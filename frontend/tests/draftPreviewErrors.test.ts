@@ -11,19 +11,14 @@ Deno.test("resolvePreviewErrorMessage: known code LAYOUT_NOT_FOUND returns speci
   assertStringIncludes(msg, "レイアウトが存在しません");
 });
 
-Deno.test("resolvePreviewErrorMessage: known code DRAFT_NOT_FOUND returns specific message", () => {
-  const msg = resolvePreviewErrorMessage("DRAFT_NOT_FOUND");
-  assertStringIncludes(msg, "ドラフトが存在しません");
-});
-
-Deno.test("resolvePreviewErrorMessage: known code ROUTE_KEY_MISMATCH returns specific message", () => {
-  const msg = resolvePreviewErrorMessage("ROUTE_KEY_MISMATCH");
-  assertStringIncludes(msg, "ルートキーが一致しません");
+Deno.test("resolvePreviewErrorMessage: known code MANIFEST_TOPOLOGY_AMBIGUOUS returns specific message", () => {
+  const msg = resolvePreviewErrorMessage("MANIFEST_TOPOLOGY_AMBIGUOUS");
+  assertStringIncludes(msg, "topologySystemName");
 });
 
 Deno.test("resolvePreviewErrorMessage: known code LAYOUT_NODES_NOT_FOUND returns specific message", () => {
   const msg = resolvePreviewErrorMessage("LAYOUT_NODES_NOT_FOUND");
-  assertStringIncludes(msg, "ノードがありません");
+  assertStringIncludes(msg, "tensor");
 });
 
 Deno.test("resolvePreviewErrorMessage: known code UNAUTHORIZED returns auth guidance", () => {
@@ -54,6 +49,13 @@ Deno.test("DRAFT_PREVIEW_ERROR_MESSAGES: PROJECTION_FAILED is defined", () => {
     DRAFT_PREVIEW_ERROR_MESSAGES["PROJECTION_FAILED"] ?? "",
     "投影に失敗",
   );
+});
+
+Deno.test("resolvePreviewErrorMessage: LAYOUT_HAS_NO_NODES is distinct from LAYOUT_NODES_NOT_FOUND", () => {
+  const noNodes = resolvePreviewErrorMessage("LAYOUT_HAS_NO_NODES");
+  const notFound = resolvePreviewErrorMessage("LAYOUT_NODES_NOT_FOUND");
+  assertStringIncludes(noNodes, "ノードがありません");
+  assertStringIncludes(notFound, "tensor");
 });
 
 Deno.test("DRAFT_PREVIEW_ERROR_MESSAGES: all entries are non-empty Japanese strings", () => {

@@ -1111,7 +1111,9 @@ export default function ContentsScreenDesignPanel({
           <ContentsStepCompletionBanner
             title="Step 3 まで完了しました"
             body={`「${design.screenLabel.trim() || "このページ"}」の操作・検索・集計の設定を保存しました。次は ${UX_UI_BUILDER} で部品とレイアウトを作成します。`}
-            primaryHref="/admin/ui-builder"
+            primaryHref={selectedId
+              ? `/admin/ui-builder?manifestId=${encodeURIComponent(selectedId)}`
+              : "/admin/ui-builder"}
             primaryLabel={`${UX_UI_BUILDER}（Step 4）へ進む`}
             onDismiss={() => setShowStep3Completion(false)}
           />
@@ -1221,20 +1223,6 @@ export default function ContentsScreenDesignPanel({
           </label>
         </div>
       )}
-      {activeStep === 3 && (
-        <label class="mb-3 block text-xs">
-          ページ名
-          <input
-            class="mt-1 w-full rounded border px-2 py-1"
-            value={design.screenLabel}
-            onInput={(e) =>
-              patchDesign({
-                screenLabel: (e.target as HTMLInputElement).value,
-              })}
-          />
-        </label>
-      )}
-
       {activeStep !== 1 && (
         <label class="mb-3 block text-xs">
           対象の下書きページ（draft のみ）
@@ -1764,7 +1752,9 @@ export default function ContentsScreenDesignPanel({
         <div class="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">
           <span class="font-medium">保存済み — 次は Step 4 です</span>
           <a
-            href="/admin/ui-builder"
+            href={selectedId
+              ? `/admin/ui-builder?manifestId=${encodeURIComponent(selectedId)}`
+              : "/admin/ui-builder"}
             class="btn-primary text-sm no-underline"
           >
             {UX_UI_BUILDER}へ進む

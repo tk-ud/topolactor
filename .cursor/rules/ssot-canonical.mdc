@@ -1,0 +1,42 @@
+---
+description: SSOT is canonical; read applicable SSOT before any implementation (Cursor)
+alwaysApply: true
+---
+
+# SSOT 正本（実装より優先）
+
+## 正本
+
+- **仕様の正本は `docs/` 配下の SSOT 文書**。実装・既存コード・会話の推測は正本ではない。
+- 主な所在:
+  - `docs/design/*-ssot.yaml` / `*-ssot.md`
+  - `docs/governance/*-ssot.yaml` / `*-ssot.md`
+  - 関連仕様: `docs/registrar-admin-ui-specification.md` など SSOT が参照する文書
+- `docs/system-roadmap.yaml`、`.agent/tasks/todo.md`、既存実装は**動的参考**であり、設計判断の正本にしない。
+
+## 禁止（Cursor エージェント向け・厳守）
+
+- **対象領域の SSOT を読まずに実装・改修・リファクタすることは禁止。**
+- **「いまのコードがこうだから正しい」という理由付けは禁止。** コードは AI が書いたものを含み、正本にならない。
+- SSOT と矛盾する挙動を「既存実装に合わせた」と説明して維持することは禁止。
+- コンテキスト節約のため SSOT を飛ばし、実装やテストだけから設計を復元することは禁止。
+
+## 実装前の必須手順
+
+1. 変更対象の**ドメイン**（admin contents / ui-builder / demo / manifest / layout / auth 等）を特定する。
+2. 該当 SSOT を**開いて読む**（`docs/design/`・`docs/governance/` をファイル名・キーワードで検索。不明なら `docs/file-structure.yaml` の `ssot_references` も見る）。
+3. SSOT に書かれた責務境界・禁止事項・データ経路に沿って実装する。
+4. SSOT にない新ルート・新テーブル正本・二重 draft 系統を勝手に足さない。必要なら先に SSOT / ユーザー合意。
+
+## 例（よくある違反）
+
+| 誤り | SSOT 上の正本 |
+|------|----------------|
+| `/demo` が `content_entity_drafts` を必須にする | Contents Step 3 の `screen_data_shape.initialDataRows`；`content_entity_drafts` は content_bundle promote 用 |
+| UI Builder に別 preview タブを足す | canvas が live preview；別 surface 分離は prohibited |
+| Step 3 保存＝実データ行登録とみなす | initialDataRows は topology intent のみ；business-row insertion は content_bundle 明示ルート |
+
+## 完了時
+
+- 変更がどの SSOT 条項に従っているか、完了報告で一言示す（パスまたは節名でよい）。
+- SSOT と実装がまだ乖離している既存コードに触れた場合は、黙って残さず SSOT 方向へ寄せるか、乖離を明示する。

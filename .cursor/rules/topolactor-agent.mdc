@@ -20,6 +20,7 @@ alwaysApply: true
 ## Work posture
 
 - Do not load every protocol, doc, or skill by default.
+- **SSOT before implementation:** see [`.cursor/rules/ssot-canonical.mdc`](ssot-canonical.mdc) — `docs/design/*-ssot.*` and `docs/governance/*-ssot.*` are canonical; do not implement without reading the applicable SSOT. Existing code is not authority.
 - Preserve canonical runtime routes and explicit-failure behavior (no silent fallback).
 - Confirm implementation state from **code and tests**, not from `.agent/tasks/todo.md` or `docs/system-roadmap.yaml` alone.
 - Run required local checks before claiming completion; run `bash .agent/tests/check-structure.sh` **last**.

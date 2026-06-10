@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using Topolactor.Runtime;
 
 namespace Topolactor.Repository;
 
@@ -279,9 +280,11 @@ public class NpgsqlTopologyRepository : TopologyRepository
         if (baseNodes.Count == 0)
             return baseNodes;
 
+        var enrichedNodes = await EnrichCatalogComponentIdsFromRegistryAsync(baseNodes, ct);
+
         // Batch-fetch componentKind for catalog_component nodes.
-        var catalogComponentIds = baseNodes
-            .Where(n => n.NodeKind is "catalog_component" && n.ComponentId is not null)
+        var catalogComponentIds = enrichedNodes
+            .Where(n => n.NodeKind is not "structural_html" && n.ComponentId is not null)
             .Select(n => n.ComponentId!)
             .Distinct()
             .ToList();
@@ -290,11 +293,11 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
         var hasWiring = runtimeDispatchAction is not null || wiringId is not null;
         if (!hasWiring && componentKindMap.Count == 0)
-            return baseNodes;
+            return enrichedNodes;
 
-        return baseNodes.Select(n =>
+        return enrichedNodes.Select(n =>
         {
-            if (n.NodeKind is not "catalog_component")
+            if (n.NodeKind is "structural_html")
                 return n;
             var kind = n.ComponentId is not null && componentKindMap.TryGetValue(n.ComponentId, out var k) ? k : null;
             return n with
@@ -324,6 +327,66 @@ public class NpgsqlTopologyRepository : TopologyRepository
         "delete" => "logicalDelete",
         _ => null,
     };
+
+    /// <inheritdoc/>
+    public override async Task<IReadOnlyDictionary<string, string>> LoadComponentIdsByKeysAsync(
+        IReadOnlyList<string> componentKeys, CancellationToken ct = default)
+    {
+        if (componentKeys.Count == 0)
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var keys = componentKeys
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Select(k => k.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (keys.Length == 0)
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT component_key, component_id::text " +
+            "FROM topology.ui_component_registry " +
+            "WHERE component_key = ANY(@keys)";
+        cmd.Parameters.AddWithValue("keys", keys);
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            if (!reader.IsDBNull(0) && !reader.IsDBNull(1))
+                result[reader.GetString(0)] = reader.GetString(1);
+        }
+        return result;
+    }
+
+    private async Task<IReadOnlyList<LayoutNodeRecord>> EnrichCatalogComponentIdsFromRegistryAsync(
+        IReadOnlyList<LayoutNodeRecord> nodes,
+        CancellationToken ct)
+    {
+        var keysNeedingId = nodes
+            .Where(n => n.NodeKind is not "structural_html"
+                && string.IsNullOrWhiteSpace(n.ComponentId)
+                && !string.IsNullOrWhiteSpace(n.ComponentKey))
+            .Select(n => n.ComponentKey!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (keysNeedingId.Count == 0)
+            return nodes;
+
+        var idByKey = await LoadComponentIdsByKeysAsync(keysNeedingId, ct);
+        if (idByKey.Count == 0)
+            return nodes;
+
+        return nodes
+            .Select(n => LayoutNodeComponentIdEnrichment.Enrich(n, idByKey))
+            .ToList();
+    }
 
     /// <inheritdoc/>
     public override async Task<IReadOnlyDictionary<string, string>> LoadComponentKindsByIdsAsync(
@@ -433,6 +496,10 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     ? pj.GetString() : null;
                 var stateJson = node.TryGetProperty("stateJson", out var sj) && sj.ValueKind == JsonValueKind.String
                     ? sj.GetString() : null;
+                var widthMode = node.TryGetProperty("widthMode", out var wm) && wm.ValueKind == JsonValueKind.String
+                    ? wm.GetString() : null;
+                var heightMode = node.TryGetProperty("heightMode", out var hm) && hm.ValueKind == JsonValueKind.String
+                    ? hm.GetString() : null;
                 string? propBindingsJson = null;
                 if (node.TryGetProperty("propBindings", out var pb) && pb.ValueKind == JsonValueKind.Object)
                     propBindingsJson = pb.GetRawText();
@@ -453,7 +520,9 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     LayoutClassRefs: layoutClassRefs,
                     PropsJson: propsJson,
                     StateJson: stateJson,
-                    PropBindingsJson: propBindingsJson
+                    PropBindingsJson: propBindingsJson,
+                    WidthMode: widthMode,
+                    HeightMode: heightMode
                 ));
             }
 

@@ -6,6 +6,7 @@ import { constructProjection, type ComponentDataHub, type ProjectionDefinition, 
 import { ensureRuntimeComponentRegistryInitialized } from "./runtimeComponentRegistry.ts";
 import type { RuntimeDispatchSpec } from "./frontendScheduler.ts";
 import { resolvePropBindings } from "./propBindingResolver.ts";
+import { mergeCatalogPropsWithComponentDesign } from "./mergeComponentDesignProps.ts";
 
 export type ComponentSpec = {
   componentId?: string;
@@ -44,6 +45,10 @@ export type ComponentSpec = {
   heightMode?: "auto" | "preset" | "custom";
   /** SSOT topology-layout-class vocabulary refs for className resolution. */
   layoutClassRefs?: string[];
+  /** structural_html text content from component_style_design.inlineText */
+  inlineText?: string;
+  /** css_dictionary token refs applied to wrapper inline style */
+  cssTokenRefs?: string[];
 };
 
 /**
@@ -291,6 +296,8 @@ export function renderEmission(
           y: node.y,
           width: node.width,
           height: node.height,
+          widthMode: node.widthMode,
+          heightMode: node.heightMode,
           layoutClassRefs: node.layoutClassRefs,
         };
 
@@ -299,6 +306,8 @@ export function renderEmission(
           return {
             componentType: "structural_html",
             def: {},
+            inlineText: node.componentDesign?.inlineText,
+            cssTokenRefs: node.componentDesign?.cssTokenRefs,
             ...layoutFields,
           };
         }
@@ -348,13 +357,17 @@ export function renderEmission(
             ...layoutFields,
           };
         }
-
-        // Resolve propBindings from emission.data after propsJson/stateJson merge.
-        let finalProps = mergedProps.props;
+        const propsWithDesign = mergeCatalogPropsWithComponentDesign(
+          node.componentKind,
+          node.componentKey ?? node.nodeId ?? "Component",
+          mergedProps.props,
+          node.componentDesign,
+        );
+        let finalProps = propsWithDesign;
         if (node.propBindings && Object.keys(node.propBindings).length > 0) {
           const emissionData = emission.data ?? {};
           const bindingResult = resolvePropBindings(
-            mergedProps.props,
+            propsWithDesign,
             node.propBindings,
             node.componentKind,
             emissionData,
@@ -369,7 +382,13 @@ export function renderEmission(
           }
           finalProps = bindingResult.props;
         }
-
+        const design = node.componentDesign;
+        const hubDesign = design
+          ? {
+            classname: design.classname,
+            tailwind: design.tailwind,
+          }
+          : undefined;
         const hub: ComponentDataHub = {
           componentId: node.componentId,
           componentKind: node.componentKind,
@@ -378,7 +397,7 @@ export function renderEmission(
           wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : null,
           props: finalProps,
           eventBinding: componentEventBinding,
-          design: undefined,
+          design: hubDesign,
         };
         const adapted = adaptComponentDataHub(hub);
         if (!adapted.ok) {
@@ -394,6 +413,7 @@ export function renderEmission(
           componentType: node.componentKind,
           def: {},
           runtimeSpec: adapted.value,
+          cssTokenRefs: design?.cssTokenRefs,
           ...layoutFields,
         };
       });

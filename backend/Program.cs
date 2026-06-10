@@ -489,30 +489,15 @@ app.MapGet("/draft-preview/layouts", async (
     return Results.Json(new { success = true, layouts });
 });
 
-// GET /draft-preview/drafts — lists content_entity_drafts with status='draft'
-app.MapGet("/draft-preview/drafts", async (
-    HttpContext ctx,
-    ContentBundleRepository contentRepo,
-    JwtGuard jwtGuard,
-    CancellationToken ct) =>
-{
-    var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
-    if (authErrors.Count > 0)
-        return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
-
-    var drafts = await contentRepo.ListEntityDraftsAsync(ct);
-    return Results.Json(new { success = true, drafts });
-});
-
-// POST /draft-preview/preview — loads layout nodes + draft content for projection preview
-// Request: { layoutId: string, draftId: string }
-// Response: { success, layoutId, draftId, layoutNodes: [{slotKey, orderIndex}], draftEntityJson, draftStatus }
+// POST /draft-preview/preview — layout projection + manifest screen_data_shape topology intent
+// Request: { layoutId: string }
+// Resolves initialDataRows from draft manifest matched by routeKey (= topologySystemName).
 app.MapPost("/draft-preview/preview", async (
     HttpContext ctx,
     DraftPreviewRequest request,
     TopologyRepository topoRepo,
-    ContentBundleRepository contentRepo,
+    ManifestRepository manifestRepo,
+    UiTopologyRepository uiRepo,
     JwtGuard jwtGuard,
     CancellationToken ct) =>
 {
@@ -521,59 +506,30 @@ app.MapPost("/draft-preview/preview", async (
     if (authErrors.Count > 0)
         return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
 
-    if (string.IsNullOrWhiteSpace(request.LayoutId) || !Guid.TryParse(request.LayoutId, out var layoutId))
-        return Results.Json(new { success = false,
-            errors = new[] { new ValidationError("MALFORMED_LAYOUT_ID", "layoutId must be a non-empty valid UUID.") }
-        }, statusCode: 422);
+    var (success, error, statusCode) = await DraftPreviewComposer.ComposeAsync(
+        request.LayoutId ?? string.Empty,
+        topoRepo,
+        manifestRepo,
+        uiRepo,
+        ct);
 
-    if (string.IsNullOrWhiteSpace(request.DraftId) || !Guid.TryParse(request.DraftId, out var draftId))
-        return Results.Json(new { success = false,
-            errors = new[] { new ValidationError("MALFORMED_DRAFT_ID", "draftId must be a non-empty valid UUID.") }
-        }, statusCode: 422);
-
-    var tensorRows = await topoRepo.LoadLayoutNodesAsync(layoutId, ct);
-    if (tensorRows.Count == 0)
-        return Results.Json(new { success = false,
-            errors = new[] { new ValidationError("LAYOUT_NODES_NOT_FOUND",
-                $"layout_id '{layoutId}' has no tensor rows in ui_topology_tensor. " +
-                "Broken layout configuration — no fallback.") }
-        }, statusCode: 422);
-
-    var draft = await contentRepo.LoadDraftAsync(draftId, ct);
-    if (draft is null)
-        return Results.Json(new { success = false,
-            errors = new[] { new ValidationError("DRAFT_NOT_FOUND",
-                $"draft_id '{draftId}' not found in content_entity_drafts.") }
-        }, statusCode: 404);
-
-    var orderedNodes = tensorRows
-        .OrderBy(r => r.OrderIndex)
-        .Select(r => new
-        {
-            nodeId = r.NodeId,
-            nodeKind = r.NodeKind,
-            htmlTag = r.HtmlTag,
-            componentKey = r.ComponentKey,
-            componentId = r.ComponentId,
-            parentNodeId = r.ParentNodeId,
-            slotKey = r.SlotKey,
-            orderIndex = r.OrderIndex,
-            x = r.X,
-            y = r.Y,
-            width = r.Width,
-            height = r.Height,
-            layoutClassRefs = r.LayoutClassRefs,
-        })
-        .ToList();
+    if (error is not null)
+        return Results.Json(new { success = false, errors = new[] { error } }, statusCode: statusCode);
 
     return Results.Json(new
     {
         success = true,
-        layoutId = layoutId.ToString(),
-        draftId = draftId.ToString(),
-        layoutNodes = orderedNodes,
-        draftEntityJson = System.Text.Json.JsonSerializer.Deserialize<object>(draft.EntityJsonb),
-        draftStatus = draft.Status,
+        layoutId = success!.LayoutId,
+        previewMode = success.PreviewMode,
+        routeKey = success.RouteKey,
+        packageId = success.PackageId,
+        layoutNodes = success.LayoutNodes,
+        rootLayoutClassRefs = success.RootLayoutClassRefs,
+        designByNodeId = success.DesignByNodeId,
+        manifestId = success.ManifestId,
+        manifestStatus = success.ManifestStatus,
+        topologySystemName = success.TopologySystemName,
+        initialDataRows = success.InitialDataRows,
     });
 });
 

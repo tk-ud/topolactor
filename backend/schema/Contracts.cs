@@ -224,7 +224,7 @@ public record ExistingSystemChangeIntakeResponseDto(
 );
 
 /// <summary>
-/// A draft content entity for the /demo draft preview selector.
+/// A content_bundle entity draft for promote staging (not /demo preview).
 /// Source: topology.content_entity_drafts WHERE status='draft'.
 /// Label is extracted from entity_jsonb (label/name/title fields), fallback to "Draft {id-prefix}".
 /// </summary>
@@ -238,6 +238,13 @@ public record EntityDraftListItemDto(
 
 /// <summary>Request body for POST /draft-preview/preview.</summary>
 public record DraftPreviewRequest(
-    [property: System.Text.Json.Serialization.JsonPropertyName("layoutId")] string? LayoutId,
-    [property: System.Text.Json.Serialization.JsonPropertyName("draftId")] string? DraftId
+    [property: System.Text.Json.Serialization.JsonPropertyName("layoutId")] string? LayoutId
+);
+
+/// <summary>Tensor row context for a layout_id — used by draft preview projection.</summary>
+public record LayoutTensorContextDto(
+    [property: System.Text.Json.Serialization.JsonPropertyName("packageId")] Guid PackageId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("routeKey")] string RouteKey,
+    [property: System.Text.Json.Serialization.JsonPropertyName("rootLayoutClassRefs")]
+    IReadOnlyList<string> RootLayoutClassRefs
 );

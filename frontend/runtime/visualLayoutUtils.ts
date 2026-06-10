@@ -466,6 +466,28 @@ export function seedDraftNodesFromPalette(
   }));
 }
 
+/** Fill missing componentId from palette/registry before layout_patch apply. */
+export function enrichDraftNodesWithPaletteComponentIds<
+  T extends { componentKey: string; componentId?: string; nodeKind?: string },
+>(
+  nodes: readonly T[],
+  palette: readonly { componentKey: string; componentId?: string }[],
+): T[] {
+  const idByKey = new Map<string, string>();
+  for (const entry of palette) {
+    if (entry.componentId?.trim()) {
+      idByKey.set(entry.componentKey, entry.componentId.trim());
+    }
+  }
+  return nodes.map((node) => {
+    if (node.nodeKind === "structural_html" || node.componentId?.trim()) {
+      return node;
+    }
+    const resolved = idByKey.get(node.componentKey);
+    return resolved ? { ...node, componentId: resolved } : node;
+  });
+}
+
 export function buildVisualLayoutPatchJson(
   nodes: VisualNodePayload[],
   layoutClassRefs: string[] = [],

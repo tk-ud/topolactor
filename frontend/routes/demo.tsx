@@ -2,15 +2,15 @@ import { JSX } from "preact";
 import DraftPreviewShell from "../islands/DraftPreviewShell.tsx";
 
 /**
- * /demo — draft preview surface.
- * Renders layout selector (admin-authored) + draft content selector + preview projection.
+ * /demo — pre-publish projection preview (read-only).
+ * Layout from UI Builder Apply; content from manifest screen_data_shape.initialDataRows.
  */
 export default function Demo(): JSX.Element {
   return (
     <main class="page-main max-w-4xl font-sans">
-      <h1 class="page-title">topolactor — ドラフトプレビュー</h1>
+      <h1 class="page-title">topolactor — 公開前プレビュー</h1>
       <p class="mb-6 text-sm text-gray-500">
-        admin-authored layout とドラフトコンテンツを選択して投影を確認できます。
+        UIビルダーで Apply した配置と、Contents で保存した manifest のサンプルデータ（topology intent）を投影します。
       </p>
 
       <DraftPreviewShell />

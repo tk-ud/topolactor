@@ -41,6 +41,7 @@ import {
 } from "../content/adminUxTerms.ts";
 import {
   buildVisualLayoutPatchJson,
+  enrichDraftNodesWithPaletteComponentIds,
   filterEmptyResponsiveRules,
   type LayoutDimension,
   type LayoutNodeKind,
@@ -70,8 +71,10 @@ import {
   type FlowCanvasDesignDraft,
 } from "../components/FlowLayoutCanvas.tsx";
 import { lookupTopologyLayoutClassKey } from "../runtime/topologyLayoutClassResolver.ts";
-import { LayoutPatchApplyHandoffModal } from "../components/LayoutPatchApplyHandoffModal.tsx";
-import type { LayoutPreviewNodeInput } from "../runtime/layoutComponentPreview.ts";
+import {
+  LayoutPatchApplyModal,
+  type LayoutPatchApplyModalPhase,
+} from "../components/LayoutPatchApplyModal.tsx";
 import { type BucketItem } from "../runtime/bucketUtils.ts";
 import { PACKAGE_WIRING_TARGET_SURFACES } from "../lib/packageWiringOptions.ts";
 import {
@@ -623,11 +626,13 @@ function LayoutRightDock({
   onToggleLayoutClassRef,
   onDesignChange,
   routeCandidates,
+  canvasDesignDraft,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
   selectedNode: DraftNode | null;
   packageId: string;
+  canvasDesignDraft?: DesignDraft;
   onSelectNode: (id: string | null) => void;
   onReparent: (nodeId: string, newParentId: string | null, insertBeforeId: string | null) => void;
   onCopy: (id: string) => void;
@@ -685,6 +690,7 @@ function LayoutRightDock({
               selectedPackageId={packageId}
               selectedCanvasNode={selectedNode}
               routeCandidates={routeCandidates}
+              canvasDesignDraft={canvasDesignDraft}
               onDesignPreviewChange={onDesignChange}
               onCommitNode={onCommitNode}
             />
@@ -740,7 +746,7 @@ type LayoutRouteCandidate = {
 };
 
 type LayoutPatchSummary = {
-  action: "preview" | "validate" | "apply";
+  action: "validate" | "apply";
   valid: boolean;
   layoutId: string;
   routeKey: string;
@@ -1118,7 +1124,7 @@ async function loadLayoutCandidatesFromBackend(): Promise<{
 }
 
 function projectLayoutPatchSummary(
-  action: "preview" | "validate" | "apply",
+  action: "validate" | "apply",
   body: Record<string, unknown> | null,
   draftNodes: DraftNode[],
   cssTokenCount: number,
@@ -1152,10 +1158,8 @@ function projectLayoutPatchSummary(
     } else {
       nextAction = "エラーを修正してから再実行してください";
     }
-  } else if (action === "preview") {
-    nextAction = "問題なければ「バリデート」を実行";
   } else if (action === "validate") {
-    nextAction = "問題なければ「適用」を実行";
+    nextAction = "問題なければ「DB に反映する」を実行";
   } else {
     nextAction =
       "モーダルで次のステップ（デザイン設定 / デモ / ページ群管理）を選んでください";
@@ -1185,9 +1189,9 @@ function LifecycleStepIndicator(
     {
       id: "draft",
       label: "ドラフト編集",
-      phases: ["idle", "previewing", "previewed"],
+      phases: ["idle"],
     },
-    { id: "validated", label: "検証済み", phases: ["validating", "validated"] },
+    { id: "checked", label: "検証済み", phases: ["validating", "validated"] },
     {
       id: "applied",
       label: "適用済み",
@@ -1477,8 +1481,7 @@ function ApplyReadinessPanel({
       </ul>
       {allClear && (
         <p class="mt-2 text-green-700 font-semibold text-xs">
-          すべてのローカルチェック通過。canvasプレビュー → バリデート →
-          適用 の順で実行してください。
+          すべてのローカルチェック通過。「適用」でバリデーション後に DB へ保存できます。
         </p>
       )}
     </div>
@@ -1498,11 +1501,7 @@ function LayoutPatchSummaryPanel(
     >
       <div class="mb-2 flex flex-wrap items-center gap-2">
         <strong>
-          {summary.action === "preview"
-            ? "プレビュー"
-            : summary.action === "validate"
-            ? "バリデート"
-            : "適用"} 結果
+          {summary.action === "validate" ? "バリデート" : "適用"} 結果
         </strong>
         <StatusBadge
           text={summary.valid ? "問題なし" : "エラーあり"}
@@ -1521,6 +1520,11 @@ function LayoutPatchSummaryPanel(
           レイアウト: {summary.layoutKey
             ? <code>{summary.layoutKey}</code>
             : <code>{shortId(summary.layoutId) || "—"}</code>}
+          {summary.layoutId && (
+            <span class="ml-1 font-mono text-xs text-slate-600">
+              (layoutId: {summary.layoutId})
+            </span>
+          )}
         </li>
         <li>CSS トークン: {summary.cssTokenCount} 件</li>
         <li>メッセージ: {summary.message}</li>
@@ -2015,20 +2019,33 @@ type ManifestRouteOption = {
   derivedRouteKey: string;
 };
 
+function readUiBuilderHandoffManifestId(): string {
+  if (typeof globalThis.location === "undefined") return "";
+  return new URLSearchParams(globalThis.location.search).get("manifestId")?.trim() ??
+    "";
+}
+
 /**
- * Normal-flow route entry: loads active manifests and derives routeKey from topologySystemName.
+ * Normal-flow route entry: loads manifests and derives routeKey from topologySystemName.
  * SSOT: routeKey = topologySystemNameToUiBuilderKey(topologySystemName).
- * Prevents display names / arbitrary text from becoming routeKey.
+ * Auto-commits on handoff (?manifestId=), single candidate, or manifest select change.
  */
 function ManifestRouteEntry({
-  onConfirm,
+  initialManifestId,
+  committedRouteKey,
+  onCommit,
 }: {
-  onConfirm: (routeKey: string) => void;
+  initialManifestId: string;
+  committedRouteKey: string;
+  onCommit: (routeKey: string) => void;
 }): JSX.Element {
   const [options, setOptions] = useState<ManifestRouteOption[]>([]);
-  const [selected, setSelected] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const autoCommitAttempted = useRef(false);
+  const onCommitRef = useRef(onCommit);
+  onCommitRef.current = onCommit;
 
   useEffect(() => {
     let cancelled = false;
@@ -2051,10 +2068,7 @@ function ManifestRouteEntry({
           const label = resolveVisibleTopologyName(shape?.userFacingTopologyLabel, sysName);
           resolved.push({ manifestId: item.manifestId, topologySystemName: sysName, label, derivedRouteKey });
         }
-        if (!cancelled) {
-          setOptions(resolved);
-          if (resolved.length > 0) setSelected(resolved[0].derivedRouteKey);
-        }
+        if (!cancelled) setOptions(resolved);
       } catch (e) {
         if (!cancelled) setLoadError(String(e));
       } finally {
@@ -2065,12 +2079,57 @@ function ManifestRouteEntry({
     return () => { cancelled = true; };
   }, []);
 
-  const selectedOption = options.find((o) => o.derivedRouteKey === selected);
+  useEffect(() => {
+    if (loading || options.length === 0 || committedRouteKey || autoCommitAttempted.current) {
+      return;
+    }
+    const handoff = initialManifestId.trim();
+    if (handoff) {
+      const match = options.find((o) => o.manifestId === handoff);
+      if (match) {
+        autoCommitAttempted.current = true;
+        onCommitRef.current(match.derivedRouteKey);
+        return;
+      }
+    }
+    if (options.length === 1) {
+      autoCommitAttempted.current = true;
+      onCommitRef.current(options[0]!.derivedRouteKey);
+    }
+  }, [loading, options, initialManifestId, committedRouteKey]);
+
+  const committedOption = options.find((o) =>
+    o.derivedRouteKey === committedRouteKey
+  );
+
+  if (committedRouteKey && committedOption && !pickerOpen) {
+    return (
+      <div class="mb-3 flex flex-wrap items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+        <span>
+          編集中: <strong>{committedOption.label}</strong>
+          {" "}
+          <span class="font-mono text-slate-600">
+            ({committedOption.topologySystemName} → {committedRouteKey})
+          </span>
+          <span class="ml-1 text-slate-500">— topology.name から自動</span>
+        </span>
+        {options.length > 1 && (
+          <button
+            type="button"
+            class="btn-secondary px-2 py-0.5 text-[0.7rem]"
+            onClick={() => setPickerOpen(true)}
+          >
+            別のページに切り替え
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div class="mb-3 rounded border border-blue-200 bg-blue-50/40 p-3 text-xs">
       <p class="mb-1.5 font-semibold text-blue-900">
-        通常導線: topology.name からルートキーを派生
+        編集するページを選択（topology.name から routeKey を自動派生）
       </p>
       {loading && <p class="text-slate-600">マニフェストを読み込み中…</p>}
       {loadError && <p class="text-red-700">読み込みエラー: {loadError}</p>}
@@ -2086,32 +2145,34 @@ function ManifestRouteEntry({
             マニフェストを選択
             <select
               class="mt-1 w-full rounded border bg-white px-2 py-1 font-mono text-xs"
-              value={selected}
-              onChange={(e) => setSelected((e.target as HTMLSelectElement).value)}
+              value={committedRouteKey || options[0]?.derivedRouteKey || ""}
+              onChange={(e) => {
+                const key = (e.target as HTMLSelectElement).value;
+                if (key) {
+                  setPickerOpen(false);
+                  onCommit(key);
+                }
+              }}
             >
               {options.map((o) => (
-                <option key={o.derivedRouteKey} value={o.derivedRouteKey}>
+                <option key={o.manifestId} value={o.derivedRouteKey}>
                   {o.label} → {o.derivedRouteKey}
                 </option>
               ))}
             </select>
           </label>
-          {selectedOption && (
-            <p class="mt-1 text-[0.7rem] text-blue-800">
-              topology.name: <span class="font-mono">{selectedOption.topologySystemName}</span>
-              {" "}→ routeKey: <span class="font-mono">{selectedOption.derivedRouteKey}</span>
-            </p>
+          <p class="mt-1 text-[0.7rem] text-blue-800">
+            選択すると routeKey が自動確定し、パッケージが生成されます。
+          </p>
+          {committedRouteKey && pickerOpen && (
+            <button
+              type="button"
+              class="btn-secondary mt-2 text-xs"
+              onClick={() => setPickerOpen(false)}
+            >
+              キャンセル
+            </button>
           )}
-          <button
-            type="button"
-            class="btn-primary mt-2 text-xs"
-            disabled={!selected}
-            onClick={() => {
-              if (selected) onConfirm(selected);
-            }}
-          >
-            このルートキーで確定
-          </button>
         </>
       )}
     </div>
@@ -2120,20 +2181,62 @@ function ManifestRouteEntry({
 
 function BucketPackageRouteFields({
   routeKey,
-  manualRouteDraft,
   committedRouteKey,
   routeOptions,
   candidateErrors,
   onRouteKeyChange,
-  onManualRouteDraftChange,
-  onManualRouteCommit,
 }: {
   routeKey: string;
-  manualRouteDraft: string;
   committedRouteKey: string;
   routeOptions: string[];
   candidateErrors: ValidationError[];
   onRouteKeyChange: (routeKey: string) => void;
+}): JSX.Element {
+  return (
+    <div class="mt-3 rounded border border-slate-200 bg-slate-50 p-3">
+      <p class="mb-2 text-xs font-semibold text-slate-700">
+        既存パッケージのルート候補（移行用）
+      </p>
+      <label class="mb-2 flex flex-col gap-0.5 text-sm">
+        候補から選択
+        <select
+          value={routeKey}
+          onChange={(e) => {
+            onRouteKeyChange((e.target as HTMLSelectElement).value);
+          }}
+          disabled={routeOptions.length === 0}
+          class="input font-mono text-xs"
+        >
+          <option value="">— ルートを選択 —</option>
+          {routeOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </label>
+      {routeOptions.length === 0 && candidateErrors.length === 0 && (
+        <p class="mb-2 text-xs text-slate-600">
+          登録済みパッケージのルート候補がありません。通常導線では上のマニフェスト選択から
+          topology.name 派生のルートキーを確定してください。
+        </p>
+      )}
+      {committedRouteKey && (
+        <p class="mt-2 text-xs text-slate-600">
+          使用中のルート: <code class="font-mono">{committedRouteKey}</code>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Legacy/debug only: manual routeKey typing for migration — not part of normal authoring. */
+function LegacyManualRouteInput({
+  manualRouteDraft,
+  committedRouteKey,
+  routeKey,
+  onManualRouteDraftChange,
+  onManualRouteCommit,
+}: {
+  manualRouteDraft: string;
+  committedRouteKey: string;
+  routeKey: string;
   onManualRouteDraftChange: (draft: string) => void;
   onManualRouteCommit: () => void;
 }): JSX.Element {
@@ -2147,35 +2250,12 @@ function BucketPackageRouteFields({
   };
 
   return (
-    <div class="mt-3 rounded border border-slate-200 bg-slate-50 p-3">
-      <p class="mb-2 text-xs font-semibold text-slate-700">
-        ページルート（canvas workspace の入口）
+    <div class="mt-3 rounded border border-dashed border-slate-300 bg-slate-50/80 p-3">
+      <p class="mb-2 text-xs font-semibold text-slate-600">
+        legacy / debug: 手動ルートキー入力（移行・互換のみ）
       </p>
-      <label class="mb-2 flex flex-col gap-0.5 text-sm">
-        候補から選択
-        <select
-          value={routeKey}
-          onChange={(e) => {
-            onRouteKeyChange((e.target as HTMLSelectElement).value);
-            onManualRouteDraftChange("");
-          }}
-          disabled={routeOptions.length === 0}
-          class="input font-mono text-xs"
-        >
-          <option value="">— ルートを選択 —</option>
-          {routeOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-      </label>
-      {routeOptions.length === 0 && candidateErrors.length === 0 && (
-        <p class="mb-2 text-xs text-amber-900">
-          初回は下の直接入力にルートキーを入れてください（例:{" "}
-          <code>customer-management</code>）。
-          ルートキーは topology.name（ケバブケース）と同じ値にしてください。
-          Enter または「確定」でパッケージを自動生成します（入力中は登録されません）。
-        </p>
-      )}
       <label class="flex flex-col gap-0.5 text-sm">
-        直接入力（初回はこちら）
+        ルートキーを直接入力
         <div class="flex gap-2">
           <input
             value={manualRouteDraft}
@@ -2204,11 +2284,6 @@ function BucketPackageRouteFields({
         <p class="mt-1 text-xs text-amber-800">
           未確定: <code class="font-mono">{manualRouteDraft.trim()}</code>
           {" "}— Enter または「確定」で反映されます
-        </p>
-      )}
-      {committedRouteKey && (
-        <p class="mt-2 text-xs text-slate-600">
-          使用中のルート: <code class="font-mono">{committedRouteKey}</code>
         </p>
       )}
     </div>
@@ -3341,12 +3416,10 @@ function LayoutBuilderSection({
     { code: string; message: string }[]
   >([]);
   const [debugJson, setDebugJson] = useState<string | null>(null);
-  const [layoutPatchPreviewNodes, setLayoutPatchPreviewNodes] = useState<
-    LayoutPreviewNodeInput[]
-  >([]);
-  const [layoutPatchPreviewClassRefs, setLayoutPatchPreviewClassRefs] =
-    useState<string[]>([]);
-  const [layoutApplyHandoffOpen, setLayoutApplyHandoffOpen] = useState(false);
+  const [layoutApplyModalOpen, setLayoutApplyModalOpen] = useState(false);
+  const [layoutApplyModalPhase, setLayoutApplyModalPhase] = useState<
+    LayoutPatchApplyModalPhase
+  >("validating");
   const lifecycleRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -3372,8 +3445,20 @@ function LayoutBuilderSection({
   const [presetsLoaded, setPresetsLoaded] = useState(false);
 
   // ── derived ─────────────────────────────────────────────────────────────
+  const paletteSeedEntries: PaletteDraftSeedEntry[] = paletteEntries.map((
+    e,
+  ) => ({
+    componentKey: e.componentKey,
+    componentKind: e.componentKind,
+    isDraftOnly: e.isDraftOnly,
+    componentId: e.componentId,
+    packageId: e.packageId,
+    layoutId: e.layoutId,
+    wiringId: e.wiringId,
+    tensorId: e.tensorId,
+  }));
   const tensorPatchJson = buildVisualLayoutPatchJson(
-    draftNodes,
+    enrichDraftNodesWithPaletteComponentIds(draftNodes, paletteSeedEntries),
     selectedLayoutClassRefs,
   );
   const effectiveLayoutId = manualLayoutId.trim() || layoutId;
@@ -3421,18 +3506,6 @@ function LayoutBuilderSection({
   const canvasPreviewClass = resolveCanvasRootPreviewClassName(
     selectedLayoutClassRefs,
   );
-  const paletteSeedEntries: PaletteDraftSeedEntry[] = paletteEntries.map((
-    e,
-  ) => ({
-    componentKey: e.componentKey,
-    componentKind: e.componentKind,
-    isDraftOnly: e.isDraftOnly,
-    componentId: e.componentId,
-    packageId: e.packageId,
-    layoutId: e.layoutId,
-    wiringId: e.wiringId,
-    tensorId: e.tensorId,
-  }));
 
   const applyCanvasFromTensorPatch = (
     tensorPatchJson: string,
@@ -3931,22 +4004,24 @@ function LayoutBuilderSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftNodes, selectedLayoutClassRefs]);
 
-  // ── layout patch (preview / validate / apply) ────────────────────────────
-  const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
+  // ── layout patch (validate in modal / apply on confirm) ─────────────────
+  const callLayoutPatch = async (
+    action: "validate" | "apply",
+    options?: { viaApplyModal?: boolean },
+  ) => {
+    const inApplyModal = options?.viaApplyModal === true || layoutApplyModalOpen;
     setPatchErrors([]);
-    setPatchSummary(null);
-    setDebugJson(null);
-    setLayoutApplyHandoffOpen(false);
-    if (action !== "preview") {
-      setLayoutPatchPreviewNodes([]);
-      setLayoutPatchPreviewClassRefs([]);
+    if (action === "validate") {
+      setPatchSummary(null);
     }
+    setDebugJson(null);
 
     if (!canPatch) {
       setPatchErrors([{
         code: "NO_ROUTE_LAYOUT",
         message: "ルートとレイアウトを選択してください。",
       }]);
+      if (inApplyModal) setLayoutApplyModalPhase("validated");
       return;
     }
     if (action === "apply") {
@@ -3962,25 +4037,20 @@ function LayoutBuilderSection({
         announce(
           `保存ブロック: ${draftOnlyNodes.length} 件のまだ使えない部品があります`,
         );
+        setLayoutApplyModalPhase("validated");
         return;
       }
+      setLayoutApplyModalPhase("applying");
     }
 
     const phaseMap: Record<string, LifecyclePhase> = {
-      preview: "previewing",
       validate: "validating",
       apply: "applying",
     };
     setLifecyclePhase(phaseMap[action] as LifecyclePhase);
     setLoading(true);
     announce(
-      `${
-        action === "preview"
-          ? "プレビュー"
-          : action === "validate"
-          ? "バリデート"
-          : "適用"
-      }を実行中...`,
+      action === "validate" ? "バリデートを実行中..." : "適用を実行中...",
     );
 
     if (!scopedPackageId?.trim()) {
@@ -4012,20 +4082,22 @@ function LayoutBuilderSection({
       );
       setPatchSummary(summary);
 
-      // Failure phases are scoped to the action: preview/validate errors stay in their
-      // respective phase (pipeline not advanced); only apply failures use applied_fail.
       const failPhase: Record<string, LifecyclePhase> = {
-        preview: "previewed",
         validate: "validated",
         apply: "applied_fail",
       };
       if (body?.errors?.length) {
         setPatchErrors(body.errors);
         setLifecyclePhase(failPhase[action] as LifecyclePhase);
+        if (action === "validate" && inApplyModal) {
+          setLayoutApplyModalPhase("validated");
+        }
+        if (action === "apply" && inApplyModal) {
+          setLayoutApplyModalPhase("validated");
+        }
         announce(`エラー: ${body.errors[0].message}`);
       } else {
         const donePhase: Record<string, LifecyclePhase> = {
-          preview: "previewed",
           validate: "validated",
           apply: "applied_ok",
         };
@@ -4034,52 +4106,16 @@ function LayoutBuilderSection({
           isPersisted ? "persisted" : donePhase[action] as LifecyclePhase,
         );
 
-        if (action === "preview") {
-          const previewData = (body?.emission?.data ?? body) as {
-            tensorPatchJson?: string;
-          };
-          const normalizedJson =
-            typeof previewData?.tensorPatchJson === "string"
-              ? previewData.tensorPatchJson
-              : submittedTensorPatchJson;
-          if (
-            applyCanvasFromTensorPatch(
-              normalizedJson,
-              "プレビュー結果を反映",
-              { seedWhenEmpty: false },
-            )
-          ) {
-            announce("プレビュー結果を canvas に反映しました");
-          }
-          const parsed = parseVisualLayoutPatchJson(
-            normalizedJson,
-            paletteSeedEntries,
-          );
-          if (parsed.ok) {
-            setLayoutPatchPreviewClassRefs(parsed.value.layoutClassRefs);
-          }
-          announce("プレビュー結果を canvas とステータスに反映しました");
+        if (action === "validate" && inApplyModal) {
+          setLayoutApplyModalPhase("validated");
         }
 
         if (action === "apply" && summary.valid) {
-          // Clear _tmp on successful apply (backend cleared server-side; clear local fallbacks too)
           if (tmpDraftKey && typeof globalThis.sessionStorage !== "undefined") {
             sessionStorage.removeItem(tmpDraftKey);
           }
           setTmpSaveStatus("idle");
-          const parsed = parseVisualLayoutPatchJson(
-            submittedTensorPatchJson,
-            paletteSeedEntries,
-          );
-          const handoffNodes = enrichLayoutPreviewNodes(
-            parsed.ok ? parsed.value.nodes : draftNodes,
-            paletteSeedEntries,
-          ) as LayoutPreviewNodeInput[];
-          setLayoutPatchPreviewNodes(handoffNodes);
-          setLayoutPatchPreviewClassRefs(
-            parsed.ok ? parsed.value.layoutClassRefs : selectedLayoutClassRefs,
-          );
-          setLayoutApplyHandoffOpen(true);
+          setLayoutApplyModalPhase("success");
           lifecycleRef.current?.scrollIntoView({
             behavior: "smooth",
             block: "start",
@@ -4112,16 +4148,47 @@ function LayoutBuilderSection({
       }
     } catch (e) {
       const failPhase: Record<string, LifecyclePhase> = {
-        preview: "previewed",
         validate: "validated",
         apply: "applied_fail",
       };
       setPatchErrors([{ code: "NETWORK_ERROR", message: String(e) }]);
       setLifecyclePhase(failPhase[action] as LifecyclePhase);
+      if (inApplyModal) {
+        setLayoutApplyModalPhase("validated");
+      }
       announce(`ネットワークエラー: ${e}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const openLayoutApplyModal = () => {
+    if (!canPatch) {
+      setPatchErrors([{
+        code: "NO_ROUTE_LAYOUT",
+        message: "ルートとレイアウトを選択してください。",
+      }]);
+      return;
+    }
+    const draftOnlyNodes = draftNodes.filter((n) => n.isDraftOnly);
+    if (draftOnlyNodes.length > 0) {
+      setPatchErrors(draftOnlyNodes.map((n) => ({
+        code: "DRAFT_ONLY_NODES",
+        message:
+          `まだ使えない部品が ${draftOnlyNodes.length} 件あります — 先に登録してください`,
+        nodeId: n.nodeId,
+        componentKey: n.componentKey,
+      })));
+      announce(
+        `保存ブロック: ${draftOnlyNodes.length} 件のまだ使えない部品があります`,
+      );
+      return;
+    }
+    setPatchErrors([]);
+    setPatchSummary(null);
+    setLayoutApplyModalOpen(true);
+    setLayoutApplyModalPhase("validating");
+    void callLayoutPatch("validate", { viaApplyModal: true });
   };
 
   // ── node factory ─────────────────────────────────────────────────────────
@@ -4340,13 +4407,15 @@ function LayoutBuilderSection({
   };
 
   const toggleNodeLayoutClassRef = (nodeId: string, classKey: string) => {
+    let toggledOn = false;
     setDraftNodes((prev) => {
       const next = prev.map((n) => {
         if (n.nodeId !== nodeId) return n;
         const current = n.layoutClassRefs ?? [];
-        const layoutClassRefs = current.includes(classKey)
-          ? current.filter((k) => k !== classKey)
-          : [...current, classKey];
+        toggledOn = !current.includes(classKey);
+        const layoutClassRefs = toggledOn
+          ? [...current, classKey]
+          : current.filter((k) => k !== classKey);
         const widthMode = resolveSizingModeAfterToggle(layoutClassRefs, n.widthMode);
         return { ...n, layoutClassRefs, widthMode };
       });
@@ -4354,6 +4423,11 @@ function LayoutBuilderSection({
       return next;
     });
     setLifecyclePhase("idle");
+    announce(
+      toggledOn
+        ? `layoutClassRefs に ${classKey} を追加しました（canvas に反映済み）`
+        : `layoutClassRefs から ${classKey} を外しました（canvas に反映済み）`,
+    );
   };
 
   const updateNode = (nodeId: string, updates: Partial<DraftNode>) => {
@@ -4507,29 +4581,31 @@ function LayoutBuilderSection({
         <div class="alert-warn mt-1 text-xs">
           <strong>投影サーフェス境界:</strong>{" "}
           フロントエンドはドラフト状態・視覚プレビュー・intent 送信のみ担当。
-          適用は <code>preview → validate → apply</code>{" "}
+          適用はモーダル内で <code>validate → apply</code>{" "}
           経由。直接 DB 書き込みは行いません。
         </div>
       </details>
 
-      <RouteLayoutSelector
-        candidates={displayCandidates}
-        routeKey={routeKey}
-        layoutId={layoutId}
-        onRouteChange={(r) => {
-          setRouteKey(r);
-          setManualRouteKey("");
-          const first = layoutsForRoute(displayCandidates, r)[0];
-          setLayoutId(first?.layoutId ?? "");
-          setManualLayoutId("");
-        }}
-        onLayoutChange={(l) => {
-          setLayoutId(l);
-          setManualLayoutId("");
-        }}
-        disabled={selectorsDisabled || layoutSelectorsLocked}
-        loadError={candidateErrors}
-      />
+      {!layoutSelectorsLocked && (
+        <RouteLayoutSelector
+          candidates={displayCandidates}
+          routeKey={routeKey}
+          layoutId={layoutId}
+          onRouteChange={(r) => {
+            setRouteKey(r);
+            setManualRouteKey("");
+            const first = layoutsForRoute(displayCandidates, r)[0];
+            setLayoutId(first?.layoutId ?? "");
+            setManualLayoutId("");
+          }}
+          onLayoutChange={(l) => {
+            setLayoutId(l);
+            setManualLayoutId("");
+          }}
+          disabled={selectorsDisabled}
+          loadError={candidateErrors}
+        />
+      )}
 
       {displayCandidates.length === 0 && candidateErrors.length === 0 &&
         packageScopedLayout && (
@@ -4587,7 +4663,7 @@ function LayoutBuilderSection({
           <span class="text-[0.7rem] text-blue-700">
             左パネルの部品カードをドラッグしてキャンバスへ配置します。
             parentNodeId・slotKey・orderIndex は右ドックの配置インスペクタで編集してください。
-            layoutClassRefs は右ドックの配置インスペクタで編集し、プレビュー → 検証 → 保存反映します。
+            layoutClassRefs は右ドックの配置インスペクタで編集し、canvas に即時反映されます。適用で DB 保存します。
           </span>
         </div>
       )}
@@ -4827,16 +4903,7 @@ function LayoutBuilderSection({
               setSelectedNodeId(id);
               setRightDrawerOpen(true);
             }}
-            onDeselectAll={() => {
-              if (selectedNodeId) {
-                setDesignDraftByNodeId((prev) => {
-                  const next = new Map(prev);
-                  next.delete(selectedNodeId);
-                  return next;
-                });
-              }
-              setSelectedNodeId(null);
-            }}
+            onDeselectAll={() => setSelectedNodeId(null)}
             onDragOver={handleDragOverCanvas}
             onDrop={handleDropOnCanvas}
             onDeleteNode={removeNode}
@@ -4869,16 +4936,10 @@ function LayoutBuilderSection({
               selectedNodeId={selectedNodeId}
               selectedNode={selectedNode}
               packageId={scopedPackageId ?? ""}
-              onSelectNode={(id) => {
-                if (selectedNodeId && selectedNodeId !== id) {
-                  setDesignDraftByNodeId((prev) => {
-                    const next = new Map(prev);
-                    next.delete(selectedNodeId);
-                    return next;
-                  });
-                }
-                setSelectedNodeId(id);
-              }}
+              onSelectNode={(id) => setSelectedNodeId(id)}
+              canvasDesignDraft={selectedNodeId
+                ? designDraftByNodeId.get(selectedNodeId)
+                : undefined}
               onReparent={reparentNode}
               onCopy={copyNode}
               onDelete={removeNode}
@@ -4940,35 +5001,15 @@ function LayoutBuilderSection({
         );
       })()}
 
-      {/* アクションバー: preview / validate / apply — 常時表示 */}
       <div class="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2">
-        <div class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">
-          保存フロー: プレビュー → バリデート → 適用
-        </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => callLayoutPatch("preview")}
+            onClick={openLayoutApplyModal}
             disabled={loading || !canPatch}
-            class="btn-secondary min-w-[100px]"
-            aria-label="プレビュー — canvasへ保存前結果を反映（DB変更なし）"
+            class="btn-success min-w-[120px]"
+            aria-label="適用 — モーダルでバリデーション後に DB へ反映"
           >
-            1. プレビュー
-          </button>
-          <button
-            onClick={() => callLayoutPatch("validate")}
-            disabled={loading || !canPatch}
-            class="btn border border-blue-600 text-blue-600 hover:bg-blue-50 min-w-[100px]"
-            aria-label="バリデート実行 — ref整合チェック"
-          >
-            2. バリデート
-          </button>
-          <button
-            onClick={() => callLayoutPatch("apply")}
-            disabled={loading || !canPatch}
-            class="btn-success min-w-[100px]"
-            aria-label="適用実行 — DBへ反映"
-          >
-            3. 適用
+            適用
           </button>
           {loading && (
             <span
@@ -4980,37 +5021,50 @@ function LayoutBuilderSection({
           )}
         </div>
         <p class="mt-1 text-[0.65rem] text-gray-400">
-          プレビュー: center canvas / inline summary に反映（DB変更なし） → バリデート:
-          ref整合チェック → 適用: DBへ反映
+          canvas は編集中の配置をリアルタイム表示します。適用でバリデーション後に
+          layout_patch_json へ保存します。
         </p>
       </div>
 
-
-      <LayoutPatchApplyHandoffModal
-        open={layoutApplyHandoffOpen}
+      <LayoutPatchApplyModal
+        open={layoutApplyModalOpen}
+        phase={layoutApplyModalPhase}
+        summary={patchSummary
+          ? {
+            valid: patchSummary.valid,
+            message: patchSummary.message,
+            nodeCount: patchSummary.nodeCount,
+            draftOnlyCount: patchSummary.draftOnlyCount,
+            routeKey: patchSummary.routeKey,
+            layoutId: patchSummary.layoutId,
+            layoutKey: patchSummary.layoutKey,
+            errors: patchSummary.errors,
+          }
+          : null}
         routeKey={effectiveRouteKey}
+        layoutId={effectiveLayoutId}
         layoutLabel={selectedLayout?.layoutKey ?? shortId(effectiveLayoutId)}
-        nodeCount={draftNodes.length}
-        previewNodes={layoutPatchPreviewNodes}
-        layoutClassRefs={layoutPatchPreviewClassRefs.length > 0
-          ? layoutPatchPreviewClassRefs
-          : selectedLayoutClassRefs}
-        onClose={() => setLayoutApplyHandoffOpen(false)}
+        loading={loading}
+        onClose={() => {
+          setLayoutApplyModalOpen(false);
+          setLayoutApplyModalPhase("validating");
+        }}
+        onConfirmApply={() => callLayoutPatch("apply", { viaApplyModal: true })}
         onGoDesign={() => {
-          setLayoutApplyHandoffOpen(false);
+          setLayoutApplyModalOpen(false);
+          setLayoutApplyModalPhase("validating");
+          setRightDrawerOpen(true);
           announce("右パネルのデザインインスペクタで選択ノードを編集できます");
         }}
       />
 
       {/* Gap 3: Actionable error panel */}
-      {patchErrors.length > 0 && (
+      {patchErrors.length > 0 && !layoutApplyModalOpen && (
         <ActionableValidationErrorPanel
           errors={patchErrors}
           title="エラー — 修正方法"
         />
       )}
-
-      {patchSummary && <LayoutPatchSummaryPanel summary={patchSummary} />}
 
       <Accordion title="詳細情報（開発者向け）" defaultOpen={false}>
         <p class="text-muted-xs mb-2">
@@ -5681,16 +5735,44 @@ function designPreviewDraft(
   };
 }
 
+function hasCanvasDesignDraft(draft: DesignDraft | undefined): boolean {
+  if (!draft) return false;
+  return Boolean(
+    draft.inlineText?.trim() ||
+    draft.linkHref?.trim() ||
+    draft.linkTarget?.trim() ||
+    (draft.cssTokenRefs && draft.cssTokenRefs.length > 0),
+  );
+}
+
+function hydrateDesignFormFromDraft(
+  draft: DesignDraft,
+  setters: {
+    setInlineText: (v: string) => void;
+    setLinkHref: (v: string) => void;
+    setLinkTarget: (v: string) => void;
+    setCssTokenRefs: (v: string[]) => void;
+  },
+): void {
+  setters.setInlineText(draft.inlineText ?? "");
+  setters.setLinkHref(draft.linkHref ?? "");
+  setters.setLinkTarget(draft.linkTarget ?? "");
+  setters.setCssTokenRefs(draft.cssTokenRefs ?? []);
+}
+
 function PackageDesignPanel({
   selectedPackageId,
   selectedCanvasNode,
   routeCandidates,
+  canvasDesignDraft,
   onDesignPreviewChange,
   onCommitNode,
 }: {
   selectedPackageId: string;
   selectedCanvasNode: DraftNode | null;
   routeCandidates?: string[];
+  /** Canvas preview state for the selected node — survives deselect/reselect. */
+  canvasDesignDraft?: DesignDraft;
   onDesignPreviewChange?: (nodeId: string, partial: DesignDraft) => void;
   onCommitNode?: (updates: Partial<DraftNode>, label: string) => void;
 }): JSX.Element {
@@ -5725,6 +5807,7 @@ function PackageDesignPanel({
     null,
   );
   const designTmpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastDesignInitKeyRef = useRef<string | null>(null);
   const [propsDraft, setPropsDraft] = useState(selectedCanvasNode?.propsJson ?? "");
   const [propsError, setPropsError] = useState<string | null>(null);
   const [stateDraft, setStateDraft] = useState(selectedCanvasNode?.stateJson ?? "");
@@ -5865,6 +5948,7 @@ function PackageDesignPanel({
 
   useEffect(() => {
     if (!selectedCanvasNode) {
+      lastDesignInitKeyRef.current = null;
       setDesignName("");
       setCssTokenRefs([]);
       setResponsiveTokenRefs({});
@@ -5881,14 +5965,32 @@ function PackageDesignPanel({
       setStateError(null);
       return;
     }
-    const saved = savedDesigns.find((d) =>
-      d.layoutNodeId === selectedCanvasNode.nodeId
-    );
-    if (saved) {
+    const nodeId = selectedCanvasNode.nodeId;
+    const saved = savedDesigns.find((d) => d.layoutNodeId === nodeId);
+    const initKey = `${nodeId}::${saved?.designId ?? "none"}`;
+    if (lastDesignInitKeyRef.current === initKey) {
+      return;
+    }
+    lastDesignInitKeyRef.current = initKey;
+
+    if (hasCanvasDesignDraft(canvasDesignDraft)) {
+      setDesignName(saved?.name ?? `${nodeId}_design`);
+      setResponsiveTokenRefs(saved?.responsiveTokenRefs ?? {});
+      setReactionIntent(saved?.reactionIntent ?? "");
+      setClassname(saved?.classname ?? "");
+      setTailwind(saved?.tailwind ?? "");
+      setDesignTmpStatus(saved?.hasDesignTmpDraft ? "saved" : "idle");
+      hydrateDesignFormFromDraft(canvasDesignDraft!, {
+        setInlineText,
+        setLinkHref,
+        setLinkTarget,
+        setCssTokenRefs,
+      });
+    } else if (saved) {
       applySavedDesign(saved);
     } else {
       const defaultText = selectedCanvasNode.htmlTag === "a" ? "リンクテキスト" : "";
-      setDesignName(`${selectedCanvasNode.nodeId}_design`);
+      setDesignName(`${nodeId}_design`);
       setCssTokenRefs([]);
       setResponsiveTokenRefs({});
       setInlineText(defaultText);
@@ -5898,10 +6000,7 @@ function PackageDesignPanel({
       setClassname("");
       setTailwind("");
       setDesignTmpStatus("idle");
-      // Push complete state (including cssTokenRefs: []) so stale tokens from a previous
-      // visit to this node are cleared. text/link inline edits omit cssTokenRefs intentionally;
-      // node selection init must be an explicit full reset, same as applySavedDesign.
-      onDesignPreviewChange?.(selectedCanvasNode.nodeId, {
+      onDesignPreviewChange?.(nodeId, {
         inlineText: defaultText.trim() || undefined,
         linkHref: undefined,
         linkTarget: undefined,
@@ -6783,16 +6882,20 @@ export default function UiBuilderAdmin(): JSX.Element {
 
       <UiBuilderFlowStepper activeStep={flowStep} />
 
-      <div
-        class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
-        role="note"
-      >
-        ルートを<strong>確定</strong>（候補選択または直接入力で Enter）するとパッケージが自動生成され、canvas
-        workspace が使えます。入力のたびに登録はされません。
-      </div>
+      {!committedRouteKey && (
+        <div
+          class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+          role="note"
+        >
+          ページ内容（/admin/contents）で登録した topology.name から routeKey を自動派生します。
+          単一ページまたは handoff 付きで開いた場合は自動で canvas workspace が有効になります。
+        </div>
+      )}
 
       <ManifestRouteEntry
-        onConfirm={(key) => {
+        initialManifestId={readUiBuilderHandoffManifestId()}
+        committedRouteKey={committedRouteKey}
+        onCommit={(key) => {
           setCommittedManualRouteKey(key);
           setRouteKey("");
           setManualRouteDraft("");
@@ -6801,12 +6904,11 @@ export default function UiBuilderAdmin(): JSX.Element {
 
       <details class="mb-3">
         <summary class="cursor-pointer rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 hover:bg-slate-100">
-          既存ルート候補 / 直接入力（上級者・移行用）
+          legacy / debug: 既存ルート候補・手動ルートキー（移行用）
         </summary>
       <div class="mt-2 rounded border border-slate-200 bg-white p-3">
         <BucketPackageRouteFields
           routeKey={routeKey}
-          manualRouteDraft={manualRouteDraft}
           committedRouteKey={committedRouteKey}
           routeOptions={routeOptions}
           candidateErrors={candidateErrors}
@@ -6815,6 +6917,11 @@ export default function UiBuilderAdmin(): JSX.Element {
             setCommittedManualRouteKey("");
             setManualRouteDraft("");
           }}
+        />
+        <LegacyManualRouteInput
+          manualRouteDraft={manualRouteDraft}
+          committedRouteKey={committedRouteKey}
+          routeKey={routeKey}
           onManualRouteDraftChange={setManualRouteDraft}
           onManualRouteCommit={() => {
             const next = manualRouteDraft.trim();

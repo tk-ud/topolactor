@@ -153,6 +153,78 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return records;
     }
 
+    public override async Task<LayoutTensorContextDto?> ResolveLayoutTensorContextAsync(
+        Guid layoutId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT t.package_id, t.route_key,
+                   COALESCE(t.layout_patch_json->'layoutClassRefs', '[]'::jsonb)::text AS root_class_refs
+            FROM topology.ui_topology_tensor t
+            WHERE t.layout_id = @layoutId
+            LIMIT 2
+            """;
+        cmd.Parameters.AddWithValue("layoutId", layoutId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        string? routeKey = null;
+        Guid? packageId = null;
+        string? rootClassRefsJson = null;
+        var rowCount = 0;
+
+        while (await reader.ReadAsync(ct))
+        {
+            rowCount++;
+            if (rowCount == 1)
+            {
+                packageId = reader.GetGuid(0);
+                routeKey = reader.GetString(1);
+                rootClassRefsJson = reader.IsDBNull(2) ? "[]" : reader.GetString(2);
+            }
+            if (rowCount == 2)
+            {
+                throw new InvalidOperationException(
+                    $"LAYOUT_NODES_AMBIGUOUS_SELECTOR: multiple tensor rows for layout_id='{layoutId}'. " +
+                    "Cannot safely resolve layout context without a disambiguating selector (route_key or package_id).");
+            }
+        }
+
+        if (!packageId.HasValue || routeKey is null)
+            return null;
+
+        var rootLayoutClassRefs = ParseStringArrayJson(rootClassRefsJson);
+        return new LayoutTensorContextDto(packageId.Value, routeKey, rootLayoutClassRefs);
+    }
+
+    private static IReadOnlyList<string> ParseStringArrayJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return [];
+            var list = new List<string>();
+            foreach (var el in doc.RootElement.EnumerateArray())
+            {
+                if (el.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    var s = el.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) list.Add(s);
+                }
+            }
+            return list;
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
     public override async Task<IReadOnlyList<LayoutCandidateDto>> ListLayoutCandidatesAsync(
         CancellationToken ct = default)
     {

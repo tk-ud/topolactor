@@ -377,25 +377,47 @@ Deno.test("UiBuilderAdmin: component_style_design upsert retains design editor f
   );
 });
 
-Deno.test("UiBuilderAdmin: layout_patch apply opens post-apply handoff modal", async () => {
+Deno.test("UiBuilderAdmin: deselect must not delete canvas designDraftByNodeId entries", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
   assert(
-    src.includes("LayoutPatchApplyHandoffModal"),
-    "apply must open handoff modal",
+    src.includes("onDeselectAll={() => setSelectedNodeId(null)}"),
+    "deselect must preserve designDraftByNodeId for canvas preview persistence",
+  );
+  assertFalse(
+    /onDeselectAll[\s\S]{0,200}designDraftByNodeId[\s\S]{0,80}\.delete/.test(src),
+    "onDeselectAll must not delete design draft entries",
+  );
+});
+
+Deno.test("UiBuilderAdmin: layout_patch apply uses unified modal with validate then handoff", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("LayoutPatchApplyModal"),
+    "apply must use unified apply modal",
+  );
+  assert(
+    src.includes("layoutId={effectiveLayoutId}"),
+    "modal must pass layoutId for demo deep-link",
   );
   assert(
     src.includes('announce("右パネルのデザインインスペクタで選択ノードを編集できます")'),
     "handoff must route authors to the docked right-panel design inspector",
   );
   assert(
-    src.includes("setLayoutApplyHandoffOpen(true)"),
-    "apply success must open handoff",
+    src.includes('setLayoutApplyModalPhase("success")'),
+    "apply success must transition modal to handoff phase",
+  );
+  assertFalse(
+    src.includes("LayoutPatchApplyHandoffModal"),
+    "legacy handoff modal must be removed",
   );
 });
 
-Deno.test("UiBuilderAdmin: layout_patch preview updates canvas without separate modal", async () => {
+Deno.test("UiBuilderAdmin: surface shows apply only; validate runs inside modal", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
@@ -408,16 +430,19 @@ Deno.test("UiBuilderAdmin: layout_patch preview updates canvas without separate 
     "separate visual audit canvas must not remain in the normal authoring route",
   );
   assertFalse(
-    src.includes("buildLayoutPatchPreviewAudit"),
-    "preview audit modal boundary must be removed from authoring route",
-  );
-  assertFalse(
-    src.includes("視覚監査モーダル") || src.includes("視覚監査"),
-    "normal UI copy must not advertise a separate visual audit modal",
+    src.includes('callLayoutPatch("preview")'),
+    "preview action must not be exposed in authoring UI",
   );
   assert(
-    src.includes("プレビュー結果を canvas とステータスに反映しました"),
-    "layout_patch:preview result must be reflected into the center canvas/status route",
+    src.includes("openLayoutApplyModal"),
+    "surface apply button must open modal workflow",
+  );
+  const modalSrc = await Deno.readTextFile(
+    new URL("../components/LayoutPatchApplyModal.tsx", import.meta.url),
+  );
+  assertFalse(
+    modalSrc.includes("FlowLayoutCanvas"),
+    "apply modal must not embed flow canvas wireframe",
   );
 });
 
@@ -522,6 +547,33 @@ Deno.test("ContentsScreenDesignPanel: step 3 omits legacy table_ref and import_s
   assertEquals(src.includes("UX_FIELD_TABLE_REF"), false);
   assertEquals(src.includes("UX_FIELD_IMPORT_SCHEMA"), false);
   assertEquals(src.includes("importSchemaName:"), false);
+});
+
+Deno.test("ContentsScreenDesignPanel: step 3 does not render ページ名 input", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n      \)\}/g)];
+  assert(step3Blocks.length > 0, "step 3 rendering blocks must exist");
+  for (const match of step3Blocks) {
+    assertFalse(
+      match[0].includes("ページ名"),
+      "step 3 must not render ページ名 input (display label belongs to step 1 only)",
+    );
+  }
+});
+
+Deno.test("ContentsScreenDesignPanel: step 3 does not patch screenLabel", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n      \)\}/g)];
+  for (const match of step3Blocks) {
+    assertFalse(
+      match[0].includes("screenLabel"),
+      "step 3 must not patch design.screenLabel",
+    );
+  }
 });
 
 Deno.test("UX_FIELD_NULLABLE: uses user-friendly label 空欄許可", () => {
@@ -1238,14 +1290,14 @@ Deno.test("UiBuilderAdmin: empty canvas does not auto-seed all palette component
   );
 });
 
-Deno.test("UiBuilderAdmin: manual route commits on Enter not on every keystroke", async () => {
+Deno.test("UiBuilderAdmin: legacy manual route commits on Enter not on every keystroke", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
   assert(src.includes("committedRouteKey"), "committed route key must drive package auto-gen");
-  assert(src.includes("manualRouteDraft"), "manual input must be draft-only while typing");
-  assert(src.includes("onManualRouteCommit"), "manual route must require explicit commit");
-  assert(src.includes('e.key === "Enter"'), "Enter must commit manual route");
+  assert(src.includes("function LegacyManualRouteInput("), "manual input must live in legacy-only component");
+  assert(src.includes("manualRouteDraft"), "legacy manual input must be draft-only while typing");
+  assert(src.includes('e.key === "Enter"'), "Enter must commit legacy manual route");
   const mainExport = src.slice(src.indexOf("export default function UiBuilderAdmin"));
   assert(
     mainExport.includes("}, [committedRouteKey]);"),
@@ -1255,6 +1307,32 @@ Deno.test("UiBuilderAdmin: manual route commits on Enter not on every keystroke"
     mainExport.includes("}, [manualRouteDraft]);"),
     false,
     "package auto-gen must not run on every manual route keystroke",
+  );
+});
+
+Deno.test("UiBuilderAdmin: normal authoring does not expose manual routeKey guidance", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const normalPath = stripTechnicalDisclosures(src);
+  assertFalse(
+    normalPath.includes("直接入力にルートキー"),
+    "normal path must not guide authors to type routeKey manually",
+  );
+  assertFalse(
+    normalPath.includes("直接入力（初回はこちら）"),
+    "normal path must not show first-time manual routeKey input",
+  );
+  assert(
+    normalPath.includes("ManifestRouteEntry"),
+    "normal path must use topologySystemName-derived ManifestRouteEntry",
+  );
+  const bucketStart = src.indexOf("function BucketPackageRouteFields(");
+  const bucketEnd = src.indexOf("\nfunction LegacyManualRouteInput(");
+  const bucketBody = src.slice(bucketStart, bucketEnd);
+  assertFalse(
+    bucketBody.includes("直接入力"),
+    "BucketPackageRouteFields must not contain manual route input",
   );
 });
 
@@ -2110,6 +2188,44 @@ Deno.test("UiBuilderAdmin: ManifestRouteEntry exists and derives routeKey from t
   // Confirm userFacingTopologyLabel is used only for display label, not for routeKey
   assert(entryBody.includes("resolveVisibleTopologyName"), "display label uses resolveVisibleTopologyName");
   assertFalse(entryBody.includes("userFacingTopologyLabel)"), "userFacingTopologyLabel must NOT be passed to routeKey derivation");
+  assertFalse(
+    entryBody.includes("このルートキーで確定"),
+    "normal flow must auto-commit routeKey without a separate confirm button",
+  );
+  assert(
+    src.includes("readUiBuilderHandoffManifestId") &&
+      entryBody.includes("initialManifestId"),
+    "ManifestRouteEntry must support contents handoff via manifestId query",
+  );
+  assert(
+    entryBody.includes("topology.name から自動"),
+    "committed route must collapse to read-only topology.name summary",
+  );
+});
+
+Deno.test("ContentsScreenDesignPanel: step 3 completion links ui-builder with manifestId handoff", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("/admin/ui-builder?manifestId="),
+    "contents completion must hand off manifestId to ui-builder",
+  );
+  assert(
+    src.includes("encodeURIComponent(selectedId)"),
+    "manifestId handoff must be URL-encoded",
+  );
+});
+
+Deno.test("UiBuilderAdmin: scoped canvas hides route selector when package route is locked", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("!layoutSelectorsLocked && (") &&
+      src.includes("<RouteLayoutSelector"),
+    "route/layout picker must be hidden when package route is locked",
+  );
 });
 
 Deno.test("ManifestRouteEntry SSOT: topologySystemNameToUiBuilderKey roundtrip matches encodeRouteNavigationTargetRef expectation", () => {

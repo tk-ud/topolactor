@@ -15,13 +15,16 @@ export type LayoutPreviewNodeInput = {
   componentId?: string;
   nodeKind?: "catalog_component" | "structural_html";
   htmlTag?: string;
+  layoutClassRefs?: string[];
   inlineText?: string;
   linkHref?: string;
   isDraftOnly?: boolean;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  width: number | string;
+  height: number | string;
+  widthMode?: "auto" | "preset" | "custom";
+  heightMode?: "auto" | "preset" | "custom";
   /** Flow tree structure — preserved from DraftNode for visual audit hierarchy. */
   parentNodeId?: string | null;
   orderIndex?: number;

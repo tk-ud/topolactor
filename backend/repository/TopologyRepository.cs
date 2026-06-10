@@ -165,6 +165,19 @@ public class TopologyRepository
     }
 
     /// <summary>
+    /// Batch-loads component_id from topology.ui_component_registry by component_key.
+    /// Returns empty dict (base/test double). Missing keys are absent from the result.
+    /// </summary>
+    public virtual Task<IReadOnlyDictionary<string, string>> LoadComponentIdsByKeysAsync(
+        IReadOnlyList<string> componentKeys, CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "TopologyRepository.LoadComponentIdsByKeysAsync: returning empty dict (base/test double).");
+        return Task.FromResult<IReadOnlyDictionary<string, string>>(
+            new Dictionary<string, string>(StringComparer.Ordinal));
+    }
+
+    /// <summary>
     /// Loads layout nodes by parsing layout_patch_json.nodes[] from topology.ui_topology_tensor
     /// for the given layout_id. Returns empty list (base/test double).
     /// LAYOUT_NODES_NOT_FOUND is signaled by an empty list — callers must treat empty as a
@@ -272,5 +285,8 @@ public record LayoutNodeRecord(
     /// <summary>Node-local state JSON string from layout_patch_json (e.g. open:bool for modal/drawer). Null when not authored.</summary>
     string? StateJson = null,
     /// <summary>Array prop bindings JSON string from layout_patch_json. Null when not authored.</summary>
-    string? PropBindingsJson = null
+    string? PropBindingsJson = null,
+    /// <summary>Sizing mode from layout_patch_json: auto | preset | custom.</summary>
+    string? WidthMode = null,
+    string? HeightMode = null
 );

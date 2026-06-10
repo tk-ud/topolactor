@@ -128,6 +128,17 @@ export type LayoutNode = {
    * source must start with "emission.data."; transform must be in allowlist.
    */
   propBindings?: Record<string, PropBinding> | null;
+  widthMode?: "auto" | "preset" | "custom";
+  heightMode?: "auto" | "preset" | "custom";
+  /** Persisted component_style_design snapshot for draft-preview / pre-publish projection. */
+  componentDesign?: {
+    inlineText?: string;
+    linkHref?: string;
+    linkTarget?: string;
+    cssTokenRefs?: string[];
+    classname?: string;
+    tailwind?: string;
+  };
 };
 
 /**

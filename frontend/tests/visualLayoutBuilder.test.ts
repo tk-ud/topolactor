@@ -21,6 +21,7 @@ import {
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   buildVisualLayoutPatchJson,
+  enrichDraftNodesWithPaletteComponentIds,
   cloneVisualNode,
   filterEmptyResponsiveRules,
   formatLayoutDimensionCss,
@@ -43,9 +44,18 @@ import {
   wouldCreateVisualParentCycle,
 } from "../runtime/visualLayoutUtils.ts";
 import {
+  entryProjectsInContext,
   filterLayoutClassRefsByAllowedFor,
+  filterLayoutClassRefsForFlowPreview,
+  isLayoutStructureContainerClassKey,
   resolveCanvasRootPreviewClassName,
+  resolveFlowContainerPreviewClassName,
+  resolveFlowNodePreviewClassName,
   resolveNodeWrapperPreviewClassName,
+  topologyLayoutClassPreviewCoverage,
+  FLOW_CONTAINER_ROLES,
+  FLOW_LEAF_ROLES,
+  FLOW_ROOT_ROLES,
 } from "../runtime/layoutClassPreviewUtils.ts";
 import { resolveCssTokenValue, resolveUnknownCssTokenRefs } from "../runtime/cssDictionary.ts";
 import {
@@ -1171,16 +1181,14 @@ Deno.test("canvas workspace drawer shell: selecting a canvas node opens right in
 });
 
 
-Deno.test("canvas workspace: preview remains inline canvas route, not modal", async () => {
+Deno.test("canvas workspace: apply opens validate-in-modal route, not preview buttons", async () => {
   const source = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
   assertFalse(source.includes("LayoutPatchPreviewModal"));
   assertFalse(source.includes("視覚監査モーダル"));
-  assert(
-    source.includes("プレビュー結果を canvas とステータスに反映しました"),
-    "preview action should update the same canvas/status route",
-  );
+  assertFalse(source.includes('callLayoutPatch("preview")'));
+  assert(source.includes("openLayoutApplyModal"));
 });
 
 Deno.test("canvas workspace: buildVisualLayoutPatchJson is the canonical patch builder", () => {
@@ -1732,6 +1740,144 @@ Deno.test("layoutClassDictionary: layout.align.center filtered for layout_sectio
   assertEquals(filtered, ["layout.align.center"]);
 });
 
+Deno.test("resolveFlowContainerPreviewClassName: combines row + align + gap + surface", () => {
+  const className = resolveFlowContainerPreviewClassName([
+    "layout.direction.row",
+    "layout.align.start",
+    "layout.valign.center",
+    "layout.gap.md",
+    "layout.surface.border",
+    "layout.container.toolbar",
+  ]);
+  assertEquals(className.includes("topolactor-topology-layout-direction-row"), true);
+  assertEquals(className.includes("topolactor-topology-layout-align-start"), true);
+  assertEquals(className.includes("topolactor-topology-layout-valign-center"), true);
+  assertEquals(className.includes("topolactor-topology-layout-gap-md"), true);
+  assertEquals(className.includes("topolactor-topology-layout-surface-border"), true);
+  assertEquals(className.includes("topolactor-topology-layout-container-toolbar"), true);
+});
+
+Deno.test("resolveFlowNodePreviewClassName: leaf gets width/align/gap/card surface", () => {
+  const className = resolveFlowNodePreviewClassName(
+    [
+      "layout.width.full",
+      "layout.align.end",
+      "layout.gap.sm",
+      "layout.card.surface",
+    ],
+    { allowedFor: FLOW_LEAF_ROLES },
+  );
+  assertEquals(className.includes("topolactor-topology-layout-width-full"), true);
+  assertEquals(className.includes("topolactor-topology-layout-align-end"), true);
+  assertEquals(className.includes("topolactor-topology-layout-gap-sm"), true);
+  assertEquals(className.includes("topolactor-topology-layout-card-surface"), true);
+});
+
+Deno.test("resolveCanvasRootPreviewClassName: root grid + shell + responsive cols", () => {
+  const className = resolveCanvasRootPreviewClassName([
+    "layout.root.grid",
+    "layout.shell.header",
+    "layout.grid.col3",
+    "layout.gap.lg",
+  ]);
+  // grid_cols wins over direction-group root.grid when both are set
+  assertEquals(className.includes("topolactor-topology-layout-root-grid"), false);
+  assertEquals(className.includes("topolactor-topology-layout-shell-header"), true);
+  assertEquals(className.includes("topolactor-topology-layout-grid-col3"), true);
+  assertEquals(className.includes("topolactor-topology-layout-gap-lg"), true);
+});
+
+Deno.test("isLayoutStructureContainerClassKey: sizing-only refs are not structure containers", () => {
+  assertEquals(isLayoutStructureContainerClassKey("layout.width.full"), false);
+  assertEquals(isLayoutStructureContainerClassKey("layout.align.start"), false);
+  assertEquals(isLayoutStructureContainerClassKey("layout.direction.row"), true);
+  assertEquals(isLayoutStructureContainerClassKey("layout.form.inline"), true);
+});
+
+Deno.test("topology layout class dictionary: every non-state entry projects in at least one flow context", () => {
+  const coverage = topologyLayoutClassPreviewCoverage();
+  const stateOnly = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) =>
+    e.allowedFor.every((r) => r === "preview_state")
+  );
+  assertEquals(stateOnly.map((e) => e.classKey), [
+    "layout.state.selected",
+    "layout.state.blocked",
+  ]);
+
+  for (const row of coverage) {
+    const entry = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.find((e) => e.classKey === row.classKey)!;
+    const projects = row.root || row.container || row.leaf;
+    assertEquals(
+      projects,
+      true,
+      `${row.classKey} must project in root, container, or leaf context`,
+    );
+    if (row.root) {
+      const cn = resolveFlowNodePreviewClassName([row.classKey], { allowedFor: FLOW_ROOT_ROLES });
+      assertEquals(cn.includes(entry.className), true, `${row.classKey} root resolve`);
+    }
+    if (row.container) {
+      const cn = resolveFlowContainerPreviewClassName([row.classKey]);
+      assertEquals(cn.includes(entry.className), true, `${row.classKey} container resolve`);
+    }
+    if (row.leaf) {
+      const cn = resolveFlowNodePreviewClassName([row.classKey], { allowedFor: FLOW_LEAF_ROLES });
+      assertEquals(cn.includes(entry.className), true, `${row.classKey} leaf resolve`);
+    }
+  }
+
+  assertEquals(
+    TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) =>
+      !e.allowedFor.every((r) => r === "preview_state")
+    ).length,
+    coverage.length,
+  );
+});
+
+Deno.test("filterLayoutClassRefsForFlowPreview: grid_cols drops conflicting direction display", () => {
+  const filtered = filterLayoutClassRefsForFlowPreview([
+    "layout.grid.col2",
+    "layout.direction.row",
+    "layout.root.grid",
+    "layout.align.start",
+  ]);
+  assertEquals(filtered.includes("layout.grid.col2"), true);
+  assertEquals(filtered.includes("layout.align.start"), true);
+  assertEquals(filtered.includes("layout.direction.row"), false);
+  assertEquals(filtered.includes("layout.root.grid"), false);
+});
+
+Deno.test("enrichDraftNodesWithPaletteComponentIds: fills missing componentId from palette", () => {
+  const nodes = enrichDraftNodesWithPaletteComponentIds<VisualNodePayload>(
+    [{
+      nodeId: "n1",
+      componentKey: "input.primitive",
+      orderIndex: 0,
+      parentNodeId: null,
+      slotKey: "",
+      isDraftOnly: false,
+      gridCol: 1,
+      gridRow: 1,
+      x: 0,
+      y: 0,
+      width: 160,
+      height: 40,
+    }],
+    [{ componentKey: "input.primitive", componentId: "15efada6-6962-4038-b3ee-d015c4e63c63" }],
+  );
+  assertEquals(nodes[0].componentId, "15efada6-6962-4038-b3ee-d015c4e63c63");
+  const json = buildVisualLayoutPatchJson(nodes);
+  assertEquals(json.includes("15efada6-6962-4038-b3ee-d015c4e63c63"), true);
+});
+
+Deno.test("entryProjectsInContext: section.stack is container-only not leaf", () => {
+  const entry = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.find((e) =>
+    e.classKey === "layout.section.stack"
+  )!;
+  assertEquals(entryProjectsInContext(entry, "container"), true);
+  assertEquals(entryProjectsInContext(entry, "leaf"), false);
+});
+
 
 // ─── SizingMode: widthMode/heightMode inline style suppression ────────────────
 
@@ -2222,26 +2368,28 @@ Deno.test("designDraft merge: cssTokenRefs update replaces tokens and keeps othe
   assertEquals(merged.linkHref, "https://example.com");
 });
 
-Deno.test("designDraft: node reselect with no saved design clears stale cssTokenRefs", () => {
-  // Simulates: node B had a previous canvas preview with tokens, then is reselected
-  // without a saved design. Default init sends a complete state (cssTokenRefs: []) so
-  // the stale tokens are cleared — absent key from pushCanvasPreview would leave them.
+Deno.test("designDraft: canvas preview survives deselect — map entry is not deleted", () => {
+  const map = new Map<string, FlowCanvasDesignDraft>();
+  map.set("node-a", {
+    inlineText: "persisted label",
+    cssTokenRefs: ["color.action.primary.background"],
+  });
+  // onDeselectAll must only clear selection, not delete canvas preview entries.
+  assertEquals(map.get("node-a")?.inlineText, "persisted label");
+  assertEquals(map.get("node-a")?.cssTokenRefs?.length, 1);
+});
+
+Deno.test("designDraft: fresh node init still clears stale tokens via explicit cssTokenRefs []", () => {
   const staleDraft: FlowCanvasDesignDraft = {
     inlineText: "old label",
-    linkHref: "https://old.example.com",
     cssTokenRefs: ["color.action.primary.background"],
   };
-  // Default init: complete state push (same contract as applySavedDesign)
   const defaultInit: FlowCanvasDesignDraft = {
     inlineText: undefined,
-    linkHref: undefined,
-    linkTarget: undefined,
     cssTokenRefs: [],
   };
   const result = mergeDesignDraft(staleDraft, defaultInit);
   assertEquals(result.cssTokenRefs, []);
-  assertEquals(result.inlineText, undefined);
-  assertEquals(result.linkHref, undefined);
 });
 
 Deno.test("designDraft: cssTokenRefs inline styles applied after token toggle + text edit", () => {

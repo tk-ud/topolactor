@@ -4,8 +4,8 @@ import { Handlers } from "$fresh/server.ts";
  * POST /api/draft-preview/preview
  *
  * Proxies to DEMO_BACKEND_URL/draft-preview/preview.
- * Request: { layoutId: string, draftId: string }
- * Response: { success, layoutId, draftId, layoutNodes, draftEntityJson, draftStatus }
+ * Request: { layoutId: string, draftId?: string }
+ * Response: { success, layoutId, previewMode, routeKey?, manifestId?, initialDataRows?, layoutNodes, designByNodeId? }
  * Returns 501 when DEMO_BACKEND_URL is not set.
  */
 export const handler: Handlers = {

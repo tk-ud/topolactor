@@ -1,11 +1,16 @@
 import { JSX } from "preact";
 import type { LayoutPreviewNodeInput } from "../runtime/layoutComponentPreview.ts";
-import { FlowLayoutCanvas, type FlowCanvasNode } from "./FlowLayoutCanvas.tsx";
+import {
+  FlowLayoutCanvas,
+  type FlowCanvasDesignDraft,
+  type FlowCanvasNode,
+} from "./FlowLayoutCanvas.tsx";
 import type { StructuralHtmlTag } from "../runtime/visualLayoutUtils.ts";
 
 export type LayoutVisualAuditCanvasProps = {
   nodes: LayoutPreviewNodeInput[];
   layoutClassRefs?: string[];
+  designDraftByNodeId?: ReadonlyMap<string, FlowCanvasDesignDraft>;
   title?: string;
   minHeight?: number;
 };
@@ -17,12 +22,15 @@ function toFlowAuditNodes(nodes: LayoutPreviewNodeInput[]): FlowCanvasNode[] {
     componentKind: node.componentKind,
     nodeKind: node.nodeKind,
     htmlTag: node.htmlTag as StructuralHtmlTag | undefined,
+    layoutClassRefs: node.layoutClassRefs,
     isDraftOnly: node.isDraftOnly ?? false,
     slotKey: node.slotKey ?? "",
     orderIndex: node.orderIndex ?? index,
     parentNodeId: node.parentNodeId ?? null,
     width: node.width,
     height: node.height,
+    widthMode: node.widthMode,
+    heightMode: node.heightMode,
     componentId: node.componentId,
   }));
 }
@@ -33,10 +41,12 @@ function toFlowAuditNodes(nodes: LayoutPreviewNodeInput[]): FlowCanvasNode[] {
 export function LayoutVisualAuditCanvas({
   nodes,
   layoutClassRefs = [],
+  designDraftByNodeId,
   title = "配置プレビュー",
   minHeight = 320,
 }: LayoutVisualAuditCanvasProps): JSX.Element {
   const flowNodes = toFlowAuditNodes(nodes);
+  const designMap = designDraftByNodeId ?? new Map<string, FlowCanvasDesignDraft>();
 
   return (
     <section
@@ -56,6 +66,7 @@ export function LayoutVisualAuditCanvas({
         nodes={flowNodes}
         selectedNodeId={null}
         rootLayoutClassRefs={layoutClassRefs}
+        designDraftByNodeId={designMap}
         minHeight={minHeight}
         onSelectNode={() => {}}
         allowEmptyStateTemplates={false}

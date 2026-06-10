@@ -3,7 +3,12 @@ import {
   flowNodePresentation,
   flowRootClassName,
 } from "../runtime/layoutNodeFlowProjection.ts";
-import { lookupTopologyLayoutClassKey } from "../runtime/topologyLayoutClassResolver.ts";
+import {
+  isLayoutStructureContainerClassRefs,
+  resolveFlowContainerPreviewClassName,
+  resolveFlowNodePreviewClassName,
+  FLOW_LEAF_ROLES,
+} from "../runtime/layoutClassPreviewUtils.ts";
 import type { LayoutNodeKind, SizingMode, StructuralHtmlTag } from "../runtime/visualLayoutUtils.ts";
 import { layoutDimensionLabel } from "../runtime/visualLayoutUtils.ts";
 import { LayoutPreviewNodeFrame } from "./LayoutPreviewNodeFrame.tsx";
@@ -37,12 +42,7 @@ export type FlowCanvasDesignDraft = {
 
 function isContainerNode(node: FlowCanvasNode, childCount: number): boolean {
   if (childCount > 0) return true;
-  return (node.layoutClassRefs ?? []).some((key) => {
-    const entry = lookupTopologyLayoutClassKey(key.trim());
-    return entry?.allowedFor.some((r) =>
-      r === "layout_root" || r === "layout_section" || r === "layout_row"
-    ) ?? false;
-  });
+  return isLayoutStructureContainerClassRefs(node.layoutClassRefs ?? []);
 }
 
 function buildFlowChildrenMap(
@@ -58,18 +58,6 @@ function buildFlowChildrenMap(
     children.sort((a, b) => a.orderIndex - b.orderIndex);
   }
   return map;
-}
-
-function containerAllowedFor(node: FlowCanvasNode): string[] {
-  const roles = new Set<string>();
-  for (const key of node.layoutClassRefs ?? []) {
-    for (const role of lookupTopologyLayoutClassKey(key.trim())?.allowedFor ?? []) {
-      if (role === "layout_root" || role === "layout_section" || role === "layout_row") {
-        roles.add(role);
-      }
-    }
-  }
-  return roles.size > 0 ? [...roles] : ["layout_section"];
 }
 
 function FlowCanvasNodeView({
@@ -91,10 +79,13 @@ function FlowCanvasNodeView({
   const isSelected = node.nodeId === selectedNodeId;
   const design = designDraftByNodeId.get(node.nodeId);
   const isContainer = isContainerNode(node, children.length);
-  const { style: flowStyle, className } = flowNodePresentation(node, {
-    isSelected,
-    allowedFor: isContainer ? containerAllowedFor(node) : "component_wrapper",
-  });
+  const { style: flowStyle, className: flowClassName } = flowNodePresentation(node);
+  const className = isContainer
+    ? resolveFlowContainerPreviewClassName(node.layoutClassRefs ?? [], isSelected)
+    : resolveFlowNodePreviewClassName(node.layoutClassRefs ?? [], {
+      allowedFor: FLOW_LEAF_ROLES,
+      isSelected,
+    }) || flowClassName;
   const tokenStyle = design?.cssTokenRefs?.length
     ? buildInlineStyleFromCssTokenRefs(design.cssTokenRefs)
     : {};
@@ -165,6 +156,28 @@ function FlowCanvasNodeView({
     ) as JSX.Element;
   }
 
+  if (isContainer) {
+    return (
+      <div {...commonProps}>
+        {childElements.length > 0
+          ? childElements
+          : (
+            <span class="px-1 text-[0.55rem] italic text-slate-400">
+              （空コンテナ — 子をドロップ）
+            </span>
+          )}
+        {(node.slotKey || (sizeLabel && node.widthMode === "custom" && node.heightMode === "custom")) && (
+          <div class="border-t border-slate-100 bg-slate-50 px-1 py-0.5 font-mono text-[0.48rem] text-slate-400">
+            {node.slotKey && <span>slot:{node.slotKey} </span>}
+            {node.widthMode === "custom" && node.heightMode === "custom" && (
+              <span>{sizeLabel}</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div {...commonProps}>
       <div class="min-h-0 overflow-auto p-1">
@@ -177,14 +190,13 @@ function FlowCanvasNodeView({
           linkHref={design?.linkHref}
           linkTarget={design?.linkTarget}
         />
-        {childElements.length > 0 && (
-          <div class="mt-1 space-y-1">{childElements}</div>
-        )}
       </div>
-      {(node.slotKey || sizeLabel) && (
+      {(node.slotKey || (sizeLabel && node.widthMode === "custom" && node.heightMode === "custom")) && (
         <div class="border-t border-slate-100 bg-slate-50 px-1 py-0.5 font-mono text-[0.48rem] text-slate-400">
           {node.slotKey && <span>slot:{node.slotKey} </span>}
-          <span>{sizeLabel}</span>
+          {node.widthMode === "custom" && node.heightMode === "custom" && (
+            <span>{sizeLabel}</span>
+          )}
         </div>
       )}
     </div>

@@ -192,6 +192,18 @@ public class UiTopologyRepository
         throw new NotImplementedException("UiTopologyRepository.ListLayoutCandidatesAsync must be overridden by a production implementation.");
     }
 
+    /// <summary>
+    /// Resolves package_id, route_key, and root layoutClassRefs for a layout_id tensor row.
+    /// Returns null when no tensor row exists. Throws when multiple rows exist (ambiguous selector).
+    /// </summary>
+    public virtual Task<LayoutTensorContextDto?> ResolveLayoutTensorContextAsync(
+        Guid layoutId,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.ResolveLayoutTensorContextAsync must be overridden by a production implementation.");
+    }
+
     public virtual Task<IReadOnlyList<AdminPackageListItemDto>> ListAdminPackagesAsync(
         CancellationToken ct = default)
     {
