@@ -153,6 +153,211 @@ Deno.test("mdViewerPreviewFactory: explicit error when savedView props invalid (
   }
 });
 
+// ─── completedPresetSeedJson structure validation ───────────────────────────
+
+Deno.test("normalizeMdViewerSavedView: completedPresetSeedJson:{} fails — RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS", () => {
+  const factory = resolveRuntimeComponentFactory("data_display/md_viewer");
+  assertExists(factory, "factory must exist");
+  const spec = {
+    componentId: "test-md-viewer",
+    componentType: "data_display/md_viewer",
+    props: {
+      savedView: {
+        savedViewId: "sv-test-1",
+        title: "Test View",
+        renderedMarkdown: "# Test",
+        completedPresetSeedJson: {},
+      },
+    },
+    eventBinding: {},
+    previewMode: false,
+  };
+  // deno-lint-ignore no-explicit-any
+  const result = factory!.render(spec as any);
+  assertEquals(result.ok, false, "empty completedPresetSeedJson must be rejected — no silent fallback");
+  if (!result.ok) {
+    assert(
+      result.error.includes("RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS"),
+      `expected RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS, got: ${result.error}`,
+    );
+  }
+});
+
+Deno.test("normalizeMdViewerSavedView: missing render_ref.rendered_markdown_hash fails validation", () => {
+  const factory = resolveRuntimeComponentFactory("data_display/md_viewer");
+  assertExists(factory, "factory must exist");
+  const spec = {
+    componentId: "test-md-viewer",
+    componentType: "data_display/md_viewer",
+    props: {
+      savedView: {
+        savedViewId: "sv-test-2",
+        title: "Test View",
+        renderedMarkdown: "# Test",
+        completedPresetSeedJson: {
+          seed_version: "1.0",
+          template_ref: {},
+          source_ref: {},
+          binding_ref: { required_placeholder_keys: [], optional_placeholder_keys: [] },
+          render_ref: {
+            // rendered_markdown_hash intentionally omitted
+            rendered_at: "2024-01-01T00:00:00Z",
+            renderer_version: "1.0",
+            unresolved_placeholder_keys: [],
+          },
+          adjustment_ref: {},
+          dashboard_ref: {},
+          lineage_ref: {},
+        },
+      },
+    },
+    eventBinding: {},
+    previewMode: false,
+  };
+  // deno-lint-ignore no-explicit-any
+  const result = factory!.render(spec as any);
+  assertEquals(result.ok, false, "missing render_ref.rendered_markdown_hash must be rejected");
+  if (!result.ok) {
+    assert(
+      result.error.includes("RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS"),
+      `expected RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS, got: ${result.error}`,
+    );
+  }
+});
+
+Deno.test("normalizeMdViewerSavedView: missing binding_ref.required_placeholder_keys fails validation", () => {
+  const factory = resolveRuntimeComponentFactory("data_display/md_viewer");
+  assertExists(factory, "factory must exist");
+  const spec = {
+    componentId: "test-md-viewer",
+    componentType: "data_display/md_viewer",
+    props: {
+      savedView: {
+        savedViewId: "sv-test-3",
+        title: "Test View",
+        renderedMarkdown: "# Test",
+        completedPresetSeedJson: {
+          seed_version: "1.0",
+          template_ref: {},
+          source_ref: {},
+          binding_ref: {
+            // required_placeholder_keys intentionally omitted
+            optional_placeholder_keys: [],
+          },
+          render_ref: {
+            rendered_markdown_hash: "abc123hash",
+            rendered_at: "2024-01-01T00:00:00Z",
+            renderer_version: "1.0",
+            unresolved_placeholder_keys: [],
+          },
+          adjustment_ref: {},
+          dashboard_ref: {},
+          lineage_ref: {},
+        },
+      },
+    },
+    eventBinding: {},
+    previewMode: false,
+  };
+  // deno-lint-ignore no-explicit-any
+  const result = factory!.render(spec as any);
+  assertEquals(result.ok, false, "missing binding_ref.required_placeholder_keys must be rejected");
+  if (!result.ok) {
+    assert(
+      result.error.includes("RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS"),
+      `expected RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS, got: ${result.error}`,
+    );
+  }
+});
+
+Deno.test("normalizeMdViewerSavedView: missing binding_ref.optional_placeholder_keys fails validation", () => {
+  const factory = resolveRuntimeComponentFactory("data_display/md_viewer");
+  assertExists(factory, "factory must exist");
+  const spec = {
+    componentId: "test-md-viewer",
+    componentType: "data_display/md_viewer",
+    props: {
+      savedView: {
+        savedViewId: "sv-test-4",
+        title: "Test View",
+        renderedMarkdown: "# Test",
+        completedPresetSeedJson: {
+          seed_version: "1.0",
+          template_ref: {},
+          source_ref: {},
+          binding_ref: {
+            required_placeholder_keys: [],
+            // optional_placeholder_keys intentionally omitted
+          },
+          render_ref: {
+            rendered_markdown_hash: "abc123hash",
+            rendered_at: "2024-01-01T00:00:00Z",
+            renderer_version: "1.0",
+            unresolved_placeholder_keys: [],
+          },
+          adjustment_ref: {},
+          dashboard_ref: {},
+          lineage_ref: {},
+        },
+      },
+    },
+    eventBinding: {},
+    previewMode: false,
+  };
+  // deno-lint-ignore no-explicit-any
+  const result = factory!.render(spec as any);
+  assertEquals(result.ok, false, "missing binding_ref.optional_placeholder_keys must be rejected");
+  if (!result.ok) {
+    assert(
+      result.error.includes("RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS"),
+      `expected RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS, got: ${result.error}`,
+    );
+  }
+});
+
+Deno.test("normalizeMdViewerSavedView: fully valid completedPresetSeedJson passes validation and renders", () => {
+  const factory = resolveRuntimeComponentFactory("data_display/md_viewer");
+  assertExists(factory, "factory must exist");
+  const spec = {
+    componentId: "test-md-viewer",
+    componentType: "data_display/md_viewer",
+    props: {
+      savedView: {
+        savedViewId: "sv-test-valid",
+        title: "Valid Test View",
+        renderedMarkdown: "# Valid Markdown",
+        completedPresetSeedJson: {
+          seed_version: "1.0",
+          template_ref: { templateId: "tpl-001", templateName: "Test Template" },
+          source_ref: { sourceTable: "entity", sourceRecordId: "rec-001" },
+          binding_ref: {
+            required_placeholder_keys: ["{{name}}"],
+            optional_placeholder_keys: ["{{notes}}"],
+          },
+          render_ref: {
+            rendered_markdown_hash: "sha256-abc123def456",
+            rendered_at: "2024-01-01T00:00:00Z",
+            renderer_version: "1.0",
+            unresolved_placeholder_keys: [],
+          },
+          adjustment_ref: { user_adjustment_patch_json: null },
+          dashboard_ref: { tags: [], card_metadata_json: {} },
+          lineage_ref: { created_from_preset: "md_viewer.projection" },
+        },
+      },
+      seedValid: true,
+    },
+    eventBinding: {},
+    previewMode: false,
+  };
+  // deno-lint-ignore no-explicit-any
+  const result = factory!.render(spec as any);
+  assertEquals(result.ok, true, "fully valid completedPresetSeedJson must pass validation and render");
+  if (result.ok) {
+    assertExists(result.node, "must return a VNode");
+  }
+});
+
 // ─── Authority boundary tests ─────────────────────────────────────────────────
 
 Deno.test("md_viewer runtime renderer: preview renders MdViewer (not placeholder div)", () => {

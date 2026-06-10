@@ -2333,12 +2333,32 @@ function treeFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
+function isCompletedPresetSeedStructureValid(seed: unknown): boolean {
+  if (!seed || typeof seed !== "object" || Array.isArray(seed)) return false;
+  const s = seed as Record<string, unknown>;
+  if (typeof s.seed_version !== "string" || !s.seed_version) return false;
+  const requiredObjects = ["template_ref", "source_ref", "binding_ref", "render_ref", "adjustment_ref", "dashboard_ref", "lineage_ref"] as const;
+  for (const key of requiredObjects) {
+    if (!s[key] || typeof s[key] !== "object" || Array.isArray(s[key])) return false;
+  }
+  const renderRef = s.render_ref as Record<string, unknown>;
+  if (typeof renderRef.rendered_markdown_hash !== "string" || !renderRef.rendered_markdown_hash) return false;
+  if (typeof renderRef.rendered_at !== "string") return false;
+  if (typeof renderRef.renderer_version !== "string") return false;
+  if (!Array.isArray(renderRef.unresolved_placeholder_keys)) return false;
+  const bindingRef = s.binding_ref as Record<string, unknown>;
+  if (!Array.isArray(bindingRef.required_placeholder_keys)) return false;
+  if (!Array.isArray(bindingRef.optional_placeholder_keys)) return false;
+  return true;
+}
+
 function normalizeMdViewerSavedView(raw: Record<string, unknown>): SavedViewDetail | null {
   if (typeof raw.savedViewId !== "string" || !raw.savedViewId) return null;
   if (typeof raw.title !== "string") return null;
   if (typeof raw.renderedMarkdown !== "string") return null;
   const completedPresetSeedJson = raw.completedPresetSeedJson;
   if (!completedPresetSeedJson || typeof completedPresetSeedJson !== "object" || Array.isArray(completedPresetSeedJson)) return null;
+  if (!isCompletedPresetSeedStructureValid(completedPresetSeedJson)) return null;
   return {
     savedViewId: raw.savedViewId,
     title: raw.title,
