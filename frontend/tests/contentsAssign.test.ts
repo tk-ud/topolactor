@@ -23,6 +23,7 @@ const existing: ScreenDataShapeSummary = {
   logicalTables: [],
   screenOperationKind: "list",
   screenOperationKinds: ["list"],
+  topologySystemName: null,
   userFacingTopologyLabel: "注文",
   columns: [{ name: "id", dataType: "uuid", nullable: false }],
   relationIntents: [{ localTableRef: "orders", joinTableRef: "customers", localKey: "customer_id", remoteKey: "id" }],
