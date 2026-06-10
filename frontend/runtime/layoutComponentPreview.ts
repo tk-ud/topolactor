@@ -49,6 +49,7 @@ const LAYOUT_PREVIEW_KEY_ALIASES: Record<string, string> = {
 const LAYOUT_PREVIEW_DEFAULT_SIZES: Record<string, LayoutPreviewDefaultSize> = {
   "action/button": { width: 148, height: 44 },
   "display/card": { width: 240, height: 152 },
+  "display/card_list": { width: 280, height: 280 },
   "data_display/table": { width: 320, height: 180 },
   "data_display/data_grid": { width: 320, height: 180 },
   "data_display/list": { width: 260, height: 140 },
@@ -154,6 +155,14 @@ export function buildLayoutPreviewPlaceholderProps(
           title: inlineText || shortLabel,
           body: inlineText ? "" : "プレビュー本文",
         },
+      };
+    case "display/card_list":
+      return {
+        items: [
+          { id: "1", title: inlineText || "カード A", body: "サンプル本文 1" },
+          { id: "2", title: "カード B", body: "サンプル本文 2" },
+        ],
+        emptyMessage: "データがありません",
       };
     case "disclosure/modal":
       return {

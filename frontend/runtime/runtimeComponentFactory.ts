@@ -2,6 +2,7 @@ import { h, type JSX, type VNode } from "preact";
 import { Modal } from "../components/Modal.tsx";
 import { Button } from "../components/Button.tsx";
 import { Card } from "../components/Card.tsx";
+import { CardList } from "../components/CardList.tsx";
 import { Input } from "../components/Input.tsx";
 import { Table } from "../components/Table.tsx";
 import { SelectImportDialog } from "../components/SelectImportDialog.tsx";
@@ -362,6 +363,36 @@ function cardFactory(spec: RuntimeComponentSpec): RenderResult {
       onClick: spec.eventBinding.click
         ? () => {
           const result = emitBoundEvent(spec, "click", {});
+          if (!result.ok) throw new Error(result.error);
+        }
+        : undefined,
+    }),
+  };
+}
+
+function cardListFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const rawItems = Array.isArray(props.items) ? props.items : [];
+  const items = rawItems.filter(
+    (it): it is Record<string, unknown> =>
+      typeof it === "object" && it !== null && !Array.isArray(it),
+  );
+  return {
+    ok: true,
+    node: h(CardList, {
+      items: items.map((it) => ({
+        id: it.id as string | number | undefined,
+        title: it.title as string | undefined,
+        body: it.body as string | undefined,
+        footer: it.footer as string | undefined,
+        variant: it.variant as "default" | "info" | "warning" | "error" | undefined,
+      })),
+      emptyMessage: props.emptyMessage as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onSelect: spec.eventBinding.select
+        ? (_item, idx) => {
+          const result = emitBoundEvent(spec, "select", { index: idx, item: items[idx] });
           if (!result.ok) throw new Error(result.error);
         }
         : undefined,
@@ -2020,6 +2051,7 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
     ],
     render: cardFactory,
   },
+  { componentKinds: ["display/card_list"], render: cardListFactory },
   {
     componentKinds: [
       "data_display/table",

@@ -378,13 +378,20 @@ system_roadmap_ssot:
         - frontend/tests/visualLayoutBuilder.test.ts
         - frontend/tests/ssotReaderCatalog.test.ts
         - frontend/tests/abstractFunctionBoundary.test.ts
+        - frontend/tests/runtimeComponentFactory.test.ts
+        - frontend/tests/renderEmissionPropBindings.test.ts
+        - frontend/tests/propBindingResolver.test.ts
         - .agent/tests/check-ui-ux-executable-component-slice.sh
       completion_condition:
         - admin_authoring_routes_use_preview_validate_apply_boundary
         - db_design_layout_wiring_authority_remains_backend_and_topology_owned
         - mock_preset_intake_and_visual_builder_complete_their_declared_acceptance_scope
+        - display_card_list_catalog_runtime_factory_preview_and_propbindings_complete
+        - ui_builder_data_binding_tab_separates_array_prop_wiring_from_advanced_experimental
+        - display_card_single_record_only_enforced_by_tests
       known_gap_ref:
         - visual_builder_production_ready_manual_accessibility_and_responsive_token_acceptance_pending
+        - data_display_tree_runtime_factory_not_yet_implemented_propbindings_capability_exists
       files:
         - backend/
         - frontend/
