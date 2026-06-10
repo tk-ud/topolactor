@@ -25,6 +25,7 @@ css_dictionary_ssot:
   authority_boundary:
     yaml_owns:
       - css_token_key_vocabulary
+      - css_token_user_label_vocabulary
       - css_property_allowlist
       - css_value_scales
       - responsive_breakpoint_vocabulary
@@ -202,6 +203,7 @@ css_dictionary_ssot:
       component_scope:
         - Button
       semantic_role: primary_action
+      user_label: "メインボタン背景"
     color.action.primary.text:
       category: color
       property: color
@@ -209,6 +211,7 @@ css_dictionary_ssot:
       component_scope:
         - Button
       semantic_role: primary_action
+      user_label: "メインボタン文字色"
     color.action.secondary.background:
       category: color
       property: background
@@ -216,6 +219,7 @@ css_dictionary_ssot:
       component_scope:
         - Button
       semantic_role: secondary_action
+      user_label: "セカンダリボタン背景"
     color.action.secondary.text:
       category: color
       property: color
@@ -223,6 +227,7 @@ css_dictionary_ssot:
       component_scope:
         - Button
       semantic_role: secondary_action
+      user_label: "セカンダリボタン文字色"
     color.action.danger.background:
       category: color
       property: background
@@ -230,6 +235,7 @@ css_dictionary_ssot:
       component_scope:
         - Button
       semantic_role: danger_action
+      user_label: "危険操作ボタン背景"
     color.action.danger.text:
       category: color
       property: color
@@ -237,6 +243,7 @@ css_dictionary_ssot:
       component_scope:
         - Button
       semantic_role: danger_action
+      user_label: "危険操作ボタン文字色"
     border.control.default:
       category: border
       property: border
@@ -245,6 +252,7 @@ css_dictionary_ssot:
         - Button
         - Input
       semantic_role: control_boundary
+      user_label: "コントロール枠線"
     radius.control.sm:
       category: radius
       property: border-radius
@@ -254,6 +262,7 @@ css_dictionary_ssot:
         - Input
         - Card
       semantic_role: control_shape
+      user_label: "コントロール角丸（小）"
     spacing.control.padding_md:
       category: spacing
       property: padding
@@ -261,6 +270,7 @@ css_dictionary_ssot:
       component_scope:
         - Button
       semantic_role: control_spacing
+      user_label: "コントロール余白（中）"
     spacing.field.padding_sm:
       category: spacing
       property: padding
@@ -268,6 +278,7 @@ css_dictionary_ssot:
       component_scope:
         - Input
       semantic_role: field_spacing
+      user_label: "入力フィールド余白（小）"
     typography.control.monospace:
       category: typography
       property: font-family
@@ -278,6 +289,7 @@ css_dictionary_ssot:
         - Table
         - Card
       semantic_role: admin_ui_text
+      user_label: "管理UIテキスト"
     interaction.control.pointer:
       category: interaction
       property: cursor
@@ -285,6 +297,7 @@ css_dictionary_ssot:
       component_scope:
         - Button
       semantic_role: clickable_control
+      user_label: "クリック可能"
     interaction.control.disabled_opacity:
       category: interaction
       property: opacity
@@ -293,6 +306,7 @@ css_dictionary_ssot:
         - Button
         - Input
       semantic_role: disabled_state
+      user_label: "無効状態"
     layout.stack.flex_column:
       category: layout
       property: flex-direction
@@ -300,6 +314,7 @@ css_dictionary_ssot:
       component_scope:
         - Card
       semantic_role: stacked_layout
+      user_label: "縦積みレイアウト"
     layout.table.full_width:
       category: layout
       property: width
@@ -307,6 +322,7 @@ css_dictionary_ssot:
       component_scope:
         - Table
       semantic_role: data_table_width
+      user_label: "テーブル全幅"
 
   ui_binding_contract:
     selector_source: css_dictionary_ssot.tokens

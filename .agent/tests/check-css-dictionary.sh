@@ -132,7 +132,7 @@ for ln in lines:
         in_component_scope=False
 
 ts_entries={}
-for m in re.finditer(r'\{\s*tokenKey:\s*"([^"]+)"\s*,\s*category:\s*"([^"]+)"\s*,\s*property:\s*"([^"]+)"\s*,\s*componentScope:\s*\[([^\]]*)\]\s*,\s*semanticRole:\s*"([^"]+)"\s*\}', ts_text):
+for m in re.finditer(r'\{\s*tokenKey:\s*"([^"]+)"\s*,\s*category:\s*"([^"]+)"\s*,\s*property:\s*"([^"]+)"\s*,\s*componentScope:\s*\[([^\]]*)\]\s*,\s*semanticRole:\s*"([^"]+)"[^}]*\}', ts_text):
     key,cat,prop,scopes,role=m.groups()
     scope=[x.strip().strip('"') for x in scopes.split(',') if x.strip()]
     ts_entries[key]={"category":cat,"property":prop,"componentScope":scope,"semanticRole":role}
