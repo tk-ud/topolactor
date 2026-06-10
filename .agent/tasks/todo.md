@@ -60,6 +60,9 @@ UIBuilder preset ecosystem parent surface is partial. Provisional preset surface
 **Resolved (runtime-catalog-full-connection-rk9ije 2026-06-10):**
 - [x] `runtime_component_catalog_full_connection_bundle` — COMPONENT_CATALOG_ENTRIES の runtimeConnected:false エントリを全量接続。select / checkbox / badge / status_badge / alert / loading / empty / error / json_viewer / admin_page_shell / admin_section / validation_result / textarea_template / tabs / tree / md_viewer の 16 component に runtime factory 追加。tree_node は sub-component として registrationRequired:false / non-runtime 明示。双方向整合テスト (runtimeComponentCatalogFullConnection.test.ts) 追加。registrationRequired:true + runtimeConnected:false 違反ゼロ確認済み。
 
+**Resolved (md_viewer_runtime_completion_bundle 2026-06-10):**
+- [x] `md_viewer_runtime_completion_bundle` — `mdViewerPreviewFactory` を placeholder div から MdViewer 実体への runtime renderer に置き換え。`buildLayoutPreviewPlaceholderProps("data_display/md_viewer")` に savedView/seedValid サンプル projection props を整備。runtime props 正規化 (`normalizeMdViewerSavedView`) 追加。savedView 欠損時の明示エラー (`RUNTIME_MD_VIEWER_MISSING_SAVED_VIEW_PROPS` / `RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS`) 実装。全 mutation action callbacks を未提供（authority は /admin/team-dashboard 側に維持）。preview mode では `disabledActionReasons` で明示的 disabled 理由を表示。`mdViewerRuntimeCompletion.test.ts` 追加。
+
 - [ ] aggregate_dashboard provisional preset surface is not yet implemented or explicitly completed
 - [ ] hub_search provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_search_crud_aggregate provisional preset surface is not yet implemented or explicitly completed
