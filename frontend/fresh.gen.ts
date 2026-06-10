@@ -8,15 +8,19 @@ import * as $admin_contents from "./routes/admin/contents.tsx";
 import * as $admin_enums from "./routes/admin/enums.tsx";
 import * as $admin_index from "./routes/admin/index.tsx";
 import * as $admin_manifests from "./routes/admin/manifests.tsx";
+import * as $admin_team_dashboard_index from "./routes/admin/team-dashboard/index.tsx";
 import * as $admin_ui_builder from "./routes/admin/ui-builder.tsx";
 import * as $admin_users from "./routes/admin/users.tsx";
 import * as $api_auth_login_manifest from "./routes/api/auth/login-manifest.ts";
 import * as $api_auth_login from "./routes/api/auth/login.ts";
 import * as $api_auth_logout from "./routes/api/auth/logout.ts";
 import * as $api_auth_refresh from "./routes/api/auth/refresh.ts";
+import * as $api_auth_register from "./routes/api/auth/register.ts";
 import * as $api_auth_session from "./routes/api/auth/session.ts";
 import * as $api_component_events_append from "./routes/api/component-events/append.ts";
 import * as $api_dispatch from "./routes/api/dispatch.ts";
+import * as $api_draft_preview_layouts from "./routes/api/draft-preview/layouts.ts";
+import * as $api_draft_preview_preview from "./routes/api/draft-preview/preview.ts";
 import * as $api_sql_attention_topology_projection from "./routes/api/sql-attention/topology-projection.ts";
 import * as $api_sse from "./routes/api/sse.ts";
 import * as $api_super_auth_login from "./routes/api/super_auth/login.ts";
@@ -39,14 +43,18 @@ import * as $ContentsAdmin from "./islands/ContentsAdmin.tsx";
 import * as $ContentsPromotionPanel from "./islands/ContentsPromotionPanel.tsx";
 import * as $ContentsScreenDesignPanel from "./islands/ContentsScreenDesignPanel.tsx";
 import * as $ContextTokenRegistryEditor from "./islands/ContextTokenRegistryEditor.tsx";
+import * as $DraftPreviewShell from "./islands/DraftPreviewShell.tsx";
 import * as $HubNavigationAdmin from "./islands/HubNavigationAdmin.tsx";
 import * as $LoginManifestPanel from "./islands/LoginManifestPanel.tsx";
 import * as $ManifestsAdmin from "./islands/ManifestsAdmin.tsx";
 import * as $OperationPanel from "./islands/OperationPanel.tsx";
+import * as $PresetUploaderDrawer from "./islands/PresetUploaderDrawer.tsx";
+import * as $ProjectionShell from "./islands/ProjectionShell.tsx";
 import * as $RegistryVectorValidator from "./islands/RegistryVectorValidator.tsx";
 import * as $ReplyPanel from "./islands/ReplyPanel.tsx";
 import * as $SeedAdmin from "./islands/SeedAdmin.tsx";
 import * as $SuperAuthPanel from "./islands/SuperAuthPanel.tsx";
+import * as $TeamMarkdownDashboard from "./islands/TeamMarkdownDashboard.tsx";
 import * as $UiBuilderAdmin from "./islands/UiBuilderAdmin.tsx";
 import * as $UserDemoStepper from "./islands/UserDemoStepper.tsx";
 import type { Manifest } from "$fresh/server.ts";
@@ -59,15 +67,19 @@ const manifest = {
     "./routes/admin/enums.tsx": $admin_enums,
     "./routes/admin/index.tsx": $admin_index,
     "./routes/admin/manifests.tsx": $admin_manifests,
+    "./routes/admin/team-dashboard/index.tsx": $admin_team_dashboard_index,
     "./routes/admin/ui-builder.tsx": $admin_ui_builder,
     "./routes/admin/users.tsx": $admin_users,
     "./routes/api/auth/login-manifest.ts": $api_auth_login_manifest,
     "./routes/api/auth/login.ts": $api_auth_login,
     "./routes/api/auth/logout.ts": $api_auth_logout,
     "./routes/api/auth/refresh.ts": $api_auth_refresh,
+    "./routes/api/auth/register.ts": $api_auth_register,
     "./routes/api/auth/session.ts": $api_auth_session,
     "./routes/api/component-events/append.ts": $api_component_events_append,
     "./routes/api/dispatch.ts": $api_dispatch,
+    "./routes/api/draft-preview/layouts.ts": $api_draft_preview_layouts,
+    "./routes/api/draft-preview/preview.ts": $api_draft_preview_preview,
     "./routes/api/sql-attention/topology-projection.ts":
       $api_sql_attention_topology_projection,
     "./routes/api/sse.ts": $api_sse,
@@ -93,14 +105,18 @@ const manifest = {
     "./islands/ContentsPromotionPanel.tsx": $ContentsPromotionPanel,
     "./islands/ContentsScreenDesignPanel.tsx": $ContentsScreenDesignPanel,
     "./islands/ContextTokenRegistryEditor.tsx": $ContextTokenRegistryEditor,
+    "./islands/DraftPreviewShell.tsx": $DraftPreviewShell,
     "./islands/HubNavigationAdmin.tsx": $HubNavigationAdmin,
     "./islands/LoginManifestPanel.tsx": $LoginManifestPanel,
     "./islands/ManifestsAdmin.tsx": $ManifestsAdmin,
     "./islands/OperationPanel.tsx": $OperationPanel,
+    "./islands/PresetUploaderDrawer.tsx": $PresetUploaderDrawer,
+    "./islands/ProjectionShell.tsx": $ProjectionShell,
     "./islands/RegistryVectorValidator.tsx": $RegistryVectorValidator,
     "./islands/ReplyPanel.tsx": $ReplyPanel,
     "./islands/SeedAdmin.tsx": $SeedAdmin,
     "./islands/SuperAuthPanel.tsx": $SuperAuthPanel,
+    "./islands/TeamMarkdownDashboard.tsx": $TeamMarkdownDashboard,
     "./islands/UiBuilderAdmin.tsx": $UiBuilderAdmin,
     "./islands/UserDemoStepper.tsx": $UserDemoStepper,
   },

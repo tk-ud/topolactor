@@ -5,6 +5,8 @@ export default {
     "./routes/**/*.{ts,tsx}",
     "./islands/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
+    "./styles/**/*.css",
+    "./runtime/**/*.ts",
   ],
   theme: {
     extend: {},

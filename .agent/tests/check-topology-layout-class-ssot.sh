@@ -155,6 +155,7 @@ for k in ts_entries:
 allowed_files = {
     os.path.normpath(css_path),
     os.path.normpath(ts_path),
+    os.path.normpath(os.path.join(frontend_root, 'static', 'styles.css')),
     os.path.normpath(os.path.join(frontend_root, 'runtime', 'topologyLayoutClassResolver.ts')),
     os.path.normpath(os.path.join(frontend_root, 'islands', 'UiBuilderAdmin.tsx')),
 }
@@ -164,7 +165,7 @@ for root, _, files in os.walk(frontend_root):
             continue
         fp = os.path.normpath(os.path.join(root, fn))
         rel = fp.replace('\\', '/')
-        if fp in allowed_files or '/tests/' in rel or '/runtime/topologyLayoutClassDictionary.ts' in rel:
+        if fp in allowed_files or '/tests/' in rel or '/_fresh/' in rel or '/runtime/topologyLayoutClassDictionary.ts' in rel:
             continue
         text = open(fp, encoding='utf-8', errors='ignore').read()
         for m in re.finditer(r'topolactor-topology-[a-z0-9-]+', text):

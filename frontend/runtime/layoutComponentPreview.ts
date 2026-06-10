@@ -138,11 +138,11 @@ export function buildLayoutPreviewPlaceholderProps(
     case "form_input/input":
     case "form_input/textarea":
     case "form_input/search_input":
+      // No componentKey-derived label — SSOT inlineText is field content, not a fake "<kind>" caption.
       return {
         data: {
-          label: shortLabel,
-          placeholder: "プレビュー",
-          value: inlineText ?? "",
+          placeholder: inlineText?.trim() || "プレビュー",
+          value: "",
           disabled: false,
         },
       };

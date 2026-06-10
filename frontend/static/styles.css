@@ -1,10 +1,196 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities;
-
-@import "../styles/topology-layout.css";
 
 @layer components {
+  /* Topology layout projection — keep in sync with frontend/styles/topology-layout.css */
+  .topolactor-topology-layout-root-grid {
+    @apply grid grid-cols-12 gap-2;
+  }
+
+  .topolactor-topology-layout-section-stack {
+    @apply flex flex-col gap-2;
+  }
+
+  .topolactor-topology-layout-row-flex {
+    @apply flex flex-row flex-wrap items-center gap-2;
+  }
+
+  .topolactor-topology-layout-card-surface {
+    @apply rounded-lg border border-gray-200 bg-white p-2 shadow-sm;
+  }
+
+  .topolactor-topology-layout-node-boundary {
+    @apply rounded border-2 border-blue-200 bg-white;
+  }
+
+  .topolactor-topology-layout-state-selected {
+    @apply border-blue-600 bg-blue-50 ring-1 ring-blue-400;
+  }
+
+  .topolactor-topology-layout-state-blocked {
+    @apply border-yellow-500 bg-yellow-50 opacity-90;
+  }
+
+  .topolactor-topology-layout-direction-stack {
+    @apply flex flex-col;
+  }
+
+  .topolactor-topology-layout-direction-row {
+    @apply flex flex-row;
+  }
+
+  .topolactor-topology-layout-direction-wrap {
+    @apply flex flex-row flex-wrap;
+  }
+
+  .topolactor-topology-layout-align-start {
+    @apply justify-start;
+  }
+
+  .topolactor-topology-layout-align-center {
+    @apply justify-center;
+  }
+
+  .topolactor-topology-layout-align-end {
+    @apply justify-end;
+  }
+
+  .topolactor-topology-layout-align-between {
+    @apply justify-between;
+  }
+
+  .topolactor-topology-layout-valign-start {
+    @apply items-start;
+  }
+
+  .topolactor-topology-layout-valign-center {
+    @apply items-center;
+  }
+
+  .topolactor-topology-layout-valign-end {
+    @apply items-end;
+  }
+
+  .topolactor-topology-layout-width-full {
+    @apply w-full;
+  }
+
+  .topolactor-topology-layout-width-content {
+    @apply w-fit;
+  }
+
+  .topolactor-topology-layout-width-sm {
+    width: 320px;
+  }
+
+  .topolactor-topology-layout-width-md {
+    width: 480px;
+  }
+
+  .topolactor-topology-layout-width-lg {
+    width: 720px;
+  }
+
+  .topolactor-topology-layout-gap-none {
+    @apply gap-0;
+  }
+
+  .topolactor-topology-layout-gap-sm {
+    @apply gap-2;
+  }
+
+  .topolactor-topology-layout-gap-md {
+    @apply gap-4;
+  }
+
+  .topolactor-topology-layout-gap-lg {
+    @apply gap-6;
+  }
+
+  .topolactor-topology-layout-grid-col2 {
+    @apply grid grid-cols-2;
+  }
+
+  .topolactor-topology-layout-grid-col3 {
+    @apply grid grid-cols-3;
+  }
+
+  .topolactor-topology-layout-surface-border {
+    @apply border border-gray-300;
+  }
+
+  .topolactor-topology-layout-surface-shadow {
+    @apply shadow-md;
+  }
+
+  .topolactor-topology-layout-surface-subtle {
+    @apply bg-gray-50;
+  }
+
+  .topolactor-topology-layout-surface-rounded {
+    @apply rounded-lg;
+  }
+
+  .topolactor-topology-layout-shell-modal {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/50;
+  }
+
+  .topolactor-topology-layout-shell-drawer {
+    @apply fixed inset-y-0 right-0 z-40 w-80 bg-white shadow-xl;
+  }
+
+  .topolactor-topology-layout-shell-sidebar {
+    @apply flex flex-col w-64 bg-white border-r border-gray-200;
+  }
+
+  .topolactor-topology-layout-shell-header {
+    @apply flex items-center w-full border-b border-gray-200 bg-white px-4 py-2;
+  }
+
+  .topolactor-topology-layout-shell-footer {
+    @apply flex items-center w-full border-t border-gray-200 bg-white px-4 py-2;
+  }
+
+  .topolactor-topology-layout-container-page {
+    @apply flex flex-col min-h-screen w-full;
+  }
+
+  .topolactor-topology-layout-container-section {
+    @apply flex flex-col w-full py-4;
+  }
+
+  .topolactor-topology-layout-container-card {
+    @apply rounded-lg border border-gray-200 bg-white p-4;
+  }
+
+  .topolactor-topology-layout-container-panel {
+    @apply flex flex-col rounded border border-gray-200 bg-white p-3;
+  }
+
+  .topolactor-topology-layout-container-form {
+    @apply flex flex-col gap-3;
+  }
+
+  .topolactor-topology-layout-container-toolbar {
+    @apply flex flex-row items-center gap-2 border-b border-gray-200 px-2 py-1;
+  }
+
+  .topolactor-topology-layout-container-list {
+    @apply flex flex-col divide-y divide-gray-100;
+  }
+
+  .topolactor-topology-layout-form-row {
+    @apply flex flex-col gap-1;
+  }
+
+  .topolactor-topology-layout-form-inline {
+    @apply flex flex-row items-center gap-2;
+  }
+
+  .topolactor-topology-layout-form-button-row {
+    @apply flex flex-row items-center justify-end gap-2 pt-2;
+  }
+
   .page-main {
     @apply mx-auto max-w-5xl px-6 py-8;
   }
@@ -173,3 +359,5 @@
     @apply overflow-x-auto rounded bg-gray-100 p-3 font-mono text-xs;
   }
 }
+
+@tailwind utilities;

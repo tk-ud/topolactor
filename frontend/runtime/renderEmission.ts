@@ -8,6 +8,7 @@ import type { RuntimeDispatchSpec } from "./frontendScheduler.ts";
 import { resolvePropBindings } from "./propBindingResolver.ts";
 import { mergeCatalogPropsWithComponentDesign } from "./mergeComponentDesignProps.ts";
 import { buildPreviewInertEventBinding } from "./previewInertEventBinding.ts";
+import { buildLayoutPreviewPlaceholderProps } from "./layoutComponentPreview.ts";
 
 export type RenderEmissionOptions = {
   /**
@@ -123,14 +124,17 @@ export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispa
 
 /**
  * Builds minimum renderable props for a catalog_component node.
- * Uses componentKey as label for button/action components.
- * All factories handle absent/optional fields gracefully.
+ * Delegates to canvas preview placeholders when componentKind is known (no fake "input" labels).
  */
 function buildDefaultCatalogComponentProps(node: EmissionLayoutNode): Record<string, unknown> {
-  const label = (node.componentKey && node.componentKey.trim())
+  const componentKey = (node.componentKey && node.componentKey.trim())
     ? node.componentKey.trim()
     : (node.nodeId ?? "Component");
-  return { data: { label } };
+  const componentKind = node.componentKind?.trim();
+  if (componentKind) {
+    return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
+  }
+  return { data: { label: componentKey } };
 }
 
 /**

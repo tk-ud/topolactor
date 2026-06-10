@@ -30,6 +30,22 @@ Deno.test("buildLayoutPreviewPlaceholderProps: button includes disabled preview 
   assertExists(data.label);
 });
 
+Deno.test("buildLayoutPreviewPlaceholderProps: input omits componentKey caption label", () => {
+  const props = buildLayoutPreviewPlaceholderProps("form_input/input", "input.primitive");
+  const data = props.data as Record<string, unknown>;
+  assertEquals("label" in data, false);
+  assertEquals(data.placeholder, "プレビュー");
+});
+
+Deno.test("buildLayoutPreviewPlaceholderProps: input inlineText overrides placeholder not label", () => {
+  const props = buildLayoutPreviewPlaceholderProps("form_input/input", "input.primitive", {
+    inlineText: "氏名",
+  });
+  const data = props.data as Record<string, unknown>;
+  assertEquals(data.placeholder, "氏名");
+  assertEquals("label" in data, false);
+});
+
 Deno.test("buildLayoutPreviewRuntimeSpec: sets previewMode on spec", () => {
   const built = buildLayoutPreviewRuntimeSpec({
     componentKey: "card.primitive",

@@ -2,6 +2,9 @@
  * Topology layout projection CSS — NOT admin UI chrome.
  * Authority: docs/design/topology-layout-class-ssot.yaml
  * Prefix: topolactor-topology-
+ *
+ * Also mirrored in frontend/static/styles.css (@layer components) for Fresh/Tailwind
+ * build — @import of this file is not expanded by the Fresh tailwind plugin.
  */
 
 @layer components {
