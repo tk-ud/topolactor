@@ -66,6 +66,13 @@ import {
   setStoredScreenLabel,
 } from "../runtime/screenAuthoringIntent.ts";
 import {
+  isValidTopologySystemName,
+  topologySystemNameValidationError,
+  topologySystemNameToPhysicalTable,
+  topologySystemNameToRoute,
+  topologySystemNameToUiBuilderKey,
+} from "../lib/topologySystemName.ts";
+import {
   clearManifestScreenDesignLocal,
   emptyManifestScreenDesign,
   loadManifestScreenDesignLocal,
@@ -451,7 +458,7 @@ export default function ContentsScreenDesignPanel({
     const m = await listAdminManifests("draft");
     if (m) {
       onManifestsChange(m);
-      await loadManifestLabels(m);
+      await loadManifestLabelsWithSystemName(m);
     }
   };
 
@@ -461,6 +468,24 @@ export default function ContentsScreenDesignPanel({
     const status = UX_STATUS_LABELS[m.status] ?? m.status;
     if (label) return `${label} [${status}]`;
     return `下書き ${index + 1} [${status}]`;
+  };
+
+  const loadManifestLabelsWithSystemName = async (items: AdminManifestListItem[]) => {
+    const labels: Record<string, string> = {};
+    await Promise.all(
+      items.map(async (item) => {
+        const stored = getStoredScreenLabel(item.manifestId);
+        if (stored) { labels[item.manifestId] = stored; return; }
+        const detail = await getAdminManifest(item.manifestId);
+        if (!detail) return;
+        const shape = extractScreenDataShapeFromTopology(detail.topologyRawJson);
+        const display = shape.userFacingTopologyLabel?.trim();
+        const sysName = shape.topologySystemName?.trim();
+        const visible = display || sysName;
+        if (visible) labels[item.manifestId] = visible;
+      }),
+    );
+    setManifestLabels(labels);
   };
 
   const loadSelectedManifest = async (manifestId: string) => {
@@ -487,6 +512,7 @@ export default function ContentsScreenDesignPanel({
       (summaryLayer.includes("detail") ? "detail" : "list");
 
     const fromBackend = screenDesignFromBackendShape(shape, operationKind);
+    fromBackend.topologySystemName = shape.topologySystemName ?? "";
     fromBackend.screenLabel = shape.userFacingTopologyLabel ??
       getStoredScreenLabel(manifestId) ?? "";
     if (shape.screenOperationKinds.length > 0) {
@@ -578,8 +604,9 @@ export default function ContentsScreenDesignPanel({
   }, [remoteTargets, design.logicalTables, design.relationIntents]);
 
   const handleStep1Submit = async () => {
-    if (!design.screenLabel.trim()) {
-      setErrors([{ message: "トポロジー表示名（ページ名）を入力してください。" }]);
+    const nameErr = topologySystemNameValidationError(design.topologySystemName);
+    if (nameErr) {
+      setErrors([{ message: nameErr }]);
       return;
     }
     setErrors([]);
@@ -592,17 +619,18 @@ export default function ContentsScreenDesignPanel({
         successMessage: "Step 1: 空の下書きを登録しました。",
         errorMessage: "下書きを作成できませんでした。",
         onSuccess: async (result) => {
+          const sysName = design.topologySystemName.trim();
           const label = design.screenLabel.trim();
           setSelectedId(result.manifestId);
-          setStoredScreenLabel(result.manifestId, label);
+          if (label) setStoredScreenLabel(result.manifestId, label);
           saveManifestScreenDesignLocal(result.manifestId, design);
-          if (label) {
-            await assignAdminManifestScreenDataShape({
-              manifestId: result.manifestId,
-              userFacingTopologyLabel: label,
-            });
-          }
-          setManifestLabels((prev) => ({ ...prev, [result.manifestId]: label }));
+          await assignAdminManifestScreenDataShape({
+            manifestId: result.manifestId,
+            topologySystemName: sysName,
+            userFacingTopologyLabel: label || undefined,
+          });
+          const visibleLabel = label || sysName;
+          setManifestLabels((prev) => ({ ...prev, [result.manifestId]: visibleLabel }));
           onManifestsReload();
           await loadManifests();
           await loadSelectedManifest(result.manifestId);
@@ -637,6 +665,24 @@ export default function ContentsScreenDesignPanel({
       const enumErr = validateEnumGroupResolution(step);
       if (enumErr) {
         setErrors([{ message: enumErr }]);
+        return;
+      }
+    }
+    if (step === 2) {
+      // Additional tables (index > 0) must also be valid topology system names
+      // because their physical table names are derived via replaceAll("-", "_").
+      const additionalTableErrors = design.logicalTables.slice(1)
+        .map((t, i) => {
+          const name = t.tableName.trim();
+          if (!name) return `追加テーブル ${i + 2}: テーブル名を入力してください。`;
+          if (!isValidTopologySystemName(name)) {
+            return `追加テーブル ${i + 2} (${name}): 英小文字・数字・ハイフンのみで指定してください（先頭・末尾・連続ハイフン不可）。`;
+          }
+          return null;
+        })
+        .filter((e): e is string => e !== null);
+      if (additionalTableErrors.length > 0) {
+        setErrors(additionalTableErrors.map((message) => ({ message })));
         return;
       }
     }
@@ -1130,9 +1176,54 @@ export default function ContentsScreenDesignPanel({
         </p>
       )}
 
-      {(activeStep === 1 || activeStep === 3) && (
+      {activeStep === 1 && (
+        <div class="mb-3 space-y-3">
+          <label class="block text-xs">
+            <span class="font-semibold">トポロジーID <span class="text-red-500">*</span></span>
+            <span class="ml-1 text-slate-500">（英小文字・数字・ハイフンのみ、例: customer-management）</span>
+            <input
+              class="mt-1 w-full rounded border px-2 py-1 font-mono"
+              placeholder="例: customer-management"
+              value={design.topologySystemName}
+              onInput={(e) => {
+                const val = (e.target as HTMLInputElement).value;
+                patchDesign({ topologySystemName: val });
+              }}
+            />
+            {design.topologySystemName.trim() && !isValidTopologySystemName(design.topologySystemName) && (
+              <span class="mt-0.5 block text-xs text-red-600">
+                {topologySystemNameValidationError(design.topologySystemName)}
+              </span>
+            )}
+          </label>
+          {design.topologySystemName.trim() && isValidTopologySystemName(design.topologySystemName) && (
+            <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
+              <p class="font-semibold mb-1">生成される識別子（自動）</p>
+              <ul class="space-y-0.5 font-mono text-[11px]">
+                <li>Route: {topologySystemNameToRoute(design.topologySystemName)}</li>
+                <li>Primary Table: {topologySystemNameToPhysicalTable(design.topologySystemName)}</li>
+                <li>UI Builder Key: {topologySystemNameToUiBuilderKey(design.topologySystemName)}</li>
+              </ul>
+            </div>
+          )}
+          <label class="block text-xs">
+            表示名（任意）
+            <span class="ml-1 text-slate-500">日本語OK・後から変更可</span>
+            <input
+              class="mt-1 w-full rounded border px-2 py-1"
+              placeholder="例: 顧客管理"
+              value={design.screenLabel}
+              onInput={(e) =>
+                patchDesign({
+                  screenLabel: (e.target as HTMLInputElement).value,
+                })}
+            />
+          </label>
+        </div>
+      )}
+      {activeStep === 3 && (
         <label class="mb-3 block text-xs">
-          {activeStep === 1 ? "トポロジー表示名（必須）" : "ページ名"}
+          ページ名
           <input
             class="mt-1 w-full rounded border px-2 py-1"
             value={design.screenLabel}
@@ -1205,23 +1296,43 @@ export default function ContentsScreenDesignPanel({
       {needsEnumDictionaryCatalog && enumDictionaryError && (
         <p class="mb-2 text-xs text-red-600" role="alert">{enumDictionaryError}</p>
       )}
-      {design.logicalTables.map((table, tableIndex) => (
+      {design.logicalTables.map((table, tableIndex) => {
+        const isPrimary = tableIndex === 0;
+        const derivedPrimaryName = design.topologySystemName.trim() && isValidTopologySystemName(design.topologySystemName)
+          ? topologySystemNameToPhysicalTable(design.topologySystemName)
+          : "";
+        return (
         <div
           key={tableIndex}
           class="mb-4 rounded border border-slate-200 p-3"
         >
-          <label class="mb-2 block text-xs font-semibold">
-            テーブル名
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
-              placeholder="例: employees"
-              value={table.tableName}
-              onInput={(e) =>
-                patchLogicalTable(tableIndex, {
-                  tableName: (e.target as HTMLInputElement).value,
-                })}
-            />
-          </label>
+          {isPrimary ? (
+            <div class="mb-2 text-xs">
+              <p class="font-semibold">テーブル名（プライマリ・自動生成）</p>
+              <p class="mt-1 rounded border border-slate-100 bg-slate-50 px-2 py-1 font-mono text-slate-700">
+                {derivedPrimaryName || <span class="italic text-slate-400">Step 1 でトポロジーIDを入力してください</span>}
+              </p>
+            </div>
+          ) : (
+            <label class="mb-2 block text-xs font-semibold">
+              テーブルID <span class="text-red-500">*</span>
+              <span class="ml-1 font-normal text-slate-500">（英小文字・数字・ハイフン、例: customer-contacts）</span>
+              <input
+                class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
+                placeholder="例: customer-contacts"
+                value={table.tableName}
+                onInput={(e) =>
+                  patchLogicalTable(tableIndex, {
+                    tableName: (e.target as HTMLInputElement).value,
+                  })}
+              />
+              {table.tableName.trim() && isValidTopologySystemName(table.tableName) && (
+                <span class="mt-0.5 block font-mono font-normal text-slate-500">
+                  Physical Table: {topologySystemNameToPhysicalTable(table.tableName)}
+                </span>
+              )}
+            </label>
+          )}
           {table.columns.map((col, colIndex) => {
             const showEnumGroup = isEnumBackedColumnDataType(col.dataType);
             return (
@@ -1362,7 +1473,8 @@ export default function ContentsScreenDesignPanel({
             )}
           </div>
         </div>
-      ))}
+        );
+      })}
       <button
         type="button"
         class="btn-secondary text-xs"

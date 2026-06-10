@@ -49,25 +49,71 @@ admin_console_workflow_ssot:
         Read-only validate or preview may exist inside a step before submit, but they do not
         replace the single submit that persists the step. Legacy validate→preview→promote as three
         separate persistence gates across steps 1–3 is superseded by this pipeline for new work.
+  # ---------------------------------------------------------------------------
+  # Topology naming SSOT (added with naming-ssot reorganization)
+  # ---------------------------------------------------------------------------
+  topology_naming_ssot:
+    topology_system_name:
+      field: topologySystemName                   # implementation field name (DTO / ManifestScreenDesignDraft / screen_data_shape JSONB)
+      also_called_in_docs_and_ui: topology.name   # shorthand used in design docs and UI hints; refers to this same field — NOT a separate concept
+      required: true
+      format: kebab-case (^[a-z0-9]+(?:-[a-z0-9]+)*$)
+      meaning: system identifier; SSOT for route/primary-table/UI-Builder-key derivation
+      mutability: immutable after creation in normal flow; destructive-change must be surfaced explicitly
+    derived_identifiers:
+      route: "/admin/${topologySystemName}"
+      primary_physical_table: "topologySystemName.replaceAll('-', '_')"
+      ui_builder_key: topologySystemName
+    user_facing_topology_label:
+      field: userFacingTopologyLabel (displayName / screenLabel)
+      required: false
+      format: any string including Japanese
+      meaning: optional human-readable display name; NOT used for route/table/key derivation
+      display_rule: "visibleName = userFacingTopologyLabel ?? topologySystemName"
+    additional_table_system_name:
+      required: true for tables beyond primary
+      format: same as topology_system_name (kebab-case)
+      derived_physical_name: "table.name.replaceAll('-', '_')"
+    prohibited:
+      - deriving route/table/ui_builder_key from userFacingTopologyLabel
+      - accepting Japanese or free-form text as topologySystemName
+      - exposing manual route-name/physical-table-name/ui-builder-key input in normal authoring flow
+
     steps:
       - step: 1
         label: manifest_empty_register
         route: /admin/contents
-        user_facing_goal: マニフェストを空登録し、わかりやすいトポロジー名を最低限登録する
+        user_facing_goal: マニフェストを空登録し、topology ID（システム名）を最低限登録する
         submit_persists:
           - empty manifest draft shell
-          - user_facing_topology_label_minimum
+          - topology_system_name (required; kebab-case; SSOT for route/primary-table/ui-builder-key)
+          - user_facing_topology_label (optional display name; Japanese OK; not used for route/table/key)
+        derived_on_step1:
+          - route path auto-shown as preview: /admin/${topologySystemName}
+          - primary physical table auto-shown as preview: topologySystemName.replaceAll('-', '_')
+          - ui_builder_key auto-shown as preview: topologySystemName
         backend_targets:
           - manifest row with draft lifecycle
-          - topology naming fields sufficient for later steps to reference the manifest
+          - screen_data_shape entry with topologySystemName and optional userFacingTopologyLabel
+        normal_view_ui_excludes:
+          - manual route name input
+          - manual physical table name input
+          - manual ui_builder_key input
         prohibited:
           - requiring full screen_data_shape before first submit
-          - silent_skip_when_topology_label_missing
+          - silent_skip_when_topology_system_name_missing
+          - accepting free-form or Japanese text as topologySystemName
 
       - step: 2
         label: logical_table_definitions
         route: /admin/contents
         user_facing_goal: テーブル定義（jsonb 内カラム名と型）を登録する。複数テーブル登録可
+        primary_table_name:
+          source: auto-derived from topology_system_name (topologySystemName.replaceAll('-', '_'))
+          user_input: prohibited for primary table in normal flow
+        additional_table_name:
+          source: user input (required; kebab-case; same format as topologySystemName)
+          physical_name_derived: table.name.replaceAll('-', '_')
         submit_persists:
           - one_or_more logical table definitions
           - per_table column definitions inside jsonb shape intent
@@ -704,6 +750,20 @@ admin_console_workflow_ssot:
       edit_target_contract_ref: ui_builder_canvas_workspace.edit_target_contract
       canvas_workspace_contract_ref: ui_builder_canvas_workspace.canvas_workspace_contract
       preset_ecosystem_ref: ui_builder_canvas_workspace.authoring_flow.responsibilities.preset_ecosystem
+      routeKey_ssot:
+        ssot: topologySystemName
+        format: kebab-case (matches topology_system_name)
+        derivation: "routeKey = topologySystemName; routeNavigationTargetRef = route:<topologySystemName>"
+        new_package_authoring:
+          guidance: "Enter the same value as topologySystemName (a.k.a. topology.name in docs; e.g. customer-management)"
+          prohibited: Japanese display names, snake_case, free-form text
+        existing_packages: routeKey already stored in DB; read as-is for backward compat
+        responsibility_boundaries:
+          topology_system_name: SSOT for admin route, primary physical table, UI Builder routeKey
+          manifest_key: dispatcher target (hub_grouping) only; NOT route/table/UI Builder key
+          manifest_id: persistent UUID; NOT used as routeKey
+          user_facing_topology_label: display only; must NOT become routeKey or route nav target
+
       default_wiring_presets:
         route_navigation:
           normal_view_label: "クリック時に指定ルートへ移動"

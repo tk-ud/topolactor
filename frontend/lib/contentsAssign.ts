@@ -1,5 +1,9 @@
 import type { AdminManifestScreenDataShapeInput } from "../api/adminApi.ts";
 import type { ManifestScreenDesignDraft } from "./manifestScreenDesign.ts";
+import {
+  isValidTopologySystemName,
+  topologySystemNameToPhysicalTable,
+} from "./topologySystemName.ts";
 import { serializeContentDataRowsForShape } from "./manifestScreenDesign.ts";
 import { parseSearchTargets } from "./manifestScreenDesign.ts";
 import { formatAggregationSpecFromBlocks } from "./screenDataShapeRawBinding.ts";
@@ -57,6 +61,7 @@ function shapePayloadFromExisting(
     columns: existing.columns,
     screenOperationKind: kinds[0],
     screenOperationKinds: kinds,
+    topologySystemName: existing.topologySystemName || undefined,
     userFacingTopologyLabel: existing.userFacingTopologyLabel || undefined,
     relationIntents: existing.relationIntents,
     operationEntityBindings: existing.operationEntityBindings.map((b) => ({
@@ -93,8 +98,17 @@ export function buildAssignPayloadForStep(
   const base = shapePayloadFromExisting(manifestId, existing);
 
   if (step === 2) {
-    const logicalTables = design.logicalTables.map((t) => ({
-      tableName: t.tableName.trim(),
+    const sysName = design.topologySystemName.trim();
+    const derivedPrimaryName = sysName && isValidTopologySystemName(sysName)
+      ? topologySystemNameToPhysicalTable(sysName)
+      : undefined;
+    // logicalTables.tableName stores the PHYSICAL table name (underscores).
+    // Primary (i=0): derived from topologySystemName via replaceAll("-","_").
+    // Additional (i>0): user enters a kebab-case system name; converted here to physical name.
+    const logicalTables = design.logicalTables.map((t, i) => ({
+      tableName: i === 0 && derivedPrimaryName
+        ? derivedPrimaryName
+        : topologySystemNameToPhysicalTable(t.tableName.trim()),
       columns: t.columns.filter((c) => c.name.trim()).map((c) => ({
         name: c.name.trim(),
         dataType: c.dataType,
@@ -110,6 +124,7 @@ export function buildAssignPayloadForStep(
       manifestId,
       logicalTables: logicalTables.length > 0 ? logicalTables : undefined,
       columns: legacyColumns.length > 0 ? legacyColumns : undefined,
+      topologySystemName: design.topologySystemName.trim() || base.topologySystemName,
       userFacingTopologyLabel: design.screenLabel.trim() || base.userFacingTopologyLabel,
       tableRef: base.tableRef,
       dbTableName: base.dbTableName,
@@ -187,6 +202,7 @@ export function buildAssignPayloadForStep(
     relationIntents: base.relationIntents,
     screenOperationKind: kinds[0],
     screenOperationKinds: kinds,
+    topologySystemName: design.topologySystemName.trim() || base.topologySystemName,
     userFacingTopologyLabel: design.screenLabel.trim() || base.userFacingTopologyLabel,
     operationEntityBindings: design.operationEntityBindings.map((b) => ({
       operationKind: b.operationKind,

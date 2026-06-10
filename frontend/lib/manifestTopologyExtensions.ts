@@ -70,6 +70,7 @@ export type ScreenDataShapeSummary = {
   logicalTables: LogicalTableShape[];
   screenOperationKind: string | null;
   screenOperationKinds: string[];
+  topologySystemName: string | null;
   userFacingTopologyLabel: string | null;
   columns: ColumnShape[];
   relationIntents: RelationIntentShape[];
@@ -112,6 +113,10 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
     const screenOperationKinds = Array.isArray(entry.screenOperationKinds)
       ? entry.screenOperationKinds.filter((t): t is string => typeof t === "string")
       : screenOperationKind ? [screenOperationKind] : [];
+    const topologySystemName =
+      typeof entry.topologySystemName === "string" && entry.topologySystemName.trim()
+        ? entry.topologySystemName.trim()
+        : null;
     const userFacingTopologyLabel =
       typeof entry.userFacingTopologyLabel === "string"
         ? entry.userFacingTopologyLabel
@@ -322,6 +327,7 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
       logicalTables,
       screenOperationKind,
       screenOperationKinds,
+      topologySystemName,
       userFacingTopologyLabel,
       columns,
       relationIntents,
@@ -347,6 +353,7 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
     logicalTables: [],
     screenOperationKind: null,
     screenOperationKinds: [],
+    topologySystemName: null,
     userFacingTopologyLabel: null,
     columns: [],
     relationIntents: [],

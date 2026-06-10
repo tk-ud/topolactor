@@ -23,6 +23,7 @@ const existing: ScreenDataShapeSummary = {
   logicalTables: [],
   screenOperationKind: "list",
   screenOperationKinds: ["list"],
+  topologySystemName: null,
   userFacingTopologyLabel: "注文",
   columns: [{ name: "id", dataType: "uuid", nullable: false }],
   relationIntents: [{ localTableRef: "orders", joinTableRef: "customers", localKey: "customer_id", remoteKey: "id" }],
@@ -144,4 +145,40 @@ Deno.test("buildAssignPayloadForStep step 3: tableRef from primary logical table
   );
   assertEquals(payload.columns, existing.columns);
   assertEquals(payload.relationIntents, existing.relationIntents);
+});
+
+Deno.test("buildAssignPayloadForStep step 2: primary table derived from topologySystemName, additional tables from design", () => {
+  const design = emptyManifestScreenDesign();
+  design.topologySystemName = "customer-management";
+  design.logicalTables = [
+    {
+      tableName: "manual-primary-name",
+      columns: [{ name: "id", dataType: "uuid", nullable: false }],
+    },
+    {
+      tableName: "customer-contacts",
+      columns: [{ name: "phone", dataType: "text", nullable: true }],
+    },
+  ];
+
+  const payload = buildAssignPayloadForStep(2, manifestId, design, existing);
+  // Primary table (index 0) MUST be derived from topologySystemName, not from design.logicalTables[0].tableName
+  assertEquals(payload.logicalTables?.[0].tableName, "customer_management");
+  // Additional table (index 1) has physical name derived via replaceAll("-","_")
+  assertEquals(payload.logicalTables?.[1].tableName, "customer_contacts");
+});
+
+Deno.test("buildAssignPayloadForStep step 2: without topologySystemName, primary table uses design tableName", () => {
+  const design = emptyManifestScreenDesign();
+  design.topologySystemName = "";
+  design.logicalTables = [
+    {
+      tableName: "fallback_primary",
+      columns: [{ name: "id", dataType: "uuid", nullable: false }],
+    },
+  ];
+
+  const payload = buildAssignPayloadForStep(2, manifestId, design, existing);
+  // When topologySystemName is empty/invalid, primary table uses design tableName as-is
+  assertEquals(payload.logicalTables?.[0].tableName, "fallback_primary");
 });

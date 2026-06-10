@@ -251,6 +251,11 @@ export function serializeContentDataRowsForShape(
 
 /** Local draft cache only — not canonical. Backend topology extensions are SSOT after save. */
 export type ManifestScreenDesignDraft = {
+  /**
+   * Topology system name: kebab-case identifier, SSOT for route/primary table/UI Builder key derivation.
+   * Required at Step 1. Immutable after creation in normal flow.
+   */
+  topologySystemName: string;
   screenLabel: string;
   /** @deprecated use operationKinds — kept for local cache compat */
   operationKind: ScreenOperationKind;
@@ -300,6 +305,7 @@ export const MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE =
   "この端末に一時保存した未反映の変更があります。";
 
 export const emptyManifestScreenDesign = (): ManifestScreenDesignDraft => ({
+  topologySystemName: "",
   screenLabel: "",
   operationKind: "list",
   operationKinds: ["list"],
@@ -528,6 +534,7 @@ export function screenDesignFromBackendShape(
     globalHaving,
   );
   return qualifyScreenDesignColumnKeys({
+    topologySystemName: shape.topologySystemName ?? "",
     screenLabel: shape.userFacingTopologyLabel ?? "",
     operationKind: kinds[0],
     operationKinds: kinds,
