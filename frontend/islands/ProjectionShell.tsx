@@ -5,7 +5,7 @@ import { clearSessionToken, persistSessionToken, readClientSessionToken } from "
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
-import { createSseReceiver, type SseReceiver } from "../runtime/sseReceiver.ts";
+import { createSseReceiver, type ProjectionHookTrigger, type SseReceiver } from "../runtime/sseReceiver.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
@@ -43,8 +43,8 @@ export default function ProjectionShell(): JSX.Element {
         return;
       }
 
-      const probe = await probeSessionToken(token);
-      if (!probe.ok) {
+      const probe = await probeSessionToken(token, "user");
+      if (!probe) {
         if (mounted) {
           setAuthFallback(true);
           setLoading(false);
@@ -54,8 +54,8 @@ export default function ProjectionShell(): JSX.Element {
 
       setProjectionToken(token);
 
-      const refreshResult = await refreshUserSession(token);
-      if (!refreshResult.ok) {
+      const refreshResult = await refreshUserSession();
+      if (!refreshResult.success) {
         clearSessionToken();
         if (mounted) {
           setAuthFallback(true);
@@ -77,27 +77,39 @@ export default function ProjectionShell(): JSX.Element {
 
       if (!mounted) return;
 
-      if (!dispatchResult.ok) {
-        setError(dispatchResult.error ?? "投影の取得に失敗しました");
+      if (!dispatchResult.success) {
+        setError(dispatchResult.errors?.[0]?.message ?? "投影の取得に失敗しました");
         setLoading(false);
         return;
       }
 
       const nextEmission = dispatchResult.emission;
+      if (!nextEmission) {
+        setError("投影データを取得できませんでした");
+        setLoading(false);
+        return;
+      }
       setEmission(nextEmission);
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry));
       setLoading(false);
 
       const receiver = createSseReceiver({
-        token: refreshResult.token ?? token,
-        onProjection: (next) => {
+        onProjectionHookTrigger: (_trigger: ProjectionHookTrigger) => {
           const gen = ++refreshGenRef.current;
           (async () => {
             try {
-              if (!next.emission) return;
               if (gen !== refreshGenRef.current || !mounted) return;
-              setEmission(next.emission);
-              setSpecs(renderEmission(next.emission, defaultComponentRegistry));
+              const result = await queueClientCommand({
+                operationType: "Search",
+                target: "default",
+                layer: "screen_list",
+                action: "Search",
+              });
+              if (!result.success || gen !== refreshGenRef.current || !mounted) return;
+              const updated = result.emission;
+              if (!updated) return;
+              setEmission(updated);
+              setSpecs(renderEmission(updated, defaultComponentRegistry));
             } catch (err) {
               if (gen !== refreshGenRef.current || !mounted) return;
               console.error("[ProjectionShell] SSE_PROJECTION_REFRESH_ERROR:", err);
@@ -159,6 +171,7 @@ export default function ProjectionShell(): JSX.Element {
     <div
       data-projection-island="main_projection_island"
       data-projection-surface="product"
+      data-primary-dom-projection
     >
       <LayoutProjectionTree
         specs={specs}

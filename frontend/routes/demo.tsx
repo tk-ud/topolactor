@@ -10,7 +10,7 @@ export default function Demo(): JSX.Element {
     <main class="page-main max-w-4xl font-sans">
       <h1 class="page-title">topolactor — 公開前プレビュー</h1>
       <p class="mb-6 text-sm text-gray-500">
-        UIビルダーで Apply した配置と、Contents で保存した manifest のサンプルデータ（topology intent）を投影します。
+        UIビルダーで Apply した配置と、Contents で保存したサンプルデータを投影します。
       </p>
 
       <DraftPreviewShell />

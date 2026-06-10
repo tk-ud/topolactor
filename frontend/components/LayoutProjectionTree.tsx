@@ -93,7 +93,10 @@ function ProjectionTreeNode({
     const rendered = renderRuntimeComponent(spec.runtimeSpec);
     if (!rendered.ok) {
       return (
-        <div class="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700" {...commonProps}>
+        <div
+          {...commonProps}
+          class={["rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700", commonProps.class].filter(Boolean).join(" ")}
+        >
           {rendered.error}
         </div>
       );
