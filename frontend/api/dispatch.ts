@@ -121,6 +121,28 @@ export type LayoutNode = {
   propsJson?: string | null;
   /** Node-local state JSON (e.g. open:bool for modal/drawer). When present, renderEmission merges into props.data; invalid JSON → explicit error spec. */
   stateJson?: string | null;
+  /**
+   * Array prop bindings authored in UI Builder.
+   * Maps component prop name → runtime data path binding descriptor.
+   * Resolved after propsJson/stateJson in renderEmission.
+   * source must start with "emission.data."; transform must be in allowlist.
+   */
+  propBindings?: Record<string, PropBinding> | null;
+};
+
+/**
+ * Binding descriptor for a single array prop on a layout node.
+ * source: dotted path starting with "emission.data." (e.g. "emission.data.rows").
+ * keyPath/labelPath/valuePath/childrenPath: field names within each array element.
+ * transform: allowlist transform identifier (e.g. "activeColumnsToTableColumns").
+ */
+export type PropBinding = {
+  source: string;
+  keyPath?: string;
+  labelPath?: string;
+  valuePath?: string;
+  childrenPath?: string;
+  transform?: string;
 };
 
 export type Emission = {

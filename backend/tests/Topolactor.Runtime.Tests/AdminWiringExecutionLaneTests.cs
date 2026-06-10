@@ -272,6 +272,32 @@ public class AdminWiringExecutionLaneTests
         Assert.Equal("{\"open\":true}", node.StateJson);
     }
 
+    // ─── LayoutNode: PropBindings contract shape ─────────────────────────────
+
+    [Fact]
+    public void LayoutNode_PropBindings_DefaultsToNull()
+    {
+        var node = new LayoutNode(
+            NodeId: "n-pb-null", NodeKind: "catalog_component", HtmlTag: null,
+            ComponentKey: null, ComponentId: "comp-pb-null", ParentNodeId: null,
+            SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: 0, Height: 0,
+            LayoutClassRefs: null);
+
+        Assert.Null(node.PropBindings);
+    }
+
+    [Fact]
+    public void LayoutNodeRecord_PropBindingsJson_DefaultsToNull()
+    {
+        var record = new LayoutNodeRecord(
+            NodeId: "r-pb-null", NodeKind: "catalog_component", HtmlTag: null,
+            ComponentKey: null, ComponentId: "comp-pb-r-null", ParentNodeId: null,
+            SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: 0, Height: 0,
+            LayoutClassRefs: null);
+
+        Assert.Null(record.PropBindingsJson);
+    }
+
     // ─── Base TopologyRepository.LoadComponentKindsByIdsAsync ────────────────
 
     [Fact]

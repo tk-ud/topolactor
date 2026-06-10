@@ -216,6 +216,8 @@ export interface VisualNodePayload {
   propsJson?: string;
   /** Serialized component state override for runtime wiring (JSON string). Merged into props.data at render time (e.g. open:bool for modal/drawer). */
   stateJson?: string;
+  /** Array prop bindings: runtime data path → component prop. Resolved after propsJson/stateJson in renderEmission. */
+  propBindings?: Record<string, { source: string; keyPath?: string; labelPath?: string; valuePath?: string; childrenPath?: string; transform?: string }> | null;
 }
 
 export function isStructuralHtmlNode(node: Pick<VisualNodePayload, "nodeKind">): boolean {
@@ -369,6 +371,9 @@ function readPatchNode(
       : palette?.componentKind,
     propsJson: typeof raw.propsJson === "string" ? raw.propsJson : undefined,
     stateJson: typeof raw.stateJson === "string" ? raw.stateJson : undefined,
+    propBindings: (typeof raw.propBindings === "object" && raw.propBindings !== null && !Array.isArray(raw.propBindings))
+      ? raw.propBindings as Record<string, { source: string; keyPath?: string; labelPath?: string; valuePath?: string; childrenPath?: string; transform?: string }>
+      : undefined,
     widthMode: (raw.widthMode === "auto" || raw.widthMode === "preset" || raw.widthMode === "custom")
       ? raw.widthMode as SizingMode
       : undefined,
@@ -485,6 +490,7 @@ export function buildVisualLayoutPatchJson(
           : {}),
         ...(n.propsJson ? { propsJson: n.propsJson } : {}),
         ...(n.stateJson ? { stateJson: n.stateJson } : {}),
+        ...(n.propBindings && Object.keys(n.propBindings).length > 0 ? { propBindings: n.propBindings } : {}),
         slotKey: n.slotKey || null,
         orderIndex: n.orderIndex,
         parentNodeId: n.parentNodeId || null,

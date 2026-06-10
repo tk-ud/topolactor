@@ -433,6 +433,9 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     ? pj.GetString() : null;
                 var stateJson = node.TryGetProperty("stateJson", out var sj) && sj.ValueKind == JsonValueKind.String
                     ? sj.GetString() : null;
+                string? propBindingsJson = null;
+                if (node.TryGetProperty("propBindings", out var pb) && pb.ValueKind == JsonValueKind.Object)
+                    propBindingsJson = pb.GetRawText();
 
                 result.Add(new LayoutNodeRecord(
                     NodeId: nodeId!,
@@ -449,7 +452,8 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     Height: height,
                     LayoutClassRefs: layoutClassRefs,
                     PropsJson: propsJson,
-                    StateJson: stateJson
+                    StateJson: stateJson,
+                    PropBindingsJson: propBindingsJson
                 ));
             }
 

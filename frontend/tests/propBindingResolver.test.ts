@@ -1,0 +1,269 @@
+/**
+ * propBindingResolver.test.ts
+ *
+ * Tests for array prop binding resolution:
+ *   - resolveRuntimeDataPath
+ *   - resolvePropBindings
+ *   - validatePropBindingsStructure
+ *   - applyPropBindingTransform
+ *   - COMPONENT_ARRAY_PROP_CAPABILITIES
+ */
+import {
+  assertEquals,
+  assertExists,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  ALLOWED_PROP_BINDING_TRANSFORMS,
+  applyPropBindingTransform,
+  COMPONENT_ARRAY_PROP_CAPABILITIES,
+  resolvePropBindings,
+  resolveRuntimeDataPath,
+  validatePropBindingsStructure,
+  validatePropBindingTarget,
+} from "../runtime/propBindingResolver.ts";
+
+// ── resolveRuntimeDataPath ──────────────────────────────────────────────────
+
+Deno.test("resolveRuntimeDataPath: resolves emission.data.rows", () => {
+  const data = { rows: [{ id: 1 }, { id: 2 }] };
+  const result = resolveRuntimeDataPath(data, "emission.data.rows");
+  assertEquals(result, [{ id: 1 }, { id: 2 }]);
+});
+
+Deno.test("resolveRuntimeDataPath: resolves nested path emission.data.meta.count", () => {
+  const data = { meta: { count: 42 } };
+  const result = resolveRuntimeDataPath(data, "emission.data.meta.count");
+  assertEquals(result, 42);
+});
+
+Deno.test("resolveRuntimeDataPath: returns undefined for missing path", () => {
+  const data: Record<string, unknown> = {};
+  const result = resolveRuntimeDataPath(data, "emission.data.rows");
+  assertEquals(result, undefined);
+});
+
+Deno.test("resolveRuntimeDataPath: returns undefined for non-emission.data. prefix", () => {
+  const data = { rows: [] };
+  const result = resolveRuntimeDataPath(data, "data.rows");
+  assertEquals(result, undefined);
+});
+
+Deno.test("resolveRuntimeDataPath: resolves activeColumns", () => {
+  const data = { activeColumns: ["name", "age"] };
+  const result = resolveRuntimeDataPath(data, "emission.data.activeColumns");
+  assertEquals(result, ["name", "age"]);
+});
+
+// ── applyPropBindingTransform ────────────────────────────────────────────────
+
+Deno.test("applyPropBindingTransform: activeColumnsToTableColumns converts strings", () => {
+  const result = applyPropBindingTransform(["name", "age"], "activeColumnsToTableColumns");
+  assertEquals(result, { ok: true, value: [{ key: "name", header: "name" }, { key: "age", header: "age" }] });
+});
+
+Deno.test("applyPropBindingTransform: activeColumnsToTableColumns passes objects through", () => {
+  const cols = [{ key: "name", header: "Name" }];
+  const result = applyPropBindingTransform(cols, "activeColumnsToTableColumns");
+  assertEquals(result, { ok: true, value: cols });
+});
+
+Deno.test("applyPropBindingTransform: rowsToOptions passes through", () => {
+  const rows = [{ id: 1, label: "A" }];
+  const result = applyPropBindingTransform(rows, "rowsToOptions");
+  assertEquals(result, { ok: true, value: rows });
+});
+
+Deno.test("applyPropBindingTransform: unknown transform returns error", () => {
+  const result = applyPropBindingTransform([], "eval()");
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.error.includes("LAYOUT_NODE_PROP_BINDING_INVALID_TRANSFORM"), true);
+  }
+});
+
+// ── validatePropBindingTarget ────────────────────────────────────────────────
+
+Deno.test("validatePropBindingTarget: data_display/table accepts rows and columns", () => {
+  assertEquals(validatePropBindingTarget("data_display/table", "rows"), undefined);
+  assertEquals(validatePropBindingTarget("data_display/table", "columns"), undefined);
+});
+
+Deno.test("validatePropBindingTarget: action/button rejects any array prop", () => {
+  const err = validatePropBindingTarget("action/button", "items");
+  assertExists(err);
+  assertEquals(err!.includes("LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT"), true);
+});
+
+Deno.test("validatePropBindingTarget: data_display/tree rejects unknown prop", () => {
+  const err = validatePropBindingTarget("data_display/tree", "rows");
+  assertExists(err);
+  assertEquals(err!.includes("LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_PROP"), true);
+});
+
+Deno.test("validatePropBindingTarget: display/card_list accepts items", () => {
+  assertEquals(validatePropBindingTarget("display/card_list", "items"), undefined);
+});
+
+// ── resolvePropBindings ──────────────────────────────────────────────────────
+
+Deno.test("resolvePropBindings: emission.data.rows → items prop", () => {
+  const baseProps = { data: { label: "List" } };
+  const bindings = { items: { source: "emission.data.rows" } };
+  const emissionData = { rows: [{ id: 1 }, { id: 2 }] };
+  const result = resolvePropBindings(baseProps, bindings, "display/card_list", emissionData);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.items, [{ id: 1 }, { id: 2 }]);
+    assertEquals((result.props.data as Record<string, unknown>).label, "List");
+  }
+});
+
+Deno.test("resolvePropBindings: emission.data.rows → rows prop for table", () => {
+  const baseProps = { data: { label: "Table" } };
+  const bindings = { rows: { source: "emission.data.rows" } };
+  const emissionData = { rows: [{ name: "Alice" }] };
+  const result = resolvePropBindings(baseProps, bindings, "data_display/table", emissionData);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.rows, [{ name: "Alice" }]);
+  }
+});
+
+Deno.test("resolvePropBindings: activeColumns + transform → columns", () => {
+  const baseProps = {};
+  const bindings = { columns: { source: "emission.data.activeColumns", transform: "activeColumnsToTableColumns" } };
+  const emissionData = { activeColumns: ["name", "age"] };
+  const result = resolvePropBindings(baseProps, bindings, "data_display/table", emissionData);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.columns, [{ key: "name", header: "name" }, { key: "age", header: "age" }]);
+  }
+});
+
+Deno.test("resolvePropBindings: missing source path leaves prop absent (no error)", () => {
+  const baseProps = { existing: "value" };
+  const bindings = { items: { source: "emission.data.rows" } };
+  const emissionData: Record<string, unknown> = {};
+  const result = resolvePropBindings(baseProps, bindings, "display/card_list", emissionData);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals("items" in result.props, false);
+    assertEquals(result.props.existing, "value");
+  }
+});
+
+Deno.test("resolvePropBindings: propsJson and propBindings priority — binding wins", () => {
+  const baseProps = { items: ["static"] };
+  const bindings = { items: { source: "emission.data.rows" } };
+  const emissionData = { rows: [{ id: 1 }] };
+  const result = resolvePropBindings(baseProps, bindings, "display/card_list", emissionData);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.items, [{ id: 1 }]);
+  }
+});
+
+Deno.test("resolvePropBindings: non-emission.data. source returns error", () => {
+  const baseProps = {};
+  const bindings = { items: { source: "data.rows" } };
+  const emissionData = { rows: [] };
+  const result = resolvePropBindings(baseProps, bindings, "display/card_list", emissionData);
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.error.includes("LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE"), true);
+  }
+});
+
+Deno.test("resolvePropBindings: scalar source returns error", () => {
+  const baseProps = {};
+  const bindings = { items: { source: "emission.data.count" } };
+  const emissionData = { count: 42 };
+  const result = resolvePropBindings(baseProps, bindings, "display/card_list", emissionData);
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.error.includes("LAYOUT_NODE_PROP_BINDING_SCALAR_SOURCE"), true);
+  }
+});
+
+Deno.test("resolvePropBindings: non-capability component returns error", () => {
+  const baseProps = {};
+  const bindings = { items: { source: "emission.data.rows" } };
+  const emissionData = { rows: [] };
+  const result = resolvePropBindings(baseProps, bindings, "action/button", emissionData);
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.error.includes("LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT"), true);
+  }
+});
+
+Deno.test("resolvePropBindings: invalid transform returns error", () => {
+  const baseProps = {};
+  const bindings = { items: { source: "emission.data.rows", transform: "evilEval" } };
+  const emissionData = { rows: [1, 2] };
+  const result = resolvePropBindings(baseProps, bindings, "display/card_list", emissionData);
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.error.includes("LAYOUT_NODE_PROP_BINDING_INVALID_TRANSFORM"), true);
+  }
+});
+
+// ── validatePropBindingsStructure ────────────────────────────────────────────
+
+Deno.test("validatePropBindingsStructure: valid binding passes", () => {
+  const bindings = {
+    items: { source: "emission.data.rows", keyPath: "id", labelPath: "name" },
+  };
+  const errs = validatePropBindingsStructure(bindings, "display/card_list");
+  assertEquals(errs, []);
+});
+
+Deno.test("validatePropBindingsStructure: non-object propBindings is error", () => {
+  const errs = validatePropBindingsStructure("not an object", "display/card_list");
+  assertEquals(errs.length > 0, true);
+  assertEquals(errs[0].includes("LAYOUT_NODE_PROP_BINDING_INVALID"), true);
+});
+
+Deno.test("validatePropBindingsStructure: invalid source is error", () => {
+  const bindings = { items: { source: "wrongprefix.rows" } };
+  const errs = validatePropBindingsStructure(bindings, "display/card_list");
+  assertEquals(errs.some((e) => e.includes("LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE")), true);
+});
+
+Deno.test("validatePropBindingsStructure: non-capability component is error", () => {
+  const bindings = { items: { source: "emission.data.rows" } };
+  const errs = validatePropBindingsStructure(bindings, "action/button");
+  assertEquals(errs.some((e) => e.includes("LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT")), true);
+});
+
+Deno.test("validatePropBindingsStructure: invalid transform is error", () => {
+  const bindings = { items: { source: "emission.data.rows", transform: "badTransform" } };
+  const errs = validatePropBindingsStructure(bindings, "display/card_list");
+  assertEquals(errs.some((e) => e.includes("LAYOUT_NODE_PROP_BINDING_INVALID_TRANSFORM")), true);
+});
+
+Deno.test("validatePropBindingsStructure: non-string labelPath is error", () => {
+  const bindings = { items: { source: "emission.data.rows", labelPath: 123 as unknown as string } };
+  const errs = validatePropBindingsStructure(bindings, "display/card_list");
+  assertEquals(errs.some((e) => e.includes("LAYOUT_NODE_PROP_BINDING_INVALID_PATH")), true);
+});
+
+// ── COMPONENT_ARRAY_PROP_CAPABILITIES ────────────────────────────────────────
+
+Deno.test("COMPONENT_ARRAY_PROP_CAPABILITIES: table accepts rows and columns", () => {
+  const caps = COMPONENT_ARRAY_PROP_CAPABILITIES["data_display/table"];
+  assertEquals(Array.isArray(caps), true);
+  assertEquals(caps.includes("rows"), true);
+  assertEquals(caps.includes("columns"), true);
+});
+
+Deno.test("COMPONENT_ARRAY_PROP_CAPABILITIES: select accepts options", () => {
+  const caps = COMPONENT_ARRAY_PROP_CAPABILITIES["form_input/select"];
+  assertEquals(Array.isArray(caps), true);
+  assertEquals(caps.includes("options"), true);
+});
+
+Deno.test("ALLOWED_PROP_BINDING_TRANSFORMS: contains expected transforms", () => {
+  assertEquals(ALLOWED_PROP_BINDING_TRANSFORMS.has("activeColumnsToTableColumns"), true);
+  assertEquals(ALLOWED_PROP_BINDING_TRANSFORMS.has("rowsToOptions"), true);
+  assertEquals(ALLOWED_PROP_BINDING_TRANSFORMS.has("eval"), false);
+});

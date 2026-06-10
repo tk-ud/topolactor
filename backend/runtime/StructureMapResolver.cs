@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Topolactor.Repository;
 using Topolactor.Schema;
 
@@ -119,7 +120,10 @@ public class StructureMapResolver
                         TargetSurface: row.TargetSurface,
                         TargetRef: row.TargetRef,
                         PropsJson: row.PropsJson,
-                        StateJson: row.StateJson
+                        StateJson: row.StateJson,
+                        PropBindings: row.PropBindingsJson != null
+                            ? JsonSerializer.Deserialize<JsonElement>(row.PropBindingsJson)
+                            : null
                     )).ToList();
                 }
             }

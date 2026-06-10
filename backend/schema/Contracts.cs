@@ -96,7 +96,9 @@ public record LayoutNode(
     /// <summary>Node-local props override JSON string authored in UI Builder. Null when not set. renderEmission merges this over default props; invalid JSON → explicit error spec.</summary>
     string? PropsJson = null,
     /// <summary>Node-local state JSON string authored in UI Builder (e.g. open:bool for modal/drawer). Null when not set. renderEmission merges into props.data; invalid JSON → explicit error spec.</summary>
-    string? StateJson = null
+    string? StateJson = null,
+    /// <summary>Array prop bindings authored in UI Builder. Null when not set. Serialized as JSON object in emission. renderEmission resolves from emission.data after propsJson/stateJson.</summary>
+    JsonElement? PropBindings = null
 );
 
 /// <summary>
