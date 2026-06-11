@@ -487,6 +487,13 @@ function autoCompleteInputFactory(spec: RuntimeComponentSpec): RenderResult {
           if (!result.ok) throw new Error(result.error);
         }
         : undefined,
+      // read-only backend search hook; caller (island/page) must debounce; no mutation during typing
+      onSearch: spec.eventBinding.search
+        ? (query: string) => {
+          const result = emitBoundEvent(spec, "search", { query });
+          if (!result.ok) throw new Error(result.error);
+        }
+        : undefined,
     }),
   };
 }
@@ -754,6 +761,13 @@ function suggestInputFactory(spec: RuntimeComponentSpec): RenderResult {
       onSelect: spec.eventBinding.select
         ? (value: string) => {
           const r = emitBoundEvent(spec, "select", { value });
+          if (!r.ok) throw new Error(r.error);
+        }
+        : undefined,
+      // read-only backend search hook; caller must debounce; no mutation during typing
+      onSearch: spec.eventBinding.search
+        ? (query: string) => {
+          const r = emitBoundEvent(spec, "search", { query });
           if (!r.ok) throw new Error(r.error);
         }
         : undefined,
