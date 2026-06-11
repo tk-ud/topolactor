@@ -149,6 +149,7 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     "blur",
     "drag",
     "drop",
+    "search",
   ];
   if (!valid.includes(eventType as NormalizedComponentEventType)) return null;
   const actorOrSource = (value as Record<string, unknown>).actorOrSource;

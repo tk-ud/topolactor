@@ -18,6 +18,10 @@
  * - SuggestInput has onSearch prop (backend read-only search hook)
  * - SearchCombobox does NOT have onSearch (small-scale known candidates, no backend)
  * - onSearch is optional (no-arg usage still valid)
+ * - Runtime factory: "search" is a valid NormalizedComponentEventType / parseEventBinding event
+ * - Runtime factory: emitBoundEvent with "search" trigger does not return INVALID_EVENT_BINDING
+ * - Runtime factory: autocomplete_input factory wires onSearch via eventBinding.search (no error)
+ * - Runtime factory: suggest_input factory wires onSearch via eventBinding.search (no error)
  * - Boundary: AutoCompleteInput source has no eval/fetch/Function (no mutation during typing)
  * - Boundary: SuggestInput source has no eval/fetch/Function
  * - Boundary: uiBuilderAutocompleteCandidates.ts has no fetch (combobox local derivation only)
@@ -32,6 +36,8 @@ import {
 import type { AutoCompleteInputProps } from "../components/AutoCompleteInput.tsx";
 import type { SuggestInputProps } from "../components/SuggestInput.tsx";
 import type { SearchComboboxProps } from "../components/SearchCombobox.tsx";
+import { __testOnly } from "../runtime/runtimeComponentFactory.ts";
+import type { RuntimeComponentSpec } from "../runtime/runtimeComponentAdapter.ts";
 
 // ─── Type-level boundary checks ──────────────────────────────────────────────
 
@@ -156,4 +162,48 @@ Deno.test("framing: SuggestInput source declares candidate_source_boundary debou
     src.includes("no mutation") || src.includes("No mutation"),
     "SuggestInput must explicitly state no mutation during typing",
   );
+});
+
+// ─── Runtime factory: "search" event binding validation ──────────────────────
+
+Deno.test('Runtime factory: "search" is a valid NormalizedComponentEventType / parseEventBinding event', () => {
+  const parsed = __testOnly.parseEventBinding({ eventType: "search" });
+  assert(parsed !== null, '"search" must parse as a valid event binding');
+  assertEquals(parsed?.eventType, "search");
+});
+
+Deno.test('Runtime factory: emitBoundEvent with "search" trigger does not return INVALID_EVENT_BINDING', () => {
+  const spec: RuntimeComponentSpec = {
+    componentId: "test-search-emit",
+    componentType: "autocomplete_input",
+    props: {},
+    eventBinding: { search: { eventType: "search" } },
+  };
+  const result = __testOnly.emitBoundEvent(spec, "search", { query: "hello" });
+  assert(
+    result.ok,
+    `emitBoundEvent with 'search' trigger must return ok (not INVALID_EVENT_BINDING), got: ${JSON.stringify(result)}`,
+  );
+});
+
+Deno.test("Runtime factory: autocomplete_input factory wires onSearch via eventBinding.search (no error)", () => {
+  const spec: RuntimeComponentSpec = {
+    componentId: "test-ac-onsearch-wire",
+    componentType: "autocomplete_input",
+    props: {},
+    eventBinding: { search: { eventType: "search" } },
+  };
+  const result = __testOnly.emitBoundEvent(spec, "search", { query: "ac-test" });
+  assert(result.ok, "autocomplete_input onSearch wired via eventBinding.search must not error");
+});
+
+Deno.test("Runtime factory: suggest_input factory wires onSearch via eventBinding.search (no error)", () => {
+  const spec: RuntimeComponentSpec = {
+    componentId: "test-suggest-onsearch-wire",
+    componentType: "suggest_input",
+    props: {},
+    eventBinding: { search: { eventType: "search" } },
+  };
+  const result = __testOnly.emitBoundEvent(spec, "search", { query: "suggest-test" });
+  assert(result.ok, "suggest_input onSearch wired via eventBinding.search must not error");
 });
