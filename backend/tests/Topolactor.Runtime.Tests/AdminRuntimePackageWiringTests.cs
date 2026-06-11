@@ -170,18 +170,15 @@ public class AdminRuntimePackageWiringTests
     }
 
     [Fact]
-    public async Task ExecuteDataAsync_UpdatePackageWiring_ManifestSurface_ValidWiringKey_Succeeds()
+    public async Task ExecuteDataAsync_UpdatePackageWiring_ManifestSurface_ManifestNotFound_ReturnsError()
     {
         var packageId = Guid.NewGuid();
         var wiringId = Guid.NewGuid();
-        var initial = new AdminPackageWiringDto(
+        var nonExistentManifestId = Guid.NewGuid();
+        var wiring = new AdminPackageWiringDto(
             wiringId.ToString(), "wk", "navigation", "manifest", null);
-        var refreshed = initial with
-        {
-            TargetSurface = "manifest",
-            TargetRef = $"manifest:{packageId}:sc.name.eq",
-        };
-        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(initial, refreshed));
+        var repo = new InMemoryManifestAdminRepository(); // no manifests seeded
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(wiring), repo);
 
         var vector = new OperationVector(
             "admin", "ui_topology", "update_package_wiring", null, "admin",
@@ -191,7 +188,174 @@ public class AdminRuntimePackageWiringTests
                 wiringId = wiringId.ToString(),
                 wiringKind = "navigation",
                 targetSurface = "manifest",
-                targetRef = $"manifest:{packageId}:sc.name.eq",
+                targetRef = $"manifest:{nonExistentManifestId}:sc.name.eq",
+            }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(data);
+        Assert.Equal("MANIFEST_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_UpdatePackageWiring_ManifestSurface_NoScreenDataShape_ReturnsError()
+    {
+        var packageId = Guid.NewGuid();
+        var wiringId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        var topology = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new { type = "dispatcher_mapping", role = "admin" }),
+        };
+        var repo = new InMemoryManifestAdminRepository();
+        repo.Seed(new ManifestDetailRecord(manifestId, null, topology, "active",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var wiring = new AdminPackageWiringDto(
+            wiringId.ToString(), "wk", "navigation", "manifest", null);
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(wiring), repo);
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "update_package_wiring", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                packageId = packageId.ToString(),
+                wiringId = wiringId.ToString(),
+                wiringKind = "navigation",
+                targetSurface = "manifest",
+                targetRef = $"manifest:{manifestId}:sc.name.eq",
+            }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(data);
+        Assert.Equal("SCREEN_DATA_SHAPE_UNRESOLVED", error!.Code);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_UpdatePackageWiring_ManifestSurface_NoScreenReadQueryWiring_ReturnsError()
+    {
+        var packageId = Guid.NewGuid();
+        var wiringId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        // screen_data_shape present but no screenReadQueryWiring
+        var topology = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new { type = "screen_data_shape", tableRef = "users" }),
+        };
+        var repo = new InMemoryManifestAdminRepository();
+        repo.Seed(new ManifestDetailRecord(manifestId, null, topology, "active",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var wiring = new AdminPackageWiringDto(
+            wiringId.ToString(), "wk", "navigation", "manifest", null);
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(wiring), repo);
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "update_package_wiring", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                packageId = packageId.ToString(),
+                wiringId = wiringId.ToString(),
+                wiringKind = "navigation",
+                targetSurface = "manifest",
+                targetRef = $"manifest:{manifestId}:sc.name.eq",
+            }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(data);
+        Assert.Equal("SCREEN_DATA_SHAPE_UNRESOLVED", error!.Code);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_UpdatePackageWiring_ManifestSurface_WiringKeyNotInCandidates_ReturnsError()
+    {
+        var packageId = Guid.NewGuid();
+        var wiringId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        var topology = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "screen_data_shape",
+                screenReadQueryWiring = new
+                {
+                    searchConditions = new
+                    {
+                        bindings = new[] { new { wiringKey = "sc.name.eq", column = "name", @operator = "=" } },
+                    },
+                },
+            }),
+        };
+        var repo = new InMemoryManifestAdminRepository();
+        repo.Seed(new ManifestDetailRecord(manifestId, null, topology, "active",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var wiring = new AdminPackageWiringDto(
+            wiringId.ToString(), "wk", "navigation", "manifest", null);
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(wiring), repo);
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "update_package_wiring", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                packageId = packageId.ToString(),
+                wiringId = wiringId.ToString(),
+                wiringKind = "navigation",
+                targetSurface = "manifest",
+                targetRef = $"manifest:{manifestId}:unknown.key",
+            }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(data);
+        Assert.Equal("MANIFEST_WIRING_KEY_UNRESOLVED", error!.Code);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_UpdatePackageWiring_ManifestSurface_ValidWiringKey_Succeeds()
+    {
+        var packageId = Guid.NewGuid();
+        var wiringId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        // Seed a manifest with a matching wiringKey candidate
+        var topology = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "screen_data_shape",
+                screenReadQueryWiring = new
+                {
+                    searchConditions = new
+                    {
+                        bindings = new[] { new { wiringKey = "sc.name.eq", column = "name", @operator = "=" } },
+                    },
+                },
+            }),
+        };
+        var repo = new InMemoryManifestAdminRepository();
+        repo.Seed(new ManifestDetailRecord(manifestId, null, topology, "active",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var initial = new AdminPackageWiringDto(
+            wiringId.ToString(), "wk", "navigation", "manifest", null);
+        var refreshed = initial with
+        {
+            TargetSurface = "manifest",
+            TargetRef = $"manifest:{manifestId}:sc.name.eq",
+        };
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(initial, refreshed), repo);
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "update_package_wiring", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                packageId = packageId.ToString(),
+                wiringId = wiringId.ToString(),
+                wiringKind = "navigation",
+                targetSurface = "manifest",
+                targetRef = $"manifest:{manifestId}:sc.name.eq",
             }),
             null);
 
