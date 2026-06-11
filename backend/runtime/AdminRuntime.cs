@@ -1044,6 +1044,23 @@ public partial class AdminRuntime
                 "PACKAGE_WIRING_PAYLOAD_INVALID",
                 "packageId, wiringId, wiringKind, and targetSurface are required."));
         }
+        // For manifest surface, targetRef must be manifest:<uuid>:<wiringKey> with non-empty wiringKey.
+        // manifest:<uuid> without wiringKey cannot route to runtime dispatch lane.
+        if (request.TargetSurface.Trim().Equals("manifest", StringComparison.OrdinalIgnoreCase))
+        {
+            var targetRefValue = request.TargetRef?.Trim() ?? "";
+            var parts = targetRefValue.Split(':', 3);
+            var validFormat = parts.Length == 3
+                && parts[0].Equals("manifest", StringComparison.OrdinalIgnoreCase)
+                && Guid.TryParse(parts[1], out _)
+                && !string.IsNullOrWhiteSpace(parts[2]);
+            if (!validFormat)
+            {
+                return (null, new ValidationError(
+                    "MANIFEST_WIRING_KEY_MISSING",
+                    "targetRef for manifest surface must be manifest:<manifestId>:<wiringKey> with a non-empty wiringKey."));
+            }
+        }
         try
         {
             var error = await _uiTopologyRepository.UpdatePackageWiringAsync(

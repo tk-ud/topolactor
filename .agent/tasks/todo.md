@@ -106,15 +106,28 @@ Completion condition:
 ---
 ## Bundle `ui-builder-package-wiring-read-query-targets`
 
-**Status:** not_started
+**Status:** implemented
 **Roadmap bundle:** `product.admin_topology_authoring`
 **SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`
 
-- [ ] UI Builder package wiring tab で contents / screen_data_shape 由来の entity search / aggregation / displayColumns wiring candidates を選択できるようにする。
-  - route navigation は frontend-local のまま維持する。
-  - search / aggregate は runtime dispatch lane に接続する。
-  - unresolved manifest / unresolved screen_data_shape / missing wiringKey は blocking error として表示する。
-  
+実装済み:
+- `frontend/islands/UiBuilderAdmin.tsx` (PackageWiringEditor):
+  - `candidateLoadError` state 追加。list_screen_read_query_wiring + manifest:get 両方が失敗した場合に explicit error を設定し、save を blocking error にする。
+  - `handleSaveWiring` に blocking checks 追加: candidateLoadError / screenWiringCandidates.length === 0 / selectedManifestWiringKey 空 のいずれでも save 拒否。
+  - 「接続なし（ページのみ紐づけ）」ラジオオプション削除。candidates が 0 件または load error の場合は赤/amber のエラー表示で保存不可を明示。
+  - route navigation は RouteNavigationWiringPreset / encodeRouteNavigationTargetRef を維持し、manifest runtime dispatch lane に混入しない。
+- `backend/runtime/AdminRuntime.cs` (DataUpdatePackageWiringAsync):
+  - targetSurface === "manifest" の場合、targetRef が `manifest:<uuid>:<wiringKey>` 形式（wiringKey 非空）であることを検証。違反時 MANIFEST_WIRING_KEY_MISSING エラーを返す。
+- `frontend/tests/uiBuilderPackageWiring.test.ts`:
+  - 23 tests: screen_data_shape由来 searchConditions/havingConditions/aggregationMeasures/displayColumns candidate builder、buildWiringKindSelectOptions、encode/parse helpers、blocking save checks、route navigation frontend-local 確認。
+- `backend/tests/Topolactor.Runtime.Tests/AdminRuntimePackageWiringTests.cs`:
+  - 8 tests 追加: manifest surface wiringKey missing/empty/valid 検証、list_screen_read_query_wiring candidates/not_found/no_shape/no_wiring ケース。
+
+evidence:
+- frontend: 1500 tests passed (0 failed)
+- backend: 787 tests passed (0 failed)
+- check-structure.sh: All checks passed
+
 ---
 
 ## Bundle `preset_team_markdown_saved_view_seed`
