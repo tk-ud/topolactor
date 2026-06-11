@@ -6,6 +6,7 @@
  */
 import {
   assertEquals,
+  assertAlmostEquals,
   assertFalse,
   assert,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
@@ -730,6 +731,6 @@ Deno.test("renderEmission: applies emission.calculationBindings when options.cal
   const specs = renderEmission(emission as unknown as Parameters<typeof renderEmission>[0], registry);
   const target = specs.find((s) => s.nodeId === "result-node");
   assert(target !== undefined, "result-node spec should exist");
-  // taxIncluded(100, 10) = 110
-  assertEquals((target!.runtimeSpec?.props as Record<string, unknown>)?.value, 110);
+  // taxIncluded(100, 10) = 110 (float arithmetic may produce 110.00000000000001)
+  assertAlmostEquals((target!.runtimeSpec?.props as Record<string, unknown>)?.value as number, 110, 1e-6);
 });
