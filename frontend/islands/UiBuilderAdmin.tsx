@@ -986,7 +986,7 @@ function BatchOperationPanel({
         />
       </div>
       <p class="text-[0.6rem] text-slate-400">
-        source は emission.data. で始まる必要があります。対応 componentKind のみ適用されます。
+        source は emission.data. で始まる必要があります。配列 prop に対応した部品種別のみ適用されます。
       </p>
       <div class="flex gap-1">
         <button
@@ -1048,7 +1048,7 @@ function BatchOperationPanel({
         <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">targetRef:</label>
         <input
           class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
-          placeholder="route:my-page または manifest:uuid:key"
+          placeholder="route:my-page または (接続先 ref)"
           value={batchWiringDraft.targetRef}
           onInput={(e) => {
             setBatchWiringDraft((d) => ({ ...d, targetRef: (e.target as HTMLInputElement).value }));
@@ -1101,7 +1101,7 @@ function BatchOperationPanel({
   const calcAssistTab: JSX.Element = (
     <div class="flex flex-col gap-2 p-1">
       <p class="rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[0.6rem] text-blue-800">
-        選択ノードを参照する CalcBinding を追加します。eval / Function は使用しません。backend dispatch は追加されません。
+        選択ノードを参照する CalcBinding を追加します。計算はブラウザ内で完結し、外部送信は行いません。
       </p>
       <textarea
         class="w-full rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
@@ -1147,8 +1147,8 @@ function BatchOperationPanel({
             </ul>
           )}
           <p class="mt-1 text-[0.6rem] text-slate-500">
-            backend dispatch追加: {batchCalcPreview.dispatchAdded ? "あり（エラー）" : "なし"} /
-            eval追加: {batchCalcPreview.evalAdded ? "あり（エラー）" : "なし"}
+            外部送信: {batchCalcPreview.dispatchAdded ? "あり（エラー）" : "なし"} /
+            動的評価: {batchCalcPreview.evalAdded ? "あり（エラー）" : "なし"}
           </p>
         </div>
       )}
