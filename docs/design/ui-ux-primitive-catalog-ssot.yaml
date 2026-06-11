@@ -71,6 +71,22 @@ meaning_boundaries:
       - calculation result triggering immediate DB write
       - frontend computing topology scores authoritatively
 
+  frontend_local_calculation_binding_boundary:
+    rule: frontend-local calculation uses backend-loaded reference data as read-only input
+    lane: frontend_local_only
+    computation_trigger: input / change / select event on canvas node (no backend dispatch)
+    reference_data: backend-loaded emission data; read-only; not mutated by calculation
+    result_target: target node value / result / preview / inlineText (runtime props injection only)
+    prohibited:
+      - input_change_ごとの_backend_dispatch
+      - ManifestDispatcher_呼び出し
+      - queueAdminClientCommand_呼び出し
+      - 計算結果の逐次DB保存
+      - eval_or_Function
+      - 業務基準値_literal_を本番計算定義に保存
+      - unknown_rule_の_silent_fallback
+    implementation_ref: frontend/runtime/frontendLocalCalculationResolver.ts
+
   external_lookup_boundary:
     rule: external lookup is candidate surface not canonical SSOT
     note: >

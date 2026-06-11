@@ -759,6 +759,21 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: frontend_local_derived_calculation_binding
+    change_surfaces:
+      - frontend/runtime/frontendLocalCalculationResolver.ts
+      - frontend_local_derived_calculation_binding authoring UI
+      - frontend-local calculation graph
+      - ruleTable source selection
+      - calculation binding propsJson round-trip
+    required_docs:
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/framework-core.yaml
+    protocols: []
+
 worktypes:
   ids:
     - audit
