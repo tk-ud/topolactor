@@ -11,6 +11,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-search-suggest-candidate-boundary` | UIBuilder autocomplete / suggest / combobox candidate boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml` |
 | `ui-builder-projection-authoring-assist-roadmap-alignment` | UIBuilder projection authoring assist roadmap / SSOT alignment | not_started | 1 | `product.admin_topology_authoring` | `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
@@ -54,11 +55,22 @@ Note: md_viewer is now a dashboard/read-work component candidate shown in Dashbo
 
 ---
 
+## Bundle `ui-builder-search-suggest-candidate-boundary`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml`
+**Target files:** `frontend/components/AutoCompleteInput.tsx`, `frontend/components/SuggestInput.tsx`, `frontend/components/SearchCombobox.tsx`, `frontend/lib/uiBuilderAutocompleteCandidates.ts`, `frontend/components/catalog.ts`
+
+- [ ] UIBuilder / component catalog 上の autocomplete / suggest / combobox の候補取得・採用境界を SSOT と実装名へ揃える。autocomplete と suggest はどちらも input event + debounce + backend read-only search を許容する同格の候補取得境界として扱い、typing 中の mutation / DB write / apply は行わない。差分は UI 採用形態であり、autocomplete は単一行検索/選択用途、suggest は商品等の複数行入力補助用途とする。小規模・既知候補の選択 UI は既存の `search_combobox.primitive` / `frontend/components/SearchCombobox.tsx` を combobox として再利用し、既存の `uiBuilderAutocompleteCandidates.ts` 系 helper は autocomplete 本体ではなく combobox candidate derivation として扱う。必要に応じて naming / compatibility alias / tests / docs evidence を揃える。
+
+---
+
 ## Bundle `ui-builder-projection-authoring-assist-roadmap-alignment`
 
 **Status:** not_started
 **Roadmap bundle:** `product.admin_topology_authoring`
-**Depends on:** `ui-builder-selection-model`, `ui-builder-autocomplete-candidates`, `ui-builder-batch-operation`, `ui-builder-suggest-authoring-assist`
+**Depends on:** `ui-builder-selection-model`, `ui-builder-autocomplete-candidates`, `ui-builder-batch-operation`, `ui-builder-suggest-authoring-assist`, `ui-builder-search-suggest-candidate-boundary`
 **SSOT:** `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml`, `docs/design/admin-console-workflow-ssot.yaml`
 
 - [ ] UIBuilder projection setting authoring assist の bundle 群が実装された後、roadmap / TODO / SSOT / required evidence を同じ completion boundary へ揃える。
@@ -70,7 +82,7 @@ Scope:
 - 実装完了できない残項目がある場合は partial 判定できる粒度で残 todo を全列挙する。
 
 **Carry-over boundary correction:**
-- [ ] **active-remote-manifest-column-suggest** は UIBuilder 側の設計判断待ち / backend dispatch 実装待ちとして扱わない。`/admin/contents` Step 2.5 が relationship 設定を担当し、active remote 側の `remote_manifest_id` / `join_table_ref` / `remote_key` は `screen_data_shape.relationIntents` に保存・検証される。remote target の一覧取得と検証は `manifest:list_relationship_remote_targets` / `assign_screen_data_shape` 側の責務で完結する。UIBuilder の責務は、保存済み `screen_data_shape` / `relationIntents` / projection data shape を component props / propBindings / layout projection へ配線することに限定する。用語境界として、autocomplete と suggest はどちらも input event + debounce + backend read-only search を許容する同格の候補取得境界として扱う。差分は UI 採用形態であり、autocomplete は単一行検索/選択用途、suggest は商品等の複数行入力補助用途とする。小規模・既知候補の選択 UI は既存の `search_combobox.primitive` / `frontend/components/SearchCombobox.tsx` を combobox として再利用し、既存の `uiBuilderAutocompleteCandidates.ts` 系 helper は autocomplete 本体ではなく combobox candidate derivation として扱う。残作業は、roadmap / TODO / SSOT / evidence 上でこの責務・用語境界を明確化し、`deriveQualifiedColumnCandidates` の `remoteTargets = []` 固定を UIBuilder 実装漏れとして誤判定しないよう completion boundary を揃えること。
+- [ ] **active-remote-manifest-column-suggest** は UIBuilder 側の設計判断待ち / backend dispatch 実装待ちとして扱わない。`/admin/contents` Step 2.5 が relationship 設定を担当し、active remote 側の `remote_manifest_id` / `join_table_ref` / `remote_key` は `screen_data_shape.relationIntents` に保存・検証される。remote target の一覧取得と検証は `manifest:list_relationship_remote_targets` / `assign_screen_data_shape` 側の責務で完結する。UIBuilder の責務は、保存済み `screen_data_shape` / `relationIntents` / projection data shape を component props / propBindings / layout projection へ配線することに限定する。残作業は、roadmap / TODO / SSOT / evidence 上でこの責務境界を明確化し、`deriveQualifiedColumnCandidates` の `remoteTargets = []` 固定を UIBuilder 実装漏れとして誤判定しないよう completion boundary を揃えること。
 
 Completion condition:
 - roadmap / TODO / SSOT の責務が食い違わず、後続 PR closure が bundle 単位で判定できる。
