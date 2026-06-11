@@ -170,9 +170,16 @@ public class StructureMapResolver
                 {
                     calculationBindings = JsonSerializer.Deserialize<JsonElement>(calcBindingsJson);
                 }
-                catch (JsonException)
+                catch (JsonException ex)
                 {
-                    // Malformed JSON: omit silently — frontend will receive null and apply no bindings.
+                    // Malformed JSON is an explicit failure — silent omit is prohibited.
+                    // Broken calculationBindings authoring must surface in Emission.Errors.
+                    var calcError = new ValidationError(
+                        "CALC_BINDINGS_JSON_INVALID",
+                        $"layout_id '{record.LayoutId.Value}' has malformed calculationBindings JSON in layout_patch_json. " +
+                        $"Frontend calculation bindings cannot be applied. Parse error: {ex.Message}");
+                    var merged = new List<ValidationError>(layoutErrors ?? []) { calcError };
+                    layoutErrors = merged;
                 }
             }
         }
