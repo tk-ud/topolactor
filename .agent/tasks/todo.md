@@ -11,7 +11,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `ui-builder-selection-model` | UIBuilder selection set / group selection foundation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-selection-model` | UIBuilder selection set / group selection foundation | implemented | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-autocomplete-candidates` | UIBuilder projection setting autocomplete candidates | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-batch-operation` | UIBuilder projection setting batch operation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-suggest-authoring-assist` | UIBuilder projection setting suggest assist | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
@@ -95,21 +95,25 @@ UIBuilder の投影設定 assist は、既存の package-only canvas workspace /
 
 ## Bundle `ui-builder-selection-model`
 
-**Status:** not_started
+**Status:** implemented
 **Roadmap bundle:** `product.admin_topology_authoring`
 **SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace`), `docs/design/pipeline-continuity-ssot.yaml` (`layout_projection_dom_lane`)
 
-- [ ] UIBuilder の単一 `selectedNodeId` モデルを、既存 inspector の単一 primary selection 互換を壊さず、batch operation が参照できる selection set contract として整理・実装する。
+- [x] UIBuilder の単一 `selectedNodeId` モデルを、既存 inspector の単一 primary selection 互換を壊さず、batch operation が参照できる selection set contract として整理・実装する。
 
-Scope:
-- `selectedNodeIds` / `primarySelectedNodeId` または同等 contract を定義する。
-- all select / subtree select / nodeKind select / componentKind select / invert select / clear selection を UIBuilder 内の draft interaction として扱う。
-- `groupId` を導入する場合は、保存先を `layout_patch_json` / node-local metadata / transient UI state のどこに置くかを SSOT 上で明示してから実装する。
-- FlowLayoutCanvas / LayerTree / right dock inspector の責務境界を崩さない。
-
-Completion condition:
-- 後続 `ui-builder-batch-operation` が参照できる selection set contract が明文化され、単一 node 編集 UX が退行しない。
-- frontend は projection / draft interaction surface のままで、DB direct write・topology judgment・runtime judgment を追加しない。
+実装済み (2026-06-11):
+- `SelectionSetContract` 型 (`selectedNodeIds: ReadonlySet<string>` + `primarySelectedNodeId: string | null`) を `visualLayoutUtils.ts` に定義。`UiBuilderAdmin.tsx` から re-export。
+- `selectAll` / `selectSubtree` / `selectByNodeKind` / `selectByComponentKind` / `invertSelection` / `emptySelectionSet` / `removeFromSelectionSet` を `visualLayoutUtils.ts` に純関数として実装。
+- `LayoutBuilderSection` に `selectedNodeIds` state (ReadonlySet) を追加。既存 `selectedNodeId` (primarySelectedNodeId) は変更せず。
+- 単一クリック・デセレクト・コピー・削除・canvas clear・layout ロード で両 state を同期。
+- Selection UI ボタン (全選択 / サブツリー / 反転 / 解除) を canvas ステータスバーに追加。
+- `FlowLayoutCanvas` に `selectedNodeIds?: ReadonlySet<string>` optional prop を追加。非 primary 選択 node に `ring-indigo-300` ハイライト。
+- `LayerTree` / `LayoutRightDock` に `selectedNodeIds` optional prop を追加。layer tree で indigo background ハイライト。
+- `frontend/tests/uiBuilderSelectionModel.test.ts` を新規追加 (25 テスト全通過)。
+- `adminUxGuard.test.ts` の onDeselectAll 検証パターンを multi-line 対応に更新。
+- `groupId` は永続化しない (transient UI state のみ; SSOT 上の保存先定義なし)。
+- `UI_BUILDER_SELECTION_STATE_BOUNDARY = "transient_draft_interaction_state_only"` として明示。
+- frontend projection boundary を壊さず: DB write / topology judgment / runtime judgment 追加なし。
 
 ---
 

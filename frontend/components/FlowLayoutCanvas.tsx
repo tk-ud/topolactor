@@ -64,6 +64,7 @@ function FlowCanvasNodeView({
   node,
   childrenMap,
   selectedNodeId,
+  selectedNodeIds,
   designDraftByNodeId,
   onSelectNode,
   onDeleteNode,
@@ -74,6 +75,7 @@ function FlowCanvasNodeView({
   node: FlowCanvasNode;
   childrenMap: Map<string | undefined, FlowCanvasNode[]>;
   selectedNodeId: string | null;
+  selectedNodeIds?: ReadonlySet<string>;
   designDraftByNodeId: ReadonlyMap<string, FlowCanvasDesignDraft>;
   onSelectNode: (nodeId: string) => void;
   onDeleteNode?: (nodeId: string) => void;
@@ -83,6 +85,7 @@ function FlowCanvasNodeView({
 }): JSX.Element {
   const children = childrenMap.get(node.nodeId) ?? [];
   const isSelected = node.nodeId === selectedNodeId;
+  const isInSelectionSet = selectedNodeIds != null && selectedNodeIds.has(node.nodeId) && !isSelected;
   const design = designDraftByNodeId.get(node.nodeId);
   const isContainer = isContainerNode(node, children.length);
   const { style: flowStyle, className: flowClassName } = flowNodePresentation(node);
@@ -115,6 +118,7 @@ function FlowCanvasNodeView({
       node={child}
       childrenMap={childrenMap}
       selectedNodeId={selectedNodeId}
+      selectedNodeIds={selectedNodeIds}
       designDraftByNodeId={designDraftByNodeId}
       onSelectNode={onSelectNode}
       onDeleteNode={onDeleteNode}
@@ -128,7 +132,7 @@ function FlowCanvasNodeView({
     "data-node-id": node.nodeId,
     class: [
       className,
-      isSelected ? "ring-2 ring-blue-400 ring-offset-1" : "",
+      isSelected ? "ring-2 ring-blue-400 ring-offset-1" : isInSelectionSet ? "ring-1 ring-indigo-300 ring-offset-1" : "",
       "rounded border border-slate-200",
     ].filter(Boolean).join(" ") || undefined,
     style: Object.keys(style).length > 0 ? style : undefined,
@@ -222,6 +226,8 @@ function FlowCanvasNodeView({
 export type FlowLayoutCanvasProps = {
   nodes: FlowCanvasNode[];
   selectedNodeId: string | null;
+  /** Full selection set for multi-select visual highlight (ring-indigo on non-primary nodes). */
+  selectedNodeIds?: ReadonlySet<string>;
   rootLayoutClassRefs?: string[];
   designDraftByNodeId?: ReadonlyMap<string, FlowCanvasDesignDraft>;
   canvasRef?: { current: HTMLDivElement | null };
@@ -245,6 +251,7 @@ export type FlowLayoutCanvasProps = {
 export function FlowLayoutCanvas({
   nodes,
   selectedNodeId,
+  selectedNodeIds,
   rootLayoutClassRefs = [],
   designDraftByNodeId = new Map(),
   canvasRef,
@@ -324,6 +331,7 @@ export function FlowLayoutCanvas({
                 node={node}
                 childrenMap={childrenMap}
                 selectedNodeId={selectedNodeId}
+                selectedNodeIds={selectedNodeIds}
                 designDraftByNodeId={designDraftByNodeId}
                 onSelectNode={onSelectNode}
                 onDeleteNode={onDeleteNode}
