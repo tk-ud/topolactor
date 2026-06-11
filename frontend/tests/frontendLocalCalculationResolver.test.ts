@@ -572,6 +572,43 @@ Deno.test("resolveAllowedTargetProps: returns allowed props for calc_topology/co
   assert(props!.includes("value"));
 });
 
+// ─── structural_html alias: layout/structural_html ────────────────────────────
+
+Deno.test("CALC_TARGET_PROP_BY_COMPONENT_KIND: layout/structural_html allows only inlineText", () => {
+  assertEquals(CALC_TARGET_PROP_BY_COMPONENT_KIND["layout/structural_html"], ["inlineText"]);
+});
+
+Deno.test("CALC_TARGET_PROP_BY_COMPONENT_KIND: structural_html (bare alias) allows only inlineText", () => {
+  assertEquals(CALC_TARGET_PROP_BY_COMPONENT_KIND["structural_html"], ["inlineText"]);
+});
+
+Deno.test("validateCalcTargetProp: layout/structural_html + inlineText → valid", () => {
+  assertEquals(validateCalcTargetProp("layout/structural_html", "inlineText"), []);
+});
+
+Deno.test("validateCalcTargetProp: layout/structural_html + value → CALC_TARGET_PROP_UNSUPPORTED", () => {
+  const errors = validateCalcTargetProp("layout/structural_html", "value");
+  assert(errors.length > 0, "should have validation error");
+  assert(errors[0].includes("CALC_TARGET_PROP_UNSUPPORTED"), `expected CALC_TARGET_PROP_UNSUPPORTED: ${errors[0]}`);
+});
+
+Deno.test("validateCalcTargetProp: layout/structural_html + result → CALC_TARGET_PROP_UNSUPPORTED", () => {
+  const errors = validateCalcTargetProp("layout/structural_html", "result");
+  assert(errors.length > 0);
+  assert(errors[0].includes("CALC_TARGET_PROP_UNSUPPORTED"));
+});
+
+Deno.test("validateCalcTargetProp: layout/structural_html + preview → CALC_TARGET_PROP_UNSUPPORTED", () => {
+  const errors = validateCalcTargetProp("layout/structural_html", "preview");
+  assert(errors.length > 0);
+  assert(errors[0].includes("CALC_TARGET_PROP_UNSUPPORTED"));
+});
+
+Deno.test("resolveAllowedTargetProps: layout/structural_html → [\"inlineText\"] (not null)", () => {
+  const props = resolveAllowedTargetProps("layout/structural_html");
+  assertEquals(props, ["inlineText"]);
+});
+
 // ─── selectRuleFromTable: node-based matchConditions ─────────────────────────
 
 Deno.test("selectRuleFromTable: transactionType = node value (taxRates.transactionType=node.value)", () => {

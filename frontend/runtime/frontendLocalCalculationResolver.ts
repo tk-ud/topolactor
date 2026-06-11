@@ -473,6 +473,10 @@ export const CALC_TARGET_PROP_BY_COMPONENT_KIND: Record<string, string[]> = {
   "calc_topology/computed_field_preview": ["preview", "value"],
   "calc_topology/cross_entity_calculation_panel": ["preview", "value"],
   "calc_topology/formula_builder": ["value"],
+  // Structural HTML nodes carry componentKind="layout/structural_html" (set by makeStructuralHtmlNode
+  // and parseVisualLayoutPatchJson). The bare "structural_html" key is kept as alias for
+  // any path that resolves nodeKind directly. Only inlineText is valid as a calc target.
+  "layout/structural_html": ["inlineText"],
   "structural_html": ["inlineText"],
 };
 
