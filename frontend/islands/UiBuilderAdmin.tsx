@@ -126,6 +126,13 @@ import {
   type RoundingPolicy,
   type RuleMatchCondition,
 } from "../runtime/frontendLocalCalculationResolver.ts";
+import {
+  deriveEmissionPathCandidates,
+  deriveNodeCandidates,
+  deriveRuleTableFieldCandidates,
+  deriveRouteKeyCandidates,
+  type DraftNodeMinimal,
+} from "../lib/uiBuilderAutocompleteCandidates.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -737,6 +744,8 @@ function LayoutRightDock({
               canvasDesignDraft={canvasDesignDraft}
               onDesignPreviewChange={onDesignChange}
               onCommitNode={onCommitNode}
+              emissionDataJson={emissionDataJson}
+              draftNodes={draftNodes}
             />
           </Accordion>
         </>
@@ -5501,10 +5510,12 @@ function RouteNavigationWiringPreset({
 function PackageWiringEditor({
   selectedPackageId,
   packageComponents,
+  routeCandidates,
   onWiringSaved,
 }: {
   selectedPackageId: string;
   packageComponents: AdminPackageComponentRow[];
+  routeCandidates?: string[];
   onWiringSaved?: (wiring: AdminPackageWiringRow) => void;
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
@@ -5851,16 +5862,45 @@ function PackageWiringEditor({
             )}
 
             {targetSurface !== "manifest" && (
-              <label class="block sm:col-span-2">
-                接続先参照 (target_ref、任意)
-                <input
-                  class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                  value={targetRef}
-                  placeholder="例: route:admin:demo"
-                  onInput={(e) =>
-                    setTargetRef((e.target as HTMLInputElement).value)}
-                />
-              </label>
+              <div class="sm:col-span-2 flex flex-col gap-1">
+                <span class="text-[0.7rem] text-slate-700">接続先参照 (target_ref)</span>
+                {routeCandidates && routeCandidates.length > 0 && (
+                  <div class="flex flex-wrap gap-1">
+                    {routeCandidates.map((rk) => {
+                      const encoded = `route:${rk}`;
+                      return (
+                        <button
+                          key={rk}
+                          type="button"
+                          class={`rounded border px-2 py-0.5 text-[0.65rem] font-mono ${targetRef === encoded ? "border-blue-500 bg-blue-100 text-blue-800" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+                          onClick={() => setTargetRef(encoded)}
+                        >
+                          {rk}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      class={`rounded border px-2 py-0.5 text-[0.65rem] ${!targetRef ? "border-slate-400 bg-slate-100 text-slate-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                      onClick={() => setTargetRef("")}
+                    >
+                      なし
+                    </button>
+                  </div>
+                )}
+                {(!routeCandidates || routeCandidates.length === 0) && (
+                  <p class="text-[0.65rem] text-slate-500">ルート候補がありません。レイアウト登録後に再度確認してください。</p>
+                )}
+                <AdvancedManualOverride title="target_ref 手入力（SSOT key 直接指定 / 移行 / デバッグ用）">
+                  <input
+                    class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                    value={targetRef}
+                    placeholder="例: route:admin:demo"
+                    onInput={(e) =>
+                      setTargetRef((e.target as HTMLInputElement).value)}
+                  />
+                </AdvancedManualOverride>
+              </div>
             )}
           </div>
           <button
@@ -6157,6 +6197,7 @@ function LocalCalcBindingPanel({
                 draftNodes={draftNodes}
                 draftNodeIds={draftNodeIds}
                 onChange={updateBinding}
+                emissionDataJson={emissionDataJson}
               />
             )}
             {isExpanded && errors.length > 0 && (
@@ -6183,11 +6224,13 @@ function CalcBindingEditor({
   draftNodes,
   draftNodeIds,
   onChange,
+  emissionDataJson,
 }: {
   binding: CalcBinding;
   draftNodes: DraftNode[];
   draftNodeIds: string[];
   onChange: (b: CalcBinding) => void;
+  emissionDataJson?: string;
 }): JSX.Element {
   const targetNodeKind = draftNodes.find((n) => n.nodeId === binding.targetNodeId)?.componentKind ?? null;
   const allowedTargetProps = targetNodeKind ? resolveAllowedTargetProps(targetNodeKind) : null;
@@ -6251,8 +6294,8 @@ function CalcBindingEditor({
             onChange={(e) => updateTargetNodeId((e.currentTarget as HTMLSelectElement).value)}
           >
             <option value="">ノードを選択...</option>
-            {draftNodeIds.map((id) => (
-              <option key={id} value={id}>{id}</option>
+            {deriveNodeCandidates(draftNodes as DraftNodeMinimal[]).map(({ nodeId, label }) => (
+              <option key={nodeId} value={nodeId}>{label}</option>
             ))}
           </select>
           <select
@@ -6281,6 +6324,7 @@ function CalcBindingEditor({
             draftNodeIds={draftNodeIds}
             onChange={(s) => updateVarSource(name, s)}
             onRemove={() => removeVar(name)}
+            emissionDataJson={emissionDataJson}
           />
         ))}
         <div class="flex gap-1">
@@ -6335,10 +6379,12 @@ function CalcMatchConditionsEditor({
   conditions,
   draftNodeIds,
   onChange,
+  tableFieldCandidates,
 }: {
   conditions: RuleMatchCondition[];
   draftNodeIds: string[];
   onChange: (conds: RuleMatchCondition[]) => void;
+  tableFieldCandidates?: string[];
 }): JSX.Element {
   function addCondition() {
     const newCond: RuleMatchCondition = {
@@ -6371,12 +6417,18 @@ function CalcMatchConditionsEditor({
       {conditions.length === 0 && (
         <span class="text-[0.55rem] text-blue-400">条件なし — 全行が対象（優先度/日付で最上位を選択）</span>
       )}
+      {tableFieldCandidates && tableFieldCandidates.length > 0 && (
+        <datalist id="calc-match-field-list">
+          {tableFieldCandidates.map((f) => <option key={f} value={f} />)}
+        </datalist>
+      )}
       {conditions.map((cond, idx) => (
         <div key={idx} class="flex flex-col gap-0.5 rounded border border-blue-200 bg-white p-0.5">
           <div class="flex items-center gap-0.5">
             <input
               type="text"
               class="flex-1 rounded border border-slate-200 px-0.5 py-0 text-[0.6rem] font-mono"
+              list={tableFieldCandidates && tableFieldCandidates.length > 0 ? "calc-match-field-list" : undefined}
               placeholder="フィールド名 (例: transactionType)"
               value={cond.field}
               onInput={(e) => updateCondition(idx, { ...cond, field: (e.currentTarget as HTMLInputElement).value })}
@@ -6454,12 +6506,14 @@ function CalcVarEditor({
   draftNodeIds,
   onChange,
   onRemove,
+  emissionDataJson,
 }: {
   name: string;
   source: CalcVariableSource;
   draftNodeIds: string[];
   onChange: (s: CalcVariableSource) => void;
   onRemove: () => void;
+  emissionDataJson?: string;
 }): JSX.Element {
   return (
     <div class="flex flex-col gap-0.5 rounded border border-slate-100 bg-white p-1">
@@ -6512,38 +6566,102 @@ function CalcVarEditor({
           />
         </div>
       )}
-      {source.kind === "emission" && (
-        <input
-          type="text"
-          class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
-          placeholder="emission.data.path"
-          value={source.path}
-          onInput={(e) => onChange({ ...source, path: (e.currentTarget as HTMLInputElement).value })}
-        />
-      )}
-      {source.kind === "ruleTable" && (
-        <div class="flex flex-col gap-0.5">
-          <input
-            type="text"
-            class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
-            placeholder="emission.data.tablePath"
-            value={source.tablePath}
-            onInput={(e) => onChange({ ...source, tablePath: (e.currentTarget as HTMLInputElement).value })}
-          />
-          <input
-            type="text"
-            class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
-            placeholder="selectedField (例: hourlyRate, taxRate)"
-            value={source.selectedField}
-            onInput={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLInputElement).value })}
-          />
-          <CalcMatchConditionsEditor
-            conditions={source.matchConditions}
-            draftNodeIds={draftNodeIds}
-            onChange={(conds) => onChange({ ...source, matchConditions: conds })}
-          />
-        </div>
-      )}
+      {source.kind === "emission" && (() => {
+        const emResult = deriveEmissionPathCandidates(emissionDataJson ?? "");
+        return (
+          <>
+            {emResult.ok ? (
+              <>
+                <datalist id={`calc-var-emission-list-${name}`}>
+                  {emResult.candidates.map((c) => <option key={c.path} value={c.path} />)}
+                </datalist>
+                <input
+                  type="text"
+                  class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
+                  list={`calc-var-emission-list-${name}`}
+                  placeholder="emission.data.path"
+                  value={source.path}
+                  onInput={(e) => onChange({ ...source, path: (e.currentTarget as HTMLInputElement).value })}
+                />
+              </>
+            ) : (
+              <>
+                <p class="text-[0.55rem] text-amber-600">{emResult.reason}</p>
+                <input
+                  type="text"
+                  class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
+                  placeholder="emission.data.path"
+                  value={source.path}
+                  onInput={(e) => onChange({ ...source, path: (e.currentTarget as HTMLInputElement).value })}
+                />
+              </>
+            )}
+          </>
+        );
+      })()}
+      {source.kind === "ruleTable" && (() => {
+        const tableResult = deriveEmissionPathCandidates(emissionDataJson ?? "");
+        const arrayPaths = tableResult.ok ? tableResult.candidates.filter((c) => c.isArray).map((c) => c.path) : [];
+        const fieldResult = deriveRuleTableFieldCandidates(source.tablePath, emissionDataJson ?? "");
+        const fieldCandidates = fieldResult.ok ? fieldResult.fields : [];
+        return (
+          <div class="flex flex-col gap-0.5">
+            {arrayPaths.length > 0 && (
+              <datalist id={`calc-var-table-list-${name}`}>
+                {arrayPaths.map((p) => <option key={p} value={p} />)}
+              </datalist>
+            )}
+            <input
+              type="text"
+              class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
+              list={arrayPaths.length > 0 ? `calc-var-table-list-${name}` : undefined}
+              placeholder="emission.data.tablePath"
+              value={source.tablePath}
+              onInput={(e) => onChange({ ...source, tablePath: (e.currentTarget as HTMLInputElement).value })}
+            />
+            {fieldCandidates.length > 0 ? (
+              <>
+                <select
+                  class="w-full rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.6rem]"
+                  value={source.selectedField}
+                  onChange={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLSelectElement).value })}
+                >
+                  <option value="">— フィールドを選択 —</option>
+                  {fieldCandidates.map((f) => <option key={f} value={f}>{f}</option>)}
+                </select>
+                <AdvancedManualOverride title="selectedField 手入力（SSOT key 直接指定）">
+                  <input
+                    type="text"
+                    class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
+                    placeholder="selectedField (例: hourlyRate, taxRate)"
+                    value={source.selectedField}
+                    onInput={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLInputElement).value })}
+                  />
+                </AdvancedManualOverride>
+              </>
+            ) : (
+              <>
+                {fieldResult.ok === false && source.tablePath.trim() && (
+                  <p class="text-[0.55rem] text-amber-600">{fieldResult.reason}</p>
+                )}
+                <input
+                  type="text"
+                  class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
+                  placeholder="selectedField (例: hourlyRate, taxRate)"
+                  value={source.selectedField}
+                  onInput={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLInputElement).value })}
+                />
+              </>
+            )}
+            <CalcMatchConditionsEditor
+              conditions={source.matchConditions}
+              draftNodeIds={draftNodeIds}
+              onChange={(conds) => onChange({ ...source, matchConditions: conds })}
+              tableFieldCandidates={fieldCandidates}
+            />
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -6555,6 +6673,8 @@ function PackageDesignPanel({
   canvasDesignDraft,
   onDesignPreviewChange,
   onCommitNode,
+  emissionDataJson,
+  draftNodes,
 }: {
   selectedPackageId: string;
   selectedCanvasNode: DraftNode | null;
@@ -6563,6 +6683,8 @@ function PackageDesignPanel({
   canvasDesignDraft?: DesignDraft;
   onDesignPreviewChange?: (nodeId: string, partial: DesignDraft) => void;
   onCommitNode?: (updates: Partial<DraftNode>, label: string) => void;
+  emissionDataJson?: string;
+  draftNodes?: DraftNode[];
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
   const [designName, setDesignName] = useState("");
@@ -7229,26 +7351,62 @@ function PackageDesignPanel({
                               </button>
                             )}
                           </div>
-                          {binding && (
+                          {binding && (() => {
+                            const emissionResult = deriveEmissionPathCandidates(emissionDataJson ?? "");
+                            const arraySourcePaths = emissionResult.ok ? emissionResult.candidates.filter((c) => c.isArray).map((c) => c.path) : [];
+                            const allSourcePaths = emissionResult.ok ? emissionResult.candidates.map((c) => c.path) : [];
+                            const sourceFieldResult = deriveRuleTableFieldCandidates(binding.source, emissionDataJson ?? "");
+                            const sourceFieldCandidates = sourceFieldResult.ok ? sourceFieldResult.fields : [];
+                            const sourceListId = `propbinding-source-list-${propName}`;
+                            const pathListId = `propbinding-path-list-${propName}`;
+                            return (
                             <div class="flex flex-col gap-1">
                               <label class="block">
                                 source（必須 — emission.data.* パス）
-                                <input
-                                  class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
-                                  value={binding.source}
-                                  placeholder="emission.data.rows"
-                                  onInput={(e) => {
-                                    const v = (e.target as HTMLInputElement).value;
-                                    const next = { ...propBindingsDraft, [propName]: { ...binding, source: v } };
-                                    setPropBindingsDraft(next);
-                                  }}
-                                  onBlur={() => {
-                                    const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
-                                    if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
-                                    setPropBindingsError(null);
-                                    onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.sourceを更新`);
-                                  }}
-                                />
+                                {emissionResult.ok ? (
+                                  <>
+                                    <datalist id={sourceListId}>
+                                      {arraySourcePaths.map((p) => <option key={p} value={p} />)}
+                                    </datalist>
+                                    <input
+                                      class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                      list={sourceListId}
+                                      value={binding.source}
+                                      placeholder="emission.data.rows"
+                                      onInput={(e) => {
+                                        const v = (e.target as HTMLInputElement).value;
+                                        const next = { ...propBindingsDraft, [propName]: { ...binding, source: v } };
+                                        setPropBindingsDraft(next);
+                                      }}
+                                      onBlur={() => {
+                                        const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                        if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                        setPropBindingsError(null);
+                                        onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.sourceを更新`);
+                                      }}
+                                    />
+                                  </>
+                                ) : (
+                                  <>
+                                    <p class="mt-0.5 text-[0.55rem] text-amber-700">{emissionResult.reason}</p>
+                                    <input
+                                      class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                      value={binding.source}
+                                      placeholder="emission.data.rows"
+                                      onInput={(e) => {
+                                        const v = (e.target as HTMLInputElement).value;
+                                        const next = { ...propBindingsDraft, [propName]: { ...binding, source: v } };
+                                        setPropBindingsDraft(next);
+                                      }}
+                                      onBlur={() => {
+                                        const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                        if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                        setPropBindingsError(null);
+                                        onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.sourceを更新`);
+                                      }}
+                                    />
+                                  </>
+                                )}
                               </label>
                               <label class="block">
                                 transform（任意）
@@ -7271,10 +7429,16 @@ function PackageDesignPanel({
                                   ))}
                                 </select>
                               </label>
+                              {sourceFieldCandidates.length > 0 && (
+                                <datalist id={pathListId}>
+                                  {sourceFieldCandidates.map((f) => <option key={f} value={f} />)}
+                                </datalist>
+                              )}
                               <label class="block">
                                 keyPath（任意 — 行キーフィールド）
                                 <input
                                   class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                  list={sourceFieldCandidates.length > 0 ? pathListId : undefined}
                                   value={binding.keyPath ?? ""}
                                   placeholder="id"
                                   onInput={(e) => {
@@ -7294,6 +7458,7 @@ function PackageDesignPanel({
                                 labelPath（任意 — 表示ラベルフィールド）
                                 <input
                                   class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                  list={sourceFieldCandidates.length > 0 ? pathListId : undefined}
                                   value={binding.labelPath ?? ""}
                                   placeholder="name"
                                   onInput={(e) => {
@@ -7313,6 +7478,7 @@ function PackageDesignPanel({
                                 valuePath（任意 — 値フィールド）
                                 <input
                                   class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                  list={sourceFieldCandidates.length > 0 ? pathListId : undefined}
                                   value={binding.valuePath ?? ""}
                                   placeholder="id"
                                   onInput={(e) => {
@@ -7332,6 +7498,7 @@ function PackageDesignPanel({
                                 childrenPath（任意 — 子ノードフィールド / tree 用）
                                 <input
                                   class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                  list={sourceFieldCandidates.length > 0 ? pathListId : undefined}
                                   value={binding.childrenPath ?? ""}
                                   placeholder="children"
                                   onInput={(e) => {
@@ -7348,7 +7515,8 @@ function PackageDesignPanel({
                                 />
                               </label>
                             </div>
-                          )}
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -7377,6 +7545,7 @@ function PackageDesignPanel({
                     <PackageWiringEditor
                       selectedPackageId={selectedPackageId}
                       packageComponents={packageComponents}
+                      routeCandidates={routeCandidates}
                     />
                   </div>
                 </details>
