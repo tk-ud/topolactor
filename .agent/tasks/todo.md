@@ -104,6 +104,30 @@ Completion condition:
 - 実装完了判定は roadmap/TODO 記述だけで行わず、実コード・テスト evidence と突合する。
 
 ---
+## Bundle `ui-builder-canvas-design-authoring-integrity`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`
+
+- [ ] UI Builder canvas / layout inspector / design inspector の authoring integrity を bundle 単位で改善する。
+  - modal 配置時に canvas 操作不能にならない inert preview boundary を実装する。
+  - 配置インスペクタにも responsive layout authoring を追加し、design inspector responsive token と責務を分離する。
+  - component_style_design の cssTokenRefs を canvas preview と runtime render の両方に反映する。
+  - linkHref に read-only placeholder interpolation を追加し、未解決 placeholder を silent fallback しない。
+
+## Bundle `ui-builder-package-wiring-read-query-targets`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`
+
+- [ ] UI Builder package wiring tab で contents / screen_data_shape 由来の entity search / aggregation / displayColumns wiring candidates を選択できるようにする。
+  - route navigation は frontend-local のまま維持する。
+  - search / aggregate は runtime dispatch lane に接続する。
+  - unresolved manifest / unresolved screen_data_shape / missing wiringKey は blocking error として表示する。
+  
+---
 
 ## Bundle `preset_team_markdown_saved_view_seed`
 
