@@ -349,3 +349,139 @@ Deno.test("layout_patch_json round-trip: calculationBindings field preserved thr
   assert(Array.isArray(propsObj.calculationBindings), "calculationBindings should be an array");
   assertEquals(propsObj.calculationBindings[0].calculationId, "test-1");
 });
+
+// ─── applyCalcBindingsToSpecs via renderEmission path ───────────────────────
+
+import {
+  applyCalcBindingsToSpecs,
+} from "../runtime/renderEmission.ts";
+import type { ComponentSpec } from "../runtime/renderEmission.ts";
+
+Deno.test("applyCalcBindingsToSpecs: injects calculated value into runtimeSpec.props.value", () => {
+  const specs: ComponentSpec[] = [
+    {
+      nodeId: "target-node",
+      componentType: "form_input/text",
+      def: {},
+      runtimeSpec: { componentId: "c1", componentType: "form_input/text", packageId: null, layoutId: null, wiringId: null, props: { data: { label: "工費" } }, eventBinding: {} },
+    },
+  ];
+  const bindings: import("../runtime/frontendLocalCalculationResolver.ts").CalcBinding[] = [
+    {
+      calculationId: "labor-cost-render",
+      variables: {
+        hours: { kind: "literal", value: 8 },
+        rate: { kind: "literal", value: 5000 },
+      },
+      operation: { op: "multiply", a: "hours", b: "rate" },
+      targetNodeId: "target-node",
+      targetProp: "value",
+    },
+  ];
+  const result = applyCalcBindingsToSpecs(specs, bindings, {}, {});
+  assertEquals(result.length, 1);
+  assertEquals((result[0].runtimeSpec?.props as Record<string, unknown>)?.value, 40000);
+});
+
+Deno.test("applyCalcBindingsToSpecs: unresolved calc error is recorded in def.calc_errors, not thrown", () => {
+  const specs: ComponentSpec[] = [
+    { nodeId: "n1", componentType: "form_input/text", def: {}, runtimeSpec: { componentId: "c1", componentType: "form_input/text", packageId: null, layoutId: null, wiringId: null, props: {}, eventBinding: {} } },
+  ];
+  const bindings: import("../runtime/frontendLocalCalculationResolver.ts").CalcBinding[] = [
+    {
+      calculationId: "broken",
+      variables: {
+        x: { kind: "emission", path: "emission.data.missing.path" },
+      },
+      operation: { op: "multiply", a: "x", b: "x" },
+      targetNodeId: "n1",
+      targetProp: "value",
+    },
+  ];
+  const result = applyCalcBindingsToSpecs(specs, bindings, {}, {});
+  assertEquals(result.length, 1);
+  const calcErrors = (result[0].def as Record<string, unknown>).calc_errors;
+  assert(Array.isArray(calcErrors) && calcErrors.length > 0);
+  assert(String(calcErrors[0]).startsWith("CALC_EMISSION_PATH_UNRESOLVED"));
+});
+
+Deno.test("applyCalcBindingsToSpecs: does not call fetch or dispatch", () => {
+  const fetchCalled = { value: false };
+  const originalFetch = (globalThis as Record<string, unknown>).fetch;
+  (globalThis as Record<string, unknown>).fetch = () => {
+    fetchCalled.value = true;
+    return Promise.resolve(new Response("{}"));
+  };
+
+  const specs: ComponentSpec[] = [
+    { nodeId: "n2", componentType: "form_input/text", def: {}, runtimeSpec: { componentId: "c2", componentType: "form_input/text", packageId: null, layoutId: null, wiringId: null, props: {}, eventBinding: {} } },
+  ];
+  const bindings: import("../runtime/frontendLocalCalculationResolver.ts").CalcBinding[] = [
+    {
+      calculationId: "no-dispatch",
+      variables: { x: { kind: "literal", value: 5 }, y: { kind: "literal", value: 3 } },
+      operation: { op: "add", a: "x", b: "y" },
+      targetNodeId: "n2",
+      targetProp: "value",
+    },
+  ];
+  applyCalcBindingsToSpecs(specs, bindings, {}, {});
+
+  (globalThis as Record<string, unknown>).fetch = originalFetch;
+  assertFalse(fetchCalled.value, "fetch must not be called during calc binding evaluation");
+  assertEquals(typeof (globalThis as Record<string, unknown>).queueAdminClientCommand, "undefined");
+});
+
+Deno.test("applyCalcBindingsToSpecs: no-op when calculationBindings is empty", () => {
+  const specs: ComponentSpec[] = [
+    { nodeId: "n3", componentType: "form_input/text", def: {} },
+  ];
+  const result = applyCalcBindingsToSpecs(specs, [], {}, {});
+  assertEquals(result, specs);
+});
+
+Deno.test("buildVisualLayoutPatchJson / parseVisualLayoutPatchJson: calculationBindings round-trip at root level", () => {
+  const bindings: import("../runtime/frontendLocalCalculationResolver.ts").CalcBinding[] = [
+    {
+      calculationId: "round-trip-test",
+      variables: {
+        hours: { kind: "node", nodeId: "hours-node", propKey: "value" },
+        rate: { kind: "ruleTable", tablePath: "emission.data.laborRates", matchConditions: [], selectedField: "hourlyRate", priorityOrder: "desc", effectiveDateHandling: "latest_effective" },
+      },
+      operation: { op: "multiply", a: "hours", b: "rate" },
+      targetNodeId: "cost-node",
+      targetProp: "value",
+      roundingPolicy: "round",
+    },
+  ];
+  const json = buildVisualLayoutPatchJson([], [], bindings);
+  const parsed = parseVisualLayoutPatchJson(json);
+  assert(parsed.ok, "should parse OK");
+  assert(Array.isArray(parsed.value.calculationBindings), "calculationBindings should be an array");
+  assertEquals(parsed.value.calculationBindings!.length, 1);
+  assertEquals(parsed.value.calculationBindings![0].calculationId, "round-trip-test");
+  assertEquals(parsed.value.calculationBindings![0].targetNodeId, "cost-node");
+  assertEquals(parsed.value.calculationBindings![0].roundingPolicy, "round");
+});
+
+Deno.test("buildVisualLayoutPatchJson: no calculationBindings key when array is empty", () => {
+  const json = buildVisualLayoutPatchJson([], []);
+  const obj = JSON.parse(json) as Record<string, unknown>;
+  assertFalse("calculationBindings" in obj, "should not include calculationBindings key when empty");
+});
+
+Deno.test("unsupported targetProp in ruleTable: literal warning note preserved in binding", () => {
+  const binding: import("../runtime/frontendLocalCalculationResolver.ts").CalcBinding = {
+    calculationId: "literal-note-test",
+    variables: {
+      rate: { kind: "literal", value: 0.1, note: "テスト用。業務基準値には literal を使わないでください" },
+    },
+    operation: { op: "multiply", a: "rate", b: "rate" },
+    targetNodeId: "n1",
+    targetProp: "value",
+  };
+  const errors = validateCalcBinding(binding);
+  assertEquals(errors.length, 0, "valid binding should have no validation errors");
+  const rateSrc = binding.variables.rate as { kind: "literal"; note?: string };
+  assert(rateSrc.note?.includes("業務基準値"), "note should warn about business rates");
+});

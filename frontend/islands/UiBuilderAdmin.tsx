@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { JSX } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import { PresetUploaderDrawer, type CanvasPresetSeed } from "./PresetUploaderDrawer.tsx";
@@ -107,6 +107,14 @@ import {
   ALLOWED_PROP_BINDING_TRANSFORMS,
   validatePropBindingsStructure,
 } from "../runtime/propBindingResolver.ts";
+import {
+  evaluateAllCalcBindings,
+  validateCalcBinding,
+  type CalcBinding,
+  type CalcOperation,
+  type CalcVariableSource,
+  type RoundingPolicy,
+} from "../runtime/frontendLocalCalculationResolver.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -627,6 +635,10 @@ function LayoutRightDock({
   onDesignChange,
   routeCandidates,
   canvasDesignDraft,
+  calculationBindings,
+  draftNodeIds,
+  calcResults,
+  onCalcBindingsChange,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -643,6 +655,10 @@ function LayoutRightDock({
   onToggleLayoutClassRef: (classKey: string) => void;
   onDesignChange: (nodeId: string, partial: DesignDraft) => void;
   routeCandidates?: string[];
+  calculationBindings: CalcBinding[];
+  draftNodeIds: string[];
+  calcResults: ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>;
+  onCalcBindingsChange: (bindings: CalcBinding[]) => void;
 }): JSX.Element {
   return (
     <aside
@@ -701,6 +717,14 @@ function LayoutRightDock({
           ノードを選択してください
         </p>
       )}
+      <Accordion title={`ローカル計算 (${calculationBindings.length})`} defaultOpen={false}>
+        <LocalCalcBindingPanel
+          bindings={calculationBindings}
+          draftNodeIds={draftNodeIds}
+          calcResults={calcResults}
+          onBindingsChange={onCalcBindingsChange}
+        />
+      </Accordion>
     </aside>
   );
 }
@@ -3444,6 +3468,12 @@ function LayoutBuilderSection({
   const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
   const [presetsLoaded, setPresetsLoaded] = useState(false);
 
+  // ── frontend-local calc bindings ─────────────────────────────────────────
+  const [calculationBindings, setCalculationBindings] = useState<CalcBinding[]>([]);
+  const [nodeValues, setNodeValues] = useState<Record<string, Record<string, unknown>>>({});
+  const [calcResults, setCalcResults] = useState<ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>>(new Map());
+  const lastEmissionDataRef = useRef<Record<string, unknown>>({});
+
   // ── derived ─────────────────────────────────────────────────────────────
   const paletteSeedEntries: PaletteDraftSeedEntry[] = paletteEntries.map((
     e,
@@ -3460,6 +3490,7 @@ function LayoutBuilderSection({
   const tensorPatchJson = buildVisualLayoutPatchJson(
     enrichDraftNodesWithPaletteComponentIds(draftNodes, paletteSeedEntries),
     selectedLayoutClassRefs,
+    calculationBindings,
   );
   const effectiveLayoutId = manualLayoutId.trim() || layoutId;
   const effectiveRouteKey = manualRouteKey.trim() || routeKey;
@@ -3485,6 +3516,55 @@ function LayoutBuilderSection({
   const canPatch = packageAuthoringReady &&
     Boolean(effectiveLayoutId && effectiveRouteKey);
   const routeOptions = uniqueRouteKeys(layoutCandidates);
+
+  // ── frontend-local calc binding handlers & derived ────────────────────────
+  const handleNodeValueChange = useCallback(
+    (nodeId: string, propKey: string, value: unknown) => {
+      setNodeValues((prev) => {
+        const updated = {
+          ...prev,
+          [nodeId]: { ...(prev[nodeId] ?? {}), [propKey]: value },
+        };
+        // Re-evaluate all calc bindings — no backend dispatch
+        if (calculationBindings.length > 0) {
+          const ctx = {
+            nodeValues: updated,
+            emissionData: lastEmissionDataRef.current,
+          };
+          const results = evaluateAllCalcBindings(calculationBindings, ctx);
+          setCalcResults(results);
+        }
+        return updated;
+      });
+    },
+    [calculationBindings],
+  );
+
+  const calcTriggerNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const binding of calculationBindings) {
+      for (const source of Object.values(binding.variables)) {
+        if (source.kind === "node") ids.add(source.nodeId);
+        if (source.kind === "ruleTable") {
+          for (const cond of source.matchConditions) {
+            if (cond.valueFrom.kind === "node") ids.add(cond.valueFrom.nodeId);
+          }
+        }
+      }
+    }
+    return ids;
+  }, [calculationBindings]);
+
+  const calcOverridesByNodeId = useMemo(() => {
+    const map = new Map<string, Record<string, unknown>>();
+    for (const [, entry] of calcResults) {
+      if (entry.result.ok) {
+        const existing = map.get(entry.targetNodeId) ?? {};
+        map.set(entry.targetNodeId, { ...existing, [entry.targetProp]: entry.result.value });
+      }
+    }
+    return map;
+  }, [calcResults]);
 
   const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
     if (!packageScopedLayout) {
@@ -3532,6 +3612,7 @@ function LayoutBuilderSection({
     }
     setDraftNodes(nodes);
     setSelectedLayoutClassRefs(parsed.value.layoutClassRefs);
+    setCalculationBindings(parsed.value.calculationBindings ?? []);
     setLegacyLayoutWarning(isLegacyAbsoluteLayoutPatch(nodes));
     setSelectedNodeId(null);
     setDesignDraftByNodeId(new Map());
@@ -4911,6 +4992,9 @@ function LayoutBuilderSection({
               ? handleAddFromEmptyState
               : undefined}
             allowEmptyStateTemplates={packageScopedLayout}
+            calcTriggerNodeIds={calcTriggerNodeIds}
+            calcOverridesByNodeId={calcOverridesByNodeId}
+            onNodeValueChange={handleNodeValueChange}
           />
         </div>
 
@@ -4950,6 +5034,10 @@ function LayoutBuilderSection({
                 selectedNode && toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
               onDesignChange={handleDesignDraftChange}
               routeCandidates={routeOptions}
+              calculationBindings={calculationBindings}
+              draftNodeIds={draftNodes.map((n) => n.nodeId)}
+              calcResults={calcResults}
+              onCalcBindingsChange={setCalculationBindings}
             />
           </div>
         )}
@@ -5758,6 +5846,377 @@ function hydrateDesignFormFromDraft(
   setters.setLinkHref(draft.linkHref ?? "");
   setters.setLinkTarget(draft.linkTarget ?? "");
   setters.setCssTokenRefs(draft.cssTokenRefs ?? []);
+}
+
+// ─── ローカル計算バインドコンポーネント ────────────────────────────────────────
+
+const ALLOWED_OPERATIONS = [
+  "multiply", "add", "subtract", "divide", "percent",
+  "taxIncluded", "taxAmount", "round", "floor", "ceil",
+] as const;
+
+const ROUNDING_POLICIES: RoundingPolicy[] = ["none", "round", "floor", "ceil"];
+
+const TARGET_PROPS = ["value", "result", "preview", "inlineText"];
+
+function makeCalcId(): string {
+  return `calc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function emptyCalcBinding(targetNodeId: string = ""): CalcBinding {
+  return {
+    calculationId: makeCalcId(),
+    variables: {
+      a: { kind: "literal", value: 0 },
+      b: { kind: "literal", value: 0 },
+    },
+    operation: { op: "multiply", a: "a", b: "b" },
+    targetNodeId,
+    targetProp: "value",
+  };
+}
+
+function LocalCalcBindingPanel({
+  bindings,
+  draftNodeIds,
+  calcResults,
+  onBindingsChange,
+}: {
+  bindings: CalcBinding[];
+  draftNodeIds: string[];
+  calcResults: ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>;
+  onBindingsChange: (bindings: CalcBinding[]) => void;
+}): JSX.Element {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function addBinding() {
+    const b = emptyCalcBinding(draftNodeIds[0] ?? "");
+    onBindingsChange([...bindings, b]);
+    setExpandedId(b.calculationId);
+  }
+
+  function removeBinding(id: string) {
+    onBindingsChange(bindings.filter((b) => b.calculationId !== id));
+    if (expandedId === id) setExpandedId(null);
+  }
+
+  function updateBinding(updated: CalcBinding) {
+    onBindingsChange(bindings.map((b) => b.calculationId === updated.calculationId ? updated : b));
+  }
+
+  return (
+    <div class="flex flex-col gap-2 text-xs">
+      <p class="text-[0.65rem] text-slate-500">
+        入力変更で backend dispatch なしに計算値を即時反映します。業務基準値は emission.data.* / ruleTable source を使ってください。
+      </p>
+      {bindings.length === 0 && (
+        <p class="text-slate-400">計算バインドがありません。</p>
+      )}
+      {bindings.map((binding) => {
+        const resultEntry = [...calcResults.values()].find(
+          (e) => e.targetNodeId === binding.targetNodeId && e.targetProp === binding.targetProp,
+        );
+        const errors = validateCalcBinding(binding);
+        const isExpanded = expandedId === binding.calculationId;
+        return (
+          <div
+            key={binding.calculationId}
+            class="rounded border border-slate-200 bg-slate-50 p-2"
+          >
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="flex-1 text-left text-[0.7rem] font-semibold text-slate-700"
+                onClick={() => setExpandedId(isExpanded ? null : binding.calculationId)}
+              >
+                {isExpanded ? "▲" : "▼"} {binding.calculationId}
+              </button>
+              {errors.length > 0 && (
+                <span class="rounded bg-red-100 px-1 text-[0.6rem] text-red-600">
+                  エラー {errors.length}
+                </span>
+              )}
+              {resultEntry?.result.ok && (
+                <span class="rounded bg-green-100 px-1 font-mono text-[0.65rem] text-green-700">
+                  = {resultEntry.result.value}
+                </span>
+              )}
+              {resultEntry && !resultEntry.result.ok && (
+                <span class="rounded bg-red-100 px-1 text-[0.6rem] text-red-600" title={(resultEntry.result as { ok: false; error: string }).error}>
+                  !
+                </span>
+              )}
+              <button
+                type="button"
+                class="ml-auto text-[0.6rem] text-red-400 hover:text-red-600"
+                onClick={() => removeBinding(binding.calculationId)}
+                aria-label="削除"
+              >
+                ✕
+              </button>
+            </div>
+            {isExpanded && (
+              <CalcBindingEditor
+                binding={binding}
+                draftNodeIds={draftNodeIds}
+                onChange={updateBinding}
+              />
+            )}
+            {isExpanded && errors.length > 0 && (
+              <ul class="mt-1 list-inside list-disc text-[0.6rem] text-red-600">
+                {errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        class="mt-1 rounded border border-dashed border-blue-300 px-2 py-1 text-[0.7rem] text-blue-600 hover:bg-blue-50"
+        onClick={addBinding}
+      >
+        + ローカル計算を追加
+      </button>
+    </div>
+  );
+}
+
+function CalcBindingEditor({
+  binding,
+  draftNodeIds,
+  onChange,
+}: {
+  binding: CalcBinding;
+  draftNodeIds: string[];
+  onChange: (b: CalcBinding) => void;
+}): JSX.Element {
+  const [varName, setVarName] = useState("a");
+
+  const varEntries = Object.entries(binding.variables);
+
+  function updateTargetNodeId(val: string) {
+    onChange({ ...binding, targetNodeId: val });
+  }
+
+  function updateTargetProp(val: string) {
+    onChange({ ...binding, targetProp: val });
+  }
+
+  function updateOp(val: string) {
+    const op = val as CalcOperation["op"];
+    // Build minimal valid operation for the selected op
+    if (op === "round" || op === "floor" || op === "ceil") {
+      onChange({ ...binding, operation: { op, a: varEntries[0]?.[0] ?? "a" } });
+    } else if (op === "multiply" || op === "add" || op === "subtract" || op === "divide") {
+      const names = varEntries.map(([n]) => n);
+      onChange({ ...binding, operation: { op, a: names[0] ?? "a", b: names[1] ?? "b" } });
+    } else if (op === "percent" || op === "taxIncluded" || op === "taxAmount") {
+      const names = varEntries.map(([n]) => n);
+      onChange({ ...binding, operation: { op, base: names[0] ?? "base", rate: names[1] ?? "rate" } });
+    }
+  }
+
+  function addVar(name: string) {
+    if (!name.trim() || name in binding.variables) return;
+    const newSource: CalcVariableSource = { kind: "literal", value: 0, note: "テスト用。業務基準値には literal を使わないでください" };
+    onChange({ ...binding, variables: { ...binding.variables, [name.trim()]: newSource } });
+  }
+
+  function removeVar(name: string) {
+    const vars = { ...binding.variables };
+    delete vars[name];
+    onChange({ ...binding, variables: vars });
+  }
+
+  function updateVarSource(name: string, source: CalcVariableSource) {
+    onChange({ ...binding, variables: { ...binding.variables, [name]: source } });
+  }
+
+  function updateRounding(policy: RoundingPolicy) {
+    onChange({ ...binding, roundingPolicy: policy });
+  }
+
+  return (
+    <div class="mt-2 flex flex-col gap-2 border-t border-slate-200 pt-2">
+      {/* Target */}
+      <div class="flex flex-col gap-1">
+        <span class="text-[0.65rem] font-semibold text-slate-600">反映先 (target)</span>
+        <div class="flex gap-1">
+          <select
+            class="flex-1 rounded border border-slate-300 bg-white px-1 py-0.5 text-[0.65rem]"
+            value={binding.targetNodeId}
+            onChange={(e) => updateTargetNodeId((e.currentTarget as HTMLSelectElement).value)}
+          >
+            <option value="">ノードを選択...</option>
+            {draftNodeIds.map((id) => (
+              <option key={id} value={id}>{id}</option>
+            ))}
+          </select>
+          <select
+            class="w-24 rounded border border-slate-300 bg-white px-1 py-0.5 text-[0.65rem]"
+            value={binding.targetProp}
+            onChange={(e) => updateTargetProp((e.currentTarget as HTMLSelectElement).value)}
+          >
+            {TARGET_PROPS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Variables */}
+      <div class="flex flex-col gap-1">
+        <span class="text-[0.65rem] font-semibold text-slate-600">変数</span>
+        {varEntries.map(([name, source]) => (
+          <CalcVarEditor
+            key={name}
+            name={name}
+            source={source}
+            draftNodeIds={draftNodeIds}
+            onChange={(s) => updateVarSource(name, s)}
+            onRemove={() => removeVar(name)}
+          />
+        ))}
+        <div class="flex gap-1">
+          <input
+            type="text"
+            class="w-16 rounded border border-slate-200 px-1 py-0.5 text-[0.65rem]"
+            placeholder="変数名"
+            value={varName}
+            onInput={(e) => setVarName((e.currentTarget as HTMLInputElement).value)}
+          />
+          <button
+            type="button"
+            class="rounded border border-dashed border-slate-300 px-1 py-0.5 text-[0.65rem] text-slate-500 hover:border-blue-300 hover:text-blue-600"
+            onClick={() => addVar(varName)}
+          >
+            + 変数追加
+          </button>
+        </div>
+      </div>
+
+      {/* Operation */}
+      <div class="flex flex-col gap-1">
+        <span class="text-[0.65rem] font-semibold text-slate-600">演算</span>
+        <select
+          class="rounded border border-slate-300 bg-white px-1 py-0.5 text-[0.65rem]"
+          value={binding.operation.op}
+          onChange={(e) => updateOp((e.currentTarget as HTMLSelectElement).value)}
+        >
+          {ALLOWED_OPERATIONS.map((op) => <option key={op} value={op}>{op}</option>)}
+        </select>
+        <pre class="rounded bg-slate-100 px-1 py-0.5 text-[0.6rem] text-slate-600">
+          {JSON.stringify(binding.operation, null, 0)}
+        </pre>
+      </div>
+
+      {/* Rounding */}
+      <div class="flex items-center gap-2">
+        <span class="text-[0.65rem] font-semibold text-slate-600">丸め</span>
+        <select
+          class="rounded border border-slate-300 bg-white px-1 py-0.5 text-[0.65rem]"
+          value={binding.roundingPolicy ?? "none"}
+          onChange={(e) => updateRounding((e.currentTarget as HTMLSelectElement).value as RoundingPolicy)}
+        >
+          {ROUNDING_POLICIES.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function CalcVarEditor({
+  name,
+  source,
+  draftNodeIds,
+  onChange,
+  onRemove,
+}: {
+  name: string;
+  source: CalcVariableSource;
+  draftNodeIds: string[];
+  onChange: (s: CalcVariableSource) => void;
+  onRemove: () => void;
+}): JSX.Element {
+  return (
+    <div class="flex flex-col gap-0.5 rounded border border-slate-100 bg-white p-1">
+      <div class="flex items-center gap-1">
+        <span class="font-mono text-[0.65rem] font-semibold text-slate-700">{name}</span>
+        <select
+          class="ml-auto rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.6rem]"
+          value={source.kind}
+          onChange={(e) => {
+            const kind = (e.currentTarget as HTMLSelectElement).value;
+            if (kind === "literal") onChange({ kind: "literal", value: 0, note: "テスト・固定係数のみ" });
+            else if (kind === "node") onChange({ kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" });
+            else if (kind === "emission") onChange({ kind: "emission", path: "emission.data." });
+            else if (kind === "ruleTable") onChange({ kind: "ruleTable", tablePath: "emission.data.", matchConditions: [], priorityOrder: "desc", effectiveDateHandling: "latest_effective", selectedField: "" });
+          }}
+        >
+          <option value="node">node</option>
+          <option value="emission">emission</option>
+          <option value="ruleTable">ruleTable</option>
+          <option value="literal">literal (テスト用)</option>
+        </select>
+        <button type="button" class="text-[0.6rem] text-red-400 hover:text-red-600" onClick={onRemove}>✕</button>
+      </div>
+      {source.kind === "literal" && (
+        <div>
+          <span class="text-[0.55rem] text-amber-600">⚠ literal は業務基準値に使わないでください。税率・レートは ruleTable/emission を使ってください。</span>
+          <input
+            type="number"
+            class="mt-0.5 w-full rounded border border-slate-200 px-1 py-0.5 text-[0.65rem]"
+            value={source.value}
+            onInput={(e) => onChange({ ...source, value: parseFloat((e.currentTarget as HTMLInputElement).value) || 0 })}
+          />
+        </div>
+      )}
+      {source.kind === "node" && (
+        <div class="flex gap-1">
+          <select
+            class="flex-1 rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.6rem]"
+            value={source.nodeId}
+            onChange={(e) => onChange({ ...source, nodeId: (e.currentTarget as HTMLSelectElement).value })}
+          >
+            {draftNodeIds.map((id) => <option key={id} value={id}>{id}</option>)}
+          </select>
+          <input
+            type="text"
+            class="w-16 rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
+            placeholder="propKey"
+            value={source.propKey}
+            onInput={(e) => onChange({ ...source, propKey: (e.currentTarget as HTMLInputElement).value })}
+          />
+        </div>
+      )}
+      {source.kind === "emission" && (
+        <input
+          type="text"
+          class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
+          placeholder="emission.data.path"
+          value={source.path}
+          onInput={(e) => onChange({ ...source, path: (e.currentTarget as HTMLInputElement).value })}
+        />
+      )}
+      {source.kind === "ruleTable" && (
+        <div class="flex flex-col gap-0.5">
+          <input
+            type="text"
+            class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
+            placeholder="emission.data.tablePath"
+            value={source.tablePath}
+            onInput={(e) => onChange({ ...source, tablePath: (e.currentTarget as HTMLInputElement).value })}
+          />
+          <input
+            type="text"
+            class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
+            placeholder="selectedField (例: hourlyRate, taxRate)"
+            value={source.selectedField}
+            onInput={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLInputElement).value })}
+          />
+          <span class="text-[0.55rem] text-slate-400">matchConditions: 現在 {source.matchConditions.length} 件（JSON編集で設定）</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PackageDesignPanel({
