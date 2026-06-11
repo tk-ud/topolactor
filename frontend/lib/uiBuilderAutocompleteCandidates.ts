@@ -1,5 +1,14 @@
 /**
- * UIBuilder autocomplete candidate derivation helpers.
+ * UIBuilder combobox candidate derivation helpers.
+ *
+ * Role: combobox candidate derivation — NOT autocomplete or suggest body.
+ * These helpers serve search_combobox.primitive / SearchCombobox.tsx (small-scale, known
+ * candidates derived from local in-memory data). They do NOT implement the
+ * autocomplete_input.primitive or suggest_input.primitive backend search path.
+ *
+ * Candidate boundary: autocomplete and suggest allow debounce + backend read-only search
+ * via onSearch prop (see AutoCompleteInput.tsx / SuggestInput.tsx).
+ * These helpers produce local-derived candidates only — no backend fetch, no mutation.
  *
  * SSOT: docs/design/admin-console-workflow-ssot.yaml
  *   - layout_node_props_contract (propBindings.source, emission.data.* paths)

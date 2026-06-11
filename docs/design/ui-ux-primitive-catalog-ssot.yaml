@@ -191,7 +191,13 @@ category_a_search_suggest:
       visual_role: field
       candidate_surface: true
       mutation_boundary: preview_before_apply
-      runtimeConnected: false
+      candidate_source_boundary: debounce_backend_readonly_search
+      no_mutation_during_typing: true
+      use_case: single_row_search_select
+      onSearch_note: >
+        onSearch prop triggers read-only backend search; caller must debounce;
+        no mutation / DB write / apply during typing.
+      runtimeConnected: true
 
     SuggestInput:
       key: suggest_input.primitive
@@ -200,7 +206,13 @@ category_a_search_suggest:
       semantic_role: input
       visual_role: field
       candidate_surface: true
-      runtimeConnected: false
+      candidate_source_boundary: debounce_backend_readonly_search
+      no_mutation_during_typing: true
+      use_case: multi_row_product_item_input_assist
+      onSearch_note: >
+        onSearch prop triggers read-only backend search; caller must debounce;
+        no mutation / DB write / apply during typing.
+      runtimeConnected: true
 
     SearchCombobox:
       key: search_combobox.primitive
@@ -209,7 +221,10 @@ category_a_search_suggest:
       semantic_role: input
       visual_role: field
       candidate_surface: true
-      runtimeConnected: false
+      scale: small_scale_known_candidates
+      combobox_candidate_source: uiBuilderAutocompleteCandidates.ts
+      no_backend_search: local_derivation_only
+      runtimeConnected: true
 
     SelectImportDialog:
       key: select_import_dialog.primitive

@@ -656,7 +656,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true | mutation_boundary:preview_before_apply",
+    notes: "candidateSurface:true | mutation_boundary:preview_before_apply | candidate_source_boundary:debounce_backend_readonly_search | no_mutation_during_typing:true | use_case:single_row_search_select",
   },
   {
     componentKey: "suggest_input.primitive",
@@ -669,7 +669,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true",
+    notes: "candidateSurface:true | candidate_source_boundary:debounce_backend_readonly_search | no_mutation_during_typing:true | use_case:multi_row_product_item_input_assist",
   },
   {
     componentKey: "search_combobox.primitive",
@@ -687,7 +687,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     ],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true",
+    notes: "candidateSurface:true | scale:small_scale_known_candidates | combobox_candidate_source:uiBuilderAutocompleteCandidates.ts | no_backend_search:local_derivation_only",
   },
   {
     componentKey: "select_import_dialog.primitive",

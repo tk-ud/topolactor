@@ -14,7 +14,8 @@ export type NormalizedComponentEventType =
   | "focus"
   | "blur"
   | "drag"
-  | "drop";
+  | "drop"
+  | "search";
 
 type ComponentOperationEvent = {
   componentId: string;

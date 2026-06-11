@@ -6,10 +6,18 @@ import {
   type ComponentIdentityProps,
 } from "./types.ts";
 
+// candidate_source_boundary: debounce_backend_readonly_search
+// Typing triggers onChange and onSearch. Caller is responsible for debouncing onSearch before
+// calling a backend read-only search provider. No mutation / DB write / apply during typing.
+// suggestions prop is updated by parent after backend search completes.
+// Differentiated from autocomplete by multi-row product / item input assist use cases.
+// SSOT: docs/design/ui-ux-primitive-catalog-ssot.yaml (suggest_input.primitive)
 export type SuggestInputProps = ComponentIdentityProps & {
   value: string;
   onChange: (value: string) => void;
   onSelect?: (value: string) => void;
+  /** Read-only backend search hook. Caller must debounce. No mutation/write during typing. */
+  onSearch?: (query: string) => void;
   suggestions?: string[];
   placeholder?: string;
   disabled?: boolean;
@@ -22,6 +30,7 @@ export function SuggestInput({
   value,
   onChange,
   onSelect,
+  onSearch,
   suggestions,
   placeholder,
   disabled,
@@ -47,7 +56,11 @@ export function SuggestInput({
         list={suggestions && suggestions.length > 0 ? listId : undefined}
         placeholder={placeholder}
         disabled={isDisabled}
-        onInput={(e) => onChange((e.target as HTMLInputElement).value)}
+        onInput={(e) => {
+          const v = (e.target as HTMLInputElement).value;
+          onChange(v);
+          onSearch?.(v);
+        }}
         onChange={(e) => {
           const v = (e.target as HTMLInputElement).value;
           if (onSelect && suggestions && suggestions.includes(v)) {
