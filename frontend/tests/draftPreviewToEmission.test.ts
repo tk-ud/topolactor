@@ -14,7 +14,7 @@ Deno.test("draftPreviewResultToEmission: maps design → componentDesign for ren
         nodeKind: "structural_html",
         htmlTag: "h1",
         orderIndex: 0,
-        design: { inlineText: "従業員管理", cssTokenRefs: ["color.primary"] },
+        design: { inlineText: "従業員管理", cssTokenRefs: ["color.action.primary.background"] },
       },
       {
         nodeId: "n-btn",
@@ -30,12 +30,12 @@ Deno.test("draftPreviewResultToEmission: maps design → componentDesign for ren
 
   assertEquals(emission?.layoutId, "layout-1");
   assertEquals(emission?.layoutNodes?.[0]?.componentDesign?.inlineText, "従業員管理");
-  assertEquals(emission?.layoutNodes?.[0]?.componentDesign?.cssTokenRefs, ["color.primary"]);
+  assertEquals(emission?.layoutNodes?.[0]?.componentDesign?.cssTokenRefs, ["color.action.primary.background"]);
 
   const specs = renderEmission(emission!, defaultComponentRegistry, { previewMode: true });
   const h1 = specs.find((s) => s.nodeId === "n-h1");
   assertEquals(h1?.inlineText, "従業員管理");
-  assertEquals(h1?.cssTokenRefs, ["color.primary"]);
+  assertEquals(h1?.cssTokenRefs, ["color.action.primary.background"]);
 });
 
 Deno.test("draftPreviewResultToEmission: maps first initialDataRows entry to emission.data", () => {

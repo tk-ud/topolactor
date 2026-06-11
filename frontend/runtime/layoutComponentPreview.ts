@@ -1,4 +1,4 @@
-import type { VNode } from "preact";
+import { h, type VNode } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
 import type { LayoutDimension } from "./visualLayoutUtils.ts";
@@ -8,6 +8,7 @@ import {
   resolveRuntimeComponentFactory,
 } from "./runtimeComponentRegistry.ts";
 import { buildPreviewInertEventBinding } from "./previewInertEventBinding.ts";
+import { interpolateLinkHrefReadOnly } from "./linkPlaceholderInterpolation.ts";
 
 export type LayoutPreviewNodeInput = {
   nodeId: string;
@@ -37,6 +38,69 @@ export type LayoutPreviewDefaultSize = { width: number; height: number };
 export type LayoutPreviewRenderResult =
   | { ok: true; node: VNode }
   | { ok: false; code: string; reason: string };
+
+export function isModalLikeComponentKind(componentKind: string | undefined): boolean {
+  if (!componentKind) return false;
+  const normalized = componentKind.toLowerCase();
+  return normalized.includes("modal") || normalized.includes("dialog") || normalized.includes("drawer");
+}
+
+function wrapModalInertPreviewBoundary(node: VNode, componentKind: string): VNode {
+  return h(
+    "div",
+    {
+      "data-authoring-inert-modal-preview": "true",
+      "aria-label": "Modal preview is inert in UI Builder authoring canvas",
+      style: {
+        position: "relative",
+        minHeight: "160px",
+        overflow: "hidden",
+        transform: "translateZ(0)",
+        contain: "layout paint",
+        isolation: "isolate",
+        border: "1px dashed #f59e0b",
+        borderRadius: "8px",
+        background: "#fff7ed",
+      },
+    },
+    h(
+      "div",
+      {
+        style: {
+          pointerEvents: "none",
+          userSelect: "none",
+          transform: "scale(0.72)",
+          transformOrigin: "top left",
+          width: "138%",
+          minHeight: "210px",
+        },
+        "aria-hidden": "true",
+      },
+      node,
+    ),
+    h(
+      "div",
+      {
+        role: "note",
+        style: {
+          position: "absolute",
+          left: "8px",
+          right: "8px",
+          bottom: "8px",
+          pointerEvents: "none",
+          borderRadius: "6px",
+          background: "rgba(255,247,237,0.96)",
+          border: "1px solid #fed7aa",
+          color: "#9a3412",
+          fontSize: "11px",
+          padding: "6px 8px",
+        },
+      },
+      `${componentKind} preview is inert: modal interactivity is disabled while authoring.`,
+    ),
+  ) as VNode;
+}
+
 
 const LAYOUT_PREVIEW_KEY_ALIASES: Record<string, string> = {
   button: "button.primitive",
@@ -402,13 +466,21 @@ export function renderLayoutComponentPreview(input: {
       reason: "部品が未接続 — 部品登録タブで配置可能化してください",
     };
   }
+  const linkPreview = interpolateLinkHrefReadOnly(input.linkHref);
+  if (!linkPreview.ok) {
+    return {
+      ok: false,
+      code: linkPreview.code,
+      reason: linkPreview.message,
+    };
+  }
   const built = buildLayoutPreviewRuntimeSpec({
     componentKey: input.componentKey,
     componentKind: input.componentKind,
     componentId: input.componentId,
     design: {
       inlineText: input.inlineText,
-      linkHref: input.linkHref,
+      linkHref: linkPreview.value || input.linkHref,
       linkTarget: input.linkTarget,
     },
     calcTriggerCallback: input.calcTriggerCallback,
@@ -431,7 +503,12 @@ export function renderLayoutComponentPreview(input: {
       reason: result.error,
     };
   }
-  return { ok: true, node: result.node };
+  return {
+    ok: true,
+    node: isModalLikeComponentKind(built.spec.componentType)
+      ? wrapModalInertPreviewBoundary(result.node, built.spec.componentType)
+      : result.node,
+  };
 }
 
 const LEGACY_CANVAS_NODE_WIDTH = 140;

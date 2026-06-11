@@ -18,6 +18,7 @@ import {
   assertFalse,
   assertNotEquals,
   assertObjectMatch,
+  assertThrows,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   buildVisualLayoutPatchJson,
@@ -66,6 +67,8 @@ import {
   type LayoutPreviewNodeInput,
 } from "../runtime/layoutComponentPreview.ts";
 import { buildInlineStyleFromCssTokenRefs } from "../runtime/cssDictionary.ts";
+import { renderToString } from "preact-render-to-string";
+import { renderEmission } from "../runtime/renderEmission.ts";
 
 // ─── canvas utility: snapToGrid ───────────────────────────────────────────────
 
@@ -2132,12 +2135,11 @@ Deno.test("gridCol/gridRow: not in primary flow layout fields per SSOT flow_layo
   }
 });
 
-Deno.test("layout inspector tabs: 3 tabs only (概要/ツリー/クラス) — no グリッド or 配線", () => {
-  // This is a documentation test verifying the SSOT-conformant tab structure.
-  // CanvasInspector tabs: overview, tree, class (grid and wiring removed)
-  const expectedTabs = ["概要", "ツリー", "クラス"];
+Deno.test("layout inspector tabs: responsive layout authoring belongs to placement inspector, not design tokens", () => {
+  // CanvasInspector owns overview, tree, class, and responsive layout rules; grid and wiring stay out.
+  const expectedTabs = ["概要", "ツリー", "クラス", "レスポンシブ"];
   const removedTabs = ["グリッド", "配線"];
-  assertEquals(expectedTabs.length, 3, "layout inspector must have exactly 3 tabs");
+  assertEquals(expectedTabs.includes("レスポンシブ"), true);
   for (const removed of removedTabs) {
     assertFalse(expectedTabs.includes(removed), `${removed} must not be in layout inspector tabs`);
   }
@@ -2282,15 +2284,27 @@ Deno.test("resolveUnknownCssTokenRefs: all-unknown refs are all returned", () =>
   assertEquals(unknown, ["no.such.token", "also.unknown"]);
 });
 
-// buildInlineStyleFromCssTokenRefs still applies known tokens even when unknowns are present.
-// The caller is responsible for surfacing the unknown refs via resolveUnknownCssTokenRefs.
-Deno.test("buildInlineStyleFromCssTokenRefs: known tokens applied even when mixed with unknowns", () => {
-  const style = buildInlineStyleFromCssTokenRefs([
-    "unknown.token.xyz",
-    "color.action.primary.background",
-  ]);
-  assertEquals(style.background, "#0070f3");
-  assertFalse("unknown" in style);
+Deno.test("buildInlineStyleFromCssTokenRefs: unknown refs are explicit blocking errors", () => {
+  assertThrows(
+    () => buildInlineStyleFromCssTokenRefs([
+      "unknown.token.xyz",
+      "color.action.primary.background",
+    ]),
+    Error,
+    "Unresolved cssTokenRefs: unknown.token.xyz",
+  );
+});
+
+Deno.test("buildVisualLayoutPatchJson: responsiveLayoutRules round-trip in layout patch", () => {
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    responsiveLayoutRules: { md: ["layout.width.full"], lg: [] },
+  };
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([node]));
+  assertEquals(parsed.nodes[0].responsiveLayoutRules, { md: ["layout.width.full"] });
+  const result = parseVisualLayoutPatchJson(JSON.stringify(parsed));
+  assert(result.ok);
+  assertEquals(result.value.nodes[0].responsiveLayoutRules, { md: ["layout.width.full"] });
 });
 
 // ─── D3/D10 regression: cssTokenRefs preserved across inlineText/link edits ─
@@ -2446,4 +2460,52 @@ Deno.test("calculation binding propsJson round-trip: calculationBindings field p
   const propsObj = JSON.parse(node!.propsJson ?? "{}");
   assert(Array.isArray(propsObj.calculationBindings), "calculationBindings should be an array");
   assertEquals(propsObj.calculationBindings[0].calculationId, "labor-cost-1");
+});
+
+
+Deno.test("layout canvas preview: modal-like components render inside inert authoring boundary", () => {
+  const result = renderLayoutComponentPreview({
+    componentKey: "modal.primitive",
+    componentKind: "disclosure/modal",
+    componentId: "modal-preview",
+  });
+  assert(result.ok);
+  const html = renderToString(result.node);
+  assert(html.includes('data-authoring-inert-modal-preview="true"'));
+  assert(html.includes("modal interactivity is disabled while authoring"));
+});
+
+Deno.test("renderEmission: unresolved cssTokenRefs become explicit error specs", () => {
+  const specs = renderEmission({
+    layoutId: "layout-1",
+    layoutNodes: [{
+      nodeId: "node-1",
+      nodeKind: "catalog_component",
+      componentId: "cmp-1",
+      componentKey: "button",
+      componentKind: "action/button",
+      orderIndex: 0,
+      componentDesign: { cssTokenRefs: ["unknown.css.token"] },
+    }],
+  }, {});
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(specs[0].def.code, "CSS_TOKEN_REF_UNRESOLVED");
+});
+
+Deno.test("renderEmission: linkHref placeholders are read-only and unresolved placeholders block", () => {
+  const authored = "/detail/{{data.recordId}}";
+  const specs = renderEmission({
+    layoutId: "layout-1",
+    layoutNodes: [{
+      nodeId: "node-link",
+      nodeKind: "structural_html",
+      htmlTag: "a",
+      componentKey: "layout/structural_html",
+      orderIndex: 0,
+      componentDesign: { inlineText: "detail", linkHref: authored },
+    }],
+  }, {});
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(specs[0].def.code, "LINK_HREF_PLACEHOLDER_UNRESOLVED");
+  assertEquals(specs[0].def.linkHref, authored);
 });

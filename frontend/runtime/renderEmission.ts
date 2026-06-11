@@ -9,6 +9,8 @@ import { resolvePropBindings } from "./propBindingResolver.ts";
 import { mergeCatalogPropsWithComponentDesign } from "./mergeComponentDesignProps.ts";
 import { buildPreviewInertEventBinding } from "./previewInertEventBinding.ts";
 import { buildLayoutPreviewPlaceholderProps } from "./layoutComponentPreview.ts";
+import { resolveUnknownCssTokenRefs } from "./cssDictionary.ts";
+import { interpolateLinkHrefReadOnly } from "./linkPlaceholderInterpolation.ts";
 import { evaluateAllCalcBindings, type CalcBinding, type CalcContext } from "./frontendLocalCalculationResolver.ts";
 
 export type RenderEmissionOptions = {
@@ -382,13 +384,43 @@ export function renderEmission(
           layoutClassRefs: node.layoutClassRefs,
         };
 
+        const design = node.componentDesign;
+        const unknownCssTokenRefs = design?.cssTokenRefs?.length
+          ? resolveUnknownCssTokenRefs(design.cssTokenRefs)
+          : [];
+        if (unknownCssTokenRefs.length > 0) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: {
+              error: `CSS_TOKEN_REF_UNRESOLVED: ${unknownCssTokenRefs.join(", ")}`,
+              code: "CSS_TOKEN_REF_UNRESOLVED",
+              cssTokenRefs: unknownCssTokenRefs,
+            },
+            ...layoutFields,
+          };
+        }
+        const linkHrefResult = interpolateLinkHrefReadOnly(design?.linkHref);
+        if (!linkHrefResult.ok) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: {
+              error: linkHrefResult.message,
+              code: linkHrefResult.code,
+              linkHref: design?.linkHref,
+            },
+            ...layoutFields,
+          };
+        }
+
         // structural_html nodes render as actual HTML elements — no registry lookup.
         if (node.nodeKind === "structural_html") {
           return {
             componentType: "structural_html",
-            def: {},
-            inlineText: node.componentDesign?.inlineText,
-            cssTokenRefs: node.componentDesign?.cssTokenRefs,
+            def: { linkHref: linkHrefResult.value || design?.linkHref },
+            inlineText: design?.inlineText,
+            cssTokenRefs: design?.cssTokenRefs,
             ...layoutFields,
           };
         }
@@ -444,7 +476,7 @@ export function renderEmission(
           node.componentKind,
           node.componentKey ?? node.nodeId ?? "Component",
           mergedProps.props,
-          node.componentDesign,
+          design ? { ...design, linkHref: linkHrefResult.value || design.linkHref } : undefined,
         );
         let finalProps = propsWithDesign;
         if (node.propBindings && Object.keys(node.propBindings).length > 0) {
@@ -465,7 +497,6 @@ export function renderEmission(
           }
           finalProps = bindingResult.props;
         }
-        const design = node.componentDesign;
         const hubDesign = design
           ? {
             classname: design.classname,
