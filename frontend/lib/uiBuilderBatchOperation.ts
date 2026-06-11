@@ -18,7 +18,11 @@
 import { lookupTopologyLayoutClassKey } from "../runtime/topologyLayoutClassResolver.ts";
 import { COMPONENT_ARRAY_PROP_CAPABILITIES } from "../runtime/propBindingResolver.ts";
 import { isRouteNavigationTargetRef } from "./packageWiringPicker.ts";
-import type { CalcBinding } from "../runtime/frontendLocalCalculationResolver.ts";
+import {
+  type CalcBinding,
+  validateCalcBinding,
+  validateCalcTargetProp,
+} from "../runtime/frontendLocalCalculationResolver.ts";
 
 // ─── Minimal node interface (compatible with DraftNode in UiBuilderAdmin) ─────
 
@@ -809,11 +813,11 @@ export function previewBatchWiringAssist(
 /**
  * Preview adding a new CalcBinding that references multiple selected nodes.
  *
- * Validates:
- * - No eval/Function (structural check only).
- * - emission paths start with "emission.data.".
- * - variable kinds are in allowed set.
- * - No duplicate calculationId.
+ * Validates using existing validateCalcBinding + validateCalcTargetProp:
+ * - operation.op must be in the SSOT allowlist.
+ * - variables shape: kind, emission path, ruleTable fields, literal finite value.
+ * - calculationId non-empty and not duplicate.
+ * - targetProp validated against target node's componentKind via validateCalcTargetProp.
  *
  * Does NOT add backend dispatch or eval.
  * dispatchAdded and evalAdded are literal false constants as explicit contract proof.
@@ -822,31 +826,32 @@ export function previewBatchCalcBindingAssist(
   calcBindings: readonly CalcBinding[],
   selectedNodeIds: ReadonlySet<string>,
   newBinding: CalcBinding,
+  allNodes?: readonly BatchNodeMinimal[],
 ): BatchCalcBindingAssistPreviewResult {
   const errors: string[] = [];
-  const ALLOWED_KINDS = new Set(["node", "emission", "ruleTable", "literal"]);
 
-  for (const [name, source] of Object.entries(newBinding.variables ?? {})) {
-    const s = source as { kind?: string; path?: string };
-    if (!ALLOWED_KINDS.has(s.kind ?? "")) {
-      errors.push(
-        `BATCH_CALC_INVALID_VARIABLE_KIND: 変数 "${name}" の kind "${s.kind}" は許可されていません`,
-      );
-    }
-    if (s.kind === "emission") {
-      const path = s.path ?? "";
-      if (!path.startsWith(EMISSION_DATA_PREFIX)) {
-        errors.push(
-          `BATCH_CALC_EMISSION_PATH_INVALID: 変数 "${name}" の path "${path}" は "${EMISSION_DATA_PREFIX}" で始まる必要があります`,
-        );
-      }
-    }
-  }
+  // Full structural validation via existing boundary function (operation.op allowlist,
+  // variables shape, ruleTable fields, literal finite check, targetNodeId/targetProp presence).
+  const structuralErrors = validateCalcBinding(newBinding);
+  errors.push(...structuralErrors);
 
+  // Duplicate calculationId check.
   if (calcBindings.some((b) => b.calculationId === newBinding.calculationId)) {
     errors.push(
       `BATCH_CALC_DUPLICATE_ID: calculationId "${newBinding.calculationId}" は既に存在します`,
     );
+  }
+
+  // targetProp validation against the target node's componentKind.
+  if (allNodes && newBinding.targetNodeId) {
+    const targetNode = allNodes.find((n) => n.nodeId === newBinding.targetNodeId);
+    if (targetNode?.componentKind) {
+      const targetPropErrors = validateCalcTargetProp(
+        targetNode.componentKind,
+        newBinding.targetProp ?? "",
+      );
+      errors.push(...targetPropErrors);
+    }
   }
 
   const referencedNodeIds = new Set<string>();
@@ -856,7 +861,7 @@ export function previewBatchCalcBindingAssist(
       referencedNodeIds.add(s.nodeId);
     }
   }
-  if (selectedNodeIds.has(newBinding.targetNodeId)) {
+  if (selectedNodeIds.has(newBinding.targetNodeId ?? "")) {
     referencedNodeIds.add(newBinding.targetNodeId);
   }
 
@@ -871,13 +876,16 @@ export function previewBatchCalcBindingAssist(
 
 /**
  * Apply batch calc binding: add new binding to existing array.
+ * Fail-close: re-runs validateCalcBinding so UI-only button control cannot bypass validation.
  * Does NOT call backend, does NOT use eval/Function.
- * Returns new array with the binding appended (no-op if duplicate calculationId).
+ * Returns new array with the binding appended (no-op on any validation error or duplicate id).
  */
 export function applyBatchCalcBindingAssist(
   calcBindings: readonly CalcBinding[],
   newBinding: CalcBinding,
 ): CalcBinding[] {
+  // Fail-close: structural validation must pass even if UI skipped preview.
+  if (validateCalcBinding(newBinding).length > 0) return [...calcBindings];
   if (calcBindings.some((b) => b.calculationId === newBinding.calculationId)) {
     return [...calcBindings];
   }

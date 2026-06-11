@@ -607,7 +607,7 @@ Deno.test("previewBatchCalcBindingAssist: duplicate calculationId → validation
   assertEquals(result.validationErrors.some((e) => e.includes("BATCH_CALC_DUPLICATE_ID")), true);
 });
 
-Deno.test("previewBatchCalcBindingAssist: invalid variable kind → validation error", () => {
+Deno.test("previewBatchCalcBindingAssist: invalid variable kind → CALC_BINDING error (validateCalcBinding reused)", () => {
   const badBinding: CalcBinding = {
     ...sampleCalcBinding,
     calculationId: "calc_bad_kind",
@@ -616,13 +616,27 @@ Deno.test("previewBatchCalcBindingAssist: invalid variable kind → validation e
     },
   };
   const result = previewBatchCalcBindingAssist([], new Set(["comp1"]), badBinding);
+  // Error code comes from validateCalcBinding (CALC_BINDING_INVALID_VARIABLE_KIND)
   assertEquals(
-    result.validationErrors.some((e) => e.includes("BATCH_CALC_INVALID_VARIABLE_KIND")),
+    result.validationErrors.some((e) => e.includes("CALC_BINDING_INVALID_VARIABLE_KIND")),
     true,
   );
 });
 
-Deno.test("previewBatchCalcBindingAssist: emission path not starting with emission.data. → error", () => {
+Deno.test("previewBatchCalcBindingAssist: unsupported operation.op → CALC_BINDING error", () => {
+  const badBinding: CalcBinding = {
+    ...sampleCalcBinding,
+    calculationId: "calc_bad_op",
+    operation: { op: "eval_inject" as "add", a: "v_a", b: "v_b" },
+  };
+  const result = previewBatchCalcBindingAssist([], new Set(["comp1"]), badBinding);
+  assertEquals(
+    result.validationErrors.some((e) => e.includes("CALC_BINDING_INVALID_OPERATION_OP")),
+    true,
+  );
+});
+
+Deno.test("previewBatchCalcBindingAssist: emission path not starting with emission.data. → CALC_BINDING error", () => {
   const badBinding: CalcBinding = {
     ...sampleCalcBinding,
     calculationId: "calc_bad_path",
@@ -632,9 +646,89 @@ Deno.test("previewBatchCalcBindingAssist: emission path not starting with emissi
   };
   const result = previewBatchCalcBindingAssist([], new Set(["comp1"]), badBinding);
   assertEquals(
-    result.validationErrors.some((e) => e.includes("BATCH_CALC_EMISSION_PATH_INVALID")),
+    result.validationErrors.some((e) => e.includes("CALC_BINDING_INVALID_EMISSION_PATH")),
     true,
   );
+});
+
+Deno.test("previewBatchCalcBindingAssist: literal non-finite value → CALC_BINDING error", () => {
+  const badBinding: CalcBinding = {
+    ...sampleCalcBinding,
+    calculationId: "calc_bad_literal",
+    variables: {
+      v_inf: { kind: "literal", value: Infinity as unknown as never },
+    },
+  };
+  const result = previewBatchCalcBindingAssist([], new Set(["comp1"]), badBinding);
+  assertEquals(
+    result.validationErrors.some((e) => e.includes("CALC_BINDING_INVALID_LITERAL_VALUE")),
+    true,
+  );
+});
+
+Deno.test("previewBatchCalcBindingAssist: ruleTable missing tablePath → CALC_BINDING error", () => {
+  const badBinding: CalcBinding = {
+    ...sampleCalcBinding,
+    calculationId: "calc_bad_ruletable",
+    variables: {
+      v_rt: {
+        kind: "ruleTable",
+        tablePath: "wrong.path",
+        matchConditions: [],
+        priorityOrder: "desc",
+        effectiveDateHandling: "latest_effective",
+        selectedField: "rate",
+      } as unknown as never,
+    },
+  };
+  const result = previewBatchCalcBindingAssist([], new Set(["comp1"]), badBinding);
+  assertEquals(
+    result.validationErrors.some((e) => e.includes("CALC_BINDING_INVALID_RULE_TABLE_PATH")),
+    true,
+  );
+});
+
+Deno.test("previewBatchCalcBindingAssist: targetProp invalid for known componentKind → CALC_TARGET_PROP error", () => {
+  // form_input/input only allows targetProp "value"
+  const inputNode: BatchNodeMinimal = {
+    nodeId: "inp1",
+    componentKey: "Input",
+    nodeKind: "catalog_component",
+    componentKind: "form_input/input",
+    parentNodeId: null,
+    layoutClassRefs: [],
+  };
+  const badBinding: CalcBinding = {
+    ...sampleCalcBinding,
+    calculationId: "calc_bad_targetprop",
+    targetNodeId: "inp1",
+    targetProp: "nonexistent_prop",
+  };
+  const result = previewBatchCalcBindingAssist([], new Set(["inp1"]), badBinding, [inputNode]);
+  assertEquals(
+    result.validationErrors.some((e) => e.includes("CALC_TARGET_PROP_UNSUPPORTED")),
+    true,
+  );
+});
+
+Deno.test("previewBatchCalcBindingAssist: valid targetProp for known componentKind → no error", () => {
+  const inputNode: BatchNodeMinimal = {
+    nodeId: "inp1",
+    componentKey: "Input",
+    nodeKind: "catalog_component",
+    componentKind: "form_input/input",
+    parentNodeId: null,
+    layoutClassRefs: [],
+  };
+  const validBinding: CalcBinding = {
+    calculationId: "calc_valid_targetprop",
+    targetNodeId: "inp1",
+    targetProp: "value",
+    operation: { op: "round", a: "v_a" },
+    variables: { v_a: { kind: "literal", value: 42 } },
+  };
+  const result = previewBatchCalcBindingAssist([], new Set(["inp1"]), validBinding, [inputNode]);
+  assertEquals(result.validationErrors.length, 0);
 });
 
 Deno.test("previewBatchCalcBindingAssist: referencedNodeCount reflects nodes in selectedNodeIds", () => {
@@ -658,6 +752,29 @@ Deno.test("applyBatchCalcBindingAssist: appends new binding to array", () => {
   const result = applyBatchCalcBindingAssist([], sampleCalcBinding);
   assertEquals(result.length, 1);
   assertEquals(result[0].calculationId, "calc_test_1");
+});
+
+Deno.test("applyBatchCalcBindingAssist: fail-close — invalid operation.op is NOT appended even if UI skipped preview", () => {
+  const invalidBinding: CalcBinding = {
+    ...sampleCalcBinding,
+    calculationId: "calc_fail_close",
+    operation: { op: "sql_inject" as "add", a: "v_a", b: "v_b" },
+  };
+  const result = applyBatchCalcBindingAssist([], invalidBinding);
+  // Must be rejected — fail-close even without UI preview gate
+  assertEquals(result.length, 0);
+});
+
+Deno.test("applyBatchCalcBindingAssist: fail-close — invalid variable kind is NOT appended", () => {
+  const invalidBinding: CalcBinding = {
+    ...sampleCalcBinding,
+    calculationId: "calc_fail_close_kind",
+    variables: {
+      v_bad: { kind: "eval_injection" as "literal", value: 0 },
+    },
+  };
+  const result = applyBatchCalcBindingAssist([], invalidBinding);
+  assertEquals(result.length, 0);
 });
 
 Deno.test("applyBatchCalcBindingAssist: no-op when duplicate calculationId", () => {

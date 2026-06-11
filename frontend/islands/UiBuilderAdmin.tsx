@@ -834,7 +834,7 @@ function BatchOperationPanel({
       setBatchCalcPreview(null);
       return;
     }
-    setBatchCalcPreview(previewBatchCalcBindingAssist(calculationBindings, selectedNodeIds, parsed));
+    setBatchCalcPreview(previewBatchCalcBindingAssist(calculationBindings, selectedNodeIds, parsed, draftNodes));
   };
   const handleApplyCalcBinding = () => {
     if (!batchCalcPreview || batchCalcPreview.validationErrors.length > 0) return;
