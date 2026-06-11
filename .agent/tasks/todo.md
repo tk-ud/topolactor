@@ -11,7 +11,6 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `ui-builder-selection-model` | UIBuilder selection set / group selection foundation | implemented | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-autocomplete-candidates` | UIBuilder projection setting autocomplete candidates | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-batch-operation` | UIBuilder projection setting batch operation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-suggest-authoring-assist` | UIBuilder projection setting suggest assist | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
@@ -78,42 +77,13 @@ Note: md_viewer is now a dashboard/read-work component candidate shown in Dashbo
 
 ## UIBuilder projection setting authoring assist 作業順序
 
-UIBuilder の投影設定 assist は、既存の package-only canvas workspace / preview → validate → apply boundary / frontend projection surface boundary を維持したまま、以下の順で bundle 実装する。
+`ui-builder-selection-model` は実装済み。次 bundle は `ui-builder-autocomplete-candidates`。
 
-1. `ui-builder-selection-model`
-2. `ui-builder-autocomplete-candidates`
-3. `ui-builder-batch-operation`
-4. `ui-builder-suggest-authoring-assist`
-5. `ui-builder-projection-authoring-assist-roadmap-alignment`
-
-順序理由:
-- batch operation は selection set contract がないと対象範囲が曖昧になる。
-- suggest は autocomplete candidate source がないと推測実装になる。
-- roadmap / SSOT alignment は bundle 境界が定まってから更新しないと stale になりやすい。
-
----
-
-## Bundle `ui-builder-selection-model`
-
-**Status:** implemented
-**Roadmap bundle:** `product.admin_topology_authoring`
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace`), `docs/design/pipeline-continuity-ssot.yaml` (`layout_projection_dom_lane`)
-
-- [x] UIBuilder の単一 `selectedNodeId` モデルを、既存 inspector の単一 primary selection 互換を壊さず、batch operation が参照できる selection set contract として整理・実装する。
-
-実装済み (2026-06-11):
-- `SelectionSetContract` 型 (`selectedNodeIds: ReadonlySet<string>` + `primarySelectedNodeId: string | null`) を `visualLayoutUtils.ts` に定義。`UiBuilderAdmin.tsx` から re-export。
-- `selectAll` / `selectSubtree` / `selectByNodeKind` / `selectByComponentKind` / `invertSelection` / `emptySelectionSet` / `removeFromSelectionSet` を `visualLayoutUtils.ts` に純関数として実装。
-- `LayoutBuilderSection` に `selectedNodeIds` state (ReadonlySet) を追加。既存 `selectedNodeId` (primarySelectedNodeId) は変更せず。
-- 単一クリック・デセレクト・コピー・削除・canvas clear・layout ロード で両 state を同期。
-- Selection UI ボタン (全選択 / サブツリー / 反転 / 解除) を canvas ステータスバーに追加。
-- `FlowLayoutCanvas` に `selectedNodeIds?: ReadonlySet<string>` optional prop を追加。非 primary 選択 node に `ring-indigo-300` ハイライト。
-- `LayerTree` / `LayoutRightDock` に `selectedNodeIds` optional prop を追加。layer tree で indigo background ハイライト。
-- `frontend/tests/uiBuilderSelectionModel.test.ts` を新規追加 (25 テスト全通過)。
-- `adminUxGuard.test.ts` の onDeselectAll 検証パターンを multi-line 対応に更新。
-- `groupId` は永続化しない (transient UI state のみ; SSOT 上の保存先定義なし)。
-- `UI_BUILDER_SELECTION_STATE_BOUNDARY = "transient_draft_interaction_state_only"` として明示。
-- frontend projection boundary を壊さず: DB write / topology judgment / runtime judgment 追加なし。
+残り実装順序:
+1. `ui-builder-autocomplete-candidates`
+2. `ui-builder-batch-operation`
+3. `ui-builder-suggest-authoring-assist`
+4. `ui-builder-projection-authoring-assist-roadmap-alignment`
 
 ---
 
