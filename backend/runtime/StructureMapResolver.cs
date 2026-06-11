@@ -94,6 +94,7 @@ public class StructureMapResolver
 
         IReadOnlyList<LayoutNode>? layoutNodes = null;
         IReadOnlyList<ValidationError>? layoutErrors = null;
+        JsonElement? calculationBindings = null;
 
         if (record.LayoutId.HasValue)
         {
@@ -160,6 +161,27 @@ public class StructureMapResolver
                     )).ToList();
                 }
             }
+
+            // Load calculationBindings regardless of node validation outcome — they are forwarded raw.
+            var calcBindingsJson = await _topologyRepository.LoadLayoutCalcBindingsJsonAsync(record.LayoutId.Value, ct);
+            if (!string.IsNullOrWhiteSpace(calcBindingsJson))
+            {
+                try
+                {
+                    calculationBindings = JsonSerializer.Deserialize<JsonElement>(calcBindingsJson);
+                }
+                catch (JsonException ex)
+                {
+                    // Malformed JSON is an explicit failure — silent omit is prohibited.
+                    // Broken calculationBindings authoring must surface in Emission.Errors.
+                    var calcError = new ValidationError(
+                        "CALC_BINDINGS_JSON_INVALID",
+                        $"layout_id '{record.LayoutId.Value}' has malformed calculationBindings JSON in layout_patch_json. " +
+                        $"Frontend calculation bindings cannot be applied. Parse error: {ex.Message}");
+                    var merged = new List<ValidationError>(layoutErrors ?? []) { calcError };
+                    layoutErrors = merged;
+                }
+            }
         }
 
         buildShape:
@@ -176,7 +198,8 @@ public class StructureMapResolver
             Errors: layoutErrors,
             StructureMapStatePolicyJson: record.StatePolicyJson,
             LayoutId: record.LayoutId?.ToString(),
-            LayoutNodes: layoutNodes
+            LayoutNodes: layoutNodes,
+            CalculationBindings: calculationBindings
         );
     }
 

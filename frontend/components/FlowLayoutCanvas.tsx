@@ -67,6 +67,9 @@ function FlowCanvasNodeView({
   designDraftByNodeId,
   onSelectNode,
   onDeleteNode,
+  calcTriggerNodeIds,
+  calcOverridesByNodeId,
+  onNodeValueChange,
 }: {
   node: FlowCanvasNode;
   childrenMap: Map<string | undefined, FlowCanvasNode[]>;
@@ -74,6 +77,9 @@ function FlowCanvasNodeView({
   designDraftByNodeId: ReadonlyMap<string, FlowCanvasDesignDraft>;
   onSelectNode: (nodeId: string) => void;
   onDeleteNode?: (nodeId: string) => void;
+  calcTriggerNodeIds?: ReadonlySet<string>;
+  calcOverridesByNodeId?: ReadonlyMap<string, Record<string, unknown>>;
+  onNodeValueChange?: (nodeId: string, propKey: string, value: unknown) => void;
 }): JSX.Element {
   const children = childrenMap.get(node.nodeId) ?? [];
   const isSelected = node.nodeId === selectedNodeId;
@@ -112,6 +118,9 @@ function FlowCanvasNodeView({
       designDraftByNodeId={designDraftByNodeId}
       onSelectNode={onSelectNode}
       onDeleteNode={onDeleteNode}
+      calcTriggerNodeIds={calcTriggerNodeIds}
+      calcOverridesByNodeId={calcOverridesByNodeId}
+      onNodeValueChange={onNodeValueChange}
     />
   ));
 
@@ -178,6 +187,11 @@ function FlowCanvasNodeView({
     );
   }
 
+  const calcTriggerCallback = calcTriggerNodeIds?.has(node.nodeId)
+    ? (value: unknown) => onNodeValueChange?.(node.nodeId, "value", value)
+    : undefined;
+  const calcValueOverridesForNode = calcOverridesByNodeId?.get(node.nodeId);
+
   return (
     <div {...commonProps}>
       <div class="min-h-0 overflow-auto p-1">
@@ -189,6 +203,8 @@ function FlowCanvasNodeView({
           inlineText={design?.inlineText}
           linkHref={design?.linkHref}
           linkTarget={design?.linkTarget}
+          calcTriggerCallback={calcTriggerCallback}
+          calcValueOverrides={calcValueOverridesForNode}
         />
       </div>
       {(node.slotKey || (sizeLabel && node.widthMode === "custom" && node.heightMode === "custom")) && (
@@ -218,6 +234,12 @@ export type FlowLayoutCanvasProps = {
   onAddFromEmptyState?: (templateId: string) => void;
   allowEmptyStateTemplates?: boolean;
   emptyGuidance?: string;
+  /** Calc binding trigger: nodeIds whose value changes should call onNodeValueChange */
+  calcTriggerNodeIds?: ReadonlySet<string>;
+  /** Calc binding results: nodeId → prop overrides injected by evaluateAllCalcBindings */
+  calcOverridesByNodeId?: ReadonlyMap<string, Record<string, unknown>>;
+  /** Called when a calc-trigger input node changes value. Never dispatches to backend. */
+  onNodeValueChange?: (nodeId: string, propKey: string, value: unknown) => void;
 };
 
 export function FlowLayoutCanvas({
@@ -235,6 +257,9 @@ export function FlowLayoutCanvas({
   onAddFromEmptyState,
   allowEmptyStateTemplates = true,
   emptyGuidance = UX_EMPTY_CANVAS_DRAG_GUIDANCE,
+  calcTriggerNodeIds,
+  calcOverridesByNodeId,
+  onNodeValueChange,
 }: FlowLayoutCanvasProps): JSX.Element {
   const childrenMap = buildFlowChildrenMap(nodes);
   const roots = childrenMap.get(undefined) ?? [];
@@ -302,6 +327,9 @@ export function FlowLayoutCanvas({
                 designDraftByNodeId={designDraftByNodeId}
                 onSelectNode={onSelectNode}
                 onDeleteNode={onDeleteNode}
+                calcTriggerNodeIds={calcTriggerNodeIds}
+                calcOverridesByNodeId={calcOverridesByNodeId}
+                onNodeValueChange={onNodeValueChange}
               />
             ))}
           </div>

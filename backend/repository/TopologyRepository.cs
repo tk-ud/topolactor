@@ -192,6 +192,16 @@ public class TopologyRepository
         return Task.FromResult<IReadOnlyList<LayoutNodeRecord>>(Array.Empty<LayoutNodeRecord>());
     }
 
+    /// <summary>
+    /// Loads the raw calculationBindings JSON array from layout_patch_json root for the given layout_id.
+    /// Returns null when absent or empty. Base/test double returns null.
+    /// </summary>
+    public virtual Task<string?> LoadLayoutCalcBindingsJsonAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        return Task.FromResult<string?>(null);
+    }
+
     public virtual Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
         => Task.FromException<IReadOnlyList<DemoEntityProjection>>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
 

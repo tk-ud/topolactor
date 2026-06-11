@@ -27,6 +27,10 @@ export type RuntimeComponentSpec = {
   design?: NormalizedDesign;
   /** UI Builder canvas preview — no runtime event dispatch; relaxed binding checks. */
   previewMode?: boolean;
+  /** frontend_local_derived_calculation_binding: fires on change/input/select BEFORE previewMode gate. */
+  calcTriggerCallback?: (value: unknown) => void;
+  /** frontend_local_derived_calculation_binding: prop overrides injected into placeholder props for target nodes. */
+  calcValueOverrides?: Record<string, unknown>;
 };
 
 type AdaptResult = { ok: true; value: RuntimeComponentSpec } | {

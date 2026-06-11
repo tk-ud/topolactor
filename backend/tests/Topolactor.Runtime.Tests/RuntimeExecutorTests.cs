@@ -638,6 +638,79 @@ public class RuntimeExecutorTests
     }
 
     [Fact]
+    public async Task StructureMapResolver_MalformedCalcBindingsJson_ReturnsCalcBindingsJsonInvalidError()
+    {
+        // Verifies explicit-failure policy: malformed calculationBindings JSON in layout_patch_json
+        // must produce CALC_BINDINGS_JSON_INVALID in Emission.Errors — not silent omit.
+        var layoutId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000002");
+        var repo = new StubTopologyRepositoryWithMalformedCalcBindings(layoutId);
+        var resolver = new StructureMapResolver(repo);
+        var attractor = new AttractorResult(
+            AttractorKey: TopologyRepository.DefaultAttractorKey,
+            StructureMapId: TopologyRepository.DefaultStructureMapId,
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId
+        );
+
+        var shape = await resolver.Resolve(attractor);
+
+        Assert.NotNull(shape.Errors);
+        Assert.Contains(shape.Errors!, e => e.Code == "CALC_BINDINGS_JSON_INVALID");
+        Assert.Null(shape.CalculationBindings);
+    }
+
+    [Fact]
+    public async Task StructureMapResolver_AbsentCalcBindingsJson_IsNoOp()
+    {
+        // Absent calculationBindings (null from repository) must not produce any error.
+        var layoutId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000003");
+        var repo = new StubTopologyRepositoryWithLayout(layoutId);
+        var resolver = new StructureMapResolver(repo);
+        var attractor = new AttractorResult(
+            AttractorKey: TopologyRepository.DefaultAttractorKey,
+            StructureMapId: TopologyRepository.DefaultStructureMapId,
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId
+        );
+
+        var shape = await resolver.Resolve(attractor);
+
+        // LAYOUT_NODES_NOT_FOUND is expected (base stub returns no nodes) — but no calc binding error.
+        Assert.NotNull(shape.Errors);
+        Assert.DoesNotContain(shape.Errors!, e => e.Code == "CALC_BINDINGS_JSON_INVALID");
+        Assert.Null(shape.CalculationBindings);
+    }
+
+    [Fact]
+    public async Task StructureMapResolver_ValidCalcBindingsJson_ForwardedToEmission()
+    {
+        // Valid calculationBindings array is forwarded raw to RuntimeWorkingShape.CalculationBindings
+        // without any server-side evaluation. EmissionBuilder then carries it to Emission.
+        var layoutId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000004");
+        var repo = new StubTopologyRepositoryWithValidCalcBindings(layoutId);
+        var builder = new EmissionBuilder();
+        var resolver = new StructureMapResolver(repo);
+        var attractor = new AttractorResult(
+            AttractorKey: TopologyRepository.DefaultAttractorKey,
+            StructureMapId: TopologyRepository.DefaultStructureMapId,
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId
+        );
+
+        var shape = await resolver.Resolve(attractor);
+        var emission = builder.Build(shape);
+
+        Assert.NotNull(shape.CalculationBindings);
+        Assert.NotNull(emission.CalculationBindings);
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, emission.CalculationBindings!.Value.ValueKind);
+        Assert.Equal(1, emission.CalculationBindings!.Value.GetArrayLength());
+        // Verify backend did NOT evaluate the binding (no dispatch, no calculated value in emission.Data)
+        Assert.Null(emission.Data);
+        // Verify no calc-binding error emitted for valid JSON
+        Assert.DoesNotContain(emission.Errors, e => e.Code == "CALC_BINDINGS_JSON_INVALID");
+    }
+
+    [Fact]
     public void EmissionBuilder_LayoutNodes_IsPreservedFromWorkingShape()
     {
         // Verifies LayoutNodes pipeline: RuntimeWorkingShape.LayoutNodes → Emission.LayoutNodes.
@@ -810,6 +883,68 @@ internal class StubTopologyRepositoryWithLayoutAndNodes(Guid layoutId)
         ];
         return Task.FromResult(rows);
     }
+}
+
+/// <summary>
+/// Stub: returns default structure map with layoutId + valid nodes + malformed calculationBindings JSON.
+/// Used to verify CALC_BINDINGS_JSON_INVALID explicit-failure behavior.
+/// </summary>
+internal class StubTopologyRepositoryWithMalformedCalcBindings(Guid layoutId)
+    : TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")
+{
+    private readonly Guid _layoutId = layoutId;
+
+    public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
+    {
+        if (key == DefaultAttractorKey || key == DefaultStructureMapId)
+        {
+            return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
+                StructureMapId: DefaultStructureMapId,
+                AttractorKey:   DefaultAttractorKey,
+                PackageId:      DefaultPackageId,
+                SchemaId:       DefaultSchemaId,
+                ComponentIds:   [DefaultComponentId],
+                StatePolicyJson: null,
+                LayoutId: _layoutId
+            ));
+        }
+        return Task.FromResult<StructureMapRecord?>(null);
+    }
+
+    public override Task<string?> LoadLayoutCalcBindingsJsonAsync(Guid layoutId, CancellationToken ct = default)
+        => Task.FromResult<string?>("[{not valid json]]]");
+}
+
+/// <summary>
+/// Stub: returns default structure map with layoutId + valid nodes + a valid single-element calculationBindings array.
+/// Used to verify valid calculationBindings are forwarded raw without backend evaluation.
+/// </summary>
+internal class StubTopologyRepositoryWithValidCalcBindings(Guid layoutId)
+    : TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")
+{
+    private readonly Guid _layoutId = layoutId;
+    private const string ValidCalcBindingsJson =
+        """[{"calculationId":"test-calc","variables":{"a":{"kind":"literal","value":5}},"operation":{"op":"multiply","a":"a","b":"a"},"targetNodeId":"n","targetProp":"value"}]""";
+
+    public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
+    {
+        if (key == DefaultAttractorKey || key == DefaultStructureMapId)
+        {
+            return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
+                StructureMapId: DefaultStructureMapId,
+                AttractorKey:   DefaultAttractorKey,
+                PackageId:      DefaultPackageId,
+                SchemaId:       DefaultSchemaId,
+                ComponentIds:   [DefaultComponentId],
+                StatePolicyJson: null,
+                LayoutId: _layoutId
+            ));
+        }
+        return Task.FromResult<StructureMapRecord?>(null);
+    }
+
+    public override Task<string?> LoadLayoutCalcBindingsJsonAsync(Guid layoutId, CancellationToken ct = default)
+        => Task.FromResult<string?>(ValidCalcBindingsJson);
 }
 
 public class SchedulerDispatcherChainTests

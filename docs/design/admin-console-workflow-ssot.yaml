@@ -451,6 +451,51 @@ admin_console_workflow_ssot:
               note: >
                 raw dispatcher fields (wiringKind / targetSurface / targetRef) are advanced path only;
                 not the normal-view completion path
+        - frontend_local_derived_calculation_binding:
+            status: implemented
+            lane: frontend_local_only
+            purpose: >
+              input/change/select イベントで frontend-local calculation graph を実行し、
+              target node の value / result / preview / inlineText を即時更新する。
+              計算定義は layout_patch_json または node-local propsJson に保存する。
+            reference_data_contract:
+              source: backend-loaded emission data (初期ロード済み reference data / rule table)
+              access: read-only; frontend は参照のみで書き込み不可
+              table_resolution: ruleTable source で tablePath (emission.data.* path) → 複数候補を条件・priority・effectiveFrom でソートし最優先行を選択
+            calculation_binding_model:
+              calculationId: string (unique per binding)
+              variables:
+                node_source: nodeId + propKey (live canvas input value)
+                emission_source: emission.data.* dotted path (scalar from loaded reference)
+                ruleTable_source:
+                  tablePath: emission.data.* path to array
+                  matchConditions: field/value pairs using node or literal values
+                  priorityOrder: desc
+                  effectiveDateHandling: latest_effective
+                  selectedField: field name to extract from winning row
+                literal_source:
+                  allowed: test coefficients, fixed offsets, provisional use
+                  prohibited: 税率・工費レート・単価などの業務基準値
+              operation: allowlist only (multiply / add / subtract / divide / percent / taxIncluded / taxAmount / round / floor / ceil)
+              targetNodeId: canvas node to update
+              targetProp: value | result | preview | inlineText
+              roundingPolicy: round | floor | ceil | none
+            prohibited:
+              - input_change_ごとの_backend_dispatch
+              - ManifestDispatcher_経由の逐次計算
+              - queueAdminClientCommand_経由の逐次計算
+              - 計算結果の逐次DB保存
+              - eval_or_Function_arbitrary_JS
+              - 税率・工費レート・単価などの業務基準値を_literal_source_で本番計算定義に保存
+              - unknown_rate_or_unknown_rule_の_silent_fallback
+            rule_selection_contract:
+              filter_enabled: rows where enabled !== false pass
+              sort: priority DESC, then effectiveFrom DESC
+              select: first row's selectedField
+              unresolved: explicit CALC_RULE_UNRESOLVED error (no silent fallback)
+            implementation_ref: frontend/runtime/frontendLocalCalculationResolver.ts
+            authoring_ui_surface: right_dock data/wiring panel (ローカル計算 section)
+            runtime_canvas_ref: FlowLayoutCanvas evaluates bindings on node value change; injects result into target node runtime props
         - preset_ecosystem:
             role: ui_builder_authoring_support
             status: planned_parent_surface

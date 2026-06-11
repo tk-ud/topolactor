@@ -3,6 +3,7 @@
  * Pure functions extracted for testability.
  * SSOT: docs/registrar-admin-ui-specification.md §5
  */
+import type { CalcBinding } from "./frontendLocalCalculationResolver.ts";
 
 export const RESPONSIVE_BREAKPOINTS = ["sm", "md", "lg", "xl"] as const;
 export type BreakpointKey = (typeof RESPONSIVE_BREAKPOINTS)[number];
@@ -312,6 +313,7 @@ export type PaletteDraftSeedEntry = {
 export type ParsedVisualLayoutPatch = {
   nodes: VisualNodePayload[];
   layoutClassRefs: string[];
+  calculationBindings?: CalcBinding[];
 };
 
 export type ParseVisualLayoutPatchResult =
@@ -420,7 +422,14 @@ export function parseVisualLayoutPatchJson(
       if (node) nodes.push(node);
     }
   }
-  return { ok: true, value: { nodes, layoutClassRefs } };
+  const calculationBindings = Array.isArray(root.calculationBindings)
+    ? (root.calculationBindings as unknown[]).filter(
+        (b): b is CalcBinding =>
+          typeof b === "object" && b !== null && !Array.isArray(b) &&
+          typeof (b as Record<string, unknown>).calculationId === "string",
+      )
+    : undefined;
+  return { ok: true, value: { nodes, layoutClassRefs, calculationBindings } };
 }
 
 /** Legacy bulk auto-place canvas: every nodeId is seed_{componentKey}_{index}. */
@@ -491,11 +500,13 @@ export function enrichDraftNodesWithPaletteComponentIds<
 export function buildVisualLayoutPatchJson(
   nodes: VisualNodePayload[],
   layoutClassRefs: string[] = [],
+  calculationBindings?: CalcBinding[],
 ): string {
   return JSON.stringify(
     {
       grid: { cols: 12 },
       ...(layoutClassRefs.length > 0 ? { layoutClassRefs } : {}),
+      ...(calculationBindings && calculationBindings.length > 0 ? { calculationBindings } : {}),
       nodes: nodes.map((n) => ({
         nodeId: n.nodeId,
         ...(n.nodeKind ? { nodeKind: n.nodeKind } : {}),

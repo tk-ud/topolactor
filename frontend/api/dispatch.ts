@@ -1,4 +1,5 @@
 import type { ProjectionDefinition } from "../runtime/projectionConstructor.ts";
+import type { CalcBinding } from "../runtime/frontendLocalCalculationResolver.ts";
 
 /**
  * Structured validation error matching backend ValidationError { Code, Message }.
@@ -188,6 +189,13 @@ export type Emission = {
    * layoutId is present but layoutNodes is absent — that is an explicit failure state.
    */
   layoutNodes?: LayoutNode[];
+  /**
+   * Frontend-local calculation bindings from layout_patch_json.calculationBindings[].
+   * Backend extracts and forwards these verbatim — no server-side evaluation.
+   * renderEmission applies them client-side to derive values from emission.data.* and node inputs.
+   * Absent when no calculationBindings are authored in the layout patch.
+   */
+  calculationBindings?: CalcBinding[];
 };
 
 export type DispatchRequest = {

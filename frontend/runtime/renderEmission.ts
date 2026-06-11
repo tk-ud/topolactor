@@ -9,6 +9,7 @@ import { resolvePropBindings } from "./propBindingResolver.ts";
 import { mergeCatalogPropsWithComponentDesign } from "./mergeComponentDesignProps.ts";
 import { buildPreviewInertEventBinding } from "./previewInertEventBinding.ts";
 import { buildLayoutPreviewPlaceholderProps } from "./layoutComponentPreview.ts";
+import { evaluateAllCalcBindings, type CalcBinding, type CalcContext } from "./frontendLocalCalculationResolver.ts";
 
 export type RenderEmissionOptions = {
   /**
@@ -16,6 +17,10 @@ export type RenderEmissionOptions = {
    * relaxed factory checks — same contract as UI Builder canvas preview.
    */
   previewMode?: boolean;
+  /** Frontend-local calculation bindings from layout patch root. Evaluated without backend dispatch. */
+  calculationBindings?: CalcBinding[];
+  /** Live node values for calc binding trigger resolution. */
+  calcNodeValues?: Record<string, Record<string, unknown>>;
 };
 
 export type ComponentSpec = {
@@ -241,6 +246,67 @@ export function buildChildrenMap(specs: ComponentSpec[]): Map<string | undefined
   return map;
 }
 
+/**
+ * Evaluates calculationBindings (from layout patch root) against emission data and
+ * node values, then injects results into matching ComponentSpecs.
+ * No backend dispatch — frontend-local only.
+ * Unresolved/error results are recorded on the spec as calc_error (not thrown).
+ */
+export function applyCalcBindingsToSpecs(
+  specs: ComponentSpec[],
+  calculationBindings: CalcBinding[],
+  emissionData: Record<string, unknown>,
+  nodeValues: Record<string, Record<string, unknown>> = {},
+): ComponentSpec[] {
+  if (calculationBindings.length === 0) return specs;
+  const ctx: CalcContext = { nodeValues, emissionData };
+  const results = evaluateAllCalcBindings(calculationBindings, ctx);
+  if (results.size === 0) return specs;
+
+  return specs.map((spec) => {
+    if (!spec.nodeId) return spec;
+    const overrideEntries = [...results.values()].filter(
+      (e) => e.targetNodeId === spec.nodeId,
+    );
+    if (overrideEntries.length === 0) return spec;
+    const calcErrors: string[] = [];
+    let updatedSpec = spec;
+    for (const entry of overrideEntries) {
+      if (!entry.result.ok) {
+        calcErrors.push(entry.result.error);
+        continue;
+      }
+      if (entry.targetProp === "inlineText") {
+        updatedSpec = { ...updatedSpec, inlineText: String(entry.result.value) };
+      } else if (updatedSpec.runtimeSpec) {
+        const existingProps = updatedSpec.runtimeSpec.props ?? {};
+        // Inject at top level for any targetProp, AND into props.data when data is an object.
+        // Factories (inputFactory, calculationPreviewPanelFactory, etc.) read from props.data.
+        const existingData = existingProps.data;
+        const updatedData = (typeof existingData === "object" && existingData !== null && !Array.isArray(existingData))
+          ? { ...(existingData as Record<string, unknown>), [entry.targetProp]: entry.result.value }
+          : existingData;
+        updatedSpec = {
+          ...updatedSpec,
+          runtimeSpec: {
+            ...updatedSpec.runtimeSpec,
+            props: {
+              ...existingProps,
+              [entry.targetProp]: entry.result.value,
+              ...(updatedData !== existingData ? { data: updatedData } : {}),
+            },
+          },
+        };
+      }
+    }
+    if (calcErrors.length > 0) {
+      const existing = updatedSpec.def as Record<string, unknown>;
+      updatedSpec = { ...updatedSpec, def: { ...existing, calc_errors: calcErrors } };
+    }
+    return updatedSpec;
+  });
+}
+
 export function renderRuntimeComponents(componentDataHubs: ComponentDataHub[]): ComponentSpec[] {
   return componentDataHubs.map((hub) => {
     const adapted = adaptComponentDataHub(hub);
@@ -297,7 +363,7 @@ export function renderEmission(
     }
 
     // Render in slot order. Each node carries full layout projection fields.
-    return [...emission.layoutNodes]
+    const rawSpecs = [...emission.layoutNodes]
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .map((node): ComponentSpec => {
         const layoutFields = {
@@ -436,6 +502,15 @@ export function renderEmission(
           ...layoutFields,
         };
       });
+
+    const bindings = options?.calculationBindings ?? emission.calculationBindings ?? [];
+    if (bindings.length === 0) return rawSpecs;
+    return applyCalcBindingsToSpecs(
+      rawSpecs,
+      bindings,
+      emission.data ?? {},
+      options?.calcNodeValues ?? {},
+    );
   }
 
   // No layout: flat componentIds rendering.

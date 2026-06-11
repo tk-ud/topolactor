@@ -2410,3 +2410,40 @@ Deno.test("designDraft: cssTokenRefs inline styles applied after token toggle + 
   const style = _buildStyle(afterTextEdit.cssTokenRefs!);
   assertEquals(style.background, "#0070f3");
 });
+
+Deno.test("calculation binding propsJson round-trip: calculationBindings field preserved through parseVisualLayoutPatchJson / buildVisualLayoutPatchJson", () => {
+  // Build a patch JSON with a node whose propsJson contains calculationBindings
+  const calcBindings = JSON.stringify([{
+    calculationId: "labor-cost-1",
+    variables: {
+      hours: { kind: "node", nodeId: "hours-input", propKey: "value" },
+      rate: { kind: "ruleTable", tablePath: "emission.data.laborRates", matchConditions: [], selectedField: "hourlyRate", priorityOrder: "desc", effectiveDateHandling: "latest_effective" },
+    },
+    operation: { op: "multiply", a: "hours", b: "rate" },
+    targetNodeId: "labor-cost-output",
+    targetProp: "value",
+    roundingPolicy: "round",
+  }]);
+
+  const patchJson = JSON.stringify({
+    nodes: [{
+      nodeId: "labor-cost-output",
+      nodeKind: "catalog_component",
+      componentKey: "form_input/text",
+      parentNodeId: null,
+      slotKey: "main",
+      orderIndex: 0,
+      propsJson: JSON.stringify({ calculationBindings: JSON.parse(calcBindings) }),
+    }],
+  });
+
+  const parsed = parseVisualLayoutPatchJson(patchJson);
+  assert(parsed !== null, "should parse successfully");
+  assert(parsed.ok, "parse result should be ok");
+  if (!parsed.ok) return;
+  const node = parsed.value.nodes.find((n: { nodeId: string }) => n.nodeId === "labor-cost-output");
+  assert(node !== undefined, "node should exist");
+  const propsObj = JSON.parse(node!.propsJson ?? "{}");
+  assert(Array.isArray(propsObj.calculationBindings), "calculationBindings should be an array");
+  assertEquals(propsObj.calculationBindings[0].calculationId, "labor-cost-1");
+});

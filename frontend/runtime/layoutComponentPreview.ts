@@ -138,15 +138,23 @@ export function buildLayoutPreviewPlaceholderProps(
   componentKind: string,
   componentKey: string,
   overrides: LayoutPreviewDesignOverrides = {},
+  calcValueOverrides?: Record<string, unknown>,
 ): Record<string, unknown> {
   const shortLabel = layoutPreviewDisplayLabel(componentKey);
   const inlineText = overrides.inlineText?.trim();
+
+  // Helper: resolve a prop from calcValueOverrides as a display string.
+  const calcVal = (key: string): string | undefined => {
+    if (!calcValueOverrides || !(key in calcValueOverrides)) return undefined;
+    const v = calcValueOverrides[key];
+    return String(v);
+  };
 
   switch (componentKind) {
     case "action/button":
       return {
         data: {
-          label: inlineText || shortLabel || "Button",
+          label: calcVal("label") ?? inlineText ?? shortLabel ?? "Button",
           variant: "primary",
           disabled: true,
         },
@@ -158,7 +166,7 @@ export function buildLayoutPreviewPlaceholderProps(
       return {
         data: {
           placeholder: inlineText?.trim() || "プレビュー",
-          value: "",
+          value: calcVal("value") ?? "",
           disabled: false,
         },
       };
@@ -319,9 +327,9 @@ export function buildLayoutPreviewPlaceholderProps(
     default:
       return {
         title: shortLabel,
-        value: "",
+        value: calcVal("value") ?? calcVal("result") ?? "",
         items: [],
-        preview: "プレビュー",
+        preview: calcVal("preview") ?? "プレビュー",
       };
   }
 }
@@ -331,6 +339,8 @@ export function buildLayoutPreviewRuntimeSpec(input: {
   componentKind?: string;
   componentId?: string;
   design?: LayoutPreviewDesignOverrides;
+  calcTriggerCallback?: (value: unknown) => void;
+  calcValueOverrides?: Record<string, unknown>;
 }):
   | { ok: true; spec: RuntimeComponentSpec }
   | { ok: false; code: string; reason: string } {
@@ -363,9 +373,12 @@ export function buildLayoutPreviewRuntimeSpec(input: {
         componentKind,
         normalizedKey,
         input.design,
+        input.calcValueOverrides,
       ),
       eventBinding: buildPreviewInertEventBinding(),
       previewMode: true,
+      calcTriggerCallback: input.calcTriggerCallback,
+      calcValueOverrides: input.calcValueOverrides,
     },
   };
 }
@@ -379,6 +392,8 @@ export function renderLayoutComponentPreview(input: {
   inlineText?: string;
   linkHref?: string;
   linkTarget?: string;
+  calcTriggerCallback?: (value: unknown) => void;
+  calcValueOverrides?: Record<string, unknown>;
 }): LayoutPreviewRenderResult {
   if (input.isDraftOnly) {
     return {
@@ -396,6 +411,8 @@ export function renderLayoutComponentPreview(input: {
       linkHref: input.linkHref,
       linkTarget: input.linkTarget,
     },
+    calcTriggerCallback: input.calcTriggerCallback,
+    calcValueOverrides: input.calcValueOverrides,
   });
   if (!built.ok) return built;
   const factory = resolveRuntimeComponentFactory(built.spec.componentType);

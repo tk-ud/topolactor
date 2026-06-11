@@ -313,6 +313,26 @@ public class NpgsqlTopologyRepository : TopologyRepository
         }).ToList();
     }
 
+    /// <inheritdoc/>
+    public override async Task<string?> LoadLayoutCalcBindingsJsonAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT (COALESCE(layout_draft_tmp_json, layout_patch_json)->'calculationBindings')::text " +
+            "FROM topology.ui_topology_tensor " +
+            "WHERE layout_id = @layoutId " +
+            "LIMIT 1";
+        cmd.Parameters.AddWithValue("layoutId", layoutId);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null || scalar is DBNull) return null;
+        var json = scalar as string;
+        if (string.IsNullOrWhiteSpace(json) || json == "null") return null;
+        return json;
+    }
+
     /// <summary>
     /// Maps ui_wiring_registry.wiring_kind to the canonical RuntimeDispatchAction.
     /// search/aggregate → Search, create → Create, update → diffUpdate, delete → logicalDelete.
