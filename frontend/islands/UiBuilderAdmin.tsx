@@ -1692,7 +1692,7 @@ function AuthoringSuggestAssistPanel({
                     <>
                       {isDbColumn && (
                         <p class="text-[0.6rem] text-amber-600">
-                          フィールド参照は matchCondition 値ソースとして runtime が未対応です。node または固定値を選択してください。
+                          フィールド参照は matchCondition 値ソースとして使用できません。node または固定値を選択してください。
                         </p>
                       )}
                       {!isDbColumn && !hasMatchingRuleTableBinding && onCalcBindingsChange && calculationBindings && (
