@@ -11,7 +11,6 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `ui-builder-suggest-authoring-assist` | UIBuilder projection setting suggest assist | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-projection-authoring-assist-roadmap-alignment` | UIBuilder projection authoring assist roadmap / SSOT alignment | not_started | 1 | `product.admin_topology_authoring` | `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
@@ -78,30 +77,7 @@ Note: md_viewer is now a dashboard/read-work component candidate shown in Dashbo
 `ui-builder-selection-model` は実装済み。`ui-builder-autocomplete-candidates` は実装済み。`ui-builder-batch-operation` は実装済み。
 
 残り実装順序:
-1. `ui-builder-suggest-authoring-assist`
-2. `ui-builder-projection-authoring-assist-roadmap-alignment`
-
----
-
-## Bundle `ui-builder-suggest-authoring-assist`
-
-**Status:** not_started
-**Roadmap bundle:** `product.admin_topology_authoring`
-**Depends on:** `ui-builder-selection-model`, `ui-builder-autocomplete-candidates`
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`frontend_local_derived_calculation_binding`), `docs/design/pipeline-continuity-ssot.yaml` (`component_wiring_execution_lane`)
-
-- [ ] 選択中 node / selection set / loaded emission data から、次に設定すべき source node / target node / ruleTable matchConditions / targetProp 候補を suggest する authoring assist を実装する。
-
-Scope:
-- selected node から次候補を提示するが、自動 mutation authority にはしない。
-- source node / target node 候補は draftNodes・nodeKind・componentKind・targetProp capability から導出する。
-- ruleTable matchConditions 候補は tablePath rows の field と node value source 候補から導出する。
-- targetProp 候補は既存 `resolveAllowedTargetProps` / `validateCalcTargetProp` と整合させる。
-- suggest 採用は user action のみとし、投影・計算・wiring の runtime authority を持たせない。
-
-Completion condition:
-- suggest は候補提示に留まり、ユーザー採用なしに draft mutation しない。
-- frontend-local calc boundary と component wiring execution boundary を壊さない。
+1. `ui-builder-projection-authoring-assist-roadmap-alignment`
 
 ---
 
@@ -119,6 +95,9 @@ Scope:
 - `.agent/docs/ssot-map.yaml` の worktype / required surface 追加要否を判断する。
 - `docs/design/admin-console-workflow-ssot.yaml` への contract 追加要否を判断する。
 - 実装完了できない残項目がある場合は partial 判定できる粒度で残 todo を全列挙する。
+
+**Carry-over (ui-builder-suggest-authoring-assist bundle で未実装):**
+- [ ] **active-remote-manifest-column-suggest**: `deriveQualifiedColumnCandidates` は active remote manifest のテーブル/フィールド候補を列挙しない。SSOT Step 3 では `manifest:list_relationship_remote_targets` による remote targets がある想定だが、UIBuilder authoring 中の backend dispatch は禁止されているため、現行実装では `remoteTargets = []` で固定されている。active remote manifest テーブル/フィールド候補のサジェスト UI は、backend dispatch 禁止制約を維持したまま実現可能なアーキテクチャ (キャッシュ読み込み、静的 SSOT 参照、manifest プリロードなど) が確定した後に、別 bundle で実装すること。`docs/system-roadmap.yaml` の `active_remote_manifest_column_suggest` known_gap への evidence_ref 追加も同 bundle 完了時に行う。
 
 Completion condition:
 - roadmap / TODO / SSOT の責務が食い違わず、後続 PR closure が bundle 単位で判定できる。
