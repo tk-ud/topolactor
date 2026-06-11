@@ -1284,7 +1284,7 @@ function AuthoringSuggestAssistPanel({
   if (!suggestShape) {
     return (
       <div class="p-2 text-[0.65rem] text-slate-500">
-        マニフェストを選択すると DB table / column 候補が表示されます。
+        ページを選択するとデータ候補が表示されます。
       </div>
     );
   }
@@ -1306,7 +1306,7 @@ function AuthoringSuggestAssistPanel({
       {/* DB table / column section */}
       {activeSection === "db" && (
         <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
-          <p class="font-semibold text-slate-700">DB table 候補</p>
+          <p class="font-semibold text-slate-700">テーブル候補</p>
           {dbTableResult.ok ? (
             <div class="flex flex-wrap gap-1">
               {(dbTableResult as { ok: true; candidates: Array<{ tableRef: string; source: string; columnCount: number }> }).candidates.map((c) => (
@@ -1398,7 +1398,7 @@ function AuthoringSuggestAssistPanel({
           )}
           {!selectedTableRef && (
             <p class="text-[0.6rem] text-slate-400">
-              DB table セクションでテーブルを選択するとフィールド候補が表示されます。
+              テーブルセクションでテーブルを選択するとフィールド候補が表示されます。
             </p>
           )}
         </div>
