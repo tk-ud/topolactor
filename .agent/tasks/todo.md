@@ -11,6 +11,11 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-selection-model` | UIBuilder selection set / group selection foundation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-autocomplete-candidates` | UIBuilder projection setting autocomplete candidates | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-batch-operation` | UIBuilder projection setting batch operation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-suggest-authoring-assist` | UIBuilder projection setting suggest assist | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-projection-authoring-assist-roadmap-alignment` | UIBuilder projection authoring assist roadmap / SSOT alignment | not_started | 1 | `product.admin_topology_authoring` | `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 ---
@@ -68,6 +73,129 @@ UIBuilder preset ecosystem parent surface is partial. Provisional preset surface
 - [ ] physical_search_crud_aggregate provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_details_inline_editor_md_generator provisional preset surface is not yet implemented or explicitly completed
 Note: md_viewer is now a dashboard/read-work component candidate shown in DashboardCandidatePalette; its completed preset seed / saved view flow evidence remains closed under `/admin/team-dashboard` primary route.
+
+---
+
+## UIBuilder projection setting authoring assist 作業順序
+
+UIBuilder の投影設定 assist は、既存の package-only canvas workspace / preview → validate → apply boundary / frontend projection surface boundary を維持したまま、以下の順で bundle 実装する。
+
+1. `ui-builder-selection-model`
+2. `ui-builder-autocomplete-candidates`
+3. `ui-builder-batch-operation`
+4. `ui-builder-suggest-authoring-assist`
+5. `ui-builder-projection-authoring-assist-roadmap-alignment`
+
+順序理由:
+- batch operation は selection set contract がないと対象範囲が曖昧になる。
+- suggest は autocomplete candidate source がないと推測実装になる。
+- roadmap / SSOT alignment は bundle 境界が定まってから更新しないと stale になりやすい。
+
+---
+
+## Bundle `ui-builder-selection-model`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace`), `docs/design/pipeline-continuity-ssot.yaml` (`layout_projection_dom_lane`)
+
+- [ ] UIBuilder の単一 `selectedNodeId` モデルを、既存 inspector の単一 primary selection 互換を壊さず、batch operation が参照できる selection set contract として整理・実装する。
+
+Scope:
+- `selectedNodeIds` / `primarySelectedNodeId` または同等 contract を定義する。
+- all select / subtree select / nodeKind select / componentKind select / invert select / clear selection を UIBuilder 内の draft interaction として扱う。
+- `groupId` を導入する場合は、保存先を `layout_patch_json` / node-local metadata / transient UI state のどこに置くかを SSOT 上で明示してから実装する。
+- FlowLayoutCanvas / LayerTree / right dock inspector の責務境界を崩さない。
+
+Completion condition:
+- 後続 `ui-builder-batch-operation` が参照できる selection set contract が明文化され、単一 node 編集 UX が退行しない。
+- frontend は projection / draft interaction surface のままで、DB direct write・topology judgment・runtime judgment を追加しない。
+
+---
+
+## Bundle `ui-builder-autocomplete-candidates`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`layout_node_props_contract`, `frontend_local_derived_calculation_binding`), `docs/design/pipeline-continuity-ssot.yaml` (`frontend_projection_constructor_lane`, `component_wiring_execution_lane`)
+
+- [ ] UIBuilder 投影設定で手入力になっている componentKey / componentKind / nodeId / emission.data.* path / ruleTable selectedField / targetRef / routeKey を、既存 registry・draftNodes・loaded emission data 由来の候補として提示する。
+
+Scope:
+- componentKey / componentKind は `COMPONENT_CATALOG_ENTRIES` と draft node metadata から候補生成する。
+- nodeId は draftNodes から候補生成し、human-readable label を併記する。
+- emission.data.* dotted path と ruleTable selectedField は、UIBuilder が既に保持する loaded emission data / `emissionDataJson` から導出し、hidden backend dependency を追加しない。
+- targetRef / routeKey は既存の layout candidates / package wiring picker / screen read query wiring candidates の候補 source を使う。
+- normal candidate path と advanced free text path を分ける。
+
+Completion condition:
+- 候補 source が SSOT / 実装上で追跡可能で、候補なしの理由が UI に表示される。
+- silent fallback や追加 fetch 依存で投影設定を成立させない。
+
+---
+
+## Bundle `ui-builder-batch-operation`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**Depends on:** `ui-builder-selection-model`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace`), `docs/design/topology-layout-class-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml` (`component_wiring_execution_lane`)
+
+- [ ] selection set に対する layoutClassRefs / propsJson / stateJson / propBindings / wiring / calc binding の batch authoring assist を、preview / validate / apply boundary を迂回せずに実装する。
+
+Scope:
+- layoutClassRefs batch add/remove/replace は allowedFor / conflict_group / raw className 禁止を守る。
+- propsJson / stateJson は JSON object merge/patch として扱い、malformed JSON や配列 root は明示エラーにする。
+- propBindings は componentKind capability を検証し、非対応 node は silent skip せず per-node error として表示する。
+- wiring / frontend-local calc binding の複数 node 参照補助を追加する。ただし input/change ごとの backend dispatch・逐次DB保存・eval/Function は追加しない。
+- batch apply 前に対象 node 数、変更内容、per-node validation result を preview 表示する。
+
+Completion condition:
+- batch 対象・変更内容・per-node validation が UI 上で確認でき、silent skip がない。
+- existing layout_patch preview / validate / apply と component_style_design / wiring / frontend-local calculation binding の境界を壊さない。
+
+---
+
+## Bundle `ui-builder-suggest-authoring-assist`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**Depends on:** `ui-builder-selection-model`, `ui-builder-autocomplete-candidates`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`frontend_local_derived_calculation_binding`), `docs/design/pipeline-continuity-ssot.yaml` (`component_wiring_execution_lane`)
+
+- [ ] 選択中 node / selection set / loaded emission data から、次に設定すべき source node / target node / ruleTable matchConditions / targetProp 候補を suggest する authoring assist を実装する。
+
+Scope:
+- selected node から次候補を提示するが、自動 mutation authority にはしない。
+- source node / target node 候補は draftNodes・nodeKind・componentKind・targetProp capability から導出する。
+- ruleTable matchConditions 候補は tablePath rows の field と node value source 候補から導出する。
+- targetProp 候補は既存 `resolveAllowedTargetProps` / `validateCalcTargetProp` と整合させる。
+- suggest 採用は user action のみとし、投影・計算・wiring の runtime authority を持たせない。
+
+Completion condition:
+- suggest は候補提示に留まり、ユーザー採用なしに draft mutation しない。
+- frontend-local calc boundary と component wiring execution boundary を壊さない。
+
+---
+
+## Bundle `ui-builder-projection-authoring-assist-roadmap-alignment`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**Depends on:** `ui-builder-selection-model`, `ui-builder-autocomplete-candidates`, `ui-builder-batch-operation`, `ui-builder-suggest-authoring-assist`
+**SSOT:** `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml`, `docs/design/admin-console-workflow-ssot.yaml`
+
+- [ ] UIBuilder projection setting authoring assist の bundle 群が実装された後、roadmap / TODO / SSOT / required evidence を同じ completion boundary へ揃える。
+
+Scope:
+- `docs/system-roadmap.yaml` の known_gap_ref / completion_condition / evidence_ref への反映要否を判断する。
+- `.agent/docs/ssot-map.yaml` の worktype / required surface 追加要否を判断する。
+- `docs/design/admin-console-workflow-ssot.yaml` への contract 追加要否を判断する。
+- 実装完了できない残項目がある場合は partial 判定できる粒度で残 todo を全列挙する。
+
+Completion condition:
+- roadmap / TODO / SSOT の責務が食い違わず、後続 PR closure が bundle 単位で判定できる。
+- 実装完了判定は roadmap/TODO 記述だけで行わず、実コード・テスト evidence と突合する。
 
 ---
 
