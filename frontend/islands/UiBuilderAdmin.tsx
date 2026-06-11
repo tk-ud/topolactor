@@ -102,7 +102,24 @@ import {
 } from "../lib/screenReadQueryWiring.ts";
 import { getAdminManifest, listAdminManifests } from "../api/adminApi.ts";
 import { getStoredScreenLabel } from "../runtime/screenAuthoringIntent.ts";
-import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
+import {
+  extractScreenDataShapeFromTopology,
+  type LogicalTableShape,
+  type RelationIntentShape,
+  type OperationEntityBindingShape,
+} from "../lib/manifestTopologyExtensions.ts";
+import {
+  deriveDbTableCandidates,
+  deriveDbColumnCandidates,
+  deriveQualifiedColumnCandidates,
+  deriveDataBindingPathCandidates,
+  deriveSourceNodeSuggestCandidates,
+  deriveTargetNodeSuggestCandidates,
+  deriveTargetPropSuggestCandidates,
+  deriveRuleTableMatchConditionSuggestCandidates,
+  deriveEmissionScalarPathCandidates,
+  deriveEmissionArrayPathCandidates,
+} from "../lib/uiBuilderAuthoringSuggest.ts";
 import { resolveVisibleTopologyName, topologySystemNameToUiBuilderKey, isValidTopologySystemName } from "../lib/topologySystemName.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
@@ -1181,6 +1198,316 @@ function BatchOperationPanel({
   );
 }
 
+// ─── AuthoringSuggestAssistPanel ──────────────────────────────────────────────
+
+/**
+ * Authoring suggest assist panel — displays DB table/column, calc source/target, data binding,
+ * and ruleTable matchCondition candidates derived from the loaded manifest shape and canvas nodes.
+ *
+ * Boundary:
+ * - Display only. Does NOT mutate draftNodes, calculationBindings, propBindings, or wiring draft.
+ * - Adoption requires explicit user action — displayed candidates are informational only.
+ * - draft state update is the caller's responsibility after user adopts a candidate.
+ * - DB persistence follows existing preview → validate → apply boundary.
+ */
+function AuthoringSuggestAssistPanel({
+  draftNodes,
+  emissionDataJson,
+  suggestShape,
+}: {
+  draftNodes: DraftNodeMinimal[];
+  emissionDataJson: string;
+  suggestShape: ManifestSuggestShape | null;
+}): JSX.Element {
+  const [selectedTableRef, setSelectedTableRef] = useState("");
+  const [selectedTargetNodeId, setSelectedTargetNodeId] = useState("");
+  const [activeSection, setActiveSection] = useState<
+    "db" | "calc" | "binding" | "ruleTable" | null
+  >(null);
+
+  const logicalTables = suggestShape?.logicalTables ?? [];
+  const relationIntents = suggestShape?.relationIntents ?? [];
+
+  const dbTableResult = deriveDbTableCandidates(logicalTables, relationIntents);
+  const dbColumnResult = selectedTableRef
+    ? deriveDbColumnCandidates(logicalTables, selectedTableRef)
+    : null;
+  const qualifiedColResult = deriveQualifiedColumnCandidates(logicalTables, relationIntents);
+  const sourceNodeResult = deriveSourceNodeSuggestCandidates(draftNodes);
+  const targetNodeResult = deriveTargetNodeSuggestCandidates(draftNodes);
+
+  const selectedTargetNode = targetNodeResult.ok
+    ? (targetNodeResult as { ok: true; candidates: Array<{ nodeId: string; componentKind?: string }> }).candidates.find(
+        (c) => c.nodeId === selectedTargetNodeId,
+      )
+    : null;
+  const targetPropResult = selectedTargetNode?.componentKind
+    ? deriveTargetPropSuggestCandidates(selectedTargetNode.componentKind)
+    : null;
+
+  const emissionArrayResult = deriveEmissionArrayPathCandidates(emissionDataJson);
+  const emissionScalarResult = deriveEmissionScalarPathCandidates(emissionDataJson);
+
+  function SectionToggle({ id, label }: { id: typeof activeSection; label: string }) {
+    return (
+      <button
+        type="button"
+        class={`rounded border px-2 py-0.5 text-[0.62rem] ${
+          activeSection === id
+            ? "border-indigo-300 bg-indigo-100 text-indigo-800"
+            : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+        }`}
+        onClick={() => setActiveSection(activeSection === id ? null : id)}
+      >
+        {label}
+      </button>
+    );
+  }
+
+  function CandidatePill({ label, title }: { label: string; title?: string }) {
+    return (
+      <span
+        class="inline-block rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[0.6rem] text-slate-700"
+        title={title}
+      >
+        {label}
+      </span>
+    );
+  }
+
+  function ReasonNote({ reason }: { reason: string }) {
+    return (
+      <p class="text-[0.6rem] text-slate-500 italic">{reason}</p>
+    );
+  }
+
+  if (!suggestShape) {
+    return (
+      <div class="p-2 text-[0.65rem] text-slate-500">
+        マニフェストを選択すると DB table / column 候補が表示されます。
+      </div>
+    );
+  }
+
+  return (
+    <div class="flex flex-col gap-2 p-2 text-[0.65rem]" data-authoring-suggest-panel="true">
+      <p class="text-[0.6rem] text-slate-500">
+        候補を確認して採用ボタンを押してください。採用前は draft mutation しません。
+      </p>
+
+      {/* Section toggles */}
+      <div class="flex flex-wrap gap-1">
+        <SectionToggle id="db" label="DB table / column" />
+        <SectionToggle id="binding" label="データバインド" />
+        <SectionToggle id="calc" label="calc source / target" />
+        <SectionToggle id="ruleTable" label="ruleTable" />
+      </div>
+
+      {/* DB table / column section */}
+      {activeSection === "db" && (
+        <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
+          <p class="font-semibold text-slate-700">DB table 候補</p>
+          {dbTableResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(dbTableResult as { ok: true; candidates: Array<{ tableRef: string; source: string; columnCount: number }> }).candidates.map((c) => (
+                <button
+                  key={c.tableRef}
+                  type="button"
+                  class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
+                    selectedTableRef === c.tableRef
+                      ? "border-blue-400 bg-blue-50 text-blue-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                  title={`source: ${c.source}, columns: ${c.columnCount}`}
+                  onClick={() => setSelectedTableRef(selectedTableRef === c.tableRef ? "" : c.tableRef)}
+                >
+                  {c.tableRef}
+                  <span class="ml-0.5 text-slate-400">({c.source === "local" ? "ローカル" : "関連"})</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(dbTableResult as { ok: false; reason: string }).reason} />
+          )}
+
+          {selectedTableRef && (
+            <>
+              <p class="font-semibold text-slate-700">
+                カラム候補: <span class="font-mono text-blue-700">{selectedTableRef}</span>
+              </p>
+              {dbColumnResult?.ok ? (
+                <div class="flex flex-wrap gap-1">
+                  {(dbColumnResult as { ok: true; columns: Array<{ columnName: string; qualifiedKey: string; dataType: string }> }).columns.map((c) => (
+                    <CandidatePill
+                      key={c.qualifiedKey}
+                      label={c.qualifiedKey}
+                      title={`${c.columnName} (${c.dataType})`}
+                    />
+                  ))}
+                </div>
+              ) : dbColumnResult ? (
+                <ReasonNote reason={(dbColumnResult as { ok: false; reason: string }).reason} />
+              ) : null}
+            </>
+          )}
+
+          {qualifiedColResult.ok && (qualifiedColResult as { ok: true; unresolvedErrors: string[] }).unresolvedErrors.length > 0 && (
+            <div class="rounded border border-amber-200 bg-amber-50 p-1.5">
+              <p class="mb-0.5 font-semibold text-amber-800">未解決の関連</p>
+              {(qualifiedColResult as { ok: true; unresolvedErrors: string[] }).unresolvedErrors.map((e, i) => (
+                <p key={i} class="text-[0.6rem] text-amber-700">{e}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Data binding section */}
+      {activeSection === "binding" && (
+        <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
+          <p class="font-semibold text-slate-700">データバインド候補</p>
+          <p class="text-[0.6rem] text-slate-500">
+            対象ノードを選択 → source パスと field パスを確認してください。
+          </p>
+
+          {/* Array emission paths */}
+          <p class="font-semibold text-slate-600">source パス（emission.data.* 配列）</p>
+          {emissionArrayResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(emissionArrayResult as { ok: true; candidates: Array<{ path: string }> }).candidates.map((c) => (
+                <CandidatePill key={c.path} label={c.path} />
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(emissionArrayResult as { ok: false; reason: string }).reason} />
+          )}
+
+          {/* Field paths from selected table */}
+          {selectedTableRef && dbColumnResult?.ok && (
+            <>
+              <p class="font-semibold text-slate-600">
+                フィールド候補: <span class="font-mono">{selectedTableRef}</span>
+                （keyPath / labelPath / valuePath / childrenPath）
+              </p>
+              <div class="flex flex-wrap gap-1">
+                {(dbColumnResult as { ok: true; columns: Array<{ columnName: string }> }).columns.map((c) => (
+                  <CandidatePill key={c.columnName} label={c.columnName} />
+                ))}
+              </div>
+            </>
+          )}
+          {!selectedTableRef && (
+            <p class="text-[0.6rem] text-slate-400">
+              DB table セクションでテーブルを選択するとフィールド候補が表示されます。
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Calc source / target section */}
+      {activeSection === "calc" && (
+        <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
+          <p class="font-semibold text-slate-700">calc source 候補</p>
+
+          <p class="font-semibold text-slate-600">node source</p>
+          {sourceNodeResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(sourceNodeResult as { ok: true; candidates: Array<{ nodeId: string; propKey: string; label: string }> }).candidates.map((c) => (
+                <CandidatePill
+                  key={`${c.nodeId}-${c.propKey}`}
+                  label={`${c.propKey}`}
+                  title={c.label}
+                />
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(sourceNodeResult as { ok: false; reason: string }).reason} />
+          )}
+
+          <p class="font-semibold text-slate-600">emission scalar source</p>
+          {emissionScalarResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(emissionScalarResult as { ok: true; candidates: Array<{ path: string }> }).candidates.map((c) => (
+                <CandidatePill key={c.path} label={c.path} />
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(emissionScalarResult as { ok: false; reason: string }).reason} />
+          )}
+
+          <p class="font-semibold text-slate-700 mt-1">targetNode / targetProp 候補</p>
+          {targetNodeResult.ok ? (
+            <div class="flex flex-col gap-1">
+              {(targetNodeResult as { ok: true; candidates: Array<{ nodeId: string; componentKind?: string; label: string; allowedTargetProps: string[] | null }> }).candidates.map((c) => (
+                <button
+                  key={c.nodeId}
+                  type="button"
+                  class={`rounded border px-1.5 py-0.5 text-left text-[0.6rem] ${
+                    selectedTargetNodeId === c.nodeId
+                      ? "border-indigo-400 bg-indigo-50 text-indigo-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                  onClick={() =>
+                    setSelectedTargetNodeId(selectedTargetNodeId === c.nodeId ? "" : c.nodeId)
+                  }
+                >
+                  <span class="font-mono">{c.label}</span>
+                  {c.allowedTargetProps && (
+                    <span class="ml-1 text-slate-500">→ {c.allowedTargetProps.join(", ")}</span>
+                  )}
+                  {!c.allowedTargetProps && (
+                    <span class="ml-1 text-slate-400">(unknown kind)</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(targetNodeResult as { ok: false; reason: string }).reason} />
+          )}
+
+          {selectedTargetNodeId && targetPropResult && (
+            <div class="mt-1">
+              {targetPropResult.ok ? (
+                <div class="flex flex-wrap gap-1">
+                  <p class="w-full text-[0.6rem] font-semibold text-slate-600">targetProp 候補:</p>
+                  {(targetPropResult as { ok: true; targetProps: string[] }).targetProps.map((p) => (
+                    <CandidatePill key={p} label={p} />
+                  ))}
+                </div>
+              ) : (
+                <ReasonNote reason={(targetPropResult as { ok: false; reason: string }).reason} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ruleTable section */}
+      {activeSection === "ruleTable" && (
+        <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
+          <p class="font-semibold text-slate-700">ruleTable 候補</p>
+
+          <p class="font-semibold text-slate-600">tablePath 候補（配列パス）</p>
+          {emissionArrayResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(emissionArrayResult as { ok: true; candidates: Array<{ path: string }> }).candidates.map((c) => (
+                <CandidatePill key={c.path} label={c.path} />
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(emissionArrayResult as { ok: false; reason: string }).reason} />
+          )}
+
+          <p class="text-[0.6rem] text-slate-500">
+            matchConditions 候補はローカル計算パネルの ruleTable 設定から確認してください。
+            候補の表示のみ — 自動保存・適用はしません。
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LayoutRightDock({
   draftNodes,
   selectedNodeId,
@@ -1205,6 +1532,7 @@ function LayoutRightDock({
   emissionDataJson,
   onEmissionDataJsonChange,
   onBatchApplyNodes,
+  suggestShape,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -1231,6 +1559,8 @@ function LayoutRightDock({
   onEmissionDataJsonChange: (json: string) => void;
   /** Callback for batch operation apply — updates draftNodes with batch result. */
   onBatchApplyNodes: (nodes: DraftNode[]) => void;
+  /** Authoring suggest context — from loaded manifest shape (optional). */
+  suggestShape?: ManifestSuggestShape | null;
 }): JSX.Element {
   return (
     <aside
@@ -1315,6 +1645,13 @@ function LayoutRightDock({
           onBindingsChange={onCalcBindingsChange}
           emissionDataJson={emissionDataJson}
           onEmissionDataJsonChange={onEmissionDataJsonChange}
+        />
+      </Accordion>
+      <Accordion title="サジェスト候補" defaultOpen={false}>
+        <AuthoringSuggestAssistPanel
+          draftNodes={draftNodes}
+          emissionDataJson={emissionDataJson}
+          suggestShape={suggestShape ?? null}
         />
       </Accordion>
     </aside>
@@ -2633,6 +2970,16 @@ type ManifestRouteOption = {
   topologySystemName: string;
   label: string;
   derivedRouteKey: string;
+  logicalTables: LogicalTableShape[];
+  relationIntents: RelationIntentShape[];
+  operationEntityBindings: OperationEntityBindingShape[];
+};
+
+/** Minimal manifest shape for authoring suggest context. */
+type ManifestSuggestShape = {
+  logicalTables: LogicalTableShape[];
+  relationIntents: RelationIntentShape[];
+  operationEntityBindings: OperationEntityBindingShape[];
 };
 
 function readUiBuilderHandoffManifestId(): string {
@@ -2650,10 +2997,12 @@ function ManifestRouteEntry({
   initialManifestId,
   committedRouteKey,
   onCommit,
+  onShapeLoaded,
 }: {
   initialManifestId: string;
   committedRouteKey: string;
   onCommit: (routeKey: string) => void;
+  onShapeLoaded?: (shape: ManifestSuggestShape | null) => void;
 }): JSX.Element {
   const [options, setOptions] = useState<ManifestRouteOption[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -2662,6 +3011,8 @@ function ManifestRouteEntry({
   const autoCommitAttempted = useRef(false);
   const onCommitRef = useRef(onCommit);
   onCommitRef.current = onCommit;
+  const onShapeLoadedRef = useRef(onShapeLoaded);
+  onShapeLoadedRef.current = onShapeLoaded;
 
   useEffect(() => {
     let cancelled = false;
@@ -2682,7 +3033,15 @@ function ManifestRouteEntry({
           if (!sysName || !isValidTopologySystemName(sysName)) continue;
           const derivedRouteKey = topologySystemNameToUiBuilderKey(sysName);
           const label = resolveVisibleTopologyName(shape?.userFacingTopologyLabel, sysName);
-          resolved.push({ manifestId: item.manifestId, topologySystemName: sysName, label, derivedRouteKey });
+          resolved.push({
+            manifestId: item.manifestId,
+            topologySystemName: sysName,
+            label,
+            derivedRouteKey,
+            logicalTables: shape?.logicalTables?.map((t) => ({ tableName: t.tableName, columns: t.columns })) ?? [],
+            relationIntents: shape?.relationIntents ?? [],
+            operationEntityBindings: shape?.operationEntityBindings ?? [],
+          });
         }
         if (!cancelled) setOptions(resolved);
       } catch (e) {
@@ -2717,6 +3076,19 @@ function ManifestRouteEntry({
   const committedOption = options.find((o) =>
     o.derivedRouteKey === committedRouteKey
   );
+
+  useEffect(() => {
+    if (!onShapeLoadedRef.current) return;
+    if (committedOption) {
+      onShapeLoadedRef.current({
+        logicalTables: committedOption.logicalTables,
+        relationIntents: committedOption.relationIntents,
+        operationEntityBindings: committedOption.operationEntityBindings,
+      });
+    } else if (!committedRouteKey) {
+      onShapeLoadedRef.current(null);
+    }
+  }, [committedOption, committedRouteKey]);
 
   if (committedRouteKey && committedOption && !pickerOpen) {
     return (
@@ -4033,6 +4405,7 @@ function LayoutBuilderSection({
   onRegisterComponentBeforePlace,
   onDetachComponentAfterRemove,
   paletteReloadToken = 0,
+  suggestShape = null,
 }: {
   scopedPackageId?: string;
   scopedRouteKey?: string | null;
@@ -4041,6 +4414,7 @@ function LayoutBuilderSection({
   onRegisterComponentBeforePlace?: (componentKey: string) => Promise<boolean>;
   onDetachComponentAfterRemove?: (componentKey: string) => Promise<void>;
   paletteReloadToken?: number;
+  suggestShape?: ManifestSuggestShape | null;
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
   // ── route/layout selection ───────────────────────────────────────────────
@@ -5820,6 +6194,7 @@ function LayoutBuilderSection({
               }}
               emissionDataJson={emissionDataJson}
               onEmissionDataJsonChange={setEmissionDataJson}
+              suggestShape={suggestShape}
             />
           </div>
         )}
@@ -8409,6 +8784,7 @@ export default function UiBuilderAdmin(): JSX.Element {
   >(null);
   const [paletteReloadToken, setPaletteReloadToken] = useState(0);
   const [flowStep, setFlowStep] = useState<UiBuilderFlowStepId>("route");
+  const [suggestShape, setSuggestShape] = useState<ManifestSuggestShape | null>(null);
 
   const committedRouteKey = committedManualRouteKey.trim() || routeKey;
   const routeCanvasReady = Boolean(committedRouteKey);
@@ -8555,6 +8931,7 @@ export default function UiBuilderAdmin(): JSX.Element {
           setRouteKey("");
           setManualRouteDraft("");
         }}
+        onShapeLoaded={setSuggestShape}
       />
 
       <details class="mb-3">
@@ -8628,6 +9005,7 @@ export default function UiBuilderAdmin(): JSX.Element {
           onRegisterComponentBeforePlace={handleRegisterComponentBeforePlace}
           onDetachComponentAfterRemove={handleDetachComponentAfterRemove}
           paletteReloadToken={paletteReloadToken}
+          suggestShape={suggestShape}
         />
       </div>
     </main>
