@@ -157,6 +157,7 @@ import {
   deriveRouteKeyCandidates,
   type DraftNodeMinimal,
 } from "../lib/uiBuilderAutocompleteCandidates.ts";
+import { searchRouteKeyCandidates } from "../lib/uiBuilderSearchProvider.ts";
 import {
   applyBatchCalcBindingAssist,
   applyBatchJsonPatch,
@@ -4873,6 +4874,53 @@ function LayoutBuilderSection({
   const [calcResults, setCalcResults] = useState<ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>>(new Map());
   const lastEmissionDataRef = useRef<Record<string, unknown>>({});
   const [emissionDataJson, setEmissionDataJson] = useState<string>("");
+
+  // ── search suggestions state (autocomplete/suggest candidate boundary) ────
+  // loop: onSearch → debounce → searchRouteKeyCandidates (read-only) → suggestions update
+  // SSOT: candidate_source_boundary: debounce_backend_readonly_search (no mutation during typing)
+  // UIBuilder does not own topology judgment. No mutation / DB write / apply during typing.
+  const [searchSuggestionsByNodeId, setSearchSuggestionsByNodeId] = useState<Record<string, string[]>>({});
+  const [searchErrorByNodeId, setSearchErrorByNodeId] = useState<Record<string, string>>({});
+  const searchDebounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const handleNodeSearch = useCallback(
+    (componentId: string, query: string) => {
+      if (searchDebounceTimers.current[componentId]) {
+        clearTimeout(searchDebounceTimers.current[componentId]);
+      }
+      searchDebounceTimers.current[componentId] = setTimeout(async () => {
+        const sessionToken =
+          typeof globalThis.sessionStorage !== "undefined"
+            ? (sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined)
+            : undefined;
+        // read-only search — no mutation / DB write / apply during typing
+        const result = await searchRouteKeyCandidates(query, sessionToken);
+        if (result.ok) {
+          setSearchSuggestionsByNodeId((prev) => ({
+            ...prev,
+            [componentId]: result.candidates,
+          }));
+          setSearchErrorByNodeId((prev) => {
+            const next = { ...prev };
+            delete next[componentId];
+            return next;
+          });
+        } else {
+          // explicit failure — no silent fallback
+          setSearchSuggestionsByNodeId((prev) => {
+            const next = { ...prev };
+            delete next[componentId];
+            return next;
+          });
+          setSearchErrorByNodeId((prev) => ({
+            ...prev,
+            [componentId]: result.reason,
+          }));
+        }
+      }, 400);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!emissionDataJson.trim()) {

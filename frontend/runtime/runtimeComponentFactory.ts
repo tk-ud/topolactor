@@ -225,6 +225,13 @@ function emitBoundEvent(
   if (spec.calcTriggerCallback && (trigger === "change" || trigger === "input" || trigger === "select")) {
     spec.calcTriggerCallback(payload.value ?? payload.raw ?? payload);
   }
+  // Lane 3 (search): search_suggest candidate boundary — fires BEFORE previewMode gate.
+  // Island/page provides searchCallback to implement the debounce → read-only provider → suggestions update loop.
+  // No mutation / DB write / apply. SSOT: candidate_source_boundary: debounce_backend_readonly_search
+  if (spec.searchCallback && trigger === "search") {
+    const q = typeof payload.query === "string" ? payload.query : "";
+    spec.searchCallback(spec.componentId, q);
+  }
   if (isPreviewMode(spec)) return { ok: true };
   const binding = parseEventBinding(spec.eventBinding[trigger]);
   if (!binding) {

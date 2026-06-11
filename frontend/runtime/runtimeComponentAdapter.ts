@@ -31,6 +31,12 @@ export type RuntimeComponentSpec = {
   calcTriggerCallback?: (value: unknown) => void;
   /** frontend_local_derived_calculation_binding: prop overrides injected into placeholder props for target nodes. */
   calcValueOverrides?: Record<string, unknown>;
+  /**
+   * search_suggest candidate boundary: fires on "search" trigger BEFORE previewMode gate.
+   * Island/page provides this to implement the onSearch → debounce → read-only provider → suggestions update loop.
+   * No mutation / DB write during typing. SSOT: candidate_source_boundary: debounce_backend_readonly_search
+   */
+  searchCallback?: (componentId: string, query: string) => void;
 };
 
 type AdaptResult = { ok: true; value: RuntimeComponentSpec } | {
