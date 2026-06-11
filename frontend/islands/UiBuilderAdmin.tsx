@@ -119,6 +119,7 @@ import {
   deriveRuleTableMatchConditionSuggestCandidates,
   deriveEmissionScalarPathCandidates,
   deriveEmissionArrayPathCandidates,
+  type MatchConditionValueSourceCandidate,
 } from "../lib/uiBuilderAuthoringSuggest.ts";
 import { resolveVisibleTopologyName, topologySystemNameToUiBuilderKey, isValidTopologySystemName } from "../lib/topologySystemName.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
@@ -1201,26 +1202,38 @@ function BatchOperationPanel({
 // ─── AuthoringSuggestAssistPanel ──────────────────────────────────────────────
 
 /**
- * Authoring suggest assist panel — displays DB table/column, calc source/target, data binding,
- * and ruleTable matchCondition candidates derived from the loaded manifest shape and canvas nodes.
+ * Authoring suggest assist panel — displays and adopts candidates for
+ * テーブル/フィールド, データバインド, calc source/target, ruleTable matchConditions.
  *
  * Boundary:
- * - Display only. Does NOT mutate draftNodes, calculationBindings, propBindings, or wiring draft.
- * - Adoption requires explicit user action — displayed candidates are informational only.
- * - draft state update is the caller's responsibility after user adopts a candidate.
- * - DB persistence follows existing preview → validate → apply boundary.
+ * - Adoption via explicit user action only — updates propBindings or calculationBindings
+ *   through onCommitNode / onCalcBindingsChange; never writes to DB or triggers dispatch.
+ * - active remote manifest テーブル/フィールド候補: out of scope for this bundle.
+ *   Requires manifest:list_relationship_remote_targets (backend dispatch — 禁止).
+ *   Remote manifest column suggest is tracked as a separate future bundle.
  */
 function AuthoringSuggestAssistPanel({
   draftNodes,
   emissionDataJson,
   suggestShape,
+  selectedNode,
+  onCommitNode,
+  onCalcBindingsChange,
+  calculationBindings,
 }: {
   draftNodes: DraftNodeMinimal[];
   emissionDataJson: string;
   suggestShape: ManifestSuggestShape | null;
+  selectedNode?: DraftNode | null;
+  onCommitNode?: (updates: Partial<DraftNode>, label: string) => void;
+  onCalcBindingsChange?: (bindings: CalcBinding[]) => void;
+  calculationBindings?: CalcBinding[];
 }): JSX.Element {
   const [selectedTableRef, setSelectedTableRef] = useState("");
   const [selectedTargetNodeId, setSelectedTargetNodeId] = useState("");
+  const [selectedRuleTablePath, setSelectedRuleTablePath] = useState("");
+  const [selectedMatchField, setSelectedMatchField] = useState("");
+  const [selectedMatchVsIndex, setSelectedMatchVsIndex] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<
     "db" | "calc" | "binding" | "ruleTable" | null
   >(null);
@@ -1248,6 +1261,90 @@ function AuthoringSuggestAssistPanel({
   const emissionArrayResult = deriveEmissionArrayPathCandidates(emissionDataJson);
   const emissionScalarResult = deriveEmissionScalarPathCandidates(emissionDataJson);
 
+  const matchCondResult = selectedRuleTablePath
+    ? deriveRuleTableMatchConditionSuggestCandidates(
+        selectedRuleTablePath,
+        emissionDataJson,
+        draftNodes,
+        logicalTables,
+      )
+    : null;
+  type FieldCand = { field: string; description: string };
+  const matchFieldCandidates: FieldCand[] = matchCondResult?.ok
+    ? (matchCondResult as { ok: true; fieldCandidates: FieldCand[] }).fieldCandidates
+    : [];
+  const matchVsCandidates: MatchConditionValueSourceCandidate[] = matchCondResult?.ok
+    ? (matchCondResult as { ok: true; valueSourceCandidates: MatchConditionValueSourceCandidate[] }).valueSourceCandidates
+    : [];
+
+  // ── adoption helpers ───────────────────────────────────────────────────────
+  const firstArrayPropName =
+    COMPONENT_ARRAY_PROP_CAPABILITIES[selectedNode?.componentKind ?? ""]?.[0] ?? null;
+  const canAdoptPropBinding = !!selectedNode && !!onCommitNode && !!firstArrayPropName;
+
+  function adoptColumnAsField(
+    columnName: string,
+    fieldKey: "keyPath" | "labelPath" | "valuePath" | "childrenPath",
+  ) {
+    if (!canAdoptPropBinding || !selectedNode || !onCommitNode || !firstArrayPropName) return;
+    const existing = selectedNode.propBindings ?? {};
+    const existingEntry = existing[firstArrayPropName] ?? { source: "" };
+    onCommitNode(
+      { propBindings: { ...existing, [firstArrayPropName]: { ...existingEntry, [fieldKey]: columnName } } },
+      `${fieldKey} 採用`,
+    );
+  }
+
+  function adoptEmissionArrayAsSource(path: string) {
+    if (!canAdoptPropBinding || !selectedNode || !onCommitNode || !firstArrayPropName) return;
+    const existing = selectedNode.propBindings ?? {};
+    const existingEntry = existing[firstArrayPropName] ?? { source: "" };
+    onCommitNode(
+      { propBindings: { ...existing, [firstArrayPropName]: { ...existingEntry, source: path } } },
+      `source 採用`,
+    );
+  }
+
+  function adoptCalcTargetProp(targetNodeId: string, prop: string) {
+    if (!onCalcBindingsChange || !calculationBindings) return;
+    onCalcBindingsChange(
+      calculationBindings.map((b) => b.targetNodeId === targetNodeId ? { ...b, targetProp: prop } : b),
+    );
+  }
+
+  function adoptRuleTableMatchCondition() {
+    if (
+      !selectedRuleTablePath || !selectedMatchField || selectedMatchVsIndex === null ||
+      !onCalcBindingsChange || !calculationBindings
+    ) return;
+    const vs = matchVsCandidates[selectedMatchVsIndex];
+    if (!vs) return;
+    const valueFrom: RuleMatchCondition["valueFrom"] =
+      vs.kind === "node"
+        ? { kind: "node", nodeId: vs.nodeId, propKey: vs.propKey }
+        : { kind: "literal", value: vs.kind === "db_column" ? vs.qualifiedKey : "" };
+    const newCondition: RuleMatchCondition = { field: selectedMatchField, valueFrom };
+    onCalcBindingsChange(
+      calculationBindings.map((binding) => ({
+        ...binding,
+        variables: Object.fromEntries(
+          Object.entries(binding.variables).map(([k, v]) =>
+            v.kind === "ruleTable" && v.tablePath === selectedRuleTablePath
+              ? [k, { ...v, matchConditions: [...v.matchConditions, newCondition] }]
+              : [k, v]
+          ),
+        ),
+      })),
+    );
+  }
+
+  const hasMatchingRuleTableBinding = (calculationBindings ?? []).some((b) =>
+    Object.values(b.variables).some(
+      (v) => v.kind === "ruleTable" && v.tablePath === selectedRuleTablePath,
+    )
+  );
+
+  // ── inner sub-components ───────────────────────────────────────────────────
   function SectionToggle({ id, label }: { id: typeof activeSection; label: string }) {
     return (
       <button
@@ -1275,10 +1372,20 @@ function AuthoringSuggestAssistPanel({
     );
   }
 
-  function ReasonNote({ reason }: { reason: string }) {
+  function AdoptBtn({ onClick, label }: { onClick: () => void; label: string }) {
     return (
-      <p class="text-[0.6rem] text-slate-500 italic">{reason}</p>
+      <button
+        type="button"
+        class="rounded border border-green-300 bg-green-50 px-1 py-0.5 text-[0.55rem] text-green-700 hover:bg-green-100"
+        onClick={onClick}
+      >
+        {label}
+      </button>
     );
+  }
+
+  function ReasonNote({ reason }: { reason: string }) {
+    return <p class="text-[0.6rem] text-slate-500 italic">{reason}</p>;
   }
 
   if (!suggestShape) {
@@ -1292,18 +1399,18 @@ function AuthoringSuggestAssistPanel({
   return (
     <div class="flex flex-col gap-2 p-2 text-[0.65rem]" data-authoring-suggest-panel="true">
       <p class="text-[0.6rem] text-slate-500">
-        候補を確認して採用ボタンを押してください。採用前は draft mutation しません。
+        候補を確認して採用ボタンを押してください。採用前は draft を変更しません。
       </p>
 
       {/* Section toggles */}
       <div class="flex flex-wrap gap-1">
-        <SectionToggle id="db" label="DB table / column" />
+        <SectionToggle id="db" label="テーブル / フィールド" />
         <SectionToggle id="binding" label="データバインド" />
         <SectionToggle id="calc" label="calc source / target" />
         <SectionToggle id="ruleTable" label="ruleTable" />
       </div>
 
-      {/* DB table / column section */}
+      {/* テーブル / フィールド section */}
       {activeSection === "db" && (
         <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
           <p class="font-semibold text-slate-700">テーブル候補</p>
@@ -1318,7 +1425,7 @@ function AuthoringSuggestAssistPanel({
                       ? "border-blue-400 bg-blue-50 text-blue-800"
                       : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                   }`}
-                  title={`source: ${c.source}, columns: ${c.columnCount}`}
+                  title={`source: ${c.source}, count: ${c.columnCount}`}
                   onClick={() => setSelectedTableRef(selectedTableRef === c.tableRef ? "" : c.tableRef)}
                 >
                   {c.tableRef}
@@ -1333,16 +1440,26 @@ function AuthoringSuggestAssistPanel({
           {selectedTableRef && (
             <>
               <p class="font-semibold text-slate-700">
-                カラム候補: <span class="font-mono text-blue-700">{selectedTableRef}</span>
+                フィールド候補: <span class="font-mono text-blue-700">{selectedTableRef}</span>
               </p>
+              {!canAdoptPropBinding && (
+                <p class="text-[0.6rem] text-slate-400">
+                  採用するには配列対応ノードを選択してください。
+                </p>
+              )}
               {dbColumnResult?.ok ? (
-                <div class="flex flex-wrap gap-1">
+                <div class="flex flex-col gap-1">
                   {(dbColumnResult as { ok: true; columns: Array<{ columnName: string; qualifiedKey: string; dataType: string }> }).columns.map((c) => (
-                    <CandidatePill
-                      key={c.qualifiedKey}
-                      label={c.qualifiedKey}
-                      title={`${c.columnName} (${c.dataType})`}
-                    />
+                    <div key={c.qualifiedKey} class="flex flex-wrap items-center gap-0.5">
+                      <CandidatePill label={c.qualifiedKey} title={`${c.columnName} (${c.dataType})`} />
+                      {canAdoptPropBinding && (
+                        <>
+                          {(["keyPath", "labelPath", "valuePath", "childrenPath"] as const).map((field) => (
+                            <AdoptBtn key={field} label={field} onClick={() => adoptColumnAsField(c.columnName, field)} />
+                          ))}
+                        </>
+                      )}
+                    </div>
                   ))}
                 </div>
               ) : dbColumnResult ? (
@@ -1362,41 +1479,53 @@ function AuthoringSuggestAssistPanel({
         </div>
       )}
 
-      {/* Data binding section */}
+      {/* データバインド section */}
       {activeSection === "binding" && (
         <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
           <p class="font-semibold text-slate-700">データバインド候補</p>
-          <p class="text-[0.6rem] text-slate-500">
-            対象ノードを選択 → source パスと field パスを確認してください。
-          </p>
+          {!canAdoptPropBinding && (
+            <p class="text-[0.6rem] text-slate-400">
+              採用するには配列対応ノードを選択してください。
+            </p>
+          )}
 
-          {/* Array emission paths */}
           <p class="font-semibold text-slate-600">source パス（emission.data.* 配列）</p>
           {emissionArrayResult.ok ? (
-            <div class="flex flex-wrap gap-1">
+            <div class="flex flex-col gap-1">
               {(emissionArrayResult as { ok: true; candidates: Array<{ path: string }> }).candidates.map((c) => (
-                <CandidatePill key={c.path} label={c.path} />
+                <div key={c.path} class="flex items-center gap-1">
+                  <CandidatePill label={c.path} />
+                  {canAdoptPropBinding && (
+                    <AdoptBtn label="source採用" onClick={() => adoptEmissionArrayAsSource(c.path)} />
+                  )}
+                </div>
               ))}
             </div>
           ) : (
             <ReasonNote reason={(emissionArrayResult as { ok: false; reason: string }).reason} />
           )}
 
-          {/* Field paths from selected table */}
-          {selectedTableRef && dbColumnResult?.ok && (
+          {selectedTableRef && dbColumnResult?.ok ? (
             <>
               <p class="font-semibold text-slate-600">
                 フィールド候補: <span class="font-mono">{selectedTableRef}</span>
-                （keyPath / labelPath / valuePath / childrenPath）
               </p>
-              <div class="flex flex-wrap gap-1">
+              <div class="flex flex-col gap-1">
                 {(dbColumnResult as { ok: true; columns: Array<{ columnName: string }> }).columns.map((c) => (
-                  <CandidatePill key={c.columnName} label={c.columnName} />
+                  <div key={c.columnName} class="flex flex-wrap items-center gap-0.5">
+                    <CandidatePill label={c.columnName} />
+                    {canAdoptPropBinding && (
+                      <>
+                        {(["keyPath", "labelPath", "valuePath", "childrenPath"] as const).map((field) => (
+                          <AdoptBtn key={field} label={field} onClick={() => adoptColumnAsField(c.columnName, field)} />
+                        ))}
+                      </>
+                    )}
+                  </div>
                 ))}
               </div>
             </>
-          )}
-          {!selectedTableRef && (
+          ) : (
             <p class="text-[0.6rem] text-slate-400">
               テーブルセクションでテーブルを選択するとフィールド候補が表示されます。
             </p>
@@ -1404,7 +1533,7 @@ function AuthoringSuggestAssistPanel({
         </div>
       )}
 
-      {/* Calc source / target section */}
+      {/* calc source / target section */}
       {activeSection === "calc" && (
         <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
           <p class="font-semibold text-slate-700">calc source 候補</p>
@@ -1413,11 +1542,7 @@ function AuthoringSuggestAssistPanel({
           {sourceNodeResult.ok ? (
             <div class="flex flex-wrap gap-1">
               {(sourceNodeResult as { ok: true; candidates: Array<{ nodeId: string; propKey: string; label: string }> }).candidates.map((c) => (
-                <CandidatePill
-                  key={`${c.nodeId}-${c.propKey}`}
-                  label={`${c.propKey}`}
-                  title={c.label}
-                />
+                <CandidatePill key={`${c.nodeId}-${c.propKey}`} label={c.propKey} title={c.label} />
               ))}
             </div>
           ) : (
@@ -1468,10 +1593,15 @@ function AuthoringSuggestAssistPanel({
           {selectedTargetNodeId && targetPropResult && (
             <div class="mt-1">
               {targetPropResult.ok ? (
-                <div class="flex flex-wrap gap-1">
-                  <p class="w-full text-[0.6rem] font-semibold text-slate-600">targetProp 候補:</p>
+                <div class="flex flex-col gap-1">
+                  <p class="text-[0.6rem] font-semibold text-slate-600">targetProp 候補:</p>
                   {(targetPropResult as { ok: true; targetProps: string[] }).targetProps.map((p) => (
-                    <CandidatePill key={p} label={p} />
+                    <div key={p} class="flex items-center gap-1">
+                      <CandidatePill label={p} />
+                      {onCalcBindingsChange && calculationBindings && (
+                        <AdoptBtn label="採用" onClick={() => adoptCalcTargetProp(selectedTargetNodeId, p)} />
+                      )}
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -1487,21 +1617,112 @@ function AuthoringSuggestAssistPanel({
         <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
           <p class="font-semibold text-slate-700">ruleTable 候補</p>
 
-          <p class="font-semibold text-slate-600">tablePath 候補（配列パス）</p>
+          <p class="font-semibold text-slate-600">tablePath（配列パスを選択）</p>
           {emissionArrayResult.ok ? (
             <div class="flex flex-wrap gap-1">
               {(emissionArrayResult as { ok: true; candidates: Array<{ path: string }> }).candidates.map((c) => (
-                <CandidatePill key={c.path} label={c.path} />
+                <button
+                  key={c.path}
+                  type="button"
+                  class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
+                    selectedRuleTablePath === c.path
+                      ? "border-blue-400 bg-blue-50 text-blue-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                  onClick={() => {
+                    setSelectedRuleTablePath(selectedRuleTablePath === c.path ? "" : c.path);
+                    setSelectedMatchField("");
+                    setSelectedMatchVsIndex(null);
+                  }}
+                >
+                  {c.path}
+                </button>
               ))}
             </div>
           ) : (
             <ReasonNote reason={(emissionArrayResult as { ok: false; reason: string }).reason} />
           )}
 
-          <p class="text-[0.6rem] text-slate-500">
-            matchConditions 候補はローカル計算パネルの ruleTable 設定から確認してください。
-            候補の表示のみ — 自動保存・適用はしません。
-          </p>
+          {selectedRuleTablePath && matchCondResult && (
+            matchCondResult.ok ? (
+              <>
+                <p class="font-semibold text-slate-600">matchCondition フィールド候補</p>
+                {matchFieldCandidates.length === 0 ? (
+                  <p class="text-[0.6rem] text-slate-400">フィールド候補がありません。</p>
+                ) : (
+                  <div class="flex flex-wrap gap-1">
+                    {matchFieldCandidates.map((fc) => (
+                      <button
+                        key={fc.field}
+                        type="button"
+                        class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
+                          selectedMatchField === fc.field
+                            ? "border-blue-400 bg-blue-50 text-blue-800"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                        title={fc.description}
+                        onClick={() => setSelectedMatchField(selectedMatchField === fc.field ? "" : fc.field)}
+                      >
+                        {fc.field}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <p class="font-semibold text-slate-600">値ソース候補</p>
+                <div class="flex flex-col gap-0.5">
+                  {matchVsCandidates.map((vs, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      class={`rounded border px-1.5 py-0.5 text-left text-[0.6rem] ${
+                        selectedMatchVsIndex === i
+                          ? "border-indigo-400 bg-indigo-50 text-indigo-800"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                      onClick={() => setSelectedMatchVsIndex(selectedMatchVsIndex === i ? null : i)}
+                    >
+                      {vs.kind === "node"
+                        ? `node: ${vs.label} / ${vs.propKey}`
+                        : vs.kind === "db_column"
+                        ? `フィールド: ${vs.qualifiedKey}`
+                        : "固定値（手動入力）"}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedMatchField && selectedMatchVsIndex !== null && (
+                  onCalcBindingsChange && calculationBindings ? (
+                    <>
+                      {!hasMatchingRuleTableBinding && (
+                        <p class="text-[0.6rem] text-amber-600">
+                          この tablePath の ruleTable 変数がありません。ローカル計算パネルで先に追加してください。
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        disabled={!hasMatchingRuleTableBinding}
+                        class={`rounded border px-2 py-0.5 text-[0.6rem] ${
+                          hasMatchingRuleTableBinding
+                            ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+                            : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                        }`}
+                        onClick={() => adoptRuleTableMatchCondition()}
+                      >
+                        条件追加
+                      </button>
+                    </>
+                  ) : (
+                    <p class="text-[0.6rem] text-slate-400">
+                      採用にはローカル計算コールバックが必要です。
+                    </p>
+                  )
+                )}
+              </>
+            ) : (
+              <ReasonNote reason={(matchCondResult as { ok: false; reason: string }).reason} />
+            )
+          )}
         </div>
       )}
     </div>
@@ -1652,6 +1873,10 @@ function LayoutRightDock({
           draftNodes={draftNodes}
           emissionDataJson={emissionDataJson}
           suggestShape={suggestShape ?? null}
+          selectedNode={selectedNode}
+          onCommitNode={onCommitNode}
+          onCalcBindingsChange={onCalcBindingsChange}
+          calculationBindings={calculationBindings}
         />
       </Accordion>
     </aside>

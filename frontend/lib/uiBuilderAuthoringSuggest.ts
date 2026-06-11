@@ -180,7 +180,14 @@ export type QualifiedColumnCandidateResult =
 
 /**
  * Derive qualified column candidates (tableRef.columnName) from logicalTables + relationIntents.
- * Uses step3FieldSourceFromDesign for relation resolution (no active remote targets in UIBuilder).
+ * Uses step3FieldSourceFromDesign for relation resolution.
+ *
+ * Scope boundary — active remote manifest テーブル/フィールド:
+ *   SSOT Step 3 includes active-remote targets via manifest:list_relationship_remote_targets,
+ *   but that requires a backend dispatch call which is prohibited in UIBuilder authoring.
+ *   remoteTargets is therefore always [] here. Active remote manifest column suggest is
+ *   out of scope for this bundle and tracked as a separate future bundle.
+ *
  * Returns unresolved relation errors as structured reasons — no silent fallback.
  */
 export function deriveQualifiedColumnCandidates(
