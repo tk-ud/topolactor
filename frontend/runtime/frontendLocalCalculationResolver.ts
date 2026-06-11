@@ -459,6 +459,47 @@ export function evaluateAllCalcBindings(
 }
 
 /**
+ * Allowed targetProp values per componentKind.
+ * Used by UI Builder to restrict targetProp selects and by validateCalcBindingForKind.
+ * null means the componentKind is not in the allowlist (unsupported as calc target).
+ */
+export const CALC_TARGET_PROP_BY_COMPONENT_KIND: Record<string, string[]> = {
+  "form_input/input": ["value"],
+  "form_input/textarea": ["value"],
+  "form_input/search_input": ["value"],
+  "form_input/select": ["value"],
+  "form_input/checkbox": ["checked"],
+  "calc_topology/calculation_preview_panel": ["result"],
+  "calc_topology/computed_field_preview": ["preview", "value"],
+  "calc_topology/cross_entity_calculation_panel": ["preview", "value"],
+  "calc_topology/formula_builder": ["value"],
+  "structural_html": ["inlineText"],
+};
+
+/**
+ * Returns the allowed targetProp values for a componentKind, or null if unknown.
+ */
+export function resolveAllowedTargetProps(componentKind: string): string[] | null {
+  return CALC_TARGET_PROP_BY_COMPONENT_KIND[componentKind] ?? null;
+}
+
+/**
+ * Validates that a targetProp is allowed for the given componentKind.
+ * Returns error strings (empty = valid). When componentKind is not in the map,
+ * returns no error (unknown kind is not blocked — only known kinds are constrained).
+ */
+export function validateCalcTargetProp(componentKind: string, targetProp: string): string[] {
+  const allowed = resolveAllowedTargetProps(componentKind);
+  if (allowed === null) return []; // unknown kind: not constrained
+  if (!allowed.includes(targetProp)) {
+    return [
+      `CALC_TARGET_PROP_UNSUPPORTED: targetProp "${targetProp}" is not supported for componentKind "${componentKind}". Allowed: ${allowed.join(", ")}`,
+    ];
+  }
+  return [];
+}
+
+/**
  * Validates the structure of a CalcBinding.
  * Returns an array of error strings (empty = valid).
  */

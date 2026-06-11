@@ -14,6 +14,9 @@ import {
   evaluateCalcBinding,
   evaluateAllCalcBindings,
   validateCalcBinding,
+  validateCalcTargetProp,
+  CALC_TARGET_PROP_BY_COMPONENT_KIND,
+  resolveAllowedTargetProps,
   type CalcBinding,
   type CalcContext,
 } from "../runtime/frontendLocalCalculationResolver.ts";
@@ -517,4 +520,172 @@ Deno.test("unsupported targetProp in ruleTable: literal warning note preserved i
   assertEquals(errors.length, 0, "valid binding should have no validation errors");
   const rateSrc = binding.variables.rate as { kind: "literal"; note?: string };
   assert(rateSrc.note?.includes("業務基準値"), "note should warn about business rates");
+});
+
+// ─── CALC_TARGET_PROP_BY_COMPONENT_KIND / validateCalcTargetProp ─────────────
+
+Deno.test("CALC_TARGET_PROP_BY_COMPONENT_KIND: form_input/input allows only value", () => {
+  assertEquals(CALC_TARGET_PROP_BY_COMPONENT_KIND["form_input/input"], ["value"]);
+});
+
+Deno.test("CALC_TARGET_PROP_BY_COMPONENT_KIND: calc_topology/calculation_preview_panel allows only result", () => {
+  assertEquals(CALC_TARGET_PROP_BY_COMPONENT_KIND["calc_topology/calculation_preview_panel"], ["result"]);
+});
+
+Deno.test("validateCalcTargetProp: form_input/input + value → valid (no errors)", () => {
+  const errors = validateCalcTargetProp("form_input/input", "value");
+  assertEquals(errors, []);
+});
+
+Deno.test("validateCalcTargetProp: form_input/input + result → error (unsupported targetProp)", () => {
+  const errors = validateCalcTargetProp("form_input/input", "result");
+  assert(errors.length > 0, "should have validation error");
+  assert(errors[0].includes("CALC_TARGET_PROP_UNSUPPORTED"), `error code should be CALC_TARGET_PROP_UNSUPPORTED: ${errors[0]}`);
+});
+
+Deno.test("validateCalcTargetProp: calc_topology/calculation_preview_panel + result → valid", () => {
+  const errors = validateCalcTargetProp("calc_topology/calculation_preview_panel", "result");
+  assertEquals(errors, []);
+});
+
+Deno.test("validateCalcTargetProp: calc_topology/calculation_preview_panel + value → error", () => {
+  const errors = validateCalcTargetProp("calc_topology/calculation_preview_panel", "value");
+  assert(errors.length > 0);
+  assert(errors[0].includes("CALC_TARGET_PROP_UNSUPPORTED"));
+});
+
+Deno.test("validateCalcTargetProp: unknown componentKind → no error (unknown kinds not constrained)", () => {
+  const errors = validateCalcTargetProp("unknown/component_kind", "anything");
+  assertEquals(errors, []);
+});
+
+Deno.test("resolveAllowedTargetProps: returns null for unknown componentKind", () => {
+  assertEquals(resolveAllowedTargetProps("not/a/real/kind"), null);
+});
+
+Deno.test("resolveAllowedTargetProps: returns allowed props for calc_topology/computed_field_preview", () => {
+  const props = resolveAllowedTargetProps("calc_topology/computed_field_preview");
+  assert(Array.isArray(props));
+  assert(props!.includes("preview"));
+  assert(props!.includes("value"));
+});
+
+// ─── selectRuleFromTable: node-based matchConditions ─────────────────────────
+
+Deno.test("selectRuleFromTable: transactionType = node value (taxRates.transactionType=node.value)", () => {
+  const table = [
+    { transactionType: "standard", taxRate: 10, enabled: true, priority: 1, effectiveFrom: "2020-01-01" },
+    { transactionType: "reduced", taxRate: 8, enabled: true, priority: 1, effectiveFrom: "2020-01-01" },
+  ];
+  const conditions = [
+    {
+      field: "transactionType",
+      valueFrom: { kind: "node" as const, nodeId: "typeSelect", propKey: "value" },
+    },
+  ];
+  // Simulate: typeSelect.value = "standard"
+  const resolvedNodeValues = { typeSelect: { value: "standard" } };
+  const result = selectRuleFromTable(table, conditions, "taxRate", resolvedNodeValues);
+  assertEquals(result, { ok: true, value: 10 });
+});
+
+Deno.test("selectRuleFromTable: workType = node value (laborRates.workType=node.value)", () => {
+  const table = [
+    { workType: "electrical", rate: 3500, enabled: true, priority: 1, effectiveFrom: "2023-01-01" },
+    { workType: "plumbing", rate: 4200, enabled: true, priority: 1, effectiveFrom: "2023-01-01" },
+  ];
+  const conditions = [
+    {
+      field: "workType",
+      valueFrom: { kind: "node" as const, nodeId: "workTypeSelect", propKey: "value" },
+    },
+  ];
+  const resolvedNodeValues = { workTypeSelect: { value: "plumbing" } };
+  const result = selectRuleFromTable(table, conditions, "rate", resolvedNodeValues);
+  assertEquals(result, { ok: true, value: 4200 });
+});
+
+// ─── applyCalcBindingsToSpecs: deep merge into props.data ────────────────────
+
+Deno.test("applyCalcBindingsToSpecs: injects value into props.data.value for form_input/input (deep merge)", () => {
+  const specs: ComponentSpec[] = [
+    {
+      nodeId: "cost-input",
+      componentType: "form_input/input",
+      def: {},
+      runtimeSpec: {
+        componentId: "c1",
+        componentType: "form_input/input",
+        packageId: null,
+        layoutId: null,
+        wiringId: null,
+        props: { data: { value: "", placeholder: "工費", disabled: false } },
+        eventBinding: {},
+      },
+    },
+  ];
+  const bindings: CalcBinding[] = [
+    {
+      calculationId: "labor-calc",
+      variables: {
+        hours: { kind: "literal", value: 8 },
+        rate: { kind: "literal", value: 5000 },
+      },
+      operation: { op: "multiply", a: "hours", b: "rate" },
+      targetNodeId: "cost-input",
+      targetProp: "value",
+    },
+  ];
+  const result = applyCalcBindingsToSpecs(specs, bindings, {}, {});
+  const data = (result[0].runtimeSpec?.props as Record<string, unknown>)?.data as Record<string, unknown>;
+  assertEquals(data?.value, 40000, "data.value should be 40000 from 8 × 5000");
+  // Top-level injection also present
+  assertEquals((result[0].runtimeSpec?.props as Record<string, unknown>)?.value, 40000);
+});
+
+Deno.test("applyCalcBindingsToSpecs: injects result into props.data.result for calculation_preview_panel", () => {
+  const specs: ComponentSpec[] = [
+    {
+      nodeId: "preview-panel",
+      componentType: "calc_topology/calculation_preview_panel",
+      def: {},
+      runtimeSpec: {
+        componentId: "c2",
+        componentType: "calc_topology/calculation_preview_panel",
+        packageId: null,
+        layoutId: null,
+        wiringId: null,
+        props: { data: { result: null, title: "税込計算" } },
+        eventBinding: {},
+      },
+    },
+  ];
+  const bindings: CalcBinding[] = [
+    {
+      calculationId: "tax-calc",
+      variables: {
+        price: { kind: "literal", value: 1000 },
+        rate: { kind: "literal", value: 10 },
+      },
+      operation: { op: "taxIncluded", base: "price", rate: "rate" },
+      targetNodeId: "preview-panel",
+      targetProp: "result",
+    },
+  ];
+  const result = applyCalcBindingsToSpecs(specs, bindings, {}, {});
+  const data = (result[0].runtimeSpec?.props as Record<string, unknown>)?.data as Record<string, unknown>;
+  assertEquals(data?.result, 1100, "data.result should be 1100 from 1000 × (1 + 10/100)");
+});
+
+Deno.test("applyCalcBindingsToSpecs: no fetch/dispatch during deep merge evaluation", () => {
+  let fetchCalled = false;
+  const orig = (globalThis as Record<string, unknown>).fetch;
+  (globalThis as Record<string, unknown>).fetch = () => { fetchCalled = true; return Promise.resolve(new Response("{}")); };
+  const specs: ComponentSpec[] = [
+    { nodeId: "n", componentType: "form_input/input", def: {}, runtimeSpec: { componentId: "c", componentType: "form_input/input", packageId: null, layoutId: null, wiringId: null, props: { data: { value: "" } }, eventBinding: {} } },
+  ];
+  applyCalcBindingsToSpecs(specs, [{ calculationId: "x", variables: { a: { kind: "literal", value: 5 } }, operation: { op: "multiply", a: "a", b: "a" }, targetNodeId: "n", targetProp: "value" }], {}, {});
+  (globalThis as Record<string, unknown>).fetch = orig;
+  assertFalse(fetchCalled);
+  assertFalse("queueAdminClientCommand" in globalThis);
 });

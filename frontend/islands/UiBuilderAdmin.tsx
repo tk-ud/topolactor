@@ -114,6 +114,7 @@ import {
   type CalcOperation,
   type CalcVariableSource,
   type RoundingPolicy,
+  type RuleMatchCondition,
 } from "../runtime/frontendLocalCalculationResolver.ts";
 
 /**
@@ -6179,6 +6180,123 @@ function CalcBindingEditor({
   );
 }
 
+function CalcMatchConditionsEditor({
+  conditions,
+  draftNodeIds,
+  onChange,
+}: {
+  conditions: RuleMatchCondition[];
+  draftNodeIds: string[];
+  onChange: (conds: RuleMatchCondition[]) => void;
+}): JSX.Element {
+  function addCondition() {
+    const newCond: RuleMatchCondition = {
+      field: "",
+      valueFrom: { kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" },
+    };
+    onChange([...conditions, newCond]);
+  }
+
+  function removeCondition(idx: number) {
+    onChange(conditions.filter((_, i) => i !== idx));
+  }
+
+  function updateCondition(idx: number, updated: RuleMatchCondition) {
+    onChange(conditions.map((c, i) => (i === idx ? updated : c)));
+  }
+
+  return (
+    <div class="flex flex-col gap-0.5 rounded border border-blue-100 bg-blue-50 p-1">
+      <div class="flex items-center justify-between">
+        <span class="text-[0.55rem] font-semibold text-blue-700">matchConditions ({conditions.length}件)</span>
+        <button
+          type="button"
+          class="rounded border border-dashed border-blue-300 px-1 py-0 text-[0.55rem] text-blue-600 hover:bg-blue-100"
+          onClick={addCondition}
+        >
+          + 条件追加
+        </button>
+      </div>
+      {conditions.length === 0 && (
+        <span class="text-[0.55rem] text-blue-400">条件なし — 全行が対象（優先度/日付で最上位を選択）</span>
+      )}
+      {conditions.map((cond, idx) => (
+        <div key={idx} class="flex flex-col gap-0.5 rounded border border-blue-200 bg-white p-0.5">
+          <div class="flex items-center gap-0.5">
+            <input
+              type="text"
+              class="flex-1 rounded border border-slate-200 px-0.5 py-0 text-[0.6rem] font-mono"
+              placeholder="フィールド名 (例: transactionType)"
+              value={cond.field}
+              onInput={(e) => updateCondition(idx, { ...cond, field: (e.currentTarget as HTMLInputElement).value })}
+            />
+            <select
+              class="rounded border border-slate-200 bg-white px-0.5 py-0 text-[0.55rem]"
+              value={cond.valueFrom.kind}
+              onChange={(e) => {
+                const kind = (e.currentTarget as HTMLSelectElement).value;
+                const newCond = { ...cond };
+                if (kind === "node") {
+                  newCond.valueFrom = { kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" };
+                } else {
+                  newCond.valueFrom = { kind: "literal", value: "" };
+                }
+                updateCondition(idx, newCond);
+              }}
+            >
+              <option value="node">node</option>
+              <option value="literal">literal</option>
+            </select>
+            <button
+              type="button"
+              class="text-[0.55rem] text-red-400 hover:text-red-600"
+              onClick={() => removeCondition(idx)}
+            >
+              ✕
+            </button>
+          </div>
+          {cond.valueFrom.kind === "node" && (
+            <div class="flex gap-0.5">
+              <select
+                class="flex-1 rounded border border-slate-200 bg-white px-0.5 py-0 text-[0.55rem]"
+                value={cond.valueFrom.nodeId}
+                onChange={(e) => updateCondition(idx, {
+                  ...cond,
+                  valueFrom: { ...cond.valueFrom as { kind: "node"; nodeId: string; propKey: string }, nodeId: (e.currentTarget as HTMLSelectElement).value },
+                })}
+              >
+                {draftNodeIds.map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
+              <input
+                type="text"
+                class="w-14 rounded border border-slate-200 px-0.5 py-0 text-[0.55rem]"
+                placeholder="propKey"
+                value={(cond.valueFrom as { kind: "node"; propKey: string }).propKey}
+                onInput={(e) => updateCondition(idx, {
+                  ...cond,
+                  valueFrom: { ...cond.valueFrom as { kind: "node"; nodeId: string; propKey: string }, propKey: (e.currentTarget as HTMLInputElement).value },
+                })}
+              />
+            </div>
+          )}
+          {cond.valueFrom.kind === "literal" && (
+            <input
+              type="text"
+              class="w-full rounded border border-slate-200 px-0.5 py-0 text-[0.6rem] font-mono"
+              placeholder="値 (例: standard, reduced)"
+              value={String((cond.valueFrom as { kind: "literal"; value: unknown }).value)}
+              onInput={(e) => updateCondition(idx, {
+                ...cond,
+                valueFrom: { kind: "literal", value: (e.currentTarget as HTMLInputElement).value },
+              })}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CalcVarEditor({
   name,
   source,
@@ -6268,7 +6386,11 @@ function CalcVarEditor({
             value={source.selectedField}
             onInput={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLInputElement).value })}
           />
-          <span class="text-[0.55rem] text-slate-400">matchConditions: 現在 {source.matchConditions.length} 件（JSON編集で設定）</span>
+          <CalcMatchConditionsEditor
+            conditions={source.matchConditions}
+            draftNodeIds={draftNodeIds}
+            onChange={(conds) => onChange({ ...source, matchConditions: conds })}
+          />
         </div>
       )}
     </div>

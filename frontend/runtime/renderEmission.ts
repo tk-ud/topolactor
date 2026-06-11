@@ -280,11 +280,21 @@ export function applyCalcBindingsToSpecs(
         updatedSpec = { ...updatedSpec, inlineText: String(entry.result.value) };
       } else if (updatedSpec.runtimeSpec) {
         const existingProps = updatedSpec.runtimeSpec.props ?? {};
+        // Inject at top level for any targetProp, AND into props.data when data is an object.
+        // Factories (inputFactory, calculationPreviewPanelFactory, etc.) read from props.data.
+        const existingData = existingProps.data;
+        const updatedData = (typeof existingData === "object" && existingData !== null && !Array.isArray(existingData))
+          ? { ...(existingData as Record<string, unknown>), [entry.targetProp]: entry.result.value }
+          : existingData;
         updatedSpec = {
           ...updatedSpec,
           runtimeSpec: {
             ...updatedSpec.runtimeSpec,
-            props: { ...existingProps, [entry.targetProp]: entry.result.value },
+            props: {
+              ...existingProps,
+              [entry.targetProp]: entry.result.value,
+              ...(updatedData !== existingData ? { data: updatedData } : {}),
+            },
           },
         };
       }
