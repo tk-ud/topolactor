@@ -67,6 +67,9 @@ function FlowCanvasNodeView({
   designDraftByNodeId,
   onSelectNode,
   onDeleteNode,
+  calcTriggerNodeIds,
+  calcOverridesByNodeId,
+  onNodeValueChange,
 }: {
   node: FlowCanvasNode;
   childrenMap: Map<string | undefined, FlowCanvasNode[]>;
@@ -74,6 +77,9 @@ function FlowCanvasNodeView({
   designDraftByNodeId: ReadonlyMap<string, FlowCanvasDesignDraft>;
   onSelectNode: (nodeId: string) => void;
   onDeleteNode?: (nodeId: string) => void;
+  calcTriggerNodeIds?: ReadonlySet<string>;
+  calcOverridesByNodeId?: ReadonlyMap<string, Record<string, unknown>>;
+  onNodeValueChange?: (nodeId: string, propKey: string, value: unknown) => void;
 }): JSX.Element {
   const children = childrenMap.get(node.nodeId) ?? [];
   const isSelected = node.nodeId === selectedNodeId;
@@ -112,6 +118,9 @@ function FlowCanvasNodeView({
       designDraftByNodeId={designDraftByNodeId}
       onSelectNode={onSelectNode}
       onDeleteNode={onDeleteNode}
+      calcTriggerNodeIds={calcTriggerNodeIds}
+      calcOverridesByNodeId={calcOverridesByNodeId}
+      onNodeValueChange={onNodeValueChange}
     />
   ));
 
@@ -199,6 +208,40 @@ function FlowCanvasNodeView({
           )}
         </div>
       )}
+      {calcTriggerNodeIds?.has(node.nodeId) && (
+        <div
+          class="border-t border-blue-100 bg-blue-50 px-1 py-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span class="block text-[0.55rem] text-blue-500">計算トリガー入力</span>
+          <input
+            type="text"
+            class="mt-0.5 w-full rounded border border-blue-300 bg-white px-1 py-0.5 text-[0.7rem] outline-none focus:ring-1 focus:ring-blue-400"
+            placeholder="値を入力..."
+            onInput={(e) => {
+              onNodeValueChange?.(node.nodeId, "value", (e.currentTarget as HTMLInputElement).value);
+            }}
+            onChange={(e) => {
+              onNodeValueChange?.(node.nodeId, "value", (e.currentTarget as HTMLInputElement).value);
+            }}
+          />
+        </div>
+      )}
+      {calcOverridesByNodeId?.has(node.nodeId) && (() => {
+        const overrides = calcOverridesByNodeId.get(node.nodeId)!;
+        return (
+          <div class="border-t border-green-100 bg-green-50 px-1 py-0.5">
+            {Object.entries(overrides).map(([prop, val]) => (
+              <div key={prop} class="flex items-center gap-1">
+                <span class="text-[0.55rem] text-green-600">{prop}:</span>
+                <span class="font-mono text-[0.65rem] text-green-800">
+                  {typeof val === "number" ? val.toLocaleString() : String(val)}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -218,6 +261,12 @@ export type FlowLayoutCanvasProps = {
   onAddFromEmptyState?: (templateId: string) => void;
   allowEmptyStateTemplates?: boolean;
   emptyGuidance?: string;
+  /** Calc binding trigger: nodeIds whose value changes should call onNodeValueChange */
+  calcTriggerNodeIds?: ReadonlySet<string>;
+  /** Calc binding results: nodeId → prop overrides injected by evaluateAllCalcBindings */
+  calcOverridesByNodeId?: ReadonlyMap<string, Record<string, unknown>>;
+  /** Called when a calc-trigger input node changes value. Never dispatches to backend. */
+  onNodeValueChange?: (nodeId: string, propKey: string, value: unknown) => void;
 };
 
 export function FlowLayoutCanvas({
@@ -235,6 +284,9 @@ export function FlowLayoutCanvas({
   onAddFromEmptyState,
   allowEmptyStateTemplates = true,
   emptyGuidance = UX_EMPTY_CANVAS_DRAG_GUIDANCE,
+  calcTriggerNodeIds,
+  calcOverridesByNodeId,
+  onNodeValueChange,
 }: FlowLayoutCanvasProps): JSX.Element {
   const childrenMap = buildFlowChildrenMap(nodes);
   const roots = childrenMap.get(undefined) ?? [];
@@ -302,6 +354,9 @@ export function FlowLayoutCanvas({
                 designDraftByNodeId={designDraftByNodeId}
                 onSelectNode={onSelectNode}
                 onDeleteNode={onDeleteNode}
+                calcTriggerNodeIds={calcTriggerNodeIds}
+                calcOverridesByNodeId={calcOverridesByNodeId}
+                onNodeValueChange={onNodeValueChange}
               />
             ))}
           </div>
