@@ -727,7 +727,7 @@ Deno.test("renderEmission: applies emission.calculationBindings when options.cal
   };
   // Empty registry — renderEmission will produce specs via layoutNodes path
   const registry = {};
-  const specs = renderEmission(emission as Parameters<typeof renderEmission>[0], registry);
+  const specs = renderEmission(emission as unknown as Parameters<typeof renderEmission>[0], registry);
   const target = specs.find((s) => s.nodeId === "result-node");
   assert(target !== undefined, "result-node spec should exist");
   // taxIncluded(100, 10) = 110
