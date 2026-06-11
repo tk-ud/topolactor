@@ -34,18 +34,47 @@ export function resolveCssTokenValue(tokenKey: string): string | undefined {
   return CSS_TOKEN_RESOLVED_VALUES[tokenKey];
 }
 
-/** Apply selected cssTokenRefs as inline styles for admin design preview canvas. */
-export function buildInlineStyleFromCssTokenRefs(
+export type CssTokenRefsStyleResult =
+  | { ok: true; style: Record<string, string> }
+  | { ok: false; code: string; message: string; unknownRefs: string[] };
+
+/** Resolve selected cssTokenRefs as inline styles. Unknown refs are explicit errors. */
+export function resolveInlineStyleFromCssTokenRefs(
   tokenRefs: string[],
-): Record<string, string> {
+): CssTokenRefsStyleResult {
+  const unknownRefs = resolveUnknownCssTokenRefs(tokenRefs);
+  if (unknownRefs.length > 0) {
+    return {
+      ok: false,
+      code: "CSS_TOKEN_REF_UNRESOLVED",
+      message: `Unresolved cssTokenRefs: ${unknownRefs.join(", ")}`,
+      unknownRefs,
+    };
+  }
   const style: Record<string, string> = {};
   for (const key of tokenRefs) {
     const token = CSS_DICTIONARY_TOKENS.find((t) => t.tokenKey === key);
     const value = resolveCssTokenValue(key);
-    if (!token || !value) continue;
+    if (!token || !value) {
+      return {
+        ok: false,
+        code: "CSS_TOKEN_REF_UNRESOLVED",
+        message: `Unresolved cssTokenRefs: ${key}`,
+        unknownRefs: [key],
+      };
+    }
     style[token.property] = value;
   }
-  return style;
+  return { ok: true, style };
+}
+
+/** Apply selected cssTokenRefs as inline styles; throws on unresolved refs. */
+export function buildInlineStyleFromCssTokenRefs(
+  tokenRefs: string[],
+): Record<string, string> {
+  const resolved = resolveInlineStyleFromCssTokenRefs(tokenRefs);
+  if (!resolved.ok) throw new Error(resolved.message);
+  return resolved.style;
 }
 
 /**

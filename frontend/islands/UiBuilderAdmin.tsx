@@ -9,7 +9,6 @@ import {
 } from "../api/mockPresetApi.ts";
 import { computeSourceHash } from "../runtime/visualMockParser.ts";
 import {
-  buildInlineStyleFromCssTokenRefs,
   CSS_DICTIONARY_TOKENS,
   resolveCssTokenValue,
 } from "../runtime/cssDictionary.ts";
@@ -79,6 +78,7 @@ import {
   type FlowCanvasDesignDraft,
 } from "../components/FlowLayoutCanvas.tsx";
 import { lookupTopologyLayoutClassKey } from "../runtime/topologyLayoutClassResolver.ts";
+import { findLinkHrefPlaceholders, interpolateLinkHrefReadOnly } from "../runtime/linkPlaceholderInterpolation.ts";
 import {
   LayoutPatchApplyModal,
   type LayoutPatchApplyModalPhase,
@@ -251,6 +251,8 @@ type DraftNode = {
   nodeKind?: LayoutNodeKind;
   htmlTag?: StructuralHtmlTag;
   layoutClassRefs?: string[];
+  /** Breakpoint-specific layout/topology class refs; owned by layout inspector, not design tokens. */
+  responsiveLayoutRules?: ResponsiveTokenRules;
   isDraftOnly: boolean;
   slotKey: string;
   orderIndex: number;
@@ -3771,6 +3773,15 @@ function CanvasInspector({
 }): JSX.Element {
   const [manualSlotKey, setManualSlotKey] = useState("");
   const [parentCycleError, setParentCycleError] = useState<string | null>(null);
+  const [responsiveLayoutJson, setResponsiveLayoutJson] = useState(() =>
+    JSON.stringify(filterEmptyResponsiveRules(node.responsiveLayoutRules ?? {}), null, 2)
+  );
+  const [responsiveLayoutError, setResponsiveLayoutError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setResponsiveLayoutJson(JSON.stringify(filterEmptyResponsiveRules(node.responsiveLayoutRules ?? {}), null, 2));
+    setResponsiveLayoutError(null);
+  }, [node.nodeId]);
 
   const parentOptions = draftNodes.filter((n) => n.nodeId !== node.nodeId);
   const isContainer = isLayoutContainerNode(node, draftNodes);
@@ -3828,6 +3839,29 @@ function CanvasInspector({
     } else {
       onUpdate({ [field]: final });
     }
+  };
+
+  const commitResponsiveLayoutJson = () => {
+    const parsed = validateResponsiveTokenRulesJson(responsiveLayoutJson);
+    if (!parsed.ok) {
+      setResponsiveLayoutError(`${parsed.errorCode}: ${parsed.message}`);
+      return;
+    }
+    setResponsiveLayoutError(null);
+    onCommit(
+      { responsiveLayoutRules: filterEmptyResponsiveRules(parsed.rules) } as Partial<DraftNode>,
+      "レスポンシブ配置ルールを変更",
+    );
+  };
+
+  const updateResponsiveLayoutRules = (rules: ResponsiveTokenRules) => {
+    const filtered = filterEmptyResponsiveRules(rules);
+    setResponsiveLayoutJson(JSON.stringify(filtered, null, 2));
+    setResponsiveLayoutError(null);
+    onCommit(
+      { responsiveLayoutRules: filtered } as Partial<DraftNode>,
+      "レスポンシブ配置ルールを変更",
+    );
   };
 
   const overviewTab = (
@@ -4150,6 +4184,41 @@ function CanvasInspector({
     </fieldset>
   );
 
+  const responsiveTab = (
+    <fieldset class="flex flex-col gap-2">
+      <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+        レスポンシブ配置 / サイズ
+      </legend>
+      <p class="text-muted-xs">
+        ブレークポイント別の layoutClassRefs は配置インスペクタで管理します。デザインインスペクタの cssTokenRefs とは分離されています。
+      </p>
+      <ResponsiveLayoutRuleEditor
+        rules={node.responsiveLayoutRules ?? {}}
+        onChange={updateResponsiveLayoutRules}
+        isContainer={isContainer}
+      />
+      <label class="flex flex-col gap-1 text-[0.65rem] text-gray-600">
+        JSON（明示バリデーション / 空欄はクリア）
+        <textarea
+          class={`min-h-[88px] rounded border px-1 py-0.5 font-mono text-[0.6rem] ${responsiveLayoutError ? "border-red-400 bg-red-50" : "border-slate-200"}`}
+          value={responsiveLayoutJson}
+          onInput={(e) => setResponsiveLayoutJson((e.target as HTMLTextAreaElement).value)}
+          onBlur={commitResponsiveLayoutJson}
+          aria-invalid={Boolean(responsiveLayoutError)}
+          aria-label="レスポンシブ配置ルール JSON"
+          placeholder={`{
+  "md": ["layout.width.full"]
+}`}
+        />
+      </label>
+      {responsiveLayoutError && (
+        <p role="alert" class="rounded border border-red-200 bg-red-50 p-1 text-[0.6rem] text-red-700">
+          {responsiveLayoutError}
+        </p>
+      )}
+    </fieldset>
+  );
+
   return (
     <div
       role="complementary"
@@ -4175,8 +4244,80 @@ function CanvasInspector({
           { id: "overview", label: "概要", content: overviewTab },
           { id: "tree", label: "ツリー", content: treeTab },
           { id: "class", label: "クラス", content: classTab },
+          { id: "responsive_layout", label: "レスポンシブ", content: responsiveTab },
         ]}
       />
+    </div>
+  );
+}
+
+
+function ResponsiveLayoutRuleEditor({
+  rules,
+  onChange,
+  isContainer,
+}: {
+  rules: ResponsiveTokenRules;
+  onChange: (rules: ResponsiveTokenRules) => void;
+  isContainer: boolean;
+}): JSX.Element {
+  const [activeBreakpoint, setActiveBreakpoint] = useState<string>(RESPONSIVE_BREAKPOINTS[1]);
+  const activeTokens = rules[activeBreakpoint] ?? [];
+  const clearBreakpoint = (bp: string) => {
+    const next = { ...rules };
+    delete next[bp];
+    onChange(next);
+  };
+  const toggleToken = (tokenKey: string) => {
+    const current = rules[activeBreakpoint] ?? [];
+    const nextTokens = current.includes(tokenKey)
+      ? current.filter((k) => k !== tokenKey)
+      : [...current, tokenKey];
+    onChange({ ...rules, [activeBreakpoint]: nextTokens });
+  };
+  return (
+    <div class="rounded border border-slate-200 bg-white p-2">
+      <div class="mb-2 flex flex-wrap gap-1" role="tablist" aria-label="レスポンシブ配置ブレークポイント">
+        {RESPONSIVE_BREAKPOINTS.map((bp) => {
+          const count = rules[bp]?.length ?? 0;
+          const active = bp === activeBreakpoint;
+          return (
+            <button
+              key={bp}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setActiveBreakpoint(bp)}
+              class={`rounded border px-2 py-0.5 font-mono text-[0.65rem] ${
+                active ? "border-blue-500 bg-blue-600 text-white" : count > 0 ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-600"
+              }`}
+            >
+              {bp}{count > 0 ? ` (${count})` : ""}
+            </button>
+          );
+        })}
+      </div>
+      <div class="mb-1 flex items-center justify-between">
+        <span class="text-[0.65rem] font-semibold text-slate-700">
+          {BREAKPOINT_LABELS[activeBreakpoint] ?? activeBreakpoint} の layoutClassRefs
+        </span>
+        {activeTokens.length > 0 && (
+          <button type="button" class="text-[0.6rem] text-red-500" onClick={() => clearBreakpoint(activeBreakpoint)}>
+            クリア
+          </button>
+        )}
+      </div>
+      <TopologyLayoutClassPicker
+        selectedClassRefs={activeTokens}
+        onToggle={toggleToken}
+        scopeFilter=""
+        {...(isContainer
+          ? { allowedForAny: ["layout_root", "layout_section", "layout_row"] }
+          : { allowedForFilter: "component_wrapper" })}
+      />
+      <p class="mt-2 text-[0.6rem] text-slate-500">
+        保存時は layout_patch_json の responsiveLayoutRules として明示的にシリアライズされます。
+      </p>
     </div>
   );
 }
@@ -7953,6 +8094,8 @@ function PackageDesignPanel({
       ? `<${selectedCanvasNode.htmlTag}>`
       : friendlyComponentLabel(selectedCanvasNode.componentKey)
     : "";
+  const linkHrefPreview = interpolateLinkHrefReadOnly(linkHref);
+  const linkHrefPlaceholders = findLinkHrefPlaceholders(linkHref);
   const savedForSelectedNode = savedDesigns.filter((d) =>
     d.layoutNodeId === layoutNodeId
   );
@@ -8435,6 +8578,22 @@ function PackageDesignPanel({
                       }}
                       placeholder="https://..."
                     />
+                    {linkHref.trim() && (
+                      <div
+                        class={`mt-1 rounded border px-2 py-1 text-[0.6rem] ${
+                          linkHrefPreview.ok ? "border-slate-200 bg-slate-50 text-slate-600" : "border-red-200 bg-red-50 text-red-700"
+                        }`}
+                        role={linkHrefPreview.ok ? "note" : "alert"}
+                      >
+                        <span class="font-semibold">read-only preview:</span>{" "}
+                        {linkHrefPreview.ok ? linkHrefPreview.value : linkHrefPreview.message}
+                        {linkHrefPlaceholders.length > 0 && (
+                          <span class="ml-1 font-mono">
+                            placeholders: {linkHrefPlaceholders.join(", ")}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </label>
                   <label class="text-xs">
                     リンク target
@@ -8479,16 +8638,6 @@ function PackageDesignPanel({
                   onToggle={toggleCssToken}
                 />
               </div>
-            ),
-          },
-          {
-            id: "responsive",
-            label: "レスポンシブ",
-            content: (
-              <ResponsiveTokenRuleEditor
-                rules={responsiveTokenRefs}
-                onChange={setResponsiveTokenRefs}
-              />
             ),
           },
           {

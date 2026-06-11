@@ -13,7 +13,8 @@ import type { LayoutNodeKind, SizingMode, StructuralHtmlTag } from "../runtime/v
 import { layoutDimensionLabel } from "../runtime/visualLayoutUtils.ts";
 import { LayoutPreviewNodeFrame } from "./LayoutPreviewNodeFrame.tsx";
 import { UX_EMPTY_CANVAS_DRAG_GUIDANCE, UX_ROUTE_KEY_REQUIRED_FOR_CANVAS } from "../content/adminUxTerms.ts";
-import { buildInlineStyleFromCssTokenRefs, resolveUnknownCssTokenRefs } from "../runtime/cssDictionary.ts";
+import { resolveInlineStyleFromCssTokenRefs } from "../runtime/cssDictionary.ts";
+import { interpolateLinkHrefReadOnly } from "../runtime/linkPlaceholderInterpolation.ts";
 
 export type FlowCanvasNode = {
   nodeId: string;
@@ -95,19 +96,10 @@ function FlowCanvasNodeView({
       allowedFor: FLOW_LEAF_ROLES,
       isSelected,
     }) || flowClassName;
-  const tokenStyle = design?.cssTokenRefs?.length
-    ? buildInlineStyleFromCssTokenRefs(design.cssTokenRefs)
-    : {};
-  if (design?.cssTokenRefs?.length) {
-    const unknown = resolveUnknownCssTokenRefs(design.cssTokenRefs);
-    if (unknown.length > 0) {
-      console.warn(
-        `[FlowLayoutCanvas] unknown cssTokenRefs on node ${node.nodeId}:`,
-        unknown,
-      );
-    }
-  }
-  const style = { ...flowStyle, ...tokenStyle };
+  const tokenResult = design?.cssTokenRefs?.length
+    ? resolveInlineStyleFromCssTokenRefs(design.cssTokenRefs)
+    : { ok: true as const, style: {} };
+  const style = { ...flowStyle, ...(tokenResult.ok ? tokenResult.style : {}) };
   const sizeLabel = `${layoutDimensionLabel(node.width ?? "auto")}×${
     layoutDimensionLabel(node.height ?? "auto")
   }`;
@@ -158,13 +150,21 @@ function FlowCanvasNodeView({
   if (node.nodeKind === "structural_html" && node.htmlTag) {
     const text = design?.inlineText?.trim();
     const href = design?.linkHref?.trim();
+    const linkPreview = node.htmlTag === "a" ? interpolateLinkHrefReadOnly(href) : null;
     const inner = href && node.htmlTag === "a"
-      ? text || href
+      ? text || (linkPreview?.ok ? linkPreview.value : href)
       : text;
     return h(
       node.htmlTag,
-      commonProps,
+      {
+        ...commonProps,
+        ...(node.htmlTag === "a" && linkPreview?.ok && linkPreview.value ? { href: linkPreview.value } : {}),
+        ...(node.htmlTag === "a" && linkPreview && !linkPreview.ok ? { "aria-invalid": true } : {}),
+      },
       inner,
+      node.htmlTag === "a" && linkPreview && !linkPreview.ok
+        ? h("span", { role: "alert", class: "ml-1 text-[0.6rem] text-red-700" }, linkPreview.message)
+        : null,
       ...childElements,
     ) as JSX.Element;
   }
@@ -172,6 +172,11 @@ function FlowCanvasNodeView({
   if (isContainer) {
     return (
       <div {...commonProps}>
+        {!tokenResult.ok && (
+          <div role="alert" class="mb-1 rounded border border-red-200 bg-red-50 p-1 text-[0.6rem] text-red-700">
+            {tokenResult.message}
+          </div>
+        )}
         {childElements.length > 0
           ? childElements
           : (
@@ -198,6 +203,11 @@ function FlowCanvasNodeView({
 
   return (
     <div {...commonProps}>
+      {!tokenResult.ok && (
+        <div role="alert" class="m-1 rounded border border-red-200 bg-red-50 p-1 text-[0.6rem] text-red-700">
+          {tokenResult.message}
+        </div>
+      )}
       <div class="min-h-0 overflow-auto p-1">
         <LayoutPreviewNodeFrame
           componentKey={node.componentKey}

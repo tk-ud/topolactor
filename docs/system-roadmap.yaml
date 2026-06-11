@@ -381,6 +381,12 @@ system_roadmap_ssot:
         - frontend/tests/runtimeComponentFactory.test.ts
         - frontend/tests/renderEmissionPropBindings.test.ts
         - frontend/tests/propBindingResolver.test.ts
+        - frontend/tests/cssDictionary.test.ts
+        - frontend/tests/draftPreviewToEmission.test.ts
+        - frontend/runtime/layoutComponentPreview.ts
+        - frontend/runtime/linkPlaceholderInterpolation.ts
+        - frontend/components/FlowLayoutCanvas.tsx
+        - frontend/components/LayoutProjectionTree.tsx
         - .agent/tests/check-ui-ux-executable-component-slice.sh
       completion_condition:
         - admin_authoring_routes_use_preview_validate_apply_boundary
@@ -390,8 +396,12 @@ system_roadmap_ssot:
         - ui_builder_data_binding_tab_separates_array_prop_wiring_from_advanced_experimental
         - display_card_single_record_only_enforced_by_tests
         - runtime_catalog_full_connection_all_placement_candidates_have_factory
+        - ui_builder_modal_preview_is_inert_and_does_not_block_canvas_authoring
+        - ui_builder_responsive_layout_authoring_is_owned_by_layout_inspector_with_blocking_validation
+        - component_style_design_css_token_refs_apply_in_canvas_and_runtime_with_explicit_unresolved_ref_errors
+        - link_href_placeholder_interpolation_is_read_only_and_unresolved_placeholders_fail_without_fallback
       known_gap_ref:
-        - visual_builder_production_ready_manual_accessibility_and_responsive_token_acceptance_pending
+        - visual_builder_production_ready_manual_accessibility_acceptance_pending
       files:
         - backend/
         - frontend/

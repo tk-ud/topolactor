@@ -4,7 +4,8 @@ import {
   type ComponentSpec,
 } from "../runtime/renderEmission.ts";
 import { flowNodePresentation, flowRootClassName } from "../runtime/layoutNodeFlowProjection.ts";
-import { buildInlineStyleFromCssTokenRefs } from "../runtime/cssDictionary.ts";
+import { resolveInlineStyleFromCssTokenRefs } from "../runtime/cssDictionary.ts";
+import { interpolateLinkHrefReadOnly } from "../runtime/linkPlaceholderInterpolation.ts";
 import { renderRuntimeComponent } from "../runtime/runtimePrimitiveRenderer.ts";
 import {
   isLayoutStructureContainerClassRefs,
@@ -38,11 +39,11 @@ function mergePresentationStyle(
     : resolveFlowNodePreviewClassName(spec.layoutClassRefs ?? [], {
       allowedFor: FLOW_LEAF_ROLES,
     }) || flowClassName;
-  const tokenStyle = spec.cssTokenRefs?.length
-    ? buildInlineStyleFromCssTokenRefs(spec.cssTokenRefs)
-    : {};
+  const tokenResult = spec.cssTokenRefs?.length
+    ? resolveInlineStyleFromCssTokenRefs(spec.cssTokenRefs)
+    : { ok: true as const, style: {} };
   return {
-    style: { ...style, ...tokenStyle },
+    style: { ...style, ...(tokenResult.ok ? tokenResult.style : {}) },
     className: className || undefined,
   };
 }
@@ -81,10 +82,22 @@ function ProjectionTreeNode({
 
   if (spec.nodeKind === "structural_html" && spec.htmlTag) {
     const text = spec.inlineText?.trim();
+    const authoredHref = typeof spec.def?.linkHref === "string" ? spec.def.linkHref : undefined;
+    const linkPreview = spec.htmlTag === "a" ? interpolateLinkHrefReadOnly(authoredHref) : null;
+    if (linkPreview && !linkPreview.ok) {
+      return (
+        <div class="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700" data-node-id={spec.nodeId}>
+          {linkPreview.message}
+        </div>
+      );
+    }
     return h(
       spec.htmlTag,
-      commonProps,
-      text || null,
+      {
+        ...commonProps,
+        ...(spec.htmlTag === "a" && linkPreview?.ok && linkPreview.value ? { href: linkPreview.value } : {}),
+      },
+      text || (linkPreview?.ok ? linkPreview.value : null),
       ...childElements,
     ) as JSX.Element;
   }

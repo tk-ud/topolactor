@@ -207,6 +207,8 @@ export interface VisualNodePayload {
   nodeKind?: LayoutNodeKind;
   htmlTag?: StructuralHtmlTag;
   layoutClassRefs?: string[];
+  /** Breakpoint-specific layout/topology class refs owned by layout inspector. */
+  responsiveLayoutRules?: ResponsiveTokenRules;
   componentId?: string;
   packageId?: string;
   layoutId?: string;
@@ -359,6 +361,9 @@ function readPatchNode(
     width: readLayoutDimension(raw.width, DEFAULT_VISUAL_NODE_WIDTH),
     height: readLayoutDimension(raw.height, DEFAULT_VISUAL_NODE_HEIGHT),
     ...(layoutClassRefs.length > 0 ? { layoutClassRefs } : {}),
+    responsiveLayoutRules: (typeof raw.responsiveLayoutRules === "object" && raw.responsiveLayoutRules !== null && !Array.isArray(raw.responsiveLayoutRules))
+      ? filterEmptyResponsiveRules(raw.responsiveLayoutRules as ResponsiveTokenRules)
+      : undefined,
     componentId: typeof raw.componentId === "string"
       ? raw.componentId
       : palette?.componentId,
@@ -520,6 +525,9 @@ export function buildVisualLayoutPatchJson(
         ...(n.tensorId ? { tensorId: n.tensorId } : {}),
         ...(n.layoutClassRefs && n.layoutClassRefs.length > 0
           ? { layoutClassRefs: n.layoutClassRefs }
+          : {}),
+        ...(n.responsiveLayoutRules && Object.keys(filterEmptyResponsiveRules(n.responsiveLayoutRules)).length > 0
+          ? { responsiveLayoutRules: filterEmptyResponsiveRules(n.responsiveLayoutRules) }
           : {}),
         ...(n.propsJson ? { propsJson: n.propsJson } : {}),
         ...(n.stateJson ? { stateJson: n.stateJson } : {}),
