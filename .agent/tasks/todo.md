@@ -110,18 +110,3 @@ Completion condition:
 実装 bundle ではなく、統合 UX の手動受入 / hand-debug evidence gap。runtime dispatch loop、ProjectionShell SSE refresh、recommend child island、SQL Attention feedback projection、admin CSV/JSON import、admin authoring routes は実装済みとして扱い、未実装扱いに戻さない。
 
 - [ ] `product.dynamic_support_nocode_loop` の combined UX を、authoring guidance → SQL Attention feedback → M6 admin loop の通し手動受入 / hand-debug で確認する
-
----
-
-## Bundle `preset_team_markdown_saved_view_seed` (completed evidence anchor)
-
-**Status:** implemented
-**SSOT:** `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`
-
-完了済み carry-over (evidence anchor — test guard for seed-driven wording):
-- [x] **md_translation_template_seed_registration_surface_completion**: MdTranslationAuthoringSeedSurface.tsx — template registration form uses createTemplate API, template list via listTemplates API; registry-driven Select with + Register new template toggle; existing bucket parts only. Roadmap known_gap: `product.component_markdown_authoring_projection#md_translation_template_seed_registration_surface_completion_pending`.
-- [x] **md_translation_binding_seed_authoring_surface_completion**: MdTranslationAuthoringSeedSurface.tsx — registry-driven source table via listRelationshipRemoteTargets; datalist column candidates; explicit manual fallback labeled. Roadmap known_gap: `product.component_markdown_authoring_projection#md_translation_binding_seed_authoring_surface_completion_pending`.
-- [x] **md_translation_seed_candidate_builder_contract**: seed candidate helper builds template_ref/source_ref/binding_ref/render_ref/adjustment_ref/dashboard_ref/lineage_ref; blocks unresolved required placeholders.
-- [x] **unresolved_required_placeholder_backend_gate**: CompletedPresetSeedValidator blocks non-empty render_ref.unresolved_placeholder_keys and binding_ref.unresolved_required_placeholder_keys with explicit REQUIRED_PLACEHOLDER_UNBOUND.
-- [x] **md_translation_saved_view_create_seed_flow_completion**: handleSave calls createSavedView via team_markdown API; completedPresetSeedJson via buildMdTranslationAuthoringSeedCandidate; unresolved required gate blocks save. Roadmap known_gap: `product.component_markdown_authoring_projection#md_translation_saved_view_create_seed_flow_completion_pending`.
-- [x] **existing_component_bucket_composition_hardening**: MdTranslationAuthoringSeedSurface.tsx uses only Select/input/textarea/button existing bucket parts; data-component-bucket-parts attribute on root div; no bespoke modal/drawer/form created. Roadmap known_gap: `product.component_markdown_authoring_projection#existing_component_bucket_composition_hardening_pending`.

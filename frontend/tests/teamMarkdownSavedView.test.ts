@@ -171,63 +171,81 @@ Deno.test("validateCompletedPresetSeed — accepts valid complete seed", () => {
 
 // ─── md translation authoring seed registration tests ───────────────────────
 
-Deno.test("todo/roadmap use seed-driven authoring surface wording, not bespoke form terms", async () => {
-  const todo = await Deno.readTextFile(".agent/tasks/todo.md");
+Deno.test("roadmap/SSOT use seed-driven authoring surface wording, not bespoke form terms", async () => {
   const roadmap = await Deno.readTextFile("docs/system-roadmap.yaml");
+  const ssot = await Deno.readTextFile(
+    "docs/design/team-markdown-dashboard-saved-view-ssot.yaml",
+  );
+  const source = await Deno.readTextFile(
+    "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+  );
 
-  // Both files must reject old bespoke form terms (regression guard)
-  for (const source of [todo, roadmap]) {
+  // Roadmap/SSOT surfaces must reject old bespoke form terms without
+  // treating .agent/tasks/todo.md as a completed evidence ledger.
+  for (const content of [roadmap, ssot]) {
     assertEquals(
-      source.includes("template_registration_modal_or_drawer UI"),
+      content.includes("template_registration_modal_or_drawer UI"),
       false,
     );
-    assertEquals(source.includes("RecordMarkdownBindForm"), false);
-    assertEquals(source.includes("MarkdownTemplateRegistryForm"), false);
+    assertEquals(content.includes("RecordMarkdownBindForm"), false);
+    assertEquals(content.includes("MarkdownTemplateRegistryForm"), false);
   }
-  // Canonical task IDs must appear in todo (completed or pending)
   assertEquals(
-    todo.includes("md_translation_template_seed_registration_surface"),
-    true,
-  );
-  assertEquals(
-    todo.includes("md_translation_binding_seed_authoring_surface"),
-    true,
-  );
-  assertEquals(
-    todo.includes("md_translation_saved_view_create_seed_flow"),
+    source.includes(
+      'data-component-bucket-parts="select input textarea button existing_bucket_parts"',
+    ),
     true,
   );
 
+  // Completed seed contract evidence belongs to roadmap evidence/completion
+  // refs and the feature SSOT, not to completed [x] anchors in todo.md.
   assertEquals(
-    todo.includes("[x] **md_translation_seed_candidate_builder_contract**"),
+    ssot.includes("md_translation_seed_candidate_builder_contract"),
     true,
   );
   assertEquals(
-    todo.includes("[x] **unresolved_required_placeholder_backend_gate**"),
+    ssot.includes("unresolved_required_placeholder_backend_gate"),
     true,
   );
   assertEquals(
-    todo.includes(
-      "[x] **md_translation_template_seed_registration_surface_completion**",
+    ssot.includes("prompt_level_template_seed_registration_surface_completion"),
+    true,
+  );
+  assertEquals(
+    ssot.includes("prompt_level_binding_seed_authoring_surface_completion"),
+    true,
+  );
+  assertEquals(
+    ssot.includes("prompt_level_saved_view_create_seed_flow_completion"),
+    true,
+  );
+  assertEquals(
+    ssot.includes("existing_component_bucket_composition_hardening"),
+    true,
+  );
+  assertEquals(
+    roadmap.includes("frontend/components/MdTranslationAuthoringSeedSurface.tsx"),
+    true,
+  );
+  assertEquals(
+    roadmap.includes("frontend/lib/mdTranslationSeedBuilder.ts"),
+    true,
+  );
+  assertEquals(
+    roadmap.includes(
+      "registry_driven_authoring_surface_template_and_binding_selection",
     ),
     true,
   );
   assertEquals(
-    todo.includes(
-      "[x] **md_translation_binding_seed_authoring_surface_completion**",
-    ),
+    roadmap.includes("client_seed_candidate_builder_constructs_required_seed_refs"),
     true,
   );
   assertEquals(
-    todo.includes(
-      "[x] **md_translation_saved_view_create_seed_flow_completion**",
-    ),
-    true,
+    roadmap.includes(".agent/tasks/todo.md#preset_team_markdown_saved_view_seed"),
+    false,
   );
-  assertEquals(
-    todo.includes("[x] **existing_component_bucket_composition_hardening**"),
-    true,
-  );
+
   // Bundle md_translation_registry_driven_authoring_surface_completion is closed —
   // these four known_gap_ref items must no longer appear in roadmap as pending.
   assertEquals(
