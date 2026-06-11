@@ -70,7 +70,7 @@ Scope:
 - 実装完了できない残項目がある場合は partial 判定できる粒度で残 todo を全列挙する。
 
 **Carry-over (ui-builder-suggest-authoring-assist bundle で未実装):**
-- [ ] **active-remote-manifest-column-suggest**: `deriveQualifiedColumnCandidates` は active remote manifest のテーブル/フィールド候補を列挙しない。SSOT Step 3 では `manifest:list_relationship_remote_targets` による remote targets がある想定だが、UIBuilder authoring 中の backend dispatch は禁止されているため、現行実装では `remoteTargets = []` で固定されている。active remote manifest テーブル/フィールド候補のサジェスト UI は、backend dispatch 禁止制約を維持したまま、UI authoring 前に明示取得済みの manifest snapshot / SSOT static reference / backend-produced read model のいずれを正本補助として扱うかを設計確定した後に、別 bundle で実装すること。`docs/system-roadmap.yaml` の `active_remote_manifest_column_suggest` known_gap への evidence_ref 追加も同 bundle 完了時に行う。
+- [ ] **active-remote-manifest-column-suggest**: `deriveQualifiedColumnCandidates` は active remote manifest のテーブル/フィールド候補を列挙しない。`/admin/contents` Step 2.5 は relationship 設定を担当し、active remote 側は `remote_manifest_id` / `join_table_ref` / `remote_key` を `screen_data_shape.relationIntents` に保存・検証する。remote target の一覧取得と検証は `manifest:list_relationship_remote_targets` / `assign_screen_data_shape` 側の責務であり、UIBuilder authoring assist が backend dispatch して取得する設計課題として扱わない。残作業は、保存済みの `screen_data_shape` / `relationIntents` / active `topology_manifest` reference を UIBuilder 側の read-only input として候補 derivation に渡す boundary / evidence を整えること。現行の `remoteTargets = []` 固定は未対応の証跡として残し、別 bundle で `deriveQualifiedColumnCandidates` / tests / `docs/system-roadmap.yaml` の `active_remote_manifest_column_suggest` known_gap evidence_ref を揃える。
 
 Completion condition:
 - roadmap / TODO / SSOT の責務が食い違わず、後続 PR closure が bundle 単位で判定できる。
