@@ -620,7 +620,6 @@ system_roadmap_ssot:
         - docs/design/admin-console-workflow-ssot.yaml
         - docs/design/mock-preset-intake-compiler-ssot.yaml
         - docs/design/db-schema.yaml
-        - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
       evidence_ref:
         - db/migrations/team_markdown_registry_tables.sql
         - backend/repository/NpgsqlTeamMarkdownRepository.cs
@@ -655,7 +654,6 @@ system_roadmap_ssot:
         - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
         - docs/design/db-schema.yaml
-        - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
       evidence_ref:
         - db/migrations/team_markdown_registry_tables.sql
         - backend/runtime/AdminRuntime.TeamMarkdown.cs
@@ -705,7 +703,6 @@ system_roadmap_ssot:
       detail_ref:
         - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
-        - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
       evidence_ref:
         - frontend/components/MdViewer.tsx
         - frontend/islands/TeamMarkdownDashboard.tsx
@@ -751,7 +748,6 @@ system_roadmap_ssot:
       detail_ref:
         - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
         - docs/design/db-schema.yaml
-        - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
       evidence_ref:
         - backend/schema/TeamMarkdownContracts.cs
         - backend/runtime/AdminRuntime.TeamMarkdown.cs
