@@ -42,7 +42,9 @@ import {
 import {
   buildVisualLayoutPatchJson,
   enrichDraftNodesWithPaletteComponentIds,
+  emptySelectionSet,
   filterEmptyResponsiveRules,
+  invertSelection,
   type LayoutDimension,
   type LayoutNodeKind,
   layoutDimensionLabel,
@@ -52,10 +54,16 @@ import {
   parseLayoutDimensionInput,
   type PaletteDraftSeedEntry,
   parseVisualLayoutPatchJson,
+  removeFromSelectionSet,
   reorderLayoutNodeStack,
   resolveSizingModeAfterToggle,
   RESPONSIVE_BREAKPOINTS,
   type ResponsiveTokenRules,
+  selectAll,
+  selectByComponentKind,
+  selectByNodeKind,
+  type SelectionSetContract,
+  selectSubtree,
   type SizingMode,
   isPaletteAutoSeedCanvas,
   seedDraftNodesFromPalette,
@@ -146,6 +154,14 @@ export const UI_BUILDER_DESIGN_SAVE_ABOVE_TABS = true as const;
 export const UI_BUILDER_DRAWER_SHELL_KIND = "same_workspace_display_shell" as const;
 /** Drawer open/closed flags are frontend-local UI state only, never persisted. */
 export const UI_BUILDER_DRAWER_STATE_BOUNDARY = "frontend_local_state_only" as const;
+/** Selection set is transient draft interaction state only; not persisted to layout_patch_json. */
+export const UI_BUILDER_SELECTION_STATE_BOUNDARY = "transient_draft_interaction_state_only" as const;
+/**
+ * SelectionSetContract re-export for batch operation bundle.
+ * SSOT: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
+ * groupId: not persisted in this bundle (transient only; no SSOT for persistence target).
+ */
+export type { SelectionSetContract };
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
@@ -625,6 +641,7 @@ function ComponentBucketCard({
 function LayoutRightDock({
   draftNodes,
   selectedNodeId,
+  selectedNodeIds,
   selectedNode,
   packageId,
   onSelectNode,
@@ -647,6 +664,8 @@ function LayoutRightDock({
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
+  /** Full selection set for multi-select display in layer tree. */
+  selectedNodeIds?: ReadonlySet<string>;
   selectedNode: DraftNode | null;
   packageId: string;
   canvasDesignDraft?: DesignDraft;
@@ -673,12 +692,14 @@ function LayoutRightDock({
       style={{ width: LAYOUT_RIGHT_DOCK_WIDTH, minWidth: "320px", maxWidth: "420px" }}
       aria-label="レイアウト編集ドック"
       data-selected-node-id={selectedNodeId ?? ""}
+      data-selection-count={selectedNodeIds?.size ?? (selectedNodeId ? 1 : 0)}
     >
       <Accordion title={`レイヤー (${draftNodes.length})`} defaultOpen={true}>
         <LayerTree
           embedded
           draftNodes={draftNodes}
           selectedNodeId={selectedNodeId}
+          selectedNodeIds={selectedNodeIds}
           onSelect={(id) => onSelectNode(id === selectedNodeId ? null : id)}
           onReparent={onReparent}
           onCopy={onCopy}
@@ -2366,6 +2387,7 @@ function buildLayerTreeItems(nodes: DraftNode[]): LayerTreeItem[] {
 function LayerTree({
   draftNodes,
   selectedNodeId,
+  selectedNodeIds,
   onSelect,
   onCopy,
   onDelete,
@@ -2374,6 +2396,8 @@ function LayerTree({
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
+  /** Full selection set for multi-select highlight in layer tree. */
+  selectedNodeIds?: ReadonlySet<string>;
   onSelect: (nodeId: string) => void;
   onCopy: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
@@ -2448,6 +2472,7 @@ function LayerTree({
         )}
         {items.map(({ node, depth }) => {
           const isSelected = node.nodeId === selectedNodeId;
+          const isInSelectionSet = selectedNodeIds != null && selectedNodeIds.has(node.nodeId) && !isSelected;
           const isDragging = node.nodeId === draggedId;
           const isTarget = dropTarget?.id === node.nodeId;
           const dropPos = isTarget ? dropTarget?.pos : null;
@@ -2477,7 +2502,7 @@ function LayerTree({
                 }
               }}
               class={`relative flex cursor-pointer items-center gap-1 border-b border-gray-100 py-1 text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400 ${
-                isSelected ? "bg-blue-50" : "hover:bg-gray-50"
+                isSelected ? "bg-blue-50" : isInSelectionSet ? "bg-indigo-50" : "hover:bg-gray-50"
               } ${isDragging ? "opacity-40" : ""} ${
                 isTarget && dropPos === "into"
                   ? "outline outline-1 outline-blue-400"
@@ -3411,7 +3436,12 @@ function LayoutBuilderSection({
 
   // ── canvas draft state ───────────────────────────────────────────────────
   const [draftNodes, setDraftNodes] = useState<DraftNode[]>([]);
+  // primarySelectedNodeId: inspector target (single-selection UX, backward-compat alias for selectedNodeId).
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  // selectedNodeIds: full selection set contract (batch operation target).
+  // SSOT: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
+  // Not persisted to layout_patch_json — transient draft interaction state only.
+  const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(emptySelectionSet());
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
 
@@ -3609,6 +3639,43 @@ function LayoutBuilderSection({
   };
   const selectedNode = draftNodes.find((n) => n.nodeId === selectedNodeId) ??
     null;
+
+  // ── Selection set contract ────────────────────────────────────────────────
+  // SSOT: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
+  // All ops are frontend-only draft interaction state. Not persisted.
+  // groupId: not persisted in this bundle (transient only; no SSOT for persistence target).
+
+  /** SelectionSetContract snapshot — consumed by batch operation bundle. */
+  const selectionSetContract: SelectionSetContract = {
+    selectedNodeIds,
+    primarySelectedNodeId: selectedNodeId,
+  };
+
+  const handleSelectAll = () => {
+    setSelectedNodeIds(selectAll(draftNodes));
+  };
+
+  const handleSelectSubtree = (nodeId: string) => {
+    setSelectedNodeIds(selectSubtree(draftNodes, nodeId));
+  };
+
+  const handleSelectByNodeKind = (nodeKind: string) => {
+    setSelectedNodeIds(selectByNodeKind(draftNodes, nodeKind));
+  };
+
+  const handleSelectByComponentKind = (componentKind: string) => {
+    setSelectedNodeIds(selectByComponentKind(draftNodes, componentKind));
+  };
+
+  const handleInvertSelection = () => {
+    setSelectedNodeIds(invertSelection(draftNodes, selectedNodeIds));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedNodeId(null);
+    setSelectedNodeIds(emptySelectionSet());
+  };
+
   const canvasPreviewClass = resolveCanvasRootPreviewClassName(
     selectedLayoutClassRefs,
   );
@@ -3641,6 +3708,7 @@ function LayoutBuilderSection({
     setCalculationBindings(parsed.value.calculationBindings ?? []);
     setLegacyLayoutWarning(isLegacyAbsoluteLayoutPatch(nodes));
     setSelectedNodeId(null);
+    setSelectedNodeIds(emptySelectionSet());
     setDesignDraftByNodeId(new Map());
     historyRef.current = [{
       nodes: nodes.map((n) => ({ ...n })),
@@ -4458,6 +4526,7 @@ function LayoutBuilderSection({
     const next = draftNodes.filter((n) => n.nodeId !== nodeId);
     setDraftNodes(next);
     if (selectedNodeId === nodeId) setSelectedNodeId(null);
+    setSelectedNodeIds((prev) => removeFromSelectionSet(prev, nodeId));
     setDesignDraftByNodeId((prev) => {
       if (!prev.has(nodeId)) return prev;
       const nextMap = new Map(prev);
@@ -4491,6 +4560,7 @@ function LayoutBuilderSection({
     const next = [...draftNodes, cloned];
     setDraftNodes(next);
     setSelectedNodeId(cloned.nodeId);
+    setSelectedNodeIds(new Set([cloned.nodeId]));
     pushHistory(next, `コピー: ${friendlyNodeLabel(source)}`);
     setLifecyclePhase("idle");
     announce(`${friendlyNodeLabel(source)}をコピーしました`);
@@ -4827,6 +4897,7 @@ function LayoutBuilderSection({
               const next: DraftNode[] = [];
               setDraftNodes(next);
               setSelectedNodeId(null);
+              setSelectedNodeIds(emptySelectionSet());
               pushHistory(next, "キャンバスをクリア");
               setLifecyclePhase("idle");
               announce("キャンバスをクリアしました");
@@ -4901,7 +4972,61 @@ function LayoutBuilderSection({
           {selectedNode
             ? ` — 選択中: ${friendlyComponentLabel(selectedNode.componentKey)}`
             : ""}
+          {selectedNodeIds.size > 1
+            ? ` (${selectedNodeIds.size}件選択)`
+            : ""}
         </span>
+
+        {/* Selection set operations — draft interaction only; not persisted */}
+        {draftNodes.length > 0 && (
+          <div
+            class="flex items-center gap-1"
+            data-selection-boundary={UI_BUILDER_SELECTION_STATE_BOUNDARY}
+          >
+            <button
+              type="button"
+              class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
+              onClick={handleSelectAll}
+              title="全ノードを選択"
+              aria-label="全ノードを選択"
+            >
+              全選択
+            </button>
+            {selectedNodeId && (
+              <button
+                type="button"
+                class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
+                onClick={() => handleSelectSubtree(selectedNodeId)}
+                title="選択中ノードのサブツリーを選択"
+                aria-label="サブツリー選択"
+              >
+                サブツリー
+              </button>
+            )}
+            {selectedNodeIds.size > 0 && (
+              <button
+                type="button"
+                class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
+                onClick={handleInvertSelection}
+                title="選択を反転"
+                aria-label="選択反転"
+              >
+                反転
+              </button>
+            )}
+            {selectedNodeIds.size > 0 && (
+              <button
+                type="button"
+                class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
+                onClick={handleClearSelection}
+                title="選択解除"
+                aria-label="選択解除"
+              >
+                解除
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Preset uploader drawer — SSOT: mock-preset-intake-compiler-ssot.yaml §preset_uploader_surface */}
@@ -5002,15 +5127,20 @@ function LayoutBuilderSection({
           <FlowLayoutCanvas
             nodes={draftNodes}
             selectedNodeId={selectedNodeId}
+            selectedNodeIds={selectedNodeIds}
             rootLayoutClassRefs={selectedLayoutClassRefs}
             designDraftByNodeId={designDraftByNodeId}
             canvasRef={canvasRef}
             minHeight={CANVAS_MIN_HEIGHT}
             onSelectNode={(id) => {
               setSelectedNodeId(id);
+              setSelectedNodeIds(new Set([id]));
               setRightDrawerOpen(true);
             }}
-            onDeselectAll={() => setSelectedNodeId(null)}
+            onDeselectAll={() => {
+              setSelectedNodeId(null);
+              setSelectedNodeIds(emptySelectionSet());
+            }}
             onDragOver={handleDragOverCanvas}
             onDrop={handleDropOnCanvas}
             onDeleteNode={removeNode}
@@ -5044,9 +5174,13 @@ function LayoutBuilderSection({
             <LayoutRightDock
               draftNodes={draftNodes}
               selectedNodeId={selectedNodeId}
+              selectedNodeIds={selectedNodeIds}
               selectedNode={selectedNode}
               packageId={scopedPackageId ?? ""}
-              onSelectNode={(id) => setSelectedNodeId(id)}
+              onSelectNode={(id) => {
+                setSelectedNodeId(id);
+                setSelectedNodeIds(id ? new Set([id]) : emptySelectionSet());
+              }}
               canvasDesignDraft={selectedNodeId
                 ? designDraftByNodeId.get(selectedNodeId)
                 : undefined}

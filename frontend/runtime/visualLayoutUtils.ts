@@ -624,3 +624,99 @@ export function reorderLayoutNodeStack<T extends { nodeId: string; orderIndex: n
   [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
   return next.map((n, i) => ({ ...n, orderIndex: i }));
 }
+
+// ─── Selection Set Contract ────────────────────────────────────────────────────
+// SSOT: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
+// Frontend draft interaction state only. Not persisted to layout_patch_json.
+
+/** Minimal node shape required by selection set helpers. */
+export interface SelectionNode {
+  nodeId: string;
+  parentNodeId: string | null;
+  nodeKind?: string;
+  componentKind?: string;
+}
+
+/**
+ * Selection set contract for UIBuilder canvas workspace.
+ * Consumed by batch operation bundle (ui-builder-batch-operation).
+ * groupId: not persisted in this bundle (transient UI state only; no SSOT for persistence target).
+ */
+export type SelectionSetContract = {
+  /** Full set of selected node IDs (batch operation target). */
+  selectedNodeIds: ReadonlySet<string>;
+  /** Inspector target: last explicitly clicked node (single-selection UX). */
+  primarySelectedNodeId: string | null;
+};
+
+/** Select all nodes in the draft canvas. */
+export function selectAll(nodes: readonly SelectionNode[]): ReadonlySet<string> {
+  return new Set(nodes.map((n) => n.nodeId));
+}
+
+/**
+ * Select a node and all its descendants (subtree rooted at nodeId).
+ * Returns empty set if nodeId not found.
+ */
+export function selectSubtree(
+  nodes: readonly SelectionNode[],
+  nodeId: string,
+): ReadonlySet<string> {
+  const result = new Set<string>();
+  const queue: string[] = [nodeId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const node = nodes.find((n) => n.nodeId === current);
+    if (!node) continue;
+    result.add(current);
+    for (const child of nodes) {
+      if (child.parentNodeId === current) queue.push(child.nodeId);
+    }
+  }
+  return result;
+}
+
+/** Select all nodes matching a given nodeKind. */
+export function selectByNodeKind(
+  nodes: readonly SelectionNode[],
+  nodeKind: string,
+): ReadonlySet<string> {
+  return new Set(nodes.filter((n) => n.nodeKind === nodeKind).map((n) => n.nodeId));
+}
+
+/** Select all nodes matching a given componentKind. */
+export function selectByComponentKind(
+  nodes: readonly SelectionNode[],
+  componentKind: string,
+): ReadonlySet<string> {
+  return new Set(
+    nodes.filter((n) => n.componentKind === componentKind).map((n) => n.nodeId),
+  );
+}
+
+/** Invert the current selection set against the full node list. */
+export function invertSelection(
+  nodes: readonly SelectionNode[],
+  currentSelection: ReadonlySet<string>,
+): ReadonlySet<string> {
+  return new Set(nodes.filter((n) => !currentSelection.has(n.nodeId)).map((n) => n.nodeId));
+}
+
+/** Return an empty selection set (clear selection). */
+export function emptySelectionSet(): ReadonlySet<string> {
+  return new Set<string>();
+}
+
+/**
+ * Remove a deleted node from the selection set.
+ * Returns unchanged reference if nodeId was not selected.
+ */
+export function removeFromSelectionSet(
+  current: ReadonlySet<string>,
+  nodeId: string,
+): ReadonlySet<string> {
+  if (!current.has(nodeId)) return current;
+  const next = new Set(current);
+  next.delete(nodeId);
+  return next;
+}

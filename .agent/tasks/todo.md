@@ -11,7 +11,6 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `ui-builder-selection-model` | UIBuilder selection set / group selection foundation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-autocomplete-candidates` | UIBuilder projection setting autocomplete candidates | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-batch-operation` | UIBuilder projection setting batch operation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-suggest-authoring-assist` | UIBuilder projection setting suggest assist | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
@@ -78,38 +77,13 @@ Note: md_viewer is now a dashboard/read-work component candidate shown in Dashbo
 
 ## UIBuilder projection setting authoring assist 作業順序
 
-UIBuilder の投影設定 assist は、既存の package-only canvas workspace / preview → validate → apply boundary / frontend projection surface boundary を維持したまま、以下の順で bundle 実装する。
+`ui-builder-selection-model` は実装済み。次 bundle は `ui-builder-autocomplete-candidates`。
 
-1. `ui-builder-selection-model`
-2. `ui-builder-autocomplete-candidates`
-3. `ui-builder-batch-operation`
-4. `ui-builder-suggest-authoring-assist`
-5. `ui-builder-projection-authoring-assist-roadmap-alignment`
-
-順序理由:
-- batch operation は selection set contract がないと対象範囲が曖昧になる。
-- suggest は autocomplete candidate source がないと推測実装になる。
-- roadmap / SSOT alignment は bundle 境界が定まってから更新しないと stale になりやすい。
-
----
-
-## Bundle `ui-builder-selection-model`
-
-**Status:** not_started
-**Roadmap bundle:** `product.admin_topology_authoring`
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace`), `docs/design/pipeline-continuity-ssot.yaml` (`layout_projection_dom_lane`)
-
-- [ ] UIBuilder の単一 `selectedNodeId` モデルを、既存 inspector の単一 primary selection 互換を壊さず、batch operation が参照できる selection set contract として整理・実装する。
-
-Scope:
-- `selectedNodeIds` / `primarySelectedNodeId` または同等 contract を定義する。
-- all select / subtree select / nodeKind select / componentKind select / invert select / clear selection を UIBuilder 内の draft interaction として扱う。
-- `groupId` を導入する場合は、保存先を `layout_patch_json` / node-local metadata / transient UI state のどこに置くかを SSOT 上で明示してから実装する。
-- FlowLayoutCanvas / LayerTree / right dock inspector の責務境界を崩さない。
-
-Completion condition:
-- 後続 `ui-builder-batch-operation` が参照できる selection set contract が明文化され、単一 node 編集 UX が退行しない。
-- frontend は projection / draft interaction surface のままで、DB direct write・topology judgment・runtime judgment を追加しない。
+残り実装順序:
+1. `ui-builder-autocomplete-candidates`
+2. `ui-builder-batch-operation`
+3. `ui-builder-suggest-authoring-assist`
+4. `ui-builder-projection-authoring-assist-roadmap-alignment`
 
 ---
 

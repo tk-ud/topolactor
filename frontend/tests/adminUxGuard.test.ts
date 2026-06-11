@@ -381,8 +381,9 @@ Deno.test("UiBuilderAdmin: deselect must not delete canvas designDraftByNodeId e
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
+  // onDeselectAll must call setSelectedNodeId(null) — selection may be multi-line
   assert(
-    src.includes("onDeselectAll={() => setSelectedNodeId(null)}"),
+    /onDeselectAll[\s\S]{0,120}setSelectedNodeId\(null\)/.test(src),
     "deselect must preserve designDraftByNodeId for canvas preview persistence",
   );
   assertFalse(
