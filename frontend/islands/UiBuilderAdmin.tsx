@@ -119,6 +119,10 @@ import {
   deriveRuleTableMatchConditionSuggestCandidates,
   deriveEmissionScalarPathCandidates,
   deriveEmissionArrayPathCandidates,
+  applyColumnFieldAdoption,
+  applyEmissionSourceAdoption,
+  applyCalcTargetPropAdoption,
+  applyRuleTableMatchConditionAdoption,
   type MatchConditionValueSourceCandidate,
 } from "../lib/uiBuilderAuthoringSuggest.ts";
 import { resolveVisibleTopologyName, topologySystemNameToUiBuilderKey, isValidTopologySystemName } from "../lib/topologySystemName.ts";
@@ -1287,29 +1291,28 @@ function AuthoringSuggestAssistPanel({
     fieldKey: "keyPath" | "labelPath" | "valuePath" | "childrenPath",
   ) {
     if (!canAdoptPropBinding || !selectedNode || !onCommitNode || !firstArrayPropName) return;
-    const existing = selectedNode.propBindings ?? {};
-    const existingEntry = existing[firstArrayPropName] ?? { source: "" };
-    onCommitNode(
-      { propBindings: { ...existing, [firstArrayPropName]: { ...existingEntry, [fieldKey]: columnName } } },
-      `${fieldKey} 採用`,
+    const updated = applyColumnFieldAdoption(
+      selectedNode.propBindings ?? {},
+      firstArrayPropName,
+      columnName,
+      fieldKey,
     );
+    onCommitNode({ propBindings: updated }, `${fieldKey} 採用`);
   }
 
   function adoptEmissionArrayAsSource(path: string) {
     if (!canAdoptPropBinding || !selectedNode || !onCommitNode || !firstArrayPropName) return;
-    const existing = selectedNode.propBindings ?? {};
-    const existingEntry = existing[firstArrayPropName] ?? { source: "" };
-    onCommitNode(
-      { propBindings: { ...existing, [firstArrayPropName]: { ...existingEntry, source: path } } },
-      `source 採用`,
+    const updated = applyEmissionSourceAdoption(
+      selectedNode.propBindings ?? {},
+      firstArrayPropName,
+      path,
     );
+    onCommitNode({ propBindings: updated }, `source 採用`);
   }
 
   function adoptCalcTargetProp(targetNodeId: string, prop: string) {
     if (!onCalcBindingsChange || !calculationBindings) return;
-    onCalcBindingsChange(
-      calculationBindings.map((b) => b.targetNodeId === targetNodeId ? { ...b, targetProp: prop } : b),
-    );
+    onCalcBindingsChange(applyCalcTargetPropAdoption(calculationBindings, targetNodeId, prop));
   }
 
   function adoptRuleTableMatchCondition() {
@@ -1318,23 +1321,13 @@ function AuthoringSuggestAssistPanel({
       !onCalcBindingsChange || !calculationBindings
     ) return;
     const vs = matchVsCandidates[selectedMatchVsIndex];
-    if (!vs) return;
+    if (!vs || vs.kind === "db_column") return;
     const valueFrom: RuleMatchCondition["valueFrom"] =
       vs.kind === "node"
         ? { kind: "node", nodeId: vs.nodeId, propKey: vs.propKey }
-        : { kind: "literal", value: vs.kind === "db_column" ? vs.qualifiedKey : "" };
-    const newCondition: RuleMatchCondition = { field: selectedMatchField, valueFrom };
+        : { kind: "literal", value: "" };
     onCalcBindingsChange(
-      calculationBindings.map((binding) => ({
-        ...binding,
-        variables: Object.fromEntries(
-          Object.entries(binding.variables).map(([k, v]) =>
-            v.kind === "ruleTable" && v.tablePath === selectedRuleTablePath
-              ? [k, { ...v, matchConditions: [...v.matchConditions, newCondition] }]
-              : [k, v]
-          ),
-        ),
-      })),
+      applyRuleTableMatchConditionAdoption(calculationBindings, selectedRuleTablePath, selectedMatchField, valueFrom),
     );
   }
 
@@ -1691,33 +1684,44 @@ function AuthoringSuggestAssistPanel({
                   ))}
                 </div>
 
-                {selectedMatchField && selectedMatchVsIndex !== null && (
-                  onCalcBindingsChange && calculationBindings ? (
+                {selectedMatchField && selectedMatchVsIndex !== null && (() => {
+                  const vs = matchVsCandidates[selectedMatchVsIndex];
+                  const isDbColumn = vs?.kind === "db_column";
+                  const canAdopt = !isDbColumn && !!onCalcBindingsChange && !!calculationBindings && hasMatchingRuleTableBinding;
+                  return (
                     <>
-                      {!hasMatchingRuleTableBinding && (
+                      {isDbColumn && (
+                        <p class="text-[0.6rem] text-amber-600">
+                          フィールド参照は matchCondition 値ソースとして runtime が未対応です。node または固定値を選択してください。
+                        </p>
+                      )}
+                      {!isDbColumn && !hasMatchingRuleTableBinding && onCalcBindingsChange && calculationBindings && (
                         <p class="text-[0.6rem] text-amber-600">
                           この tablePath の ruleTable 変数がありません。ローカル計算パネルで先に追加してください。
                         </p>
                       )}
-                      <button
-                        type="button"
-                        disabled={!hasMatchingRuleTableBinding}
-                        class={`rounded border px-2 py-0.5 text-[0.6rem] ${
-                          hasMatchingRuleTableBinding
-                            ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
-                            : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
-                        }`}
-                        onClick={() => adoptRuleTableMatchCondition()}
-                      >
-                        条件追加
-                      </button>
+                      {!isDbColumn && onCalcBindingsChange && calculationBindings && (
+                        <button
+                          type="button"
+                          disabled={!canAdopt}
+                          class={`rounded border px-2 py-0.5 text-[0.6rem] ${
+                            canAdopt
+                              ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+                              : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                          }`}
+                          onClick={() => adoptRuleTableMatchCondition()}
+                        >
+                          条件追加
+                        </button>
+                      )}
+                      {!onCalcBindingsChange && (
+                        <p class="text-[0.6rem] text-slate-400">
+                          採用にはローカル計算コールバックが必要です。
+                        </p>
+                      )}
                     </>
-                  ) : (
-                    <p class="text-[0.6rem] text-slate-400">
-                      採用にはローカル計算コールバックが必要です。
-                    </p>
-                  )
-                )}
+                  );
+                })()}
               </>
             ) : (
               <ReasonNote reason={(matchCondResult as { ok: false; reason: string }).reason} />

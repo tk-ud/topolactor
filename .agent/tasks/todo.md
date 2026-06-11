@@ -96,6 +96,9 @@ Scope:
 - `docs/design/admin-console-workflow-ssot.yaml` への contract 追加要否を判断する。
 - 実装完了できない残項目がある場合は partial 判定できる粒度で残 todo を全列挙する。
 
+**Carry-over (ui-builder-suggest-authoring-assist bundle で未実装):**
+- [ ] **active-remote-manifest-column-suggest**: `deriveQualifiedColumnCandidates` は active remote manifest のテーブル/フィールド候補を列挙しない。SSOT Step 3 では `manifest:list_relationship_remote_targets` による remote targets がある想定だが、UIBuilder authoring 中の backend dispatch は禁止されているため、現行実装では `remoteTargets = []` で固定されている。active remote manifest テーブル/フィールド候補のサジェスト UI は、backend dispatch 禁止制約を維持したまま実現可能なアーキテクチャ (キャッシュ読み込み、静的 SSOT 参照、manifest プリロードなど) が確定した後に、別 bundle で実装すること。`docs/system-roadmap.yaml` の `active_remote_manifest_column_suggest` known_gap への evidence_ref 追加も同 bundle 完了時に行う。
+
 Completion condition:
 - roadmap / TODO / SSOT の責務が食い違わず、後続 PR closure が bundle 単位で判定できる。
 - 実装完了判定は roadmap/TODO 記述だけで行わず、実コード・テスト evidence と突合する。

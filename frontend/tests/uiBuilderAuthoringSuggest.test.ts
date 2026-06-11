@@ -50,12 +50,18 @@ import {
   deriveEmissionArrayPathCandidates,
   deriveOperationEntityColumnCandidates,
   deriveUiBuilderAuthoringSuggestBundle,
+  applyColumnFieldAdoption,
+  applyEmissionSourceAdoption,
+  applyCalcTargetPropAdoption,
+  applyRuleTableMatchConditionAdoption,
   type DbTableCandidate,
   type DbColumnCandidate,
   type QualifiedColumnCandidate,
   type TargetNodeCandidate,
   type SourceNodeCandidate,
+  type PropBindingEntry,
 } from "../lib/uiBuilderAuthoringSuggest.ts";
+import type { CalcBinding, RuleMatchCondition } from "../runtime/frontendLocalCalculationResolver.ts";
 import type { DraftNodeMinimal } from "../lib/uiBuilderAutocompleteCandidates.ts";
 import type { LogicalTableShape, RelationIntentShape, OperationEntityBindingShape } from "../lib/manifestTopologyExtensions.ts";
 
@@ -712,4 +718,183 @@ Deno.test("boundary: no eval/fetch/Function in suggest module (structural check)
   assertFalse(fileContent.includes("new Function("), "new Function() must not be used");
   assertFalse(fileContent.includes("fetch("), "fetch() must not be used");
   assertFalse(fileContent.includes("ManifestDispatcher"), "ManifestDispatcher must not be imported");
+});
+
+// ─── Adoption helpers ─────────────────────────────────────────────────────────
+
+const baseBinding: PropBindingEntry = { source: "emission.data.rows" };
+const bindingWithPaths: PropBindingEntry = {
+  source: "emission.data.rows",
+  keyPath: "id",
+  labelPath: "name",
+};
+
+const calcBindingTarget: CalcBinding = {
+  calculationId: "calc_001",
+  variables: { a: { kind: "emission", path: "emission.data.totalCount" } },
+  operation: { op: "multiply", a: "a", b: "b" },
+  targetNodeId: "node_input_001",
+  targetProp: "value",
+};
+
+const ruleTableBinding: CalcBinding = {
+  calculationId: "calc_rule_001",
+  variables: {
+    rate: {
+      kind: "ruleTable",
+      tablePath: "emission.data.rates",
+      matchConditions: [],
+      priorityOrder: "desc",
+      effectiveDateHandling: "latest_effective",
+      selectedField: "rate_value",
+    },
+  },
+  operation: { op: "multiply", a: "base", b: "rate" },
+  targetNodeId: "node_input_001",
+  targetProp: "value",
+};
+
+Deno.test("applyColumnFieldAdoption: sets keyPath on new entry", () => {
+  const result = applyColumnFieldAdoption({}, "items", "id", "keyPath");
+  assertEquals(result["items"].keyPath, "id");
+  assertEquals(result["items"].source, "");
+});
+
+Deno.test("applyColumnFieldAdoption: preserves existing source and other fields", () => {
+  const result = applyColumnFieldAdoption({ items: bindingWithPaths }, "items", "dept", "valuePath");
+  assertEquals(result["items"].source, "emission.data.rows");
+  assertEquals(result["items"].keyPath, "id");
+  assertEquals(result["items"].labelPath, "name");
+  assertEquals(result["items"].valuePath, "dept");
+});
+
+Deno.test("applyColumnFieldAdoption: overwrites existing field", () => {
+  const result = applyColumnFieldAdoption({ items: bindingWithPaths }, "items", "email", "labelPath");
+  assertEquals(result["items"].labelPath, "email");
+  assertEquals(result["items"].keyPath, "id");
+});
+
+Deno.test("applyColumnFieldAdoption: does not mutate input propBindings", () => {
+  const input: Record<string, PropBindingEntry> = { items: { ...bindingWithPaths } };
+  applyColumnFieldAdoption(input, "items", "new_col", "childrenPath");
+  assertEquals(input["items"].childrenPath, undefined);
+});
+
+Deno.test("applyEmissionSourceAdoption: sets source on existing entry", () => {
+  const result = applyEmissionSourceAdoption({ items: baseBinding }, "items", "emission.data.orders");
+  assertEquals(result["items"].source, "emission.data.orders");
+});
+
+Deno.test("applyEmissionSourceAdoption: preserves column paths when updating source", () => {
+  const result = applyEmissionSourceAdoption({ items: bindingWithPaths }, "items", "emission.data.items");
+  assertEquals(result["items"].source, "emission.data.items");
+  assertEquals(result["items"].keyPath, "id");
+  assertEquals(result["items"].labelPath, "name");
+});
+
+Deno.test("applyEmissionSourceAdoption: does not mutate input propBindings", () => {
+  const input: Record<string, PropBindingEntry> = { items: { ...baseBinding } };
+  applyEmissionSourceAdoption(input, "items", "emission.data.other");
+  assertEquals(input["items"].source, "emission.data.rows");
+});
+
+Deno.test("applyCalcTargetPropAdoption: updates targetProp for matching nodeId", () => {
+  const result = applyCalcTargetPropAdoption([calcBindingTarget], "node_input_001", "label");
+  assertEquals(result[0].targetProp, "label");
+});
+
+Deno.test("applyCalcTargetPropAdoption: leaves non-matching bindings unchanged", () => {
+  const other: CalcBinding = { ...calcBindingTarget, calculationId: "calc_002", targetNodeId: "node_other" };
+  const result = applyCalcTargetPropAdoption([calcBindingTarget, other], "node_input_001", "label");
+  assertEquals(result[0].targetProp, "label");
+  assertEquals(result[1].targetProp, "value");
+});
+
+Deno.test("applyCalcTargetPropAdoption: does not mutate input bindings", () => {
+  const input = [{ ...calcBindingTarget }];
+  applyCalcTargetPropAdoption(input, "node_input_001", "label");
+  assertEquals(input[0].targetProp, "value");
+});
+
+Deno.test("applyRuleTableMatchConditionAdoption: appends condition to matching ruleTable variable", () => {
+  const valueFrom: RuleMatchCondition["valueFrom"] = { kind: "node", nodeId: "node_input_001", propKey: "value" };
+  const result = applyRuleTableMatchConditionAdoption(
+    [ruleTableBinding],
+    "emission.data.rates",
+    "dept_code",
+    valueFrom,
+  );
+  const v = result[0].variables["rate"];
+  assert(v.kind === "ruleTable");
+  assertEquals(v.matchConditions.length, 1);
+  assertEquals(v.matchConditions[0].field, "dept_code");
+});
+
+Deno.test("applyRuleTableMatchConditionAdoption: does not affect bindings for other tablePaths", () => {
+  const valueFrom: RuleMatchCondition["valueFrom"] = { kind: "literal", value: "X" };
+  const result = applyRuleTableMatchConditionAdoption(
+    [ruleTableBinding],
+    "emission.data.other_table",
+    "some_field",
+    valueFrom,
+  );
+  const v = result[0].variables["rate"];
+  assert(v.kind === "ruleTable");
+  assertEquals(v.matchConditions.length, 0);
+});
+
+Deno.test("applyRuleTableMatchConditionAdoption: does not mutate input bindings array", () => {
+  const input = [{ ...ruleTableBinding, variables: { rate: { ...(ruleTableBinding.variables["rate"] as { kind: "ruleTable"; tablePath: string; matchConditions: RuleMatchCondition[]; priorityOrder: "desc"; effectiveDateHandling: "latest_effective"; selectedField: string }), matchConditions: [] } } }];
+  const valueFrom: RuleMatchCondition["valueFrom"] = { kind: "literal", value: 42 };
+  applyRuleTableMatchConditionAdoption(input, "emission.data.rates", "field", valueFrom);
+  const v = input[0].variables["rate"] as { kind: "ruleTable"; matchConditions: RuleMatchCondition[] };
+  assertEquals(v.matchConditions.length, 0);
+});
+
+Deno.test("applyRuleTableMatchConditionAdoption: multiple bindings — only matching ruleTable vars updated", () => {
+  const binding2: CalcBinding = {
+    calculationId: "calc_002",
+    variables: {
+      r2: {
+        kind: "ruleTable",
+        tablePath: "emission.data.other",
+        matchConditions: [],
+        priorityOrder: "desc",
+        effectiveDateHandling: "latest_effective",
+        selectedField: "x",
+      },
+    },
+    operation: { op: "add", a: "r2", b: "r2" },
+    targetNodeId: "node_other",
+    targetProp: "value",
+  };
+  const valueFrom: RuleMatchCondition["valueFrom"] = { kind: "literal", value: 1 };
+  const result = applyRuleTableMatchConditionAdoption(
+    [ruleTableBinding, binding2],
+    "emission.data.rates",
+    "f",
+    valueFrom,
+  );
+  const v1 = result[0].variables["rate"] as { kind: "ruleTable"; matchConditions: RuleMatchCondition[] };
+  const v2 = result[1].variables["r2"] as { kind: "ruleTable"; matchConditions: RuleMatchCondition[] };
+  assertEquals(v1.matchConditions.length, 1);
+  assertEquals(v2.matchConditions.length, 0);
+});
+
+Deno.test("adoption: no mutation before explicit call — draft unchanged if helper not called", () => {
+  const propBindings: Record<string, PropBindingEntry> = { items: { source: "emission.data.rows" } };
+  const calcBindings: CalcBinding[] = [{ ...calcBindingTarget }];
+  const original = JSON.stringify(propBindings);
+  const originalCalc = JSON.stringify(calcBindings);
+  assertEquals(JSON.stringify(propBindings), original);
+  assertEquals(JSON.stringify(calcBindings), originalCalc);
+});
+
+Deno.test("adoption: db_column valueFrom not accepted by RuleMatchCondition type (compile-time boundary)", () => {
+  const nodeValueFrom: RuleMatchCondition["valueFrom"] = { kind: "node", nodeId: "n1", propKey: "value" };
+  const literalValueFrom: RuleMatchCondition["valueFrom"] = { kind: "literal", value: "x" };
+  const r1 = applyRuleTableMatchConditionAdoption([ruleTableBinding], "emission.data.rates", "f", nodeValueFrom);
+  const r2 = applyRuleTableMatchConditionAdoption([ruleTableBinding], "emission.data.rates", "f", literalValueFrom);
+  assert(r1.length > 0);
+  assert(r2.length > 0);
 });

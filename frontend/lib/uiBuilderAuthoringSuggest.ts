@@ -14,7 +14,7 @@
  * - No route: targetRef mixed into manifest/runtimeDispatch candidates.
  * - No DB creation authority — candidates reference existing field sources only.
  * - No silent fallback: unavailable candidates return structured reason.
- * - Mutation authority: none — all helpers are pure derivation only.
+ * - Adoption helpers return derived state; no DB write, no dispatch, no backend call.
  *
  * Reuse: manifestLogicalTables.ts SSOT functions are used via structural cast.
  * LogicalTableShape ≅ LogicalTableDraft (same fields), RelationIntentShape ≅ RelationIntentDraft.
@@ -35,6 +35,8 @@ import {
 } from "./manifestLogicalTables.ts";
 import {
   resolveAllowedTargetProps,
+  type CalcBinding,
+  type RuleMatchCondition,
 } from "../runtime/frontendLocalCalculationResolver.ts";
 import {
   deriveEmissionPathCandidates,
@@ -612,6 +614,91 @@ export type UiBuilderAuthoringSuggestBundle = {
   emissionScalarPaths: EmissionScalarPathCandidateResult;
   emissionArrayPaths: EmissionScalarPathCandidateResult;
 };
+
+// ─── Adoption helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Prop binding entry type for adoption helpers.
+ * Structurally equivalent to DraftNode.propBindings value type.
+ */
+export type PropBindingEntry = {
+  source: string;
+  keyPath?: string;
+  labelPath?: string;
+  valuePath?: string;
+  childrenPath?: string;
+  transform?: string;
+};
+
+/**
+ * Apply a DB column field adoption to propBindings.
+ * Returns new propBindings object; input is not mutated.
+ * Caller is responsible for writing the result to draft state via onCommitNode.
+ */
+export function applyColumnFieldAdoption(
+  propBindings: Record<string, PropBindingEntry>,
+  propName: string,
+  columnName: string,
+  fieldKey: "keyPath" | "labelPath" | "valuePath" | "childrenPath",
+): Record<string, PropBindingEntry> {
+  const existing = propBindings[propName] ?? { source: "" };
+  return { ...propBindings, [propName]: { ...existing, [fieldKey]: columnName } };
+}
+
+/**
+ * Apply an emission array path as propBinding source.
+ * Returns new propBindings object; input is not mutated.
+ */
+export function applyEmissionSourceAdoption(
+  propBindings: Record<string, PropBindingEntry>,
+  propName: string,
+  path: string,
+): Record<string, PropBindingEntry> {
+  const existing = propBindings[propName] ?? { source: "" };
+  return { ...propBindings, [propName]: { ...existing, source: path } };
+}
+
+/**
+ * Update targetProp of all CalcBindings for the given targetNodeId.
+ * Returns new bindings array; input is not mutated.
+ */
+export function applyCalcTargetPropAdoption(
+  calculationBindings: CalcBinding[],
+  targetNodeId: string,
+  prop: string,
+): CalcBinding[] {
+  return calculationBindings.map((b) =>
+    b.targetNodeId === targetNodeId ? { ...b, targetProp: prop } : b
+  );
+}
+
+/**
+ * Add a RuleMatchCondition to all ruleTable variables matching the given tablePath.
+ *
+ * valueFrom must be { kind: "node" } or { kind: "literal" } — these are the only
+ * kinds supported by RuleMatchCondition at runtime. db_column has no RuleMatchCondition
+ * kind and must not be passed here; the UI must guard before calling this function.
+ *
+ * Returns new bindings array; input is not mutated.
+ */
+export function applyRuleTableMatchConditionAdoption(
+  calculationBindings: CalcBinding[],
+  tablePath: string,
+  matchField: string,
+  valueFrom: RuleMatchCondition["valueFrom"],
+): CalcBinding[] {
+  const newCondition: RuleMatchCondition = { field: matchField, valueFrom };
+  return calculationBindings.map((binding) => ({
+    ...binding,
+    variables: Object.fromEntries(
+      Object.entries(binding.variables).map(([k, v]) =>
+        v.kind === "ruleTable" && v.tablePath === tablePath
+          ? [k, { ...v, matchConditions: [...v.matchConditions, newCondition] }]
+          : [k, v]
+      ),
+    ),
+  }));
+}
 
 /**
  * Derive all authoring suggest candidates at once.
