@@ -69,8 +69,8 @@ Scope:
 - `docs/design/admin-console-workflow-ssot.yaml` への contract 追加要否を判断する。
 - 実装完了できない残項目がある場合は partial 判定できる粒度で残 todo を全列挙する。
 
-**Carry-over (ui-builder-suggest-authoring-assist bundle で未実装):**
-- [ ] **active-remote-manifest-column-suggest**: `deriveQualifiedColumnCandidates` は active remote manifest のテーブル/フィールド候補を列挙しない。`/admin/contents` Step 2.5 は relationship 設定を担当し、active remote 側は `remote_manifest_id` / `join_table_ref` / `remote_key` を `screen_data_shape.relationIntents` に保存・検証する。remote target の一覧取得と検証は `manifest:list_relationship_remote_targets` / `assign_screen_data_shape` 側の責務であり、UIBuilder authoring assist が backend dispatch して取得する設計課題として扱わない。残作業は、保存済みの `screen_data_shape` / `relationIntents` / active `topology_manifest` reference を UIBuilder 側の read-only input として候補 derivation に渡す boundary / evidence を整えること。現行の `remoteTargets = []` 固定は未対応の証跡として残し、別 bundle で `deriveQualifiedColumnCandidates` / tests / `docs/system-roadmap.yaml` の `active_remote_manifest_column_suggest` known_gap evidence_ref を揃える。
+**Carry-over boundary correction:**
+- [ ] **active-remote-manifest-column-suggest** は UIBuilder 側の設計判断待ち / backend dispatch 実装待ちとして扱わない。`/admin/contents` Step 2.5 が relationship 設定を担当し、active remote 側の `remote_manifest_id` / `join_table_ref` / `remote_key` は `screen_data_shape.relationIntents` に保存・検証される。remote target の一覧取得と検証は `manifest:list_relationship_remote_targets` / `assign_screen_data_shape` 側の責務で完結する。UIBuilder / suggest / autocomplete の責務は、保存済み `screen_data_shape` / `relationIntents` / projection data shape を component props / propBindings / layout projection へ配線することに限定する。残作業は、roadmap / TODO / SSOT / evidence 上でこの責務境界を明確化し、`deriveQualifiedColumnCandidates` の `remoteTargets = []` 固定を UIBuilder 実装漏れとして誤判定しないよう completion boundary を揃えること。
 
 Completion condition:
 - roadmap / TODO / SSOT の責務が食い違わず、後続 PR closure が bundle 単位で判定できる。
