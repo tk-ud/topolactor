@@ -11,7 +11,6 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `ui-builder-batch-operation` | UIBuilder projection setting batch operation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-suggest-authoring-assist` | UIBuilder projection setting suggest assist | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-projection-authoring-assist-roadmap-alignment` | UIBuilder projection authoring assist roadmap / SSOT alignment | not_started | 1 | `product.admin_topology_authoring` | `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -76,34 +75,11 @@ Note: md_viewer is now a dashboard/read-work component candidate shown in Dashbo
 
 ## UIBuilder projection setting authoring assist 作業順序
 
-`ui-builder-selection-model` は実装済み。`ui-builder-autocomplete-candidates` は実装済み。次 bundle は `ui-builder-batch-operation`。
+`ui-builder-selection-model` は実装済み。`ui-builder-autocomplete-candidates` は実装済み。`ui-builder-batch-operation` は実装済み。
 
 残り実装順序:
-1. `ui-builder-batch-operation`
-2. `ui-builder-suggest-authoring-assist`
-3. `ui-builder-projection-authoring-assist-roadmap-alignment`
-
----
-
-## Bundle `ui-builder-batch-operation`
-
-**Status:** not_started
-**Roadmap bundle:** `product.admin_topology_authoring`
-**Depends on:** `ui-builder-selection-model`
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace`), `docs/design/topology-layout-class-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml` (`component_wiring_execution_lane`)
-
-- [ ] selection set に対する layoutClassRefs / propsJson / stateJson / propBindings / wiring / calc binding の batch authoring assist を、preview / validate / apply boundary を迂回せずに実装する。
-
-Scope:
-- layoutClassRefs batch add/remove/replace は allowedFor / conflict_group / raw className 禁止を守る。
-- propsJson / stateJson は JSON object merge/patch として扱い、malformed JSON や配列 root は明示エラーにする。
-- propBindings は componentKind capability を検証し、非対応 node は silent skip せず per-node error として表示する。
-- wiring / frontend-local calc binding の複数 node 参照補助を追加する。ただし input/change ごとの backend dispatch・逐次DB保存・eval/Function は追加しない。
-- batch apply 前に対象 node 数、変更内容、per-node validation result を preview 表示する。
-
-Completion condition:
-- batch 対象・変更内容・per-node validation が UI 上で確認でき、silent skip がない。
-- existing layout_patch preview / validate / apply と component_style_design / wiring / frontend-local calculation binding の境界を壊さない。
+1. `ui-builder-suggest-authoring-assist`
+2. `ui-builder-projection-authoring-assist-roadmap-alignment`
 
 ---
 

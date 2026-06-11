@@ -135,6 +135,23 @@ import {
   deriveRouteKeyCandidates,
   type DraftNodeMinimal,
 } from "../lib/uiBuilderAutocompleteCandidates.ts";
+import {
+  applyBatchCalcBindingAssist,
+  applyBatchJsonPatch,
+  applyBatchLayoutClassRefs,
+  applyBatchPropBinding,
+  type BatchLayoutClassRefOpKind,
+  type BatchPropBindingDraft,
+  type BatchPreviewResult,
+  type BatchWiringAssistDraft,
+  type BatchWiringAssistPreviewResult,
+  type BatchCalcBindingAssistPreviewResult,
+  previewBatchCalcBindingAssist,
+  previewBatchJsonPatch,
+  previewBatchLayoutClassRefs,
+  previewBatchPropBinding,
+  previewBatchWiringAssist,
+} from "../lib/uiBuilderBatchOperation.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -647,6 +664,523 @@ function ComponentBucketCard({
   );
 }
 
+// ─── 一括操作パネル ──────────────────────────────────────────────────────────
+
+/** Preview table row for batch operation results. */
+function BatchPreviewTable({ result }: { result: BatchPreviewResult }): JSX.Element {
+  return (
+    <div class="mt-2 max-h-48 overflow-y-auto rounded border border-slate-200 bg-white text-[0.65rem]">
+      <table class="w-full">
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50 text-left">
+            <th class="px-2 py-1 font-semibold text-slate-700">ノード</th>
+            <th class="px-2 py-1 font-semibold text-slate-700">状態</th>
+            <th class="px-2 py-1 font-semibold text-slate-700">変更内容</th>
+          </tr>
+        </thead>
+        <tbody>
+          {result.entries.map((e) => (
+            <tr
+              key={e.nodeId}
+              class={`border-b border-slate-100 ${
+                e.status === "error"
+                  ? "bg-red-50"
+                  : e.status === "warning"
+                  ? "bg-amber-50"
+                  : e.status === "no_change"
+                  ? "bg-slate-50"
+                  : "bg-green-50"
+              }`}
+            >
+              <td class="px-2 py-1 font-mono text-slate-700 truncate max-w-[120px]" title={e.nodeId}>
+                {e.nodeLabel}
+              </td>
+              <td class="px-2 py-1">
+                {e.status === "error" && <span class="badge-error">エラー</span>}
+                {e.status === "warning" && <span class="badge-warn">警告</span>}
+                {e.status === "no_change" && <span class="badge-info">変更なし</span>}
+                {e.status === "ok" && <span class="badge-ok">OK</span>}
+              </td>
+              <td class="px-2 py-1 text-slate-600">
+                {e.error
+                  ? <span class="text-red-700 break-all">{e.error}</span>
+                  : e.changeSummary
+                  ? <span class="break-all">{e.changeSummary}</span>
+                  : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div class="border-t border-slate-100 bg-slate-50 px-2 py-1 text-slate-500">
+        対象: {result.targetCount} 件 / 変更: {result.willChangeCount} 件 / エラー: {result.errorCount} 件
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Batch operation panel — shown when selectedNodeIds.size > 1.
+ *
+ * Provides batch authoring assist for:
+ *   layoutClassRefs / propsJson / stateJson / propBindings / wiring reference / calc binding
+ *
+ * SSOT: admin-console-workflow-ssot.yaml (ui_builder_canvas_workspace)
+ * Boundary: apply updates draftNodes only; DB persistence goes through existing layout_patch flow.
+ * silent skip prohibited: all per-node errors shown before apply.
+ * data-batch-operation-panel attribute: test surface marker.
+ */
+function BatchOperationPanel({
+  selectedNodeIds,
+  draftNodes,
+  calculationBindings,
+  onApplyNodes,
+  onApplyCalcBindings,
+}: {
+  selectedNodeIds: ReadonlySet<string>;
+  draftNodes: DraftNode[];
+  calculationBindings: CalcBinding[];
+  onApplyNodes: (nodes: DraftNode[]) => void;
+  onApplyCalcBindings: (bindings: CalcBinding[]) => void;
+}): JSX.Element {
+  // layoutClassRefs tab state
+  const [batchClassOp, setBatchClassOp] = useState<BatchLayoutClassRefOpKind>("add");
+  const [batchClassKey, setBatchClassKey] = useState("");
+  const [batchClassPreview, setBatchClassPreview] = useState<BatchPreviewResult | null>(null);
+
+  // propsJson / stateJson tab state
+  const [batchJsonField, setBatchJsonField] = useState<"propsJson" | "stateJson">("propsJson");
+  const [batchJsonPatch, setBatchJsonPatch] = useState("");
+  const [batchJsonPreview, setBatchJsonPreview] = useState<BatchPreviewResult | null>(null);
+
+  // propBindings tab state
+  const [batchBindingDraft, setBatchBindingDraft] = useState<BatchPropBindingDraft>({
+    propName: "",
+    source: "emission.data.",
+  });
+  const [batchBindingPreview, setBatchBindingPreview] = useState<BatchPreviewResult | null>(null);
+
+  // wiring assist tab state
+  const [batchWiringDraft, setBatchWiringDraft] = useState<BatchWiringAssistDraft>({
+    wiringKind: "",
+    targetSurface: "route",
+    targetRef: "",
+  });
+  const [batchWiringPreview, setBatchWiringPreview] = useState<BatchWiringAssistPreviewResult | null>(null);
+
+  // calc binding assist tab state
+  const [batchCalcJson, setBatchCalcJson] = useState("");
+  const [batchCalcPreview, setBatchCalcPreview] = useState<BatchCalcBindingAssistPreviewResult | null>(null);
+  const [batchCalcError, setBatchCalcError] = useState<string | null>(null);
+
+  if (selectedNodeIds.size === 0) {
+    return (
+      <p class="px-2 py-2 text-center text-[0.65rem] text-slate-400">
+        複数のノードを選択すると一括操作できます
+      </p>
+    );
+  }
+
+  const handlePreviewClassRefs = () => {
+    setBatchClassPreview(
+      previewBatchLayoutClassRefs(draftNodes, selectedNodeIds, batchClassOp, batchClassKey.trim()),
+    );
+  };
+  const handleApplyClassRefs = () => {
+    if (!batchClassPreview || batchClassPreview.hasAnyError) return;
+    onApplyNodes(applyBatchLayoutClassRefs(draftNodes, selectedNodeIds, batchClassOp, batchClassKey.trim()) as DraftNode[]);
+    setBatchClassPreview(null);
+  };
+
+  const handlePreviewJsonPatch = () => {
+    setBatchJsonPreview(previewBatchJsonPatch(draftNodes, selectedNodeIds, batchJsonField, batchJsonPatch));
+  };
+  const handleApplyJsonPatch = () => {
+    if (!batchJsonPreview || batchJsonPreview.hasAnyError) return;
+    onApplyNodes(applyBatchJsonPatch(draftNodes, selectedNodeIds, batchJsonField, batchJsonPatch) as DraftNode[]);
+    setBatchJsonPreview(null);
+  };
+
+  const handlePreviewPropBinding = () => {
+    setBatchBindingPreview(previewBatchPropBinding(draftNodes, selectedNodeIds, batchBindingDraft));
+  };
+  const handleApplyPropBinding = () => {
+    if (!batchBindingPreview || batchBindingPreview.hasAnyError) return;
+    onApplyNodes(applyBatchPropBinding(draftNodes, selectedNodeIds, batchBindingDraft) as DraftNode[]);
+    setBatchBindingPreview(null);
+  };
+
+  const handlePreviewWiring = () => {
+    setBatchWiringPreview(previewBatchWiringAssist(draftNodes, selectedNodeIds, batchWiringDraft));
+  };
+
+  const handlePreviewCalcBinding = () => {
+    setBatchCalcError(null);
+    if (!batchCalcJson.trim()) {
+      setBatchCalcError("BATCH_CALC_EMPTY: CalcBinding JSON が空です");
+      setBatchCalcPreview(null);
+      return;
+    }
+    let parsed: CalcBinding;
+    try {
+      parsed = JSON.parse(batchCalcJson) as CalcBinding;
+    } catch {
+      setBatchCalcError("BATCH_CALC_MALFORMED: JSON として解析できません");
+      setBatchCalcPreview(null);
+      return;
+    }
+    if (!parsed.calculationId?.trim()) {
+      setBatchCalcError("BATCH_CALC_MISSING_ID: calculationId が必要です");
+      setBatchCalcPreview(null);
+      return;
+    }
+    setBatchCalcPreview(previewBatchCalcBindingAssist(calculationBindings, selectedNodeIds, parsed));
+  };
+  const handleApplyCalcBinding = () => {
+    if (!batchCalcPreview || batchCalcPreview.validationErrors.length > 0) return;
+    let parsed: CalcBinding;
+    try {
+      parsed = JSON.parse(batchCalcJson) as CalcBinding;
+    } catch {
+      return;
+    }
+    onApplyCalcBindings(applyBatchCalcBindingAssist(calculationBindings, parsed));
+    setBatchCalcJson("");
+    setBatchCalcPreview(null);
+  };
+
+  const classRefsTab: JSX.Element = (
+    <div class="flex flex-col gap-2 p-1">
+      <div class="flex gap-1 items-center flex-wrap">
+        <label class="text-[0.62rem] text-slate-600 shrink-0">操作:</label>
+        <select
+          class="rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.65rem]"
+          value={batchClassOp}
+          onChange={(e) => {
+            setBatchClassOp((e.target as HTMLSelectElement).value as BatchLayoutClassRefOpKind);
+            setBatchClassPreview(null);
+          }}
+        >
+          <option value="add">add（追加）</option>
+          <option value="remove">remove（削除）</option>
+          <option value="replace_group">replace_group（グループ置換）</option>
+        </select>
+      </div>
+      <div class="flex gap-1 items-center">
+        <label class="text-[0.62rem] text-slate-600 shrink-0">classKey:</label>
+        <input
+          class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
+          placeholder="layout.direction.stack"
+          value={batchClassKey}
+          onInput={(e) => {
+            setBatchClassKey((e.target as HTMLInputElement).value);
+            setBatchClassPreview(null);
+          }}
+          list="batch-class-key-list"
+        />
+        <datalist id="batch-class-key-list">
+          {TOPOLOGY_LAYOUT_CLASS_DICTIONARY.map((e) => (
+            <option key={e.classKey} value={e.classKey}>{e.label}</option>
+          ))}
+        </datalist>
+      </div>
+      <div class="flex gap-1">
+        <button
+          type="button"
+          class="btn-secondary px-2 py-0.5 text-[0.65rem]"
+          onClick={handlePreviewClassRefs}
+          disabled={!batchClassKey.trim()}
+        >
+          プレビュー
+        </button>
+        {batchClassPreview && !batchClassPreview.hasAnyError && batchClassPreview.willChangeCount > 0 && (
+          <button
+            type="button"
+            class="btn-success px-2 py-0.5 text-[0.65rem]"
+            onClick={handleApplyClassRefs}
+          >
+            適用（{batchClassPreview.willChangeCount} 件）
+          </button>
+        )}
+      </div>
+      {batchClassPreview && <BatchPreviewTable result={batchClassPreview} />}
+    </div>
+  );
+
+  const propsStateTab: JSX.Element = (
+    <div class="flex flex-col gap-2 p-1">
+      <div class="flex gap-1 items-center">
+        <label class="text-[0.62rem] text-slate-600 shrink-0">対象:</label>
+        <select
+          class="rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.65rem]"
+          value={batchJsonField}
+          onChange={(e) => {
+            setBatchJsonField((e.target as HTMLSelectElement).value as "propsJson" | "stateJson");
+            setBatchJsonPreview(null);
+          }}
+        >
+          <option value="propsJson">propsJson</option>
+          <option value="stateJson">stateJson</option>
+        </select>
+      </div>
+      <textarea
+        class="w-full rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
+        rows={4}
+        placeholder='{"key": "value"}'
+        value={batchJsonPatch}
+        onInput={(e) => {
+          setBatchJsonPatch((e.target as HTMLTextAreaElement).value);
+          setBatchJsonPreview(null);
+        }}
+      />
+      <p class="text-[0.6rem] text-slate-400">
+        JSON オブジェクト（配列・スカラー不可）。既存値とマージします。上書きになるキーはプレビューで確認してください。
+      </p>
+      <div class="flex gap-1">
+        <button
+          type="button"
+          class="btn-secondary px-2 py-0.5 text-[0.65rem]"
+          onClick={handlePreviewJsonPatch}
+          disabled={!batchJsonPatch.trim()}
+        >
+          プレビュー
+        </button>
+        {batchJsonPreview && !batchJsonPreview.hasAnyError && batchJsonPreview.willChangeCount > 0 && (
+          <button
+            type="button"
+            class="btn-success px-2 py-0.5 text-[0.65rem]"
+            onClick={handleApplyJsonPatch}
+          >
+            適用（{batchJsonPreview.willChangeCount} 件）
+          </button>
+        )}
+      </div>
+      {batchJsonPreview && <BatchPreviewTable result={batchJsonPreview} />}
+    </div>
+  );
+
+  const propBindingsTab: JSX.Element = (
+    <div class="flex flex-col gap-2 p-1">
+      <div class="flex gap-1 items-center">
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-16">propName:</label>
+        <input
+          class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
+          placeholder="items"
+          value={batchBindingDraft.propName}
+          onInput={(e) => {
+            setBatchBindingDraft((d) => ({ ...d, propName: (e.target as HTMLInputElement).value }));
+            setBatchBindingPreview(null);
+          }}
+        />
+      </div>
+      <div class="flex gap-1 items-center">
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-16">source:</label>
+        <input
+          class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
+          placeholder="emission.data.rows"
+          value={batchBindingDraft.source}
+          onInput={(e) => {
+            setBatchBindingDraft((d) => ({ ...d, source: (e.target as HTMLInputElement).value }));
+            setBatchBindingPreview(null);
+          }}
+        />
+      </div>
+      <p class="text-[0.6rem] text-slate-400">
+        source は emission.data. で始まる必要があります。対応 componentKind のみ適用されます。
+      </p>
+      <div class="flex gap-1">
+        <button
+          type="button"
+          class="btn-secondary px-2 py-0.5 text-[0.65rem]"
+          onClick={handlePreviewPropBinding}
+          disabled={!batchBindingDraft.propName.trim()}
+        >
+          プレビュー
+        </button>
+        {batchBindingPreview && !batchBindingPreview.hasAnyError && batchBindingPreview.willChangeCount > 0 && (
+          <button
+            type="button"
+            class="btn-success px-2 py-0.5 text-[0.65rem]"
+            onClick={handleApplyPropBinding}
+          >
+            適用（{batchBindingPreview.willChangeCount} 件）
+          </button>
+        )}
+      </div>
+      {batchBindingPreview && <BatchPreviewTable result={batchBindingPreview} />}
+    </div>
+  );
+
+  const wiringAssistTab: JSX.Element = (
+    <div class="flex flex-col gap-2 p-1">
+      <p class="rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[0.6rem] text-blue-800">
+        配線参照: テンプレートを入力して per-node バリデーション結果を確認できます。
+        実際の保存は既存の単一ノード配線エディターから行ってください。
+      </p>
+      <div class="flex gap-1 items-center">
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">wiringKind:</label>
+        <input
+          class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
+          placeholder="navigation"
+          value={batchWiringDraft.wiringKind}
+          onInput={(e) => {
+            setBatchWiringDraft((d) => ({ ...d, wiringKind: (e.target as HTMLInputElement).value }));
+            setBatchWiringPreview(null);
+          }}
+        />
+      </div>
+      <div class="flex gap-1 items-center">
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">targetSurface:</label>
+        <select
+          class="flex-1 rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.65rem]"
+          value={batchWiringDraft.targetSurface}
+          onChange={(e) => {
+            setBatchWiringDraft((d) => ({ ...d, targetSurface: (e.target as HTMLSelectElement).value }));
+            setBatchWiringPreview(null);
+          }}
+        >
+          {PACKAGE_WIRING_TARGET_SURFACES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+      <div class="flex gap-1 items-center">
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">targetRef:</label>
+        <input
+          class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
+          placeholder="route:my-page または manifest:uuid:key"
+          value={batchWiringDraft.targetRef}
+          onInput={(e) => {
+            setBatchWiringDraft((d) => ({ ...d, targetRef: (e.target as HTMLInputElement).value }));
+            setBatchWiringPreview(null);
+          }}
+        />
+      </div>
+      <button
+        type="button"
+        class="btn-secondary px-2 py-0.5 text-[0.65rem] self-start"
+        onClick={handlePreviewWiring}
+        disabled={!batchWiringDraft.wiringKind.trim()}
+      >
+        バリデーション確認
+      </button>
+      {batchWiringPreview && (
+        <div class="mt-1 max-h-48 overflow-y-auto rounded border border-slate-200 bg-white text-[0.65rem]">
+          {batchWiringPreview.errorCount > 0 && (
+            <div class="px-2 py-1 bg-red-50 text-red-700 text-[0.62rem]">
+              エラー: {batchWiringPreview.errorCount} 件
+            </div>
+          )}
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-slate-200 bg-slate-50 text-left">
+                <th class="px-2 py-1 font-semibold text-slate-700">ノード</th>
+                <th class="px-2 py-1 font-semibold text-slate-700">wiringId</th>
+                <th class="px-2 py-1 font-semibold text-slate-700">結果</th>
+              </tr>
+            </thead>
+            <tbody>
+              {batchWiringPreview.entries.map((e) => (
+                <tr key={e.nodeId} class={`border-b border-slate-100 ${e.validationStatus === "error" ? "bg-red-50" : "bg-green-50"}`}>
+                  <td class="px-2 py-1 font-mono text-slate-700 truncate max-w-[100px]">{e.nodeLabel}</td>
+                  <td class="px-2 py-1 font-mono text-slate-500 text-[0.6rem]">{e.currentWiringId ? e.currentWiringId.slice(0, 8) + "…" : "(なし)"}</td>
+                  <td class="px-2 py-1 text-slate-600 break-all">
+                    {e.error
+                      ? <span class="text-red-700">{e.error}</span>
+                      : <span class="text-green-700">{e.previewNote}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const calcAssistTab: JSX.Element = (
+    <div class="flex flex-col gap-2 p-1">
+      <p class="rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[0.6rem] text-blue-800">
+        選択ノードを参照する CalcBinding を追加します。eval / Function は使用しません。backend dispatch は追加されません。
+      </p>
+      <textarea
+        class="w-full rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
+        rows={5}
+        placeholder='{"calculationId":"...", "targetNodeId":"...", "targetProp":"...", "variables":{}, "operation":{"op":"multiply","a":"x","b":"y"}}'
+        value={batchCalcJson}
+        onInput={(e) => {
+          setBatchCalcJson((e.target as HTMLTextAreaElement).value);
+          setBatchCalcPreview(null);
+          setBatchCalcError(null);
+        }}
+      />
+      <div class="flex gap-1">
+        <button
+          type="button"
+          class="btn-secondary px-2 py-0.5 text-[0.65rem]"
+          onClick={handlePreviewCalcBinding}
+          disabled={!batchCalcJson.trim()}
+        >
+          プレビュー
+        </button>
+        {batchCalcPreview && batchCalcPreview.validationErrors.length === 0 && (
+          <button
+            type="button"
+            class="btn-success px-2 py-0.5 text-[0.65rem]"
+            onClick={handleApplyCalcBinding}
+          >
+            追加
+          </button>
+        )}
+      </div>
+      {batchCalcError && (
+        <p class="text-[0.62rem] text-red-700 break-all">{batchCalcError}</p>
+      )}
+      {batchCalcPreview && (
+        <div class="rounded border border-slate-200 bg-slate-50 p-2 text-[0.65rem]">
+          <p class="text-slate-700">{batchCalcPreview.previewNote}</p>
+          {batchCalcPreview.validationErrors.length > 0 && (
+            <ul class="mt-1 space-y-0.5 pl-0">
+              {batchCalcPreview.validationErrors.map((err, i) => (
+                <li key={i} class="text-red-700 break-all">{err}</li>
+              ))}
+            </ul>
+          )}
+          <p class="mt-1 text-[0.6rem] text-slate-500">
+            backend dispatch追加: {batchCalcPreview.dispatchAdded ? "あり（エラー）" : "なし"} /
+            eval追加: {batchCalcPreview.evalAdded ? "あり（エラー）" : "なし"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div
+      data-batch-operation-panel="true"
+      data-selection-count={selectedNodeIds.size}
+      data-batch-boundary="layout_patch_flow"
+      class="flex flex-col gap-1"
+    >
+      <div class="rounded border border-violet-200 bg-violet-50 px-2 py-1 text-[0.62rem] text-violet-800">
+        {selectedNodeIds.size} 件のノードが選択中です。
+        apply は draftNodes のみを更新します。DB への保存は既存の「適用」モーダルから行ってください。
+      </div>
+      <InspectorTabPanel
+        ariaLabel="一括操作"
+        panelMaxHeight="min(420px, 60vh)"
+        tabs={[
+          { id: "class_refs", label: "クラス", content: classRefsTab },
+          { id: "props_state", label: "Props", content: propsStateTab },
+          { id: "prop_bindings", label: "データ接続", content: propBindingsTab },
+          { id: "wiring", label: "配線参照", content: wiringAssistTab },
+          { id: "calc", label: "計算", content: calcAssistTab },
+        ]}
+      />
+    </div>
+  );
+}
+
 function LayoutRightDock({
   draftNodes,
   selectedNodeId,
@@ -670,6 +1204,7 @@ function LayoutRightDock({
   onCalcBindingsChange,
   emissionDataJson,
   onEmissionDataJsonChange,
+  onBatchApplyNodes,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -694,6 +1229,8 @@ function LayoutRightDock({
   onCalcBindingsChange: (bindings: CalcBinding[]) => void;
   emissionDataJson: string;
   onEmissionDataJsonChange: (json: string) => void;
+  /** Callback for batch operation apply — updates draftNodes with batch result. */
+  onBatchApplyNodes: (nodes: DraftNode[]) => void;
 }): JSX.Element {
   return (
     <aside
@@ -716,7 +1253,20 @@ function LayoutRightDock({
         />
       </Accordion>
 
-      {selectedNode ? (
+      {/* Batch operation panel: shown when multiple nodes selected (batch mode). */}
+      {/* Single-node inspector: shown when exactly one node is selected (primarySelectedNodeId). */}
+      {/* Boundary: single-select = inspector, multi-select = batch panel. */}
+      {(selectedNodeIds?.size ?? 0) > 1 ? (
+        <Accordion title={`一括操作 (${selectedNodeIds!.size} 件選択中)`} defaultOpen={true}>
+          <BatchOperationPanel
+            selectedNodeIds={selectedNodeIds!}
+            draftNodes={draftNodes}
+            calculationBindings={calculationBindings}
+            onApplyNodes={onBatchApplyNodes}
+            onApplyCalcBindings={onCalcBindingsChange}
+          />
+        </Accordion>
+      ) : selectedNode ? (
         <>
           <Accordion
             title={`${UX_LAYOUT_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
@@ -5263,6 +5813,11 @@ function LayoutBuilderSection({
               draftNodeIds={draftNodes.map((n) => n.nodeId)}
               calcResults={calcResults}
               onCalcBindingsChange={setCalculationBindings}
+              onBatchApplyNodes={(updatedNodes) => {
+                setDraftNodes(updatedNodes);
+                pushHistory(updatedNodes, "一括操作適用");
+                setLifecyclePhase("idle");
+              }}
               emissionDataJson={emissionDataJson}
               onEmissionDataJsonChange={setEmissionDataJson}
             />
