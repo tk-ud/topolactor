@@ -357,6 +357,7 @@ Deno.test("layout_patch_json round-trip: calculationBindings field preserved thr
 
 import {
   applyCalcBindingsToSpecs,
+  renderEmission,
 } from "../runtime/renderEmission.ts";
 import type { ComponentSpec } from "../runtime/renderEmission.ts";
 import {
@@ -688,4 +689,47 @@ Deno.test("applyCalcBindingsToSpecs: no fetch/dispatch during deep merge evaluat
   (globalThis as Record<string, unknown>).fetch = orig;
   assertFalse(fetchCalled);
   assertFalse("queueAdminClientCommand" in globalThis);
+});
+
+// ─── renderEmission: emission.calculationBindings fallback ───────────────────
+
+Deno.test("renderEmission: applies emission.calculationBindings when options.calculationBindings is absent", () => {
+  const binding: CalcBinding = {
+    calculationId: "emission-embedded-calc",
+    variables: { base: { kind: "literal", value: 100 }, rate: { kind: "literal", value: 10 } },
+    operation: { op: "taxIncluded", base: "base", rate: "rate" },
+    targetNodeId: "result-node",
+    targetProp: "value",
+  };
+  // Minimal emission with layoutNodes + embedded calculationBindings
+  const emission = {
+    layoutId: "layout-1",
+    layoutNodes: [
+      {
+        nodeId: "result-node",
+        nodeKind: "catalog_component",
+        componentId: "preview-panel-id",
+        componentKey: "calc_topology/calculation_preview_panel",
+        componentKind: "calc_topology/calculation_preview_panel",
+        parentNodeId: null,
+        slotKey: null,
+        orderIndex: 0,
+        x: 0, y: 0, width: 100, height: 50,
+        layoutClassRefs: null,
+        runtimeDispatchAction: null,
+        wiringId: null, wiringKey: null, wiringKind: null,
+        targetSurface: null, targetRef: null,
+        propsJson: null, stateJson: null, propBindings: null,
+        htmlTag: null,
+      },
+    ],
+    calculationBindings: [binding],
+  };
+  // Empty registry — renderEmission will produce specs via layoutNodes path
+  const registry = {};
+  const specs = renderEmission(emission as Parameters<typeof renderEmission>[0], registry);
+  const target = specs.find((s) => s.nodeId === "result-node");
+  assert(target !== undefined, "result-node spec should exist");
+  // taxIncluded(100, 10) = 110
+  assertEquals((target!.runtimeSpec?.props as Record<string, unknown>)?.value, 110);
 });

@@ -30,7 +30,8 @@ public class EmissionBuilder
             ContextRouteRecommendation: shape.ContextRouteRecommendation,
             RecommendNavigationProjection: shape.RecommendNavigationProjection,
             LayoutId: shape.LayoutId,
-            LayoutNodes: shape.LayoutNodes
+            LayoutNodes: shape.LayoutNodes,
+            CalculationBindings: shape.CalculationBindings
         );
     }
 }

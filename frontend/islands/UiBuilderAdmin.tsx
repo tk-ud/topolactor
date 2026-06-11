@@ -109,7 +109,9 @@ import {
 } from "../runtime/propBindingResolver.ts";
 import {
   evaluateAllCalcBindings,
+  resolveAllowedTargetProps,
   validateCalcBinding,
+  validateCalcTargetProp,
   type CalcBinding,
   type CalcOperation,
   type CalcVariableSource,
@@ -725,6 +727,7 @@ function LayoutRightDock({
       <Accordion title={`ローカル計算 (${calculationBindings.length})`} defaultOpen={false}>
         <LocalCalcBindingPanel
           bindings={calculationBindings}
+          draftNodes={draftNodes}
           draftNodeIds={draftNodeIds}
           calcResults={calcResults}
           onBindingsChange={onCalcBindingsChange}
@@ -5903,6 +5906,7 @@ function emptyCalcBinding(targetNodeId: string = ""): CalcBinding {
 
 function LocalCalcBindingPanel({
   bindings,
+  draftNodes,
   draftNodeIds,
   calcResults,
   onBindingsChange,
@@ -5910,6 +5914,7 @@ function LocalCalcBindingPanel({
   onEmissionDataJsonChange,
 }: {
   bindings: CalcBinding[];
+  draftNodes: DraftNode[];
   draftNodeIds: string[];
   calcResults: ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>;
   onBindingsChange: (bindings: CalcBinding[]) => void;
@@ -6015,6 +6020,7 @@ function LocalCalcBindingPanel({
             {isExpanded && (
               <CalcBindingEditor
                 binding={binding}
+                draftNodes={draftNodes}
                 draftNodeIds={draftNodeIds}
                 onChange={updateBinding}
               />
@@ -6040,13 +6046,19 @@ function LocalCalcBindingPanel({
 
 function CalcBindingEditor({
   binding,
+  draftNodes,
   draftNodeIds,
   onChange,
 }: {
   binding: CalcBinding;
+  draftNodes: DraftNode[];
   draftNodeIds: string[];
   onChange: (b: CalcBinding) => void;
 }): JSX.Element {
+  const targetNodeKind = draftNodes.find((n) => n.nodeId === binding.targetNodeId)?.componentKind ?? null;
+  const allowedTargetProps = targetNodeKind ? resolveAllowedTargetProps(targetNodeKind) : null;
+  const targetPropOptions = allowedTargetProps ?? TARGET_PROPS;
+  const targetPropErrors = targetNodeKind ? validateCalcTargetProp(targetNodeKind, binding.targetProp) : [];
   const [varName, setVarName] = useState("a");
 
   const varEntries = Object.entries(binding.variables);
@@ -6110,13 +6122,18 @@ function CalcBindingEditor({
             ))}
           </select>
           <select
-            class="w-24 rounded border border-slate-300 bg-white px-1 py-0.5 text-[0.65rem]"
+            class={`w-24 rounded border px-1 py-0.5 text-[0.65rem] bg-white ${targetPropErrors.length > 0 ? "border-red-400" : "border-slate-300"}`}
             value={binding.targetProp}
             onChange={(e) => updateTargetProp((e.currentTarget as HTMLSelectElement).value)}
           >
-            {TARGET_PROPS.map((p) => <option key={p} value={p}>{p}</option>)}
+            {targetPropOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
+        {targetPropErrors.length > 0 && (
+          <ul class="list-inside list-disc text-[0.6rem] text-red-500">
+            {targetPropErrors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        )}
       </div>
 
       {/* Variables */}

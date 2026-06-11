@@ -503,7 +503,7 @@ export function renderEmission(
         };
       });
 
-    const bindings = options?.calculationBindings ?? [];
+    const bindings = options?.calculationBindings ?? emission.calculationBindings ?? [];
     if (bindings.length === 0) return rawSpecs;
     return applyCalcBindingsToSpecs(
       rawSpecs,

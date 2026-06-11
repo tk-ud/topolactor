@@ -129,7 +129,10 @@ public record RuntimeWorkingShape(
     ContextRouteRecommendationResult? ContextRouteRecommendation = null,
     RecommendNavigationProjectionSpec? RecommendNavigationProjection = null,
     string? LayoutId = null,
-    IReadOnlyList<LayoutNode>? LayoutNodes = null
+    IReadOnlyList<LayoutNode>? LayoutNodes = null,
+    // Frontend-local calculation bindings extracted verbatim from layout_patch_json.calculationBindings[].
+    // Backend does not evaluate these — they are forwarded raw for client-side computation.
+    JsonElement? CalculationBindings = null
 );
 
 /// <summary>
@@ -166,7 +169,10 @@ public record Emission(
     JsonElement? ProjectionDefinition = null,
     IReadOnlyList<HubNavigationSequenceItemDto>? NavigationSequence = null,
     string? LayoutId = null,
-    IReadOnlyList<LayoutNode>? LayoutNodes = null
+    IReadOnlyList<LayoutNode>? LayoutNodes = null,
+    // Frontend-local calculation bindings verbatim from layout_patch_json.calculationBindings[].
+    // Null when absent. Never evaluated server-side.
+    JsonElement? CalculationBindings = null
 );
 
 /// <summary>SSOT runtime_jump_event_contract: scope, from, to, reason (+ planned for user_action).</summary>

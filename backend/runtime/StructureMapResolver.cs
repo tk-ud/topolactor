@@ -94,6 +94,7 @@ public class StructureMapResolver
 
         IReadOnlyList<LayoutNode>? layoutNodes = null;
         IReadOnlyList<ValidationError>? layoutErrors = null;
+        JsonElement? calculationBindings = null;
 
         if (record.LayoutId.HasValue)
         {
@@ -160,6 +161,20 @@ public class StructureMapResolver
                     )).ToList();
                 }
             }
+
+            // Load calculationBindings regardless of node validation outcome — they are forwarded raw.
+            var calcBindingsJson = await _topologyRepository.LoadLayoutCalcBindingsJsonAsync(record.LayoutId.Value, ct);
+            if (!string.IsNullOrWhiteSpace(calcBindingsJson))
+            {
+                try
+                {
+                    calculationBindings = JsonSerializer.Deserialize<JsonElement>(calcBindingsJson);
+                }
+                catch (JsonException)
+                {
+                    // Malformed JSON: omit silently — frontend will receive null and apply no bindings.
+                }
+            }
         }
 
         buildShape:
@@ -176,7 +191,8 @@ public class StructureMapResolver
             Errors: layoutErrors,
             StructureMapStatePolicyJson: record.StatePolicyJson,
             LayoutId: record.LayoutId?.ToString(),
-            LayoutNodes: layoutNodes
+            LayoutNodes: layoutNodes,
+            CalculationBindings: calculationBindings
         );
     }
 
