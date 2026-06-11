@@ -72,8 +72,8 @@ Note: md_viewer is now a dashboard/read-work component candidate shown in Dashbo
 - `frontend/tests/searchSuggestCandidateBoundary.test.ts` を新規作成: prop 型境界・no fetch/eval/Function 境界・framing 宣言テスト。
 
 **残作業 (partial 判定理由):**
-- [ ] backend read-only search endpoint の実装: `onSearch` に対応する backend search API は未実装。runtime spec の "search" event binding を受け取る backend handler が必要。実装は backend dispatch / search endpoint 側の別 bundle 扱い。
-- [ ] `runtimeComponentFactory` の "search" event で suggestions を更新するリアクティブ更新機構: island/page 側で `onSearch` → debounce → backend search → `suggestions` prop 更新の loop が必要。UIBuilder island 実装は別 bundle。
+- [ ] backend read-only search action / provider の定義: `onSearch` に対応する candidate search を既存 `/api/dispatch` / ManifestDispatcher 境界、または authoring read provider 境界に接続する。新規 HTTP endpoint を増やす前提ではない。typing 中の mutation / DB write / apply は禁止。
+- [ ] `runtimeComponentFactory` の "search" event で suggestions を更新するリアクティブ更新機構: island/page 側で `onSearch` → debounce → read-only search provider → `suggestions` prop 更新の loop が必要。UIBuilder island 実装は別 bundle。
 - [ ] `SearchCombobox` へのcombobox candidate derivation integration テスト: `uiBuilderAutocompleteCandidates.ts` helpers を `SearchCombobox` props へ接続する UiBuilderAdmin island 側のテストカバレッジ未整備。
 
 ---
