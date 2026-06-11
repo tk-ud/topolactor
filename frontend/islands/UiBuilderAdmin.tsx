@@ -127,6 +127,8 @@ import {
   type RuleMatchCondition,
 } from "../runtime/frontendLocalCalculationResolver.ts";
 import {
+  deriveComponentKeyCandidates,
+  deriveComponentKindCandidates,
   deriveEmissionPathCandidates,
   deriveNodeCandidates,
   deriveRuleTableFieldCandidates,
@@ -2686,6 +2688,60 @@ function CanvasInspector({
             ⚠ まだ使えない部品 — 先に部品登録を完了してください
           </div>
         )}
+        {node.nodeKind !== "structural_html" && (() => {
+          const keyCandidates = deriveComponentKeyCandidates(draftNodes as DraftNodeMinimal[]);
+          const kindCandidates = deriveComponentKindCandidates(draftNodes as DraftNodeMinimal[]);
+          return (
+            <div class="mt-1 flex flex-col gap-1">
+              <label class="flex flex-col gap-0.5">
+                <span class="text-[0.6rem] text-gray-500">componentKey</span>
+                <select
+                  class="rounded border border-slate-200 bg-white px-1 py-0.5 font-mono text-[0.6rem]"
+                  value={node.componentKey ?? ""}
+                  onChange={(e) => onCommit({ componentKey: (e.target as HTMLSelectElement).value }, "componentKeyを変更")}
+                >
+                  <option value="">— 選択 —</option>
+                  {keyCandidates.map(({ value, source }) => (
+                    <option key={value} value={value}>{value}{source === "draft" ? " ＊" : ""}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="flex flex-col gap-0.5">
+                <span class="text-[0.6rem] text-gray-500">componentKind</span>
+                <select
+                  class="rounded border border-slate-200 bg-white px-1 py-0.5 font-mono text-[0.6rem]"
+                  value={node.componentKind ?? ""}
+                  onChange={(e) => onCommit({ componentKind: (e.target as HTMLSelectElement).value }, "componentKindを変更")}
+                >
+                  <option value="">— 選択 —</option>
+                  {kindCandidates.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              </label>
+              <AdvancedManualOverride title="componentKey / componentKind 手入力（SSOT key 直接指定 / 移行 / デバッグ用）">
+                <label class="block">
+                  componentKey
+                  <input
+                    class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                    defaultValue={node.componentKey ?? ""}
+                    placeholder="例: action/button"
+                    onBlur={(e) => onCommit({ componentKey: (e.target as HTMLInputElement).value }, "componentKeyを手入力で変更")}
+                  />
+                </label>
+                <label class="mt-1 block">
+                  componentKind
+                  <input
+                    class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                    defaultValue={node.componentKind ?? ""}
+                    placeholder="例: action/button"
+                    onBlur={(e) => onCommit({ componentKind: (e.target as HTMLInputElement).value }, "componentKindを手入力で変更")}
+                  />
+                </label>
+              </AdvancedManualOverride>
+            </div>
+          );
+        })()}
         <details class="mt-1">
           <summary class="cursor-pointer text-[0.6rem] text-gray-400">
             技術情報
@@ -7429,11 +7485,15 @@ function PackageDesignPanel({
                                   ))}
                                 </select>
                               </label>
-                              {sourceFieldCandidates.length > 0 && (
+                              {sourceFieldCandidates.length > 0 ? (
                                 <datalist id={pathListId}>
                                   {sourceFieldCandidates.map((f) => <option key={f} value={f} />)}
                                 </datalist>
-                              )}
+                              ) : binding.source.trim() ? (
+                                <p class="text-[0.55rem] text-amber-700">
+                                  フィールド候補なし: {sourceFieldResult.ok === false ? sourceFieldResult.reason : ""}
+                                </p>
+                              ) : null}
                               <label class="block">
                                 keyPath（任意 — 行キーフィールド）
                                 <input

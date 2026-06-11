@@ -11,7 +11,6 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `ui-builder-autocomplete-candidates` | UIBuilder projection setting autocomplete candidates | implemented | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-batch-operation` | UIBuilder projection setting batch operation | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-suggest-authoring-assist` | UIBuilder projection setting suggest assist | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `ui-builder-projection-authoring-assist-roadmap-alignment` | UIBuilder projection authoring assist roadmap / SSOT alignment | not_started | 1 | `product.admin_topology_authoring` | `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml` |
@@ -83,16 +82,6 @@ Note: md_viewer is now a dashboard/read-work component candidate shown in Dashbo
 1. `ui-builder-batch-operation`
 2. `ui-builder-suggest-authoring-assist`
 3. `ui-builder-projection-authoring-assist-roadmap-alignment`
-
----
-
-## Bundle `ui-builder-autocomplete-candidates`
-
-**Status:** implemented
-**Roadmap bundle:** `product.admin_topology_authoring`
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`layout_node_props_contract`, `frontend_local_derived_calculation_binding`), `docs/design/pipeline-continuity-ssot.yaml` (`frontend_projection_constructor_lane`, `component_wiring_execution_lane`)
-
-- [x] UIBuilder 投影設定で手入力になっている componentKey / componentKind / nodeId / emission.data.* path / ruleTable selectedField / targetRef / routeKey を、既存 registry・draftNodes・loaded emission data 由来の候補として提示する。
 
 ---
 
