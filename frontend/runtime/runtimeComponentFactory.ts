@@ -219,6 +219,11 @@ function emitBoundEvent(
   trigger: string,
   payload: Record<string, unknown>,
 ): { ok: true } | { ok: false; error: string } {
+  // Lane 3: frontend_local_derived_calculation_binding — fires BEFORE previewMode gate.
+  // No backend dispatch. No ManifestDispatcher. No queueAdminClientCommand.
+  if (spec.calcTriggerCallback && (trigger === "change" || trigger === "input" || trigger === "select")) {
+    spec.calcTriggerCallback(payload.value ?? payload.raw ?? payload);
+  }
   if (isPreviewMode(spec)) return { ok: true };
   const binding = parseEventBinding(spec.eventBinding[trigger]);
   if (!binding) {

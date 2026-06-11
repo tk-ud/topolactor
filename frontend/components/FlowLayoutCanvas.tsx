@@ -187,6 +187,11 @@ function FlowCanvasNodeView({
     );
   }
 
+  const calcTriggerCallback = calcTriggerNodeIds?.has(node.nodeId)
+    ? (value: unknown) => onNodeValueChange?.(node.nodeId, "value", value)
+    : undefined;
+  const calcValueOverridesForNode = calcOverridesByNodeId?.get(node.nodeId);
+
   return (
     <div {...commonProps}>
       <div class="min-h-0 overflow-auto p-1">
@@ -198,6 +203,8 @@ function FlowCanvasNodeView({
           inlineText={design?.inlineText}
           linkHref={design?.linkHref}
           linkTarget={design?.linkTarget}
+          calcTriggerCallback={calcTriggerCallback}
+          calcValueOverrides={calcValueOverridesForNode}
         />
       </div>
       {(node.slotKey || (sizeLabel && node.widthMode === "custom" && node.heightMode === "custom")) && (
@@ -208,40 +215,6 @@ function FlowCanvasNodeView({
           )}
         </div>
       )}
-      {calcTriggerNodeIds?.has(node.nodeId) && (
-        <div
-          class="border-t border-blue-100 bg-blue-50 px-1 py-0.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <span class="block text-[0.55rem] text-blue-500">計算トリガー入力</span>
-          <input
-            type="text"
-            class="mt-0.5 w-full rounded border border-blue-300 bg-white px-1 py-0.5 text-[0.7rem] outline-none focus:ring-1 focus:ring-blue-400"
-            placeholder="値を入力..."
-            onInput={(e) => {
-              onNodeValueChange?.(node.nodeId, "value", (e.currentTarget as HTMLInputElement).value);
-            }}
-            onChange={(e) => {
-              onNodeValueChange?.(node.nodeId, "value", (e.currentTarget as HTMLInputElement).value);
-            }}
-          />
-        </div>
-      )}
-      {calcOverridesByNodeId?.has(node.nodeId) && (() => {
-        const overrides = calcOverridesByNodeId.get(node.nodeId)!;
-        return (
-          <div class="border-t border-green-100 bg-green-50 px-1 py-0.5">
-            {Object.entries(overrides).map(([prop, val]) => (
-              <div key={prop} class="flex items-center gap-1">
-                <span class="text-[0.55rem] text-green-600">{prop}:</span>
-                <span class="font-mono text-[0.65rem] text-green-800">
-                  {typeof val === "number" ? val.toLocaleString() : String(val)}
-                </span>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
     </div>
   );
 }

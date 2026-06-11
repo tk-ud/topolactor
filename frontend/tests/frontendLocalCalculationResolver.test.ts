@@ -356,6 +356,9 @@ import {
   applyCalcBindingsToSpecs,
 } from "../runtime/renderEmission.ts";
 import type { ComponentSpec } from "../runtime/renderEmission.ts";
+import {
+  buildLayoutPreviewPlaceholderProps,
+} from "../runtime/layoutComponentPreview.ts";
 
 Deno.test("applyCalcBindingsToSpecs: injects calculated value into runtimeSpec.props.value", () => {
   const specs: ComponentSpec[] = [
@@ -468,6 +471,36 @@ Deno.test("buildVisualLayoutPatchJson: no calculationBindings key when array is 
   const json = buildVisualLayoutPatchJson([], []);
   const obj = JSON.parse(json) as Record<string, unknown>;
   assertFalse("calculationBindings" in obj, "should not include calculationBindings key when empty");
+});
+
+// ─── buildLayoutPreviewPlaceholderProps: calcValueOverrides injection ─────────
+
+Deno.test("buildLayoutPreviewPlaceholderProps: calcValueOverrides.value injects into form_input/input data.value", () => {
+  const props = buildLayoutPreviewPlaceholderProps(
+    "form_input/input",
+    "form_input/input",
+    {},
+    { value: 15000 },
+  );
+  const data = (props as Record<string, unknown>).data as Record<string, unknown>;
+  assertEquals(data.value, "15000");
+});
+
+Deno.test("buildLayoutPreviewPlaceholderProps: no calcValueOverrides → value is empty string for form_input/input", () => {
+  const props = buildLayoutPreviewPlaceholderProps("form_input/input", "form_input/input", {});
+  const data = (props as Record<string, unknown>).data as Record<string, unknown>;
+  assertEquals(data.value, "");
+});
+
+Deno.test("buildLayoutPreviewPlaceholderProps: calcValueOverrides.value injected for action/button label", () => {
+  const props = buildLayoutPreviewPlaceholderProps(
+    "action/button",
+    "action/button",
+    {},
+    { label: "計算結果ボタン" },
+  );
+  const data = (props as Record<string, unknown>).data as Record<string, unknown>;
+  assertEquals(data.label, "計算結果ボタン");
 });
 
 Deno.test("unsupported targetProp in ruleTable: literal warning note preserved in binding", () => {

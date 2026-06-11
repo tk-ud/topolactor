@@ -14,6 +14,10 @@ export type LayoutPreviewNodeFrameProps = {
   inlineText?: string;
   linkHref?: string;
   linkTarget?: string;
+  /** frontend_local_derived_calculation_binding: fires when this node's onChange fires. */
+  calcTriggerCallback?: (value: unknown) => void;
+  /** frontend_local_derived_calculation_binding: prop overrides to inject into this node's display. */
+  calcValueOverrides?: Record<string, unknown>;
 };
 
 /** Shared read-only runtime primitive preview frame for canvas and visual audit modal. */
@@ -26,6 +30,8 @@ export function LayoutPreviewNodeFrame({
   inlineText,
   linkHref,
   linkTarget,
+  calcTriggerCallback,
+  calcValueOverrides,
 }: LayoutPreviewNodeFrameProps): JSX.Element {
   const resolvedKind = componentKind ??
     resolveComponentKindForLayoutPreview(componentKey) ??
@@ -38,6 +44,8 @@ export function LayoutPreviewNodeFrame({
     inlineText,
     linkHref,
     linkTarget,
+    calcTriggerCallback,
+    calcValueOverrides,
   });
   if (!result.ok) {
     return (

@@ -639,6 +639,8 @@ function LayoutRightDock({
   draftNodeIds,
   calcResults,
   onCalcBindingsChange,
+  emissionDataJson,
+  onEmissionDataJsonChange,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -659,6 +661,8 @@ function LayoutRightDock({
   draftNodeIds: string[];
   calcResults: ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>;
   onCalcBindingsChange: (bindings: CalcBinding[]) => void;
+  emissionDataJson: string;
+  onEmissionDataJsonChange: (json: string) => void;
 }): JSX.Element {
   return (
     <aside
@@ -723,6 +727,8 @@ function LayoutRightDock({
           draftNodeIds={draftNodeIds}
           calcResults={calcResults}
           onBindingsChange={onCalcBindingsChange}
+          emissionDataJson={emissionDataJson}
+          onEmissionDataJsonChange={onEmissionDataJsonChange}
         />
       </Accordion>
     </aside>
@@ -3473,6 +3479,22 @@ function LayoutBuilderSection({
   const [nodeValues, setNodeValues] = useState<Record<string, Record<string, unknown>>>({});
   const [calcResults, setCalcResults] = useState<ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>>(new Map());
   const lastEmissionDataRef = useRef<Record<string, unknown>>({});
+  const [emissionDataJson, setEmissionDataJson] = useState<string>("");
+
+  useEffect(() => {
+    if (!emissionDataJson.trim()) {
+      lastEmissionDataRef.current = {};
+      return;
+    }
+    try {
+      const parsed = JSON.parse(emissionDataJson);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        lastEmissionDataRef.current = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // keep previous value on parse error
+    }
+  }, [emissionDataJson]);
 
   // ── derived ─────────────────────────────────────────────────────────────
   const paletteSeedEntries: PaletteDraftSeedEntry[] = paletteEntries.map((
@@ -5038,6 +5060,8 @@ function LayoutBuilderSection({
               draftNodeIds={draftNodes.map((n) => n.nodeId)}
               calcResults={calcResults}
               onCalcBindingsChange={setCalculationBindings}
+              emissionDataJson={emissionDataJson}
+              onEmissionDataJsonChange={setEmissionDataJson}
             />
           </div>
         )}
@@ -5881,13 +5905,18 @@ function LocalCalcBindingPanel({
   draftNodeIds,
   calcResults,
   onBindingsChange,
+  emissionDataJson,
+  onEmissionDataJsonChange,
 }: {
   bindings: CalcBinding[];
   draftNodeIds: string[];
   calcResults: ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>;
   onBindingsChange: (bindings: CalcBinding[]) => void;
+  emissionDataJson: string;
+  onEmissionDataJsonChange: (json: string) => void;
 }): JSX.Element {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [emissionJsonError, setEmissionJsonError] = useState<string | null>(null);
 
   function addBinding() {
     const b = emptyCalcBinding(draftNodeIds[0] ?? "");
@@ -5909,6 +5938,33 @@ function LocalCalcBindingPanel({
       <p class="text-[0.65rem] text-slate-500">
         入力変更で backend dispatch なしに計算値を即時反映します。業務基準値は emission.data.* / ruleTable source を使ってください。
       </p>
+      <details class="rounded border border-slate-200 p-1.5">
+        <summary class="cursor-pointer text-[0.65rem] font-semibold text-slate-600">
+          参照データ (emission.data.*) — テスト用 JSON
+        </summary>
+        <p class="mt-1 text-[0.6rem] text-slate-400">
+          本番では backend から emission.data に自動供給されます。ここで入力した JSON はキャンバスプレビューの計算テストにのみ使われます。
+        </p>
+        <textarea
+          class={`mt-1 w-full rounded border px-1 py-0.5 font-mono text-[0.65rem] ${emissionJsonError ? "border-red-400 bg-red-50" : "border-slate-300 bg-white"}`}
+          rows={5}
+          value={emissionDataJson}
+          placeholder={'{\n  "laborRates": [{"rate": 2500, "priority": 1, "enabled": true}]\n}'}
+          onInput={(e) => {
+            const raw = (e.currentTarget as HTMLTextAreaElement).value;
+            onEmissionDataJsonChange(raw);
+            try {
+              JSON.parse(raw || "{}");
+              setEmissionJsonError(null);
+            } catch (err) {
+              setEmissionJsonError(err instanceof Error ? err.message : "JSON parse error");
+            }
+          }}
+        />
+        {emissionJsonError && (
+          <p class="mt-0.5 text-[0.6rem] text-red-500">{emissionJsonError}</p>
+        )}
+      </details>
       {bindings.length === 0 && (
         <p class="text-slate-400">計算バインドがありません。</p>
       )}
