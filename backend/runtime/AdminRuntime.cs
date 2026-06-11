@@ -1044,6 +1044,52 @@ public partial class AdminRuntime
                 "PACKAGE_WIRING_PAYLOAD_INVALID",
                 "packageId, wiringId, wiringKind, and targetSurface are required."));
         }
+        // For manifest surface, targetRef must be manifest:<uuid>:<wiringKey> with non-empty wiringKey,
+        // the manifest must exist, screen_data_shape must be resolved, and wiringKey must be a known candidate.
+        if (request.TargetSurface.Trim().Equals("manifest", StringComparison.OrdinalIgnoreCase))
+        {
+            var targetRefValue = request.TargetRef?.Trim() ?? "";
+            var parts = targetRefValue.Split(':', 3);
+            var validFormat = parts.Length == 3
+                && parts[0].Equals("manifest", StringComparison.OrdinalIgnoreCase)
+                && Guid.TryParse(parts[1], out var manifestTargetId)
+                && !string.IsNullOrWhiteSpace(parts[2]);
+            if (!validFormat)
+            {
+                return (null, new ValidationError(
+                    "MANIFEST_WIRING_KEY_MISSING",
+                    "targetRef for manifest surface must be manifest:<manifestId>:<wiringKey> with a non-empty wiringKey."));
+            }
+            // Re-parse now that validFormat is confirmed.
+            Guid.TryParse(parts[1], out manifestTargetId);
+            var wiringKeyStr = parts[2];
+
+            if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+
+            var manifestDetail = await _manifestRepository.LoadDetailByIdAsync(manifestTargetId, ct);
+            if (manifestDetail is null)
+                return (null, new ValidationError("MANIFEST_NOT_FOUND",
+                    $"Manifest {manifestTargetId} was not found. Cannot save wiring to an unresolved manifest."));
+
+            var shapeEntry = ScreenDataShapeTopologyReader.FindScreenDataShapeEntry(manifestDetail.Topology);
+            if (shapeEntry is null)
+                return (null, new ValidationError("SCREEN_DATA_SHAPE_UNRESOLVED",
+                    "Manifest has no screen_data_shape entry. Configure Step 3 before connecting wiring."));
+
+            if (!shapeEntry.Value.TryGetProperty("screenReadQueryWiring", out var wiringRoot)
+                || wiringRoot.ValueKind != JsonValueKind.Object)
+                return (null, new ValidationError("SCREEN_DATA_SHAPE_UNRESOLVED",
+                    "Manifest screen_data_shape has no screenReadQueryWiring. Define read/query wiring in Step 3 first."));
+
+            var knownKeys = ScreenReadQueryWiringCandidates.GetWiringKeys(wiringRoot);
+            if (knownKeys.Count == 0)
+                return (null, new ValidationError("SCREEN_DATA_SHAPE_UNRESOLVED",
+                    "Manifest screenReadQueryWiring has no candidates. Add searchConditions, aggregationMeasures, or displayColumns in Step 3."));
+
+            if (!knownKeys.Contains(wiringKeyStr))
+                return (null, new ValidationError("MANIFEST_WIRING_KEY_UNRESOLVED",
+                    $"wiringKey '{wiringKeyStr}' is not a known candidate in the manifest's screenReadQueryWiring."));
+        }
         try
         {
             var error = await _uiTopologyRepository.UpdatePackageWiringAsync(

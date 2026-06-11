@@ -52,4 +52,36 @@ public static class ScreenReadQueryWiringCandidates
 
         return candidates;
     }
+
+    /// <summary>
+    /// Returns the set of all wiringKey values present in the screenReadQueryWiring element.
+    /// Used for backend validation that a targetRef wiringKey is a known candidate.
+    /// </summary>
+    public static HashSet<string> GetWiringKeys(JsonElement wiringRoot)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (wiringRoot.ValueKind != JsonValueKind.Object) return keys;
+
+        foreach (var field in new[] { "searchConditions", "havingConditions", "aggregationMeasures", "displayColumns" })
+        {
+            if (!wiringRoot.TryGetProperty(field, out var section) || section.ValueKind != JsonValueKind.Object)
+                continue;
+            if (!section.TryGetProperty("bindings", out var bindings) || bindings.ValueKind != JsonValueKind.Array)
+                continue;
+            foreach (var binding in bindings.EnumerateArray())
+            {
+                if (binding.ValueKind != JsonValueKind.Object) continue;
+                var wk = binding.TryGetProperty("wiringKey", out var wkEl) ? wkEl.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(wk)) keys.Add(wk!);
+            }
+        }
+
+        if (wiringRoot.TryGetProperty("displayColumnMode", out var mode) && mode.ValueKind == JsonValueKind.Object)
+        {
+            var modeKey = mode.TryGetProperty("wiringKey", out var wk) ? wk.GetString() : "screen.displayColumnMode";
+            if (!string.IsNullOrWhiteSpace(modeKey)) keys.Add(modeKey!);
+        }
+
+        return keys;
+    }
 }

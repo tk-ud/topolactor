@@ -104,18 +104,6 @@ Completion condition:
 - 実装完了判定は roadmap/TODO 記述だけで行わず、実コード・テスト evidence と突合する。
 
 ---
-## Bundle `ui-builder-package-wiring-read-query-targets`
-
-**Status:** not_started
-**Roadmap bundle:** `product.admin_topology_authoring`
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`
-
-- [ ] UI Builder package wiring tab で contents / screen_data_shape 由来の entity search / aggregation / displayColumns wiring candidates を選択できるようにする。
-  - route navigation は frontend-local のまま維持する。
-  - search / aggregate は runtime dispatch lane に接続する。
-  - unresolved manifest / unresolved screen_data_shape / missing wiringKey は blocking error として表示する。
-  
----
 
 ## Bundle `preset_team_markdown_saved_view_seed`
 

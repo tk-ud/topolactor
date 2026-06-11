@@ -6885,6 +6885,9 @@ function PackageWiringEditor({
   const [screenWiringCandidates, setScreenWiringCandidates] = useState<
     ScreenReadQueryWiringCandidate[]
   >([]);
+  const [candidateLoadError, setCandidateLoadError] = useState<string | null>(
+    null,
+  );
   const [manifestOptions, setManifestOptions] = useState<
     ManifestPickerOption[]
   >([]);
@@ -6929,6 +6932,7 @@ function PackageWiringEditor({
       setTargetRef("");
       setSelectedManifestId("");
       setSelectedManifestWiringKey("");
+      setCandidateLoadError(null);
       setLoadStatus(null);
       setSaveStatus(null);
       return;
@@ -6957,6 +6961,7 @@ function PackageWiringEditor({
     if (targetSurface !== "manifest") {
       setManifestOptions([]);
       setScreenWiringCandidates([]);
+      setCandidateLoadError(null);
       return;
     }
     (async () => {
@@ -6980,9 +6985,11 @@ function PackageWiringEditor({
   useEffect(() => {
     if (targetSurface !== "manifest" || !selectedManifestId.trim()) {
       setScreenWiringCandidates([]);
+      setCandidateLoadError(null);
       return;
     }
     (async () => {
+      setCandidateLoadError(null);
       const body = await dispatchAdminOp(
         "manifest",
         "list_screen_read_query_wiring",
@@ -6997,6 +7004,7 @@ function PackageWiringEditor({
         setScreenWiringCandidates(data.candidates);
         return;
       }
+      // Fallback: derive candidates from raw topology JSON via manifest:get.
       const getBody = await dispatchAdminOp("manifest", "get", {
         manifestId: selectedManifestId.trim(),
       });
@@ -7008,7 +7016,13 @@ function PackageWiringEditor({
           buildScreenReadQueryWiringCandidates(detail.topologyRawJson),
         );
       } else {
+        // Both primary and fallback failed — explicit error, not silent empty.
         setScreenWiringCandidates([]);
+        const errMsg =
+          getBody?.errors?.[0]?.message ??
+          body?.errors?.[0]?.message ??
+          "マニフェストの read/query 配線情報を取得できませんでした。";
+        setCandidateLoadError(errMsg);
       }
     })();
   }, [targetSurface, selectedManifestId]);
@@ -7034,6 +7048,24 @@ function PackageWiringEditor({
     }
     if (targetSurface === "manifest" && !selectedManifestId.trim()) {
       setSaveStatus("接続先ページを選択してください。");
+      return;
+    }
+    if (targetSurface === "manifest" && candidateLoadError) {
+      setSaveStatus(
+        `配線候補の取得に失敗しています。再読み込み後に再試行してください: ${candidateLoadError}`,
+      );
+      return;
+    }
+    if (targetSurface === "manifest" && screenWiringCandidates.length === 0) {
+      setSaveStatus(
+        "read/query 配線候補がありません。Step 3 で searchConditions / havingConditions / aggregationMeasures / displayColumns を設定してから再試行してください。",
+      );
+      return;
+    }
+    if (targetSurface === "manifest" && !selectedManifestWiringKey.trim()) {
+      setSaveStatus(
+        "read/query 配線キーを選択してください（接続なしでは保存できません）。",
+      );
       return;
     }
     if (!(await confirm("パッケージ配線を保存します。よろしいですか？"))) {
@@ -7168,26 +7200,23 @@ function PackageWiringEditor({
                     <legend class="mb-2 font-medium text-slate-800">
                       Step3 read/query 配線（接続先参照）
                     </legend>
-                    {screenWiringCandidates.length === 0
+                    {candidateLoadError
                       ? (
-                        <p class="text-slate-500">
-                          このページに read/query 配線候補がありません。Step 3
-                          の保存後に再度お試しください。
+                        <p class="rounded border border-red-300 bg-red-50 px-2 py-1.5 text-red-700">
+                          配線候補の取得に失敗しました: {candidateLoadError}
+                          （保存不可 — 再読み込み後に再試行してください）
+                        </p>
+                      )
+                      : screenWiringCandidates.length === 0
+                      ? (
+                        <p class="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-800">
+                          read/query 配線候補がありません。Step 3 で
+                          searchConditions / havingConditions / aggregationMeasures / displayColumns
+                          を設定してから再試行してください（保存不可）。
                         </p>
                       )
                       : (
                         <ul class="space-y-2">
-                          <li>
-                            <label class="flex cursor-pointer items-start gap-2 rounded border border-slate-200 px-2 py-1.5 hover:bg-slate-50">
-                              <input
-                                type="radio"
-                                name={`manifest-wiring-${wiring.wiringId}`}
-                                checked={selectedManifestWiringKey === ""}
-                                onChange={() => handleSelectManifestWiring("")}
-                              />
-                              <span>接続なし（ページのみ紐づけ）</span>
-                            </label>
-                          </li>
                           {screenWiringCandidates.map((c) => (
                             <li key={c.wiringKey}>
                               <label class="flex cursor-pointer items-start gap-2 rounded border border-slate-200 px-2 py-1.5 hover:bg-slate-50">
