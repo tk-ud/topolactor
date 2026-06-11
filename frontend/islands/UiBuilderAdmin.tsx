@@ -2719,7 +2719,7 @@ function CanvasInspector({
                   ))}
                 </select>
               </label>
-              <AdvancedManualOverride title="componentKey / componentKind 手入力（SSOT key 直接指定 / 移行 / デバッグ用）">
+              <AdvancedManualOverride title="部品 key / 種別 key 手入力（SSOT 直接指定 / 移行 / デバッグ用）">
                 <label class="block">
                   componentKey
                   <input
