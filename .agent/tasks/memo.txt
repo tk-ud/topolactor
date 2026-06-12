@@ -1,15 +1,7 @@
 # ui builder
-- 
-
 
 ## canvas
-- modal配置で操作不能になる
-
 
 ## 配置インスペクタ
-- デザインインスペクタにはレスポンシブがあるがレイアウトにレスポンシブがないのは不自然
 
 ## デザインインスペクタ
-- コンポーネントの初期デザイン token key 設定しても上書きされないの？
-- アンカータグなどのリンクURLにbind dataの差込変数(placeholder)が出来るように 例 `https://exsample.com?id={user.id}` 
-- パッケージ配線tab contentsで設定したentityが選択できない route 移動だけで検索や集計が出来ない

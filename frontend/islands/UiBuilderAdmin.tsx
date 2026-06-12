@@ -28,6 +28,7 @@ import {
   UX_DASHBOARD_PRESET_CANDIDATE_LABEL,
   UX_DESIGN_INSPECTOR_SECTION,
   UX_DESIGN_NODE_SAVE_LABEL,
+  UX_EMPTY_CANVAS_DRAG_GUIDANCE,
   UX_LAYOUT_EDITOR_SURFACE,
   UX_LAYOUT_INSPECTOR_SECTION,
   UX_ROUTE_KEY_REQUIRED_FOR_CANVAS,
@@ -1831,7 +1832,8 @@ function LayoutRightDock({
         <>
           <Accordion
             title={`${UX_LAYOUT_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
-            defaultOpen
+            // deno-lint-ignore jsx-boolean-value
+            defaultOpen={true}
           >
             <CanvasInspector
               key={selectedNode.nodeId}
@@ -6578,6 +6580,7 @@ function LayoutBuilderSection({
               ? handleAddFromEmptyState
               : undefined}
             allowEmptyStateTemplates={packageScopedLayout}
+            emptyGuidance={UX_EMPTY_CANVAS_DRAG_GUIDANCE}
             calcTriggerNodeIds={calcTriggerNodeIds}
             calcOverridesByNodeId={calcOverridesByNodeId}
             onNodeValueChange={handleNodeValueChange}
