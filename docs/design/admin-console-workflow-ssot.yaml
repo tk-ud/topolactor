@@ -405,6 +405,15 @@ admin_console_workflow_ssot:
         Canonical cross-reference graph for UIBuilder authoring surfaces. Every preset seed,
         inspector, editor, helper panel, and runtime action must be traceable through this map
         before being treated as implemented or still pending in a downstream seed/TODO.
+      convergence_boundary_note: >
+        This reference map is an observability and navigation surface. It traces which authoring
+        surfaces, inspectors, editors, and runtime actions are related and which candidate expansions
+        are available for authoring. It does not govern convergence. UIBuilder is a horizontal
+        projection/authoring surface; it does not own convergence judgment, promotion judgment, or DB
+        direct write authority. Convergence authority remains in SSOT contracts, backend/runtime
+        validation, preview-validate-apply gates, audit protocols, and physical DB constraints.
+        See docs/design/topolactor-phase-model.md for the full phase-origin → projection/authoring →
+        convergence boundary → persistence point flow.
       route: /admin/ui-builder
       active_topology_boundary:
         rule: >

@@ -45,6 +45,42 @@ Governance exists in convergence boundaries:
 The graph can show where things are related.
 It cannot decide whether a candidate should converge, be persisted, promoted, or rejected.
 
+## Phase-origin observation and downstream convergence flow
+
+Phase, attention, logs, registry tensor, hub, and topology are upstream observation and guidance axes.
+They observe system state, pressures, and candidate directions.
+They do not themselves decide convergence or mutate canonical state.
+
+The canonical flow is:
+
+1. Phase-origin observation: phase / attention / logs / registry tensor / hub / topology observe candidate directions and pressures.
+2. Downstream projection and authoring: UIBuilder and frontend surfaces receive and display candidates for author review.
+3. Convergence boundary: backend validation, runtime dispatch, preview / validate / apply, and promotion boundaries judge convergence.
+4. Persistence point: physical DB tables record the settled state as concrete, auditable evidence.
+
+SQL Attention, recommendation pressure, and logs observation are observation and recommendation basis layers.
+They must not automatically execute fixed-route mutations, topology mutations, or registry mutations.
+Any candidate that becomes actionable requires explicit user action or explicit admin-approved apply.
+
+## Cross-SSOT reference map and UIBuilder reference graph boundary
+
+A cross-SSOT reference map or UIBuilder reference graph improves observability and navigation across surfaces.
+It helps identify which surfaces are related and which candidate expansions are available.
+It does not judge whether a candidate should converge, be persisted, promoted, or rejected.
+The map or graph itself holds no governance authority.
+
+Governance authority over convergence decisions exists exclusively in:
+
+- SSOT contracts (allowed vocabulary, shape, relation)
+- backend validation and runtime dispatch
+- preview / validate / apply gates
+- promotion boundaries
+- audit protocols
+- physical DB persistence constraints
+
+The reference graph can show where things are related.
+It cannot decide whether a candidate should converge, be persisted, promoted, or rejected.
+
 ## Japanese note
 
 このノートは概念補助であり、実行可能な SSOT 契約ではありません。
@@ -54,3 +90,6 @@ Backend は validation / dispatch / apply / promotion / audit judgment を通じ
 Hub / registry は地図・指針・候補軸であり、統治権限そのものではありません。
 参照グラフは観測・参照・展開を助けますが、governance ではありません。
 Governance は SSOT 契約、backend validation、runtime authority、preview / validate / apply、promotion boundary、audit protocol、DB 制約にあります。
+Phase / attention / logs / registry tensor / hub / topology は上流の観測・指針・参照軸であり、収束判断・永続化権限・topology mutation authority を持ちません。
+SQL Attention / recommendation / logs pressure は観測と推薦の根拠層であり、fixed route / topology / registry の自動変更を実行してはなりません。
+cross-SSOT reference map や UIBuilder reference graph は観測・参照・navigation を助けますが、それ自体が収束判断を下す governance authority ではありません。
