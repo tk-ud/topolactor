@@ -46,6 +46,10 @@ ui_builder_preset_ecosystem_ssot:
           - "event.value"
         resolves_to: dotted path traversal on the triggering event payload object
         error_when_untraversable: PAYLOAD_FROM_EVENT_PATH_NOT_FOUND
+        error_when_key_absent: >
+          PAYLOAD_FROM_EVENT_PATH_NOT_FOUND — a key absent at any segment,
+          including the final leaf, is an error. No silent undefined is returned.
+          This distinguishes "key does not exist" from "key is present with value undefined".
       literal:
         syntax: "literal:<string>"
         example: "literal:active"
@@ -54,6 +58,7 @@ ui_builder_preset_ecosystem_ssot:
       - silent_fallback_for_unresolved_source_patterns
       - partial_payload_on_resolution_error (all errors returned together)
       - treating_undefined_node_value_as_error (absent is OK; missing nodeId is error)
+      - silent_undefined_for_absent_event_path_key (absent key at any segment including leaf → PAYLOAD_FROM_EVENT_PATH_NOT_FOUND)
     error_codes:
       - PAYLOAD_FROM_NODE_NOT_FOUND
       - PAYLOAD_FROM_EVENT_PATH_NOT_FOUND
@@ -500,3 +505,5 @@ ui_builder_preset_ecosystem_ssot:
     aggregate_dashboard_seed: implemented (db/migrations/aggregate_dashboard_preset_seed.sql)
     logs_diff_record_history_read_boundary: backend_gap (read method absent; write exists)
     existing_entity_dispatch_alignment: documented (no new implementation required; content_bundle:* dispatch exists)
+    aggregation_function_ref_wiring: open_gap (ssot_ambiguity; contents-side aggregation function wiring surface not yet specified in dedicated SSOT; author fills after preset load)
+    aggregation_preview_table_prop_binding_capability: open_gap (pending_catalog_validation; aggregation_preview_table and hub_statistics_panel capability tags for propBindings data target need validation)

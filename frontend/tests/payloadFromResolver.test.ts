@@ -191,13 +191,15 @@ Deno.test("payloadFromResolver: event path returns error when intermediate segme
   }
 });
 
-Deno.test("payloadFromResolver: event path single segment returns undefined when key absent (undefined is ok for leaf)", () => {
-  // event.value where eventPayload has no value → single segment → returns undefined (value may not be present)
+Deno.test("payloadFromResolver: event path single segment returns PAYLOAD_FROM_EVENT_PATH_NOT_FOUND when key absent", () => {
+  // event.value where eventPayload has no value key → absent key at leaf → structured error, no silent undefined
   const source: PayloadFromSource = { kind: "event_path", path: ["value"] };
   const eventPayload = {}; // no value key
   const result = resolvePayloadFromSource(source, {}, eventPayload);
-  assertEquals(result.ok, true); // single segment → undefined is returned without error
-  if (result.ok) assertEquals(result.value, undefined);
+  assertEquals(result.ok, false); // absent key at any segment (including leaf) is an error
+  if (!result.ok) {
+    assertMatch(result.error, /PAYLOAD_FROM_EVENT_PATH_NOT_FOUND/);
+  }
 });
 
 // ---------------------------------------------------------------------------

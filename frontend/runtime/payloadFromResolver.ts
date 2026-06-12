@@ -83,6 +83,12 @@ export function resolvePayloadFromSource(
             error: `PAYLOAD_FROM_EVENT_PATH_NOT_FOUND: path "event.${source.path.join(".")}" is not traversable at "${traversed}" (value is not an object)`,
           };
         }
+        if (!(seg in (current as Record<string, unknown>))) {
+          return {
+            ok: false,
+            error: `PAYLOAD_FROM_EVENT_PATH_NOT_FOUND: path "event.${source.path.join(".")}" key "${seg}" is absent at "${traversed}"`,
+          };
+        }
         current = (current as Record<string, unknown>)[seg];
         traversed += `.${seg}`;
       }
