@@ -40,6 +40,8 @@ CREATE INDEX IF NOT EXISTS idx_logs_diff_table
   ON logs.diff (physical_table_id, physical_table_name);
 CREATE INDEX IF NOT EXISTS idx_logs_diff_operation_kind
   ON logs.diff (operation_kind);
+CREATE INDEX IF NOT EXISTS idx_logs_diff_record_history
+  ON logs.diff (physical_table_id, record_id, observed_at, diff_id);
 
 -- ---------------------------------------------------------------------------
 -- logs.current

@@ -167,3 +167,24 @@ Deno.test("buildLayoutPreviewPlaceholderProps: card does NOT include items array
   assertExists(data);
   assertExists(data.title);
 });
+
+
+Deno.test("renderLayoutComponentPreview: aggregation_preview_table.primitive renders preview vnode", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const result = renderLayoutComponentPreview({
+    componentKey: "aggregation_preview_table.primitive",
+    componentKind: "calc_topology/aggregation_preview_table",
+  });
+  if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+  assertExists(result.node);
+});
+
+Deno.test("renderLayoutComponentPreview: hub_statistics_panel.primitive renders preview vnode", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const result = renderLayoutComponentPreview({
+    componentKey: "hub_statistics_panel.primitive",
+    componentKind: "calc_topology/hub_statistics_panel",
+  });
+  if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+  assertExists(result.node);
+});

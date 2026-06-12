@@ -21,7 +21,8 @@ import type { PropBinding } from "../api/dispatch.ts";
 
 /**
  * Component kinds that accept prop bindings, and which prop names they accept.
- * Most entries are array props; data_display/json.data accepts the full emission.data object.
+ * Most entries are array props; data_display/json.data and aggregation display .data
+ * targets accept the full resolved emission.data object for read-only projection.
  * Only props listed here may be the target of a propBinding.
  * SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.component_array_prop_capabilities
  */
@@ -44,6 +45,9 @@ export const COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   "table_op/group_by_control": ["columns"],
   "table_op/bulk_action_panel": ["actions"],
   "table_op/virtualized_data_table": ["rows", "columns"],
+  "inline_edit/audit_diff_drawer": ["entries"],
+  "calc_topology/aggregation_preview_table": ["data"],
+  "calc_topology/hub_statistics_panel": ["data"],
 };
 
 /** Allowlist of permitted transform identifiers. */
@@ -60,7 +64,10 @@ function isEmissionDataSource(source: string): boolean {
 }
 
 function acceptsNonArrayResolvedValue(componentKind: string, propName: string): boolean {
-  return componentKind === "data_display/json" && propName === "data";
+  if (propName !== "data") return false;
+  return componentKind === "data_display/json" ||
+    componentKind === "calc_topology/aggregation_preview_table" ||
+    componentKind === "calc_topology/hub_statistics_panel";
 }
 
 /**

@@ -190,6 +190,23 @@ public class SqlAttentionLogsRepository
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Loads physical record history from logs.diff for an explicit physical table + record.
+    /// Empty results are an explicit no-history outcome; implementations must not fall back
+    /// to topology_edit_log or synthesize frontend history.
+    /// </summary>
+    public virtual Task<IReadOnlyList<PhysicalRecordHistoryEntry>> LoadPhysicalRecordHistoryAsync(
+        string tableId,
+        string recordId,
+        CancellationToken ct = default)
+    {
+        ValidatePhysicalRecordHistoryRequest(tableId, recordId);
+        _logger.LogDebug(
+            "SqlAttentionLogsRepository.LoadPhysicalRecordHistoryAsync: no DB connection (test double) — returning empty history for tableId={TableId} recordId={RecordId}.",
+            tableId, recordId);
+        return Task.FromResult<IReadOnlyList<PhysicalRecordHistoryEntry>>([]);
+    }
+
     protected static void ValidateGenerationRequest(AttentionGenerationAppendRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -207,6 +224,12 @@ public class SqlAttentionLogsRepository
         if (request.Source.AttentionId == Guid.Empty) throw new ArgumentException("source_attention_id must not be empty.", nameof(request));
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ActorOrSource);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CommandId);
+    }
+
+    protected static void ValidatePhysicalRecordHistoryRequest(string tableId, string recordId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tableId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
     }
 
     protected static void ValidateLogsDiffRequest(LogsDiffAppendRequest request)

@@ -779,7 +779,9 @@ category_f_calculation_topology:
       semantic_role: data_viewer
       visual_role: panel
       preview_only: true
-      runtimeConnected: false
+      runtimeConnected: true
+      propBindingTargets:
+        data: emission.data
 
     AggregationPreviewTable:
       key: aggregation_preview_table.primitive
@@ -788,7 +790,9 @@ category_f_calculation_topology:
       semantic_role: data_viewer
       visual_role: table
       preview_only: true
-      runtimeConnected: false
+      runtimeConnected: true
+      propBindingTargets:
+        data: emission.data.aggregationResults
 
     CrossEntityCalculationPanel:
       key: cross_entity_calculation_panel.primitive

@@ -430,6 +430,52 @@ SELECT attention_id, current_id, source_set_id,
         return rows;
     }
 
+    public override async Task<IReadOnlyList<PhysicalRecordHistoryEntry>> LoadPhysicalRecordHistoryAsync(
+        string tableId,
+        string recordId,
+        CancellationToken ct = default)
+    {
+        ValidatePhysicalRecordHistoryRequest(tableId, recordId);
+
+        const string sql = @"
+SELECT diff_id, physical_table_id, physical_table_name, record_id, operation_kind,
+       before_state_or_diff_json::text AS before_state_or_diff_json,
+       after_state_or_diff_json::text AS after_state_or_diff_json,
+       observed_at, actor_or_source, archive_policy
+  FROM logs.diff
+ WHERE physical_table_id = @physical_table_id
+   AND record_id = @record_id
+ ORDER BY observed_at ASC, diff_id ASC";
+
+        var rows = new List<PhysicalRecordHistoryEntry>();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("physical_table_id", tableId);
+        cmd.Parameters.AddWithValue("record_id", recordId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new PhysicalRecordHistoryEntry(
+                DiffId: reader.GetGuid(reader.GetOrdinal("diff_id")),
+                TableId: reader.GetString(reader.GetOrdinal("physical_table_id")),
+                TableName: reader.IsDBNull(reader.GetOrdinal("physical_table_name")) ? null : reader.GetString(reader.GetOrdinal("physical_table_name")),
+                RecordId: reader.GetString(reader.GetOrdinal("record_id")),
+                OperationKind: reader.GetString(reader.GetOrdinal("operation_kind")),
+                BeforeStateOrDiffJson: reader.GetString(reader.GetOrdinal("before_state_or_diff_json")),
+                AfterStateOrDiffJson: reader.GetString(reader.GetOrdinal("after_state_or_diff_json")),
+                ObservedAt: reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("observed_at")),
+                ActorOrSource: reader.IsDBNull(reader.GetOrdinal("actor_or_source")) ? null : reader.GetString(reader.GetOrdinal("actor_or_source")),
+                ArchivePolicy: reader.GetString(reader.GetOrdinal("archive_policy"))));
+        }
+
+        _npgsqlLogger.LogInformation(
+            "LoadPhysicalRecordHistoryAsync: loaded {Count} logs.diff row(s) for tableId={TableId} recordId={RecordId}.",
+            rows.Count, tableId, recordId);
+        return rows;
+    }
+
     public override async Task AppendLogsDiffAsync(
         LogsDiffAppendRequest request,
         CancellationToken ct = default)

@@ -306,3 +306,35 @@ for (const seedFile of SEED_FILES) {
     },
   );
 }
+
+Deno.test("[preset-line] aggregate_dashboard.v1 aggregation display nodes bind data without catalog gap", async () => {
+  const sql = await Deno.readTextFile("db/migrations/aggregate_dashboard_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/migrations/aggregate_dashboard_preset_seed.sql");
+  const byId = new Map(snapshot.layoutPatchJson.nodes.map((node) => [String(node.nodeId), node]));
+
+  const table = byId.get("dashboard_aggregation_table") as Record<string, unknown> | undefined;
+  const stats = byId.get("dashboard_stats_panel") as Record<string, unknown> | undefined;
+  assert(table, "dashboard_aggregation_table must exist");
+  assert(stats, "dashboard_stats_panel must exist");
+  const tableBindings = table.propBindings as Record<string, { source: string }> | undefined;
+  const statsBindings = stats.propBindings as Record<string, { source: string }> | undefined;
+  assert(tableBindings?.data?.source === "emission.data.aggregationResults", "aggregation table binds emission.data.aggregationResults");
+  assert(statsBindings?.data?.source === "emission.data", "hub stats panel binds full emission.data");
+  assert(
+    !snapshot.unresolvedJson.some((item) => item.knownGapRef === "aggregation_preview_table_prop_binding_capability"),
+    "aggregation_preview_table_prop_binding_capability must not remain in unresolved_json",
+  );
+});
+
+Deno.test("[preset-line] physical_details_inline_editor history binds emission.data.history without backend gap", async () => {
+  const sql = await Deno.readTextFile("db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const historyNode = snapshot.layoutPatchJson.nodes.find((node) => node.nodeId === "details_history_list") as Record<string, unknown> | undefined;
+  assert(historyNode, "details_history_list must exist");
+  const bindings = historyNode.propBindings as Record<string, { source: string }> | undefined;
+  assert(bindings?.entries?.source === "emission.data.history", "audit diff drawer entries bind emission.data.history");
+  assert(
+    !snapshot.unresolvedJson.some((item) => item.knownGapRef === "logs_diff_record_history_binding"),
+    "logs_diff_record_history_binding must not remain in unresolved_json",
+  );
+});

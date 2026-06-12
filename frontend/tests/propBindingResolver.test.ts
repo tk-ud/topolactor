@@ -365,3 +365,50 @@ Deno.test("validatePropBindingsStructure: json viewer accepts emission.data root
   );
   assertEquals(errs, []);
 });
+
+
+Deno.test("resolvePropBindings: aggregation preview table accepts non-array emission.data.aggregationResults as data", () => {
+  const result = resolvePropBindings(
+    { title: "Aggregation results" },
+    { data: { source: "emission.data.aggregationResults" } },
+    "calc_topology/aggregation_preview_table",
+    { aggregationResults: { rows: [{ group: "A", count: 2 }], totals: { count: 2 } } },
+  );
+
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.data, { rows: [{ group: "A", count: 2 }], totals: { count: 2 } });
+  }
+});
+
+Deno.test("resolvePropBindings: hub statistics panel accepts full emission.data as data", () => {
+  const emissionData = { aggregationResults: [{ hub: "orders", count: 3 }], summary: { hubs: 1 } };
+  const result = resolvePropBindings(
+    { title: "Summary stats" },
+    { data: { source: "emission.data" } },
+    "calc_topology/hub_statistics_panel",
+    emissionData,
+  );
+
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.data, emissionData);
+  }
+});
+
+Deno.test("validatePropBindingsStructure: aggregate dashboard display components allow data target", () => {
+  assertEquals(
+    validatePropBindingsStructure(
+      { data: { source: "emission.data.aggregationResults" } },
+      "calc_topology/aggregation_preview_table",
+    ),
+    [],
+  );
+  assertEquals(
+    validatePropBindingsStructure(
+      { data: { source: "emission.data" } },
+      "calc_topology/hub_statistics_panel",
+    ),
+    [],
+  );
+});

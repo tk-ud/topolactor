@@ -51,11 +51,6 @@ WITH upserted_preset AS (
               "gap": "aggregation_function_ref_wiring",
               "status": "pending_author_selection_via_package_wiring_editor",
               "note": "Author selects a manifest screenReadQueryWiring candidate in PackageWiringEditor. Candidate list action is manifest:list_screen_read_query_wiring; aggregation dashboard candidates normally come from screen_data_shape.screenReadQueryWiring.aggregationMeasures. The saved package wiring uses targetSurface=manifest and persists targetRef=manifest:<manifestId>:<wiringKey> to topology.ui_wiring_registry.target_ref via ui_topology:update_package_wiring. Seed does not invent a real manifestId before author selection."
-            },
-            {
-              "gap": "aggregation_preview_table_prop_binding_capability",
-              "status": "pending_catalog_validation",
-              "note": "aggregation_preview_table and hub_statistics_panel capability tags for propBindings data target need validation."
             }
           ]
         }
@@ -169,8 +164,8 @@ VALUES (
         {"nodeId":"dashboard_status_filter","nodeKind":"catalog_component","componentKey":"select.template","componentKind":"form_input/select","isDraftOnly":false,"slotKey":"filters","orderIndex":3,"parentNodeId":"dashboard_shell","x":456,"y":64,"width":200,"height":48,"propsJson":"{\"label\":\"Status\",\"placeholder\":\"All\"}"},
         {"nodeId":"dashboard_run_button","nodeKind":"catalog_component","componentKey":"button.primitive","componentKind":"action/button","isDraftOnly":false,"slotKey":"filters","orderIndex":4,"parentNodeId":"dashboard_shell","x":672,"y":64,"width":120,"height":48,"propsJson":"{\"label\":\"Run\",\"variant\":\"primary\"}"},
         {"nodeId":"dashboard_results_panel","nodeKind":"catalog_component","componentKey":"panel.alias","componentKind":"disclosure_structure/panel","isDraftOnly":false,"slotKey":"results","orderIndex":5,"parentNodeId":"dashboard_shell","x":24,"y":136,"width":976,"height":592,"propsJson":"{\"title\":\"Aggregation results\"}"},
-        {"nodeId":"dashboard_aggregation_table","nodeKind":"catalog_component","componentKey":"aggregation_preview_table.primitive","componentKind":"calc_topology/aggregation_preview_table","isDraftOnly":false,"slotKey":"main","orderIndex":6,"parentNodeId":"dashboard_results_panel","x":48,"y":184,"width":656,"height":496,"propsJson":"{\"title\":\"Aggregation results\",\"emptyText\":\"Run aggregation to see results.\"}"},
-        {"nodeId":"dashboard_stats_panel","nodeKind":"catalog_component","componentKey":"hub_statistics_panel.primitive","componentKind":"calc_topology/hub_statistics_panel","isDraftOnly":false,"slotKey":"sidebar","orderIndex":7,"parentNodeId":"dashboard_results_panel","x":720,"y":184,"width":256,"height":496,"propsJson":"{\"title\":\"Summary stats\"}"},
+        {"nodeId":"dashboard_aggregation_table","nodeKind":"catalog_component","componentKey":"aggregation_preview_table.primitive","componentKind":"calc_topology/aggregation_preview_table","isDraftOnly":false,"slotKey":"main","orderIndex":6,"parentNodeId":"dashboard_results_panel","x":48,"y":184,"width":656,"height":496,"propsJson":"{\"title\":\"Aggregation results\",\"emptyText\":\"Run aggregation to see results.\"}","propBindings":{"data":{"source":"emission.data.aggregationResults"}}},
+        {"nodeId":"dashboard_stats_panel","nodeKind":"catalog_component","componentKey":"hub_statistics_panel.primitive","componentKind":"calc_topology/hub_statistics_panel","isDraftOnly":false,"slotKey":"sidebar","orderIndex":7,"parentNodeId":"dashboard_results_panel","x":720,"y":184,"width":256,"height":496,"propsJson":"{\"title\":\"Summary stats\"}","propBindings":{"data":{"source":"emission.data"}}},
         {"nodeId":"dashboard_debug_json","nodeKind":"catalog_component","componentKey":"json_viewer.template","componentKind":"data_display/json","isDraftOnly":false,"slotKey":"debug","orderIndex":8,"parentNodeId":"dashboard_shell","x":24,"y":744,"width":480,"height":16,"propsJson":"{\"title\":\"Emission debug\"}","propBindings":{"data":{"source":"emission.data"}}}
       ],
       "layoutClassRefs": []
@@ -185,9 +180,7 @@ VALUES (
     $$[{"nodeId":"dashboard_shell","styleIntent":"section_shell"},{"nodeId":"dashboard_results_panel","styleIntent":"result_panel"}]$$::jsonb,
     $$
     [
-      {"nodeId":"dashboard_run_button","reason":"authoring pending — PackageWiringEditor must select manifest:list_screen_read_query_wiring candidate from screen_data_shape.screenReadQueryWiring.aggregationMeasures and save topology.ui_wiring_registry.target_ref as manifest:<manifestId>:<wiringKey> via ui_topology:update_package_wiring; seed intentionally does not invent a manifestId before author selection","knownGapRef":"aggregation_function_ref_wiring","status":"pending_author_selection_via_package_wiring_editor"},
-      {"nodeId":"dashboard_aggregation_table","reason":"propBindings.data capability validation pending for calc_topology/aggregation_preview_table","knownGapRef":"aggregation_preview_table_prop_binding_capability"},
-      {"nodeId":"dashboard_stats_panel","reason":"propBindings.data capability validation pending for calc_topology/hub_statistics_panel","knownGapRef":"aggregation_preview_table_prop_binding_capability"}
+      {"nodeId":"dashboard_run_button","reason":"authoring pending — PackageWiringEditor must select manifest:list_screen_read_query_wiring candidate from screen_data_shape.screenReadQueryWiring.aggregationMeasures and save topology.ui_wiring_registry.target_ref as manifest:<manifestId>:<wiringKey> via ui_topology:update_package_wiring; seed intentionally does not invent a manifestId before author selection","knownGapRef":"aggregation_function_ref_wiring","status":"pending_author_selection_via_package_wiring_editor"}
     ]
     $$::jsonb
 );
