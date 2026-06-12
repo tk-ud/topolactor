@@ -109,6 +109,7 @@ mapping:
       - docs/design/sql-attention-logs-ssot.md
       - docs/design/sql-attention-logs-ssot.yaml
       - docs/framework-policy.yaml
+      - docs/design/topolactor-phase-model.md
     protocols:
       - .agent/protocols/registry-tensor-policy.md
 
@@ -148,6 +149,7 @@ mapping:
       - docs/design/context-route-recommendation.yaml
       - docs/design/db-schema.yaml
       - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/topolactor-phase-model.md
     protocols:
       - .agent/protocols/registry-tensor-policy.md
 
@@ -766,6 +768,8 @@ mapping:
       - active remote manifest column boundary
       - screen_data_shape relationIntents wiring
       - component props / propBindings / layout projection candidates
+      - calculationBindings author adoption boundary
+      - AuthoringSuggestAssistPanel
       - unresolved remote relation structured errors
     required_docs:
       - docs/design/admin-console-workflow-ssot.yaml
@@ -818,6 +822,19 @@ mapping:
       - frontend/runtime/payloadFromResolver.ts
       - frontend/tests/payloadFromResolver.test.ts
       - frontend/tests/mockPresetIntake.test.ts
+      - frontend/islands/UiBuilderAdmin.tsx
+      - frontend/islands/PresetUploaderDrawer.tsx
+      - frontend/lib/screenReadQueryWiring.ts
+      - frontend/lib/packageWiringPicker.ts
+      - frontend/lib/packageWiringOptions.ts
+      - frontend/lib/uiBuilderAuthoringSuggest.ts
+      - frontend/lib/uiBuilderBatchOperation.ts
+      - PackageWiringEditor
+      - Design Inspector
+      - Layout Inspector
+      - AuthoringSuggestAssistPanel
+      - manifest screenReadQueryWiring
+      - aggregationMeasures wiring candidate
     required_docs:
       - docs/design/ui-builder-preset-ecosystem-ssot.yaml
       - docs/design/admin-console-workflow-ssot.yaml
@@ -827,6 +844,7 @@ mapping:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/sql-attention-logs-ssot.yaml
       - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/topolactor-phase-model.md
     protocols: []
 
 worktypes:
