@@ -318,98 +318,43 @@ Deno.test("mockPresetIntake: parsed visual nodes do not have DB-identity fields"
   assertFalse("topology_manifest_id" in visualNode, "Visual node must not have topology_manifest_id");
 });
 
-// ─── Hub search provisional preset seed ──────────────────────────────────────
+// ─── Hub search wiring regression pins ───────────────────────────────────────
+// These are kept as individual tests because they pin past SSOT violations:
+//   hub:search was used as the dispatch target before the audit.
+//   "query" field was used instead of "keyword" before the alignment.
+// Generic structure/contract tests live in presetSeedLineContract.test.ts.
 
-Deno.test("hub_search preset seed: existing catalog composition and tmp canvas boundary", async () => {
+Deno.test("hub_search preset seed: wiring candidate uses content_bundle:search not hub:search", async () => {
   const sql = await Deno.readTextFile(
     "db/migrations/hub_search_preset_seed.sql",
   );
-
   assert(
-    sql.includes("hub_search.readonly.v1"),
-    "seed must register the canonical preset key",
-  );
-  assert(
-    sql.includes("Hub Search readonly preset seed"),
-    "seed must register the canonical label",
+    sql.includes("content_bundle:search"),
+    "hub_search wiring must target content_bundle:search (SSOT-authorized canonical dispatch action)",
   );
   assert(
-    sql.includes("'ui_builder_canvas'"),
-    "seed must use the UIBuilder canvas source kind",
+    !sql.includes("'hub:search'") && !sql.includes('"hub:search"'),
+    "hub:search must not appear as a wiring target — it was not SSOT-authorized",
   );
   assert(
-    sql.includes("NOT a new component implementation"),
-    "seed must document catalog-only composition",
-  );
-  assert(
-    sql.includes('activeTopologyWrite": false'),
-    "seed must not write active topology",
-  );
-  assert(
-    sql.includes("preview -> validate -> apply"),
-    "seed must preserve preview/validate/apply boundary",
-  );
-  assert(
-    sql.includes("runtime_submit_payload_binding_from_node_values"),
-    "payload binding gap must remain visible",
-  );
-
-  const match = sql.match(
-    /'hub-search-seed\.v1',\s*\$\$\s*([\s\S]*?)\s*\$\$::jsonb/,
-  );
-  assert(match, "compile snapshot layout_patch_json must be present");
-  const layout = JSON.parse(match![1]) as { nodes: VisualNodePayload[] };
-
-  const nodesById = new Map(layout.nodes.map((node) => [node.nodeId, node]));
-  const expected = [
-    ["hub_search_shell", "section.alias", "disclosure_structure/section", null],
-    [
-      "hub_search_input",
-      "search_input.alias",
-      "form_input/search_input",
-      "hub_search_shell",
-    ],
-    [
-      "hub_search_button",
-      "button.primitive",
-      "action/button",
-      "hub_search_shell",
-    ],
-    [
-      "hub_search_results_panel",
-      "panel.alias",
-      "disclosure_structure/panel",
-      "hub_search_shell",
-    ],
-    [
-      "hub_search_results",
-      "card_list.primitive",
-      "display/card_list",
-      "hub_search_results_panel",
-    ],
-    [
-      "hub_search_debug_json",
-      "json_viewer.template",
-      "data_display/json",
-      "hub_search_results_panel",
-    ],
-  ] as const;
-
-  assertEquals(layout.nodes.length, expected.length);
-  for (const [nodeId, componentKey, componentKind, parentNodeId] of expected) {
-    const node = nodesById.get(nodeId);
-    assert(node, `missing node ${nodeId}`);
-    assertEquals(node!.componentKey, componentKey);
-    assertEquals(node!.componentKind, componentKind);
-    assertEquals(node!.parentNodeId, parentNodeId);
-  }
-
-  assertEquals(
-    nodesById.get("hub_search_results")?.propBindings?.items?.source,
-    "emission.data.rows",
-  );
-  assertEquals(
-    nodesById.get("hub_search_debug_json")?.propBindings?.data?.source,
-    "emission.data",
+    !sql.includes("'hub'") && !sql.includes('"hub"') || sql.includes("'content_bundle'"),
+    "targetSurface must be content_bundle, not hub",
   );
 });
+
+Deno.test("hub_search preset seed: payloadFrom uses keyword field for content_bundle:search", async () => {
+  const sql = await Deno.readTextFile(
+    "db/migrations/hub_search_preset_seed.sql",
+  );
+  assert(
+    sql.includes('"keyword": "node:hub_search_input.value"') ||
+      sql.includes('"keyword":"node:hub_search_input.value"'),
+    "payloadFrom must map keyword field from node:hub_search_input.value (content_bundle:search expects keyword)",
+  );
+  assert(
+    !sql.includes('"query": "node:hub_search_input.value"') &&
+      !sql.includes('"query":"node:hub_search_input.value"'),
+    "payloadFrom must not use query field — content_bundle:search uses keyword",
+  );
+});
+

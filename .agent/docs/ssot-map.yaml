@@ -799,6 +799,36 @@ mapping:
       - docs/framework-core.yaml
     protocols: []
 
+  - work_type: ui_builder_preset_ecosystem
+    change_surfaces:
+      - UIBuilder preset ecosystem
+      - preset seed contracts
+      - payloadFrom resolver
+      - hub_search wiring alignment
+      - physical_search_crud_aggregate seed
+      - physical_details_inline_editor_md_generator seed
+      - aggregate_dashboard seed
+      - logs.diff physical record history binding
+      - existing entity validate/save dispatch alignment
+      - docs/design/ui-builder-preset-ecosystem-ssot.yaml
+      - db/migrations/hub_search_preset_seed.sql
+      - db/migrations/physical_search_crud_aggregate_preset_seed.sql
+      - db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql
+      - db/migrations/aggregate_dashboard_preset_seed.sql
+      - frontend/runtime/payloadFromResolver.ts
+      - frontend/tests/payloadFromResolver.test.ts
+      - frontend/tests/mockPresetIntake.test.ts
+    required_docs:
+      - docs/design/ui-builder-preset-ecosystem-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+    supporting_docs:
+      - docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml
+      - docs/design/mock-preset-intake-compiler-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/sql-attention-logs-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+    protocols: []
+
 worktypes:
   ids:
     - audit
