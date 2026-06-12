@@ -27,6 +27,14 @@ ui_builder_preset_ecosystem_ssot:
 
   cross_preset_authoring_boundary:
     authority_ref: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace.authoring_surface_reference_map
+    convergence_boundary_note: >
+      UIBuilder authoring surfaces (canvas, layout inspector, design inspector, package wiring editor,
+      preset intake) and the author_resolution_map below are horizontal projection, authoring, and
+      navigation aids. They are not convergence governance. Convergence authority remains in SSOT
+      contracts, backend/runtime validation, preview-validate-apply gates, audit protocols, and physical
+      DB constraints. No UIBuilder surface holds promotion judgment authority or DB direct write authority.
+      Cross-preset reference maps improve observability; they do not decide whether a candidate should
+      converge, be persisted, promoted, or rejected. See docs/design/topolactor-phase-model.md.
     invariant: >
       Preset seed rows and mock preset compiler output are draft/intake artifacts. They
       pre-populate the canvas, wiring candidate list, style candidates, and unresolved_json
