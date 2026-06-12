@@ -94,6 +94,9 @@
 \echo '[init.sql] applying seed_empty.sql'
 \i /db/seed_empty.sql
 
+\echo '[init.sql] applying ui_component_registry_preset_catalog_bootstrap.sql'
+\i /db/migrations/ui_component_registry_preset_catalog_bootstrap.sql
+
 \echo '[init.sql] applying patch add_enum_dictionary_dispatch_manifests.sql'
 \i /db/patches/add_enum_dictionary_dispatch_manifests.sql
 

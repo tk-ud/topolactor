@@ -5183,10 +5183,15 @@ function LayoutBuilderSection({
 
     // Confirm merge/replace when canvas has existing nodes.
     if (draftNodes.length > 0) {
-      const ok = globalThis.confirm(
+      if (!(await confirm(
         "既存のキャンバスノードがあります。プリセットを読み込むと現在のキャンバスが置き換えられます。続きますか？",
-      );
-      if (!ok) return;
+        {
+          title: "プリセット読み込み",
+          confirmLabel: "読み込む",
+        },
+      ))) {
+        return;
+      }
     }
 
     setPresetLoadStatus("loading");
