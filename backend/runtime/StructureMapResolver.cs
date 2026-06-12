@@ -43,6 +43,7 @@ public class StructureMapResolver
             ["data_display/data_grid"]          = new HashSet<string>(StringComparer.Ordinal) { "rows", "columns" },
             ["data_display/list"]               = new HashSet<string>(StringComparer.Ordinal) { "rows", "items" },
             ["data_display/tree"]               = new HashSet<string>(StringComparer.Ordinal) { "nodes", "items" },
+            ["data_display/json"]               = new HashSet<string>(StringComparer.Ordinal) { "data" },
             ["display/card_list"]               = new HashSet<string>(StringComparer.Ordinal) { "items" },
             ["disclosure/accordion"]            = new HashSet<string>(StringComparer.Ordinal) { "items" },
             ["form_input/select"]               = new HashSet<string>(StringComparer.Ordinal) { "options" },
@@ -341,7 +342,7 @@ public class StructureMapResolver
                 [
                     new ValidationError(
                         "LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT",
-                        $"Node '{node.NodeId}': component kind '{componentKind}' does not accept array prop bindings.")
+                        $"Node '{node.NodeId}': component kind '{componentKind}' does not accept prop bindings.")
                 ];
             }
 
@@ -355,7 +356,7 @@ public class StructureMapResolver
                     [
                         new ValidationError(
                             "LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_PROP",
-                            $"Node '{node.NodeId}': prop '{propName}' is not in acceptsArrayProps for '{componentKind}'.")
+                            $"Node '{node.NodeId}': prop '{propName}' is not an accepted propBinding target for '{componentKind}'.")
                     ];
                 }
 
@@ -369,7 +370,7 @@ public class StructureMapResolver
                     ];
                 }
 
-                // source: required, must start with "emission.data."
+                // source: required, must be "emission.data" or start with "emission.data."
                 if (!bindingProp.Value.TryGetProperty("source", out var sourceProp) ||
                     sourceProp.ValueKind != JsonValueKind.String)
                 {
@@ -381,13 +382,13 @@ public class StructureMapResolver
                     ];
                 }
                 var source = sourceProp.GetString()!;
-                if (!source.StartsWith("emission.data.", StringComparison.Ordinal))
+                if (!(source == "emission.data" || source.StartsWith("emission.data.", StringComparison.Ordinal)))
                 {
                     return
                     [
                         new ValidationError(
                             "LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE",
-                            $"Node '{node.NodeId}', prop '{propName}': source \"{source}\" must start with \"emission.data.\".")
+                            $"Node '{node.NodeId}', prop '{propName}': source \"{source}\" must be \"emission.data\" or start with \"emission.data.\".")
                     ];
                 }
 

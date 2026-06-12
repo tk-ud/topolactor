@@ -258,3 +258,22 @@ Deno.test("runtimePrimitiveRenderer: document_canvas/document_canvas_template_ed
   });
   assertEquals(result.ok, true);
 });
+
+Deno.test("jsonViewerFactory: data prop displays full object even when it contains value key", () => {
+  // data_display/json.data <- emission.data contract:
+  // props.data is structural JSON data, so a nested `value` key must remain part
+  // of the displayed object rather than replacing the display target.
+  const emissionData = {
+    value: "query text",
+    rows: [{ id: "hub-1", label: "Hub 1" }],
+  };
+  const result = renderRuntimeComponent({
+    componentId: "json-debug",
+    componentType: "data_display/json",
+    props: { data: emissionData, value: "legacy fallback" },
+    eventBinding: {},
+  });
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.node.props.value, emissionData);
+});

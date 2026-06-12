@@ -2186,10 +2186,11 @@ function errorStateFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function jsonViewerFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
-    ? props.data as Record<string, unknown>
+  const value = props.data !== undefined
+    ? props.data
+    : props.value !== undefined
+    ? props.value
     : props;
-  const value = "value" in data ? data.value : data;
   return {
     ok: true,
     node: h(JsonViewer, {
