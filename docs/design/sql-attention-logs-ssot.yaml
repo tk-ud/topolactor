@@ -293,9 +293,15 @@ layers:
           - observed_at
           - actor_or_source
           - archive_policy
+        read_boundary:
+          repository_method: LoadPhysicalRecordHistoryAsync(tableId, recordId, ct)
+          admin_runtime_action: physical_record:list_history
+          filter_identity: [physical_table_id, record_id]
+          no_history_status: explicit empty_history with []
         boundary:
           - not_hub_tensor_topology_edit_audit_log
           - not_direct_reuse_of_topology_edit_log
+          - no_silent_fallback_to_topology_edit_log
       logs.candidate:
         pressure: columnization_candidate_pressure_on_physical_time_axis_space
         canonical_alignment:

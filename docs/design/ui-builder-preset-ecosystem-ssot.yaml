@@ -436,14 +436,13 @@ ui_builder_preset_ecosystem_ssot:
     preview_validate_apply_boundary: mandatory
     active_topology_write: prohibited_until_explicit_apply
 
-    known_gaps:
-      - gap: logs_diff_record_history_binding
-        status: backend_gap
-        note: >
-          Physical record history read (create/update/logical_delete/restore/physical_delete)
-          requires a repository read method on SqlAttentionLogsRepository/NpgsqlSqlAttentionLogsRepository
-          and an AdminRuntime action for preset history binding. logs.diff write boundary exists;
-          read boundary is absent. topology_edit_log must NOT be reused for physical record history.
+    known_gaps: []
+    implemented_evidence:
+      logs_diff_record_history_binding:
+        repository_method: backend/repository/SqlAttentionLogsRepository.cs LoadPhysicalRecordHistoryAsync(tableId, recordId, ct)
+        npgsql_method: backend/repository/NpgsqlSqlAttentionLogsRepository.cs reads logs.diff by physical_table_id + record_id
+        admin_runtime_action: backend/runtime/AdminRuntime.cs physical_record:list_history
+        tests: backend/tests/Topolactor.Runtime.Tests/PhysicalRecordHistoryRuntimeTests.cs
 
   # ---------------------------------------------------------------------------
   # aggregate_dashboard.v1
@@ -516,14 +515,14 @@ ui_builder_preset_ecosystem_ssot:
           componentKey: aggregation_preview_table.primitive
           componentKind: calc_topology/aggregation_preview_table
           propBindings:
-            data: { source: "emission.data" }
-          note: propBindings source pending — aggregation_preview_table capability validation required
+            data: { source: "emission.data.aggregationResults" }
+          note: propBindings.data capability validated by propBindingResolver and runtime factory tests
         - nodeId: dashboard_stats_panel
           componentKey: hub_statistics_panel.primitive
           componentKind: calc_topology/hub_statistics_panel
           propBindings:
             data: { source: "emission.data" }
-          note: propBindings source pending — hub_statistics_panel capability validation required
+          note: propBindings.data capability validated by propBindingResolver and runtime factory tests
       debug:
         - nodeId: dashboard_debug_json
           componentKey: json_viewer.template
@@ -549,9 +548,14 @@ ui_builder_preset_ecosystem_ssot:
           and the saved package targetRef is manifest:<manifestId>:<wiringKey>.
           Seed SQL wording has been aligned; remaining state is author selection after
           preset load, not a backend/SSOT implementation gap.
-      - gap: aggregation_preview_table_prop_binding_capability
-        status: pending_catalog_validation
-        note: aggregation_preview_table and hub_statistics_panel capability tags need validation for propBindings data target
+    implemented_evidence:
+      aggregation_preview_table_prop_binding_capability:
+        resolver: frontend/runtime/propBindingResolver.ts COMPONENT_ARRAY_PROP_CAPABILITIES calc_topology data targets
+        runtime_factory: frontend/runtime/runtimeComponentFactory.ts thinPreviewFactory for aggregation_preview_table and hub_statistics_panel
+        seed: db/migrations/aggregate_dashboard_preset_seed.sql propBindings.data entries with unresolved gap removed
+        tests:
+          - frontend/tests/propBindingResolver.test.ts
+          - frontend/tests/runtimeComponentFactory.test.ts
 
   # ---------------------------------------------------------------------------
   # logs_diff_record_history_binding contract
@@ -566,23 +570,23 @@ ui_builder_preset_ecosystem_ssot:
         - logical_delete: soft-delete evidence
         - restore: soft-delete reversal evidence
         - physical_delete: hard-delete evidence (admin only)
-    backend_gap:
+    backend_boundary:
       write_boundary_exists: true
       write_ref: backend/repository/NpgsqlSqlAttentionLogsRepository.cs (INSERT INTO logs.diff)
-      read_boundary_exists: false
-      required_addition:
+      read_boundary_exists: true
+      read_refs:
         repository_method: LoadPhysicalRecordHistoryAsync(tableId, recordId, ct)
         repository_class: SqlAttentionLogsRepository / NpgsqlSqlAttentionLogsRepository
-        admin_runtime_action: physical_record:list_history (or equivalent registered action)
+        admin_runtime_action: physical_record:list_history
         response_shape:
-          rows: array of { operation_kind, before_state_or_diff_json, after_state_or_diff_json, created_at }
+          rows: array of { diff_id, operation_kind, before_state_or_diff_json, after_state_or_diff_json, observed_at, actor_or_source, archive_policy }
+          empty_status: empty_history with []
       prohibited:
         - topology_edit_log reuse for physical record history
         - silent fallback when record has no history rows
       implementation_note: >
-        This backend addition triggers scenario-contract protocol when implemented.
-        Preset seed marks history binding as pending; audit_diff_drawer propBindings
-        source is emission.data.history (populated after action is implemented).
+        audit_diff_drawer propBindings source is emission.data.history populated by the
+        explicit AdminRuntime action; frontend must not synthesize physical history.
 
   # ---------------------------------------------------------------------------
   # existing_entity_validate_save_dispatch_alignment contract
@@ -683,15 +687,14 @@ ui_builder_preset_ecosystem_ssot:
     aggregation_preview_table_prop_binding_capability_audit:
       scope: ui-ux primitive catalog plus propBindingResolver capability list
       rule: >
-        Remains a catalog/runtime capability validation gap, not solved by the package wiring
-        bridge. Audit whether calc_topology/aggregation_preview_table and
-        calc_topology/hub_statistics_panel should accept propBindings data.
+        Closed: calc_topology/aggregation_preview_table and calc_topology/hub_statistics_panel
+        accept propBindings.data through frontend/runtime/propBindingResolver.ts and render
+        through runtimeComponentFactory thinPreviewFactory without unresolved seed gaps.
     logs_diff_record_history_binding_backend_read_audit:
       scope: backend read boundary for logs.diff physical record history
       rule: >
-        Remains a backend gap because the write boundary exists but the repository/AdminRuntime
-        read action for physical record history is absent. Do not reclassify it as an
-        inspector authoring issue.
+        Closed: repository/AdminRuntime read action uses logs.diff directly and keeps
+        topology_edit_log out of the physical record history boundary.
     phase_origin_convergence_boundary_note:
       scope: conceptual note for phase-origin observation and convergence boundaries
       source: docs/design/topolactor-phase-model.md
@@ -708,8 +711,8 @@ ui_builder_preset_ecosystem_ssot:
     physical_search_crud_aggregate_seed: implemented (db/migrations/physical_search_crud_aggregate_preset_seed.sql)
     physical_details_inline_editor_md_generator_seed: implemented (db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql)
     aggregate_dashboard_seed: implemented (db/migrations/aggregate_dashboard_preset_seed.sql)
-    logs_diff_record_history_read_boundary: backend_gap (read method absent; write exists)
+    logs_diff_record_history_read_boundary: implemented (SqlAttentionLogsRepository/NpgsqlSqlAttentionLogsRepository LoadPhysicalRecordHistoryAsync + AdminRuntime physical_record:list_history)
     existing_entity_dispatch_alignment: documented (no new implementation required; content_bundle:* dispatch exists)
     aggregation_function_ref_wiring: seed_wording_aligned_authoring_pending (PackageWiringEditor + manifest screenReadQueryWiring bridge defined here; remaining state is author selection after preset load, not backend/SSOT implementation gap)
-    aggregation_preview_table_prop_binding_capability: open_gap (pending_catalog_validation; aggregation_preview_table and hub_statistics_panel capability tags for propBindings data target need validation)
+    aggregation_preview_table_prop_binding_capability: implemented (calc_topology aggregation_preview_table/hub_statistics_panel accept propBindings.data via propBindingResolver; seed unresolved_json gap removed)
     preset_seed_line_contract_test: implemented (frontend/tests/presetSeedLineContract.test.ts; 24 tests across 4 seeds × 6 contracts; per-seed sql.includes proliferation retired)

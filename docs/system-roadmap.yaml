@@ -381,6 +381,8 @@ system_roadmap_ssot:
         - frontend/tests/runtimeComponentFactory.test.ts
         - frontend/tests/renderEmissionPropBindings.test.ts
         - frontend/tests/propBindingResolver.test.ts
+        - frontend/tests/presetSeedLineContract.test.ts
+        - backend/tests/Topolactor.Runtime.Tests/PhysicalRecordHistoryRuntimeTests.cs
         - frontend/tests/cssDictionary.test.ts
         - frontend/tests/draftPreviewToEmission.test.ts
         - frontend/tests/uiBuilderAuthoringSuggest.test.ts
@@ -406,6 +408,7 @@ system_roadmap_ssot:
         - ui_builder_projection_authoring_assist_uses_saved_screen_data_shape_relationIntents_and_projection_shape_only
         - active_remote_manifest_table_column_selection_remains_owned_by_contents_step_2_5_and_assign_screen_data_shape
         - deriveQualifiedColumnCandidates_remoteTargets_empty_array_is_intentional_no_backend_dispatch_boundary_and_unresolved_remote_is_structured_error
+        - ui_builder_preset_ecosystem_remaining_backend_catalog_gaps_closed_without_reopening_author_selection_pending_wiring
       known_gap_ref:
         - visual_builder_production_ready_manual_accessibility_acceptance_pending
       files:

@@ -10,8 +10,8 @@
 -- detail view + inline edit + history canvas draft built from existing catalog
 -- entries only. It is NOT a new component implementation and is NOT active topology.
 -- All mutation flows use contents topology assigned content_bundle:* operation refs.
--- Physical record history binding requires backend read boundary implementation
--- (logs_diff_record_history_binding backend gap — see SSOT).
+-- Physical record history binding uses AdminRuntime physical_record:list_history
+-- backed by logs.diff; topology_edit_log is not a history source.
 -- UIBuilder loads this into a selected route package tmp canvas draft;
 -- human edit → preview → validate → apply boundary remains mandatory.
 -- =============================================================================
@@ -51,13 +51,7 @@ WITH upserted_preset AS (
             "promote": "content_bundle:promote_draft"
           },
           "payloadFromResolver": "frontend/runtime/payloadFromResolver.ts",
-          "knownGaps": [
-            {
-              "gap": "logs_diff_record_history_binding",
-              "status": "backend_gap",
-              "note": "Physical record history read boundary (logs.diff) is absent. audit_diff_drawer history binding is pending until backend read method is implemented."
-            }
-          ]
+          "knownGaps": []
         }
         $$::jsonb,
         $$
@@ -183,7 +177,7 @@ VALUES (
         {"nodeId":"details_field_label_1","nodeKind":"catalog_component","componentKey":"inline_editable_field.primitive","componentKind":"inline_edit/inline_editable_field","isDraftOnly":false,"slotKey":"details","orderIndex":4,"parentNodeId":"details_tabs","x":48,"y":136,"width":448,"height":64,"propsJson":"{\"label\":\"Field 1\",\"placeholder\":\"Enter value...\"}"},
         {"nodeId":"details_status_select","nodeKind":"catalog_component","componentKey":"select.template","componentKind":"form_input/select","isDraftOnly":false,"slotKey":"details","orderIndex":5,"parentNodeId":"details_tabs","x":512,"y":136,"width":240,"height":48,"propsJson":"{\"label\":\"Status\"}"},
         {"nodeId":"details_save_button","nodeKind":"catalog_component","componentKey":"confirmed_update_button.primitive","componentKind":"inline_edit/confirmed_update_button","isDraftOnly":false,"slotKey":"details","orderIndex":6,"parentNodeId":"details_tabs","x":864,"y":680,"width":136,"height":40,"propsJson":"{\"label\":\"Save changes\"}"},
-        {"nodeId":"details_history_list","nodeKind":"catalog_component","componentKey":"audit_diff_drawer.primitive","componentKind":"inline_edit/audit_diff_drawer","isDraftOnly":false,"slotKey":"history","orderIndex":7,"parentNodeId":"details_tabs","x":48,"y":136,"width":880,"height":440,"propsJson":"{\"title\":\"Field history\",\"emptyText\":\"No history yet.\"}"},
+        {"nodeId":"details_history_list","nodeKind":"catalog_component","componentKey":"audit_diff_drawer.primitive","componentKind":"inline_edit/audit_diff_drawer","isDraftOnly":false,"slotKey":"history","orderIndex":7,"parentNodeId":"details_tabs","x":48,"y":136,"width":880,"height":440,"propsJson":"{\"title\":\"Field history\",\"emptyText\":\"No history yet.\"}","propBindings":{"entries":{"source":"emission.data.history"}}},
         {"nodeId":"details_history_drawer_button","nodeKind":"catalog_component","componentKey":"button.primitive","componentKind":"action/button","isDraftOnly":false,"slotKey":"history","orderIndex":8,"parentNodeId":"details_tabs","x":48,"y":600,"width":160,"height":40,"propsJson":"{\"label\":\"Full history\",\"variant\":\"secondary\"}"},
         {"nodeId":"details_full_history_drawer","nodeKind":"catalog_component","componentKey":"row_detail_drawer.primitive","componentKind":"table_op/row_detail_drawer","isDraftOnly":false,"slotKey":"drawers","orderIndex":9,"parentNodeId":"details_shell","x":680,"y":72,"width":320,"height":680,"propsJson":"{\"title\":\"Full field history\"}"},
         {"nodeId":"details_debug_json","nodeKind":"catalog_component","componentKey":"json_viewer.template","componentKind":"data_display/json","isDraftOnly":false,"slotKey":"debug","orderIndex":10,"parentNodeId":"details_shell","x":24,"y":720,"width":640,"height":40,"propsJson":"{\"title\":\"Emission debug\"}","propBindings":{"data":{"source":"emission.data"}}}
@@ -201,7 +195,6 @@ VALUES (
     $$[{"nodeId":"details_shell","styleIntent":"section_shell"},{"nodeId":"details_tabs","styleIntent":"main_tabs"}]$$::jsonb,
     $$
     [
-      {"nodeId":"details_history_list","reason":"propBindings.data source emission.data.history is pending — requires backend logs.diff physical record history read boundary implementation","knownGapRef":"logs_diff_record_history_binding"},
       {"nodeId":"details_back_button","reason":"targetRef is empty — author must set route:<crudRouteKey> after preset load","knownGapRef":"back_button_route_navigation_target"}
     ]
     $$::jsonb

@@ -294,6 +294,7 @@ public partial class AdminRuntime
             "content_bundle:get_relation"               => await DataContentBundleGetRelationAsync(vector, ct),
             "content_bundle:update_entity_draft"        => await DataContentBundleUpdateDraftAsync(vector, ct),
             "content_bundle:list_hub_relations"         => await DataContentBundleListHubRelationsAsync(ct),
+            "physical_record:list_history"             => await DataPhysicalRecordListHistoryAsync(vector, ct),
             "hub_navigation:list_manifests"             => await HubNavigationListManifestsAsync(ct),
             "hub_navigation:get_hub_relations"          => await HubNavigationGetHubRelationsAsync(vector, ct),
             "hub_navigation:create"                     => await HubNavigationCreateAsync(vector, ct),
@@ -417,6 +418,62 @@ public partial class AdminRuntime
         {
             _logger.LogError(ex, "AdminRuntime.DataSystemCiInspectAsync failed for target={Target}", target);
             return (null, new ValidationError("SYSTEM_CI_DIAGNOSTIC_FAILED", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataPhysicalRecordListHistoryAsync(
+        OperationVector vector,
+        CancellationToken ct)
+    {
+        if (_sqlAttentionLogsRepository is null)
+            return (null, new ValidationError("SQL_ATTENTION_LOGS_REPOSITORY_UNAVAILABLE", "SqlAttentionLogsRepository is not registered for physical_record:list_history"));
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED", "payload.tableId and payload.recordId are required for physical_record:list_history"));
+
+        var payload = vector.Payload.Value;
+        var tableId = payload.TryGetProperty("tableId", out var tableIdEl) ? tableIdEl.GetString() : null;
+        tableId ??= payload.TryGetProperty("physicalTableId", out var physicalTableIdEl) ? physicalTableIdEl.GetString() : null;
+        var recordId = payload.TryGetProperty("recordId", out var recordIdEl) ? recordIdEl.GetString() : null;
+
+        if (string.IsNullOrWhiteSpace(tableId))
+            return (null, new ValidationError("PHYSICAL_RECORD_TABLE_ID_REQUIRED", "payload.tableId is required for physical_record:list_history"));
+        if (string.IsNullOrWhiteSpace(recordId))
+            return (null, new ValidationError("PHYSICAL_RECORD_RECORD_ID_REQUIRED", "payload.recordId is required for physical_record:list_history"));
+
+        try
+        {
+            var history = await _sqlAttentionLogsRepository.LoadPhysicalRecordHistoryAsync(tableId, recordId, ct);
+            var responseHistory = history.Select(entry => new
+            {
+                diff_id = entry.DiffId,
+                tableId = entry.TableId,
+                tableName = entry.TableName,
+                recordId = entry.RecordId,
+                operation_kind = entry.OperationKind,
+                before_state_or_diff_json = entry.BeforeStateOrDiffJson,
+                after_state_or_diff_json = entry.AfterStateOrDiffJson,
+                observed_at = entry.ObservedAt,
+                actor_or_source = entry.ActorOrSource,
+                archive_policy = entry.ArchivePolicy,
+            }).ToList();
+            var response = new
+            {
+                ok = true,
+                status = responseHistory.Count == 0 ? "empty_history" : "ok",
+                tableId,
+                recordId,
+                history = responseHistory,
+            };
+            return (JsonSerializer.SerializeToElement(response), null);
+        }
+        catch (ArgumentException ex)
+        {
+            return (null, new ValidationError("PHYSICAL_RECORD_HISTORY_REQUEST_INVALID", ex.Message));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminRuntime.DataPhysicalRecordListHistoryAsync failed for tableId={TableId} recordId={RecordId}", tableId, recordId);
+            return (null, new ValidationError("PHYSICAL_RECORD_HISTORY_READ_FAILED", ex.Message));
         }
     }
 

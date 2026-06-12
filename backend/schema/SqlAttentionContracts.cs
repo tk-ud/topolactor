@@ -411,3 +411,21 @@ public record LogsDiffAppendRequest(
     string? ActorOrSource,
     string ArchivePolicy
 );
+
+/// <summary>
+/// Read-only physical record history entry loaded from logs.diff.
+/// This contract is deliberately scoped to physical_table_id + record_id and must not
+/// be synthesized from topology_edit_log or UI operation audit events.
+/// </summary>
+public record PhysicalRecordHistoryEntry(
+    Guid DiffId,
+    string TableId,
+    string? TableName,
+    string RecordId,
+    string OperationKind,
+    string BeforeStateOrDiffJson,
+    string AfterStateOrDiffJson,
+    DateTimeOffset ObservedAt,
+    string? ActorOrSource,
+    string ArchivePolicy
+);
