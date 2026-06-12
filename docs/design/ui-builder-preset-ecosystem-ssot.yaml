@@ -412,7 +412,7 @@ ui_builder_preset_ecosystem_ssot:
           componentKey: audit_diff_drawer.primitive
           componentKind: inline_edit/audit_diff_drawer
           propBindings:
-            data: { source: "emission.data.history" }
+            entries: { source: "emission.data.history" }
           note: bound to logs.diff physical mutation history (create/update/logical_delete/restore/physical_delete)
         - nodeId: details_history_drawer_button
           componentKey: button.primitive
@@ -585,7 +585,7 @@ ui_builder_preset_ecosystem_ssot:
         - topology_edit_log reuse for physical record history
         - silent fallback when record has no history rows
       implementation_note: >
-        audit_diff_drawer propBindings source is emission.data.history populated by the
+        audit_diff_drawer propBindings.entries source is emission.data.history populated by the
         explicit AdminRuntime action; frontend must not synthesize physical history.
 
   # ---------------------------------------------------------------------------
