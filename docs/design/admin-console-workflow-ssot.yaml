@@ -553,6 +553,10 @@ admin_console_workflow_ssot:
                 role: aggregation / grouped measure / dashboard card surface
               hub_search:
                 role: hub relation / manifest relation / topology search surface
+                seed_ref: db/migrations/hub_search_preset_seed.sql
+                preset_key: hub_search.readonly.v1
+                implementation_note: existing component catalog composition only; not a new component implementation; not active topology
+                known_gap_ref: runtime_submit_payload_binding_from_node_values
               physical_search_crud_aggregate:
                 role: physical table / jsonb record search, CRUD, aggregation surface
               physical_details_inline_editor_md_generator:
@@ -579,9 +583,14 @@ admin_console_workflow_ssot:
                 Team Markdown Dashboard has been removed to resolve responsibility mixing.
                 md_viewer.projection is shown in DashboardCandidatePalette in UIBuilder canvas
                 (dashboard_placement_candidate tag; registrationRequired:false; DB bucket registration
-                not required). Provisional preset surfaces (aggregate_dashboard, hub_search,
-                physical_search_crud_aggregate, physical_details_inline_editor_md_generator) remain
-                planned until each has its own SSOT and implementation.
+                not required). hub_search.readonly.v1 is registered as a provisional
+                UIBuilder canvas preset seed in db/migrations/hub_search_preset_seed.sql using
+                existing catalog components only; it is not active topology and still depends on
+                the preview / validate / apply boundary after load. Remaining provisional preset
+                surfaces (aggregate_dashboard, physical_search_crud_aggregate,
+                physical_details_inline_editor_md_generator) remain planned until each has its own
+                SSOT and implementation. hub_search interactive submit payload resolution remains
+                a known runtime gap under runtime_submit_payload_binding_from_node_values.
       prohibited:
         - explicit packaging button, confirm-then-package dialog, or checkbox multi-select submit as primary path
         - two-step select-then-package phase framing
@@ -720,16 +729,17 @@ admin_console_workflow_ssot:
               propBindings:
                 type: object (Record<string, PropBinding>)
                 meaning: >
-                  Array prop bindings from runtime emission.data to component array props.
+                  Prop bindings from runtime emission.data to component props; most targets are array props,
+                  while data_display/json.data may receive the full emission.data object.
                   Resolved after propsJson/stateJson; wins over static props for the same key.
                   Only permitted on components whose componentKind is in COMPONENT_ARRAY_PROP_CAPABILITIES.
-                priority: 4 (after stateJson; highest precedence for array prop targets)
+                priority: 4 (after stateJson; highest precedence for prop binding targets)
                 implementation_ref: frontend/runtime/propBindingResolver.ts
                 binding_descriptor:
                   source:
                     required: true
-                    format: "emission.data.<path>" (must start with "emission.data.")
-                    examples: ["emission.data.rows", "emission.data.activeColumns", "emission.data.aggregationResults"]
+                    format: "emission.data" or "emission.data.<path>"
+                    examples: ["emission.data", "emission.data.rows", "emission.data.activeColumns", "emission.data.aggregationResults"]
                   keyPath: optional string — field name for item key within each element
                   labelPath: optional string — field name for display label within each element
                   valuePath: optional string — field name for value within each element
@@ -745,7 +755,8 @@ admin_console_workflow_ssot:
               4: propBindings (resolved from emission.data; overwrites same-key static props)
             component_array_prop_capabilities:
               meaning: >
-                Only component kinds listed here may receive array prop bindings.
+                Only component kinds listed here may receive prop bindings. Most targets are array props;
+                data_display/json.data accepts the full emission.data object for read-only debug projection.
                 Non-capability components must produce a validation error on propBindings presence.
               implementation_ref: frontend/runtime/propBindingResolver.ts COMPONENT_ARRAY_PROP_CAPABILITIES
               entries:
@@ -753,6 +764,7 @@ admin_console_workflow_ssot:
                 data_display/data_grid: [rows, columns]
                 data_display/list: [rows, items]
                 data_display/tree: [nodes, items]
+                data_display/json: [data]
                 display/card_list: [items]
                 disclosure/accordion: [items]
                 form_input/select: [options]

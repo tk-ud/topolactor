@@ -335,3 +335,33 @@ Deno.test("ALLOWED_PROP_BINDING_TRANSFORMS: contains expected transforms", () =>
   assertEquals(ALLOWED_PROP_BINDING_TRANSFORMS.has("rowsToOptions"), true);
   assertEquals(ALLOWED_PROP_BINDING_TRANSFORMS.has("eval"), false);
 });
+
+Deno.test("resolveRuntimeDataPath: resolves emission.data root", () => {
+  const data = { rows: [{ id: 1 }], meta: { count: 1 } };
+  const result = resolveRuntimeDataPath(data, "emission.data");
+  assertEquals(result, data);
+});
+
+Deno.test("resolvePropBindings: emission.data → data prop for json viewer", () => {
+  const base = { title: "Debug" };
+  const data = { rows: [{ id: 1 }], meta: { count: 1 } };
+  const result = resolvePropBindings(
+    base,
+    { data: { source: "emission.data" } },
+    "data_display/json",
+    data,
+  );
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.data, data);
+    assertEquals(result.props.title, "Debug");
+  }
+});
+
+Deno.test("validatePropBindingsStructure: json viewer accepts emission.data root", () => {
+  const errs = validatePropBindingsStructure(
+    { data: { source: "emission.data" } },
+    "data_display/json",
+  );
+  assertEquals(errs, []);
+});

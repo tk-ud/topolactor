@@ -1,14 +1,14 @@
 /**
- * propBindingResolver — resolves array prop bindings from emission.data into component props.
+ * propBindingResolver — resolves prop bindings from emission.data into component props.
  *
  * Resolution order in renderEmission:
  *   default props → propsJson → stateJson → propBindings (this module)
  *
- * source must start with "emission.data.".
+ * source must be "emission.data" or start with "emission.data.".
  * transform must be in ALLOWED_PROP_BINDING_TRANSFORMS allowlist.
  * Resolved value overwrites the target prop key (propBindings wins over propsJson/stateJson for the same key).
  * When source path resolves to undefined, the prop key is left absent (no error — data may be missing).
- * When resolved value is not an array, returns explicit error.
+ * When resolved value is not an array for array-target props, returns explicit error.
  *
  * Path fields (labelPath / valuePath / keyPath / childrenPath):
  *   - rowsToOptions:              uses labelPath → output.label, valuePath → output.value, keyPath → output.key
@@ -20,7 +20,8 @@
 import type { PropBinding } from "../api/dispatch.ts";
 
 /**
- * Component kinds that accept array props, and which prop names they accept as arrays.
+ * Component kinds that accept prop bindings, and which prop names they accept.
+ * Most entries are array props; data_display/json.data accepts the full emission.data object.
  * Only props listed here may be the target of a propBinding.
  * SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.component_array_prop_capabilities
  */
@@ -29,6 +30,7 @@ export const COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   "data_display/data_grid": ["rows", "columns"],
   "data_display/list": ["rows", "items"],
   "data_display/tree": ["nodes", "items"],
+  "data_display/json": ["data"],
   "display/card_list": ["items"],
   "disclosure/accordion": ["items"],
   "form_input/select": ["options"],
@@ -50,7 +52,16 @@ export const ALLOWED_PROP_BINDING_TRANSFORMS: ReadonlySet<string> = new Set([
   "rowsToOptions",
 ]);
 
-const EMISSION_DATA_PREFIX = "emission.data.";
+const EMISSION_DATA_ROOT = "emission.data";
+const EMISSION_DATA_PREFIX = `${EMISSION_DATA_ROOT}.`;
+
+function isEmissionDataSource(source: string): boolean {
+  return source === EMISSION_DATA_ROOT || source.startsWith(EMISSION_DATA_PREFIX);
+}
+
+function acceptsNonArrayResolvedValue(componentKind: string, propName: string): boolean {
+  return componentKind === "data_display/json" && propName === "data";
+}
 
 /**
  * Strips the "emission.data." prefix and resolves the remaining dotted path
@@ -60,6 +71,7 @@ export function resolveRuntimeDataPath(
   emissionData: Record<string, unknown>,
   source: string,
 ): unknown {
+  if (source === EMISSION_DATA_ROOT) return emissionData;
   if (!source.startsWith(EMISSION_DATA_PREFIX)) return undefined;
   const path = source.slice(EMISSION_DATA_PREFIX.length);
   if (!path) return undefined;
@@ -187,8 +199,8 @@ export function resolvePropBindings(
   for (const [propName, binding] of Object.entries(propBindings)) {
     const { source, transform } = binding;
 
-    if (!source.startsWith(EMISSION_DATA_PREFIX)) {
-      return { ok: false, error: `LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE: source "${source}" must start with "emission.data."` };
+    if (!isEmissionDataSource(source)) {
+      return { ok: false, error: `LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE: source "${source}" must be "emission.data" or start with "emission.data."` };
     }
 
     const capabilityError = validatePropBindingTarget(componentKind, propName);
@@ -198,6 +210,10 @@ export function resolvePropBindings(
     if (resolved === undefined) continue;
 
     if (!Array.isArray(resolved)) {
+      if (acceptsNonArrayResolvedValue(componentKind, propName)) {
+        props[propName] = resolved;
+        continue;
+      }
       return {
         ok: false,
         error: `LAYOUT_NODE_PROP_BINDING_SCALAR_SOURCE: source "${source}" resolved to a non-array value for prop "${propName}"`,
@@ -239,8 +255,8 @@ export function validatePropBindingsStructure(
     }
     const b = binding as Record<string, unknown>;
 
-    if (typeof b.source !== "string" || !b.source.startsWith(EMISSION_DATA_PREFIX)) {
-      errors.push(`LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE: source for "${propName}" must be a string starting with "emission.data."`);
+    if (typeof b.source !== "string" || !isEmissionDataSource(b.source)) {
+      errors.push(`LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE: source for "${propName}" must be a string equal to "emission.data" or starting with "emission.data."`);
     }
 
     const capabilityError = validatePropBindingTarget(componentKind, propName);

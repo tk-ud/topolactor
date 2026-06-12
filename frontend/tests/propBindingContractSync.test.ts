@@ -29,6 +29,7 @@ const SSOT_COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   "data_display/data_grid":            ["rows", "columns"],
   "data_display/list":                 ["rows", "items"],
   "data_display/tree":                 ["nodes", "items"],
+  "data_display/json":                 ["data"],
   "display/card_list":                 ["items"],
   "disclosure/accordion":              ["items"],
   "form_input/select":                 ["options"],

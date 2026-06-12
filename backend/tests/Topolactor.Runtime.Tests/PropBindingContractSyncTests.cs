@@ -27,6 +27,7 @@ public class PropBindingContractSyncTests
             ["data_display/data_grid"]           = new HashSet<string> { "rows", "columns" },
             ["data_display/list"]                = new HashSet<string> { "rows", "items" },
             ["data_display/tree"]                = new HashSet<string> { "nodes", "items" },
+            ["data_display/json"]                = new HashSet<string> { "data" },
             ["display/card_list"]                = new HashSet<string> { "items" },
             ["disclosure/accordion"]             = new HashSet<string> { "items" },
             ["form_input/select"]                = new HashSet<string> { "options" },
@@ -52,7 +53,7 @@ public class PropBindingContractSyncTests
     // ── Capability table sync ────────────────────────────────────────────────
 
     [Fact]
-    public void ComponentArrayPropCapabilities_MatchesSsotCanonicalTable()
+    public void ComponentPropBindingCapabilities_MatchesSsotCanonicalTable()
     {
         var impl = StructureMapResolver.ComponentArrayPropCapabilities;
 
@@ -85,6 +86,17 @@ public class PropBindingContractSyncTests
         var nodes = MakeNodes(
             componentKind: "data_display/table",
             propBindingsJson: """{"rows":{"source":"emission.data.rows"},"columns":{"source":"emission.data.activeColumns","transform":"activeColumnsToTableColumns"}}"""
+        );
+        var errors = InvokeValidate(nodes);
+        Assert.Null(errors);
+    }
+
+    [Fact]
+    public void ValidateLayoutNodes_AcceptsJsonViewerFullEmissionDataBinding()
+    {
+        var nodes = MakeNodes(
+            componentKind: "data_display/json",
+            propBindingsJson: """{"data":{"source":"emission.data"}}"""
         );
         var errors = InvokeValidate(nodes);
         Assert.Null(errors);

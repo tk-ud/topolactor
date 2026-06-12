@@ -45,9 +45,11 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 UIBuilder preset ecosystem parent surface is partial. Provisional preset surfaces remain tracked at bundle level until implemented or explicitly completed/descoped by SSOT.
 
 - [ ] aggregate_dashboard provisional preset surface is not yet implemented or explicitly completed
-- [ ] hub_search provisional preset surface is not yet implemented or explicitly completed
+- [ ] runtime_submit_payload_binding_from_node_values: UIBuilder runtime dispatch resolves submit/click payloads from current node/interface values (for example `node:hub_search_input.value`) with structured unresolved-ref errors; this closes the remaining hub_search init-wiring gap for roadmap `product.admin_topology_authoring` completion condition / known gap around preset ecosystem wiring quality.
 - [ ] physical_search_crud_aggregate provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_details_inline_editor_md_generator provisional preset surface is not yet implemented or explicitly completed
+
+Note: `hub_search.readonly.v1` is now registered by `db/migrations/hub_search_preset_seed.sql` as a UIBuilder canvas preset seed composed from existing component catalog entries only; it is not a new component implementation and does not write active topology. Its remaining interactive init-wiring gap is tracked by `runtime_submit_payload_binding_from_node_values` above.
 
 Note: md_viewer is now a dashboard/read-work component candidate shown in DashboardCandidatePalette; its completed preset seed / saved view flow evidence remains closed under `/admin/team-dashboard` primary route and is intentionally not retained as TODO evidence ledger.
 
