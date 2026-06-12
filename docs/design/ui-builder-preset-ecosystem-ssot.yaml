@@ -546,9 +546,9 @@ ui_builder_preset_ecosystem_ssot:
         note: >
           This is no longer an SSOT ambiguity. The authoring surface is PackageWiringEditor;
           candidates come from manifest:list_screen_read_query_wiring / screenReadQueryWiring,
-          and the saved package targetRef is manifest:<manifestId>:<wiringKey>. Existing seed
-          SQL still carries older placeholder wording and should be updated in a follow-up
-          seed bundle after this SSOT bridge lands.
+          and the saved package targetRef is manifest:<manifestId>:<wiringKey>.
+          Seed SQL wording has been aligned; remaining state is author selection after
+          preset load, not a backend/SSOT implementation gap.
       - gap: aggregation_preview_table_prop_binding_capability
         status: pending_catalog_validation
         note: aggregation_preview_table and hub_statistics_panel capability tags need validation for propBindings data target
@@ -677,9 +677,9 @@ ui_builder_preset_ecosystem_ssot:
         Keep real backend/catalog gaps pending, but update author-selected placeholders to
         name the exact UIBuilder surface/action/persisted field from cross_preset_authoring_boundary.
       aggregate_dashboard_targets:
-        - aggregation_function_ref_wiring knownGapRef should reference PackageWiringEditor, manifest:list_screen_read_query_wiring, and targetRef manifest:<manifestId>:<wiringKey>.
-        - unresolved_json should distinguish authoring pending from implementation gap.
-        - content_bundle:search placeholder wording should be revisited against manifest screenReadQueryWiring aggregationMeasures.
+        - aggregation_function_ref_wiring knownGapRef now references PackageWiringEditor, manifest:list_screen_read_query_wiring, and targetRef manifest:<manifestId>:<wiringKey>.
+        - unresolved_json distinguishes authoring pending from implementation gap.
+        - aggregate_dashboard.v1 seed wording is aligned to manifest screenReadQueryWiring aggregationMeasures; no content_bundle placeholder remains for the aggregation operation.
     aggregation_preview_table_prop_binding_capability_audit:
       scope: ui-ux primitive catalog plus propBindingResolver capability list
       rule: >
@@ -710,6 +710,6 @@ ui_builder_preset_ecosystem_ssot:
     aggregate_dashboard_seed: implemented (db/migrations/aggregate_dashboard_preset_seed.sql)
     logs_diff_record_history_read_boundary: backend_gap (read method absent; write exists)
     existing_entity_dispatch_alignment: documented (no new implementation required; content_bundle:* dispatch exists)
-    aggregation_function_ref_wiring: authoring_defined_seed_followup_required (PackageWiringEditor + manifest screenReadQueryWiring bridge defined here; seed SQL wording/placeholder remains to be updated)
+    aggregation_function_ref_wiring: seed_wording_aligned_authoring_pending (PackageWiringEditor + manifest screenReadQueryWiring bridge defined here; remaining state is author selection after preset load, not backend/SSOT implementation gap)
     aggregation_preview_table_prop_binding_capability: open_gap (pending_catalog_validation; aggregation_preview_table and hub_statistics_panel capability tags for propBindings data target need validation)
     preset_seed_line_contract_test: implemented (frontend/tests/presetSeedLineContract.test.ts; 24 tests across 4 seeds × 6 contracts; per-seed sql.includes proliferation retired)
