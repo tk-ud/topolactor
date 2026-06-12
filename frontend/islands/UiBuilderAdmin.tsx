@@ -1215,9 +1215,11 @@ function BatchOperationPanel({
  * Boundary:
  * - Adoption via explicit user action only — updates propBindings or calculationBindings
  *   through onCommitNode / onCalcBindingsChange; never writes to DB or triggers dispatch.
- * - active remote manifest テーブル/フィールド候補: out of scope for this bundle.
- *   Requires manifest:list_relationship_remote_targets (backend dispatch — 禁止).
- *   Remote manifest column suggest is tracked as a separate future bundle.
+ * - active remote manifest テーブル/フィールド候補: /admin/contents Step 2.5 owns
+ *   relationship configuration and active-remote validation via
+ *   manifest:list_relationship_remote_targets / assign_screen_data_shape.
+ *   UIBuilder must not add backend dispatch or remote target fetch here; unresolved
+ *   active-remote relations remain structured errors from saved relationIntents.
  */
 function AuthoringSuggestAssistPanel({
   draftNodes,
