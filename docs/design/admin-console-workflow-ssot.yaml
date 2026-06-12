@@ -418,7 +418,7 @@ admin_console_workflow_ssot:
           package_wiring: ui_topology:update_package_wiring
         tmp_draft_actions:
           layout: layout_patch:save_tmp -> topology.ui_topology_tensor.layout_draft_tmp_json
-          design: component_style_design:save_tmp -> topology.component_style_design.design_draft_tmp_json
+          design: component_style_design:save_tmp -> topology.components_style_design.design_draft_tmp_json
         prohibited:
           - preset_load_writes_active_topology
           - mock_preset_intake_writes_active_topology
@@ -469,10 +469,10 @@ admin_console_workflow_ssot:
             design_tokens: component_style_design:upsert
             node_props_state_propBindings: layout_patch:validate then layout_patch:apply
           persisted_fields:
-            - topology.component_style_design.inline_text
-            - topology.component_style_design.css_token_refs
-            - topology.component_style_design.responsive_token_refs
-            - topology.component_style_design.reaction_intent
+            - topology.components_style_design.design.inlineText
+            - topology.components_style_design.design.cssTokenRefs
+            - topology.components_style_design.design.responsiveTokenRefs
+            - topology.components_style_design.design.reactionIntent
             - topology.ui_topology_tensor.layout_patch_json.nodes[].propsJson
             - topology.ui_topology_tensor.layout_patch_json.nodes[].stateJson
             - topology.ui_topology_tensor.layout_patch_json.nodes[].propBindings
@@ -490,9 +490,13 @@ admin_console_workflow_ssot:
             - fallback frontend/lib/screenReadQueryWiring.ts candidate derivation from manifest topology raw JSON
           save_action: ui_topology:update_package_wiring
           persisted_fields:
-            - topology.ui_package_wiring.wiring_kind
-            - topology.ui_package_wiring.target_surface
-            - topology.ui_package_wiring.target_ref
+            - topology.ui_wiring_registry.wiring_kind
+            - topology.ui_wiring_registry.target_surface
+            - topology.ui_wiring_registry.target_ref
+          storage_note: >
+            Package wiring is the UI concept name. The canonical DB persistence table is
+            topology.ui_wiring_registry; topology.ui_topology_tensor binds route_key,
+            package_id, layout_id, and wiring_id into the package/layout/wiring tensor row.
           manifest_target_ref_format: manifest:<manifestId>:<wiringKey>
           candidate_sources:
             - screen_data_shape.screenReadQueryWiring.searchConditions
@@ -566,8 +570,17 @@ admin_console_workflow_ssot:
           tmp_action: component_style_design:save_tmp
           apply_action: component_style_design:upsert
           persisted_fields:
-            - topology.component_style_design.*
-            - topology.component_style_design.design_draft_tmp_json
+            - topology.components_style_design.design.inlineText
+            - topology.components_style_design.design.linkHref
+            - topology.components_style_design.design.linkTarget
+            - topology.components_style_design.design.cssTokenRefs
+            - topology.components_style_design.design.responsiveTokenRefs
+            - topology.components_style_design.design.reactionIntent
+            - topology.components_style_design.design_draft_tmp_json
+          storage_note: >
+            component_style_design:* is the runtime action namespace. The canonical DB table is
+            topology.components_style_design, and design values are JSON paths inside the
+            design JSONB column rather than separate inline_text/css_token_refs columns.
           implementation_refs:
             - frontend/islands/UiBuilderAdmin.tsx CanvasInspector
             - backend/runtime/AdminRuntime.cs component_style_design:* actions
@@ -605,7 +618,7 @@ admin_console_workflow_ssot:
             - displayColumns
           persistence:
             source: screen_data_shape.screenReadQueryWiring
-            package_target: topology.ui_package_wiring.target_ref
+            package_target: topology.ui_wiring_registry.target_ref
           implementation_refs:
             - frontend/lib/screenReadQueryWiring.ts
             - backend/runtime/AdminRuntime.cs manifest:list_screen_read_query_wiring

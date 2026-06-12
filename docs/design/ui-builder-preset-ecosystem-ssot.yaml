@@ -34,29 +34,36 @@ ui_builder_preset_ecosystem_ssot:
       topology until the author uses the explicit UIBuilder save/apply actions.
     tmp_draft_boundary:
       layout_and_node_data: layout_patch:save_tmp -> topology.ui_topology_tensor.layout_draft_tmp_json
-      design_data: component_style_design:save_tmp -> topology.component_style_design.design_draft_tmp_json
+      design_data: component_style_design:save_tmp -> topology.components_style_design.design_draft_tmp_json
     explicit_apply_boundary:
       layout_and_bindings: layout_patch:validate -> layout_patch:apply -> topology.ui_topology_tensor.layout_patch_json
-      design: component_style_design:upsert -> topology.component_style_design
-      package_wiring: ui_topology:update_package_wiring -> topology.ui_package_wiring
+      design: component_style_design:upsert -> topology.components_style_design.design JSONB
+      package_wiring: ui_topology:update_package_wiring -> topology.ui_wiring_registry
+    storage_naming_note: >
+      package wiring is the UI authoring concept. The canonical DB table is
+      topology.ui_wiring_registry, referenced by topology.ui_topology_tensor.wiring_id;
+      topology.ui_topology_tensor is the package/layout/wiring tensor row for a route.
+      component_style_design:* is the runtime action namespace, while the canonical DB
+      table is topology.components_style_design and design values are JSON paths under
+      the design JSONB column.
     author_resolution_map:
       route_navigation_targetRef:
         ui_surface: RouteNavigationWiringPreset
         candidates: route_key / route:<routeKey>
         save_action: ui_topology:update_package_wiring
-        persisted_field: topology.ui_package_wiring.target_ref
+        persisted_field: topology.ui_wiring_registry.target_ref
       runtime_dispatch_targetRef:
         ui_surface: PackageWiringEditor
         candidates: targetSurface route | ui | manifest plus action-specific targetRef
         save_action: ui_topology:update_package_wiring
-        persisted_fields: [topology.ui_package_wiring.wiring_kind, topology.ui_package_wiring.target_surface, topology.ui_package_wiring.target_ref]
+        persisted_fields: [topology.ui_wiring_registry.wiring_kind, topology.ui_wiring_registry.target_surface, topology.ui_wiring_registry.target_ref]
       manifest_read_query_targetRef:
         ui_surface: PackageWiringEditor
         candidates: manifest:list_screen_read_query_wiring candidates derived from screen_data_shape.screenReadQueryWiring
         targetRef_format: manifest:<manifestId>:<wiringKey>
         candidate_fields: [searchConditions, havingConditions, aggregationMeasures, displayColumns]
         save_action: ui_topology:update_package_wiring
-        persisted_field: topology.ui_package_wiring.target_ref
+        persisted_field: topology.ui_wiring_registry.target_ref
       propBindings:
         ui_surfaces: [Design Inspector propBindings tab, AuthoringSuggestAssistPanel]
         candidates: emission.data branches from saved projection/read-query output shape
@@ -76,7 +83,7 @@ ui_builder_preset_ecosystem_ssot:
         ui_surface: Design Inspector
         candidates: css dictionary token refs, responsive token refs, inline text/link fields
         save_actions: [component_style_design:save_tmp, component_style_design:upsert]
-        persisted_fields: [topology.component_style_design.css_token_refs, topology.component_style_design.responsive_token_refs, topology.component_style_design.inline_text]
+        persisted_fields: [topology.components_style_design.design.cssTokenRefs, topology.components_style_design.design.responsiveTokenRefs, topology.components_style_design.design.inlineText, topology.components_style_design.design.reactionIntent]
     gap_classification_rule: >
       A seed unresolved_json/knownGaps entry is a backend or catalog gap only when the
       referenced UIBuilder surface/action above cannot author and persist the value. If the
@@ -96,8 +103,12 @@ ui_builder_preset_ecosystem_ssot:
     editor_surface: PackageWiringEditor
     load_action: ui_topology:get_package_wiring
     save_action: ui_topology:update_package_wiring
-    persisted_table: topology.ui_package_wiring
+    persisted_table: topology.ui_wiring_registry
     persisted_fields: [wiring_kind, target_surface, target_ref]
+    storage_note: >
+      PackageWiringEditor edits the package wiring concept, but ui_topology:update_package_wiring
+      persists to topology.ui_wiring_registry. topology.ui_topology_tensor holds the route/package/layout
+      row that references ui_wiring_registry.wiring_id.
     manifest_target:
       targetSurface: manifest
       targetRef_format: manifest:<manifestId>:<wiringKey>
@@ -469,7 +480,7 @@ ui_builder_preset_ecosystem_ssot:
         candidate_source: manifest:list_screen_read_query_wiring -> screen_data_shape.screenReadQueryWiring
         candidate_fields: [searchConditions, havingConditions, aggregationMeasures, displayColumns]
         save_action: ui_topology:update_package_wiring
-        persisted_field: topology.ui_package_wiring.target_ref
+        persisted_field: topology.ui_wiring_registry.target_ref
         targetRef_format: manifest:<manifestId>:<wiringKey>
       display_fields:
         aggregation_results: emission.data.aggregationResults
@@ -681,6 +692,26 @@ ui_builder_preset_ecosystem_ssot:
         Remains a backend gap because the write boundary exists but the repository/AdminRuntime
         read action for physical record history is absent. Do not reclassify it as an
         inspector authoring issue.
+    phase_origin_ssot_reference_graph:
+      scope: phase-origin SSOT reference graph expansion beyond UIBuilder-centric references
+      problem: >
+        This UIBuilder/preset/inspector reference graph is an entry point, but Topolactor's
+        canonical model treats phase, attention, registry tensor, logs, hub, and topology as
+        upstream semantic axes. UIBuilder must be documented as a downstream authoring/projection
+        surface reached from those phase origins, not as the root of the reference graph.
+      references:
+        - docs/framework-core.yaml
+        - docs/framework-policy.yaml
+        - docs/design/sql-attention-logs-ssot.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/ui-builder-preset-ecosystem-ssot.yaml
+      target_direction: >
+        Start from framework-policy registry_tensor_principle / topolactor_space_boundary_policy,
+        trace phase / attention / logs / registry tensor / hub relation axes into runtime,
+        pipeline continuity, SQL Attention observation, UIBuilder projection/authoring,
+        manifest screenReadQueryWiring, package wiring, and preset seed intake surfaces.
 
   implementation_status:
     payloadFrom_resolver: implemented (frontend/runtime/payloadFromResolver.ts)
