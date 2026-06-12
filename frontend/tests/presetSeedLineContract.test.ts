@@ -37,16 +37,8 @@ const SEED_FILES = [
   "db/migrations/aggregate_dashboard_preset_seed.sql",
 ];
 
-// SSOT-authorized backend dispatch target refs — AdminRuntime.cs content_bundle:* actions.
-const AUTHORIZED_CONTENT_BUNDLE_REFS = new Set([
-  "content_bundle:search",
-  "content_bundle:get_entity",
-  "content_bundle:create_entity_draft",
-  "content_bundle:update_entity_draft",
-  "content_bundle:validate_draft",
-  "content_bundle:promote_draft",
-  "content_bundle:list_states",
-]);
+// Regression pin: target refs that are specifically banned as observed past violations.
+// BANNED_TARGET_REFS is intentionally a static regression pin, not a vocabulary list.
 
 // Target refs that are never SSOT-authorized.
 const BANNED_TARGET_REFS = new Set(["hub:search"]);
@@ -60,6 +52,25 @@ const REQUIRED_NODE_FIELDS = [
   "parentNodeId",
   "orderIndex",
 ] as const;
+
+// ─── Runtime vocabulary derivation ───────────────────────────────────────────
+// Derive authorized content_bundle: action refs from the registered switch in
+// AdminRuntime.cs rather than maintaining a parallel hardcoded list here.
+// The test validates seed wiring against the actual runtime surface.
+
+let _cachedContentBundleRefs: Set<string> | null = null;
+
+async function getAuthorizedContentBundleRefs(): Promise<Set<string>> {
+  if (_cachedContentBundleRefs) return _cachedContentBundleRefs;
+  const csSource = await Deno.readTextFile("backend/runtime/AdminRuntime.cs");
+  const refs = new Set<string>();
+  const re = /"(content_bundle:[^"]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(csSource)) !== null) refs.add(m[1]);
+  assert(refs.size > 0, "AdminRuntime.cs must register at least one content_bundle: action");
+  _cachedContentBundleRefs = refs;
+  return refs;
+}
 
 // ─── Compile snapshot extraction ──────────────────────────────────────────────
 
@@ -158,6 +169,8 @@ for (const seedFile of SEED_FILES) {
   Deno.test(
     `[preset-line] ${seedFile}: wiring candidates — valid status, no banned refs, pending gaps explicit`,
     async () => {
+      // Derive allowed content_bundle: actions from AdminRuntime.cs (the runtime surface).
+      const authorizedContentBundleRefs = await getAuthorizedContentBundleRefs();
       const sql = await Deno.readTextFile(seedFile);
       const snapshot = extractCompileSnapshot(sql, seedFile);
 
@@ -187,11 +200,11 @@ for (const seedFile of SEED_FILES) {
           );
         }
 
-        // non-empty content_bundle: refs must be SSOT-authorized
+        // content_bundle: refs must be registered in AdminRuntime.cs
         if (targetRef.startsWith("content_bundle:")) {
           assert(
-            AUTHORIZED_CONTENT_BUNDLE_REFS.has(targetRef),
-            `wc "${nodeId}": content_bundle action "${targetRef}" is not SSOT-authorized`,
+            authorizedContentBundleRefs.has(targetRef),
+            `wc "${nodeId}": content_bundle action "${targetRef}" is not registered in AdminRuntime.cs`,
           );
         }
 
