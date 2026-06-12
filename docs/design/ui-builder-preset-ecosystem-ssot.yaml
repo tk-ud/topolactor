@@ -1,0 +1,502 @@
+ui_builder_preset_ecosystem_ssot:
+  name: topolactor_ui_builder_preset_ecosystem_ssot
+  version: 0.1.0
+  status: subordinate_design_document
+
+  authority:
+    parent_ssot: docs/design/admin-console-workflow-ssot.yaml
+    parent_surface: ui_builder_canvas_workspace.authoring_flow.responsibilities.preset_ecosystem
+    seed_first_method_ssot: docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml
+    mock_intake_compiler_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
+    note: >
+      This document is subordinate to admin-console-workflow-ssot.yaml.
+      It defines per-preset seed contracts, payloadFrom resolver contract,
+      and logs.diff history binding contract for the UIBuilder preset ecosystem.
+      It does NOT add canonical routes, runtime lanes, or active topology write authority.
+
+  purpose:
+    - define per-preset seed contract blocks for all provisional presets
+    - specify payloadFrom resolver interface and recognized source patterns
+    - document logs.diff physical record history binding requirements
+    - document existing entity validate/save dispatch alignment requirements
+    - prevent hardcoded screen runtimes and parallel CRUD backends
+
+  # ---------------------------------------------------------------------------
+  # payloadFrom resolver contract
+  # ---------------------------------------------------------------------------
+
+  payloadFrom_resolver_contract:
+    implementation_ref: frontend/runtime/payloadFromResolver.ts
+    purpose: >
+      Resolves preset seed wiring candidate payloadFrom descriptors into runtime
+      dispatch payload objects at event time. Required by all preset surfaces that
+      dispatch runtime actions from canvas node values or interaction event data.
+    recognized_source_patterns:
+      node_value:
+        syntax: "node:<nodeId>.value"
+        example: "node:hub_search_input.value"
+        resolves_to: current value of the named canvas node (tracked via onNodeValueChange)
+        error_when_missing: PAYLOAD_FROM_NODE_NOT_FOUND
+      event_path:
+        syntax: "event.<segment>.<segment>..."
+        examples:
+          - "event.item.id"
+          - "event.row.id"
+          - "event.record.id"
+          - "event.value"
+        resolves_to: dotted path traversal on the triggering event payload object
+        error_when_untraversable: PAYLOAD_FROM_EVENT_PATH_NOT_FOUND
+      literal:
+        syntax: "literal:<string>"
+        example: "literal:active"
+        resolves_to: the literal string value after the prefix
+    prohibited:
+      - silent_fallback_for_unresolved_source_patterns
+      - partial_payload_on_resolution_error (all errors returned together)
+      - treating_undefined_node_value_as_error (absent is OK; missing nodeId is error)
+    error_codes:
+      - PAYLOAD_FROM_NODE_NOT_FOUND
+      - PAYLOAD_FROM_EVENT_PATH_NOT_FOUND
+      - PAYLOAD_FROM_UNRESOLVED_REF
+
+  # ---------------------------------------------------------------------------
+  # hub_search.readonly.v1 — wiring alignment contract
+  # ---------------------------------------------------------------------------
+
+  hub_search_preset:
+    preset_key: hub_search.readonly.v1
+    seed_ref: db/migrations/hub_search_preset_seed.sql
+    role: read-only hub / topology search view seed
+    status: active_seed
+
+    wiring_alignment:
+      audit_result: hub:search is NOT SSOT-authorized as a canonical dispatch target
+      canonical_action: content_bundle:search
+      authority_ref: backend/runtime/AdminRuntime.cs DataContentBundleSearchAsync
+      target_surface: content_bundle
+      target_ref: "content_bundle:search"
+      payload_fields:
+        keyword:
+          source: "node:hub_search_input.value"
+          type: string
+          backend_field: keyword (AdminRuntime DataContentBundleSearchAsync)
+      prohibited:
+        - hub:search as canonical dispatch target
+        - hub-search-specific runtime logic
+
+    layout_tree:
+      root:
+        nodeId: hub_search_shell
+        componentKey: section.alias
+        componentKind: disclosure_structure/section
+      children:
+        - nodeId: hub_search_input
+          componentKey: search_input.alias
+          componentKind: form_input/search_input
+          wiring: controlled value feeds keyword payloadFrom
+        - nodeId: hub_search_button
+          componentKey: button.primitive
+          componentKind: action/button
+          wiring: click → content_bundle:search with payloadFrom { keyword: node:hub_search_input.value }
+        - nodeId: hub_search_results_panel
+          componentKey: panel.alias
+          componentKind: disclosure_structure/panel
+        - nodeId: hub_search_results
+          componentKey: card_list.primitive
+          componentKind: display/card_list
+          propBindings:
+            items: { source: "emission.data.rows" }
+        - nodeId: hub_search_debug_json
+          componentKey: json_viewer.template
+          componentKind: data_display/json
+          propBindings:
+            data: { source: "emission.data" }
+
+    known_gaps:
+      - gap: runtime_event_payload_binding_from_node_and_event_values
+        status: implemented
+        implementation_ref: frontend/runtime/payloadFromResolver.ts
+
+  # ---------------------------------------------------------------------------
+  # physical_search_crud_aggregate.v1
+  # ---------------------------------------------------------------------------
+
+  physical_search_crud_aggregate_preset:
+    preset_key: physical_search_crud_aggregate.v1
+    seed_ref: db/migrations/physical_search_crud_aggregate_preset_seed.sql
+    role: physical table / jsonb record search, CRUD, and aggregation surface
+    status: active_seed
+
+    design_intent: >
+      Reusable search + list + create + edit + remove + detail UI shell.
+      All mutation flows use the contents topology's assigned operation refs
+      (content_bundle:create_entity_draft, content_bundle:update_entity_draft,
+      content_bundle:promote_draft, content_bundle:get_entity, content_bundle:search).
+      This preset does NOT create a parallel CRUD backend or hardcoded screen runtime.
+
+    contents_topology_binding:
+      search_operation: content_bundle:search
+      create_operation: content_bundle:create_entity_draft
+      update_operation: content_bundle:update_entity_draft
+      validate_operation: content_bundle:validate_draft
+      promote_operation: content_bundle:promote_draft
+      get_operation: content_bundle:get_entity
+      list_states_operation: content_bundle:list_states
+
+    layout_tree:
+      root:
+        nodeId: crud_shell
+        componentKey: section.alias
+        componentKind: disclosure_structure/section
+      toolbar:
+        - nodeId: crud_search_input
+          componentKey: search_input.alias
+          componentKind: form_input/search_input
+        - nodeId: crud_search_button
+          componentKey: button.primitive
+          componentKind: action/button
+          wiring: click → content_bundle:search with payloadFrom { keyword: node:crud_search_input.value }
+        - nodeId: crud_status_filter
+          componentKey: select.template
+          componentKind: form_input/select
+          propBindings:
+            options: { source: "emission.data.states" }
+          wiring: change → content_bundle:search with payloadFrom { state: event.value }
+        - nodeId: crud_add_button
+          componentKey: button.primitive
+          componentKind: action/button
+          wiring: click → opens crud_create_modal (route navigation or ui event)
+      results:
+        - nodeId: crud_results_panel
+          componentKey: panel.alias
+          componentKind: disclosure_structure/panel
+        - nodeId: crud_result_list
+          componentKey: card_list.primitive
+          componentKind: display/card_list
+          propBindings:
+            items: { source: "emission.data.rows" }
+          wiring: item.click → content_bundle:get_entity with payloadFrom { entityId: event.item.id }
+      create_modal:
+        - nodeId: crud_create_modal
+          componentKey: modal.template
+          componentKind: disclosure/modal
+        - nodeId: crud_form_name_field
+          componentKey: form_field.template
+          componentKind: form_input/form_field
+        - nodeId: crud_submit_button
+          componentKey: button.primitive
+          componentKind: action/button
+          wiring: click → content_bundle:create_entity_draft
+        - nodeId: crud_cancel_button
+          componentKey: button.primitive
+          componentKind: action/button
+      detail_drawer:
+        - nodeId: crud_detail_drawer
+          componentKey: row_detail_drawer.primitive
+          componentKind: table_op/row_detail_drawer
+          propBindings:
+            data: { source: "emission.data" }
+      confirm_dialog:
+        - nodeId: crud_confirm_dialog
+          componentKey: apply_confirm_dialog.primitive
+          componentKind: safety_guard/apply_confirm_dialog
+      debug:
+        - nodeId: crud_debug_json
+          componentKey: json_viewer.template
+          componentKind: data_display/json
+          propBindings:
+            data: { source: "emission.data" }
+
+    payloadFrom_bindings:
+      search: { keyword: "node:crud_search_input.value" }
+      state_filter: { state: "event.value" }
+      get_entity: { entityId: "event.item.id" }
+
+    preview_validate_apply_boundary: mandatory
+    active_topology_write: prohibited_until_explicit_apply
+
+    compile_audit_checks:
+      - all_wiring_candidate_targets_must_be_SSOT_authorized_actions
+      - propBindings_sources_must_start_with_emission_data
+      - payloadFrom_sources_must_match_recognized_pattern
+      - no_hardcoded_CRUD_backend_route
+
+    known_gaps:
+      - gap: enum_status_select_options_from_content_bundle_list_states
+        status: seed_marks_as_pending
+        note: Status filter options come from content_bundle:list_states; seeded as pending prop binding
+      - gap: form_field_values_to_create_entity_draft_payload
+        status: seed_marks_as_pending
+        note: Create/edit form field values need payloadFrom resolver multi-field mapping
+
+  # ---------------------------------------------------------------------------
+  # physical_details_inline_editor_md_generator.v1
+  # ---------------------------------------------------------------------------
+
+  physical_details_inline_editor_md_generator_preset:
+    preset_key: physical_details_inline_editor_md_generator.v1
+    seed_ref: db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql
+    role: physical record detail view, inline edit, and Markdown saved view generation surface
+    status: active_seed
+
+    design_intent: >
+      Reusable detail surface fed by CRUD card/detail selection. Provides header with back
+      button and PDF export preview, main tabs (details + history), inline editable fields
+      for the selected entity, field history via audit_diff_drawer, and full-history drawer.
+      All mutation flows use contents topology assigned detail/edit/history operation refs.
+      Does NOT implement bespoke detail CRUD logic inside the preset.
+
+    contents_topology_binding:
+      get_detail_operation: content_bundle:get_entity
+      update_operation: content_bundle:update_entity_draft
+      history_operation: history_read (see logs_diff_record_history_binding below)
+
+    layout_tree:
+      root:
+        nodeId: details_shell
+        componentKey: section.alias
+        componentKind: disclosure_structure/section
+      header:
+        - nodeId: details_back_button
+          componentKey: button.primitive
+          componentKind: action/button
+          wiring: click → route navigation (back to CRUD surface)
+        - nodeId: details_pdf_export_button
+          componentKey: button.primitive
+          componentKind: action/button
+          wiring: click → PDF export snapshot (backend/runtime/PdfExportSnapshotRuntime.cs)
+      tabs:
+        - nodeId: details_tabs
+          componentKey: tabs.template
+          componentKind: disclosure/tabs
+      tab1_details:
+        - nodeId: details_field_label_1
+          componentKey: inline_editable_field.primitive
+          componentKind: inline_edit/inline_editable_field
+          wiring: save → content_bundle:update_entity_draft with payloadFrom { entityId: event.record.id }
+        - nodeId: details_status_select
+          componentKey: select.template
+          componentKind: form_input/select
+          wiring: change → content_bundle:update_entity_draft
+        - nodeId: details_save_button
+          componentKey: confirmed_update_button.primitive
+          componentKind: inline_edit/confirmed_update_button
+          wiring: click → content_bundle:promote_draft
+      tab2_history:
+        - nodeId: details_history_list
+          componentKey: audit_diff_drawer.primitive
+          componentKind: inline_edit/audit_diff_drawer
+          propBindings:
+            data: { source: "emission.data.history" }
+          note: bound to logs.diff physical mutation history (create/update/logical_delete/restore/physical_delete)
+        - nodeId: details_history_drawer_button
+          componentKey: button.primitive
+          componentKind: action/button
+          wiring: click → opens details_full_history_drawer
+      full_history_drawer:
+        - nodeId: details_full_history_drawer
+          componentKey: row_detail_drawer.primitive
+          componentKind: table_op/row_detail_drawer
+      debug:
+        - nodeId: details_debug_json
+          componentKey: json_viewer.template
+          componentKind: data_display/json
+          propBindings:
+            data: { source: "emission.data" }
+
+    payloadFrom_bindings:
+      get_detail: { entityId: "event.record.id" }
+      update: { entityId: "event.record.id" }
+
+    preview_validate_apply_boundary: mandatory
+    active_topology_write: prohibited_until_explicit_apply
+
+    known_gaps:
+      - gap: logs_diff_record_history_binding
+        status: backend_gap
+        note: >
+          Physical record history read (create/update/logical_delete/restore/physical_delete)
+          requires a repository read method on SqlAttentionLogsRepository/NpgsqlSqlAttentionLogsRepository
+          and an AdminRuntime action for preset history binding. logs.diff write boundary exists;
+          read boundary is absent. topology_edit_log must NOT be reused for physical record history.
+
+  # ---------------------------------------------------------------------------
+  # aggregate_dashboard.v1
+  # ---------------------------------------------------------------------------
+
+  aggregate_dashboard_preset:
+    preset_key: aggregate_dashboard.v1
+    seed_ref: db/migrations/aggregate_dashboard_preset_seed.sql
+    role: aggregation / grouped measure / dashboard card surface
+    status: active_seed
+
+    design_intent: >
+      Reusable dashboard preset for contents-side aggregation. UI preset supplies only
+      filter inputs (date range, status), aggregation run trigger button, and result
+      display nodes. Aggregation logic remains in contents-side topology/function wiring.
+      The preset maps contentsTopologyName + aggregationFunctionRef + filter node values
+      to existing display components through preview/validate/apply.
+
+    contents_topology_binding:
+      aggregation_operation: >
+        Contents-side aggregation function ref; wired by author after preset load.
+        Author specifies topologySystemName and the assigned aggregation operation ref.
+        Preset seed uses content_bundle:search as a placeholder pending author selection.
+      display_fields:
+        aggregation_results: emission.data.aggregationResults
+        summary_stats: emission.data
+
+    layout_tree:
+      root:
+        nodeId: dashboard_shell
+        componentKey: section.alias
+        componentKind: disclosure_structure/section
+      filters:
+        - nodeId: dashboard_start_date
+          componentKey: input.primitive
+          componentKind: form_input/input
+          note: type=date; value feeds aggregation date range filter
+        - nodeId: dashboard_end_date
+          componentKey: input.primitive
+          componentKind: form_input/input
+          note: type=date; value feeds aggregation date range filter
+        - nodeId: dashboard_status_filter
+          componentKey: select.template
+          componentKind: form_input/select
+          note: status/state filter fed by content_bundle:list_states
+        - nodeId: dashboard_run_button
+          componentKey: button.primitive
+          componentKind: action/button
+          wiring: click → contents aggregation operation with payloadFrom { startDate: node:dashboard_start_date.value, endDate: node:dashboard_end_date.value }
+      results:
+        - nodeId: dashboard_results_panel
+          componentKey: panel.alias
+          componentKind: disclosure_structure/panel
+        - nodeId: dashboard_aggregation_table
+          componentKey: aggregation_preview_table.primitive
+          componentKind: calc_topology/aggregation_preview_table
+          propBindings:
+            data: { source: "emission.data" }
+          note: propBindings source pending — aggregation_preview_table capability validation required
+        - nodeId: dashboard_stats_panel
+          componentKey: hub_statistics_panel.primitive
+          componentKind: calc_topology/hub_statistics_panel
+          propBindings:
+            data: { source: "emission.data" }
+          note: propBindings source pending — hub_statistics_panel capability validation required
+      debug:
+        - nodeId: dashboard_debug_json
+          componentKey: json_viewer.template
+          componentKind: data_display/json
+          propBindings:
+            data: { source: "emission.data" }
+
+    payloadFrom_bindings:
+      run_aggregation:
+        startDate: "node:dashboard_start_date.value"
+        endDate: "node:dashboard_end_date.value"
+        state: "event.value"
+
+    preview_validate_apply_boundary: mandatory
+    active_topology_write: prohibited_until_explicit_apply
+
+    known_gaps:
+      - gap: aggregation_function_ref_wiring
+        status: ssot_ambiguity
+        note: >
+          Contents-side aggregation function wiring surface and the contentsTopologyName +
+          aggregationFunctionRef binding pattern are not yet specified in a dedicated SSOT.
+          Author must manually select the aggregation operation ref after preset load.
+          Preset seed uses content_bundle:search as placeholder; author replaces at apply time.
+      - gap: aggregation_preview_table_prop_binding_capability
+        status: pending_catalog_validation
+        note: aggregation_preview_table and hub_statistics_panel capability tags need validation for propBindings data target
+
+  # ---------------------------------------------------------------------------
+  # logs_diff_record_history_binding contract
+  # ---------------------------------------------------------------------------
+
+  logs_diff_record_history_binding_contract:
+    purpose: >
+      Physical record history UI (latest and full) must bind to logs.diff physical
+      mutation evidence rows, NOT to topology_edit_log. The binding must distinguish:
+        - create: initial row insertion evidence
+        - update: field value diff patch
+        - logical_delete: soft-delete evidence
+        - restore: soft-delete reversal evidence
+        - physical_delete: hard-delete evidence (admin only)
+    backend_gap:
+      write_boundary_exists: true
+      write_ref: backend/repository/NpgsqlSqlAttentionLogsRepository.cs (INSERT INTO logs.diff)
+      read_boundary_exists: false
+      required_addition:
+        repository_method: LoadPhysicalRecordHistoryAsync(tableId, recordId, ct)
+        repository_class: SqlAttentionLogsRepository / NpgsqlSqlAttentionLogsRepository
+        admin_runtime_action: physical_record:list_history (or equivalent registered action)
+        response_shape:
+          rows: array of { operation_kind, before_state_or_diff_json, after_state_or_diff_json, created_at }
+      prohibited:
+        - topology_edit_log reuse for physical record history
+        - silent fallback when record has no history rows
+      implementation_note: >
+        This backend addition triggers scenario-contract protocol when implemented.
+        Preset seed marks history binding as pending; audit_diff_drawer propBindings
+        source is emission.data.history (populated after action is implemented).
+
+  # ---------------------------------------------------------------------------
+  # existing_entity_validate_save_dispatch_alignment contract
+  # ---------------------------------------------------------------------------
+
+  existing_entity_validate_save_dispatch_alignment_contract:
+    purpose: >
+      CRUD/detail presets must use contents-assigned lifecycle operations.
+      Mutation flow: validate → save draft → promote. Never creates a parallel
+      hardcoded CRUD runtime. If a required contents operation ref is absent,
+      add SSOT/TODO contract before implementation rather than inventing a private route.
+    canonical_dispatch_sequence:
+      create: content_bundle:create_entity_draft → content_bundle:validate_draft → content_bundle:promote_draft
+      update: content_bundle:update_entity_draft → content_bundle:validate_draft → content_bundle:promote_draft
+      delete: contents topology assigned remove operation ref (if exists) → confirm dialog gate
+      detail_read: content_bundle:get_entity
+      search: content_bundle:search
+    wiring_alignment:
+      packageWiringOptions_ref: frontend/lib/packageWiringOptions.ts
+      packageWiringPicker_ref: frontend/lib/packageWiringPicker.ts
+      target_surface_for_admin_content_bundle: content_bundle
+      note: >
+        content_bundle target surface is used in preset seed wiring candidates when the
+        action is an admin content bundle operation. Package wiring (UIBuilder authored
+        packages) uses route | ui | manifest. Preset wiring candidates use content_bundle
+        as the target_surface string for content_bundle:* dispatch operations.
+    prohibited:
+      - parallel CRUD backend for preset surfaces
+      - hardcoded active topology writes from preset seed load
+      - bypassing validate before promote
+      - creating private dispatch routes not registered in AdminRuntime
+
+  # ---------------------------------------------------------------------------
+  # Compile-time audit checks (cross-preset)
+  # ---------------------------------------------------------------------------
+
+  compile_audit_contract:
+    checks:
+      - all_wiring_candidate_targetRefs_must_be_SSOT_authorized
+      - payloadFrom_sources_must_parse_to_recognized_pattern (no UNRESOLVED_REF)
+      - propBinding_sources_must_start_with_emission_data
+      - no_catalog_component_added_without_seed_backed_gap_classification
+      - active_topology_write_false_until_preview_validate_apply
+      - preview_validate_apply_boundary_not_skipped_by_preset_load
+    missing_wiring_visibility:
+      rule: >
+        Seed compile output must make missing UI wiring explicit in unresolved_json.
+        Pending wiring candidates (status: pending) must appear in wiring_candidate_json
+        with explicit knownGapRef. Compile must not silently drop unresolved wiring.
+
+  implementation_status:
+    payloadFrom_resolver: implemented (frontend/runtime/payloadFromResolver.ts)
+    hub_search_wiring_alignment: implemented (db/migrations/hub_search_preset_seed.sql updated)
+    physical_search_crud_aggregate_seed: implemented (db/migrations/physical_search_crud_aggregate_preset_seed.sql)
+    physical_details_inline_editor_md_generator_seed: implemented (db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql)
+    aggregate_dashboard_seed: implemented (db/migrations/aggregate_dashboard_preset_seed.sql)
+    logs_diff_record_history_read_boundary: backend_gap (read method absent; write exists)
+    existing_entity_dispatch_alignment: documented (no new implementation required; content_bundle:* dispatch exists)

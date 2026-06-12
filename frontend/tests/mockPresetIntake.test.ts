@@ -355,9 +355,9 @@ Deno.test("hub_search preset seed: existing catalog composition and tmp canvas b
   );
 
   const match = sql.match(
-    /'hub-search-seed\.v1',\s*\$\$\s*([\s\S]*?)\s*\$\$::jsonb/,
+    /'hub-search-seed\.v2',\s*\$\$\s*([\s\S]*?)\s*\$\$::jsonb/,
   );
-  assert(match, "compile snapshot layout_patch_json must be present");
+  assert(match, "compile snapshot layout_patch_json must be present (v2 after wiring alignment)");
   const layout = JSON.parse(match![1]) as { nodes: VisualNodePayload[] };
 
   const nodesById = new Map(layout.nodes.map((node) => [node.nodeId, node]));
@@ -411,5 +411,103 @@ Deno.test("hub_search preset seed: existing catalog composition and tmp canvas b
   assertEquals(
     nodesById.get("hub_search_debug_json")?.propBindings?.data?.source,
     "emission.data",
+  );
+});
+
+// ─── Hub search entity wiring alignment ─────────────────────────────────────
+
+Deno.test("hub_search preset seed: wiring candidate uses content_bundle:search not hub:search", async () => {
+  const sql = await Deno.readTextFile(
+    "db/migrations/hub_search_preset_seed.sql",
+  );
+  assert(
+    sql.includes("content_bundle:search"),
+    "hub_search wiring must target content_bundle:search (SSOT-authorized canonical dispatch action)",
+  );
+  assert(
+    !sql.includes("'hub:search'") && !sql.includes('"hub:search"'),
+    "hub:search must not appear as a wiring target — it was not SSOT-authorized",
+  );
+  assert(
+    !sql.includes("'hub'") && !sql.includes('"hub"') || sql.includes("'content_bundle'"),
+    "targetSurface must be content_bundle, not hub",
+  );
+});
+
+Deno.test("hub_search preset seed: payloadFrom uses keyword field for content_bundle:search", async () => {
+  const sql = await Deno.readTextFile(
+    "db/migrations/hub_search_preset_seed.sql",
+  );
+  assert(
+    sql.includes('"keyword": "node:hub_search_input.value"') ||
+      sql.includes('"keyword":"node:hub_search_input.value"'),
+    "payloadFrom must map keyword field from node:hub_search_input.value (content_bundle:search expects keyword)",
+  );
+  assert(
+    !sql.includes('"query": "node:hub_search_input.value"') &&
+      !sql.includes('"query":"node:hub_search_input.value"'),
+    "payloadFrom must not use query field — content_bundle:search uses keyword",
+  );
+});
+
+// ─── Preset seed structure checks for new preset seeds ───────────────────────
+
+Deno.test("physical_search_crud_aggregate preset seed: catalog-only composition and tmp canvas boundary", async () => {
+  const sql = await Deno.readTextFile(
+    "db/migrations/physical_search_crud_aggregate_preset_seed.sql",
+  );
+  assert(sql.includes("physical_search_crud_aggregate.v1"), "must register canonical preset key");
+  assert(sql.includes("'ui_builder_canvas'"), "must use UIBuilder canvas source kind");
+  assert(sql.includes('"activeTopology": false'), "must not write active topology");
+  assert(sql.includes("content_bundle:search"), "must wire search to content_bundle:search");
+  assert(sql.includes("content_bundle:get_entity"), "must wire item selection to content_bundle:get_entity");
+  assert(sql.includes("content_bundle:create_entity_draft"), "must wire create to content_bundle:create_entity_draft");
+  assert(sql.includes("payloadFromResolver.ts"), "must reference payloadFromResolver");
+  assert(sql.includes("event.item.id"), "must use event.item.id payloadFrom source for entity selection");
+  assert(
+    sql.includes("activeTopologyWrite") && sql.includes("false"),
+    "compile snapshot must document activeTopologyWrite: false",
+  );
+});
+
+Deno.test("physical_details_inline_editor_md_generator preset seed: catalog-only composition and history binding contract", async () => {
+  const sql = await Deno.readTextFile(
+    "db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql",
+  );
+  assert(sql.includes("physical_details_inline_editor_md_generator.v1"), "must register canonical preset key");
+  assert(sql.includes("'ui_builder_canvas'"), "must use UIBuilder canvas source kind");
+  assert(sql.includes('"activeTopology": false'), "must not write active topology");
+  assert(sql.includes("content_bundle:update_entity_draft"), "must wire save to content_bundle:update_entity_draft");
+  assert(sql.includes("event.record.id"), "must use event.record.id for entity identity in payloadFrom");
+  assert(sql.includes("logs_diff_record_history_binding"), "must document history binding backend gap");
+  assert(
+    sql.includes("inline_editable_field.primitive") && sql.includes("audit_diff_drawer.primitive"),
+    "must include inline editor and history list components",
+  );
+  assert(sql.includes("payloadFromResolver.ts"), "must reference payloadFromResolver");
+  assert(
+    sql.includes("topology_edit_log") === false,
+    "must not use topology_edit_log for physical record history",
+  );
+});
+
+Deno.test("aggregate_dashboard preset seed: catalog-only composition and aggregation function ref gap", async () => {
+  const sql = await Deno.readTextFile(
+    "db/migrations/aggregate_dashboard_preset_seed.sql",
+  );
+  assert(sql.includes("aggregate_dashboard.v1"), "must register canonical preset key");
+  assert(sql.includes("'ui_builder_canvas'"), "must use UIBuilder canvas source kind");
+  assert(sql.includes('"activeTopology": false'), "must not write active topology");
+  assert(sql.includes("aggregation_function_ref_wiring"), "must document aggregation function ref gap");
+  assert(
+    sql.includes("aggregation_preview_table.primitive") && sql.includes("hub_statistics_panel.primitive"),
+    "must include aggregation display components",
+  );
+  assert(sql.includes("node:dashboard_start_date.value"), "must use payloadFrom for date filter inputs");
+  assert(sql.includes("node:dashboard_end_date.value"), "must use payloadFrom for date filter inputs");
+  assert(sql.includes("payloadFromResolver.ts"), "must reference payloadFromResolver");
+  assert(
+    sql.includes("activeTopologyWrite") && sql.includes("false"),
+    "compile snapshot must document activeTopologyWrite: false",
   );
 });

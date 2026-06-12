@@ -19,7 +19,7 @@ WITH upserted_preset AS (
         preset_key,
         preset_label,
         source_kind,
-        source_hash,
+        source_hash,  -- updated v2: wiring aligned to content_bundle:search
         source_snapshot_json,
         visual_tree_json,
         status
@@ -28,7 +28,7 @@ WITH upserted_preset AS (
         'hub_search.readonly.v1',
         'Hub Search readonly preset seed',
         'ui_builder_canvas',
-        'hub_search.readonly.v1.seed.2026-06-12',
+        'hub_search.readonly.v1.seed.2026-06-12.v2',
         $$
         {
           "seedKind": "ui_builder_canvas_preset_seed",
@@ -40,7 +40,8 @@ WITH upserted_preset AS (
           "componentImplementation": "none; existing component catalog composition only",
           "runtimeMutationAuthority": "none",
           "boundary": "load into selected route package tmp canvas draft; human edit; preview; validate; apply",
-          "knownGapRefs": ["runtime_submit_payload_binding_from_node_values"]
+          "knownGapRefs": ["runtime_submit_payload_binding_from_node_values"],
+          "wiringAlignment": "content_bundle:search (hub:search was not SSOT-authorized)"
         }
         $$::jsonb,
         $$
@@ -138,18 +139,17 @@ WITH upserted_preset AS (
         status
     )
     VALUES
-        ((SELECT preset_id FROM preset), 'hub_search_button', 'hub_search_button', 'requires_event_binding', 'search', 'hub', 'hub:search',
+        ((SELECT preset_id FROM preset), 'hub_search_button', 'hub_search_button', 'requires_event_binding', 'search', 'content_bundle', 'content_bundle:search',
             $$
             {
               "event": "click",
               "wiringKind": "search",
-              "targetSurface": "hub",
-              "targetRef": "hub:search",
+              "targetSurface": "content_bundle",
+              "targetRef": "content_bundle:search",
               "readOnly": true,
-              "payloadBindingStatus": "not_implemented",
-              "knownGapRef": "runtime_submit_payload_binding_from_node_values",
-              "payloadFrom": { "query": "node:hub_search_input.value" },
-              "note": "Candidate only. Runtime node-value payload resolver is not implemented by this seed."
+              "payloadFrom": { "keyword": "node:hub_search_input.value" },
+              "payloadResolverRef": "frontend/runtime/payloadFromResolver.ts",
+              "wiringAlignmentNote": "hub:search was not SSOT-authorized. Aligned to content_bundle:search (AdminRuntime DataContentBundleSearchAsync). payload field 'keyword' sourced from node:hub_search_input.value via payloadFromResolver."
             }
             $$::jsonb,
             'pending')
@@ -166,7 +166,7 @@ INSERT INTO topology.mock_preset_compile_snapshot (
 )
 VALUES (
     (SELECT preset_id FROM preset),
-    'hub-search-seed.v1',
+    'hub-search-seed.v2',
     $$
     {
       "nodes": [
@@ -296,14 +296,13 @@ VALUES (
         "sourceObjectId": "hub_search_button",
         "capabilityTag": "requires_event_binding",
         "wiringKind": "search",
-        "targetSurface": "hub",
-        "targetRef": "hub:search",
+        "targetSurface": "content_bundle",
+        "targetRef": "content_bundle:search",
         "status": "pending",
         "binding": {
           "event": "click",
-          "payloadFrom": { "query": "node:hub_search_input.value" },
-          "payloadBindingStatus": "not_implemented",
-          "knownGapRef": "runtime_submit_payload_binding_from_node_values"
+          "payloadFrom": { "keyword": "node:hub_search_input.value" },
+          "payloadResolverRef": "frontend/runtime/payloadFromResolver.ts"
         }
       }
     ]
