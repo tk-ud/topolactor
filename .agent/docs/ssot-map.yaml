@@ -759,6 +759,31 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: ui_builder_projection_authoring_assist_boundary
+    change_surfaces:
+      - UIBuilder projection authoring assist
+      - deriveQualifiedColumnCandidates
+      - active remote manifest column boundary
+      - screen_data_shape relationIntents wiring
+      - component props / propBindings / layout projection candidates
+      - unresolved remote relation structured errors
+    required_docs:
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/system-roadmap.yaml
+    supporting_docs:
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    required_surfaces:
+      - frontend/lib/uiBuilderAuthoringSuggest.ts
+      - frontend/lib/manifestLogicalTables.ts
+      - frontend/islands/UiBuilderAdmin.tsx
+      - frontend/tests/uiBuilderAuthoringSuggest.test.ts
+      - frontend/islands/ContentsScreenDesignPanel.tsx
+      - frontend/lib/contentsAssign.ts
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
   - work_type: frontend_local_derived_calculation_binding
     change_surfaces:
       - frontend/runtime/frontendLocalCalculationResolver.ts

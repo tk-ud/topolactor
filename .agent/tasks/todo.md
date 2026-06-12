@@ -11,7 +11,6 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `ui-builder-projection-authoring-assist-roadmap-alignment` | UIBuilder projection authoring assist roadmap / SSOT alignment | not_started | 1 | `product.admin_topology_authoring` | `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 ---
@@ -51,30 +50,6 @@ UIBuilder preset ecosystem parent surface is partial. Provisional preset surface
 - [ ] physical_details_inline_editor_md_generator provisional preset surface is not yet implemented or explicitly completed
 
 Note: md_viewer is now a dashboard/read-work component candidate shown in DashboardCandidatePalette; its completed preset seed / saved view flow evidence remains closed under `/admin/team-dashboard` primary route and is intentionally not retained as TODO evidence ledger.
-
----
-
-## Bundle `ui-builder-projection-authoring-assist-roadmap-alignment`
-
-**Status:** not_started
-**Roadmap bundle:** `product.admin_topology_authoring`
-**Depends on:** `ui-builder-selection-model`, `ui-builder-autocomplete-candidates`, `ui-builder-batch-operation`, `ui-builder-suggest-authoring-assist`, `ui-builder-search-suggest-candidate-boundary`
-**SSOT:** `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml`, `docs/design/admin-console-workflow-ssot.yaml`
-
-- [ ] UIBuilder projection setting authoring assist の bundle 群が実装された後、roadmap / TODO / SSOT / required evidence を同じ completion boundary へ揃える。
-
-Scope:
-- `docs/system-roadmap.yaml` の known_gap_ref / completion_condition / evidence_ref への反映要否を判断する。
-- `.agent/docs/ssot-map.yaml` の worktype / required surface 追加要否を判断する。
-- `docs/design/admin-console-workflow-ssot.yaml` への contract 追加要否を判断する。
-- 実装完了できない残項目がある場合は partial 判定できる粒度で残 todo を全列挙する。
-
-**Carry-over boundary correction:**
-- [ ] **active-remote-manifest-column-suggest** は UIBuilder 側の設計判断待ち / backend dispatch 実装待ちとして扱わない。`/admin/contents` Step 2.5 が relationship 設定を担当し、active remote 側の `remote_manifest_id` / `join_table_ref` / `remote_key` は `screen_data_shape.relationIntents` に保存・検証される。remote target の一覧取得と検証は `manifest:list_relationship_remote_targets` / `assign_screen_data_shape` 側の責務で完結する。UIBuilder の責務は、保存済み `screen_data_shape` / `relationIntents` / projection data shape を component props / propBindings / layout projection へ配線することに限定する。残作業は、roadmap / TODO / SSOT / evidence 上でこの責務境界を明確化し、`deriveQualifiedColumnCandidates` の `remoteTargets = []` 固定を UIBuilder 実装漏れとして誤判定しないよう completion boundary を揃えること。
-
-Completion condition:
-- roadmap / TODO / SSOT の責務が食い違わず、後続 PR closure が bundle 単位で判定できる。
-- 実装完了判定は roadmap/TODO 記述だけで行わず、実コード・テスト evidence と突合する。
 
 ---
 

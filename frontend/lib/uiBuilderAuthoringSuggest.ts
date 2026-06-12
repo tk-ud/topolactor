@@ -185,10 +185,15 @@ export type QualifiedColumnCandidateResult =
  * Uses step3FieldSourceFromDesign for relation resolution.
  *
  * Scope boundary — active remote manifest テーブル/フィールド:
- *   SSOT Step 3 includes active-remote targets via manifest:list_relationship_remote_targets,
- *   but that requires a backend dispatch call which is prohibited in UIBuilder authoring.
- *   remoteTargets is therefore always [] here. Active remote manifest column suggest is
- *   out of scope for this bundle and tracked as a separate future bundle.
+ *   /admin/contents Step 2.5 owns relationship configuration and persists/validates
+ *   active-remote remoteManifestId/joinTableRef/remoteKey in screen_data_shape.relationIntents
+ *   via manifest:list_relationship_remote_targets / assign_screen_data_shape.
+ *   UIBuilder authoring must not fetch remote targets or dispatch to the backend while
+ *   deriving candidates; it only wires already-saved screen_data_shape/relationIntents and
+ *   projection data shape into props, propBindings, and layout projection.
+ *   remoteTargets is therefore intentionally always [] here. Unresolved active-remote
+ *   relation columns are surfaced as structured errors, not silent fallback and not a
+ *   UIBuilder active-remote suggest backlog.
  *
  * Returns unresolved relation errors as structured reasons — no silent fallback.
  */

@@ -383,6 +383,9 @@ system_roadmap_ssot:
         - frontend/tests/propBindingResolver.test.ts
         - frontend/tests/cssDictionary.test.ts
         - frontend/tests/draftPreviewToEmission.test.ts
+        - frontend/tests/uiBuilderAuthoringSuggest.test.ts
+        - frontend/lib/uiBuilderAuthoringSuggest.ts
+        - frontend/lib/manifestLogicalTables.ts
         - frontend/runtime/layoutComponentPreview.ts
         - frontend/runtime/linkPlaceholderInterpolation.ts
         - frontend/components/FlowLayoutCanvas.tsx
@@ -400,6 +403,9 @@ system_roadmap_ssot:
         - ui_builder_responsive_layout_authoring_is_owned_by_layout_inspector_with_blocking_validation
         - component_style_design_css_token_refs_apply_in_canvas_and_runtime_with_explicit_unresolved_ref_errors
         - link_href_placeholder_interpolation_is_read_only_and_unresolved_placeholders_fail_without_fallback
+        - ui_builder_projection_authoring_assist_uses_saved_screen_data_shape_relationIntents_and_projection_shape_only
+        - active_remote_manifest_table_column_selection_remains_owned_by_contents_step_2_5_and_assign_screen_data_shape
+        - deriveQualifiedColumnCandidates_remoteTargets_empty_array_is_intentional_no_backend_dispatch_boundary_and_unresolved_remote_is_structured_error
       known_gap_ref:
         - visual_builder_production_ready_manual_accessibility_acceptance_pending
       files:

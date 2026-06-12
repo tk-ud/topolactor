@@ -451,6 +451,34 @@ admin_console_workflow_ssot:
               note: >
                 raw dispatcher fields (wiringKind / targetSurface / targetRef) are advanced path only;
                 not the normal-view completion path
+        - projection_authoring_assist_boundary:
+            status: implemented_boundary
+            role: ui_builder_saved_projection_wiring_support
+            source_contract:
+              owner: /admin/contents Step 2.5 relationship_configuration plus Step 3 physical_table_and_page_binding
+              persisted_shape: screen_data_shape
+              relation_fields: [relationIntents.remote_manifest_id, relationIntents.join_table_ref, relationIntents.remote_key]
+              active_remote_target_list_owner: manifest:list_relationship_remote_targets
+              validation_owner: assign_screen_data_shape
+            ui_builder_responsibility:
+              - read already-saved screen_data_shape / relationIntents / projection data shape for selected route package
+              - derive local and saved relation candidate keys for component props / propBindings / layout projection
+              - surface unresolved active-remote relations as structured authoring errors
+            prohibited:
+              - fetching active remote targets from UIBuilder authoring suggest
+              - dispatching manifest:list_relationship_remote_targets from UIBuilder authoring suggest
+              - treating remoteTargets_empty_array_in_deriveQualifiedColumnCandidates_as_implementation_gap
+              - silent_fallback_to_draft_only_columns_when_active_remote_relation_is_unresolved
+            boundary_note: >
+              active remote manifest table/column selection is not a UIBuilder authoring suggest
+              responsibility. If relationIntents reference active remote tables, they must already
+              have been selected and validated in /admin/contents Step 2.5 / assign_screen_data_shape.
+              UIBuilder may wire saved projection data into component props, propBindings, and layout
+              projection, but must not acquire remote target list authority.
+            evidence_refs:
+              - frontend/lib/uiBuilderAuthoringSuggest.ts deriveQualifiedColumnCandidates
+              - frontend/islands/UiBuilderAdmin.tsx AuthoringSuggestAssistPanel
+              - frontend/tests/uiBuilderAuthoringSuggest.test.ts
         - frontend_local_derived_calculation_binding:
             status: implemented
             lane: frontend_local_only
