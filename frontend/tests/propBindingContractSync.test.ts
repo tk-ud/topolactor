@@ -43,6 +43,9 @@ const SSOT_COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   "table_op/group_by_control":         ["columns"],
   "table_op/bulk_action_panel":        ["actions"],
   "table_op/virtualized_data_table":   ["rows", "columns"],
+  "inline_edit/audit_diff_drawer":          ["entries"],
+  "calc_topology/aggregation_preview_table": ["data"],
+  "calc_topology/hub_statistics_panel":      ["data"],
 };
 
 // ── SSOT canonical transform allowlist ───────────────────────────────────────
