@@ -766,6 +766,8 @@ mapping:
       - active remote manifest column boundary
       - screen_data_shape relationIntents wiring
       - component props / propBindings / layout projection candidates
+      - calculationBindings author adoption boundary
+      - AuthoringSuggestAssistPanel
       - unresolved remote relation structured errors
     required_docs:
       - docs/design/admin-console-workflow-ssot.yaml
@@ -818,6 +820,19 @@ mapping:
       - frontend/runtime/payloadFromResolver.ts
       - frontend/tests/payloadFromResolver.test.ts
       - frontend/tests/mockPresetIntake.test.ts
+      - frontend/islands/UiBuilderAdmin.tsx
+      - frontend/islands/PresetUploaderDrawer.tsx
+      - frontend/lib/screenReadQueryWiring.ts
+      - frontend/lib/packageWiringPicker.ts
+      - frontend/lib/packageWiringOptions.ts
+      - frontend/lib/uiBuilderAuthoringSuggest.ts
+      - frontend/lib/uiBuilderBatchOperation.ts
+      - PackageWiringEditor
+      - Design Inspector
+      - Layout Inspector
+      - AuthoringSuggestAssistPanel
+      - manifest screenReadQueryWiring
+      - aggregationMeasures wiring candidate
     required_docs:
       - docs/design/ui-builder-preset-ecosystem-ssot.yaml
       - docs/design/admin-console-workflow-ssot.yaml

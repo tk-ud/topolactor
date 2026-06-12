@@ -400,6 +400,215 @@ admin_console_workflow_ssot:
         The canvas workspace selects and mutates packages only.
         Bucket rows, bare component catalog entries, and unpackaged component ids are not
         parallel edit targets. Placement and design are both scoped to the selected package.
+    authoring_surface_reference_map:
+      purpose: >
+        Canonical cross-reference graph for UIBuilder authoring surfaces. Every preset seed,
+        inspector, editor, helper panel, and runtime action must be traceable through this map
+        before being treated as implemented or still pending in a downstream seed/TODO.
+      route: /admin/ui-builder
+      active_topology_boundary:
+        rule: >
+          Canvas and inspector mutations first update UIBuilder draft state and _tmp draft rows.
+          Active topology mutation is allowed only through explicit layout_patch:apply or the
+          explicitly scoped package/style wiring save actions listed below. Preset load and mock
+          preset intake are draft producers; they are never active-topology mutation events.
+        explicit_apply_actions:
+          layout: layout_patch:apply
+          design: component_style_design:upsert
+          package_wiring: ui_topology:update_package_wiring
+        tmp_draft_actions:
+          layout: layout_patch:save_tmp -> topology.ui_topology_tensor.layout_draft_tmp_json
+          design: component_style_design:save_tmp -> topology.component_style_design.design_draft_tmp_json
+        prohibited:
+          - preset_load_writes_active_topology
+          - mock_preset_intake_writes_active_topology
+          - inspector_field_change_bypasses_tmp_or_explicit_save
+      surfaces:
+        canvas:
+          role: live flow-layout preview and selection target for package-scoped nodes
+          authoring_surface: Canvas workspace inside frontend/islands/UiBuilderAdmin.tsx
+          inputs:
+            - catalog component cards
+            - selected route_key/package/layout
+            - loaded topology.ui_topology_tensor layout draft or layout_patch_json
+            - mock preset compile snapshot layout_patch_json
+          draft_state: draftNodes + selectedLayoutClassRefs + calculationBindings
+          tmp_persistence: layout_patch:save_tmp
+          apply_boundary: layout_patch:validate then layout_patch:apply
+          active_topology_reflection: only after explicit apply succeeds
+          persisted_fields:
+            - topology.ui_topology_tensor.layout_patch_json
+            - topology.ui_topology_tensor.css_token_refs
+            - topology.ui_topology_tensor.responsive_token_refs
+          implementation_refs:
+            - frontend/islands/UiBuilderAdmin.tsx
+            - frontend/runtime/visualLayoutUtils.ts
+            - frontend/runtime/renderEmission.ts
+        layout_inspector:
+          role: structural authoring for flow layout tree
+          authoring_surface: LayoutRightDock layer/layout controls
+          inputs:
+            - current canvas selection
+            - component tree parentNodeId/orderIndex/slotKey
+            - topology layout class candidates
+          saves_to: layout_patch_json through tmp draft and explicit layout_patch apply
+          active_topology_reflection: no active mutation until layout_patch:apply
+          implementation_refs:
+            - frontend/islands/UiBuilderAdmin.tsx LayoutRightDock
+            - docs/design/topology-layout-class-ssot.yaml
+        design_inspector:
+          role: selected-node design, text/link, tokens, props/state, propBindings authoring
+          authoring_surface: CanvasInspector design inspector dock
+          inputs:
+            - selected canvas node
+            - css dictionary token candidates
+            - component prop/state schema
+            - emission.data binding candidates from AuthoringSuggestAssistPanel
+          tmp_persistence: component_style_design:save_tmp for design fields; layout_patch:save_tmp for node props/state/propBindings draft
+          apply_boundary:
+            design_tokens: component_style_design:upsert
+            node_props_state_propBindings: layout_patch:validate then layout_patch:apply
+          persisted_fields:
+            - topology.component_style_design.inline_text
+            - topology.component_style_design.css_token_refs
+            - topology.component_style_design.responsive_token_refs
+            - topology.component_style_design.reaction_intent
+            - topology.ui_topology_tensor.layout_patch_json.nodes[].propsJson
+            - topology.ui_topology_tensor.layout_patch_json.nodes[].stateJson
+            - topology.ui_topology_tensor.layout_patch_json.nodes[].propBindings
+          implementation_refs:
+            - frontend/islands/UiBuilderAdmin.tsx CanvasInspector
+            - frontend/runtime/propBindingResolver.ts
+            - docs/design/css-dictionary-ssot.yaml
+        package_wiring_editor:
+          role: package-level runtime dispatch target authoring, including manifest read/query wiring
+          authoring_surface: PackageWiringEditor advanced details disclosure
+          inputs:
+            - current package wiring row from ui_topology:get_package_wiring
+            - route/ui/manifest target surface selection
+            - manifest:list_screen_read_query_wiring candidates
+            - fallback frontend/lib/screenReadQueryWiring.ts candidate derivation from manifest topology raw JSON
+          save_action: ui_topology:update_package_wiring
+          persisted_fields:
+            - topology.ui_package_wiring.wiring_kind
+            - topology.ui_package_wiring.target_surface
+            - topology.ui_package_wiring.target_ref
+          manifest_target_ref_format: manifest:<manifestId>:<wiringKey>
+          candidate_sources:
+            - screen_data_shape.screenReadQueryWiring.searchConditions
+            - screen_data_shape.screenReadQueryWiring.havingConditions
+            - screen_data_shape.screenReadQueryWiring.aggregationMeasures
+            - screen_data_shape.screenReadQueryWiring.displayColumns
+          implementation_refs:
+            - frontend/islands/UiBuilderAdmin.tsx PackageWiringEditor
+            - frontend/lib/packageWiringPicker.ts
+            - frontend/lib/packageWiringOptions.ts
+            - frontend/lib/screenReadQueryWiring.ts
+            - backend/runtime/AdminRuntime.cs ui_topology:get_package_wiring
+            - backend/runtime/AdminRuntime.cs ui_topology:update_package_wiring
+        route_navigation_wiring_preset:
+          role: normal-view route navigation helper for click-to-route wiring
+          authoring_surface: RouteNavigationWiringPreset
+          inputs: route_key candidates
+          save_action: ui_topology:update_package_wiring
+          persisted_target: targetSurface=route / targetRef=route:<routeKey>
+          implementation_refs:
+            - frontend/islands/UiBuilderAdmin.tsx RouteNavigationWiringPreset
+            - frontend/lib/packageWiringPicker.ts
+        authoring_suggest_assist_panel:
+          role: guided adoption of saved projection candidates into propBindings and calculationBindings
+          authoring_surface: AuthoringSuggestAssistPanel
+          inputs:
+            - saved screen_data_shape / relationIntents / projection data shape
+            - current canvas selection
+            - component prop capability metadata
+          adoption_boundary: explicit user adoption only; no active topology write by suggestion display
+          draft_targets:
+            propBindings: selected node propBindings in layout_patch draft
+            calculationBindings: root layout_patch_json.calculationBindings draft array
+          apply_boundary: layout_patch:validate then layout_patch:apply
+          implementation_refs:
+            - frontend/islands/UiBuilderAdmin.tsx AuthoringSuggestAssistPanel
+            - frontend/lib/uiBuilderAuthoringSuggest.ts
+            - frontend/lib/uiBuilderBatchOperation.ts
+        preset_intake_and_mock_seed:
+          role: import/replay preset compile snapshots as canvas drafts
+          authoring_surface: PresetUploaderDrawer and preset load control in UIBuilderAdmin
+          inputs:
+            - topology.mock_preset_* registry/compiler rows
+            - db/migrations/*_preset_seed.sql layout_patch_json/wiring_candidate_json/unresolved_json
+          output_boundary: tmp canvas draft; never active topology
+          author_resolution_surfaces:
+            unresolved_layout_or_component: Canvas + Layout Inspector
+            unresolved_design_or_props: Design Inspector
+            unresolved_event_or_runtime_wiring: RouteNavigationWiringPreset or PackageWiringEditor
+            unresolved_manifest_read_query: PackageWiringEditor using manifest screenReadQueryWiring candidates
+          apply_boundary: layout_patch preview/validate/apply after author review
+          implementation_refs:
+            - frontend/islands/PresetUploaderDrawer.tsx
+            - frontend/islands/UiBuilderAdmin.tsx preset load flow
+            - db/migrations/mock_preset_registry_tables.sql
+        layout_patch_preview_validate_apply:
+          role: explicit promotion boundary for canvas/layout draft into active topology tensor
+          preview_action: layout_patch:preview
+          validate_action: layout_patch:validate
+          apply_action: layout_patch:apply
+          tmp_action: layout_patch:save_tmp
+          persisted_fields:
+            - topology.ui_topology_tensor.layout_draft_tmp_json
+            - topology.ui_topology_tensor.layout_patch_json
+          implementation_refs:
+            - frontend/islands/UiBuilderAdmin.tsx callLayoutPatch
+            - backend/runtime/AdminRuntime.cs layout_patch:* actions
+            - backend/repository/NpgsqlUiTopologyRepository.cs
+        component_style_design_save_upsert:
+          role: explicit selected-node design persistence separate from layout tensor persistence
+          tmp_action: component_style_design:save_tmp
+          apply_action: component_style_design:upsert
+          persisted_fields:
+            - topology.component_style_design.*
+            - topology.component_style_design.design_draft_tmp_json
+          implementation_refs:
+            - frontend/islands/UiBuilderAdmin.tsx CanvasInspector
+            - backend/runtime/AdminRuntime.cs component_style_design:* actions
+            - db/ui_topology_tables.sql
+        propBindings:
+          role: bind emission.data branches into component props at render time
+          authoring_surfaces:
+            - Design Inspector propBindings tab
+            - AuthoringSuggestAssistPanel adoption controls
+            - preset seed layout_patch_json nodes[].propBindings
+          candidate_source: saved projection/read-query output shape, not live remote-target lookup
+          persistence: topology.ui_topology_tensor.layout_patch_json.nodes[].propBindings
+          validation_owner: layout_patch validate path + frontend/runtime/propBindingResolver.ts
+          runtime_apply_order: default props -> propsJson -> stateJson -> propBindings
+        calculationBindings:
+          role: frontend-local derived calculations over emission.data for target node props
+          authoring_surfaces:
+            - AuthoringSuggestAssistPanel calculation adoption
+            - Design Inspector local calculation controls
+          persistence: topology.ui_topology_tensor.layout_patch_json.calculationBindings
+          apply_boundary: layout_patch:validate then layout_patch:apply
+          runtime_refs:
+            - frontend/runtime/renderEmission.ts
+            - frontend/runtime/visualLayoutUtils.ts
+        manifest_screenReadQueryWiring:
+          role: canonical candidate source for package manifest targetRef selection
+          authoring_source: /admin/contents Step 3 screen_data_shape authoring
+          ui_builder_surface: PackageWiringEditor
+          list_action: manifest:list_screen_read_query_wiring
+          target_ref_format: manifest:<manifestId>:<wiringKey>
+          candidate_fields:
+            - searchConditions
+            - havingConditions
+            - aggregationMeasures
+            - displayColumns
+          persistence:
+            source: screen_data_shape.screenReadQueryWiring
+            package_target: topology.ui_package_wiring.target_ref
+          implementation_refs:
+            - frontend/lib/screenReadQueryWiring.ts
+            - backend/runtime/AdminRuntime.cs manifest:list_screen_read_query_wiring
     authoring_flow:
       label: canvas_workspace_edit
       user_facing_label: canvas workspace で配置・デザインを編集

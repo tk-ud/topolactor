@@ -22,6 +22,109 @@ ui_builder_preset_ecosystem_ssot:
     - prevent hardcoded screen runtimes and parallel CRUD backends
 
   # ---------------------------------------------------------------------------
+  # Cross-preset UIBuilder authoring boundary
+  # ---------------------------------------------------------------------------
+
+  cross_preset_authoring_boundary:
+    authority_ref: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace.authoring_surface_reference_map
+    invariant: >
+      Preset seed rows and mock preset compiler output are draft/intake artifacts. They
+      pre-populate the canvas, wiring candidate list, style candidates, and unresolved_json
+      so an author can finish configuration inside UIBuilder. They do not mutate active
+      topology until the author uses the explicit UIBuilder save/apply actions.
+    tmp_draft_boundary:
+      layout_and_node_data: layout_patch:save_tmp -> topology.ui_topology_tensor.layout_draft_tmp_json
+      design_data: component_style_design:save_tmp -> topology.component_style_design.design_draft_tmp_json
+    explicit_apply_boundary:
+      layout_and_bindings: layout_patch:validate -> layout_patch:apply -> topology.ui_topology_tensor.layout_patch_json
+      design: component_style_design:upsert -> topology.component_style_design
+      package_wiring: ui_topology:update_package_wiring -> topology.ui_package_wiring
+    author_resolution_map:
+      route_navigation_targetRef:
+        ui_surface: RouteNavigationWiringPreset
+        candidates: route_key / route:<routeKey>
+        save_action: ui_topology:update_package_wiring
+        persisted_field: topology.ui_package_wiring.target_ref
+      runtime_dispatch_targetRef:
+        ui_surface: PackageWiringEditor
+        candidates: targetSurface route | ui | manifest plus action-specific targetRef
+        save_action: ui_topology:update_package_wiring
+        persisted_fields: [topology.ui_package_wiring.wiring_kind, topology.ui_package_wiring.target_surface, topology.ui_package_wiring.target_ref]
+      manifest_read_query_targetRef:
+        ui_surface: PackageWiringEditor
+        candidates: manifest:list_screen_read_query_wiring candidates derived from screen_data_shape.screenReadQueryWiring
+        targetRef_format: manifest:<manifestId>:<wiringKey>
+        candidate_fields: [searchConditions, havingConditions, aggregationMeasures, displayColumns]
+        save_action: ui_topology:update_package_wiring
+        persisted_field: topology.ui_package_wiring.target_ref
+      propBindings:
+        ui_surfaces: [Design Inspector propBindings tab, AuthoringSuggestAssistPanel]
+        candidates: emission.data branches from saved projection/read-query output shape
+        save_action: layout_patch:apply
+        persisted_field: topology.ui_topology_tensor.layout_patch_json.nodes[].propBindings
+      calculationBindings:
+        ui_surfaces: [AuthoringSuggestAssistPanel, Design Inspector local calculation controls]
+        candidates: emission.data branches and target node props
+        save_action: layout_patch:apply
+        persisted_field: topology.ui_topology_tensor.layout_patch_json.calculationBindings
+      layout_structure:
+        ui_surfaces: [Canvas, Layout Inspector]
+        candidates: component tree, slotKey, layoutClassRefs
+        save_action: layout_patch:apply
+        persisted_field: topology.ui_topology_tensor.layout_patch_json.nodes[]
+      design_tokens_and_text:
+        ui_surface: Design Inspector
+        candidates: css dictionary token refs, responsive token refs, inline text/link fields
+        save_actions: [component_style_design:save_tmp, component_style_design:upsert]
+        persisted_fields: [topology.component_style_design.css_token_refs, topology.component_style_design.responsive_token_refs, topology.component_style_design.inline_text]
+    gap_classification_rule: >
+      A seed unresolved_json/knownGaps entry is a backend or catalog gap only when the
+      referenced UIBuilder surface/action above cannot author and persist the value. If the
+      value is intentionally author-selected after load, keep it visible as pending authoring
+      work and reference the exact UI surface/action rather than labeling it SSOT ambiguity.
+
+  # ---------------------------------------------------------------------------
+  # Package wiring / manifest read-query bridge
+  # ---------------------------------------------------------------------------
+
+  package_wiring_manifest_bridge:
+    purpose: >
+      Provide the canonical route from preset wiring placeholders to UIBuilder package
+      wiring, including dashboard/read-query/aggregation cases. This bridge applies to
+      aggregate_dashboard.v1 and future dashboard/read-query presets; it is not a
+      preset-specific exception.
+    editor_surface: PackageWiringEditor
+    load_action: ui_topology:get_package_wiring
+    save_action: ui_topology:update_package_wiring
+    persisted_table: topology.ui_package_wiring
+    persisted_fields: [wiring_kind, target_surface, target_ref]
+    manifest_target:
+      targetSurface: manifest
+      targetRef_format: manifest:<manifestId>:<wiringKey>
+      candidate_owner: screen_data_shape.screenReadQueryWiring
+      candidate_list_action: manifest:list_screen_read_query_wiring
+      fallback_candidate_builder: frontend/lib/screenReadQueryWiring.ts buildScreenReadQueryWiringCandidates
+      candidate_dimensions:
+        searchConditions: read/search filter wiring keys
+        havingConditions: aggregate group filter wiring keys
+        aggregationMeasures: grouped measure wiring keys
+        displayColumns: display projection wiring keys
+      implementation_refs:
+        - frontend/islands/UiBuilderAdmin.tsx PackageWiringEditor
+        - frontend/lib/packageWiringPicker.ts encodeManifestPackageTargetRef
+        - frontend/lib/packageWiringPicker.ts parseManifestPackageTargetRef
+        - backend/runtime/AdminRuntime.cs manifest:list_screen_read_query_wiring
+        - backend/runtime/AdminRuntime.cs ui_topology:update_package_wiring
+    legacy_expression_bridge:
+      legacy_terms: [contentsTopologyName, aggregationFunctionRef]
+      current_authoring_expression: manifest:<manifestId>:<wiringKey> selected from screenReadQueryWiring aggregationMeasures candidates
+      rule: >
+        Old preset language that says contentsTopologyName + aggregationFunctionRef must be
+        interpreted as a request for the author to choose the active manifest and wiringKey
+        in PackageWiringEditor. The seed should not invent a private content_bundle targetRef
+        when a manifest screenReadQueryWiring candidate exists.
+
+  # ---------------------------------------------------------------------------
   # payloadFrom resolver contract
   # ---------------------------------------------------------------------------
 
@@ -73,6 +176,8 @@ ui_builder_preset_ecosystem_ssot:
     seed_ref: db/migrations/hub_search_preset_seed.sql
     role: read-only hub / topology search view seed
     status: active_seed
+    authoring_boundary_ref: cross_preset_authoring_boundary
+    intake_boundary: tmp_canvas_draft_only; explicit layout_patch apply required before active topology mutation
 
     wiring_alignment:
       audit_result: hub:search is NOT SSOT-authorized as a canonical dispatch target
@@ -131,6 +236,8 @@ ui_builder_preset_ecosystem_ssot:
     seed_ref: db/migrations/physical_search_crud_aggregate_preset_seed.sql
     role: physical table / jsonb record search, CRUD, and aggregation surface
     status: active_seed
+    authoring_boundary_ref: cross_preset_authoring_boundary
+    intake_boundary: tmp_canvas_draft_only; explicit layout_patch apply required before active topology mutation
 
     design_intent: >
       Reusable search + list + create + edit + remove + detail UI shell.
@@ -243,6 +350,8 @@ ui_builder_preset_ecosystem_ssot:
     seed_ref: db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql
     role: physical record detail view, inline edit, and Markdown saved view generation surface
     status: active_seed
+    authoring_boundary_ref: cross_preset_authoring_boundary
+    intake_boundary: tmp_canvas_draft_only; explicit layout_patch apply required before active topology mutation
 
     design_intent: >
       Reusable detail surface fed by CRUD card/detail selection. Provides header with back
@@ -334,19 +443,34 @@ ui_builder_preset_ecosystem_ssot:
     seed_ref: db/migrations/aggregate_dashboard_preset_seed.sql
     role: aggregation / grouped measure / dashboard card surface
     status: active_seed
+    authoring_boundary_ref: cross_preset_authoring_boundary
+    intake_boundary: tmp_canvas_draft_only; explicit layout_patch apply required before active topology mutation
 
     design_intent: >
       Reusable dashboard preset for contents-side aggregation. UI preset supplies only
       filter inputs (date range, status), aggregation run trigger button, and result
       display nodes. Aggregation logic remains in contents-side topology/function wiring.
-      The preset maps contentsTopologyName + aggregationFunctionRef + filter node values
-      to existing display components through preview/validate/apply.
+      The preset maps the legacy contentsTopologyName + aggregationFunctionRef wording
+      to the current manifest:<manifestId>:<wiringKey> PackageWiringEditor flow. The
+      wiringKey is selected from screenReadQueryWiring aggregationMeasures/read-query
+      candidates; filter node values still come from payloadFrom and remain draft-only
+      until preview/validate/apply.
 
     contents_topology_binding:
       aggregation_operation: >
-        Contents-side aggregation function ref; wired by author after preset load.
-        Author specifies topologySystemName and the assigned aggregation operation ref.
-        Preset seed uses content_bundle:search as a placeholder pending author selection.
+        Author selects the active manifest and screenReadQueryWiring wiringKey in
+        PackageWiringEditor. The persisted package target is targetSurface=manifest with
+        targetRef manifest:<manifestId>:<wiringKey>. For aggregation dashboards the
+        candidate should normally come from screenReadQueryWiring.aggregationMeasures;
+        searchConditions, havingConditions, and displayColumns remain valid read/query
+        candidate dimensions for related dashboard presets.
+      authoring_resolution:
+        ui_surface: PackageWiringEditor
+        candidate_source: manifest:list_screen_read_query_wiring -> screen_data_shape.screenReadQueryWiring
+        candidate_fields: [searchConditions, havingConditions, aggregationMeasures, displayColumns]
+        save_action: ui_topology:update_package_wiring
+        persisted_field: topology.ui_package_wiring.target_ref
+        targetRef_format: manifest:<manifestId>:<wiringKey>
       display_fields:
         aggregation_results: emission.data.aggregationResults
         summary_stats: emission.data
@@ -407,12 +531,13 @@ ui_builder_preset_ecosystem_ssot:
 
     known_gaps:
       - gap: aggregation_function_ref_wiring
-        status: ssot_ambiguity
+        status: pending_author_selection_via_package_wiring_editor
         note: >
-          Contents-side aggregation function wiring surface and the contentsTopologyName +
-          aggregationFunctionRef binding pattern are not yet specified in a dedicated SSOT.
-          Author must manually select the aggregation operation ref after preset load.
-          Preset seed uses content_bundle:search as placeholder; author replaces at apply time.
+          This is no longer an SSOT ambiguity. The authoring surface is PackageWiringEditor;
+          candidates come from manifest:list_screen_read_query_wiring / screenReadQueryWiring,
+          and the saved package targetRef is manifest:<manifestId>:<wiringKey>. Existing seed
+          SQL still carries older placeholder wording and should be updated in a follow-up
+          seed bundle after this SSOT bridge lands.
       - gap: aggregation_preview_table_prop_binding_capability
         status: pending_catalog_validation
         note: aggregation_preview_table and hub_statistics_panel capability tags need validation for propBindings data target
@@ -524,6 +649,39 @@ ui_builder_preset_ecosystem_ssot:
         Pending wiring candidates (status: pending) must appear in wiring_candidate_json
         with explicit knownGapRef. Compile must not silently drop unresolved wiring.
 
+  follow_up_bundles_after_ssot_alignment:
+    todo_md_reference_cleanup:
+      scope: .agent/tasks/todo.md
+      rule: >
+        Do not treat implemented UIBuilder inspector/editor flows as unresolved after this
+        SSOT bridge. TODO entries that exist only because PackageWiringEditor, Design
+        Inspector, Layout Inspector, or AuthoringSuggestAssistPanel lacked references should
+        be rewritten or closed in a separate todo-maintenance bundle.
+    preset_seed_knownGaps_unresolved_json_cleanup:
+      scope:
+        - db/migrations/aggregate_dashboard_preset_seed.sql
+        - db/migrations/physical_search_crud_aggregate_preset_seed.sql
+        - db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql
+      rule: >
+        Keep real backend/catalog gaps pending, but update author-selected placeholders to
+        name the exact UIBuilder surface/action/persisted field from cross_preset_authoring_boundary.
+      aggregate_dashboard_targets:
+        - aggregation_function_ref_wiring knownGapRef should reference PackageWiringEditor, manifest:list_screen_read_query_wiring, and targetRef manifest:<manifestId>:<wiringKey>.
+        - unresolved_json should distinguish authoring pending from implementation gap.
+        - content_bundle:search placeholder wording should be revisited against manifest screenReadQueryWiring aggregationMeasures.
+    aggregation_preview_table_prop_binding_capability_audit:
+      scope: ui-ux primitive catalog plus propBindingResolver capability list
+      rule: >
+        Remains a catalog/runtime capability validation gap, not solved by the package wiring
+        bridge. Audit whether calc_topology/aggregation_preview_table and
+        calc_topology/hub_statistics_panel should accept propBindings data.
+    logs_diff_record_history_binding_backend_read_audit:
+      scope: backend read boundary for logs.diff physical record history
+      rule: >
+        Remains a backend gap because the write boundary exists but the repository/AdminRuntime
+        read action for physical record history is absent. Do not reclassify it as an
+        inspector authoring issue.
+
   implementation_status:
     payloadFrom_resolver: implemented (frontend/runtime/payloadFromResolver.ts)
     hub_search_wiring_alignment: implemented (db/migrations/hub_search_preset_seed.sql updated)
@@ -532,6 +690,6 @@ ui_builder_preset_ecosystem_ssot:
     aggregate_dashboard_seed: implemented (db/migrations/aggregate_dashboard_preset_seed.sql)
     logs_diff_record_history_read_boundary: backend_gap (read method absent; write exists)
     existing_entity_dispatch_alignment: documented (no new implementation required; content_bundle:* dispatch exists)
-    aggregation_function_ref_wiring: open_gap (ssot_ambiguity; contents-side aggregation function wiring surface not yet specified in dedicated SSOT; author fills after preset load)
+    aggregation_function_ref_wiring: authoring_defined_seed_followup_required (PackageWiringEditor + manifest screenReadQueryWiring bridge defined here; seed SQL wording/placeholder remains to be updated)
     aggregation_preview_table_prop_binding_capability: open_gap (pending_catalog_validation; aggregation_preview_table and hub_statistics_panel capability tags for propBindings data target need validation)
     preset_seed_line_contract_test: implemented (frontend/tests/presetSeedLineContract.test.ts; 24 tests across 4 seeds × 6 contracts; per-seed sql.includes proliferation retired)
