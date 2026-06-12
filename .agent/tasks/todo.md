@@ -8,9 +8,32 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
+| `runtime-ui-interaction-wiring` | UI Builder runtime 操作配線 正規化 | partial | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
+
+---
+## Bundle `runtime-ui-interaction-wiring`
+
+**Status:** partial  
+**Roadmap bundle:** `product.admin_topology_authoring`  
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`  
+**Supporting SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml`
+
+**問題点:** UI Builder の runtime 操作配線（例: button click → modal/drawer/dialog open/close/toggle）が、通常導線ではなく上級・実験的な `propsJson.eventWirings` 手入力として露出している。`stateJson.open` は初期状態注入に留まり、`propsJson.eventWirings` が authoring → `layout_patch_json` → backend validate/apply → DB persistence → emission → `renderEmission` → `runtimeComponentFactory` → runtime UI state 反映まで一貫して実行される pipeline 証跡が不足している。
+
+**目的:** modal / drawer / dialog / tabs / accordion 等の runtime UI state 操作を、ノーコード通常導線の必須イベント設定として正規化し、保存・復元・投影・本番実行・preview inert 差分までを bundle 単位で閉じる。
+
+**改善方針:** `propsJson.eventWirings` は raw fallback / legacy 互換に降格し、正規の runtime UI interaction contract を `layout_patch_json` node contract または `state_policy_json` / wiring contract としてSSOT定義する。通常UXには「操作 / イベント」設定を追加し、eventType / actionType(open, close, toggle, setState, navigate, dispatch) / targetNodeId / targetStatePath / value を構造化入力させる。backend validate は target node / state path / unsupported action を blocking error にし、runtime は projection-local state store で対象 node props を更新する。既存の route navigation と backend runtimeDispatch は維持し、local UI state mutation と責務分離する。
+
+**対応資料:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml`, `.agent/tasks/todo.md`
+
+**対象ファイル名:** `frontend/islands/UiBuilderAdmin.tsx`, `frontend/runtime/visualLayoutUtils.ts`, `frontend/runtime/renderEmission.ts`, `frontend/runtime/runtimeComponentAdapter.ts`, `frontend/runtime/runtimeComponentFactory.ts`, `frontend/runtime/frontendScheduler.ts`, `frontend/components/Modal.tsx`, `frontend/components/ApplyConfirmDialog.tsx`, `frontend/components/RowDetailDrawer.tsx`, `frontend/tests/visualLayoutBuilder.test.ts`, `frontend/tests/runtimeComponentFactory.test.ts`, `frontend/tests/draftPreviewToEmission.test.ts`, `db/ui_topology_tables.sql`, backend layout patch validate/apply/emission surfaces
+
+**対象関数名:** `buildVisualLayoutPatchJson`, `parseVisualLayoutPatchJson`, `mergeNodeLocalProps`, `buildCatalogComponentEventBinding`, `buildRouteNavigationEventBinding`, `adaptComponentDataHub`, `renderRuntimeComponent`, `emitBoundEvent`, `enqueueRuntimeComponentCommand`, `Modal`, `RowDetailDrawer`, `LayoutPatchApplyModal` / `ApplyConfirmDialog` related handlers
+
+- [ ] UI Builder runtime 操作配線を通常UXへ昇格し、authoring → persistence → emission → render → runtime state mutation → modal/drawer/dialog open/close までを正規 pipeline として実装・テストする
 
 ---
 

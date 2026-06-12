@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { JSX } from "preact";
+import { JSX, type ComponentChildren } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import { PresetUploaderDrawer, type CanvasPresetSeed } from "./PresetUploaderDrawer.tsx";
 import {
@@ -14,7 +14,7 @@ import {
 } from "../runtime/cssDictionary.ts";
 import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "../runtime/topologyLayoutClassDictionary.ts";
 import { resolveTopologyLayoutClassRefs } from "../runtime/topologyLayoutClassResolver.ts";
-import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
+import { ValidationErrorPanel, type ValidationErrorEntry } from "../components/ValidationErrorPanel.tsx";
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
@@ -26,10 +26,8 @@ import {
   UX_COMPONENT_BUCKET_CARD_DRAG_HINT,
   UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION,
   UX_DASHBOARD_PRESET_CANDIDATE_LABEL,
-  UX_DESIGN_EDITOR_SURFACE,
   UX_DESIGN_INSPECTOR_SECTION,
   UX_DESIGN_NODE_SAVE_LABEL,
-  UX_EMPTY_CANVAS_DRAG_GUIDANCE,
   UX_LAYOUT_EDITOR_SURFACE,
   UX_LAYOUT_INSPECTOR_SECTION,
   UX_ROUTE_KEY_REQUIRED_FOR_CANVAS,
@@ -64,7 +62,6 @@ import {
   type SelectionSetContract,
   selectSubtree,
   type SizingMode,
-  isPaletteAutoSeedCanvas,
   seedDraftNodesFromPalette,
   snapToGrid,
   STRUCTURAL_HTML_TAG_ALLOWLIST,
@@ -112,7 +109,6 @@ import {
   deriveDbTableCandidates,
   deriveDbColumnCandidates,
   deriveQualifiedColumnCandidates,
-  deriveDataBindingPathCandidates,
   deriveSourceNodeSuggestCandidates,
   deriveTargetNodeSuggestCandidates,
   deriveTargetPropSuggestCandidates,
@@ -189,7 +185,8 @@ import {
  * SSOT: docs/design/admin-console-workflow-ssot.yaml (step 4 package-only edit route)
  */
 
-import { queueAdminClientCommand } from "../runtime/frontendScheduler.ts";
+import { queueAdminClientCommand, type ScheduledCommandResult } from "../runtime/frontendScheduler.ts";
+import type { ValidationError } from "../api/dispatch.ts";
 
 /** Canvas workspace contract marker (SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract). */
 export const UI_BUILDER_WORKSPACE_MODE = "canvas_workspace_v2" as const;
@@ -216,12 +213,11 @@ const SESSION_TOKEN_KEY = "demo_jwt_token";
 
 // ─── ユーティリティ ──────────────────────────────────────────────────────────
 
-// deno-lint-ignore no-explicit-any
-async function dispatchAdminOp(
+function dispatchAdminOp(
   layer: string,
   action: string,
   payload?: unknown,
-): Promise<any> {
+): Promise<ScheduledCommandResult> {
   const token = typeof globalThis.sessionStorage !== "undefined"
     ? sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined
     : undefined;
@@ -236,13 +232,21 @@ async function dispatchAdminOp(
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
 
-type ValidationError = {
-  code: string;
-  message: string;
+type UiValidationError = ValidationError & {
   field?: string;
   nodeId?: string;
   componentKey?: string;
 };
+
+function asValidationErrorEntries(
+  errors: UiValidationError[] | null | undefined,
+): ValidationErrorEntry[] {
+  return (errors ?? []).map((e) => ({
+    code: e.code ?? e.Code,
+    message: e.message ?? e.Message ?? "",
+    field: e.field,
+  }));
+}
 
 type DraftNode = {
   nodeId: string;
@@ -405,7 +409,6 @@ type HistorySnapshot = { nodes: DraftNode[]; label: string };
 
 // ─── アコーディオン ──────────────────────────────────────────────────────────
 
-// deno-lint-ignore no-explicit-any
 function Accordion({
   title,
   defaultOpen = false,
@@ -413,9 +416,7 @@ function Accordion({
 }: {
   title: string;
   defaultOpen?: boolean;
-  // preact children: typed as any to remain compatible without explicit ComponentChildren import
-  // deno-lint-ignore no-explicit-any
-  children?: any;
+  children?: ComponentChildren;
 }): JSX.Element {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -1800,7 +1801,7 @@ function LayoutRightDock({
       data-selected-node-id={selectedNodeId ?? ""}
       data-selection-count={selectedNodeIds?.size ?? (selectedNodeId ? 1 : 0)}
     >
-      <Accordion title={`レイヤー (${draftNodes.length})`} defaultOpen={true}>
+      <Accordion title={`レイヤー (${draftNodes.length})`} defaultOpen>
         <LayerTree
           embedded
           draftNodes={draftNodes}
@@ -1817,7 +1818,7 @@ function LayoutRightDock({
       {/* Single-node inspector: shown when exactly one node is selected (primarySelectedNodeId). */}
       {/* Boundary: single-select = inspector, multi-select = batch panel. */}
       {(selectedNodeIds?.size ?? 0) > 1 ? (
-        <Accordion title={`一括操作 (${selectedNodeIds!.size} 件選択中)`} defaultOpen={true}>
+        <Accordion title={`一括操作 (${selectedNodeIds!.size} 件選択中)`} defaultOpen>
           <BatchOperationPanel
             selectedNodeIds={selectedNodeIds!}
             draftNodes={draftNodes}
@@ -1830,7 +1831,7 @@ function LayoutRightDock({
         <>
           <Accordion
             title={`${UX_LAYOUT_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
-            defaultOpen={true}
+            defaultOpen
           >
             <CanvasInspector
               key={selectedNode.nodeId}
@@ -1920,7 +1921,7 @@ function isLayoutContainerNode(
   });
 }
 
-function isDraftOnlyEntry(c: { registrationRequired: boolean }): boolean {
+function _isDraftOnlyEntry(c: { registrationRequired: boolean }): boolean {
   return c.registrationRequired;
 }
 
@@ -1943,7 +1944,7 @@ type LayoutPatchSummary = {
   cssTokenCount: number;
   message: string;
   nextAction: string;
-  errors: ValidationError[];
+  errors: UiValidationError[];
 };
 
 const GENERIC_SLOT_KEYS = [
@@ -2067,7 +2068,7 @@ async function findPackageForRoute(
 
 async function ensureShellPackageForRoute(
   routeKey: string,
-): Promise<{ handoff: PackagedHandoff | null; error: ValidationError | null }> {
+): Promise<{ handoff: PackagedHandoff | null; error: UiValidationError | null }> {
   const existing = await findPackageForRoute(routeKey);
   if (existing?.packageId && existing?.layoutId) {
     return {
@@ -2099,7 +2100,7 @@ async function ensureShellPackageForRoute(
 async function registerCatalogComponentInPackage(
   routeKey: string,
   componentKey: string,
-): Promise<{ ok: boolean; error?: ValidationError }> {
+): Promise<{ ok: boolean; error?: UiValidationError }> {
   const catalogEntry = COMPONENT_CATALOG_ENTRIES.find((c) =>
     c.componentKey === componentKey
   );
@@ -2188,7 +2189,7 @@ async function registerCatalogComponentInPackage(
 async function detachComponentFromPackage(
   routeKey: string,
   componentKey: string,
-): Promise<{ ok: boolean; error?: ValidationError }> {
+): Promise<{ ok: boolean; error?: UiValidationError }> {
   const body = await dispatchAdminOp(
     "package_generator",
     "detach_package_components",
@@ -2291,7 +2292,7 @@ function shortId(id: string): string {
 
 async function loadLayoutCandidatesFromBackend(): Promise<{
   candidates: LayoutRouteCandidate[];
-  errors: ValidationError[];
+  errors: UiValidationError[];
 }> {
   const body = await dispatchAdminOp("ui_topology", "layout_candidates");
   if (body?.errors?.length) {
@@ -2317,8 +2318,8 @@ function projectLayoutPatchSummary(
   cssTokenCount: number,
   layoutKey?: string,
 ): LayoutPatchSummary {
-  const errors: ValidationError[] = Array.isArray(body?.errors)
-    ? (body.errors as ValidationError[])
+  const errors: UiValidationError[] = Array.isArray(body?.errors)
+    ? (body.errors as UiValidationError[])
     : [];
   const emission = body?.emission as
     | { data?: Record<string, unknown> }
@@ -2367,7 +2368,6 @@ function projectLayoutPatchSummary(
   };
 }
 
-// deno-lint-ignore no-explicit-any
 // Gap 1: Lifecycle step indicator — draft → validated → applied → persisted
 function LifecycleStepIndicator(
   { phase }: { phase: LifecyclePhase },
@@ -2469,20 +2469,11 @@ function LifecycleStepIndicator(
   );
 }
 
-// Gap 3: Actionable validation errors with cause + fix suggestion + contextual node info
-type AnnotatedValidationError = {
-  code: string;
-  message: string;
-  field?: string;
-  nodeId?: string;
-  componentKey?: string;
-};
-
 function ActionableValidationErrorPanel({
   errors,
   title,
 }: {
-  errors: AnnotatedValidationError[];
+  errors: UiValidationError[];
   title?: string;
 }): JSX.Element | null {
   if (errors.length === 0) return null;
@@ -2494,9 +2485,10 @@ function ActionableValidationErrorPanel({
       {title && <div class="mb-2 font-semibold text-red-800">{title}</div>}
       <ul class="space-y-2 pl-0">
         {errors.map((e, i) => {
-          const fix = ERROR_CODE_FIX[e.code] ?? null;
+          const code = e.code ?? e.Code ?? "";
+          const fix = ERROR_CODE_FIX[code] ?? null;
           return (
-            <li key={e.code ?? String(i)} class="flex flex-col gap-0.5">
+            <li key={code || String(i)} class="flex flex-col gap-0.5">
               <span class="font-medium text-red-700">
                 {fix?.cause ?? e.message}
               </span>
@@ -2527,7 +2519,7 @@ function ActionableValidationErrorPanel({
                 </div>
               )}
               <span class="font-mono text-[0.65rem] text-gray-400">
-                [{e.code}]
+                [{code || "UNKNOWN"}]
               </span>
             </li>
           );
@@ -2542,8 +2534,7 @@ function AdvancedManualOverride({
   children,
 }: {
   title?: string;
-  // deno-lint-ignore no-explicit-any
-  children?: any;
+  children?: ComponentChildren;
 }): JSX.Element {
   return (
     <details class="mt-2 rounded border border-orange-300 bg-orange-50 p-2">
@@ -2675,7 +2666,7 @@ function ApplyReadinessPanel({
   );
 }
 
-function LayoutPatchSummaryPanel(
+function _LayoutPatchSummaryPanel(
   { summary }: { summary: LayoutPatchSummary },
 ): JSX.Element {
   return (
@@ -2721,7 +2712,7 @@ function LayoutPatchSummaryPanel(
       </ul>
       {summary.errors.length > 0 && (
         <ValidationErrorPanel
-          errors={summary.errors}
+          errors={asValidationErrorEntries(summary.errors)}
           title="修正が必要なエラー"
         />
       )}
@@ -2744,7 +2735,7 @@ function RouteLayoutSelector({
   onRouteChange: (routeKey: string) => void;
   onLayoutChange: (layoutId: string) => void;
   disabled?: boolean;
-  loadError?: ValidationError[] | null;
+  loadError?: UiValidationError[] | null;
 }): JSX.Element {
   const routes = uniqueRouteKeys(candidates);
   const layouts = routeKey ? layoutsForRoute(candidates, routeKey) : [];
@@ -2781,7 +2772,7 @@ function RouteLayoutSelector({
         </select>
       </label>
       {loadError && loadError.length > 0 && (
-        <ValidationErrorPanel errors={loadError} title="候補ロードエラー" />
+        <ValidationErrorPanel errors={asValidationErrorEntries(loadError)} title="候補ロードエラー" />
       )}
       {candidates.length === 0 && !loadError?.length && (
         <div class="w-full rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -3050,7 +3041,7 @@ const CATEGORY_LABEL_MAP: Record<string, string> = {
 function TopologyLayoutClassPicker({
   selectedClassRefs,
   onToggle,
-  scopeFilter = "",
+  scopeFilter: _scopeFilter = "",
   allowedForFilter = "",
   allowedForAny = [],
 }: {
@@ -3411,7 +3402,7 @@ function BucketPackageRouteFields({
   routeKey: string;
   committedRouteKey: string;
   routeOptions: string[];
-  candidateErrors: ValidationError[];
+  candidateErrors: UiValidationError[];
   onRouteKeyChange: (routeKey: string) => void;
 }): JSX.Element {
   return (
@@ -4334,7 +4325,7 @@ const BREAKPOINT_LABELS: Record<string, string> = {
   xl: "xl (1280px〜)",
 };
 
-function ResponsiveTokenRuleEditor({
+function _ResponsiveTokenRuleEditor({
   rules,
   onChange,
 }: {
@@ -4561,7 +4552,7 @@ function DashboardCandidatePalette({
   onDragStart: (entry: PaletteEntry, payload: BucketCardDragPayload) => void;
   onAddToCanvas: (entry: PaletteEntry) => void;
   disabled?: boolean;
-}): JSX.Element {
+}): JSX.Element | null {
   const [filter, setFilter] = useState("");
   const entries: PaletteEntry[] = COMPONENT_CATALOG_ENTRIES
     .filter((c) => c.capabilityTags.includes("dashboard_placement_candidate"))
@@ -4577,7 +4568,7 @@ function DashboardCandidatePalette({
     )
     : entries;
 
-  if (entries.length === 0) return <></>;
+  if (entries.length === 0) return null;
 
   return (
     <div
@@ -4747,7 +4738,7 @@ function LeftDockedPalettePanel({
             onAddToCanvas={onAddToCanvas}
             entries={paletteEntries}
             status={paletteStatus}
-            packageOnly={true}
+            packageOnly
           />
         )}
         {activeTab === "dashboard" && (
@@ -4838,9 +4829,7 @@ function LayoutBuilderSection({
   const [patchSummary, setPatchSummary] = useState<LayoutPatchSummary | null>(
     null,
   );
-  const [patchErrors, setPatchErrors] = useState<
-    { code: string; message: string }[]
-  >([]);
+  const [patchErrors, setPatchErrors] = useState<UiValidationError[]>([]);
   const [debugJson, setDebugJson] = useState<string | null>(null);
   const [layoutApplyModalOpen, setLayoutApplyModalOpen] = useState(false);
   const [layoutApplyModalPhase, setLayoutApplyModalPhase] = useState<
@@ -4855,7 +4844,7 @@ function LayoutBuilderSection({
   const [layoutCandidates, setLayoutCandidates] = useState<
     LayoutRouteCandidate[]
   >([]);
-  const [candidateErrors, setCandidateErrors] = useState<ValidationError[]>([]);
+  const [candidateErrors, setCandidateErrors] = useState<UiValidationError[]>([]);
   const [paletteLoadFailed, setPaletteLoadFailed] = useState(false);
 
   // ── palette drag (HTML5 drag API — palette→canvas only) ─────────────────
@@ -4872,7 +4861,7 @@ function LayoutBuilderSection({
 
   // ── frontend-local calc bindings ─────────────────────────────────────────
   const [calculationBindings, setCalculationBindings] = useState<CalcBinding[]>([]);
-  const [nodeValues, setNodeValues] = useState<Record<string, Record<string, unknown>>>({});
+  const [, setNodeValues] = useState<Record<string, Record<string, unknown>>>({});
   const [calcResults, setCalcResults] = useState<ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>>(new Map());
   const lastEmissionDataRef = useRef<Record<string, unknown>>({});
   const [emissionDataJson, setEmissionDataJson] = useState<string>("");
@@ -4882,7 +4871,7 @@ function LayoutBuilderSection({
   // SSOT: candidate_source_boundary: debounce_backend_readonly_search (no mutation during typing)
   // UIBuilder does not own topology judgment. No mutation / DB write / apply during typing.
   const [searchSuggestionsByNodeId, setSearchSuggestionsByNodeId] = useState<Record<string, string[]>>({});
-  const [searchErrorByNodeId, setSearchErrorByNodeId] = useState<Record<string, string>>({});
+  const [_searchErrorByNodeId, setSearchErrorByNodeId] = useState<Record<string, string>>({});
   const searchDebounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const handleNodeSearch = useCallback(
@@ -5082,7 +5071,7 @@ function LayoutBuilderSection({
   // groupId: not persisted in this bundle (transient only; no SSOT for persistence target).
 
   /** SelectionSetContract snapshot — consumed by batch operation bundle. */
-  const selectionSetContract: SelectionSetContract = {
+  const _selectionSetContract: SelectionSetContract = {
     selectedNodeIds,
     primarySelectedNodeId: selectedNodeId,
   };
@@ -5095,11 +5084,11 @@ function LayoutBuilderSection({
     setSelectedNodeIds(selectSubtree(draftNodes, nodeId));
   };
 
-  const handleSelectByNodeKind = (nodeKind: string) => {
+  const _handleSelectByNodeKind = (nodeKind: string) => {
     setSelectedNodeIds(selectByNodeKind(draftNodes, nodeKind));
   };
 
-  const handleSelectByComponentKind = (componentKind: string) => {
+  const _handleSelectByComponentKind = (componentKind: string) => {
     setSelectedNodeIds(selectByComponentKind(draftNodes, componentKind));
   };
 
@@ -5380,7 +5369,7 @@ function LayoutBuilderSection({
         const body = await dispatchAdminOp("ui_topology", "promoted_palette");
         if (body?.errors?.length) {
           setPaletteLoadFailed(true);
-          setCandidateErrors((prev) => [...prev, ...body.errors]);
+          setCandidateErrors((prev) => [...prev, ...(body.errors ?? [])]);
           setPaletteEntries([]);
           setPaletteStatus("配置可能部品一覧の読み込みに失敗しました。");
           return;
@@ -5484,7 +5473,7 @@ function LayoutBuilderSection({
         if (cancelled) return;
         if (body?.errors?.length) {
           const notFound = body.errors.some(
-            (e: ValidationError) =>
+            (e: UiValidationError) =>
               e.code === "LAYOUT_PATCH_DRAFT_NOT_FOUND" ||
               e.code === "PACKAGE_WIRING_NOT_FOUND",
           );
@@ -5899,7 +5888,7 @@ function LayoutBuilderSection({
     announce("レイヤーを移動しました");
   };
 
-  const moveLayoutNode = (nodeId: string, dir: "up" | "down") => {
+  const _moveLayoutNode = (nodeId: string, dir: "up" | "down") => {
     const direction = dir === "up" ? "front" : "back";
     setDraftNodes((prev) => {
       const result = reorderLayoutNodeStack(prev, nodeId, direction);
@@ -6705,6 +6694,7 @@ function LayoutBuilderSection({
       <div class="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2">
         <div class="flex flex-wrap items-center gap-2">
           <button
+            type="button"
             onClick={openLayoutApplyModal}
             disabled={loading || !canPatch}
             class="btn-success min-w-[120px]"
@@ -7399,7 +7389,7 @@ function PackageWiringEditor({
   );
 }
 
-async function buildManifestPickerOptions(
+function buildManifestPickerOptions(
   items: { manifestId: string; status: string }[],
 ): Promise<ManifestPickerOption[]> {
   return Promise.all(items.map(async (item) => {
@@ -7444,7 +7434,7 @@ type LayoutNodeDesignOption = {
   htmlTag?: StructuralHtmlTag;
 };
 
-function defaultDesignName(componentKey: string): string {
+function _defaultDesignName(componentKey: string): string {
   const slug =
     componentKey.split("/").pop()?.replace(/[^a-zA-Z0-9._-]+/g, "_") ?? "part";
   return `${slug}_design`;
@@ -7600,7 +7590,7 @@ function LocalCalcBindingPanel({
           class={`mt-1 w-full rounded border px-1 py-0.5 font-mono text-[0.65rem] ${emissionJsonError ? "border-red-400 bg-red-50" : "border-slate-300 bg-white"}`}
           rows={5}
           value={emissionDataJson}
-          placeholder={'{\n  "laborRates": [{"rate": 2500, "priority": 1, "enabled": true}]\n}'}
+          placeholder='{\n  "laborRates": [{"rate": 2500, "priority": 1, "enabled": true}]\n}'
           onInput={(e) => {
             const raw = (e.currentTarget as HTMLTextAreaElement).value;
             onEmissionDataJsonChange(raw);
@@ -8145,7 +8135,7 @@ function PackageDesignPanel({
   onDesignPreviewChange,
   onCommitNode,
   emissionDataJson,
-  draftNodes,
+  draftNodes: _draftNodes,
 }: {
   selectedPackageId: string;
   selectedCanvasNode: DraftNode | null;
@@ -8833,7 +8823,7 @@ function PackageDesignPanel({
                           {binding && (() => {
                             const emissionResult = deriveEmissionPathCandidates(emissionDataJson ?? "");
                             const arraySourcePaths = emissionResult.ok ? emissionResult.candidates.filter((c) => c.isArray).map((c) => c.path) : [];
-                            const allSourcePaths = emissionResult.ok ? emissionResult.candidates.map((c) => c.path) : [];
+                            const _allSourcePaths = emissionResult.ok ? emissionResult.candidates.map((c) => c.path) : [];
                             const sourceFieldResult = deriveRuleTableFieldCandidates(binding.source, emissionDataJson ?? "");
                             const sourceFieldCandidates = sourceFieldResult.ok ? sourceFieldResult.fields : [];
                             const sourceListId = `propbinding-source-list-${propName}`;
@@ -9270,10 +9260,10 @@ export default function UiBuilderAdmin(): JSX.Element {
   const [layoutCandidates, setLayoutCandidates] = useState<
     LayoutRouteCandidate[]
   >([]);
-  const [candidateErrors, setCandidateErrors] = useState<ValidationError[]>([]);
+  const [candidateErrors, setCandidateErrors] = useState<UiValidationError[]>([]);
   const [autoPackageLoading, setAutoPackageLoading] = useState(false);
   const [autoPackageError, setAutoPackageError] = useState<
-    ValidationError | null
+    UiValidationError | null
   >(null);
   const [paletteReloadToken, setPaletteReloadToken] = useState(0);
   const [flowStep, setFlowStep] = useState<UiBuilderFlowStepId>("route");
@@ -9460,7 +9450,7 @@ export default function UiBuilderAdmin(): JSX.Element {
         )}
         {autoPackageError && (
           <ValidationErrorPanel
-            errors={[autoPackageError]}
+            errors={asValidationErrorEntries([autoPackageError])}
             title="パッケージ自動生成エラー"
           />
         )}
