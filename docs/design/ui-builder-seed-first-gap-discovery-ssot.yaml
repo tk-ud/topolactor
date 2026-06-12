@@ -1,0 +1,136 @@
+ui_builder_seed_first_gap_discovery_ssot:
+  name: topolactor_ui_builder_seed_first_gap_discovery_ssot
+  version: 0.1.0
+  status: subordinate_design_document
+
+  authority:
+    parent_ssot: docs/design/admin-console-workflow-ssot.yaml
+    parent_surface: ui_builder_canvas_workspace.authoring_flow.responsibilities.preset_ecosystem
+    runtime_boundary_ssot: docs/design/runtime-orchestration-ssot.yaml
+    pipeline_boundary_ssot: docs/design/pipeline-continuity-ssot.yaml
+    note: >
+      This document defines the development method for UIBuilder preset ecosystem expansion.
+      It is subordinate to the admin console workflow SSOT and does not add canonical routes,
+      runtime lanes, backend authority, or active topology write authority.
+
+  purpose:
+    - define seed-first preset development as the canonical discovery method for UIBuilder preset ecosystem gaps
+    - keep component catalog and runtime wiring additions demand-driven by concrete preset seeds
+    - prevent speculative component or hardcoded screen implementation before seed validation exposes a reusable gap
+    - preserve preview / validate / apply boundaries for all preset-loaded canvas drafts
+
+  core_rule:
+    summary: >
+      New UIBuilder preset surfaces SHOULD be drafted first as structured seed data using existing
+      component catalog entries, prop bindings, wiring candidates, compile snapshots, and explicit
+      unresolved gap markers. Implementation work follows only after the seed exposes a reusable
+      catalog, binding, event payload, runtime dispatch, projection, or SSOT ambiguity gap.
+    prohibited:
+      - implementing one-off hardcoded route screens before attempting a seed draft
+      - adding speculative components without a seed-backed catalog gap
+      - pretending unresolved payloadFrom, propBinding, or wiring paths work without a resolver
+      - marking a seed as active topology before explicit preview / validate / apply
+      - replacing frontend runtime boundaries with preset-specific shortcuts
+
+  development_loop:
+    ordered_steps:
+      - step: seed_draft
+        rule: >
+          Describe the desired surface as a reusable preset seed first. Use existing component catalog
+          identities, existing runtime aliases, and DB seed / mock preset registry structures where possible.
+      - step: catalog_only_composition
+        rule: >
+          Compose as far as possible from the current catalog. Missing visual or interaction affordances
+          must be recorded as gaps, not silently invented as new components.
+      - step: seed_validation
+        rule: >
+          Run seed parsing, prop binding, compile snapshot, and contract tests where available.
+          Validation failures are discovery signals for reusable runtime or catalog gaps.
+      - step: gap_classification
+        rule: >
+          Classify each blocker by reusable gap type before implementation. Keep gaps at Bundle scope;
+          do not split canonical TODO into implementation atoms.
+      - step: reusable_runtime_or_catalog_change
+        rule: >
+          Only implement gaps that are reusable across preset surfaces or required by the parent SSOT.
+          Preset-specific shortcuts and hardcoded screen paths remain prohibited.
+      - step: seed_revalidation
+        rule: >
+          Re-run seed and contract validation after the reusable gap is implemented. The seed becomes
+          evidence that the runtime vocabulary can express the surface.
+
+  canonical_gap_types:
+    component_catalog_gap:
+      meaning: existing catalog cannot express a required reusable visual or interaction structure
+      examples:
+        - relation_picker
+        - timeline
+        - graph_or_relation_map
+        - kanban_or_grouped_board
+      required_response: define catalog contract and tests before component implementation
+    prop_binding_gap:
+      meaning: runtime emission data cannot be safely projected into target component props
+      examples:
+        - emission.data root object to debug json data
+        - rows to card list items
+        - active columns to table columns
+      required_response: extend prop binding resolver and contract sync tests with explicit allowlist
+    event_payload_resolver_gap:
+      meaning: component interaction payloads or current node/interface values cannot be transformed into runtime dispatch payload
+      examples:
+        - node:hub_search_input.value to query
+        - event.item.id to hub_id
+        - event.row.id to selected entity id
+      required_response: implement structured payloadFrom resolver with unresolved-ref errors and no silent fallback
+    runtime_dispatch_or_projection_gap:
+      meaning: payload can be formed but runtime dispatch, manifest routing, or projection cannot consume it through the canonical lane
+      examples:
+        - hub detail open from selected search result
+        - relation traversal from selected hub relation
+        - aggregate dashboard refresh from selected grouping key
+      required_response: extend manifest / runtime / projection contract through documented SSOT boundaries
+    ssot_ambiguity_gap:
+      meaning: seed intent reveals unclear ownership, authority, naming, or lifecycle boundaries
+      examples:
+        - unclear owner between /admin/contents and /admin/ui-builder
+        - unclear active topology versus draft canvas state
+        - unclear saved-view versus preset seed authority
+      required_response: amend SSOT before implementation or prompt issuance
+
+  seed_contract:
+    required_properties:
+      - preset_key
+      - role_or_surface
+      - component_catalog_only_until_gap_classified
+      - visual_tree_or_layout_patch
+      - object_mapping_when_db_seeded
+      - prop_bindings_when_projection_needed
+      - wiring_candidates_when_interactive
+      - known_gap_refs_for_unresolved_paths
+      - active_topology_write_false_until_preview_validate_apply
+    gap_marker_rule: >
+      A seed may include future-looking propBinding or payloadFrom descriptors only when the descriptor is
+      marked as unresolved, pending, or not_implemented and the corresponding Bundle-level TODO / known_gap_ref exists.
+    active_topology_rule: >
+      Seed load targets the selected route package tmp canvas draft. It is not active topology and cannot
+      skip human adjustment plus preview / validate / apply.
+
+  todo_policy:
+    rule: >
+      Carry-over from seed-first discovery must be recorded at Bundle scope, tied to the roadmap bundle
+      and parent SSOT completion condition. TODO entries should name the reusable gap, its purpose,
+      relevant reference material, target files/functions when known, and the seed surface that exposed it.
+    prohibited:
+      - storing each implementation atom as a separate canonical TODO
+      - closing the parent preset ecosystem bundle while seed-exposed reusable gaps remain unresolved
+      - recording CI waiting or tool absence as TODO
+
+  current_reference_seed:
+    preset_key: hub_search.readonly.v1
+    seed_ref: db/migrations/hub_search_preset_seed.sql
+    exposed_gaps:
+      - runtime_event_payload_binding_from_node_and_event_values
+    note: >
+      hub_search.readonly.v1 demonstrates the seed-first method: existing catalog composition produced
+      a reusable preset seed, while search submit and result-selection dispatch exposed a reusable event
+      payload resolver gap rather than a one-off hardcoded screen requirement.
