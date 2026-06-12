@@ -692,26 +692,15 @@ ui_builder_preset_ecosystem_ssot:
         Remains a backend gap because the write boundary exists but the repository/AdminRuntime
         read action for physical record history is absent. Do not reclassify it as an
         inspector authoring issue.
-    phase_origin_ssot_reference_graph:
-      scope: phase-origin SSOT reference graph expansion beyond UIBuilder-centric references
-      problem: >
-        This UIBuilder/preset/inspector reference graph is an entry point, but Topolactor's
-        canonical model treats phase, attention, registry tensor, logs, hub, and topology as
-        upstream semantic axes. UIBuilder must be documented as a downstream authoring/projection
-        surface reached from those phase origins, not as the root of the reference graph.
-      references:
-        - docs/framework-core.yaml
-        - docs/framework-policy.yaml
-        - docs/design/sql-attention-logs-ssot.yaml
-        - docs/design/runtime-orchestration-ssot.yaml
-        - docs/design/pipeline-continuity-ssot.yaml
-        - docs/design/admin-console-workflow-ssot.yaml
-        - docs/design/ui-builder-preset-ecosystem-ssot.yaml
-      target_direction: >
-        Start from framework-policy registry_tensor_principle / topolactor_space_boundary_policy,
-        trace phase / attention / logs / registry tensor / hub relation axes into runtime,
-        pipeline continuity, SQL Attention observation, UIBuilder projection/authoring,
-        manifest screenReadQueryWiring, package wiring, and preset seed intake surfaces.
+    phase_origin_convergence_boundary_note:
+      scope: conceptual note for phase-origin observation and convergence boundaries
+      source: docs/design/topolactor-phase-model.md
+      role: conceptual_guidance_not_executable_contract
+      rule: >
+        Use the note to avoid treating the UIBuilder reference graph as governance.
+        UIBuilder remains a downstream horizontal projection/authoring surface; convergence
+        authority remains in SSOT contracts, backend/runtime validation, preview-validate-apply,
+        audit protocols, and physical DB constraints.
 
   implementation_status:
     payloadFrom_resolver: implemented (frontend/runtime/payloadFromResolver.ts)

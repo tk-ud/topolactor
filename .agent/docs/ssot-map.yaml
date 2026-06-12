@@ -109,6 +109,7 @@ mapping:
       - docs/design/sql-attention-logs-ssot.md
       - docs/design/sql-attention-logs-ssot.yaml
       - docs/framework-policy.yaml
+      - docs/design/topolactor-phase-model.md
     protocols:
       - .agent/protocols/registry-tensor-policy.md
 
@@ -148,6 +149,7 @@ mapping:
       - docs/design/context-route-recommendation.yaml
       - docs/design/db-schema.yaml
       - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/topolactor-phase-model.md
     protocols:
       - .agent/protocols/registry-tensor-policy.md
 
@@ -842,6 +844,7 @@ mapping:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/sql-attention-logs-ssot.yaml
       - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/topolactor-phase-model.md
     protocols: []
 
 worktypes:
