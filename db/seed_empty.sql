@@ -830,6 +830,16 @@ VALUES
         'active'
     ),
     (
+        '00000000-0000-0000-0000-0000000000bc',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"package_generator","action":"detach_package_components"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
         '00000000-0000-0000-0000-0000000000a7',
         NULL,
         ARRAY[
@@ -1227,6 +1237,15 @@ VALUES
         '00000000-0000-0000-0000-0000000000a1',
         'admin_package_generator_promote_package',
         'admin:package_generator:promote_package',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c3',
+        'admin_package_generator_detach_package_components',
+        'admin:package_generator:detach_package_components',
         '00000000-0000-0000-0000-000000000020',
         '00000000-0000-0000-0000-000000000021',
         ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],

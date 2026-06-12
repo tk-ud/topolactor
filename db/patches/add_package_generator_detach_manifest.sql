@@ -1,9 +1,10 @@
 -- One-off patch: register package_generator:detach_package_components for admin dispatch.
 -- Run when canvas node delete sync returns MANIFEST_NOT_FOUND for detach_package_components.
+-- Safe to re-run (ON CONFLICT on manifest_id / structure_map_id).
 
-INSERT INTO manifest (manifest_id, hub_id, topology, status)
-SELECT
-    '00000000-0000-0000-0000-0000000000a9'::uuid,
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000000bc',
     NULL,
     ARRAY[
         '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"package_generator","action":"detach_package_components"}'::jsonb,
@@ -11,10 +12,10 @@ SELECT
         '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
     ]::jsonb[],
     'active'
-WHERE NOT EXISTS (
-    SELECT 1 FROM manifest m
-    WHERE m.manifest_id = '00000000-0000-0000-0000-0000000000a9'::uuid
-);
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
 
 INSERT INTO topology.structure_maps (
     structure_map_id,
@@ -25,15 +26,19 @@ INSERT INTO topology.structure_maps (
     component_ids,
     active
 )
-SELECT
-    '00000000-0000-0000-0000-0000000000a2'::uuid,
+VALUES (
+    '00000000-0000-0000-0000-0000000000c3',
     'admin_package_generator_detach_package_components',
     'admin:package_generator:detach_package_components',
-    '00000000-0000-0000-0000-000000000020'::uuid,
-    '00000000-0000-0000-0000-000000000021'::uuid,
+    '00000000-0000-0000-0000-000000000020',
+    '00000000-0000-0000-0000-000000000021',
     ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
     true
-WHERE NOT EXISTS (
-    SELECT 1 FROM topology.structure_maps
-    WHERE attractor_key = 'admin:package_generator:detach_package_components'
-);
+)
+ON CONFLICT (structure_map_id) DO UPDATE
+    SET name          = EXCLUDED.name,
+        attractor_key = EXCLUDED.attractor_key,
+        package_id    = EXCLUDED.package_id,
+        schema_id     = EXCLUDED.schema_id,
+        component_ids = EXCLUDED.component_ids,
+        active        = EXCLUDED.active;
