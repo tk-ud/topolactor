@@ -489,6 +489,33 @@ ui_builder_preset_ecosystem_ssot:
       - payloadFrom_sources_must_parse_to_recognized_pattern (no UNRESOLVED_REF)
       - propBinding_sources_must_start_with_emission_data
       - no_catalog_component_added_without_seed_backed_gap_classification
+
+  # ---------------------------------------------------------------------------
+  # Preset seed test policy
+  # ---------------------------------------------------------------------------
+
+  preset_seed_test_policy:
+    authority: This section is authoritative for test organization across the preset ecosystem.
+    generic_contract_test:
+      ref: frontend/tests/presetSeedLineContract.test.ts
+      purpose: >
+        All registered preset seed SQL files are validated by a uniform set of 6 contracts.
+        Adding a new seed requires only registering its path in SEED_FILES — no per-seed
+        test file is needed. Contracts cover: layout_patch_json structure,
+        activeTopologyWrite boundary, wiring candidate status/refs, payloadFrom patterns,
+        propBindings source prefix, and unresolved_json visibility.
+      seed_registry: SEED_FILES list in presetSeedLineContract.test.ts
+    regression_pins:
+      ref: frontend/tests/mockPresetIntake.test.ts
+      policy: >
+        Individual per-seed assertions are limited to regression pins for past SSOT
+        violations that were actually observed. The two current pins are:
+        (1) hub_search wiring must target content_bundle:search, not hub:search.
+        (2) payloadFrom keyword field must not regress to query field.
+      prohibited:
+        - adding sql.includes() checks for new seeds in mockPresetIntake.test.ts
+        - per-seed layout node structure assertions outside presetSeedLineContract.test.ts
+        - pinning seed-specific propBindings values in per-seed tests
       - active_topology_write_false_until_preview_validate_apply
       - preview_validate_apply_boundary_not_skipped_by_preset_load
     missing_wiring_visibility:
@@ -507,3 +534,4 @@ ui_builder_preset_ecosystem_ssot:
     existing_entity_dispatch_alignment: documented (no new implementation required; content_bundle:* dispatch exists)
     aggregation_function_ref_wiring: open_gap (ssot_ambiguity; contents-side aggregation function wiring surface not yet specified in dedicated SSOT; author fills after preset load)
     aggregation_preview_table_prop_binding_capability: open_gap (pending_catalog_validation; aggregation_preview_table and hub_statistics_panel capability tags for propBindings data target need validation)
+    preset_seed_line_contract_test: implemented (frontend/tests/presetSeedLineContract.test.ts; 24 tests across 4 seeds × 6 contracts; per-seed sql.includes proliferation retired)
