@@ -157,6 +157,7 @@ import {
   deriveRouteKeyCandidates,
   type DraftNodeMinimal,
 } from "../lib/uiBuilderAutocompleteCandidates.ts";
+import { searchRouteKeyCandidates } from "../lib/uiBuilderSearchProvider.ts";
 import {
   applyBatchCalcBindingAssist,
   applyBatchJsonPatch,
@@ -4874,6 +4875,53 @@ function LayoutBuilderSection({
   const lastEmissionDataRef = useRef<Record<string, unknown>>({});
   const [emissionDataJson, setEmissionDataJson] = useState<string>("");
 
+  // ── search suggestions state (autocomplete/suggest candidate boundary) ────
+  // loop: onSearch → debounce → searchRouteKeyCandidates (read-only) → suggestions update
+  // SSOT: candidate_source_boundary: debounce_backend_readonly_search (no mutation during typing)
+  // UIBuilder does not own topology judgment. No mutation / DB write / apply during typing.
+  const [searchSuggestionsByNodeId, setSearchSuggestionsByNodeId] = useState<Record<string, string[]>>({});
+  const [searchErrorByNodeId, setSearchErrorByNodeId] = useState<Record<string, string>>({});
+  const searchDebounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const handleNodeSearch = useCallback(
+    (componentId: string, query: string) => {
+      if (searchDebounceTimers.current[componentId]) {
+        clearTimeout(searchDebounceTimers.current[componentId]);
+      }
+      searchDebounceTimers.current[componentId] = setTimeout(async () => {
+        const sessionToken =
+          typeof globalThis.sessionStorage !== "undefined"
+            ? (sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined)
+            : undefined;
+        // read-only search — no mutation / DB write / apply during typing
+        const result = await searchRouteKeyCandidates(query, sessionToken);
+        if (result.ok) {
+          setSearchSuggestionsByNodeId((prev) => ({
+            ...prev,
+            [componentId]: result.candidates,
+          }));
+          setSearchErrorByNodeId((prev) => {
+            const next = { ...prev };
+            delete next[componentId];
+            return next;
+          });
+        } else {
+          // explicit failure — no silent fallback
+          setSearchSuggestionsByNodeId((prev) => {
+            const next = { ...prev };
+            delete next[componentId];
+            return next;
+          });
+          setSearchErrorByNodeId((prev) => ({
+            ...prev,
+            [componentId]: result.reason,
+          }));
+        }
+      }, 400);
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!emissionDataJson.trim()) {
       lastEmissionDataRef.current = {};
@@ -4980,6 +5028,33 @@ function LayoutBuilderSection({
     }
     return map;
   }, [calcResults]);
+
+  // search_suggest candidate boundary: nodeIds of autocomplete/suggest nodes on the canvas
+  const SEARCH_SUGGEST_KINDS = new Set([
+    "search_suggest/autocomplete_input",
+    "search_suggest/suggest_input",
+  ]);
+  const searchNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const node of draftNodes) {
+      if (node.componentKind && SEARCH_SUGGEST_KINDS.has(node.componentKind)) {
+        ids.add(node.nodeId);
+      }
+    }
+    return ids;
+  }, [draftNodes]);
+
+  // Convert Record<string, string[]> to Map for FlowLayoutCanvas (read-only map)
+  const searchSuggestionsByNodeIdMap = useMemo(
+    () => new Map(Object.entries(searchSuggestionsByNodeId)),
+    [searchSuggestionsByNodeId],
+  );
+
+  // combobox candidate boundary: local derivation from layoutCandidates — no backend fetch
+  const comboboxPreviewOptions = useMemo(
+    () => deriveRouteKeyCandidates(layoutCandidates).map((k) => ({ label: k, value: k })),
+    [layoutCandidates],
+  );
 
   const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
     if (!packageScopedLayout) {
@@ -6510,6 +6585,10 @@ function LayoutBuilderSection({
             calcTriggerNodeIds={calcTriggerNodeIds}
             calcOverridesByNodeId={calcOverridesByNodeId}
             onNodeValueChange={handleNodeValueChange}
+            searchNodeIds={searchNodeIds}
+            suggestionsByNodeId={searchSuggestionsByNodeIdMap}
+            onNodeSearch={handleNodeSearch}
+            comboboxPreviewOptions={comboboxPreviewOptions}
           />
         </div>
 

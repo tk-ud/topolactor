@@ -72,6 +72,10 @@ function FlowCanvasNodeView({
   calcTriggerNodeIds,
   calcOverridesByNodeId,
   onNodeValueChange,
+  searchNodeIds,
+  suggestionsByNodeId,
+  onNodeSearch,
+  comboboxPreviewOptions,
 }: {
   node: FlowCanvasNode;
   childrenMap: Map<string | undefined, FlowCanvasNode[]>;
@@ -83,6 +87,11 @@ function FlowCanvasNodeView({
   calcTriggerNodeIds?: ReadonlySet<string>;
   calcOverridesByNodeId?: ReadonlyMap<string, Record<string, unknown>>;
   onNodeValueChange?: (nodeId: string, propKey: string, value: unknown) => void;
+  searchNodeIds?: ReadonlySet<string>;
+  suggestionsByNodeId?: ReadonlyMap<string, string[]>;
+  onNodeSearch?: (nodeId: string, query: string) => void;
+  /** Combobox preview options from uiBuilderAutocompleteCandidates local derivation (no backend fetch). */
+  comboboxPreviewOptions?: ReadonlyArray<{ label: string; value: string }>;
 }): JSX.Element {
   const children = childrenMap.get(node.nodeId) ?? [];
   const isSelected = node.nodeId === selectedNodeId;
@@ -117,6 +126,10 @@ function FlowCanvasNodeView({
       calcTriggerNodeIds={calcTriggerNodeIds}
       calcOverridesByNodeId={calcOverridesByNodeId}
       onNodeValueChange={onNodeValueChange}
+      searchNodeIds={searchNodeIds}
+      suggestionsByNodeId={suggestionsByNodeId}
+      onNodeSearch={onNodeSearch}
+      comboboxPreviewOptions={comboboxPreviewOptions}
     />
   ));
 
@@ -200,6 +213,17 @@ function FlowCanvasNodeView({
     ? (value: unknown) => onNodeValueChange?.(node.nodeId, "value", value)
     : undefined;
   const calcValueOverridesForNode = calcOverridesByNodeId?.get(node.nodeId);
+  // search_suggest candidate boundary: wire searchCallback for autocomplete/suggest nodes.
+  // Always key by node.nodeId (not runtime spec componentId) so suggestionsByNodeId.get(node.nodeId)
+  // retrieves the result that handleNodeSearch stored under the same key.
+  const searchCallbackForNode = searchNodeIds?.has(node.nodeId)
+    ? (_componentId: string, query: string) => onNodeSearch?.(node.nodeId, query)
+    : undefined;
+  const searchSuggestionsForNode = suggestionsByNodeId?.get(node.nodeId);
+  // combobox candidate boundary: local derivation only (no backend fetch)
+  const comboboxOptionsForNode = node.componentKind === "search_suggest/search_combobox"
+    ? comboboxPreviewOptions
+    : undefined;
 
   return (
     <div {...commonProps}>
@@ -219,6 +243,9 @@ function FlowCanvasNodeView({
           linkTarget={design?.linkTarget}
           calcTriggerCallback={calcTriggerCallback}
           calcValueOverrides={calcValueOverridesForNode}
+          searchCallback={searchCallbackForNode}
+          searchSuggestions={searchSuggestionsForNode}
+          comboboxOptions={comboboxOptionsForNode as { label: string; value: string }[] | undefined}
         />
       </div>
       {(node.slotKey || (sizeLabel && node.widthMode === "custom" && node.heightMode === "custom")) && (
@@ -256,6 +283,14 @@ export type FlowLayoutCanvasProps = {
   calcOverridesByNodeId?: ReadonlyMap<string, Record<string, unknown>>;
   /** Called when a calc-trigger input node changes value. Never dispatches to backend. */
   onNodeValueChange?: (nodeId: string, propKey: string, value: unknown) => void;
+  /** search_suggest candidate boundary: nodeIds of autocomplete/suggest nodes. */
+  searchNodeIds?: ReadonlySet<string>;
+  /** Live suggestions per node (updated after debounce + backend read-only search). */
+  suggestionsByNodeId?: ReadonlyMap<string, string[]>;
+  /** Called when an autocomplete/suggest node fires onSearch. Island debounces and calls provider. */
+  onNodeSearch?: (nodeId: string, query: string) => void;
+  /** Combobox preview options from uiBuilderAutocompleteCandidates local derivation (no backend fetch). */
+  comboboxPreviewOptions?: ReadonlyArray<{ label: string; value: string }>;
 };
 
 export function FlowLayoutCanvas({
@@ -277,6 +312,10 @@ export function FlowLayoutCanvas({
   calcTriggerNodeIds,
   calcOverridesByNodeId,
   onNodeValueChange,
+  searchNodeIds,
+  suggestionsByNodeId,
+  onNodeSearch,
+  comboboxPreviewOptions,
 }: FlowLayoutCanvasProps): JSX.Element {
   const childrenMap = buildFlowChildrenMap(nodes);
   const roots = childrenMap.get(undefined) ?? [];
@@ -348,6 +387,10 @@ export function FlowLayoutCanvas({
                 calcTriggerNodeIds={calcTriggerNodeIds}
                 calcOverridesByNodeId={calcOverridesByNodeId}
                 onNodeValueChange={onNodeValueChange}
+                searchNodeIds={searchNodeIds}
+                suggestionsByNodeId={suggestionsByNodeId}
+                onNodeSearch={onNodeSearch}
+                comboboxPreviewOptions={comboboxPreviewOptions}
               />
             ))}
           </div>

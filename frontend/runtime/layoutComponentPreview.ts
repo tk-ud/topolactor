@@ -405,6 +405,12 @@ export function buildLayoutPreviewRuntimeSpec(input: {
   design?: LayoutPreviewDesignOverrides;
   calcTriggerCallback?: (value: unknown) => void;
   calcValueOverrides?: Record<string, unknown>;
+  /** search_suggest candidate boundary: wires onSearch → debounce → provider loop. No mutation during typing. */
+  searchCallback?: (componentId: string, query: string) => void;
+  /** Live suggestions for autocomplete_input / suggest_input preview (updated after debounce + backend read). */
+  searchSuggestions?: string[];
+  /** Combobox preview options from uiBuilderAutocompleteCandidates local derivation (no backend fetch). */
+  comboboxOptions?: { label: string; value: string }[];
 }):
   | { ok: true; spec: RuntimeComponentSpec }
   | { ok: false; code: string; reason: string } {
@@ -428,21 +434,35 @@ export function buildLayoutPreviewRuntimeSpec(input: {
       reason: `ランタイム factory 未登録: ${componentKind}`,
     };
   }
+  const props = buildLayoutPreviewPlaceholderProps(
+    componentKind,
+    normalizedKey,
+    input.design,
+    input.calcValueOverrides,
+  );
+  // Inject live search suggestions into autocomplete/suggest preview props.
+  if (
+    input.searchSuggestions?.length &&
+    (componentKind === "search_suggest/autocomplete_input" ||
+      componentKind === "search_suggest/suggest_input")
+  ) {
+    props.suggestions = input.searchSuggestions;
+  }
+  // Inject locally-derived combobox options (no backend fetch — local_derivation_only boundary).
+  if (input.comboboxOptions?.length && componentKind === "search_suggest/search_combobox") {
+    props.options = input.comboboxOptions;
+  }
   return {
     ok: true,
     spec: {
       componentId: input.componentId ?? `preview:${normalizedKey}`,
       componentType: componentKind,
-      props: buildLayoutPreviewPlaceholderProps(
-        componentKind,
-        normalizedKey,
-        input.design,
-        input.calcValueOverrides,
-      ),
+      props,
       eventBinding: buildPreviewInertEventBinding(),
       previewMode: true,
       calcTriggerCallback: input.calcTriggerCallback,
       calcValueOverrides: input.calcValueOverrides,
+      searchCallback: input.searchCallback,
     },
   };
 }
@@ -458,6 +478,9 @@ export function renderLayoutComponentPreview(input: {
   linkTarget?: string;
   calcTriggerCallback?: (value: unknown) => void;
   calcValueOverrides?: Record<string, unknown>;
+  searchCallback?: (componentId: string, query: string) => void;
+  searchSuggestions?: string[];
+  comboboxOptions?: { label: string; value: string }[];
 }): LayoutPreviewRenderResult {
   if (input.isDraftOnly) {
     return {
@@ -485,6 +508,9 @@ export function renderLayoutComponentPreview(input: {
     },
     calcTriggerCallback: input.calcTriggerCallback,
     calcValueOverrides: input.calcValueOverrides,
+    searchCallback: input.searchCallback,
+    searchSuggestions: input.searchSuggestions,
+    comboboxOptions: input.comboboxOptions,
   });
   if (!built.ok) return built;
   const factory = resolveRuntimeComponentFactory(built.spec.componentType);

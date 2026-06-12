@@ -11,7 +11,6 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
-| `ui-builder-search-suggest-candidate-boundary` | UIBuilder autocomplete / suggest / combobox candidate boundary | partial | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml` |
 | `ui-builder-projection-authoring-assist-roadmap-alignment` | UIBuilder projection authoring assist roadmap / SSOT alignment | not_started | 1 | `product.admin_topology_authoring` | `docs/system-roadmap.yaml`, `.agent/docs/ssot-map.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
@@ -52,29 +51,6 @@ UIBuilder preset ecosystem parent surface is partial. Provisional preset surface
 - [ ] physical_details_inline_editor_md_generator provisional preset surface is not yet implemented or explicitly completed
 
 Note: md_viewer is now a dashboard/read-work component candidate shown in DashboardCandidatePalette; its completed preset seed / saved view flow evidence remains closed under `/admin/team-dashboard` primary route and is intentionally not retained as TODO evidence ledger.
-
----
-
-## Bundle `ui-builder-search-suggest-candidate-boundary`
-
-**Status:** partial
-**Roadmap bundle:** `product.admin_topology_authoring`
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml`
-**Target files:** `frontend/components/AutoCompleteInput.tsx`, `frontend/components/SuggestInput.tsx`, `frontend/components/SearchCombobox.tsx`, `frontend/lib/uiBuilderAutocompleteCandidates.ts`, `frontend/components/catalog.ts`
-
-**実装済み:**
-- `AutoCompleteInput.tsx` / `SuggestInput.tsx` に `onSearch?: (query: string) => void` を追加。debounce + backend read-only search 境界を prop として宣言。no mutation during typing コメント付与。
-- `runtimeComponentFactory.ts` の autocomplete / suggest factory に `onSearch` → `eventBinding.search` バインディングを追加。
-- `uiBuilderAutocompleteCandidates.ts` ヘッダーを「combobox candidate derivation」として明確化。NOT autocomplete/suggest body と明示。
-- `frontend/tests/uiBuilderAutocompleteCandidates.test.ts` ヘッダーをcombobox candidate derivation framing へ更新。
-- `catalog.ts` の3コンポーネント notes を更新: autocomplete/suggest に `candidate_source_boundary:debounce_backend_readonly_search | no_mutation_during_typing:true`、combobox に `combobox_candidate_source:uiBuilderAutocompleteCandidates.ts`。
-- `docs/design/ui-ux-primitive-catalog-ssot.yaml` に境界フィールド追加 (`candidate_source_boundary`, `no_mutation_during_typing`, `onSearch_note`, etc.)。
-- `frontend/tests/searchSuggestCandidateBoundary.test.ts` を新規作成: prop 型境界・no fetch/eval/Function 境界・framing 宣言テスト。
-
-**残作業 (partial 判定理由):**
-- [ ] backend read-only search action / provider の定義: `onSearch` に対応する candidate search を既存 `/api/dispatch` / ManifestDispatcher 境界、または authoring read provider 境界に接続する。新規 HTTP endpoint を増やす前提ではない。typing 中の mutation / DB write / apply は禁止。
-- [ ] `runtimeComponentFactory` の "search" event で suggestions を更新するリアクティブ更新機構: island/page 側で `onSearch` → debounce → read-only search provider → `suggestions` prop 更新の loop が必要。UIBuilder island 実装は別 bundle。
-- [ ] `SearchCombobox` へのcombobox candidate derivation integration テスト: `uiBuilderAutocompleteCandidates.ts` helpers を `SearchCombobox` props へ接続する UiBuilderAdmin island 側のテストカバレッジ未整備。
 
 ---
 

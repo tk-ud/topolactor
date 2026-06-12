@@ -13,5 +13,6 @@ export function buildPreviewInertEventBinding(): Record<string, unknown> {
     focus: inert("focus"),
     blur: inert("blur"),
     toggle: inert("toggle"),
+    search: inert("search"),
   };
 }
