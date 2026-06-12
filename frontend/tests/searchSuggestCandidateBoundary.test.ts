@@ -373,3 +373,112 @@ Deno.test("boundary: uiBuilderSearchProvider source has no eval/fetch in-compone
     "uiBuilderSearchProvider must not create new HTTP endpoints — use dispatchOperation",
   );
 });
+
+// ─── Canvas preview wiring: buildLayoutPreviewRuntimeSpec integration ─────────
+
+import { buildLayoutPreviewRuntimeSpec } from "../runtime/layoutComponentPreview.ts";
+
+Deno.test("canvas preview: buildLayoutPreviewRuntimeSpec sets searchCallback in spec for autocomplete_input", () => {
+  let capturedId = "";
+  let capturedQuery = "";
+  const result = buildLayoutPreviewRuntimeSpec({
+    componentKey: "autocomplete_input",
+    searchCallback: (componentId: string, query: string) => {
+      capturedId = componentId;
+      capturedQuery = query;
+    },
+  });
+  assert(result.ok, "buildLayoutPreviewRuntimeSpec must succeed for autocomplete_input");
+  assert(
+    typeof result.spec.searchCallback === "function",
+    "spec.searchCallback must be set when searchCallback is passed",
+  );
+  // Verify the callback actually fires through emitBoundEvent (search trigger)
+  const emitResult = __testOnly.emitBoundEvent(result.spec, "search", { query: "canvas-test" });
+  assert(emitResult.ok, "emitBoundEvent with search trigger must return ok");
+  assertEquals(capturedId, result.spec.componentId, "searchCallback must receive componentId from spec");
+  assertEquals(capturedQuery, "canvas-test", "searchCallback must receive query from payload");
+});
+
+Deno.test("canvas preview: buildLayoutPreviewRuntimeSpec injects searchSuggestions into props for autocomplete_input", () => {
+  const suggestions = ["customer-management", "order-management"];
+  const result = buildLayoutPreviewRuntimeSpec({
+    componentKey: "autocomplete_input",
+    searchSuggestions: suggestions,
+  });
+  assert(result.ok, "buildLayoutPreviewRuntimeSpec must succeed");
+  assertEquals(
+    result.spec.props.suggestions,
+    suggestions,
+    "props.suggestions must be injected from searchSuggestions for autocomplete_input preview",
+  );
+});
+
+Deno.test("canvas preview: buildLayoutPreviewRuntimeSpec injects searchSuggestions into props for suggest_input", () => {
+  const suggestions = ["product-catalog", "supplier-list"];
+  const result = buildLayoutPreviewRuntimeSpec({
+    componentKey: "suggest_input",
+    searchSuggestions: suggestions,
+  });
+  assert(result.ok, "buildLayoutPreviewRuntimeSpec must succeed");
+  assertEquals(
+    result.spec.props.suggestions,
+    suggestions,
+    "props.suggestions must be injected from searchSuggestions for suggest_input preview",
+  );
+});
+
+Deno.test("canvas preview: buildLayoutPreviewRuntimeSpec does NOT inject suggestions for search_combobox (wrong kind)", () => {
+  const result = buildLayoutPreviewRuntimeSpec({
+    componentKey: "search_combobox",
+    searchSuggestions: ["should-not-appear"],
+  });
+  assert(result.ok, "buildLayoutPreviewRuntimeSpec must succeed for search_combobox");
+  assertFalse(
+    Array.isArray(result.spec.props.suggestions) && (result.spec.props.suggestions as string[]).includes("should-not-appear"),
+    "searchSuggestions must NOT be injected into search_combobox props — combobox uses options, not suggestions",
+  );
+});
+
+Deno.test("canvas preview: buildLayoutPreviewRuntimeSpec injects comboboxOptions into props for search_combobox (local derivation only)", () => {
+  const options = [
+    { label: "customer-management", value: "customer-management" },
+    { label: "order-management", value: "order-management" },
+  ];
+  const result = buildLayoutPreviewRuntimeSpec({
+    componentKey: "search_combobox",
+    comboboxOptions: options,
+  });
+  assert(result.ok, "buildLayoutPreviewRuntimeSpec must succeed for search_combobox");
+  assertEquals(
+    result.spec.props.options,
+    options,
+    "props.options must be injected from comboboxOptions for search_combobox preview (local derivation only — no backend fetch)",
+  );
+});
+
+Deno.test("canvas preview: comboboxOptions from deriveRouteKeyCandidates are correctly shaped for SearchCombobox props", () => {
+  const candidates = deriveRouteKeyCandidates([
+    { routeKey: "customer-management", layoutId: "layout-1" },
+    { routeKey: "order-management", layoutId: "layout-2" },
+  ]);
+  const comboboxOptions = candidates.map((k) => ({ label: k, value: k }));
+
+  const result = buildLayoutPreviewRuntimeSpec({
+    componentKey: "search_combobox",
+    comboboxOptions,
+  });
+  assert(result.ok, "buildLayoutPreviewRuntimeSpec must succeed");
+  const injectedOptions = result.spec.props.options as { label: string; value: string }[];
+  assert(Array.isArray(injectedOptions), "injected options must be an array");
+  assertEquals(injectedOptions.length, 2, "must have 2 deduped options");
+  assert(injectedOptions.some((o) => o.value === "customer-management"));
+  assert(injectedOptions.some((o) => o.value === "order-management"));
+  // Verify no onSearch is involved — local derivation only
+  const comboboxProps: SearchComboboxProps = {
+    value: "",
+    onChange: () => {},
+    options: injectedOptions,
+  };
+  assertFalse("onSearch" in comboboxProps, "SearchComboboxProps must not have onSearch — local derivation only");
+});

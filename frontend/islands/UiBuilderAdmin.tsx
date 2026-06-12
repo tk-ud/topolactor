@@ -5029,6 +5029,33 @@ function LayoutBuilderSection({
     return map;
   }, [calcResults]);
 
+  // search_suggest candidate boundary: nodeIds of autocomplete/suggest nodes on the canvas
+  const SEARCH_SUGGEST_KINDS = new Set([
+    "search_suggest/autocomplete_input",
+    "search_suggest/suggest_input",
+  ]);
+  const searchNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const node of draftNodes) {
+      if (node.componentKind && SEARCH_SUGGEST_KINDS.has(node.componentKind)) {
+        ids.add(node.nodeId);
+      }
+    }
+    return ids;
+  }, [draftNodes]);
+
+  // Convert Record<string, string[]> to Map for FlowLayoutCanvas (read-only map)
+  const searchSuggestionsByNodeIdMap = useMemo(
+    () => new Map(Object.entries(searchSuggestionsByNodeId)),
+    [searchSuggestionsByNodeId],
+  );
+
+  // combobox candidate boundary: local derivation from layoutCandidates — no backend fetch
+  const comboboxPreviewOptions = useMemo(
+    () => deriveRouteKeyCandidates(layoutCandidates).map((k) => ({ label: k, value: k })),
+    [layoutCandidates],
+  );
+
   const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
     if (!packageScopedLayout) {
       announce(UX_ROUTE_KEY_REQUIRED_FOR_CANVAS);
@@ -6558,6 +6585,10 @@ function LayoutBuilderSection({
             calcTriggerNodeIds={calcTriggerNodeIds}
             calcOverridesByNodeId={calcOverridesByNodeId}
             onNodeValueChange={handleNodeValueChange}
+            searchNodeIds={searchNodeIds}
+            suggestionsByNodeId={searchSuggestionsByNodeIdMap}
+            onNodeSearch={handleNodeSearch}
+            comboboxPreviewOptions={comboboxPreviewOptions}
           />
         </div>
 
