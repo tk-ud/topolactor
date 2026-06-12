@@ -958,6 +958,66 @@ VALUES
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000bd',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"mock_preset","action":"create"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000be',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"mock_preset","action":"list"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000bf',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"mock_preset","action":"get"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c4',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"mock_preset","action":"compile"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c5',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"mock_preset","action":"bind"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c6',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"mock_preset","action":"save_mappings"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
     )
 ON CONFLICT (manifest_id) DO NOTHING;
 
@@ -1354,6 +1414,60 @@ VALUES
         '00000000-0000-0000-0000-0000000000c2',
         'admin_component_style_design_save_tmp',
         'admin:component_style_design:save_tmp',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c7',
+        'admin_mock_preset_create',
+        'admin:mock_preset:create',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c8',
+        'admin_mock_preset_list',
+        'admin:mock_preset:list',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c9',
+        'admin_mock_preset_get',
+        'admin:mock_preset:get',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000ca',
+        'admin_mock_preset_compile',
+        'admin:mock_preset:compile',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000cb',
+        'admin_mock_preset_bind',
+        'admin:mock_preset:bind',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000cc',
+        'admin_mock_preset_save_mappings',
+        'admin:mock_preset:save_mappings',
         '00000000-0000-0000-0000-000000000020',
         '00000000-0000-0000-0000-000000000021',
         ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],

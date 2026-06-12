@@ -112,5 +112,8 @@
 \echo '[init.sql] applying patch add_package_generator_promote_package_manifest.sql'
 \i /db/patches/add_package_generator_promote_package_manifest.sql
 
+\echo '[init.sql] applying patch add_mock_preset_dispatch_manifests.sql'
+\i /db/patches/add_mock_preset_dispatch_manifests.sql
+
 \echo '[init.sql] applying demo_seed.sql'
 \i /db/demo_seed.sql
