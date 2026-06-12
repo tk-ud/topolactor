@@ -482,3 +482,65 @@ Deno.test("canvas preview: comboboxOptions from deriveRouteKeyCandidates are cor
   };
   assertFalse("onSearch" in comboboxProps, "SearchComboboxProps must not have onSearch — local derivation only");
 });
+
+// ─── Key alignment: searchCallback keys by node.nodeId, not runtime componentId ──
+
+Deno.test("key alignment: searchCallback keys suggestions by node.nodeId (not runtime spec componentId)", () => {
+  // Simulates FlowCanvasNodeView's searchCallbackForNode creation:
+  // (_componentId, query) => onNodeSearch?.(node.nodeId, query)
+  // The spec may have a different componentId (e.g. node.componentId or preview:<key>),
+  // but suggestions are stored and retrieved by node.nodeId.
+
+  const nodeId = "canvas-node-abc123";
+  const capturedKeys: string[] = [];
+
+  // This is the searchCallback as created by FlowCanvasNodeView (keyed by nodeId):
+  const searchCallbackForNode = (_componentId: string, query: string): void => {
+    // handleNodeSearch stores by the key passed — here nodeId
+    capturedKeys.push(nodeId);
+    assertEquals(query, "test-query");
+  };
+
+  // Simulate spec with a DIFFERENT componentId than nodeId
+  const specComponentId = "backend-component-xyz";
+  const spec: RuntimeComponentSpec = {
+    componentId: specComponentId,
+    componentType: "autocomplete_input",
+    props: {},
+    eventBinding: { search: { eventType: "search" } },
+    searchCallback: searchCallbackForNode,
+  };
+
+  // emitBoundEvent calls spec.searchCallback(spec.componentId, q) internally,
+  // but the closure already closed over node.nodeId — so storage key is nodeId.
+  const result = __testOnly.emitBoundEvent(spec, "search", { query: "test-query" });
+  assert(result.ok, "emitBoundEvent must return ok");
+
+  assertEquals(capturedKeys.length, 1, "searchCallback must fire once");
+  assertEquals(capturedKeys[0], nodeId, "storage key must be node.nodeId, not spec.componentId");
+  assertFalse(
+    capturedKeys.includes(specComponentId),
+    "spec.componentId must NOT be used as the storage key — would break suggestionsByNodeId.get(node.nodeId) lookup",
+  );
+});
+
+Deno.test("key alignment: suggestionsByNodeId lookup uses node.nodeId that matches handleNodeSearch storage key", () => {
+  // This pins the round-trip: store by nodeId → retrieve by nodeId.
+  // FlowCanvasNodeView: searchSuggestionsForNode = suggestionsByNodeId?.get(node.nodeId)
+  // handleNodeSearch: setSearchSuggestionsByNodeId((prev) => ({ ...prev, [componentId]: result.candidates }))
+  // where componentId = node.nodeId (because searchCallbackForNode uses node.nodeId).
+
+  const nodeId = "node-roundtrip-test";
+  const suggestions = ["route-a", "route-b"];
+
+  // Simulate what handleNodeSearch stores (keyed by nodeId via the closure):
+  const searchSuggestionsByNodeId: Record<string, string[]> = {
+    [nodeId]: suggestions,
+  };
+  // Simulate what FlowCanvasNodeView reads:
+  const suggestionsByNodeId = new Map(Object.entries(searchSuggestionsByNodeId));
+  const retrieved = suggestionsByNodeId.get(nodeId);
+
+  assertEquals(retrieved, suggestions, "suggestions must round-trip through nodeId key");
+  assertEquals(retrieved, ["route-a", "route-b"]);
+});

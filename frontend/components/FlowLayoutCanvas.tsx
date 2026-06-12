@@ -213,9 +213,11 @@ function FlowCanvasNodeView({
     ? (value: unknown) => onNodeValueChange?.(node.nodeId, "value", value)
     : undefined;
   const calcValueOverridesForNode = calcOverridesByNodeId?.get(node.nodeId);
-  // search_suggest candidate boundary: wire searchCallback for autocomplete/suggest nodes
+  // search_suggest candidate boundary: wire searchCallback for autocomplete/suggest nodes.
+  // Always key by node.nodeId (not runtime spec componentId) so suggestionsByNodeId.get(node.nodeId)
+  // retrieves the result that handleNodeSearch stored under the same key.
   const searchCallbackForNode = searchNodeIds?.has(node.nodeId)
-    ? (componentId: string, query: string) => onNodeSearch?.(componentId, query)
+    ? (_componentId: string, query: string) => onNodeSearch?.(node.nodeId, query)
     : undefined;
   const searchSuggestionsForNode = suggestionsByNodeId?.get(node.nodeId);
   // combobox candidate boundary: local derivation only (no backend fetch)
