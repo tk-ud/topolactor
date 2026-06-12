@@ -57,6 +57,9 @@ public class StructureMapResolver
             ["table_op/group_by_control"]       = new HashSet<string>(StringComparer.Ordinal) { "columns" },
             ["table_op/bulk_action_panel"]      = new HashSet<string>(StringComparer.Ordinal) { "actions" },
             ["table_op/virtualized_data_table"] = new HashSet<string>(StringComparer.Ordinal) { "rows", "columns" },
+            ["inline_edit/audit_diff_drawer"]     = new HashSet<string>(StringComparer.Ordinal) { "entries" },
+            ["calc_topology/aggregation_preview_table"] = new HashSet<string>(StringComparer.Ordinal) { "data" },
+            ["calc_topology/hub_statistics_panel"] = new HashSet<string>(StringComparer.Ordinal) { "data" },
         };
 
     // SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.propBindings.transform.allowlist

@@ -41,6 +41,9 @@ public class PropBindingContractSyncTests
             ["table_op/group_by_control"]        = new HashSet<string> { "columns" },
             ["table_op/bulk_action_panel"]       = new HashSet<string> { "actions" },
             ["table_op/virtualized_data_table"]  = new HashSet<string> { "rows", "columns" },
+            ["inline_edit/audit_diff_drawer"]     = new HashSet<string> { "entries" },
+            ["calc_topology/aggregation_preview_table"] = new HashSet<string> { "data" },
+            ["calc_topology/hub_statistics_panel"] = new HashSet<string> { "data" },
         };
 
     private static readonly IReadOnlySet<string> SsotTransforms =
