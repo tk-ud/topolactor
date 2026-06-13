@@ -237,6 +237,43 @@ export async function probeSessionToken(
   }
 }
 
+/** Projection surface login — issues admin JWT if the user has admin grants, user JWT otherwise. */
+export async function loginProjection(req: LoginRequest): Promise<LoginResponse> {
+  return await postLogin("/api/auth/projection-login", req);
+}
+
+/**
+ * Decode JWT payload claims client-side (presence inspection only — no signature verification).
+ * Returns null when the token is malformed or cannot be decoded.
+ */
+export function getTokenClaims(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(
+      parts[1].length + (4 - parts[1].length % 4) % 4,
+      "=",
+    );
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refresh projection session: detects realm from the current access token and calls
+ * the matching refresh endpoint. Admin tokens use the admin refresh endpoint;
+ * user (or unknown realm) tokens use the user refresh endpoint.
+ */
+export async function refreshProjectionSession(token: string): Promise<RefreshResponse> {
+  const claims = getTokenClaims(token);
+  const realm = typeof claims?.realm === "string" ? claims.realm : null;
+  if (realm === "admin/system") {
+    return refreshAdminSession();
+  }
+  return refreshUserSession();
+}
+
 export async function probeDemoSessionToken(token: string): Promise<boolean> {
   return await probeSessionToken(token);
 }

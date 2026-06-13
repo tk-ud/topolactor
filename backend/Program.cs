@@ -261,12 +261,8 @@ app.MapPost("/dispatch", async (
     JwtGuard jwtGuard) =>
 {
     var token = ExtractBearerToken(ctx);
-    var isAdminSurface =
-        string.Equals(request.OperationType, "admin", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(request.Target, "admin", StringComparison.OrdinalIgnoreCase);
-    var authErrors = isAdminSurface
-        ? jwtGuard.ValidateForContext(token, AuthRealm.AdminRealm, AuthRealm.AdminAudience, AuthRealm.AdminRole)
-        : jwtGuard.Validate(token);
+    // Accept any valid JWT; role claim drives authoritative capability — no surface-string heuristic.
+    var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
 
@@ -344,6 +340,16 @@ static string? ReadRefreshCookie(HttpRequest request)
         return null;
     return string.IsNullOrWhiteSpace(value) ? null : Uri.UnescapeDataString(value);
 }
+
+// POST /auth/projection-login — projection surface login: admin JWT if granted, user JWT otherwise.
+// Login surface and authority are orthogonal; admin users entering via /auth retain admin capability.
+app.MapPost("/auth/projection-login", async (HttpContext ctx, LoginRequestDto request, AuthEndpoint auth) =>
+{
+    var (result, refresh) = await auth.LoginProjectionAsync(request, ctx.RequestAborted);
+    if (result.Success && refresh is not null)
+        AppendRefreshCookie(ctx.Response, refresh);
+    return Results.Json(result, statusCode: result.Success ? 200 : 401);
+});
 
 // POST /auth/register — normal user realm registration (pending approval; no session issuance)
 app.MapPost("/auth/register", async (HttpContext ctx, RegisterRequestDto request, AuthEndpoint auth) =>

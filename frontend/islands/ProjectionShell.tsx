@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { probeSessionToken, refreshUserSession } from "../api/authApi.ts";
+import { probeSessionToken, refreshProjectionSession } from "../api/authApi.ts";
 import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
@@ -43,8 +43,10 @@ export default function ProjectionShell(): JSX.Element {
         return;
       }
 
-      const probe = await probeSessionToken(token, "user");
+      // Probe accepts any valid JWT regardless of realm — login surface and capability are orthogonal.
+      const probe = await probeSessionToken(token);
       if (!probe) {
+        clearSessionToken();
         if (mounted) {
           setAuthFallback(true);
           setLoading(false);
@@ -54,26 +56,46 @@ export default function ProjectionShell(): JSX.Element {
 
       setProjectionToken(token);
 
-      const refreshResult = await refreshUserSession();
+      // Detect realm from token and call matching refresh endpoint.
+      const refreshResult = await refreshProjectionSession(token);
       if (!refreshResult.success) {
-        clearSessionToken();
-        if (mounted) {
-          setAuthFallback(true);
-          setLoading(false);
+        // Clear JWT only on token invalidity (revoked, user deleted, account suspended).
+        // Realm/surface mismatch is not token invalidity — do not destroy a valid carrier.
+        const invalidityCodes = new Set([
+          "AUTH_REFRESH_TOKEN_INVALID",
+          "AUTH_REFRESH_USER_NOT_FOUND",
+          "AUTH_USER_INACTIVE",
+          "AUTH_USER_NOT_APPROVED",
+          "AUTH_USER_SUSPENDED",
+        ]);
+        const isTokenInvalid = refreshResult.errors?.some((e) => {
+          const code = e.code ?? e.Code;
+          return invalidityCodes.has(code ?? "");
+        }) ?? false;
+        if (isTokenInvalid) {
+          clearSessionToken();
+          if (mounted) {
+            setAuthFallback(true);
+            setLoading(false);
+          }
+          return;
         }
-        return;
+        // Non-invalidity failure (realm mismatch, backend unreachable, etc.):
+        // JWT is still valid per probe; continue dispatch with existing token.
       }
       if (refreshResult.token) {
         persistSessionToken(refreshResult.token);
         setProjectionToken(refreshResult.token);
       }
 
+      const currentToken = refreshResult.token ?? token;
+
       const dispatchResult = await queueClientCommand({
         operationType: "Search",
         target: "default",
         layer: "screen_list",
         action: "Search",
-      });
+      }, currentToken);
 
       if (!mounted) return;
 
@@ -99,12 +121,13 @@ export default function ProjectionShell(): JSX.Element {
           (async () => {
             try {
               if (gen !== refreshGenRef.current || !mounted) return;
+              const sseToken = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? undefined;
               const result = await queueClientCommand({
                 operationType: "Search",
                 target: "default",
                 layer: "screen_list",
                 action: "Search",
-              });
+              }, sseToken);
               if (!result.success || gen !== refreshGenRef.current || !mounted) return;
               const updated = result.emission;
               if (!updated) return;
