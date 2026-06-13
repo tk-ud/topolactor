@@ -46,6 +46,7 @@ export type DraftPreviewLayoutNode = {
   design?: DraftPreviewNodeDesign | null;
   propsJson?: string | null;
   stateJson?: string | null;
+  runtimeInteractions?: Array<{ trigger: string; actionType: string; targetNodeId?: string; statePath?: string; value?: unknown }> | null;
   /** @deprecated legacy field — prefer nodeId + layoutClassRefs */
   layoutPatchJson?: string;
 };

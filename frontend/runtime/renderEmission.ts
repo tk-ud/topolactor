@@ -249,14 +249,13 @@ function normalizeAuthoredEventType(value: unknown): string | null {
   return map[trimmed] ?? null;
 }
 
-function buildLocalUiStateEventBinding(props: Record<string, unknown>): Record<string, unknown> {
-  const rawWirings = props.eventWirings;
+function buildLocalUiStateEventBinding(rawWirings: unknown): Record<string, unknown> {
   if (!Array.isArray(rawWirings)) return {};
   const binding: Record<string, unknown> = {};
   for (const raw of rawWirings) {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const wiring = raw as Record<string, unknown>;
-    const trigger = normalizeAuthoredEventType(wiring.eventType);
+    const trigger = normalizeAuthoredEventType(wiring.trigger ?? wiring.eventType);
     const targetNodeId = typeof wiring.targetNodeId === "string" ? wiring.targetNodeId.trim() : "";
     const actionType = typeof wiring.actionType === "string" ? wiring.actionType.trim() : "";
     if (!trigger || !targetNodeId || !actionType) continue;
@@ -565,7 +564,8 @@ export function renderEmission(
           : isNavigationWiringKind(nodeWiringKind)
           ? buildRouteNavigationEventBinding(node.targetRef)
           : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
-        const localStateEventBinding = previewMode ? {} : buildLocalUiStateEventBinding(propsWithDesign);
+        const rawLocalInteractions = node.runtimeInteractions ?? propsWithDesign.eventWirings;
+        const localStateEventBinding = previewMode ? {} : buildLocalUiStateEventBinding(rawLocalInteractions);
         const componentEventBinding = { ...baseEventBinding };
         for (const [trigger, localBinding] of Object.entries(localStateEventBinding)) {
           const existing = typeof componentEventBinding[trigger] === "object" && componentEventBinding[trigger] !== null

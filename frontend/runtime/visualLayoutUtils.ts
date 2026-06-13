@@ -221,6 +221,8 @@ export interface VisualNodePayload {
   stateJson?: string;
   /** Array prop bindings: runtime data path → component prop. Resolved after propsJson/stateJson in renderEmission. */
   propBindings?: Record<string, { source: string; keyPath?: string; labelPath?: string; valuePath?: string; childrenPath?: string; transform?: string }> | null;
+  /** Canonical runtime UI interaction contract. Legacy propsJson.eventWirings is fallback only. */
+  runtimeInteractions?: Array<{ trigger: string; actionType: string; targetNodeId?: string; statePath?: string; value?: unknown }>;
 }
 
 export function isStructuralHtmlNode(node: Pick<VisualNodePayload, "nodeKind">): boolean {
@@ -381,6 +383,13 @@ function readPatchNode(
     propBindings: (typeof raw.propBindings === "object" && raw.propBindings !== null && !Array.isArray(raw.propBindings))
       ? raw.propBindings as Record<string, { source: string; keyPath?: string; labelPath?: string; valuePath?: string; childrenPath?: string; transform?: string }>
       : undefined,
+    runtimeInteractions: (Array.isArray(raw.runtimeInteractions))
+      ? raw.runtimeInteractions.filter((v): v is { trigger: string; actionType: string; targetNodeId?: string; statePath?: string; value?: unknown } =>
+        typeof v === "object" && v !== null && !Array.isArray(v) &&
+        typeof (v as Record<string, unknown>).trigger === "string" &&
+        typeof (v as Record<string, unknown>).actionType === "string"
+      )
+      : undefined,
     widthMode: (raw.widthMode === "auto" || raw.widthMode === "preset" || raw.widthMode === "custom")
       ? raw.widthMode as SizingMode
       : undefined,
@@ -532,6 +541,7 @@ export function buildVisualLayoutPatchJson(
         ...(n.propsJson ? { propsJson: n.propsJson } : {}),
         ...(n.stateJson ? { stateJson: n.stateJson } : {}),
         ...(n.propBindings && Object.keys(n.propBindings).length > 0 ? { propBindings: n.propBindings } : {}),
+        ...(n.runtimeInteractions && n.runtimeInteractions.length > 0 ? { runtimeInteractions: n.runtimeInteractions } : {}),
         slotKey: n.slotKey || null,
         orderIndex: n.orderIndex,
         parentNodeId: n.parentNodeId || null,

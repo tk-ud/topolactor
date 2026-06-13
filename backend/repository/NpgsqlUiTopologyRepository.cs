@@ -674,6 +674,85 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return null;
     }
 
+
+    private static string? ValidateRuntimeInteractions(JsonElement nodes)
+    {
+        var componentKindsByNodeId = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            var nodeId = node.TryGetProperty("nodeId", out var nodeIdEl) && nodeIdEl.ValueKind == JsonValueKind.String
+                ? nodeIdEl.GetString()?.Trim()
+                : null;
+            if (string.IsNullOrWhiteSpace(nodeId)) continue;
+            var componentKind = node.TryGetProperty("componentKind", out var kindEl) && kindEl.ValueKind == JsonValueKind.String
+                ? kindEl.GetString()?.Trim()
+                : null;
+            componentKindsByNodeId[nodeId!] = componentKind;
+        }
+
+        foreach (var sourceNode in nodes.EnumerateArray())
+        {
+            if (sourceNode.ValueKind != JsonValueKind.Object) continue;
+            if (!sourceNode.TryGetProperty("runtimeInteractions", out var interactions)) continue;
+            if (interactions.ValueKind != JsonValueKind.Array)
+                return "RUNTIME_INTERACTIONS_MUST_BE_ARRAY";
+            foreach (var interaction in interactions.EnumerateArray())
+            {
+                if (interaction.ValueKind != JsonValueKind.Object)
+                    return "RUNTIME_INTERACTION_MUST_BE_OBJECT";
+                var trigger = interaction.TryGetProperty("trigger", out var triggerEl) && triggerEl.ValueKind == JsonValueKind.String
+                    ? triggerEl.GetString()?.Trim()
+                    : null;
+                if (string.IsNullOrWhiteSpace(trigger))
+                    return "RUNTIME_INTERACTION_TRIGGER_REQUIRED";
+                var actionType = interaction.TryGetProperty("actionType", out var actionEl) && actionEl.ValueKind == JsonValueKind.String
+                    ? actionEl.GetString()?.Trim()
+                    : null;
+                if (string.IsNullOrWhiteSpace(actionType))
+                    return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED";
+                var targetNodeId = interaction.TryGetProperty("targetNodeId", out var targetEl) && targetEl.ValueKind == JsonValueKind.String
+                    ? targetEl.GetString()?.Trim()
+                    : null;
+                if (string.IsNullOrWhiteSpace(targetNodeId))
+                    return "RUNTIME_INTERACTION_TARGET_NODE_REQUIRED";
+                if (!componentKindsByNodeId.TryGetValue(targetNodeId!, out var targetKind))
+                    return $"RUNTIME_INTERACTION_TARGET_NODE_NOT_FOUND:{targetNodeId}";
+                var statePath = interaction.TryGetProperty("statePath", out var stateEl) && stateEl.ValueKind == JsonValueKind.String
+                    ? stateEl.GetString()?.Trim()
+                    : null;
+                var isDisclosure = actionType is "openModal" or "closeModal" or "toggleModal" or "openDrawer" or "closeDrawer" or "toggleDrawer" or "openDialog" or "closeDialog" or "toggleDialog";
+                var isActiveKey = actionType is "setActiveKey";
+                var isSetState = actionType is "setState";
+                if (!isDisclosure && !isActiveKey && !isSetState)
+                    return $"RUNTIME_INTERACTION_ACTION_UNSUPPORTED:{actionType}";
+                if (isDisclosure)
+                {
+                    if (statePath is not null && statePath != "open")
+                        return $"RUNTIME_INTERACTION_STATE_PATH_UNSUPPORTED:{statePath}";
+                    var expected = actionType.Contains("Modal", StringComparison.Ordinal) ? "disclosure/modal"
+                        : actionType.Contains("Drawer", StringComparison.Ordinal) ? "disclosure/drawer"
+                        : "disclosure/dialog";
+                    if (!string.Equals(targetKind, expected, StringComparison.Ordinal))
+                        return $"RUNTIME_INTERACTION_TARGET_KIND_MISMATCH:{targetNodeId}:{targetKind ?? "(missing)"}:{expected}";
+                }
+                else if (isActiveKey)
+                {
+                    if (statePath is not null && statePath != "activeKey")
+                        return $"RUNTIME_INTERACTION_STATE_PATH_UNSUPPORTED:{statePath}";
+                    if (targetKind is not ("disclosure/tabs" or "disclosure/accordion"))
+                        return $"RUNTIME_INTERACTION_TARGET_KIND_MISMATCH:{targetNodeId}:{targetKind ?? "(missing)"}:disclosure/tabs|disclosure/accordion";
+                }
+                else if (isSetState)
+                {
+                    if (statePath is not ("open" or "activeKey"))
+                        return $"RUNTIME_INTERACTION_STATE_PATH_UNSUPPORTED:{statePath ?? "(missing)"}";
+                }
+            }
+        }
+        return null;
+    }
+
     private static LayoutPatchResult NormalizeLayoutPatch(
         Guid layoutId, string routeKey, string? tensorPatchJson,
         IReadOnlyList<string>? cssTokenRefs,
@@ -788,6 +867,15 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson);
             if (nodeError is not null)
                 return Task.FromResult(normalized with { Ok = false, Valid = false, Message = nodeError });
+            using (var runtimeInteractionDoc = JsonDocument.Parse(normalized.TensorPatchJson))
+            {
+                if (runtimeInteractionDoc.RootElement.TryGetProperty("nodes", out var runtimeNodes) && runtimeNodes.ValueKind == JsonValueKind.Array)
+                {
+                    var runtimeInteractionError = ValidateRuntimeInteractions(runtimeNodes);
+                    if (runtimeInteractionError is not null)
+                        return Task.FromResult(normalized with { Ok = false, Valid = false, Message = runtimeInteractionError });
+                }
+            }
 
             foreach (var classRef in ExtractLayoutClassRefs(normalized.TensorPatchJson))
             {

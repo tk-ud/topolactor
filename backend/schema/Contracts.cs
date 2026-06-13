@@ -98,7 +98,9 @@ public record LayoutNode(
     /// <summary>Node-local state JSON string authored in UI Builder (e.g. open:bool for modal/drawer). Null when not set. renderEmission merges into props.data; invalid JSON → explicit error spec.</summary>
     string? StateJson = null,
     /// <summary>Array prop bindings authored in UI Builder. Null when not set. Serialized as JSON object in emission. renderEmission resolves from emission.data after propsJson/stateJson.</summary>
-    JsonElement? PropBindings = null
+    JsonElement? PropBindings = null,
+    /// <summary>Canonical runtime UI interactions from layout_patch_json.nodes[].runtimeInteractions. Legacy propsJson.eventWirings is fallback only.</summary>
+    JsonElement? RuntimeInteractions = null
 );
 
 /// <summary>

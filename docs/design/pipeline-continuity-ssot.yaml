@@ -115,6 +115,9 @@ pipeline_continuity_ssot:
           the state source that changed and the final rendered/runtime state that consumes it.
         ui_builder_runtime_interaction_representative_scenario:
           id: button_click_modal_open_close
+          test_files:
+            - frontend/tests/runtimeUiInteractionScenario.test.ts
+            - backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs
           helper_chain:
             - buildVisualLayoutPatchJson
             - parseVisualLayoutPatchJson

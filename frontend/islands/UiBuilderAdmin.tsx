@@ -288,6 +288,8 @@ type DraftNode = {
    * SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.propBindings
    */
   propBindings?: Record<string, PropBindingDraft>;
+  /** Canonical runtime UI interaction contract. Legacy propsJson.eventWirings is fallback only. */
+  runtimeInteractions?: ComponentEventWiring[];
 };
 
 /** Draft-time prop binding descriptor stored in DraftNode. */
@@ -533,35 +535,42 @@ const COMPONENT_BUCKET_KIND_ICONS: Record<string, string> = {
 };
 
 
-/** Component event wiring entry (saved to propsJson.eventWirings — layout_patch_json boundary). */
+/** Canonical runtime UI interaction entry saved to layout_patch_json.nodes[].runtimeInteractions. */
 export type ComponentEventWiring = {
-  eventType: string;
+  trigger: string;
   actionType: string;
+  targetNodeId?: string;
+  statePath?: string;
+  value?: unknown;
+  /** @deprecated legacy propsJson.eventWirings compatibility only. */
+  eventType?: string;
+  /** @deprecated legacy state-key compatibility only. */
   targetStateKey?: string;
 };
 
 export const COMPONENT_EVENT_TYPES = [
-  "onClick",
-  "onChange",
-  "onSubmit",
-  "onOpen",
-  "onClose",
-  "onSelect",
-  "onInput",
-  "onFocus",
-  "onBlur",
+  "click",
+  "change",
+  "submit",
+  "toggle",
+  "select",
+  "input",
+  "focus",
+  "blur",
 ] as const;
 
 export const COMPONENT_ACTION_TYPES = [
   "setState",
-  "navigate",
   "openModal",
   "closeModal",
+  "toggleModal",
   "openDrawer",
   "closeDrawer",
-  "submitForm",
-  "clearForm",
-  "triggerAction",
+  "toggleDrawer",
+  "openDialog",
+  "closeDialog",
+  "toggleDialog",
+  "setActiveKey",
 ] as const;
 
 function bucketKindIcon(componentKind: string): string {
@@ -9004,7 +9013,7 @@ function PackageDesignPanel({
           },
           {
             id: "wiring",
-            label: "API送信配線",
+            label: "操作配線",
             content: (
               <div class="space-y-3">
                 {selectedPackageId && (
@@ -9013,6 +9022,60 @@ function PackageDesignPanel({
                     routeCandidates={routeCandidates ?? []}
                   />
                 )}
+                <section class="rounded border border-blue-100 bg-blue-50/40 p-3">
+                  <div class="mb-2">
+                    <h4 class="text-xs font-semibold text-blue-900">イベント配線 / 操作配線</h4>
+                    <p class="text-[0.6rem] text-blue-700">
+                      通常 runtime interaction。保存先は layout_patch_json.nodes[].runtimeInteractions です。propsJson.eventWirings は legacy fallback のみ。
+                    </p>
+                  </div>
+                  {(() => {
+                    const interactions = selectedCanvasNode?.runtimeInteractions ?? [];
+                    const targetNodes = (_draftNodes ?? []).filter((n) => n.nodeId !== selectedCanvasNode?.nodeId);
+                    const commitInteractions = (next: ComponentEventWiring[], label: string) => {
+                      onCommitNode?.({ runtimeInteractions: next.length > 0 ? next : undefined }, label);
+                    };
+                    const updateInteraction = (idx: number, updates: Partial<ComponentEventWiring>) => {
+                      const next = interactions.map((w, i) => i === idx ? { ...w, ...updates } : w);
+                      commitInteractions(next, "操作配線を更新");
+                    };
+                    return (
+                      <div class="space-y-2">
+                        {interactions.map((w, i) => (
+                          <div key={i} class="grid gap-2 rounded border border-blue-100 bg-white p-2 md:grid-cols-4">
+                            <label class="text-[0.65rem]">
+                              trigger
+                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.trigger ?? w.eventType ?? "click"} onChange={(e) => updateInteraction(i, { trigger: (e.target as HTMLSelectElement).value })}>
+                                {COMPONENT_EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </label>
+                            <label class="text-[0.65rem]">
+                              action
+                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.actionType} onChange={(e) => updateInteraction(i, { actionType: (e.target as HTMLSelectElement).value })}>
+                                {COMPONENT_ACTION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </label>
+                            <label class="text-[0.65rem]">
+                              target node
+                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.targetNodeId ?? ""} onChange={(e) => updateInteraction(i, { targetNodeId: (e.target as HTMLSelectElement).value || undefined })}>
+                                <option value="">選択してください</option>
+                                {targetNodes.map((n) => <option key={n.nodeId} value={n.nodeId}>{n.nodeId} / {n.componentKind ?? n.componentKey}</option>)}
+                              </select>
+                            </label>
+                            <label class="text-[0.65rem]">
+                              statePath
+                              <input class="input-mono mt-0.5 px-1 py-0.5 text-xs" value={w.statePath ?? "open"} onInput={(e) => updateInteraction(i, { statePath: (e.target as HTMLInputElement).value || undefined })} placeholder="open / activeKey" />
+                            </label>
+                            <div class="md:col-span-4 flex justify-end">
+                              <button type="button" class="text-[0.6rem] text-red-500" onClick={() => commitInteractions(interactions.filter((_, idx) => idx !== i), "操作配線を削除")}>削除</button>
+                            </div>
+                          </div>
+                        ))}
+                        <button type="button" class="btn-secondary text-xs" onClick={() => commitInteractions([...interactions, { trigger: "click", actionType: "openModal", targetNodeId: targetNodes[0]?.nodeId, statePath: "open" }], "操作配線を追加")}>+ 操作配線を追加</button>
+                      </div>
+                    );
+                  })()}
+                </section>
                 <details class="mb-4 rounded border border-slate-200 p-3">
                   <summary class="cursor-pointer text-xs font-semibold text-slate-700">
                     パッケージ配線（イベント接続）
@@ -9057,127 +9120,6 @@ function PackageDesignPanel({
                       placeholder="辞書トークンを優先してください"
                     />
                   </label>
-                </AdvancedManualOverride>
-                <AdvancedManualOverride title="イベント配線（実験的・SSOT未定義）">
-                  <p class="text-[0.6rem] text-slate-500 mb-2">
-                    SSOT未定義 — 実験的。保存対象はlayout_patch_json経由（propsJson.eventWirings）。previewモードではinert bindingを使用します。
-                  </p>
-                  <fieldset class="flex flex-col gap-1">
-                    <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-                      イベント配線（propsJson.eventWirings）
-                    </legend>
-                    {(() => {
-                      let wirings: ComponentEventWiring[] = [];
-                      try {
-                        const parsed = JSON.parse(propsDraft || "{}");
-                        if (Array.isArray(parsed.eventWirings)) wirings = parsed.eventWirings;
-                      } catch { /* ignore */ }
-
-                      const removeWiring = (idx: number) => {
-                        const next = wirings.filter((_, i) => i !== idx);
-                        try {
-                          const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
-                          const nextJson = JSON.stringify({ ...existing, eventWirings: next });
-                          setPropsDraft(nextJson);
-                          setPropsError(null);
-                          onCommitNode?.({ propsJson: nextJson }, "イベント配線を削除");
-                        } catch {
-                          setPropsError("propsJsonの更新に失敗しました");
-                        }
-                      };
-
-                      const addWiring = () => {
-                        const next: ComponentEventWiring[] = [...wirings, { eventType: "onClick", actionType: "setState", targetStateKey: "" }];
-                        try {
-                          const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
-                          const nextJson = JSON.stringify({ ...existing, eventWirings: next });
-                          setPropsDraft(nextJson);
-                          setPropsError(null);
-                          onCommitNode?.({ propsJson: nextJson }, "イベント配線を追加");
-                        } catch {
-                          setPropsError("propsJsonの更新に失敗しました");
-                        }
-                      };
-
-                      const updateWiring = (idx: number, updates: Partial<ComponentEventWiring>) => {
-                        const next = wirings.map((w, i) => i === idx ? { ...w, ...updates } : w);
-                        try {
-                          const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
-                          const nextJson = JSON.stringify({ ...existing, eventWirings: next });
-                          setPropsDraft(nextJson);
-                          setPropsError(null);
-                          onCommitNode?.({ propsJson: nextJson }, "イベント配線を更新");
-                        } catch {
-                          setPropsError("propsJsonの更新に失敗しました");
-                        }
-                      };
-
-                      return (
-                        <div class="space-y-2 mt-1">
-                          {wirings.map((w, i) => (
-                            <div key={i} class="flex flex-col gap-1 rounded border border-slate-200 p-2">
-                              <div class="flex items-center justify-between">
-                                <span class="text-[0.65rem] font-semibold text-slate-600">配線 #{i + 1}</span>
-                                <button
-                                  type="button"
-                                  class="text-[0.6rem] text-red-500 hover:text-red-700"
-                                  onClick={() => removeWiring(i)}
-                                  aria-label={`配線 ${i + 1} を削除`}
-                                >
-                                  削除
-                                </button>
-                              </div>
-                              <label class="flex flex-col gap-0.5 text-[0.65rem]">
-                                イベント
-                                <select
-                                  value={w.eventType}
-                                  onChange={(e) => updateWiring(i, { eventType: (e.target as HTMLSelectElement).value })}
-                                  class="input px-1 py-0.5 text-xs"
-                                  aria-label={`配線 ${i + 1} イベントタイプ`}
-                                >
-                                  {COMPONENT_EVENT_TYPES.map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label class="flex flex-col gap-0.5 text-[0.65rem]">
-                                アクション
-                                <select
-                                  value={w.actionType}
-                                  onChange={(e) => updateWiring(i, { actionType: (e.target as HTMLSelectElement).value })}
-                                  class="input px-1 py-0.5 text-xs"
-                                  aria-label={`配線 ${i + 1} アクションタイプ`}
-                                >
-                                  {COMPONENT_ACTION_TYPES.map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label class="flex flex-col gap-0.5 text-[0.65rem]">
-                                対象ステートキー（任意）
-                                <input
-                                  value={w.targetStateKey ?? ""}
-                                  onInput={(e) => updateWiring(i, { targetStateKey: (e.target as HTMLInputElement).value })}
-                                  onBlur={(e) => updateWiring(i, { targetStateKey: (e.target as HTMLInputElement).value })}
-                                  class="input-mono px-1 py-0.5 text-xs"
-                                  placeholder="例: modalOpen"
-                                  aria-label={`配線 ${i + 1} ターゲットステートキー`}
-                                />
-                              </label>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            class="btn-secondary text-xs"
-                            onClick={addWiring}
-                          >
-                            + イベント配線を追加
-                          </button>
-                          {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
-                        </div>
-                      );
-                    })()}
-                  </fieldset>
                 </AdvancedManualOverride>
                 <AdvancedManualOverride title="生JSON（上級者向け）">
                   <fieldset class="flex flex-col gap-1 mb-2">

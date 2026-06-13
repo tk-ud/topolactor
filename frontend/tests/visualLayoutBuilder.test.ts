@@ -2052,42 +2052,45 @@ Deno.test("CSS_DICTIONARY_TOKENS: userLabel matches expected semantic labels fro
   assertEquals(find("interaction.control.disabled_opacity")?.userLabel, "無効状態");
 });
 
-Deno.test("COMPONENT_EVENT_TYPES: contains standard DOM/component event types", () => {
-  assert(COMPONENT_EVENT_TYPES.includes("onClick"), "must include onClick");
-  assert(COMPONENT_EVENT_TYPES.includes("onChange"), "must include onChange");
-  assert(COMPONENT_EVENT_TYPES.includes("onSubmit"), "must include onSubmit");
-  assert(COMPONENT_EVENT_TYPES.includes("onOpen"), "must include onOpen");
-  assert(COMPONENT_EVENT_TYPES.includes("onClose"), "must include onClose");
+Deno.test("COMPONENT_EVENT_TYPES: contains canonical runtime trigger types", () => {
+  assert(COMPONENT_EVENT_TYPES.includes("click"), "must include click");
+  assert(COMPONENT_EVENT_TYPES.includes("change"), "must include change");
+  assert(COMPONENT_EVENT_TYPES.includes("submit"), "must include submit");
+  assert(COMPONENT_EVENT_TYPES.includes("toggle"), "must include toggle");
   assert(COMPONENT_EVENT_TYPES.length >= 5, "must have at least 5 event types");
 });
 
 Deno.test("COMPONENT_ACTION_TYPES: contains standard component action types", () => {
   assert(COMPONENT_ACTION_TYPES.includes("setState"), "must include setState");
-  assert(COMPONENT_ACTION_TYPES.includes("navigate"), "must include navigate");
   assert(COMPONENT_ACTION_TYPES.includes("openModal"), "must include openModal");
   assert(COMPONENT_ACTION_TYPES.includes("closeModal"), "must include closeModal");
   assert(COMPONENT_ACTION_TYPES.includes("openDrawer"), "must include openDrawer");
   assert(COMPONENT_ACTION_TYPES.includes("closeDrawer"), "must include closeDrawer");
+  assert(COMPONENT_ACTION_TYPES.includes("toggleDialog"), "must include toggleDialog");
+  assertEquals(
+    (COMPONENT_ACTION_TYPES as readonly string[]).includes("navigate"),
+    false,
+    "routeNavigation must remain separate from canonical local UI state mutation actions",
+  );
 });
 
-Deno.test("ComponentEventWiring: propsJson.eventWirings round-trip encoding preserves wiring data", () => {
-  const wirings: ComponentEventWiring[] = [
-    { eventType: "onClick", actionType: "openModal", targetStateKey: "modalOpen" },
-    { eventType: "onChange", actionType: "setState", targetStateKey: "inputValue" },
-  ];
-  const propsJson = JSON.stringify({ label: "送信", eventWirings: wirings });
-  const parsed = JSON.parse(propsJson);
-  assertEquals(parsed.eventWirings.length, 2);
-  assertEquals(parsed.eventWirings[0].eventType, "onClick");
-  assertEquals(parsed.eventWirings[0].actionType, "openModal");
-  assertEquals(parsed.eventWirings[0].targetStateKey, "modalOpen");
-  assertEquals(parsed.eventWirings[1].eventType, "onChange");
-  // other props preserved
-  assertEquals(parsed.label, "送信");
+Deno.test("ComponentEventWiring: runtimeInteractions canonical field round-trips through layout patch", () => {
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    runtimeInteractions: [
+      { trigger: "click", actionType: "openModal", targetNodeId: "modal-1", statePath: "open" },
+      { trigger: "toggle", actionType: "closeModal", targetNodeId: "modal-1", statePath: "open" },
+    ],
+  };
+  const parsed = parseVisualLayoutPatchJson(buildVisualLayoutPatchJson([node]));
+  assert(parsed.ok);
+  assertEquals(parsed.value.nodes[0].runtimeInteractions?.length, 2);
+  assertEquals(parsed.value.nodes[0].runtimeInteractions?.[0].trigger, "click");
+  assertEquals(parsed.value.nodes[0].runtimeInteractions?.[0].targetNodeId, "modal-1");
 });
 
-Deno.test("ComponentEventWiring: targetStateKey is optional", () => {
-  const wiring: ComponentEventWiring = { eventType: "onSubmit", actionType: "submitForm" };
+Deno.test("ComponentEventWiring: legacy propsJson.eventWirings remains fallback-compatible", () => {
+  const wiring: ComponentEventWiring = { trigger: "submit", eventType: "onSubmit", actionType: "setState" };
   assertEquals(wiring.targetStateKey, undefined);
   const json = JSON.stringify({ eventWirings: [wiring] });
   const parsed = JSON.parse(json);
@@ -2113,7 +2116,7 @@ Deno.test("modal/drawer open state: stateJson encodes as { open: boolean }", () 
 
 Deno.test("package wiring and event/state wiring are separated: UI_BUILDER_HAS_SEPARATE_TABS false (unified workspace)", () => {
   // Package wiring (ui_topology:update_package_wiring) lives in PackageDesignPanel 'パッケージ配線' tab
-  // Component event/state wiring (propsJson.eventWirings) lives in PackageDesignPanel '上級' tab (AdvancedManualOverride, SSOT未定義)
+  // Component runtime interaction wiring lives in PackageDesignPanel '操作配線' tab as canonical runtimeInteractions; propsJson.eventWirings remains legacy fallback only
   // CanvasInspector no longer has a '配線' tab (removed from layout inspector responsibility)
   assertFalse(
     UI_BUILDER_HAS_SEPARATE_TABS,

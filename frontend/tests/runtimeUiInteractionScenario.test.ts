@@ -54,7 +54,7 @@ function dataOpen(spec: unknown): unknown {
   return props?.open;
 }
 
-Deno.test("runtime-ui-interaction-wiring scenario: button click opens and modal close closes via layout patch → emission → renderEmission", () => {
+Deno.test("runtime-ui-interaction-wiring scenario: canonical runtimeInteractions button click opens and modal close closes via layout patch → emission → renderEmission", () => {
   const modalNodeId = "node-modal-target";
   const buttonNode: VisualNodePayload = {
     nodeId: "node-open-button",
@@ -74,14 +74,15 @@ Deno.test("runtime-ui-interaction-wiring scenario: button click opens and modal 
     height: 40,
     propsJson: JSON.stringify({
       data: { label: "Open modal" },
-      eventWirings: [
-        {
-          eventType: "onClick",
-          actionType: "openModal",
-          targetNodeId: modalNodeId,
-        },
-      ],
     }),
+    runtimeInteractions: [
+      {
+        trigger: "click",
+        actionType: "openModal",
+        targetNodeId: modalNodeId,
+        statePath: "open",
+      },
+    ],
   };
   const modalNode: VisualNodePayload = {
     nodeId: modalNodeId,
@@ -101,14 +102,15 @@ Deno.test("runtime-ui-interaction-wiring scenario: button click opens and modal 
     height: 200,
     propsJson: JSON.stringify({
       data: { title: "Runtime modal", body: "Opened by button click" },
-      eventWirings: [
-        {
-          eventType: "onClose",
-          actionType: "closeModal",
-          targetNodeId: modalNodeId,
-        },
-      ],
     }),
+    runtimeInteractions: [
+      {
+        trigger: "toggle",
+        actionType: "closeModal",
+        targetNodeId: modalNodeId,
+        statePath: "open",
+      },
+    ],
     stateJson: JSON.stringify({ open: false }),
   };
 
@@ -144,6 +146,7 @@ Deno.test("runtime-ui-interaction-wiring scenario: button click opens and modal 
       height: node.height,
       propsJson: node.propsJson,
       stateJson: node.stateJson,
+      runtimeInteractions: node.runtimeInteractions,
     })),
   });
   assert(emission, "draft preview result should restore to emission");
@@ -177,6 +180,21 @@ Deno.test("runtime-ui-interaction-wiring scenario: button click opens and modal 
     dataOpen(modal),
     false,
     "stateJson.open is the initial modal state only",
+  );
+
+  const previewSpecs = renderEmission(emission, defaultComponentRegistry, {
+    previewMode: true,
+    localStateStore,
+  });
+  const previewButton = previewSpecs.find((spec) =>
+    spec.nodeId === "node-open-button"
+  );
+  const previewClickBinding = (previewButton?.runtimeSpec?.eventBinding as
+    | Record<string, { localStateMutation?: unknown }>
+    | undefined)?.click;
+  assert(
+    !previewClickBinding?.localStateMutation,
+    "previewMode inert: authored local UI interaction must not execute in preview",
   );
 
   const openResult = __testOnly.emitBoundEvent(button.runtimeSpec, "click", {});

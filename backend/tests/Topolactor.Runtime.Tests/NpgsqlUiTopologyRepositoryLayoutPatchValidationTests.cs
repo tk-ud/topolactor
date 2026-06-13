@@ -147,4 +147,102 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
             Environment.SetEnvironmentVariable("TOPOLACTOR_CSS_DICTIONARY_SSOT_PATH", null);
         }
     }
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_RuntimeInteractionMissingTarget_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "openModal", "targetNodeId": "missing-modal", "statePath": "open" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TARGET_NODE_NOT_FOUND:missing-modal", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_RuntimeInteractionUnsupportedStatePath_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "openModal", "targetNodeId": "modal-1", "statePath": "visible" }
+          ] },
+          { "nodeId": "modal-1", "componentKey": "modal.primitive", "componentKind": "disclosure/modal" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_STATE_PATH_UNSUPPORTED:visible", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_RuntimeInteractionUnsupportedAction_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "teleportModal", "targetNodeId": "modal-1", "statePath": "open" }
+          ] },
+          { "nodeId": "modal-1", "componentKey": "modal.primitive", "componentKind": "disclosure/modal" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_ACTION_UNSUPPORTED:teleportModal", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_RuntimeInteractionTargetKindMismatch_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "openModal", "targetNodeId": "card-1", "statePath": "open" }
+          ] },
+          { "nodeId": "card-1", "componentKey": "card.primitive", "componentKind": "display/card" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TARGET_KIND_MISMATCH:card-1:display/card:disclosure/modal", result.Message);
+    }
+
+    [Fact]
+    public async Task ApplyConfirmedLayoutPatchAsync_InvalidRuntimeInteraction_FailsBeforePersistence()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "openModal", "targetNodeId": "missing-modal", "statePath": "open" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ApplyConfirmedLayoutPatchAsync(Guid.NewGuid(), Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_TARGET_NODE_NOT_FOUND:missing-modal", result.Message);
+    }
+
 }
