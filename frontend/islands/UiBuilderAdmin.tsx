@@ -7589,7 +7589,7 @@ function LocalCalcBindingPanel({
   return (
     <div class="flex flex-col gap-2 text-xs">
       <p class="text-[0.65rem] text-slate-500">
-        入力変更で backend dispatch なしに計算値を即時反映します。業務基準値は emission.data.* / ruleTable source を使ってください。
+          入力変更でリアルタイムに計算値を確認できます。外部参照データは下の詳細パネルから設定してください。
       </p>
       <details class="rounded border border-slate-200 p-1.5">
         <summary class="cursor-pointer text-[0.65rem] font-semibold text-slate-600">
@@ -9025,9 +9025,10 @@ function PackageDesignPanel({
                 <section class="rounded border border-blue-100 bg-blue-50/40 p-3">
                   <div class="mb-2">
                     <h4 class="text-xs font-semibold text-blue-900">イベント配線 / 操作配線</h4>
-                    <p class="text-[0.6rem] text-blue-700">
-                      通常 runtime interaction。保存先は layout_patch_json.nodes[].runtimeInteractions です。propsJson.eventWirings は legacy fallback のみ。
-                    </p>
+                    <details class="text-[0.6rem] text-blue-700">
+                      <summary class="cursor-pointer">実装詳細（上級者向け）</summary>
+                      <p class="mt-1">通常 runtime interaction。保存先は layout_patch_json.nodes[].runtimeInteractions です。propsJson.eventWirings は legacy fallback のみ。</p>
+                    </details>
                   </div>
                   {(() => {
                     const interactions = selectedCanvasNode?.runtimeInteractions ?? [];
