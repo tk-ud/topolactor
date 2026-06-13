@@ -18,8 +18,6 @@ export default function Demo(): JSX.Element {
       <div class="nav-footer mt-8">
         <a href="/" class="link">トップ</a>
         {" · "}
-        <a href="/demo/debug" class="link">開発者向け検証</a>
-        {" · "}
         <a href="/admin" class="link">管理画面</a>
       </div>
     </main>

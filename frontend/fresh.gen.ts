@@ -27,9 +27,7 @@ import * as $api_super_auth_login from "./routes/api/super_auth/login.ts";
 import * as $api_super_auth_refresh from "./routes/api/super_auth/refresh.ts";
 import * as $auth from "./routes/auth.tsx";
 import * as $demo_article from "./routes/demo-article.tsx";
-import * as $demo_static from "./routes/demo-static.tsx";
 import * as $demo from "./routes/demo.tsx";
-import * as $demo_debug from "./routes/demo/debug.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $runtime_status from "./routes/runtime-status.tsx";
 import * as $super_auth from "./routes/super_auth.tsx";
@@ -56,7 +54,6 @@ import * as $SeedAdmin from "./islands/SeedAdmin.tsx";
 import * as $SuperAuthPanel from "./islands/SuperAuthPanel.tsx";
 import * as $TeamMarkdownDashboard from "./islands/TeamMarkdownDashboard.tsx";
 import * as $UiBuilderAdmin from "./islands/UiBuilderAdmin.tsx";
-import * as $UserDemoStepper from "./islands/UserDemoStepper.tsx";
 import type { Manifest } from "$fresh/server.ts";
 
 const manifest = {
@@ -87,9 +84,7 @@ const manifest = {
     "./routes/api/super_auth/refresh.ts": $api_super_auth_refresh,
     "./routes/auth.tsx": $auth,
     "./routes/demo-article.tsx": $demo_article,
-    "./routes/demo-static.tsx": $demo_static,
     "./routes/demo.tsx": $demo,
-    "./routes/demo/debug.tsx": $demo_debug,
     "./routes/index.tsx": $index,
     "./routes/runtime-status.tsx": $runtime_status,
     "./routes/super_auth.tsx": $super_auth,
@@ -118,7 +113,6 @@ const manifest = {
     "./islands/SuperAuthPanel.tsx": $SuperAuthPanel,
     "./islands/TeamMarkdownDashboard.tsx": $TeamMarkdownDashboard,
     "./islands/UiBuilderAdmin.tsx": $UiBuilderAdmin,
-    "./islands/UserDemoStepper.tsx": $UserDemoStepper,
   },
   baseUrl: import.meta.url,
 } satisfies Manifest;

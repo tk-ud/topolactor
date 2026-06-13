@@ -7,7 +7,6 @@ namespace Topolactor.Runtime.Tests;
 
 /// <summary>
 /// In-memory content bundle repository for admin content bundle unit tests.
-/// Seeds demo hub/entity/relation data matching db/demo_seed.sql UUIDs.
 /// </summary>
 internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
 {

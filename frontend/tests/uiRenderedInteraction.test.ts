@@ -63,7 +63,6 @@ import { loginDemo } from "../api/authApi.ts";
 // Deno transpiles .tsx on the fly using deno.json compilerOptions (jsx: react-jsx, jsxImportSource: preact).
 import SeedAdmin from "../islands/SeedAdmin.tsx";
 import OperationPanel from "../islands/OperationPanel.tsx";
-import UserDemoStepper from "../islands/UserDemoStepper.tsx";
 import UiBuilderAdmin from "../islands/UiBuilderAdmin.tsx";
 import TeamMarkdownDashboard from "../islands/TeamMarkdownDashboard.tsx";
 import AdminImport from "../islands/AdminImport.tsx";
@@ -377,104 +376,6 @@ Deno.test("OperationPanel render: component source has error/success display sur
   assert(src.includes("alert-warn") || src.includes("エラーまたは部分失敗"), "component must display error/partial-failure state");
   assert(src.includes("成功"), "component must display success state");
 });
-
-// ─── Section 3: UserDemoStepper — rendered interaction ───────────────────────
-// Lane: api_command_lane → queueClientCommand (public demo lane)
-
-Deno.test("UserDemoStepper render: initial DOM contains scenario selection buttons (step=1)", () => {
-  const html = renderHtml(UserDemoStepper);
-  assert(html.includes("確認したい画面を選んでください") || html.length > 100, "step 1 heading must be present");
-  // Step 1 renders scenario selection buttons from demoPreviewOptions()
-  assert(html.includes("選んでください") || html.includes("type=\"button\""), "scenario selection must be rendered");
-});
-
-Deno.test("UserDemoStepper render: step bar is present in initial render", () => {
-  const html = renderHtml(UserDemoStepper);
-  assert(html.includes("投影を選ぶ") || html.includes("step"), "step bar must be rendered");
-});
-
-Deno.test("UserDemoStepper dispatch: runScenario body has triggerKind=client role absent", async () => {
-  __testOnly.resetCommandQueue();
-  const bodyRef = { value: {} as Record<string, unknown> };
-  const original = globalThis.fetch;
-  globalThis.fetch = makeMockFetch(
-    200,
-    { success: true, emission: { componentIds: ["demo-c1"] } },
-    (_u, init) => { bodyRef.value = JSON.parse(init?.body as string ?? "{}"); },
-  );
-  try {
-    await queueClientCommand({
-      operationType: "Search",
-      target: "demo",
-      layer: "entity",
-      action: "Search",
-    });
-    assertEquals(bodyRef.value.triggerKind, "client", "triggerKind must be client");
-    assertFalse("role" in bodyRef.value, "role must not be in dispatch body");
-    assertEquals(bodyRef.value.target, "demo");
-  } finally {
-    globalThis.fetch = original;
-    __testOnly.resetCommandQueue();
-  }
-});
-
-Deno.test("UserDemoStepper error surface: failure response not silent — success=false with errors", async () => {
-  __testOnly.resetCommandQueue();
-  const original = globalThis.fetch;
-  globalThis.fetch = makeNetworkErrorFetch("DEMO_SCENARIO_FAIL");
-  try {
-    const result = await queueClientCommand({
-      operationType: "Search",
-      target: "demo",
-      layer: "entity",
-      action: "Search",
-    });
-    assertEquals(result.success, false);
-    assertExists(result.errors);
-    assertEquals(result.errors?.[0]?.message, "DEMO_SCENARIO_FAIL");
-  } finally {
-    globalThis.fetch = original;
-    __testOnly.resetCommandQueue();
-  }
-});
-
-Deno.test("UserDemoStepper render: component source sets emission on failure (not silent in DOM)", async () => {
-  const src = await Deno.readTextFile(new URL("../islands/UserDemoStepper.tsx", import.meta.url));
-  // Component sets emission with errors when response has no emission (failure case)
-  assert(src.includes("response.errors"), "must use response.errors for failure state");
-  assert(src.includes("setEmission("), "must update emission state on both success and failure");
-  assert(src.includes("setStep(3)"), "must advance to result step after run (success or failure)");
-});
-
-Deno.test("UserDemoStepper success surface: emission is reflected in component state on success", async () => {
-  __testOnly.resetCommandQueue();
-  const original = globalThis.fetch;
-  globalThis.fetch = makeMockFetch(200, {
-    success: true,
-    emission: {
-      structureMapId: "sm-demo",
-      packageId: "pkg-demo",
-      componentIds: ["c-demo-1", "c-demo-2"],
-    },
-  });
-  try {
-    const result = await queueClientCommand({
-      operationType: "Search",
-      target: "demo",
-      layer: "entity",
-      action: "Search",
-    });
-    assertEquals(result.success, true);
-    // deno-lint-ignore no-explicit-any
-    assertEquals((result.emission as any)?.structureMapId, "sm-demo");
-    // deno-lint-ignore no-explicit-any
-    assertEquals((result.emission as any)?.componentIds?.length, 2);
-  } finally {
-    globalThis.fetch = original;
-    __testOnly.resetCommandQueue();
-  }
-});
-
 
 Deno.test("TeamMarkdownDashboard DOM: malformed search response shows explicit error without card-state crash", async () => {
   const { container, cleanup } = setupDom();
@@ -1291,80 +1192,6 @@ Deno.test("OperationPanel DOM: dispatch click with failure → エラーまた�
     assert(
       html.includes("エラーまたは部分失敗") || html.includes("実行結果"),
       "error/partial-failure section must appear in DOM after dispatch failure (not silent)",
-    );
-  } finally {
-    stopComponentEventRuntime();
-    globalThis.fetch = original;
-    __testOnly.resetCommandQueue();
-    __testOnly.resetQueue();
-    cleanup();
-  }
-});
-
-// ─── Section 10: UserDemoStepper — DOM event simulation ──────────────────────
-
-Deno.test("UserDemoStepper DOM: scenario click with success → step 3 result section appears in DOM", async () => {
-  const { container, cleanup } = setupDom();
-  const original = globalThis.fetch;
-  __testOnly.resetCommandQueue();
-  __testOnly.resetQueue();
-  try {
-    globalThis.fetch = makeMockFetch(200, {
-      success: true,
-      emission: { structureMapId: "sm-demo", packageId: "pkg-demo", componentIds: ["c-demo-1"] },
-    });
-    renderInto(UserDemoStepper, container);
-    await flushUpdates();
-    // deno-lint-ignore no-explicit-any
-    const allBtns = Array.from((container as any).querySelectorAll("button")) as Array<{
-      // deno-lint-ignore no-explicit-any
-      dispatchEvent: (e: any) => void;
-    }>;
-    assertExists(allBtns[0], "at least one button must be rendered in step 1");
-    // deno-lint-ignore no-explicit-any
-    allBtns[0].dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
-    await flushUpdates();
-    await flushUpdates();
-    // deno-lint-ignore no-explicit-any
-    const html = (container as any).innerHTML as string;
-    assert(html.includes("確認結果") || html.includes("user-demo-stepper"), "step 3 result must appear");
-  } finally {
-    stopComponentEventRuntime();
-    globalThis.fetch = original;
-    __testOnly.resetCommandQueue();
-    __testOnly.resetQueue();
-    cleanup();
-  }
-});
-
-Deno.test("UserDemoStepper DOM: scenario click with failure → step 3 with error result in DOM (not silent)", async () => {
-  const { container, cleanup } = setupDom();
-  const original = globalThis.fetch;
-  __testOnly.resetCommandQueue();
-  __testOnly.resetQueue();
-  try {
-    globalThis.fetch = makeMockFetch(422, {
-      success: false,
-      errors: [{ message: "DEMO_SCENARIO_DISPATCH_FAIL" }],
-    });
-    renderInto(UserDemoStepper, container);
-    await flushUpdates();
-    // deno-lint-ignore no-explicit-any
-    const allBtns = Array.from((container as any).querySelectorAll("button")) as Array<{
-      // deno-lint-ignore no-explicit-any
-      dispatchEvent: (e: any) => void;
-    }>;
-    assertExists(allBtns[0], "scenario button must be present");
-    // deno-lint-ignore no-explicit-any
-    allBtns[0].dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
-    await flushUpdates();
-    await flushUpdates();
-    // deno-lint-ignore no-explicit-any
-    const html = (container as any).innerHTML as string;
-    // runScenario always sets step=3; error emission surfaces via UserDemoResultCard
-    assert(
-      html.includes("確認結果") || html.includes("エラー") || html.length > 200,
-      "step 3 with error result must appear (not silent)",
     );
   } finally {
     stopComponentEventRuntime();

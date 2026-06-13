@@ -17,8 +17,6 @@ export default function Index(): JSX.Element {
         <a href="/admin" class="link">管理</a>
         {" · "}
         <a href="/runtime-status" class="link">接続状態</a>
-        {" · "}
-        <a href="/demo/debug" class="link">開発者向け検証</a>
       </p>
     </main>
   );

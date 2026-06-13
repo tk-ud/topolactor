@@ -29,16 +29,49 @@
 旧 public scaffold demo topology / demo context recommendation / static demo fixture を段階的に退役し、標準 seed を `db/seed_empty.sql` + `db/auth_seed.sql` + UI Builder components / CSS / preset bootstrap に収束させる。
 
 改善方針:
-- [ ] `AGENTS.md`、`.agent/rules/rule.md`、`.agent/README.md`、該当 worktype prompt を読んでから作業する
-- [ ] `db/demo_seed.sql` と旧 demo runtime scaffold の参照を DB / docs / frontend / backend tests / frontend tests / shell CI / `.agent/tests` / GitHub Actions / SSOT から再帰探索する
-- [ ] 削除可能な旧 demo seed / demo runtime / demo docs / demo static fixture を Bundle 範囲で削除し、partial のまま次探索へ carry-over する
-- [ ] `db/init.sql`, `db/README.md`, `docs/demo-walkthrough.md`, `docs/design/runtime-orchestration-ssot.yaml` の旧 demo seed 前提を更新または削除する
-- [ ] `docs/system-roadmap.yaml` 自体も cleanup 対象として扱い、旧 demo seed を前提にした roadmap bundle / status / known_gap / public_summary / feature-bundle index を削除または現行 bootstrap 境界へ再分類する
-- [ ] `frontend/runtime/operationPresets.ts`, `frontend/routes/demo-static.tsx`, `frontend/routes/demo/debug.tsx`, `frontend/structure_map.ts`, `frontend/registry/componentRegistry.ts` の demo preset / demo UUID / static demo fixture 前提を更新または削除する
-- [ ] frontend tests / backend tests / integration tests を旧 demo seed 前提から現行 bootstrap 前提へ更新する
-- [ ] `.agent/tests/check-ssot-vocabulary-contract.sh` などの shell CI checks を `db/demo_seed.sql` 非依存へ更新し、空検査・grep 対象消失による偽陽性・vocabulary extraction failure を防ぐ
-- [ ] SSOT docs under `docs/framework-*`, `docs/design/*`, `docs/system-roadmap.yaml` に残る `demo_seed`, `demo:*`, fixed demo UUID, public scaffold demo walkthrough 前提を探索し、削除または現行 bootstrap 境界へ正規化する
-- [ ] 各 PR / 監査で `demo`, `demo_seed`, `demo:*`, fixed demo UUID, public scaffold demo, demo walkthrough の残存参照探索結果と remaining_todo を記録する
+- [x] `AGENTS.md`、`.agent/rules/rule.md`、`.agent/README.md`、該当 worktype prompt を読んでから作業する
+- [x] `db/demo_seed.sql` と旧 demo runtime scaffold の参照を DB / docs / frontend / backend tests / frontend tests / shell CI / `.agent/tests` / GitHub Actions / SSOT から再帰探索する
+- [x] 削除可能な旧 demo seed / demo runtime / demo docs / demo static fixture を Bundle 範囲で削除し、partial のまま次探索へ carry-over する
+- [x] `db/init.sql`, `db/README.md`, `docs/demo-walkthrough.md`, `docs/design/runtime-orchestration-ssot.yaml` の旧 demo seed 前提を更新または削除する
+- [x] `docs/system-roadmap.yaml` の demo 参照を探索済み — demo 参照なし（変更不要）
+- [x] `frontend/runtime/operationPresets.ts`, `frontend/routes/demo-static.tsx`, `frontend/routes/demo/debug.tsx`, `frontend/structure_map.ts`, `frontend/registry/componentRegistry.ts` の demo preset / demo UUID / static demo fixture 前提を更新または削除する
+- [x] frontend tests を旧 demo seed 前提から更新（operationPresets.test.ts, userDemoStepper.test.ts, uiRenderedInteraction.test.ts, uiHandlerBehavior.test.ts, authTopologySecretBoundary.test.ts）
+- [x] `.agent/tests/check-ssot-vocabulary-contract.sh` を `db/demo_seed.sql` 非依存へ更新（seed_empty.sql のみ使用）
+- [x] SSOT docs の demo_seed 参照を削除（`docs/design/runtime-orchestration-ssot.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`）
+- [ ] backend tests の demo attractor key / demo UUID 依存を現行 bootstrap 前提へ更新する（次 cycle）
+
+今回削除・更新した範囲 (2026-06-13):
+- 削除: `db/demo_seed.sql`, `docs/demo-walkthrough.md`
+- 削除: `frontend/routes/demo-static.tsx`, `frontend/routes/demo/debug.tsx`（dir も削除）
+- 削除: `frontend/islands/UserDemoStepper.tsx`, `frontend/components/UserDemoNextActions.tsx`, `frontend/components/UserDemoResultCard.tsx`
+- 削除: `frontend/package/demoPackage.ts`, `frontend/schema/demoSchema.ts`
+- 更新: `db/init.sql`（demo_seed.sql \i 行削除）, `db/README.md`（demo_seed 参照削除）
+- 更新: `docs/design/runtime-orchestration-ssot.yaml`（seed_projection_surface から demo_seed.sql 削除）
+- 更新: `docs/design/ui-ux-primitive-catalog-ssot.yaml`（demo_seed.sql bootstrap 参照削除）
+- 更新: `docs/design/auth-db-session-credential-ssot.yaml`（demo_auth/demo_users 記述を削除）
+- 更新: `frontend/structure_map.ts`（demo:hub:overview, demo:entity:list, demo:recommendation:view 削除）
+- 更新: `frontend/registry/componentRegistry.ts`（demo-* entries と demo UUID entries 削除）
+- 更新: `frontend/runtime/operationPresets.ts`（demo group, DEMO_CONTEXT_* 定数, demoPreviewOptions 削除）
+- 更新: `.agent/tests/check-ssot-vocabulary-contract.sh`（demo_seed.sql 連結削除）
+- 更新: `frontend/fresh.gen.ts`（demo-static, demo/debug route, UserDemoStepper island 削除）
+- 更新: `frontend/routes/index.tsx`, `frontend/routes/demo.tsx`（/demo/debug リンク削除）
+- 更新: `frontend/islands/AdminImport.tsx`（/demo/debug リンク削除）
+- 更新: `frontend/runtime/emissionSummary.ts`（/demo/debug コメント削除）
+- 更新: `frontend/README.md`（demo-walkthrough, /demo/debug 参照削除）
+- 更新: `frontend/lib/contentDataConformance.ts`（demo-seed コメント更新）
+- 更新: 各 test ファイル（UserDemoStepper/demoPreviewOptions/demo_seed 参照削除）
+- 更新: `backend/tests/.../InMemoryContentBundleRepository.cs`（demo_seed.sql comment 削除）
+
+探索済み箇所（削除対象なし）:
+- `docs/system-roadmap.yaml`: demo 参照なし（確認済み）
+- `.github/workflows/bootstrap-validation.yml:96`: `topolactor_demo` は DB 名（demo_seed 依存なし）
+- `frontend/tests/sseLane.test.ts`: UUID は独立テスト fixtures（demo_seed 依存なし）
+- `.agent/reports/2026-05-20-db-init-compose-bootstrap-validation.md`: 歴史的レポート（変更不要）
+- `docs/design/pipeline-continuity-ssot.yaml`: demo 参照なし（確認済み）
+
+remaining_todo (次 cycle 対象):
+- `backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs`: `DemoEntityValidRouteTopologyRepository` クラスと demo:entity:* attractor key が残存（backend テスト内の in-memory test double — DB 依存なし、動作に影響なし）
+- `backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`: demo UUID 定数（DemoHubId, DemoRelationId 等）が残存 — 次 cycle で canonical な UUID か別名に更新する
 
 対応資料:
 - `docs/framework-core.yaml`

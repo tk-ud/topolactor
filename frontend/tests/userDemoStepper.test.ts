@@ -6,7 +6,6 @@ import {
   summarizeEmission,
   toUserFacingResult,
 } from "../runtime/emissionSummary.ts";
-import { demoPreviewOptions, presetsForGroups } from "../runtime/operationPresets.ts";
 import type { Emission } from "../api/dispatch.ts";
 
 // ─── toUserFacingResult: success paths ───────────────────────────────────────
@@ -143,54 +142,4 @@ Deno.test("toUserFacingResult: multiple errors produce user-facing detail withou
   assertFalse((result.detail ?? "").includes("ERR_A"));
   assertFalse((result.detail ?? "").includes("ERR_B"));
   assertFalse((result.detail ?? "").includes("["));
-});
-
-// ─── demo preview options: derived from operationPresets, not island-defined ──
-
-Deno.test("demoPreviewOptions: returns options for all demo group presets", () => {
-  const demoPresets = presetsForGroups(["demo"]);
-  const options = demoPreviewOptions();
-  // every demo preset with a previewLabel must appear
-  const optionIds = new Set(options.map((o) => o.id));
-  for (const p of demoPresets) {
-    if (p.previewLabel !== undefined) {
-      assertEquals(optionIds.has(p.id), true, `preset ${p.id} must appear in demoPreviewOptions`);
-    }
-  }
-});
-
-Deno.test("demoPreviewOptions: all options have non-empty previewLabel and previewDescription", () => {
-  for (const opt of demoPreviewOptions()) {
-    assertFalse(opt.previewLabel === "", `previewLabel must not be empty for ${opt.id}`);
-    assertFalse(opt.previewDescription === "", `previewDescription must not be empty for ${opt.id}`);
-  }
-});
-
-Deno.test("demoPreviewOptions: user-facing labels contain no construction authority vocabulary", () => {
-  const constructionVocab = ["builder", "construct", "manifest edit", "topology apply", "admin edit", "作成する", "構築する", "編集する", "登録する"];
-  for (const opt of demoPreviewOptions()) {
-    for (const term of constructionVocab) {
-      assertFalse(
-        opt.previewLabel.includes(term),
-        `previewLabel "${opt.previewLabel}" must not contain construction vocabulary: "${term}"`,
-      );
-      assertFalse(
-        opt.previewDescription.includes(term),
-        `previewDescription "${opt.previewDescription}" must not contain construction vocabulary: "${term}"`,
-      );
-    }
-  }
-});
-
-Deno.test("demoPreviewOptions: all scenario IDs are distinct", () => {
-  const ids = demoPreviewOptions().map((o) => o.id);
-  const unique = new Set(ids);
-  assertEquals(unique.size, ids.length);
-});
-
-Deno.test("demoPreviewOptions: scenario IDs are operationPresets demo group IDs", () => {
-  const demoPresetIds = new Set(presetsForGroups(["demo"]).map((p) => p.id));
-  for (const opt of demoPreviewOptions()) {
-    assertEquals(demoPresetIds.has(opt.id), true, `option ${opt.id} must be a demo group preset`);
-  }
 });

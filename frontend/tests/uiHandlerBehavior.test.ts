@@ -26,7 +26,6 @@ const INTERACTIVE_ISLANDS: string[] = [
   "OperationPanel.tsx",
   "AdminImport.tsx",
   "SuperAuthPanel.tsx",
-  "UserDemoStepper.tsx",
   "UiBuilderAdmin.tsx",
   "ContentsPromotionPanel.tsx",
   "ContentsScreenDesignPanel.tsx",
@@ -273,28 +272,6 @@ Deno.test(
 );
 
 Deno.test(
-  "lane: UserDemoStepper uses api_command_lane (queueClientCommand only)",
-  async () => {
-    const content = await Deno.readTextFile(
-      new URL("../islands/UserDemoStepper.tsx", import.meta.url),
-    );
-    assertEquals(
-      content.includes("queueClientCommand"),
-      true,
-      "UserDemoStepper must use queueClientCommand",
-    );
-    assertFalse(
-      content.includes("queueAdminClientCommand"),
-      "UserDemoStepper must not use admin lane",
-    );
-    assertFalse(
-      content.includes("emitComponentOperationEvent"),
-      "UserDemoStepper must not emit component events",
-    );
-  },
-);
-
-Deno.test(
   "lane: UiBuilderAdmin uses api_command_lane (queueAdminClientCommand only)",
   async () => {
     const content = await Deno.readTextFile(
@@ -514,30 +491,3 @@ Deno.test(
   },
 );
 
-// ─── Section 8: UserDemoStepper runScenario dispatch shape ────────────────────
-// Verifies that runScenario sends through queueClientCommand with triggerKind=client.
-
-Deno.test(
-  "UserDemoStepper: runScenario dispatches through api_command_lane with triggerKind=client",
-  async () => {
-    __testOnly.resetCommandQueue();
-    let capturedBody: Record<string, unknown> = {};
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (_input: unknown, init?: RequestInit) => {
-      capturedBody = JSON.parse(init!.body as string);
-      return new Response(
-        JSON.stringify({ success: true, emission: { componentIds: ["c1"] } }),
-        { status: 200 },
-      );
-    };
-    try {
-      // UserDemoStepper.runScenario → queueClientCommand(preset.operation, token, context)
-      await queueClientCommand({ operationType: "Search", target: "demo", layer: "entity", action: "Search" });
-      assertEquals(capturedBody.triggerKind, "client");
-      assertFalse("role" in capturedBody);
-    } finally {
-      globalThis.fetch = originalFetch;
-      __testOnly.resetCommandQueue();
-    }
-  },
-);

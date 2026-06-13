@@ -29,24 +29,6 @@ export const defaultStructureMap: StructureMap = {
     schemaId: "00000000-0000-0000-0000-000000000002",
     componentIds: ["00000000-0000-0000-0000-000000000003"],
   },
-  "demo:hub:overview": {
-    attractorKey: "demo:hub:overview",
-    packageId: "00000000-0000-0000-0000-000000000013",
-    schemaId:  "00000000-0000-0000-0000-000000000012",
-    componentIds: ["00000000-0000-0000-0000-000000000014"],
-  },
-  "demo:entity:list": {
-    attractorKey: "demo:entity:list",
-    packageId: "00000000-0000-0000-0000-000000000013",
-    schemaId:  "00000000-0000-0000-0000-000000000012",
-    componentIds: ["00000000-0000-0000-0000-000000000015"],
-  },
-  "demo:recommendation:view": {
-    attractorKey: "demo:recommendation:view",
-    packageId: "00000000-0000-0000-0000-000000000013",
-    schemaId:  "00000000-0000-0000-0000-000000000012",
-    componentIds: ["00000000-0000-0000-0000-000000000016"],
-  },
 };
 
 /**

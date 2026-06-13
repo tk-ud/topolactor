@@ -45,8 +45,6 @@ export function toUserFacingResult(summary: EmissionSummary): UserFacingResult {
     const firstMsg = summary.errorMessages[0] ?? "";
     const isAuthError = firstMsg.includes("AUTH_TOKEN_MISSING");
     const headline = isAuthError ? "ログインが必要です" : "エラーが発生しました";
-    // Raw backend validation codes are not surfaced on the /demo preview face.
-    // Raw details are available in /demo/debug.
     const detail = isAuthError
       ? "ログイン後に再試行してください。"
       : "処理に失敗しました。詳細はデバッグ画面で確認してください。";

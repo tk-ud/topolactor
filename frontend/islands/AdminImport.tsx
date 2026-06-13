@@ -422,9 +422,7 @@ export function AdminImportPanel({
             <p class="mt-2 text-xs text-muted-xs">
               次のステップ:{" "}
               <a href="/admin/ui-builder" class="link">{UX_UI_BUILDER}</a>{" "}
-              で画面を準備する、または{" "}
-              <a href="/demo/debug" class="link">{UX_RUNTIME_CHECK}</a>{" "}
-              で動作を確認してください。
+              で画面を準備してください。
             </p>
           )}
         </section>

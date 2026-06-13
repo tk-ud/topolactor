@@ -45,26 +45,16 @@ psql -d <database> -f db/seed_empty.sql
 `context_route_tables.sql` creates the context route recommendation runtime tables.
 `manifest_tables.sql` creates manifest draft/active storage.
 `auth_tables.sql` creates the canonical `auth.*` identity, credential, session, refresh token, login event, role, scope, and grant tables.
-`auth_seed.sql` inserts demo-only user/admin credentials into `auth.*`; credentials are not stored in topology or manifest rows.
+`auth_seed.sql` inserts minimal user/admin credentials into `auth.*`; credentials are not stored in topology or manifest rows.
 `seed_empty.sql` inserts the minimum default topology rows including the
 `default:entity:search` structure map, the user login seed manifest, and the context route recommendation policy
-row in `function_parameters` needed for the dummy canonical flow.
-
-To also load the public scaffold demo data (fake data only, no real business data):
-
-```bash
-psql -d <database> -f db/demo_seed.sql
-```
-
-`demo_seed.sql` adds demo hub / entities / context tokens / demo policy and demo structure maps.
-It is safe to apply after `seed_empty.sql`. All rows use `ON CONFLICT DO NOTHING`.
-See `docs/demo-walkthrough.md` for what to observe after applying the demo seed.
+row in `function_parameters` needed for the canonical flow.
 
 **docker compose:** On a fresh volume, `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`
 executes `db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql`. This file is **compose/container-path specific** (`/db/...`) and assumes `infra/docker-compose.yml` mounts `../db` to `/db`.
-It applies `schema.sql -> topology_tables.sql -> promotion_tables.sql -> sql_attention_logs_tables.sql -> ci_attention_guidance_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> manifest_tables.sql -> enum_tables.sql -> enum_seed.sql -> auth_tables.sql -> auth_seed.sql -> legacy_mirror_tables.sql -> seed_empty.sql -> demo_seed.sql` in one explicit order with `ON_ERROR_STOP`.
+It applies `schema.sql -> topology_tables.sql -> promotion_tables.sql -> sql_attention_logs_tables.sql -> ci_attention_guidance_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> manifest_tables.sql -> enum_tables.sql -> enum_seed.sql -> auth_tables.sql -> auth_seed.sql -> legacy_mirror_tables.sql -> seed_empty.sql` in one explicit order with `ON_ERROR_STOP`.
 For normal host-side `psql` usage, use the ordered per-file commands above (not `psql -f db/init.sql`).
-On an existing volume, run `psql -d topolactor_demo -f db/auth_tables.sql`, `psql -d topolactor_demo -f db/auth_seed.sql`, and `psql -d topolactor_demo -f db/demo_seed.sql` manually if needed.
+On an existing volume, run `psql -d topolactor_demo -f db/auth_tables.sql` and `psql -d topolactor_demo -f db/auth_seed.sql` manually if needed.
 
 ---
 
@@ -80,10 +70,9 @@ On an existing volume, run `psql -d topolactor_demo -f db/auth_tables.sql`, `psq
 | `enum_tables.sql` | Canonical enum item / enum group dictionary (`enum.items`, `enum.groups`, `enum.group_items`). |
 | `enum_seed.sql` | Minimal demo enum dictionary for admin select regression. Apply after `enum_tables.sql`. |
 | `auth_tables.sql` | Canonical auth store for identities, password hashes, sessions, refresh-token hashes, login events, roles, scopes, and grants. |
-| `auth_seed.sql` | Demo-only credentials in `auth.*` for user/admin realm login. Apply after `auth_tables.sql`. |
+| `auth_seed.sql` | Minimal user/admin credentials in `auth.*` for login. Apply after `auth_tables.sql`. |
 | `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`, admin dispatch manifests, and the user login seed manifest. No real business data. |
-| `demo_seed.sql` | Public scaffold demo seed. Fake/demo data only: hub, entities, context tokens, demo_policy, demo structure maps. Apply after `seed_empty.sql`. |
-| `init.sql` | Docker/demo initialization SSOT. Uses psql meta commands to execute all SQL files in explicit order with fail-fast behavior. |
+| `init.sql` | Docker initialization SSOT. Uses psql meta commands to execute all SQL files in explicit order with fail-fast behavior. |
 
 ---
 
