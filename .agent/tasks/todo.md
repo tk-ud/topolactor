@@ -8,7 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
-| `retire-legacy-demo-seed-runtime` | 旧 demo seed/runtime 退役 cleanup | partial | 9 | `cleanup.legacy_demo_seed_runtime` | `docs/framework-core.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml` |
+| `retire-legacy-demo-seed-runtime` | 旧 demo seed/runtime 退役 cleanup | partial | 10 | `cleanup.legacy_demo_seed_runtime` | `docs/framework-core.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -33,6 +33,7 @@
 - [ ] `db/demo_seed.sql` と旧 demo runtime scaffold の参照を DB / docs / frontend / backend tests / frontend tests / shell CI / `.agent/tests` / GitHub Actions / SSOT から再帰探索する
 - [ ] 削除可能な旧 demo seed / demo runtime / demo docs / demo static fixture を Bundle 範囲で削除し、partial のまま次探索へ carry-over する
 - [ ] `db/init.sql`, `db/README.md`, `docs/demo-walkthrough.md`, `docs/design/runtime-orchestration-ssot.yaml` の旧 demo seed 前提を更新または削除する
+- [ ] `docs/system-roadmap.yaml` 自体も cleanup 対象として扱い、旧 demo seed を前提にした roadmap bundle / status / known_gap / public_summary / feature-bundle index を削除または現行 bootstrap 境界へ再分類する
 - [ ] `frontend/runtime/operationPresets.ts`, `frontend/routes/demo-static.tsx`, `frontend/routes/demo/debug.tsx`, `frontend/structure_map.ts`, `frontend/registry/componentRegistry.ts` の demo preset / demo UUID / static demo fixture 前提を更新または削除する
 - [ ] frontend tests / backend tests / integration tests を旧 demo seed 前提から現行 bootstrap 前提へ更新する
 - [ ] `.agent/tests/check-ssot-vocabulary-contract.sh` などの shell CI checks を `db/demo_seed.sql` 非依存へ更新し、空検査・grep 対象消失による偽陽性・vocabulary extraction failure を防ぐ
@@ -53,6 +54,7 @@
 - `db/README.md`
 - `docs/demo-walkthrough.md`
 - `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/system-roadmap.yaml`
 - `frontend/runtime/operationPresets.ts`
 - `frontend/tests/operationPresets.test.ts`
 - `frontend/routes/demo-static.tsx`
@@ -74,8 +76,9 @@
 - `lookupComponent`
 
 remaining_todo:
-- この bundle は初回削除で implemented 判定しない。削除候補が grep / SSOT / tests / CI / docs / runtime surface の全探索で検出されなくなるまで partial として反復する。
-- test / CI / SSOT 更新なしで `db/demo_seed.sql` だけを削除する PR は partial 未満として扱う。
+- この bundle は初回削除で implemented 判定しない。削除候補が grep / SSOT / tests / CI / docs / runtime surface / roadmap の全探索で検出されなくなるまで partial として反復する。
+- test / CI / SSOT / roadmap 更新なしで `db/demo_seed.sql` だけを削除する PR は partial 未満として扱う。
+- `docs/system-roadmap.yaml` を変更する PR は `.agent/protocols/todo-carry-over.md` の Roadmap update judgment gate を適用し、`bash .agent/tests/check-system-roadmap.sh` を required check として扱う。
 - 各 PR は「今回削除した範囲」と「残存探索対象」を必ず記録し、partial から partial への再帰 cleanup として扱う。
 
 ---
