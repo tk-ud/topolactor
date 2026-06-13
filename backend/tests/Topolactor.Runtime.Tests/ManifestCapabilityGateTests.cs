@@ -11,7 +11,8 @@ namespace Topolactor.Runtime.Tests;
 /// Verifies ManifestDispatcher capability_requirement gate:
 /// - Manifest with required_role=admin: user token denied (AUTH_CAPABILITY_DENIED).
 /// - Manifest with required_role=admin: admin token allowed.
-/// - Manifest without capability_requirement: any authenticated role allowed.
+/// - Manifest without capability_requirement: any authenticated role allowed (non-admin runtime).
+/// - admin_runtime manifest without explicit capability_requirement: inferred admin requirement.
 /// - target_ref path also enforces capability gate (bypasses role-axis filtering).
 /// - request body role is not trusted — JWT-supplied role (request.Role from JWT claim) is used.
 /// </summary>
@@ -19,7 +20,7 @@ public class ManifestCapabilityGateTests
 {
     private static readonly Guid ManifestId = new("cccccccc-dddd-eeee-ffff-000000000099");
 
-    private static ManifestDispatcher BuildDispatcher(ManifestRecord manifest)
+    private static ManifestDispatcher BuildDispatcher(ManifestRecord manifest, bool includeAdminRuntime = false)
     {
         var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo);
@@ -27,6 +28,8 @@ public class ManifestCapabilityGateTests
         {
             ["topology_transform_runtime"] = new StubSuccessRuntime(),
         };
+        if (includeAdminRuntime)
+            handlers["admin_runtime"] = new StubSuccessRuntime();
         var repo = new FixedManifestRepository(ManifestId, manifest);
         return new ManifestDispatcher(
             NullLogger<ManifestDispatcher>.Instance,
@@ -134,6 +137,69 @@ public class ManifestCapabilityGateTests
     {
         var manifest = MakeManifest(requiredRole: "admin");
         var dispatcher = BuildDispatcher(manifest);
+        var targetRef = $"manifest:{ManifestId}:wiring_key";
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(role: "admin", targetRef: targetRef));
+
+        Assert.True(response.Success);
+    }
+
+    // ─── admin_runtime inference (no explicit capability_requirement) ─────────
+    // Manifests routed to admin_runtime are protected even when they lack an explicit
+    // capability_requirement entry. ManifestDispatcher infers required_role=admin from
+    // runtime_mapping.runtime_destination == "admin_runtime". This closes the target_ref
+    // bypass gap for existing admin manifests that don't declare capability_requirement.
+
+    private static ManifestRecord MakeAdminRuntimeManifest() => new ManifestRecord(
+        ManifestId: ManifestId,
+        RelationRegistryId: null,
+        Topology: JsonSerializer.SerializeToElement(new object[]
+        {
+            new { type = "runtime_mapping", runtime_destination = "admin_runtime" },
+        }).EnumerateArray().ToArray(),
+        Status: "active");
+
+    [Fact]
+    public async Task DispatchAsync_AdminRuntimeManifest_NoCapabilityRequirement_UserRole_ReturnsDenied()
+    {
+        var manifest = MakeAdminRuntimeManifest();
+        var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(role: "user"));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_AdminRuntimeManifest_NoCapabilityRequirement_AdminRole_Succeeds()
+    {
+        var manifest = MakeAdminRuntimeManifest();
+        var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(role: "admin"));
+
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_NoCapabilityRequirement_UserRole_ReturnsDenied()
+    {
+        var manifest = MakeAdminRuntimeManifest();
+        var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
+        var targetRef = $"manifest:{ManifestId}:wiring_key";
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(role: "user", targetRef: targetRef));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_AdminRuntimeManifest_NoCapabilityRequirement_AdminRole_Succeeds()
+    {
+        var manifest = MakeAdminRuntimeManifest();
+        var dispatcher = BuildDispatcher(manifest, includeAdminRuntime: true);
         var targetRef = $"manifest:{ManifestId}:wiring_key";
 
         var response = await dispatcher.DispatchAsync(MakeRequest(role: "admin", targetRef: targetRef));

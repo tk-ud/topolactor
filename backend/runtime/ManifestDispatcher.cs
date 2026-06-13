@@ -455,39 +455,75 @@ public class ManifestDispatcher
     }
 
     /// <summary>
-    /// Checks whether the topology contains an explicit capability_requirement entry and
-    /// whether the requesting role satisfies it. Returns a validation error when the
-    /// requirement is present and the role does not match; returns null when satisfied or
-    /// when no requirement is declared.
+    /// Determines the required role for a manifest by combining:
+    /// 1. Explicit capability_requirement topology entry (highest priority).
+    /// 2. Inferred requirement from runtime_mapping.runtime_destination:
+    ///    admin_runtime → required_role=admin (protects admin manifests that lack an
+    ///    explicit capability_requirement, especially on target_ref paths that bypass
+    ///    role-axis filtering in ResolveActiveManifestAsync).
+    /// 3. dispatcher_mapping.role field (fallback inference for legacy dispatch manifests).
     ///
-    /// This gate covers all manifest resolution paths, including target_ref (direct-by-id)
-    /// which bypasses role-axis filtering in ResolveActiveManifestAsync.
+    /// Returns a validation error when the required role does not match the requesting role.
+    /// Returns null when no requirement can be determined or when the role satisfies the requirement.
     ///
-    /// Topology entry shape: { "type": "capability_requirement", "required_role": "admin" }
+    /// This gate runs after all manifest resolution paths (axes, target_ref, db_notify)
+    /// so target_ref routes that bypass role-axis filtering are also protected.
     /// </summary>
     private static ValidationError? ValidateCapabilityRequirement(
         IReadOnlyList<JsonElement> topology,
         string? requestRole)
     {
+        string? explicitRequired = null;
+        string? inferredRequired = null;
+
         foreach (var entry in topology)
         {
             if (entry.ValueKind != JsonValueKind.Object) continue;
             if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
-            if (!string.Equals(typeEl.GetString(), "capability_requirement", StringComparison.OrdinalIgnoreCase)) continue;
-            if (!entry.TryGetProperty("required_role", out var reqRoleEl) || reqRoleEl.ValueKind != JsonValueKind.String) continue;
+            var type = typeEl.GetString();
 
-            var requiredRole = reqRoleEl.GetString();
-            if (string.IsNullOrWhiteSpace(requiredRole)) continue;
+            // Explicit capability_requirement overrides any inference.
+            if (string.Equals(type, "capability_requirement", StringComparison.OrdinalIgnoreCase))
+            {
+                if (entry.TryGetProperty("required_role", out var reqEl) && reqEl.ValueKind == JsonValueKind.String)
+                {
+                    var r = reqEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(r))
+                        explicitRequired = r;
+                }
+            }
 
-            if (!string.Equals(requestRole, requiredRole, StringComparison.Ordinal))
-                return new ValidationError(
-                    "AUTH_CAPABILITY_DENIED",
-                    $"This operation requires role='{requiredRole}'. Token role='{requestRole ?? "(missing)"}' is insufficient.");
+            // Infer from runtime_destination: admin_runtime manifests require admin role.
+            if (string.Equals(type, "runtime_mapping", StringComparison.OrdinalIgnoreCase))
+            {
+                if (entry.TryGetProperty("runtime_destination", out var destEl) && destEl.ValueKind == JsonValueKind.String)
+                {
+                    if (string.Equals(destEl.GetString(), "admin_runtime", StringComparison.OrdinalIgnoreCase))
+                        inferredRequired = AuthRealm.AdminRole;
+                }
+            }
 
-            return null; // requirement satisfied
+            // Infer from dispatcher_mapping.role when present (legacy admin dispatch manifests).
+            if (string.Equals(type, "dispatcher_mapping", StringComparison.OrdinalIgnoreCase))
+            {
+                if (entry.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String)
+                {
+                    var r = roleEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(r))
+                        inferredRequired = r;
+                }
+            }
         }
 
-        return null; // no requirement declared
+        var requiredRole = explicitRequired ?? inferredRequired;
+        if (requiredRole is null) return null;
+
+        if (!string.Equals(requestRole, requiredRole, StringComparison.Ordinal))
+            return new ValidationError(
+                "AUTH_CAPABILITY_DENIED",
+                $"This operation requires role='{requiredRole}'. Token role='{requestRole ?? "(missing)"}' is insufficient.");
+
+        return null; // requirement satisfied
     }
 
     /// <summary>
