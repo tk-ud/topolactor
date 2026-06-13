@@ -28,7 +28,7 @@ const OPERATION_TYPES: OperationType[] = [
   "logicalDelete",
 ];
 
-export type OperationPanelMode = "home" | "demo";
+export type OperationPanelMode = "home";
 
 type Props = {
   mode?: OperationPanelMode;
@@ -57,7 +57,7 @@ export default function OperationPanel({
   initialOperation,
   initialPresetId,
 }: Props): JSX.Element {
-  const presetGroups: OperationPresetGroup[] = mode === "demo" ? ["demo"] : ["default", "demo"];
+  const presetGroups: OperationPresetGroup[] = ["default"];
   const availablePresets = useMemo(() => presetsForGroups(presetGroups), [mode]);
 
   const defaultPresetId = initialPresetId ??
@@ -197,7 +197,6 @@ export default function OperationPanel({
   const emissionSummary = emission ? summarizeEmission(emission) : null;
 
   const defaultPresets = availablePresets.filter((p) => p.group === "default");
-  const demoPresets = availablePresets.filter((p) => p.group === "demo");
 
   function renderPresetCard(preset: OperationPreset): JSX.Element {
     const selected = preset.id === selectedPresetId;
@@ -216,7 +215,7 @@ export default function OperationPanel({
         <p class="mt-1 text-sm text-gray-600">{preset.description}</p>
         {presetHasContext(preset) && (
           <span class="mt-2 inline-block rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-            コンテキスト付き（seed demo session/token）
+            コンテキスト付き
           </span>
         )}
       </button>
@@ -248,18 +247,9 @@ export default function OperationPanel({
         <h3 class="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
           シナリオを選択
         </h3>
-        {mode === "home" && defaultPresets.length > 0 && (
+        {defaultPresets.length > 0 && (
           <div class="mb-4 space-y-2">
-            <p class="text-xs font-medium text-gray-500">Default runtime</p>
             <div class="space-y-2">{defaultPresets.map(renderPresetCard)}</div>
-          </div>
-        )}
-        {demoPresets.length > 0 && (
-          <div class="space-y-2">
-            {mode === "home" && (
-              <p class="text-xs font-medium text-gray-500">Demo topology（seed データ）</p>
-            )}
-            <div class="space-y-2">{demoPresets.map(renderPresetCard)}</div>
           </div>
         )}
       </section>
@@ -415,8 +405,7 @@ export default function OperationPanel({
           Advanced: context session / token IDs
         </summary>
         <p class="mt-2 text-muted-xs">
-          レコメンド用コンテキスト。通常は「Demo hub + recommendation context」preset が
-          seed UUID を自動設定します。手入力はデバッグ用です。
+          レコメンド用コンテキスト。preset が context UUID を自動設定します。手入力はデバッグ用です。
         </p>
         <div class="mt-3 space-y-3">
           <label class="block text-sm font-medium text-gray-700">
