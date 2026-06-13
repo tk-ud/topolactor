@@ -44,7 +44,7 @@ Deno.test("diagnoseContentDataRows applies same rules to manual and import rows"
   assertEquals(manual[0]!.message, imported[0]!.message);
 });
 
-Deno.test("diagnoseContentDataRows accepts demo-seed style UUID", () => {
+Deno.test("diagnoseContentDataRows accepts deterministic-seed style UUID", () => {
   const warnings = diagnoseContentDataRows([{
     values: { id: "00000000-0000-0000-0000-0000000000a1" },
     lineage: { source: "manual" },

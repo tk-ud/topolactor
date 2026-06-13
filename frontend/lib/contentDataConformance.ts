@@ -43,7 +43,7 @@ const TIMESTAMP_TYPES = new Set([
   "datetime",
 ]);
 
-/** Accepts demo-seed style UUIDs (8-4-4-4-12 hex) without strict RFC variant checks. */
+/** Accepts deterministic-seed style UUIDs (8-4-4-4-12 hex) without strict RFC variant checks. */
 export const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

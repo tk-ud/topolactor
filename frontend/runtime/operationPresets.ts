@@ -1,16 +1,12 @@
 import type { UserOperation } from "./resolveOperationVector.ts";
 import { resolveOperationVector } from "./resolveOperationVector.ts";
 
-/** Demo seed UUIDs — must match db/demo_seed.sql and docs/demo-walkthrough.md Scenario E. */
-export const DEMO_CONTEXT_SESSION_ID = "00000000-0000-0000-0000-000000000031";
-export const DEMO_CONTEXT_TOKEN_ID_ACTIVE = "00000000-0000-0000-0000-000000000021";
-
 export type OperationPresetContext = {
   ContextSessionId?: string;
   ContextTokenIds?: string;
 };
 
-export type OperationPresetGroup = "default" | "demo";
+export type OperationPresetGroup = "default";
 
 export type OperationPreset = {
   id: string;
@@ -21,13 +17,6 @@ export type OperationPreset = {
   expectedObservation: string;
   operation: UserOperation;
   context?: OperationPresetContext;
-  /**
-   * User-facing preview label for /demo preview surface.
-   * Defined only on demo-group presets. Admin/developer label is `label`.
-   */
-  previewLabel?: string;
-  /** User-facing preview description for /demo preview surface. */
-  previewDescription?: string;
 };
 
 export const OPERATION_PRESETS: OperationPreset[] = [
@@ -44,58 +33,6 @@ export const OPERATION_PRESETS: OperationPreset[] = [
       layer: "entity",
       action: "Search",
     },
-  },
-  {
-    id: "demo_hub_overview",
-    group: "demo",
-    label: "Demo hub overview",
-    description: "demo ハブの概要トポロジを backend runtime から取得する",
-    expectedObservation:
-      "demo_hub_overview_package 由来の component 展開と demo 用 structure map が emission に含まれる",
-    operation: {
-      operationType: "Search",
-      target: "demo",
-      layer: "hub",
-      action: "overview",
-    },
-    previewLabel: "全体を確認する",
-    previewDescription: "demo project の概要 projection を確認します。",
-  },
-  {
-    id: "demo_entity_list",
-    group: "demo",
-    label: "Demo entity list",
-    description: "demo エンティティ一覧を backend runtime から取得する",
-    expectedObservation: "demo エンティティ一覧データが emission.data に含まれる",
-    operation: {
-      operationType: "Search",
-      target: "demo",
-      layer: "entity",
-      action: "list",
-    },
-    previewLabel: "一覧を確認する",
-    previewDescription: "エンティティ一覧 projection を確認します。",
-  },
-  {
-    id: "demo_hub_recommendation",
-    group: "demo",
-    label: "Demo hub + recommendation context",
-    description:
-      "demo:hub:overview を seed 済み session/token で実行し、context_route_recommendation を確認する",
-    expectedObservation:
-      'context_route_recommendation.status が "ok" になり、nextOperations に demo:entity:list が含まれる',
-    operation: {
-      operationType: "Search",
-      target: "demo",
-      layer: "hub",
-      action: "overview",
-    },
-    context: {
-      ContextSessionId: DEMO_CONTEXT_SESSION_ID,
-      ContextTokenIds: DEMO_CONTEXT_TOKEN_ID_ACTIVE,
-    },
-    previewLabel: "レコメンドを確認する",
-    previewDescription: "推薦候補 projection を確認します（seed context 使用）。",
   },
 ];
 
@@ -128,33 +65,6 @@ export function buildDispatchContext(
   if (session) context["ContextSessionId"] = session;
   if (tokens) context["ContextTokenIds"] = tokens;
   return context;
-}
-
-/**
- * User-facing preview option for the /demo preview surface.
- * Derived from OperationPreset entries that carry previewLabel.
- * Authority: admin/manifest/seed — not a /demo-side UX definition.
- */
-export type DemoPreviewOption = {
-  id: string;
-  previewLabel: string;
-  previewDescription: string;
-};
-
-/**
- * Returns the ordered list of demo preview options for the /demo surface.
- * Source of truth is OPERATION_PRESETS demo group entries; /demo reads, not defines.
- */
-export function demoPreviewOptions(): DemoPreviewOption[] {
-  return presetsForGroups(["demo"])
-    .filter((p): p is OperationPreset & { previewLabel: string } =>
-      p.previewLabel !== undefined
-    )
-    .map((p) => ({
-      id: p.id,
-      previewLabel: p.previewLabel,
-      previewDescription: p.previewDescription ?? "",
-    }));
 }
 
 /** Match initial route defaults to a preset when no explicit preset id is passed. */

@@ -14,11 +14,10 @@ and resume context.
 | Surface | Role |
 |---------|------|
 | `/admin` | Project / topology / layout / manifest construction, validation, and registry operations |
-| `/demo` | Preview and audit of admin-constructed demo project projections (read-only) |
-| `/demo/debug` | Raw runtime inspection of demo project dispatch / emission (developer / validator) |
+| `/demo` | Pre-publish preview of UI Builder layouts and content data (read-only) |
 | `/` (top) | Public display of adopted/published projections — publish adoption pipeline not yet implemented |
 
-Construction and authority: `/admin` owns topology/manifest/registry writes. `/demo` and `/demo/debug` are read-only projection surfaces with no construction authority.
+Construction and authority: `/admin` owns topology/manifest/registry writes. `/demo` is a read-only projection surface with no construction authority.
 
 ## Tech stack
 
@@ -65,7 +64,7 @@ deno task dev                            # repo root; watches routes/ and island
 
 Open http://localhost:8000. Requires backend on http://localhost:5000 (e.g. `docker compose -f infra/docker-compose.yml up -d postgres backend`).
 
-Production-like demo (Route B — full Docker + nginx on port 80): see `docs/demo-walkthrough.md`.
+Production-like run (Route B — full Docker + nginx on port 80): see `infra/docker-compose.yml`.
 
 Requires backend running for dispatch operations.
 

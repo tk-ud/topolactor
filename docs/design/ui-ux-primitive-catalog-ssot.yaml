@@ -1101,4 +1101,3 @@ catalog_summary:
     - frontend/runtime/runtimeComponentAdapter.ts
     - frontend/runtime/runtimePrimitiveRenderer.ts
     - db/seed_empty.sql (bootstrap rows only)
-    - db/demo_seed.sql (bootstrap rows only)

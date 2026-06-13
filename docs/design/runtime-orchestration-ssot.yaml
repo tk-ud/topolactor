@@ -233,7 +233,6 @@ runtime_orchestration_ssot:
         - trigger_kinds
       seed_projection_surface:
         - db/seed_empty.sql
-        - db/demo_seed.sql
       ci_membership_rule:
         - seed_manifest_topology_type_must_be_subset_of_mapping_types
         - seed_runtime_destination_must_be_subset_of_backend_runtime_destinations
