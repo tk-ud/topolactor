@@ -26,6 +26,8 @@ export function draftPreviewResultToEmission(
     widthMode: node.widthMode,
     heightMode: node.heightMode,
     layoutClassRefs: node.layoutClassRefs,
+    propsJson: node.propsJson,
+    stateJson: node.stateJson,
     componentDesign: node.design
       ? {
         inlineText: node.design.inlineText,

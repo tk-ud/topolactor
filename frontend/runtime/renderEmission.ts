@@ -1,6 +1,6 @@
 import type { Emission, LayoutNode as EmissionLayoutNode } from "../api/dispatch.ts";
 import type { ComponentRegistry } from "../registry/componentRegistry.ts";
-import { adaptComponentDataHub, type RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
+import { adaptComponentDataHub, type RuntimeComponentSpec, type RuntimeLocalStateStore } from "./runtimeComponentAdapter.ts";
 import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
 import { constructProjection, type ComponentDataHub, type ProjectionDefinition, type UiProjection } from "./projectionConstructor.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "./runtimeComponentRegistry.ts";
@@ -23,6 +23,8 @@ export type RenderEmissionOptions = {
   calculationBindings?: CalcBinding[];
   /** Live node values for calc binding trigger resolution. */
   calcNodeValues?: Record<string, Record<string, unknown>>;
+  /** Projection-local UI state store consumed by runtime UI interaction wiring. */
+  localStateStore?: RuntimeLocalStateStore;
 };
 
 export type ComponentSpec = {
@@ -228,6 +230,91 @@ export function buildRouteNavigationEventBinding(
     binding[trigger] = { eventType: trigger, routeNavigation: { targetRef: ref } };
   }
   return binding;
+}
+
+function normalizeAuthoredEventType(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  const map: Record<string, string> = {
+    onClick: "click",
+    click: "click",
+    onChange: "change",
+    change: "change",
+    onSubmit: "submit",
+    submit: "submit",
+    onOpen: "toggle",
+    onClose: "toggle",
+    toggle: "toggle",
+  };
+  return map[trimmed] ?? null;
+}
+
+function buildLocalUiStateEventBinding(props: Record<string, unknown>): Record<string, unknown> {
+  const rawWirings = props.eventWirings;
+  if (!Array.isArray(rawWirings)) return {};
+  const binding: Record<string, unknown> = {};
+  for (const raw of rawWirings) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
+    const wiring = raw as Record<string, unknown>;
+    const trigger = normalizeAuthoredEventType(wiring.eventType);
+    const targetNodeId = typeof wiring.targetNodeId === "string" ? wiring.targetNodeId.trim() : "";
+    const actionType = typeof wiring.actionType === "string" ? wiring.actionType.trim() : "";
+    if (!trigger || !targetNodeId || !actionType) continue;
+    let action: "set" | "toggle";
+    let value: unknown;
+    switch (actionType) {
+      case "openModal":
+      case "openDrawer":
+      case "openDialog":
+        action = "set";
+        value = true;
+        break;
+      case "closeModal":
+      case "closeDrawer":
+      case "closeDialog":
+        action = "set";
+        value = false;
+        break;
+      case "toggleModal":
+      case "toggleDrawer":
+      case "toggleDialog":
+        action = "toggle";
+        break;
+      case "setState":
+        action = "set";
+        value = wiring.value;
+        break;
+      default:
+        continue;
+    }
+    const statePath = typeof wiring.statePath === "string" && wiring.statePath.trim()
+      ? wiring.statePath.trim()
+      : "open";
+    const previous = typeof binding[trigger] === "object" && binding[trigger] !== null
+      ? binding[trigger] as Record<string, unknown>
+      : { eventType: trigger };
+    binding[trigger] = {
+      ...previous,
+      eventType: trigger,
+      localStateMutation: { targetNodeId, statePath, action, value },
+    };
+  }
+  return binding;
+}
+
+function applyLocalStateOverrides(
+  props: Record<string, unknown>,
+  nodeId: string | undefined,
+  localStateStore: RuntimeLocalStateStore | undefined,
+): Record<string, unknown> {
+  if (!nodeId || !localStateStore) return props;
+  const open = localStateStore.get(nodeId, "open");
+  if (open === undefined) return props;
+  const existingData = props.data;
+  if (typeof existingData === "object" && existingData !== null && !Array.isArray(existingData)) {
+    return { ...props, data: { ...(existingData as Record<string, unknown>), open } };
+  }
+  return { ...props, open };
 }
 
 /**
@@ -455,11 +542,6 @@ export function renderEmission(
 
         // Preview surfaces: inert bindings (no wiring required). Product: wiring-backed dispatch.
         const nodeWiringKind = node.wiringKind ?? "";
-        const componentEventBinding = previewMode
-          ? buildPreviewInertEventBinding()
-          : isNavigationWiringKind(nodeWiringKind)
-          ? buildRouteNavigationEventBinding(node.targetRef)
-          : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
 
         ensureRuntimeComponentRegistryInitialized();
         const defaultProps = buildDefaultCatalogComponentProps(node);
@@ -475,9 +557,22 @@ export function renderEmission(
         const propsWithDesign = mergeCatalogPropsWithComponentDesign(
           node.componentKind,
           node.componentKey ?? node.nodeId ?? "Component",
-          mergedProps.props,
+          applyLocalStateOverrides(mergedProps.props, node.nodeId, options?.localStateStore),
           design ? { ...design, linkHref: linkHrefResult.value || design.linkHref } : undefined,
         );
+        const baseEventBinding = previewMode
+          ? buildPreviewInertEventBinding()
+          : isNavigationWiringKind(nodeWiringKind)
+          ? buildRouteNavigationEventBinding(node.targetRef)
+          : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
+        const localStateEventBinding = previewMode ? {} : buildLocalUiStateEventBinding(propsWithDesign);
+        const componentEventBinding = { ...baseEventBinding };
+        for (const [trigger, localBinding] of Object.entries(localStateEventBinding)) {
+          const existing = typeof componentEventBinding[trigger] === "object" && componentEventBinding[trigger] !== null
+            ? componentEventBinding[trigger] as Record<string, unknown>
+            : {};
+          componentEventBinding[trigger] = { ...existing, ...(localBinding as Record<string, unknown>) };
+        }
         let finalProps = propsWithDesign;
         if (node.propBindings && Object.keys(node.propBindings).length > 0) {
           const emissionData = emission.data ?? {};
@@ -511,6 +606,7 @@ export function renderEmission(
           wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : null,
           props: finalProps,
           eventBinding: componentEventBinding,
+          localStateStore: options?.localStateStore,
           design: hubDesign,
         };
         const adapted = adaptComponentDataHub(hub);

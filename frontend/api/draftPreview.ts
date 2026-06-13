@@ -44,6 +44,8 @@ export type DraftPreviewLayoutNode = {
   heightMode?: "auto" | "preset" | "custom";
   layoutClassRefs?: string[];
   design?: DraftPreviewNodeDesign | null;
+  propsJson?: string | null;
+  stateJson?: string | null;
   /** @deprecated legacy field — prefer nodeId + layoutClassRefs */
   layoutPatchJson?: string;
 };
@@ -92,7 +94,9 @@ export async function fetchDraftPreview(
   token?: string,
 ): Promise<DraftPreviewResult> {
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
     if (token) headers["Authorization"] = `Bearer ${token}`;
     const response = await fetch("/api/draft-preview/preview", {
       method: "POST",
