@@ -27,6 +27,14 @@ public class AuthRuntime
         RegisterRequestDto? request, CancellationToken ct = default) =>
         _authService.RegisterUserAsync(request, ct);
 
+    /// <summary>
+    /// Projection surface login: admin capability if the user has admin grants, user otherwise.
+    /// Login surface and authority are orthogonal — callers must not assume realm from surface.
+    /// </summary>
+    public Task<(LoginResponseDto Response, string? RefreshTokenPlaintext)> LoginProjectionAsync(
+        LoginRequestDto? request, CancellationToken ct = default) =>
+        _authService.LoginProjectionAsync(request, ct);
+
     public Task<(LoginResponseDto Response, string? RefreshTokenPlaintext)> LoginAdminAsync(
         LoginRequestDto? request, CancellationToken ct = default) =>
         _authService.LoginAsync(request, AuthRealm.Admin, ct);

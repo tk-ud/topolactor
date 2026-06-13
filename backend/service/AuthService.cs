@@ -159,6 +159,27 @@ public class AuthService
         return (new RefreshResponseDto(true, accessToken, []), newRefreshPlain);
     }
 
+    /// <summary>
+    /// Projection surface login: tries admin realm first (admin capability preserved),
+    /// falls through to user realm when the user has no admin grant.
+    /// Returns the first non-realm-denied failure verbatim (bad credentials, account state, etc.).
+    /// </summary>
+    public async Task<(LoginResponseDto Response, string? RefreshTokenPlaintext)> LoginProjectionAsync(
+        LoginRequestDto? request,
+        CancellationToken ct = default)
+    {
+        var adminResult = await LoginAsync(request, AuthRealm.Admin, ct);
+        if (adminResult.Response.Success)
+            return adminResult;
+
+        var isRealmDenied = adminResult.Response.Errors.Count == 1 &&
+            adminResult.Response.Errors[0].Code == "AUTH_REALM_DENIED";
+        if (!isRealmDenied)
+            return adminResult;
+
+        return await LoginAsync(request, AuthRealm.User, ct);
+    }
+
     public async Task<LogoutResponseDto> LogoutAsync(
         string? refreshTokenPlain,
         CancellationToken ct = default)

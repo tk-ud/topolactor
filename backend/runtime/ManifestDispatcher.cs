@@ -204,6 +204,24 @@ public class ManifestDispatcher
                 ct: ct);
             }
 
+            // Capability gate: after manifest resolution, enforce any explicit required_role
+            // declared in topology capability_requirement entry. This is especially important
+            // for target_ref paths that bypass role-axis filtering.
+            if (manifest is not null)
+            {
+                var capabilityError = ValidateCapabilityRequirement(manifest.Topology, request.Role);
+                if (capabilityError is not null)
+                {
+                    _logger.LogWarning(
+                        "ManifestDispatcher: capability requirement not met for manifest {ManifestId}. RequiredRole={RequiredRole} ActualRole={ActualRole}",
+                        manifest.ManifestId, capabilityError.Message, request.Role);
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [capabilityError]);
+                }
+            }
+
             if (manifest is null)
             {
                 _logger.LogWarning(
@@ -434,6 +452,72 @@ public class ManifestDispatcher
             if (definitionEl.ValueKind == JsonValueKind.Object) return definitionEl;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Determines the required role for a manifest by combining:
+    /// 1. Explicit capability_requirement topology entry (highest priority).
+    /// 2. Inferred requirement from runtime_mapping.runtime_destination:
+    ///    admin_runtime → required_role=admin (protects admin manifests that lack an
+    ///    explicit capability_requirement, especially on target_ref paths that bypass
+    ///    role-axis filtering in ResolveActiveManifestAsync).
+    ///
+    /// Note: dispatcher_mapping.role is NOT used for inference. That field is a routing
+    /// constraint (axes filtering in ResolveActiveManifestAsync) and is already enforced
+    /// by the manifest resolution step. Using it as a capability gate would create a
+    /// tautological check on axes paths and incorrect constraints on non-admin-runtime
+    /// manifests accessed via target_ref.
+    ///
+    /// Returns a validation error when the required role does not match the requesting role.
+    /// Returns null when no requirement can be determined or when the role satisfies the requirement.
+    ///
+    /// This gate runs after all manifest resolution paths (axes, target_ref, db_notify)
+    /// so target_ref routes that bypass role-axis filtering are also protected.
+    /// </summary>
+    private static ValidationError? ValidateCapabilityRequirement(
+        IReadOnlyList<JsonElement> topology,
+        string? requestRole)
+    {
+        string? explicitRequired = null;
+        string? inferredRequired = null;
+
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+            var type = typeEl.GetString();
+
+            // Explicit capability_requirement overrides any inference.
+            if (string.Equals(type, "capability_requirement", StringComparison.OrdinalIgnoreCase))
+            {
+                if (entry.TryGetProperty("required_role", out var reqEl) && reqEl.ValueKind == JsonValueKind.String)
+                {
+                    var r = reqEl.GetString();
+                    if (!string.IsNullOrWhiteSpace(r))
+                        explicitRequired = r;
+                }
+            }
+
+            // Infer from runtime_destination: admin_runtime manifests require admin role.
+            if (string.Equals(type, "runtime_mapping", StringComparison.OrdinalIgnoreCase))
+            {
+                if (entry.TryGetProperty("runtime_destination", out var destEl) && destEl.ValueKind == JsonValueKind.String)
+                {
+                    if (string.Equals(destEl.GetString(), "admin_runtime", StringComparison.OrdinalIgnoreCase))
+                        inferredRequired = AuthRealm.AdminRole;
+                }
+            }
+        }
+
+        var requiredRole = explicitRequired ?? inferredRequired;
+        if (requiredRole is null) return null;
+
+        if (!string.Equals(requestRole, requiredRole, StringComparison.Ordinal))
+            return new ValidationError(
+                "AUTH_CAPABILITY_DENIED",
+                $"This operation requires role='{requiredRole}'. Token role='{requestRole ?? "(missing)"}' is insufficient.");
+
+        return null; // requirement satisfied
     }
 
     /// <summary>

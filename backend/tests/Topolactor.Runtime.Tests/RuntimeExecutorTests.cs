@@ -1329,7 +1329,7 @@ public class ManifestDispatcherManifestDrivenTests
             manifestRepo,
             extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["admin_runtime"] = fakeAdminHandler });
 
-        var request = new EndpointRequestDto("X", "admin", "seed_runtime", "save", null, null, null);
+        var request = new EndpointRequestDto("X", "admin", "seed_runtime", "save", null, null, null, TriggerKind: "client", Role: "admin");
         var response = await dispatcher.DispatchAsync(request);
 
         Assert.True(response.Success);
@@ -1359,7 +1359,7 @@ public class ManifestDispatcherManifestDrivenTests
             manifestRepo,
             extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["admin_runtime"] = fakeAdminHandler });
 
-        var request = new EndpointRequestDto("X", "admin", "ci_attention", "refresh_fragments", null, null, null);
+        var request = new EndpointRequestDto("X", "admin", "ci_attention", "refresh_fragments", null, null, null, TriggerKind: "client", Role: "admin");
         var response = await dispatcher.DispatchAsync(request);
 
         Assert.True(response.Success);

@@ -3,7 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import {
   authErrorText,
   fetchUserLoginManifest,
-  loginUser,
+  loginProjection,
   probeSessionToken,
   registerUser,
   type LoginManifestResponse,
@@ -54,8 +54,9 @@ export default function LoginManifestPanel(): JSX.Element {
         }
       }
 
+      // Probe accepts any valid JWT — projection surface is not user-realm-only.
       const validToken = await ensureValidClientSession((t) =>
-        probeSessionToken(t, "user")
+        probeSessionToken(t)
       );
       setSessionCheckDone(true);
       if (validToken) {
@@ -96,7 +97,7 @@ export default function LoginManifestPanel(): JSX.Element {
       return;
     }
     setState({ status: "loading" });
-    const result = await loginUser({ username, password });
+    const result = await loginProjection({ username, password });
     if (result.success && result.token) {
       persistSessionToken(result.token);
       setState({ status: "success", token: result.token });
