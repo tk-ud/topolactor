@@ -8,9 +8,63 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
+| `auth-projection-dispatch-claim-boundary` | Auth / 投影 / dispatch claim 境界 | not_started | 1 | `product.auth_projection_dispatch_claim_boundary` | `docs/design/auth-db-session-credential-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
+
+---
+---
+
+## Bundle `auth-projection-dispatch-claim-boundary`
+
+**Status:** not_started  
+**SSOT:** `docs/design/auth-db-session-credential-ssot.yaml`  
+**Supporting SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`
+
+問題点: projection login surface、JWT carrier lifecycle、refresh/probe、dispatch Authorization / claim authorization boundary が user realm 前提で結合されている。その結果、admin capability を持つ JWT が投影 top page で user mismatch / refresh mismatch により無効扱い・削除対象になり、投影 dispatch に Bearer が渡らず、backend dispatch 側の claim / capability authorization も不十分になる。
+
+目的: login surface 分離と authority / capability 判定を直交させる。frontend は JWT carrier を保持し、API 呼び出し時に Bearer へ埋め込むだけにし、backend dispatch が JWT claim を正本として role / capability を判定する。
+
+改善方針:
+- [ ] `/auth` を user 固定 login ではなく projection login surface として扱い、admin user が `/auth` 経由でも admin capability を保持できるようにする
+- [ ] top page / `ProjectionShell` の `expected=user` 固定 probe を廃止し、realm / audience mismatch を token 自体の失効として扱って JWT を削除しない
+- [ ] refresh 失敗時の JWT 削除は invalid / expired / revoked など token 自体の失効に限定し、surface mismatch / capability mismatch と分離する
+- [ ] `ProjectionShell` の初回 dispatch、SSE refresh dispatch、component dispatch で Bearer token を必ず渡す
+- [ ] backend `/dispatch` は全 dispatch で JWT claim を読み、frontend request body の `role` を信用せず token claim で authoritative request role / capability を上書きする
+- [ ] admin 判定を `operationType` / `target` 文字列 heuristic だけにせず、dispatch destination / manifest route / operation policy に基づいて required capability を判定する
+
+対応資料:
+- `docs/design/auth-db-session-credential-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+
+対象ファイル名:
+- `frontend/islands/ProjectionShell.tsx`
+- `frontend/lib/demoSession.ts`
+- `frontend/api/authApi.ts`
+- `frontend/runtime/frontendScheduler.ts`
+- `frontend/api/dispatch.ts`
+- `frontend/routes/api/dispatch.ts`
+- `backend/Program.cs`
+- `backend/guard/JwtGuard.cs`
+- `backend/endpoint/DispatchEndpoint.cs`
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/runtime/RuntimeExecutor.cs`
+- related auth / dispatch tests
+
+対象関数名:
+- `ProjectionShell` `useEffect`
+- `ensureValidClientSession`
+- `clearSessionToken`
+- `refreshUserSession`
+- `probeSessionToken`
+- `queueClientCommand`
+- `dispatchOperation`
+- `JwtGuard.Validate`
+- `JwtGuard.ValidateForContext`
+- backend `/dispatch` handler
+- `DispatchEndpoint.HandleAsync`
 
 ---
 
