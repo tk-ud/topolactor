@@ -461,7 +461,12 @@ public class ManifestDispatcher
     ///    admin_runtime → required_role=admin (protects admin manifests that lack an
     ///    explicit capability_requirement, especially on target_ref paths that bypass
     ///    role-axis filtering in ResolveActiveManifestAsync).
-    /// 3. dispatcher_mapping.role field (fallback inference for legacy dispatch manifests).
+    ///
+    /// Note: dispatcher_mapping.role is NOT used for inference. That field is a routing
+    /// constraint (axes filtering in ResolveActiveManifestAsync) and is already enforced
+    /// by the manifest resolution step. Using it as a capability gate would create a
+    /// tautological check on axes paths and incorrect constraints on non-admin-runtime
+    /// manifests accessed via target_ref.
     ///
     /// Returns a validation error when the required role does not match the requesting role.
     /// Returns null when no requirement can be determined or when the role satisfies the requirement.
@@ -500,17 +505,6 @@ public class ManifestDispatcher
                 {
                     if (string.Equals(destEl.GetString(), "admin_runtime", StringComparison.OrdinalIgnoreCase))
                         inferredRequired = AuthRealm.AdminRole;
-                }
-            }
-
-            // Infer from dispatcher_mapping.role when present (legacy admin dispatch manifests).
-            if (string.Equals(type, "dispatcher_mapping", StringComparison.OrdinalIgnoreCase))
-            {
-                if (entry.TryGetProperty("role", out var roleEl) && roleEl.ValueKind == JsonValueKind.String)
-                {
-                    var r = roleEl.GetString();
-                    if (!string.IsNullOrWhiteSpace(r))
-                        inferredRequired = r;
                 }
             }
         }
