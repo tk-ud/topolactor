@@ -204,6 +204,24 @@ public class ManifestDispatcher
                 ct: ct);
             }
 
+            // Capability gate: after manifest resolution, enforce any explicit required_role
+            // declared in topology capability_requirement entry. This is especially important
+            // for target_ref paths that bypass role-axis filtering.
+            if (manifest is not null)
+            {
+                var capabilityError = ValidateCapabilityRequirement(manifest.Topology, request.Role);
+                if (capabilityError is not null)
+                {
+                    _logger.LogWarning(
+                        "ManifestDispatcher: capability requirement not met for manifest {ManifestId}. RequiredRole={RequiredRole} ActualRole={ActualRole}",
+                        manifest.ManifestId, capabilityError.Message, request.Role);
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [capabilityError]);
+                }
+            }
+
             if (manifest is null)
             {
                 _logger.LogWarning(
@@ -434,6 +452,42 @@ public class ManifestDispatcher
             if (definitionEl.ValueKind == JsonValueKind.Object) return definitionEl;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Checks whether the topology contains an explicit capability_requirement entry and
+    /// whether the requesting role satisfies it. Returns a validation error when the
+    /// requirement is present and the role does not match; returns null when satisfied or
+    /// when no requirement is declared.
+    ///
+    /// This gate covers all manifest resolution paths, including target_ref (direct-by-id)
+    /// which bypasses role-axis filtering in ResolveActiveManifestAsync.
+    ///
+    /// Topology entry shape: { "type": "capability_requirement", "required_role": "admin" }
+    /// </summary>
+    private static ValidationError? ValidateCapabilityRequirement(
+        IReadOnlyList<JsonElement> topology,
+        string? requestRole)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+            if (!string.Equals(typeEl.GetString(), "capability_requirement", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!entry.TryGetProperty("required_role", out var reqRoleEl) || reqRoleEl.ValueKind != JsonValueKind.String) continue;
+
+            var requiredRole = reqRoleEl.GetString();
+            if (string.IsNullOrWhiteSpace(requiredRole)) continue;
+
+            if (!string.Equals(requestRole, requiredRole, StringComparison.Ordinal))
+                return new ValidationError(
+                    "AUTH_CAPABILITY_DENIED",
+                    $"This operation requires role='{requiredRole}'. Token role='{requestRole ?? "(missing)"}' is insufficient.");
+
+            return null; // requirement satisfied
+        }
+
+        return null; // no requirement declared
     }
 
     /// <summary>

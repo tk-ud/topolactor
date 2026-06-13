@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Topolactor.Runtime.Tests;
 
+[Collection("env-sequential")]
 public class DispatchRoleAuthorityTests
 {
     [Fact]
@@ -47,6 +48,109 @@ public class DispatchRoleAuthorityTests
 
         var miss = await roleFiltered.ResolveActiveManifestAsync("viewer", vector.Target, vector.Layer, vector.Action);
         Assert.Null(miss);
+    }
+
+    [Fact]
+    public void JwtRoleClaim_Overwrites_RequestBodyRole_WhenMismatched()
+    {
+        const string secret = "dispatch-overwrite-role-test-secret";
+        using var env = new EnvScope("DEMO_JWT_SECRET", secret);
+
+        // Token carries role=user; request body tries to claim role=admin.
+        var token = BuildToken(secret, subject: "actor-2", role: "user");
+        var guard = new JwtGuard();
+
+        var jwtRole = guard.TryGetRole(token);
+        Assert.Equal("user", jwtRole);
+
+        // Simulate what Program.cs /dispatch does: override request.Role with JWT claim.
+        var manipulatedRequest = new EndpointRequestDto(
+            "Search", "admin", "screen_list", "Search",
+            IdOrHubId: null, Payload: null, Context: null,
+            TriggerKind: "client",
+            Role: "admin"); // <-- body claims admin
+
+        var authoritative = manipulatedRequest with { Role = jwtRole };
+
+        // After override, role must be what JWT says, not what request body claimed.
+        Assert.Equal("user", authoritative.Role);
+        Assert.NotEqual("admin", authoritative.Role);
+    }
+
+    [Fact]
+    public async Task UserToken_AdminCapabilityRequired_Dispatch_ReturnsDenied()
+    {
+        const string secret = "dispatch-user-denied-admin-test";
+        using var env = new EnvScope("DEMO_JWT_SECRET", secret);
+        var token = BuildToken(secret, subject: "user-actor", role: "user");
+        var guard = new JwtGuard();
+        var jwtRole = guard.TryGetRole(token);
+        Assert.Equal("user", jwtRole);
+
+        // Manifest requires admin capability.
+        var adminManifest = new ManifestRecord(
+            Guid.NewGuid(), null,
+            System.Text.Json.JsonSerializer.SerializeToElement(new object[]
+            {
+                new { type = "runtime_mapping", runtime_destination = "topology_transform_runtime" },
+                new { type = "capability_requirement", required_role = "admin" },
+            }).EnumerateArray().ToArray(),
+            "active");
+
+        var repo = new RoleFilteredManifestRepository("user", adminManifest); // returns manifest even for "user"
+        var topologyRepo = new TopologyRepository(Microsoft.Extensions.Logging.Abstractions.NullLogger<TopologyRepository>.Instance, "test-double");
+        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo);
+        var handlers = new Dictionary<string, IDispatchableRuntime>
+        {
+            ["topology_transform_runtime"] = new StubSuccessRuntime(),
+        };
+        var dispatcher = new ManifestDispatcher(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ManifestDispatcher>.Instance,
+            handlers, new OperationVectorResolver(), targetOverride, repo);
+
+        var request = new EndpointRequestDto("Search", "screen", "screen_list", "Search",
+            null, null, null, "client", Role: jwtRole);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "AUTH_CAPABILITY_DENIED");
+    }
+
+    [Fact]
+    public async Task AdminToken_AdminCapabilityRequired_Dispatch_Succeeds()
+    {
+        const string secret = "dispatch-admin-allowed-test";
+        using var env = new EnvScope("DEMO_JWT_SECRET", secret);
+        var token = BuildToken(secret, subject: "admin-actor", role: "admin");
+        var guard = new JwtGuard();
+        var jwtRole = guard.TryGetRole(token);
+        Assert.Equal("admin", jwtRole);
+
+        var adminManifest = new ManifestRecord(
+            Guid.NewGuid(), null,
+            System.Text.Json.JsonSerializer.SerializeToElement(new object[]
+            {
+                new { type = "runtime_mapping", runtime_destination = "topology_transform_runtime" },
+                new { type = "capability_requirement", required_role = "admin" },
+            }).EnumerateArray().ToArray(),
+            "active");
+
+        var repo = new RoleFilteredManifestRepository("admin", adminManifest);
+        var topologyRepo = new TopologyRepository(Microsoft.Extensions.Logging.Abstractions.NullLogger<TopologyRepository>.Instance, "test-double");
+        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo);
+        var handlers = new Dictionary<string, IDispatchableRuntime>
+        {
+            ["topology_transform_runtime"] = new StubSuccessRuntime(),
+        };
+        var dispatcher = new ManifestDispatcher(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ManifestDispatcher>.Instance,
+            handlers, new OperationVectorResolver(), targetOverride, repo);
+
+        var request = new EndpointRequestDto("Search", "screen", "screen_list", "Search",
+            null, null, null, "client", Role: jwtRole);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
     }
 
     private sealed class EnvScope : IDisposable
