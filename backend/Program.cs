@@ -266,14 +266,25 @@ app.MapPost("/dispatch", async (
     if (authErrors.Count > 0)
         return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
 
-    var role = jwtGuard.TryGetRole(token);
-    if (string.IsNullOrWhiteSpace(role))
+    var jwtRole = jwtGuard.TryGetRole(token);
+    if (string.IsNullOrWhiteSpace(jwtRole))
     {
         var errors = new[] { new ValidationError("AUTH_TOKEN_ROLE_MISSING", "Token is missing required role claim.") };
         return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 401);
     }
 
-    var authoritativeRequest = request with { Role = role };
+    // Prevent privilege escalation: body claiming admin when JWT says user is denied.
+    // Admin can use body role for routing (admin dispatching as user is not an escalation).
+    var bodyRole = request.Role;
+    if (bodyRole is "admin" && jwtRole != "admin")
+    {
+        var errors = new[] { new ValidationError("AUTH_CAPABILITY_DENIED", "Token role insufficient for requested role.") };
+        return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 403);
+    }
+    // Use body role for axes resolution (routing); fall back to JWT role when not set.
+    // Capability gate in ManifestDispatcher enforces runtime-level requirements against routing role.
+    var routingRole = bodyRole ?? jwtRole;
+    var authoritativeRequest = request with { Role = routingRole };
     var result = await dispatch.HandleAsync(authoritativeRequest, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });
