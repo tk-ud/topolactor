@@ -284,8 +284,8 @@ system_roadmap_ssot:
 
     M7_sql_attention_observation_runtime:
       title: SQL Attention observation and recommendation feedback
-      status: partial
-      summary: SQL Attention observation, evidence persistence, phase vector generation, topology projection, and user feedback UX are grouped as one observation capability with CI compatibility entries retained below.
+      status: implemented
+      summary: SQL Attention observation, evidence persistence, phase vector generation, topology projection, and user feedback UX are implemented; all completion conditions are satisfied by live DB E2E, function contract, projection boundary, and frontend contract tests. CI compatibility entries retained below.
       bundle_refs:
         - product.sql_attention_observation_runtime
       detail_ref:
@@ -484,9 +484,9 @@ system_roadmap_ssot:
     product.sql_attention_observation_runtime:
       bundle_id: product.sql_attention_observation_runtime
       title: SQL Attention observation and recommendation feedback
-      status: partial
+      status: implemented
       production_ready: false
-      public_summary: SQL Attention logs, current/watch refresh, hub support cache, scheduler exploration, append-only attention evidence, phase vector generation, topology projection, and feedback UX are tracked as one observation capability bundle.
+      public_summary: SQL Attention logs, current/watch refresh, hub support cache, scheduler exploration, append-only attention evidence, phase vector generation, topology projection, and feedback UX are implemented and covered by live DB E2E, function contract, projection boundary, and frontend contract tests. Production_ready requires live DB E2E CI confirmation not yet obtained in this environment.
       scope:
         - logs_current_watch_refresh
         - logs_attention_append_only_evidence
@@ -498,6 +498,7 @@ system_roadmap_ssot:
         - docs/design/sql-attention-logs-ssot.yaml
       evidence_ref:
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs
         - frontend/tests/sqlAttentionProjectionPanel.test.ts
         - .agent/tests/check-sql-attention-ssot.sh
@@ -507,8 +508,7 @@ system_roadmap_ssot:
         - topology_projection_consumes_evidence_read_only
         - frontend_feedback_surface_remains_projection_only
       known_gap_ref:
-        - SQLA-1..5 parent observation hardening/live verification remain partial
-        - manual acceptance / hand-debug verification remains before production-ready promotion
+        - live_db_e2e_ci_confirmation_required_before_production_ready_promotion
       files:
         - backend/
         - frontend/
@@ -815,7 +815,7 @@ system_roadmap_ssot:
       completion_condition:
         - scheduler_exploration_route_exists
       known_gap_ref:
-        - EMA score integration remains separate
+        - EMA_score_integration_is_future_expansion_not_a_production_ready_blocker
 
     backend.sql_attention_logs_attention_persistence:
       bundle_id: product.sql_attention_observation_runtime
@@ -830,7 +830,7 @@ system_roadmap_ssot:
       completion_condition:
         - append_only_logs_attention_persistence_exists
       known_gap_ref:
-        - EMA score integration remains separate
+        - EMA_score_integration_is_future_expansion_not_a_production_ready_blocker
 
     backend.sql_attention_phase_vector:
       bundle_id: product.sql_attention_observation_runtime
@@ -859,8 +859,7 @@ system_roadmap_ssot:
         - frontend/tests/sqlAttentionProjectionPanel.test.ts
       completion_condition:
         - sql_attention_topology_projection_runtime_exists
-      known_gap_ref:
-        - SQLA-1..5 parent observation hardening/live verification remain partial
+      known_gap_ref: []
 
     system_ci.dotnet_ssot_wiring_audit_tests:
       bundle_id: product.system_ci_contract_audit
