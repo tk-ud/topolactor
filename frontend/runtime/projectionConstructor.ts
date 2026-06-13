@@ -40,6 +40,10 @@ export type ComponentDataHub = {
   props: JsonObject;
   eventBinding: JsonObject;
   design?: JsonObject;
+  localStateStore?: {
+    get(targetNodeId: string, statePath: string): unknown;
+    set(targetNodeId: string, statePath: string, value: unknown): void;
+  };
 };
 
 type RuntimeTopologyComponentProps = JsonObject & {

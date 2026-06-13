@@ -37,6 +37,13 @@ export type RuntimeComponentSpec = {
    * No mutation / DB write during typing. SSOT: candidate_source_boundary: debounce_backend_readonly_search
    */
   searchCallback?: (componentId: string, query: string) => void;
+  /** Projection-local UI state store used by runtime UI interactions (modal/drawer/dialog open state). */
+  localStateStore?: RuntimeLocalStateStore;
+};
+
+export type RuntimeLocalStateStore = {
+  get(targetNodeId: string, statePath: string): unknown;
+  set(targetNodeId: string, statePath: string, value: unknown): void;
 };
 
 type AdaptResult = { ok: true; value: RuntimeComponentSpec } | {
@@ -177,6 +184,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       componentType: hub.componentKind,
       props: normalizeTopologyProps(hub.props),
       eventBinding: hub.eventBinding,
+      localStateStore: hub.localStateStore,
       className,
       design,
     },

@@ -161,6 +161,9 @@ public class StructureMapResolver
                         StateJson: row.StateJson,
                         PropBindings: row.PropBindingsJson != null
                             ? JsonSerializer.Deserialize<JsonElement>(row.PropBindingsJson)
+                            : null,
+                        RuntimeInteractions: row.RuntimeInteractionsJson != null
+                            ? JsonSerializer.Deserialize<JsonElement>(row.RuntimeInteractionsJson)
                             : null
                     )).ToList();
                 }

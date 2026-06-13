@@ -41,6 +41,145 @@ pipeline_continuity_ssot:
         - pipeline_required_identity
         - prohibited_boundary_terms
 
+  test_tier_policy:
+    purpose: >
+      Classify verification depth for runtime pipeline changes without forcing every
+      API or every CRUD-equivalent action through a full frontend-to-backend-to-frontend
+      loop. Existing lane tests and helpers are the primary building blocks; add a
+      scenario harness only when a product runtime crossing requires final state proof.
+
+    tiers:
+      tier_0_syntax_static:
+        applies_to:
+          - all_api_changes
+          - all_runtime_changes
+          - all_frontend_changes
+        required_checks:
+          - deno_fmt_lint_check_for_touched_frontend_scope
+          - dotnet_build_and_dotnet_test_for_touched_backend_scope
+          - ssot_vocabulary_membership
+          - route_action_manifest_registration_presence
+          - no_silent_fallback_guard
+        completion_rule: syntax_static_success_is_required_but_not_sufficient_for_runtime_completion
+
+      tier_1_lane_unit_boundary:
+        applies_when: target_lane_or_boundary_changes
+        lanes:
+          - api_command_lane
+          - frontend_component_event_log_lane
+          - frontend_projection_constructor_lane
+          - sse_projection_lane
+          - ui_layout_patch_serialization_lane
+        representative_assets:
+          syntax_static_check:
+            - .agent/tests/check-pipeline-continuity.sh
+            - .agent/tests/check-structure.sh
+          unit_test:
+            - frontend/tests/runtimeComponentFactory.test.ts
+            - frontend/tests/renderEmissionPropBindings.test.ts
+            - frontend/tests/adminWiringExecutionLane.test.ts
+            - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+          lane_boundary_test:
+            - frontend/tests/projectionConstructor.test.ts
+            - frontend/tests/defaultEntitySearch.test.ts
+            - backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs
+          serialization_round_trip_test:
+            - frontend/tests/visualLayoutBuilder.test.ts
+            - frontend/tests/draftPreviewToEmission.test.ts
+          dispatch_backend_runtime_test:
+            - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+            - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditSchedulerRuntimeTests.cs
+          db_repository_test:
+            - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
+            - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
+          sse_projection_refresh_test:
+            - backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs
+            - frontend/tests/uiRenderedInteraction.test.ts
+          frontend_final_render_state_assertion_test:
+            - frontend/tests/runtimeComponentFactory.test.ts
+            - frontend/tests/defaultEntitySearch.test.ts
+            - frontend/tests/uiRenderedInteraction.test.ts
+
+      tier_2_scenario_harness:
+        required_when:
+          - new_runtime_added
+          - new_dispatch_action_added
+          - ui_operation_wiring_added
+          - change_crosses_layout_patch_json_emission_renderEmission_runtimeComponentFactory
+          - db_update_result_returns_to_projection_sse_frontend
+          - runtime_ui_state_mutation_added_for_modal_drawer_dialog_tabs_accordion
+          - backend_runtime_result_affects_frontend_final_state
+        rule: >
+          Compose existing test helpers and lane tests into a representative product-runtime
+          scenario. Do not create a large new E2E platform first. The harness must assert
+          the state source that changed and the final rendered/runtime state that consumes it.
+        ui_builder_runtime_interaction_representative_scenario:
+          id: button_click_modal_open_close
+          test_files:
+            - frontend/tests/runtimeUiInteractionScenario.test.ts
+            - backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs
+          helper_chain:
+            - buildVisualLayoutPatchJson
+            - parseVisualLayoutPatchJson
+            - draftPreviewResultToEmission_or_backend_equivalent_emission_restore
+            - renderEmission
+            - parseEventBinding
+            - emitBoundEvent
+            - runtimeComponentFactory_or_projection_runtime_state_store
+          fixture_steps:
+            - create_layout_patch_fixture_with_button_node_and_modal_node
+            - author_button_runtime_ui_interaction_wiring_for_modal_open
+            - round_trip_through_buildVisualLayoutPatchJson_and_parseVisualLayoutPatchJson
+            - restore_to_emission_via_draftPreviewResultToEmission_or_backend_equivalent
+            - renderEmission_to_runtime_component_specs
+            - assert_button_runtimeSpec_has_click_interaction
+            - emitBoundEvent_button_click
+            - assert_projection_local_state_store_sets_modal_open_true
+            - assert_modal_final_props_or_dom_state_open_true
+            - execute_close_action_and_assert_modal_open_false
+          preview_boundary:
+            - stateJson_open_is_initial_state_injection_only
+            - propsJson_eventWirings_is_legacy_raw_fallback_until_migrated_to_canonical_contract
+            - previewMode_uses_inert_binding_and_must_not_be_counted_as_production_runtime_execution
+          responsibility_split:
+            routeNavigation: frontend_local_route_change_only
+            runtimeDispatch: backend_dispatch_lane_only
+            local_ui_state_mutation: projection_local_state_update_for_target_node_props
+
+      tier_3_full_product_acceptance_manual_hand_debug:
+        required_only_when:
+          - product_experience_crosses_multiple_runtimes_multiple_screens_auth_sse_db
+          - release_acceptance
+          - roadmap_completion_condition_final_confirmation
+        rule: >
+          Manual hand-debug or full product acceptance is not the default bar for every
+          API. It is reserved for product experience acceptance and release-level evidence.
+
+    non_goals_and_completion_guards:
+      - do_not_require_frontend_api_dispatch_db_sse_frontend_final_assertion_for_every_api
+      - crud_equivalent_apis_may_use_representative_fixture_plus_registration_static_vocabulary_checks
+      - api_specific_unique_db_side_effect_projection_sse_or_frontend_state_requires_additional_scenario
+      - backend_ok_true_only_is_not_completion_pass
+      - frontend_render_only_is_not_completion_pass
+      - event_log_append_only_is_not_ui_operation_execution_pass
+      - runtime_with_db_update_must_assert_db_state_or_projection_source_changed
+      - runtime_returning_to_frontend_must_assert_sse_or_refetch_final_dom_or_state
+
+    backend_db_sse_scenario_harness_policy:
+      representative_route: frontend_payload_to_dispatch_to_runtime_to_db_to_projection_or_sse_to_frontend_final_assertion
+      fixture_policy:
+        - one_representative_fixture_per_runtime_or_action_class_not_per_identical_api
+        - crud_equivalent_runtime_uses_representative_fixture_plus_registration_vocabulary_static_checks
+        - unique_side_effect_runtime_requires_individual_scenario
+        - runtime_without_sse_contract_may_use_refetch_or_projection_response_assertion
+        - runtime_with_sse_contract_must_assert_receive_then_final_render_or_state
+      reusable_assets:
+        - backend_endpoint_dispatch_tests
+        - backend_runtime_executor_tests
+        - backend_repository_or_integration_tests
+        - sse_projection_lane_tests
+        - frontend_renderEmission_and_runtimeComponentFactory_tests
+
   admin_runtime_diagnostic_read_lane_reference:
     source: docs/design/system-ci-admin-runtime-callable-surface.yaml
     route_intent:
@@ -89,7 +228,6 @@ pipeline_continuity_ssot:
   # Pipeline body runs in default-entity-search.yml via check-default-entity-search.sh.
 
   lanes:
-
     api_command_lane:
       description: >
         client command enters via ui_action, passes through frontend_scheduler,
@@ -352,7 +490,6 @@ pipeline_continuity_ssot:
         note: >
           check-pipeline-continuity.sh validates lane contract presence and CI registration;
           runtime semantics are delegated to dedicated dotnet/deno tests above.
-
 
     frontend_projection_constructor_lane:
       description: >

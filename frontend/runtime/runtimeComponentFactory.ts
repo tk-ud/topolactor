@@ -129,6 +129,13 @@ type EventBindingValue = {
   runtimeDispatch?: RuntimeDispatchSpec;
   /** navigation_wiring_execution_lane: when present, emitBoundEvent navigates to route: targetRef locally — no backend dispatch. */
   routeNavigation?: { targetRef: string };
+  /** runtime_ui_interaction_wiring: projection-local state mutation, separate from backend dispatch/navigation. */
+  localStateMutation?: {
+    targetNodeId: string;
+    statePath: string;
+    action: "set" | "toggle";
+    value?: unknown;
+  };
 };
 
 function parseEventBinding(value: unknown): EventBindingValue | null {
@@ -202,12 +209,35 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       }
     }
   }
+  const localStateMutationRaw = (value as Record<string, unknown>).localStateMutation;
+  let localStateMutation: EventBindingValue["localStateMutation"] | undefined;
+  if (localStateMutationRaw !== undefined) {
+    if (
+      typeof localStateMutationRaw !== "object" ||
+      localStateMutationRaw === null ||
+      Array.isArray(localStateMutationRaw)
+    ) return null;
+    const mutation = localStateMutationRaw as Record<string, unknown>;
+    const targetNodeId = mutation.targetNodeId;
+    const statePath = mutation.statePath;
+    const action = mutation.action;
+    if (typeof targetNodeId !== "string" || !targetNodeId.trim()) return null;
+    if (typeof statePath !== "string" || !statePath.trim()) return null;
+    if (action !== "set" && action !== "toggle") return null;
+    localStateMutation = {
+      targetNodeId: targetNodeId.trim(),
+      statePath: statePath.trim(),
+      action,
+      value: mutation.value,
+    };
+  }
   return {
     eventType: eventType as NormalizedComponentEventType,
     actorOrSource,
     payload: (payload as Record<string, unknown> | undefined) ?? {},
     runtimeDispatch,
     routeNavigation,
+    localStateMutation,
   };
 }
 
@@ -265,6 +295,21 @@ function emitBoundEvent(
       const href = routeKey.startsWith("/") ? routeKey : `/${routeKey}`;
       globalThis.location.href = href;
     }
+  }
+  // Lane 2 (local UI state): projection-local state mutation for modal/drawer/dialog.
+  // This is intentionally separate from routeNavigation and backend runtimeDispatch.
+  if (binding.localStateMutation) {
+    if (!spec.localStateStore) {
+      return {
+        ok: false,
+        error: "RUNTIME_PRIMITIVE_RENDERER_MISSING_LOCAL_STATE_STORE",
+      };
+    }
+    const mutation = binding.localStateMutation;
+    const nextValue = mutation.action === "toggle"
+      ? !spec.localStateStore.get(mutation.targetNodeId, mutation.statePath)
+      : mutation.value;
+    spec.localStateStore.set(mutation.targetNodeId, mutation.statePath, nextValue);
   }
   return { ok: true };
 }

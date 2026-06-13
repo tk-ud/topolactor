@@ -176,6 +176,57 @@ else
   fi
 fi
 
+
+# ─── 3. RUNTIME UI INTERACTION TIER 2 REPRESENTATIVE HARNESS ────────────────
+# Tier 2 does not force every API through a full product loop, but runtime UI
+# interaction changes must keep the representative canonical fixture and backend
+# fail-close validation tests present.
+
+echo ""
+echo "=== [pipeline.runtime_ui_interaction] Tier 2 representative harness presence ==="
+
+RUNTIME_UI_SCENARIO="$REPO_ROOT/frontend/tests/runtimeUiInteractionScenario.test.ts"
+RUNTIME_UI_VALIDATION="$REPO_ROOT/backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs"
+
+if [ -f "$RUNTIME_UI_SCENARIO" ]; then
+  echo "OK  [pipeline.runtime_ui_interaction] runtimeUiInteractionScenario.test.ts present"
+  if grep -q "runtimeInteractions" "$RUNTIME_UI_SCENARIO"; then
+    echo "OK  [pipeline.runtime_ui_interaction] canonical runtimeInteractions fixture present"
+  else
+    fail "[pipeline.runtime_ui_interaction] runtimeUiInteractionScenario.test.ts must exercise canonical runtimeInteractions"
+  fi
+  if grep -q "previewMode inert" "$RUNTIME_UI_SCENARIO"; then
+    echo "OK  [pipeline.runtime_ui_interaction] preview inert vs production runtime assertion present"
+  else
+    fail "[pipeline.runtime_ui_interaction] runtimeUiInteractionScenario.test.ts must assert previewMode inert behavior"
+  fi
+else
+  fail "[pipeline.runtime_ui_interaction] frontend/tests/runtimeUiInteractionScenario.test.ts not found — Tier 2 runtime UI scenario missing"
+fi
+
+if [ -f "$RUNTIME_UI_VALIDATION" ]; then
+  echo "OK  [pipeline.runtime_ui_interaction] backend layout patch validation test file present"
+  for test_name in \
+    "RuntimeInteractionMissingTarget_FailsClose" \
+    "RuntimeInteractionUnsupportedStatePath_FailsClose" \
+    "RuntimeInteractionUnsupportedAction_FailsClose" \
+    "RuntimeInteractionTargetKindMismatch_FailsClose"; do
+    if grep -q "$test_name" "$RUNTIME_UI_VALIDATION"; then
+      echo "OK  [pipeline.runtime_ui_interaction] backend validation test present: $test_name"
+    else
+      fail "[pipeline.runtime_ui_interaction] backend validation test missing: $test_name"
+    fi
+  done
+else
+  fail "[pipeline.runtime_ui_interaction] backend layout patch validation test file missing"
+fi
+
+if [ -f "$SSOT" ] && grep -q "button_click_modal_open_close" "$SSOT"; then
+  echo "OK  [pipeline.runtime_ui_interaction] SSOT representative scenario registered"
+else
+  fail "[pipeline.runtime_ui_interaction] SSOT missing button_click_modal_open_close representative scenario"
+fi
+
 # ─── 3. GAP STATUS — read from SSOT gap_summary ───────────────────────────────
 # Known gaps from pipeline-continuity-ssot.yaml gap_summary.
 # Not failures — these enumerate nodes that are not yet implemented.
@@ -197,7 +248,7 @@ if ! grep -q "check-pipeline-continuity.sh" "$SSOT"; then
   fail "[pipeline.component_event_lane] ci_script reference missing"
 fi
 
-# ─── 4. SSOT WIRING AUDIT CI LANES — presence check ──────────────────────────
+# ─── 5. SSOT WIRING AUDIT CI LANES — presence check ──────────────────────────
 # Verifies that the 5 SSOT wiring audit CI lane test files are present.
 # Each lane audits a specific SSOT contract boundary (not execution semantics).
 # Defined in docs/system-roadmap.yaml: system_ci.dotnet_ssot_wiring_audit_tests.

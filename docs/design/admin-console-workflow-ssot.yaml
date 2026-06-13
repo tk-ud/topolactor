@@ -951,12 +951,30 @@ admin_console_workflow_ssot:
             fields:
               propsJson:
                 type: string (JSON object)
-                meaning: node-local static props override; merged over default props; must be JSON object (not array)
+                meaning: node-local static props override; merged over default props; must be JSON object (not array); legacy eventWirings may be read as fallback only
                 priority: 2 (after default props)
               stateJson:
                 type: string (JSON object)
-                meaning: node-local state override; merged into props.data when data is object; must be JSON object
+                meaning: node-local initial state injection; merged into props.data when data is object; runtime interactions must not use this as mutation log
                 priority: 3 (after propsJson)
+              runtimeInteractions:
+                type: array (RuntimeInteraction)
+                meaning: canonical UI runtime interaction contract for local UI state mutation; raw propsJson.eventWirings is legacy fallback only
+                priority: event binding source, not props binding
+                descriptor:
+                  trigger: click | change | submit | toggle | select | input | focus | blur
+                  actionType: openModal | closeModal | toggleModal | openDrawer | closeDrawer | toggleDrawer | openDialog | closeDialog | toggleDialog | setActiveKey | setState
+                  targetNodeId: required layout_patch_json nodeId
+                  statePath: open | activeKey
+                  value: optional literal for setState/setActiveKey
+                responsibility_split:
+                  routeNavigation: frontend route change only
+                  runtimeDispatch: backend dispatch lane only
+                  local_ui_state_mutation: projection-local state store only
+                backend_validation:
+                  - targetNodeId must exist in layout_patch_json.nodes[]
+                  - disclosure actions must target matching disclosure componentKind
+                  - statePath/actionType unsupported values are blocking errors
               propBindings:
                 type: object (Record<string, PropBinding>)
                 meaning: >

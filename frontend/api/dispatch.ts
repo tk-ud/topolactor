@@ -129,6 +129,8 @@ export type LayoutNode = {
    * source must start with "emission.data."; transform must be in allowlist.
    */
   propBindings?: Record<string, PropBinding> | null;
+  /** Canonical runtime UI interactions. Legacy propsJson.eventWirings is fallback only. */
+  runtimeInteractions?: Array<{ trigger: string; actionType: string; targetNodeId?: string; statePath?: string; value?: unknown }> | null;
   widthMode?: "auto" | "preset" | "custom";
   heightMode?: "auto" | "preset" | "custom";
   /** Persisted component_style_design snapshot for draft-preview / pre-publish projection. */

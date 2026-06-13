@@ -296,6 +296,8 @@ public record LayoutNodeRecord(
     string? StateJson = null,
     /// <summary>Array prop bindings JSON string from layout_patch_json. Null when not authored.</summary>
     string? PropBindingsJson = null,
+    /// <summary>Canonical runtime UI interactions JSON array from layout_patch_json.nodes[].runtimeInteractions. Null when not authored.</summary>
+    string? RuntimeInteractionsJson = null,
     /// <summary>Sizing mode from layout_patch_json: auto | preset | custom.</summary>
     string? WidthMode = null,
     string? HeightMode = null
