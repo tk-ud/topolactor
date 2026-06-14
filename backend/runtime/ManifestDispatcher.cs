@@ -19,7 +19,10 @@ namespace Topolactor.Runtime;
 /// Production handler registry (injected):
 ///   topology_transform_runtime -> RuntimeExecutor (canonical topology pipeline)
 ///   admin_runtime              -> AdminRuntimeDispatchAdapter -> AdminRuntime
-///   registry_attractor_runtime -> not_yet_implemented (future bundle; separate from SQL Attention cron runtime)
+///   sse_projection_runtime     -> SseProjectionRuntime
+///
+/// Future dispatchable runtime (not yet injected):
+///   registry_attractor_runtime -> not_yet_implemented (separate from SQL Attention cron runtime)
 ///
 /// Dev bypass: when _manifestRepository is null (not injected), TargetDispatchOverride
 /// handles admin targets; unhandled requests fall through to the

@@ -509,7 +509,6 @@ system_roadmap_ssot:
         - frontend_feedback_surface_remains_projection_only
       known_gap_ref:
         - live_db_e2e_ci_confirmation_required_before_production_ready_promotion
-        - registry_attractor_runtime_dispatchable_handler_is_not_in_sql_attention_scope_and_not_yet_implemented
       files:
         - backend/
         - frontend/
