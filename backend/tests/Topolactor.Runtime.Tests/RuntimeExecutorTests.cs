@@ -151,16 +151,16 @@ public class RuntimeExecutorTests
             e =>
             {
                 Assert.Equal("hub", e.Scope);
-                Assert.Equal(10, e.PastAddress);
-                Assert.Equal(12, e.CurrentAddress);
+                Assert.Equal(12, e.FromAddress);
+                Assert.Equal(0, e.ToAddress);
                 Assert.Equal(0, e.PlannedAddress);
                 Assert.Equal("route_missing", e.Reason);
             },
             e =>
             {
                 Assert.Equal("topology", e.Scope);
-                Assert.Equal(30, e.PastAddress);
-                Assert.Equal(34, e.CurrentAddress);
+                Assert.Equal(34, e.FromAddress);
+                Assert.Equal(0, e.ToAddress);
                 Assert.Equal(0, e.PlannedAddress);
                 Assert.Equal("route_missing", e.Reason);
             });
@@ -193,16 +193,16 @@ public class RuntimeExecutorTests
             e =>
             {
                 Assert.Equal("hub", e.Scope);
-                Assert.Equal(0, e.PastAddress);
-                Assert.Equal(12, e.CurrentAddress);
+                Assert.Equal(12, e.FromAddress);
+                Assert.Equal(0, e.ToAddress);
                 Assert.Equal(0, e.PlannedAddress);
                 Assert.Equal("route_missing", e.Reason);
             },
             e =>
             {
                 Assert.Equal("topology", e.Scope);
-                Assert.Equal(0, e.PastAddress);
-                Assert.Equal(34, e.CurrentAddress);
+                Assert.Equal(34, e.FromAddress);
+                Assert.Equal(0, e.ToAddress);
                 Assert.Equal(0, e.PlannedAddress);
                 Assert.Equal("route_missing", e.Reason);
             });
@@ -228,8 +228,8 @@ public class RuntimeExecutorTests
         Assert.Single(resWithUserAction.Emission!.JumpEvents!);
         Assert.Equal("user_action", resWithUserAction.Emission.JumpEvents![0].Reason);
         Assert.Equal("hub", resWithUserAction.Emission.JumpEvents[0].Scope);
-        Assert.Equal(7, resWithUserAction.Emission.JumpEvents[0].PastAddress);
-        Assert.Equal(8, resWithUserAction.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(8, resWithUserAction.Emission.JumpEvents[0].FromAddress);
+        Assert.Equal(9, resWithUserAction.Emission.JumpEvents[0].ToAddress);
         Assert.Equal(9, resWithUserAction.Emission.JumpEvents[0].PlannedAddress);
 
         var recommendationOnly = new EndpointRequestDto(
@@ -263,8 +263,8 @@ public class RuntimeExecutorTests
         Assert.True(response.Success);
         Assert.Single(response.Emission!.JumpEvents!);
         Assert.Equal("hub", response.Emission.JumpEvents![0].Scope);
-        Assert.Equal(7, response.Emission.JumpEvents![0].PastAddress);
-        Assert.Equal(8, response.Emission.JumpEvents![0].CurrentAddress);
+        Assert.Equal(8, response.Emission.JumpEvents![0].FromAddress);
+        Assert.Equal(0, response.Emission.JumpEvents![0].ToAddress);
         Assert.Equal(0, response.Emission.JumpEvents![0].PlannedAddress);
     }
 
@@ -288,8 +288,8 @@ public class RuntimeExecutorTests
         Assert.True(response.Success);
         Assert.Single(response.Emission!.JumpEvents!);
         Assert.Equal("hub", response.Emission.JumpEvents![0].Scope);
-        Assert.Equal(0, response.Emission.JumpEvents![0].PastAddress);
-        Assert.Equal(8, response.Emission.JumpEvents![0].CurrentAddress);
+        Assert.Equal(8, response.Emission.JumpEvents![0].FromAddress);
+        Assert.Equal(9, response.Emission.JumpEvents![0].ToAddress);
         Assert.Equal(9, response.Emission.JumpEvents![0].PlannedAddress);
     }
 
@@ -335,8 +335,8 @@ public class RuntimeExecutorTests
         Assert.Single(response.Emission!.JumpEvents!);
         Assert.Equal("topology", response.Emission.JumpEvents![0].Scope);
         Assert.Equal("user_action", response.Emission.JumpEvents[0].Reason);
-        Assert.Equal(11, response.Emission.JumpEvents[0].PastAddress);
-        Assert.Equal(12, response.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(12, response.Emission.JumpEvents[0].FromAddress);
+        Assert.Equal(13, response.Emission.JumpEvents[0].ToAddress);
         Assert.Equal(13, response.Emission.JumpEvents[0].PlannedAddress);
     }
 
@@ -360,8 +360,8 @@ public class RuntimeExecutorTests
         Assert.Single(response.Emission!.JumpEvents!);
         Assert.Equal("topology", response.Emission.JumpEvents![0].Scope);
         Assert.Equal("user_action", response.Emission.JumpEvents[0].Reason);
-        Assert.Equal(0, response.Emission.JumpEvents[0].PastAddress);
-        Assert.Equal(12, response.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(12, response.Emission.JumpEvents[0].FromAddress);
+        Assert.Equal(13, response.Emission.JumpEvents[0].ToAddress);
         Assert.Equal(13, response.Emission.JumpEvents[0].PlannedAddress);
     }
 
@@ -384,8 +384,8 @@ public class RuntimeExecutorTests
         Assert.True(response.Success);
         Assert.Single(response.Emission!.JumpEvents!);
         Assert.Equal("hub", response.Emission.JumpEvents![0].Scope);
-        Assert.Equal(0, response.Emission.JumpEvents[0].PastAddress);
-        Assert.Equal(0, response.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(0, response.Emission.JumpEvents[0].FromAddress);
+        Assert.Equal(0, response.Emission.JumpEvents[0].ToAddress);
         Assert.Equal(0, response.Emission.JumpEvents[0].PlannedAddress);
     }
 

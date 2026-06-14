@@ -263,6 +263,25 @@ data_driven_topology_runtime_framework:
       - jump_hub_to_zero_planned_only
       - jump_topology_to_zero_planned_only
       - sql_attention_recommendation_must_not_overwrite_route_state_automatically
+    route_state_snapshot_vs_jump_event_supplement:
+      note: supplemental_clarification_for_existing_ssot_design_intent_no_new_model
+      route_state_snapshot:
+        fields: [pastAddress, currentAddress, plannedAddress]
+        role: route_state_context_carried_by_request_not_jump_event_fields
+      runtime_jump_event_projection:
+        from: current_address_at_event_time
+        to: destination_address
+        planned: intended_destination_for_user_action
+        note: from_to_planned_are_event_projection_fields_not_route_state_snapshot_fields
+      zero_sentinel:
+        value: 0
+        meaning: top_fallback_unresolved_sentinel
+        not: physical_id
+      route_missing_event_intent:
+        from: currentAddress
+        to: 0
+        planned: 0
+        note: route_missing_is_currentAddress_to_zero_because_next_planned_cannot_be_resolved
 
   ci_attention_projection_axis:
     ci_role:
