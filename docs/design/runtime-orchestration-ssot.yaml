@@ -700,8 +700,8 @@ runtime_orchestration_ssot:
       conditions. The SQL Attention cron runtime (HubAttractorExplorationRuntime +
       SqlAttentionScheduler) is a separate cron-triggered BackgroundService that does not
       route through ManifestDispatcher. registry_attractor_runtime as a dispatchable handler
-      is a future bundle tracked in the roadmap under
-      product.registry_attractor_runtime_dispatch_handler.
+      is a separate future bundle tracked under
+      product.registry_attractor_runtime_dispatch_handler in the implementation_registry.
     test_stub_scope:
       allowed:
         - FakeDispatchableRuntime injected in test handler dictionary
