@@ -19,10 +19,8 @@ deno check \
   frontend/routes/admin/manifests.tsx \
   frontend/routes/admin/contents.tsx \
   frontend/routes/admin/ui-builder.tsx \
-  frontend/routes/demo-article.tsx \
   frontend/routes/runtime-status.tsx \
   frontend/islands/OperationPanel.tsx \
-  frontend/islands/ReplyPanel.tsx \
   frontend/islands/SeedAdmin.tsx \
   frontend/components/ProjectionView.tsx \
   frontend/components/EmissionView.tsx \

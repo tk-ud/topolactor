@@ -8,7 +8,7 @@ namespace Topolactor.Runtime;
 /// Admin dispatch target override handler.
 ///
 /// Holds the admin dispatch logic used when ManifestDispatcher
-/// has no ManifestRepository configured (dev/demo environments only).
+/// has no ManifestRepository configured (dev environments only).
 ///
 /// ManifestDispatcher calls this only inside the null-repository branch.
 /// When a ManifestRepository is configured (production), this class is not consulted —

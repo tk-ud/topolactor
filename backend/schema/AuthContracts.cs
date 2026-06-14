@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Topolactor.Schema;
 
 /// <summary>
-/// Inbound DTO for the demo auth login endpoint.
+/// Inbound DTO for the auth login endpoint.
 /// </summary>
 public record LoginRequestDto(string? Username, string? Password);
 
