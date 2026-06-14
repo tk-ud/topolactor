@@ -694,6 +694,13 @@ runtime_orchestration_ssot:
       topology_transform_runtime: RuntimeExecutor
       admin_runtime: AdminRuntimeDispatchAdapter
       registry_attractor_runtime: not_yet_implemented
+    handler_registry_scope_note: >-
+      registry_attractor_runtime as a manifest-dispatched IDispatchableRuntime handler is
+      not_yet_implemented and is NOT part of the sql_attention_observation_runtime completion
+      conditions. The SQL Attention cron runtime (HubAttractorExplorationRuntime +
+      SqlAttentionScheduler) is a separate cron-triggered BackgroundService that does not
+      route through ManifestDispatcher. registry_attractor_runtime as a dispatchable handler
+      is a future bundle tracked separately in todo.md and the roadmap implementation_registry.
     test_stub_scope:
       allowed:
         - FakeDispatchableRuntime injected in test handler dictionary

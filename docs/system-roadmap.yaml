@@ -509,9 +509,62 @@ system_roadmap_ssot:
         - frontend_feedback_surface_remains_projection_only
       known_gap_ref:
         - live_db_e2e_ci_confirmation_required_before_production_ready_promotion
+        - registry_attractor_runtime_dispatchable_handler_is_not_in_sql_attention_scope_and_not_yet_implemented
       files:
         - backend/
         - frontend/
+
+    product.registry_attractor_runtime_dispatch_handler:
+      bundle_id: registry-attractor-dispatch-handler
+      title: registry_attractor_runtime manifest-dispatchable handler
+      status: not_started
+      production_ready: false
+      public_summary: registry_attractor_runtime as a manifest-dispatched IDispatchableRuntime handler is not yet implemented. This is a future bundle separate from the SQL Attention cron-based BackgroundService route. Implementation requires handler class, Program.cs registration, manifest mapping, explicit error on unknown destination, and tests.
+      scope:
+        - registry_attractor_runtime_handler_class
+        - program_cs_handler_dictionary_registration
+        - manifest_runtime_mapping_wiring
+        - dispatcher_explicit_error_path_coverage
+      detail_ref:
+        - docs/design/runtime-orchestration-ssot.yaml
+        - .agent/tasks/todo.md#registry-attractor-dispatch-handler
+      completion_condition:
+        - IDispatchableRuntime_handler_for_registry_attractor_runtime_exists
+        - handler_registered_in_Program_cs_handler_dictionary
+        - manifest_with_runtime_mapping_registry_attractor_runtime_routes_correctly
+        - unknown_destination_returns_RUNTIME_DESTINATION_UNKNOWN_not_silent_fallback
+        - dispatch_boundary_covered_by_tests
+      known_gap_ref:
+        - registry_attractor_runtime_handler_class_not_implemented
+        - program_cs_registration_not_added
+        - manifest_wiring_not_defined
+
+    product.core_runtime_bundle_gate:
+      bundle_id: core-runtime-bundles-gate
+      title: Core runtime bundle implementation gate
+      status: not_started
+      production_ready: false
+      public_summary: Eight core runtime bundles (email, stripe, file_storage, export_sftp, webhook_inbox, job_scheduler, audit_approval, secret_credential) are design-SSOT-assigned but not yet implemented. Each requires a separate implementation contract and validate-preview-apply boundary before implementation begins. email and stripe have existing design SSOTs; the remaining six have design-SSOT assignments only.
+      scope:
+        - email_bundle
+        - stripe_bundle
+        - file_storage_bundle
+        - export_sftp_bundle
+        - webhook_inbox_bundle
+        - job_scheduler_bundle
+        - audit_approval_bundle
+        - secret_credential_bundle
+      detail_ref:
+        - docs/design/extended-runtime-bundle-registry-ssot.yaml
+        - .agent/tasks/todo.md#core-runtime-bundles-gate
+      completion_condition:
+        - each_core_bundle_has_separate_ssot_and_implementation
+        - each_bundle_satisfies_validate_preview_apply_boundary
+        - each_bundle_is_covered_by_backend_tests_and_roadmap_evidence
+      known_gap_ref:
+        - all_eight_core_bundles_are_not_started
+        - separate_ssot_exists_for_email_and_stripe_but_runtime_implementation_not_started
+        - file_storage_export_sftp_webhook_inbox_job_scheduler_audit_approval_secret_credential_design_ssot_assigned_not_implemented
 
     product.system_ci_contract_audit:
       bundle_id: product.system_ci_contract_audit

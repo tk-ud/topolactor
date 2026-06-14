@@ -214,13 +214,13 @@ user_facing_helper_manual_ssot:
         Email / Stripe / 外部Bundle の分類正本。
         本SSOTはそれらのユーザー向け説明方針を定義する。
     email_bundle_ssot:
-      path: not_yet_created
-      status: future_bundle_candidate
-      role: Email Bundle の runtime 設計正本（後段）
+      path: docs/design/runtime-bundle-email-ssot.yaml
+      status: design_ssot_exists
+      role: Email Bundle の runtime 設計正本。UI/Human approval 経由の email send 境界を定義する。
     stripe_bundle_ssot:
-      path: not_yet_created
-      status: future_bundle_candidate
-      role: Stripe Bundle の runtime 設計正本（後段）
+      path: docs/design/runtime-bundle-stripe-ssot.yaml
+      status: design_ssot_exists
+      role: Stripe Bundle の runtime 設計正本。webhook verification 後の paid state 確定境界を定義する。
     runtime_orchestration_ssot:
       path: docs/design/runtime-orchestration-ssot.yaml
       role: canonical runtime route の正本
