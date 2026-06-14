@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
+using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Schema;
 using Xunit;
