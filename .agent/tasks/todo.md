@@ -238,21 +238,21 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 **SSOT:** `docs/design/runtime-orchestration-ssot.yaml`
 
 問題点:
-`runtime-orchestration-ssot.yaml` の `backend_dispatchable_kinds` および `backend_runtime_destinations` に `registry_attractor_runtime` が含まれているが、`handler_registry` は `not_yet_implemented` となっており、`backend/Program.cs` の handler dictionary にも登録されていない。一方 `docs/system-roadmap.yaml` の `product.sql_attention_observation_runtime` は `implemented` であり、SQL Attention cron runtime（HubAttractorExplorationRuntime + SqlAttentionScheduler）は BackgroundService として実装済みである。`registry_attractor_runtime` を ManifestDispatcher 経由で dispatch 可能なハンドラとして実装することは、SQL Attention cron runtime とは別の未着手 bundle である。
+`runtime-orchestration-ssot.yaml` の `backend_runtime_destinations` に `registry_attractor_runtime` は静的 runtime destination 語彙として含まれているが、production `handler_registry` には登録されていない。`backend/Program.cs` の handler dictionary にも未登録であり、この destination へ manifest dispatch した場合は `ManifestDispatcher` が `RUNTIME_DESTINATION_UNKNOWN` を返す境界で止まる。一方、SQL Attention cron runtime（HubAttractorExplorationRuntime + SqlAttentionScheduler）は BackgroundService として実装済みであり、ManifestDispatcher 経由の `registry_attractor_runtime` handler 実装とは別 bundle である。
 
 目的:
-`registry_attractor_runtime` を manifest-dispatched `IDispatchableRuntime` ハンドラとして実装し、ManifestDispatcher の handler registry に登録することで、SSOT の `backend_dispatchable_kinds` 宣言と実装状態を一致させる。SQL Attention cron runtime（BackgroundService route）とは独立した実装 bundle として扱う。
+`registry_attractor_runtime` を manifest-dispatched `IDispatchableRuntime` ハンドラとして実装し、production handler registry に登録することで、静的 runtime destination 語彙として予約済みの route を実行可能 handler へ接続する。SQL Attention cron runtime（BackgroundService route）とは独立した実装 bundle として扱う。
 
 改善方針:
 - [ ] `registry_attractor_runtime` 向け `IDispatchableRuntime` ハンドラクラスを実装する
 - [ ] `backend/Program.cs` の handler dictionary に `registry_attractor_runtime` → 実装クラス を登録する
 - [ ] manifest の `runtime_mapping.runtime_destination = "registry_attractor_runtime"` が正しく routing されることをテストで確認する
 - [ ] 未登録 destination が `RUNTIME_DESTINATION_UNKNOWN` error を返すことをテストで確認する（既存 `DispatchToHandlerAsync` で保証済みだが、新ハンドラ登録後のテストカバレッジを維持する）
-- [ ] SSOT の `handler_registry` を `implemented` に更新し、`handler_registry_scope_note` を削除または更新する
-- [ ] `docs/system-roadmap.yaml` の `product.registry_attractor_runtime_dispatch_handler` を `implemented` に更新する
+- [ ] 実装完了時は `docs/design/runtime-orchestration-ssot.yaml` の `handler_registry` に production handler entry を追加し、scope note を未登録境界から登録済み境界へ更新する（status 語彙は Roadmap/TODO 側で更新する）
+- [ ] `docs/system-roadmap.yaml` の `product.registry_attractor_runtime_dispatch_handler` を実装証跡に基づいて更新する
 
 対応資料:
-- `docs/design/runtime-orchestration-ssot.yaml`（handler_registry / backend_dispatchable_kinds / registry_attractor_contract）
+- `docs/design/runtime-orchestration-ssot.yaml`（handler_registry / backend_runtime_destinations / registry_attractor_contract）
 - `docs/system-roadmap.yaml`（product.registry_attractor_runtime_dispatch_handler / product.sql_attention_observation_runtime）
 - `docs/design/pipeline-continuity-ssot.yaml`
 
@@ -268,7 +268,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 remaining_todo:
 - 実装前に `registry_attractor_runtime` ハンドラの責務・入出力・テスト境界を設計する（SSOT の `registry_attractor_contract` 参照）
-- SSOT の `handler_registry_scope_note` は実装完了後に削除または更新する
+- SSOT は設計契約・語彙・境界としてのみ更新し、`not_started` / `not_yet_implemented` / `implemented` などの状態管理語彙は Roadmap/TODO 側へ置く
 
 SSOT修正が必要な場合の required checks:
 - `bash .agent/tests/check-worktype-routing.sh`
