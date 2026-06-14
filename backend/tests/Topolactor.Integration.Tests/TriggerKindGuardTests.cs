@@ -57,7 +57,7 @@ public class TriggerKindGuardTests
                 NullLogger<PackageGeneratorRuntime>.Instance, uiTopoRepo),
             uiTopoRepo);
         var targetOverride = new TargetDispatchOverride(
-            NullLogger<TargetDispatchOverride>.Instance, topologyRepo, adminRuntime);
+            NullLogger<TargetDispatchOverride>.Instance, adminRuntime);
 
         var dispatcher = new ManifestDispatcher(
             NullLogger<ManifestDispatcher>.Instance,

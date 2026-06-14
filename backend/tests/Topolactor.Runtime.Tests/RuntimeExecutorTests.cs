@@ -12,7 +12,7 @@ namespace Topolactor.Runtime.Tests;
 
 public class RuntimeExecutorTests
 {
-    internal static TargetDispatchOverride CreateTargetDispatchOverride(TopologyRepository topologyRepository)
+    internal static TargetDispatchOverride CreateTargetDispatchOverride()
     {
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
@@ -25,7 +25,7 @@ public class RuntimeExecutorTests
             new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
             new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double"));
 
-        return new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, topologyRepository, adminRuntime);
+        return new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);
     }
 
     internal static RuntimeExecutor CreateExecutor(
@@ -81,7 +81,7 @@ public class RuntimeExecutorTests
             NullLogger<ManifestDispatcher>.Instance,
             handlers,
             new OperationVectorResolver(),
-            CreateTargetDispatchOverride(topologyRepository),
+            CreateTargetDispatchOverride(),
             manifestRepository);
     }
 
@@ -105,6 +105,20 @@ public class RuntimeExecutorTests
         Assert.Empty(response.Errors);
         Assert.NotNull(response.Emission.ContextRouteRecommendation);
         Assert.Equal(RecommendationStatus.InsufficientHistory, response.Emission.ContextRouteRecommendation!.Status);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AttractorResolverThrows_ReturnsAttractorResolveFailed()
+    {
+        // ATTRACTOR_RESOLVE_FAILED fires when AttractorResolver throws an unexpected exception
+        // (not the route-missing InvalidOperationException, which returns Success=true with jump events).
+        var executor = CreateExecutor(new AttractorFailingTopologyRepository());
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
     }
 
     [Fact]
@@ -1109,68 +1123,6 @@ public class SchedulerDispatcherChainTests
     }
 }
 
-public class ManifestDispatcherOverrideTests
-{
-    [Fact]
-    public async Task DispatchAsync_DemoEntityUnknownAction_ReturnsInvalidOperation()
-    {
-        var repo = new OverrideRouteTopologyRepository();
-        var dispatcher = CreateDispatcher(repo);
-        var req = new EndpointRequestDto("Search", "demo", "entity", "noop", null, null, null);
-
-        var res = await dispatcher.DispatchAsync(req);
-
-        Assert.False(res.Success);
-        Assert.Contains(res.Errors, e => e.Code == "INVALID_OPERATION");
-    }
-
-    [Fact]
-    public async Task DispatchAsync_DemoEntityDetailWithoutEntityId_ReturnsInvalidPayload()
-    {
-        var repo = new OverrideRouteTopologyRepository();
-        var dispatcher = CreateDispatcher(repo);
-        var payload = JsonSerializer.SerializeToElement(new { title = "x" });
-        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
-
-        var res = await dispatcher.DispatchAsync(req);
-
-        Assert.False(res.Success);
-        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
-    }
-
-    [Fact]
-    public async Task DispatchAsync_DemoEntityDetailMalformedEntityId_ReturnsInvalidPayload()
-    {
-        var repo = new OverrideRouteTopologyRepository();
-        var dispatcher = CreateDispatcher(repo);
-        var payload = JsonSerializer.SerializeToElement(new { entityId = "not-a-uuid" });
-        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
-
-        var res = await dispatcher.DispatchAsync(req);
-
-        Assert.False(res.Success);
-        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
-    }
-
-    [Fact]
-    public async Task DispatchAsync_DemoEntityList_ReachesOverrideRepositoryFlow()
-    {
-        var repo = new OverrideRouteTopologyRepository();
-        var dispatcher = CreateDispatcher(repo);
-        var req = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
-
-        var res = await dispatcher.DispatchAsync(req);
-
-        Assert.True(res.Success);
-        Assert.NotNull(res.Emission);
-        Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
-        Assert.True(repo.OverrideEntityListCalled);
-    }
-
-    private static ManifestDispatcher CreateDispatcher(TopologyRepository topologyRepository)
-        => RuntimeExecutorTests.CreateDispatcher(topologyRepository);
-}
-
 /// <summary>
 /// Tests that verify Gap-1 completion conditions:
 /// - Gap-1a: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
@@ -1185,7 +1137,7 @@ public class ManifestDispatcherManifestDrivenTests
     [Fact]
     public async Task DispatchAsync_ManifestRepositoryConfigured_ManifestFound_RoutesToRuntimeExecutor()
     {
-        // Gap-1a: TargetDispatchOverride must NOT be called when manifest repo is configured.
+        // Gap-1a: manifest-driven path is used when manifest repo is configured.
         var manifestId = Guid.NewGuid();
         var manifestRepo = new StubManifestRepository(
             new ManifestRecord(
@@ -1193,17 +1145,15 @@ public class ManifestDispatcherManifestDrivenTests
                 RelationRegistryId: null,
                 Topology: BuildTopology("topology_transform_runtime"),
                 Status: "active"));
-        var topologyRepo = new OverrideRouteTopologyRepository();
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo, manifestRepo);
 
-        var request = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
         var response = await dispatcher.DispatchAsync(request);
 
         Assert.True(response.Success);
         Assert.NotNull(response.Emission);
         Assert.Empty(response.Errors);
-        Assert.False(topologyRepo.OverrideEntityListCalled,
-            "TargetDispatchOverride must not be called when manifest repository is configured.");
     }
 
     [Fact]
@@ -1816,30 +1766,12 @@ internal sealed class RoleFilteredManifestRepository(string expectedRole, Manife
             ManifestRepositoryStubDefaults.NotImplementedMerge();
     }
 
-internal sealed class OverrideRouteTopologyRepository : TopologyRepository
+internal sealed class AttractorFailingTopologyRepository
+    : TopologyRepository
 {
-    public bool OverrideEntityListCalled { get; private set; }
-
-    public OverrideRouteTopologyRepository() : base(NullLogger<TopologyRepository>.Instance, "test-double") { }
+    public AttractorFailingTopologyRepository()
+        : base(NullLogger<TopologyRepository>.Instance, "test-double") { }
 
     public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
-    {
-        if (key is "demo:entity:list" or "demo:entity:detail" or "demo:entity:create" or "demo:entity:advance" or "11111111-1111-1111-1111-111111111111")
-        {
-            return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
-                StructureMapId: "11111111-1111-1111-1111-111111111111",
-                AttractorKey: "demo:entity:list",
-                PackageId: TopologyRepository.DefaultPackageId,
-                SchemaId: TopologyRepository.DefaultSchemaId,
-                ComponentIds: [TopologyRepository.DefaultComponentId],
-                StatePolicyJson: null));
-        }
-        return base.LoadStructureMapAsync(key, ct);
-    }
-
-    public override Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
-    {
-        OverrideEntityListCalled = true;
-        return Task.FromResult<IReadOnlyList<DemoEntityProjection>>([]);
-    }
+        => throw new InvalidOperationException("Cannot resolve attractor: simulated infrastructure failure.");
 }

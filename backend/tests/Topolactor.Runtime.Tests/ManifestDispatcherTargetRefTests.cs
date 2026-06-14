@@ -20,8 +20,7 @@ public class ManifestDispatcherTargetRefTests
 
     private static ManifestDispatcher BuildDispatcher(TrackingManifestRepository repo)
     {
-        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
-        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo);
+        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride();
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
             ["topology_transform_runtime"] = new StubSuccessRuntime(),

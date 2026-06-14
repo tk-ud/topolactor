@@ -287,7 +287,6 @@ CREATE INDEX IF NOT EXISTS idx_structure_maps_component_ids
 -- topology_edit_log
 -- Converged entity data table (append-only audit).
 -- Records topology mutations as an append-only edit diff log (domain-scope operation logs).
--- Distinct from demo_state_transitions (which records state machine transitions).
 -- Used for runtime audit, recommendation feedback, and persistence tracing.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS topology.topology_edit_log (
@@ -303,8 +302,7 @@ CREATE TABLE IF NOT EXISTS topology.topology_edit_log (
 );
 
 COMMENT ON TABLE topology.topology_edit_log IS
-    'Append-only audit log for topology mutations. Distinct from demo_state_transitions '
-    'which records state machine transitions. Each row is immutable once inserted. '
+    'Append-only audit log for topology mutations. Each row is immutable once inserted. '
     'Used for runtime audit, recommendation feedback, and persistence tracing. '
     'SQL Attention logs SSOT alignment note: this table is not canonical logs.diff because target_table '
     'is currently an attractor/domain scope identifier, not a physical table identity (tableid). '
@@ -324,21 +322,6 @@ CREATE INDEX IF NOT EXISTS idx_topology_edit_log_target
 
 CREATE INDEX IF NOT EXISTS idx_topology_edit_log_created_at
     ON topology.topology_edit_log (created_at DESC);
-
-
-CREATE TABLE IF NOT EXISTS topology.demo_state_transitions (
-    transition_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    entity_id UUID NOT NULL REFERENCES topology.entities(entity_id) ON DELETE CASCADE,
-    action TEXT NOT NULL,
-    before_state TEXT,
-    after_state TEXT,
-    diff_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-    event_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_demo_state_transitions_entity_created
-    ON topology.demo_state_transitions (entity_id, created_at DESC);
 
 
 -- ---------------------------------------------------------------------------

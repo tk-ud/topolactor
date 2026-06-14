@@ -22,8 +22,7 @@ public class ManifestCapabilityGateTests
 
     private static ManifestDispatcher BuildDispatcher(ManifestRecord manifest, bool includeAdminRuntime = false)
     {
-        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
-        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo);
+        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride();
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
             ["topology_transform_runtime"] = new StubSuccessRuntime(),

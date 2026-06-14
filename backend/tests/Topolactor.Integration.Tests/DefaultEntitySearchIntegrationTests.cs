@@ -32,7 +32,6 @@ public class DefaultEntitySearchIntegrationTests
             new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double"));
         var targetDispatchOverride = new TargetDispatchOverride(
             NullLogger<TargetDispatchOverride>.Instance,
-            topologyRepository,
             adminRuntime);
         var executor = new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,

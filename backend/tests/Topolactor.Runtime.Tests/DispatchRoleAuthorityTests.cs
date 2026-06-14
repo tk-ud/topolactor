@@ -98,8 +98,7 @@ public class DispatchRoleAuthorityTests
             "active");
 
         var repo = new RoleFilteredManifestRepository("user", adminManifest); // returns manifest even for "user"
-        var topologyRepo = new TopologyRepository(Microsoft.Extensions.Logging.Abstractions.NullLogger<TopologyRepository>.Instance, "test-double");
-        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo);
+        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride();
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
             ["topology_transform_runtime"] = new StubSuccessRuntime(),
@@ -136,8 +135,7 @@ public class DispatchRoleAuthorityTests
             "active");
 
         var repo = new RoleFilteredManifestRepository("admin", adminManifest);
-        var topologyRepo = new TopologyRepository(Microsoft.Extensions.Logging.Abstractions.NullLogger<TopologyRepository>.Instance, "test-double");
-        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo);
+        var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride();
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
             ["topology_transform_runtime"] = new StubSuccessRuntime(),

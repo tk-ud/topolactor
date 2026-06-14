@@ -316,7 +316,6 @@ public class AdminRuntimeDbProjectionScenarioTests
         var vectorResolver = new OperationVectorResolver();
         var targetOverride = new TargetDispatchOverride(
             NullLogger<TargetDispatchOverride>.Instance,
-            topoRepo,
             adminRuntime);
         var dispatcher = new ManifestDispatcher(
             NullLogger<ManifestDispatcher>.Instance,

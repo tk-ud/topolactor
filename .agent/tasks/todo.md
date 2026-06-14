@@ -39,6 +39,7 @@
 - [x] `.agent/tests/check-ssot-vocabulary-contract.sh` を `db/demo_seed.sql` 非依存へ更新（seed_empty.sql のみ使用）
 - [x] SSOT docs の demo_seed 参照を削除（`docs/design/runtime-orchestration-ssot.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`）
 - [x] backend tests の demo attractor key / demo UUID 依存を現行 bootstrap 前提へ更新する（2026-06-14 完了）
+- [x] demo:entity dispatch 協調削除 — `backend/runtime/TargetDispatchOverride.cs`（IsDemoEntity/ApplyDemoStateLoopAsync 削除）, `backend/repository/TopologyRepository.cs`（demo メソッド/レコード削除）, `backend/repository/NpgsqlTopologyRepository.cs`（demo 実装削除）, `backend/repository/DiffLogRepository.cs`（コメント更新）, `backend/Program.cs`（コンストラクタ引数削除）, `backend/runtime/ManifestDispatcher.cs`（コメント更新）, 各テストファイル, `db/topology_tables.sql`（demo_state_transitions テーブル/index 削除）, `docs/design/db-schema.yaml`（demo_state_transitions 参照削除）（2026-06-14 完了）
 
 今回削除・更新した範囲 (2026-06-13):
 - 削除: `db/demo_seed.sql`, `docs/demo-walkthrough.md`
@@ -81,25 +82,18 @@
 - `frontend/routes/demo.tsx`: /demo は Draft Preview（publish 前プレビュー）— 旧 demo scaffold ではなく active feature
 - `backend/tests/.../AuthServiceProjectionLoginTests.cs`: `DEMO_JWT_SECRET`, `DEMO_JWT_EXPIRY_HOURS` は auth JWT 設定 env var（"demo_admin"/"demo_user" は auth_seed.sql のユーザー名）— demo seed 依存なし
 - `backend/tests/.../EnvDependentTestCollection.cs:6`: `DEMO_JWT_SECRET` コメント — auth env var コメント（変更不要）
-- `backend/runtime/TargetDispatchOverride.cs`: `demo:entity:*` dispatch は "dev/demo bypass" — 次 cycle で削除対象
-- `backend/repository/TopologyRepository.cs:205-214`: `LoadDemoEntityListAsync`, `LoadDemoEntityDetailAsync`, `DemoEntityProjection`, `DemoTransitionResult` — 次 cycle で削除対象
-- `backend/repository/NpgsqlTopologyRepository.cs:587-677`: demo entity/transition SQL実装 — 次 cycle で削除対象
-- `backend/tests/.../ProductionHardeningBoundaryTests.cs`: demo entity hardening tests — 次 cycle で削除対象（上記 production code 削除と連動）
-- `db/topology_tables.sql:329-341`: `topology.demo_state_transitions` テーブル — 次 cycle で削除対象（backend 実装削除と連動）
-- `docs/design/db-schema.yaml:163`: `topology.demo_state_transitions` テーブル参照 — 次 cycle で更新対象
-- `db/topology_tables.sql:290,306`: `demo_state_transitions` へのコメント参照 — 次 cycle で更新対象
-- `backend/repository/DiffLogRepository.cs:9-10`: `demo_state_transitions` 分離コメント — 次 cycle で更新対象
-- `backend/tests/.../RuntimeExecutorTests.cs:1119-1166`: `"demo"` target の test method（`DispatchAsync_DemoEntity*`）— TargetDispatchOverride demo 削除と連動。次 cycle で更新対象
+- `backend/runtime/TargetDispatchOverride.cs`: demo:entity dispatch 削除済み（2026-06-14 完了）
+- `backend/repository/TopologyRepository.cs:205-214`: LoadDemoEntityListAsync 等削除済み（2026-06-14 完了）
+- `backend/repository/NpgsqlTopologyRepository.cs:587-677`: demo entity/transition SQL実装削除済み（2026-06-14 完了）
+- `backend/tests/.../ProductionHardeningBoundaryTests.cs`: Gap-11 demo tests 削除済み（2026-06-14 完了）
+- `db/topology_tables.sql:329-341`: demo_state_transitions テーブル削除済み（2026-06-14 完了）
+- `docs/design/db-schema.yaml:163`: demo_state_transitions 参照削除済み（2026-06-14 完了）
+- `db/topology_tables.sql:290,306`: demo_state_transitions コメント参照更新済み（2026-06-14 完了）
+- `backend/repository/DiffLogRepository.cs:9-10`: demo_state_transitions コメント削除済み（2026-06-14 完了）
+- `backend/tests/.../RuntimeExecutorTests.cs:1119-1166`: DispatchAsync_DemoEntity* 削除済み、ATTRACTOR_RESOLVE_FAILED テスト追加済み（2026-06-14 完了）
 
 remaining_todo (次 cycle 対象):
-- **coordinated demo:entity dispatch removal** — 以下を同一 PR で削除/更新する必要あり（個別削除は不可）:
-  - `backend/runtime/TargetDispatchOverride.cs`: `IsDemoEntity` check, `ApplyDemoStateLoopAsync` 削除
-  - `backend/repository/TopologyRepository.cs`: `LoadDemoEntityListAsync`, `LoadDemoEntityDetailAsync`, `ApplyDemoTransitionAsync`, `LoadDemoTransitionHistoryAsync`, `DemoEntityProjection`, `DemoTransitionResult` 削除
-  - `backend/repository/NpgsqlTopologyRepository.cs`: demo entity/transition 実装削除
-  - `backend/tests/.../ProductionHardeningBoundaryTests.cs`: Gap-11 demo method tests 削除
-  - `backend/tests/.../RuntimeExecutorTests.cs`: `DispatchAsync_DemoEntity*` test methods 更新（`OverrideRouteTopologyRepository` 利用 → 別シナリオへ）
-  - `db/topology_tables.sql`: `topology.demo_state_transitions` テーブルと index 削除、関連コメント更新
-  - `docs/design/db-schema.yaml`: `topology.demo_state_transitions` 参照削除
+- demo 参照の全探索を継続し、削除候補が見当たらなくなるまで partial として反復する
 
 対応資料:
 - `docs/framework-core.yaml`
