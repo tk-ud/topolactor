@@ -232,7 +232,7 @@ public class DbNotifyListenerPayloadTests
                 NullLogger<Topolactor.Runtime.PackageGeneratorRuntime>.Instance, uiTopoRepo),
             uiTopoRepo);
         var targetOverride = new Topolactor.Runtime.TargetDispatchOverride(
-            NullLogger<Topolactor.Runtime.TargetDispatchOverride>.Instance, topologyRepo, adminRuntime);
+            NullLogger<Topolactor.Runtime.TargetDispatchOverride>.Instance, adminRuntime);
 
         var manifestId = Guid.Parse("00000000-0000-0000-0000-000000000001");
         var manifestRepo = new StubManifestRepository(

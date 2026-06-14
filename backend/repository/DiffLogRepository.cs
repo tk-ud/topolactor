@@ -6,11 +6,6 @@ namespace Topolactor.Repository;
 /// Append-only log of topology mutations. Records before/after state for each operation.
 /// Writes are never destructive — entries are only ever appended, never updated or deleted.
 ///
-/// Separation from demo_state_transitions:
-///   demo_state_transitions = state machine transition log (state A → state B events).
-///   topology_edit_log      = edit diff audit log (what changed, who, when).
-///   These are semantically distinct; callers must not mix them.
-///
 /// Base implementation logs to ILogger. Production: override in NpgsqlDiffLogRepository
 /// to persist to topology_edit_log.
 /// </summary>

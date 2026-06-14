@@ -130,7 +130,6 @@ builder.Services.AddSingleton<OutputLaneRouter>(sp =>
 builder.Services.AddSingleton<TargetDispatchOverride>(sp =>
     new TargetDispatchOverride(
         sp.GetRequiredService<ILogger<TargetDispatchOverride>>(),
-        sp.GetRequiredService<TopologyRepository>(),
         sp.GetRequiredService<AdminRuntime>()));
 builder.Services.AddSingleton<RuntimeExecutor>(sp =>
     new RuntimeExecutor(

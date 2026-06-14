@@ -20,8 +20,8 @@ namespace Topolactor.Runtime;
 ///   topology_transform_runtime -> RuntimeExecutor (canonical topology pipeline)
 ///   admin_runtime              -> AdminRuntimeDispatchAdapter -> AdminRuntime
 ///
-/// Dev/demo bypass: when _manifestRepository is null (not injected), TargetDispatchOverride
-/// handles demo/entity and admin targets; unhandled requests fall through to the
+/// Dev bypass: when _manifestRepository is null (not injected), TargetDispatchOverride
+/// handles admin targets; unhandled requests fall through to the
 /// topology_transform_runtime handler from the registry.
 /// This explicit bypass is isolated inside the null-repository branch only and is not
 /// the production destination selection path.
@@ -83,10 +83,10 @@ public class ManifestDispatcher
 
         if (_manifestRepository is null)
         {
-            // Dev/demo bypass: no manifest repository configured.
-            // TargetDispatchOverride handles demo/entity and admin targets.
+            // Dev bypass: no manifest repository configured.
+            // TargetDispatchOverride handles admin targets.
             // This branch is isolated here and is not the production destination selection path.
-            _logger.LogDebug("ManifestDispatcher: no manifest repository configured (dev/demo bypass).");
+            _logger.LogDebug("ManifestDispatcher: no manifest repository configured (dev bypass).");
 
             var overrideValidationError = _targetDispatchOverride.ValidateRequest(vector);
             if (overrideValidationError is not null)

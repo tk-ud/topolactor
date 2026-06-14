@@ -160,7 +160,6 @@ db_schema:
         - topology.structure_maps
         - topology.entities
         - topology.topology_edit_log
-        - topology.demo_state_transitions
         - topology.content_entity_drafts
         - topology.admin_import_snapshot
         - topology.admin_import_records
@@ -237,7 +236,6 @@ db_schema:
           - topologys.structure_maps
           - topologys.entities
           - topologys.topology_edit_log
-          - topologys.demo_state_transitions
           - topologys.content_entity_drafts
           - topologys.admin_import_snapshot
           - topologys.admin_import_records
