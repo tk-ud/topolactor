@@ -60,8 +60,8 @@ public class ManifestDispatcher
     /// the runtime_destination resolved from db_notify projection mapping in that manifest topology.
     /// Per SSOT notify_listen_contract.db_listen: listen_event_enters_scheduler_before_projection_runtime.
     ///
-    /// When _manifestRepository is null (dev/demo bypass): TargetDispatchOverride handles
-    /// demo/entity and admin targets; unhandled requests fall through to the
+    /// When _manifestRepository is null (dev bypass): TargetDispatchOverride handles
+    /// admin targets; unhandled requests fall through to the
     /// topology_transform_runtime handler in the registry.
     ///
     /// When _manifestRepository is configured (production): manifest resolution is the sole

@@ -26,7 +26,6 @@ import * as $api_sse from "./routes/api/sse.ts";
 import * as $api_super_auth_login from "./routes/api/super_auth/login.ts";
 import * as $api_super_auth_refresh from "./routes/api/super_auth/refresh.ts";
 import * as $auth from "./routes/auth.tsx";
-import * as $demo_article from "./routes/demo-article.tsx";
 import * as $demo from "./routes/demo.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $runtime_status from "./routes/runtime-status.tsx";
@@ -49,7 +48,6 @@ import * as $OperationPanel from "./islands/OperationPanel.tsx";
 import * as $PresetUploaderDrawer from "./islands/PresetUploaderDrawer.tsx";
 import * as $ProjectionShell from "./islands/ProjectionShell.tsx";
 import * as $RegistryVectorValidator from "./islands/RegistryVectorValidator.tsx";
-import * as $ReplyPanel from "./islands/ReplyPanel.tsx";
 import * as $SeedAdmin from "./islands/SeedAdmin.tsx";
 import * as $SuperAuthPanel from "./islands/SuperAuthPanel.tsx";
 import * as $TeamMarkdownDashboard from "./islands/TeamMarkdownDashboard.tsx";
@@ -83,7 +81,6 @@ const manifest = {
     "./routes/api/super_auth/login.ts": $api_super_auth_login,
     "./routes/api/super_auth/refresh.ts": $api_super_auth_refresh,
     "./routes/auth.tsx": $auth,
-    "./routes/demo-article.tsx": $demo_article,
     "./routes/demo.tsx": $demo,
     "./routes/index.tsx": $index,
     "./routes/runtime-status.tsx": $runtime_status,
@@ -108,7 +105,6 @@ const manifest = {
     "./islands/PresetUploaderDrawer.tsx": $PresetUploaderDrawer,
     "./islands/ProjectionShell.tsx": $ProjectionShell,
     "./islands/RegistryVectorValidator.tsx": $RegistryVectorValidator,
-    "./islands/ReplyPanel.tsx": $ReplyPanel,
     "./islands/SeedAdmin.tsx": $SeedAdmin,
     "./islands/SuperAuthPanel.tsx": $SuperAuthPanel,
     "./islands/TeamMarkdownDashboard.tsx": $TeamMarkdownDashboard,
