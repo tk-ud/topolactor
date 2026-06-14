@@ -89,7 +89,7 @@ public class AdminRuntimeMasterRosterTests
             registrar,
             pkg,
             uiRepo,
-            enumDictionaryRepository: InMemoryEnumDictionaryRepository.WithDemoSeed(),
+            enumDictionaryRepository: InMemoryEnumDictionaryRepository.WithFixtureSeed(),
             authMasterRepository: new InMemoryAuthMasterRepository());
     }
 }

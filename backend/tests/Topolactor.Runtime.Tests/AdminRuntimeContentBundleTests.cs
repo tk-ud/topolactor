@@ -54,7 +54,7 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            entityId = InMemoryContentBundleRepository.DemoEntityAlphaId.ToString(),
+            entityId = InMemoryContentBundleRepository.FixtureEntityAlphaId.ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "content_bundle", "get_entity", null, "admin", payload, null), default);
@@ -85,7 +85,7 @@ public class AdminRuntimeContentBundleTests
         {
             hubId = Guid.NewGuid().ToString(),
             entityJsonb = new { label = "Test Entity", state = "active" },
-            relationIds = new[] { InMemoryContentBundleRepository.DemoRelationId.ToString() },
+            relationIds = new[] { InMemoryContentBundleRepository.FixtureRelationId.ToString() },
             stateName = "active",
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -102,7 +102,7 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            hubId = InMemoryContentBundleRepository.DemoHubId.ToString(),
+            hubId = InMemoryContentBundleRepository.FixtureHubId.ToString(),
             entityJsonb = new { label = "Test Entity", state = "active" },
             relationIds = new[] { Guid.NewGuid().ToString() },
             stateName = "active",
@@ -178,7 +178,7 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            hubId = InMemoryContentBundleRepository.DemoHubId.ToString(),
+            hubId = InMemoryContentBundleRepository.FixtureHubId.ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "content_bundle", "get_hub", null, "admin", payload, null), default);
@@ -205,13 +205,13 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            relationRegistryId = InMemoryContentBundleRepository.DemoRelationId.ToString(),
+            relationRegistryId = InMemoryContentBundleRepository.FixtureRelationId.ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "content_bundle", "get_relation", null, "admin", payload, null), default);
 
         Assert.Null(error);
-        Assert.Equal("demo_relation", data!.Value.GetProperty("name").GetString());
+        Assert.Equal("fixture_relation", data!.Value.GetProperty("name").GetString());
     }
 
     [Fact]
@@ -236,9 +236,9 @@ public class AdminRuntimeContentBundleTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             draftId,
-            hubId = InMemoryContentBundleRepository.DemoHubId.ToString(),
+            hubId = InMemoryContentBundleRepository.FixtureHubId.ToString(),
             entityJsonb = new { label = "Updated Entity", state = "active" },
-            relationIds = new[] { InMemoryContentBundleRepository.DemoRelationId.ToString() },
+            relationIds = new[] { InMemoryContentBundleRepository.FixtureRelationId.ToString() },
             stateName = "active",
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -258,7 +258,7 @@ public class AdminRuntimeContentBundleTests
             draftId,
             hubId = Guid.NewGuid().ToString(),
             entityJsonb = new { label = "Updated", state = "active" },
-            relationIds = new[] { InMemoryContentBundleRepository.DemoRelationId.ToString() },
+            relationIds = new[] { InMemoryContentBundleRepository.FixtureRelationId.ToString() },
             stateName = "active",
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -281,7 +281,7 @@ public class AdminRuntimeContentBundleTests
         Assert.True(data.HasValue);
         Assert.True(data.Value.GetArrayLength() >= 1);
         var first = data.Value[0];
-        Assert.Equal(InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+        Assert.Equal(InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
             first.GetProperty("topologyManifestId").GetString());
         Assert.True(first.GetProperty("hasHubRelations").GetBoolean());
     }
@@ -292,7 +292,7 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "get_hub_relations", null, "admin", payload, null), default);
@@ -309,8 +309,8 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
+            topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
             sequencePosition = 99,
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -328,8 +328,8 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
+            topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
             sequencePosition = 1, // already exists in seed
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -347,8 +347,8 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
+            hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
@@ -365,8 +365,8 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.DemoHubId.ToString(), // same as source hub
+            topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.FixtureHubId.ToString(), // same as source hub
             sequencePosition = 2,
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -384,8 +384,8 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.DemoHubId.ToString(), // same as source hub
+            hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.FixtureHubId.ToString(), // same as source hub
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
@@ -405,8 +405,8 @@ public class AdminRuntimeContentBundleTests
         // Add a second hub_relation to have something to swap
         var createPayload = JsonSerializer.SerializeToElement(new
         {
-            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
-            relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
+            topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.FixtureRelatedHubId.ToString(),
             sequencePosition = 2,
         });
         await runtime.ExecuteDataAsync(
@@ -414,7 +414,7 @@ public class AdminRuntimeContentBundleTests
 
         var listPayload = JsonSerializer.SerializeToElement(new
         {
-            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
         });
         var (listData, _) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "get_hub_relations", null, "admin", listPayload, null), default);
@@ -425,7 +425,7 @@ public class AdminRuntimeContentBundleTests
         // Swap positions
         var reorderPayload = JsonSerializer.SerializeToElement(new
         {
-            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            topologyManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId.ToString(),
             items = new[]
             {
                 new { hubRelationId = relations[0].id, newSequencePosition = relations[1].seq },
@@ -446,7 +446,7 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
+            hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
             relatedHubId = Guid.NewGuid().ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -464,7 +464,7 @@ public class AdminRuntimeContentBundleTests
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
-            hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
+            hubRelationId = InMemoryContentBundleRepository.FixtureHubRelationId.ToString(),
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "deprecate", null, "admin", payload, null), default);
@@ -479,9 +479,9 @@ public class AdminRuntimeContentBundleTests
     {
         var payload = JsonSerializer.SerializeToElement(new
         {
-            hubId = InMemoryContentBundleRepository.DemoHubId.ToString(),
+            hubId = InMemoryContentBundleRepository.FixtureHubId.ToString(),
             entityJsonb = new { label = "New Test Entity", state = "active" },
-            relationIds = new[] { InMemoryContentBundleRepository.DemoRelationId.ToString() },
+            relationIds = new[] { InMemoryContentBundleRepository.FixtureRelationId.ToString() },
             stateName = "active",
         });
         var (data, error) = await runtime.ExecuteDataAsync(
