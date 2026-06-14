@@ -108,10 +108,12 @@ public class RuntimeExecutorTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_UnknownAttractorKey_ReturnsAttractorResolveFailed()
+    public async Task ExecuteAsync_AttractorResolverThrows_ReturnsAttractorResolveFailed()
     {
-        var executor = CreateExecutor();
-        var request = new EndpointRequestDto("Search", "unknown", "target", "action", null, null, null);
+        // ATTRACTOR_RESOLVE_FAILED fires when AttractorResolver throws an unexpected exception
+        // (not the route-missing InvalidOperationException, which returns Success=true with jump events).
+        var executor = CreateExecutor(new AttractorFailingTopologyRepository());
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
 
         var response = await executor.ExecuteAsync(request);
 
@@ -1764,3 +1766,12 @@ internal sealed class RoleFilteredManifestRepository(string expectedRole, Manife
             ManifestRepositoryStubDefaults.NotImplementedMerge();
     }
 
+internal sealed class AttractorFailingTopologyRepository
+    : TopologyRepository
+{
+    public AttractorFailingTopologyRepository()
+        : base(NullLogger<TopologyRepository>.Instance, "test-double") { }
+
+    public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
+        => throw new InvalidOperationException("Cannot resolve attractor: simulated infrastructure failure.");
+}
