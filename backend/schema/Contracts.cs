@@ -177,13 +177,17 @@ public record Emission(
     JsonElement? CalculationBindings = null
 );
 
-/// <summary>SSOT runtime_jump_event_contract: scope, from, to, reason (+ planned for user_action).</summary>
+/// <summary>SSOT runtime_jump_event_contract: scope, from, to, planned, reason.
+/// FromAddress = address at event time (currentAddress at jump origin).
+/// ToAddress = destination (0 for route_missing sentinel; plannedAddress for user_action).
+/// PlannedAddress = intended destination for user_action jumps; 0 for route_missing.
+/// JSON shape: scope/from/to/planned/reason (unchanged).</summary>
 public record RuntimeJumpEvent(
     string Scope,
     [property: System.Text.Json.Serialization.JsonPropertyName("from")]
-    int PastAddress,
+    int FromAddress,
     [property: System.Text.Json.Serialization.JsonPropertyName("to")]
-    int CurrentAddress,
+    int ToAddress,
     [property: System.Text.Json.Serialization.JsonPropertyName("planned")]
     int PlannedAddress,
     string Reason

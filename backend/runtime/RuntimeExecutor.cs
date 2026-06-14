@@ -330,19 +330,21 @@ public class RuntimeExecutor : IDispatchableRuntime
             Emission: null,
             Errors: [new ValidationError(code, message)]);
 
+    // SSOT route_missing_behavior: from=currentAddress, to=0, planned=0, reason=route_missing.
+    // pastAddress is route state snapshot context; it does not enter the jump event from field.
     private static IReadOnlyList<RuntimeJumpEvent> BuildRouteMissingJumpEvents(Dictionary<string, string>? context)
     {
-        var pastHubAddress = TryReadInt(context, "pastHubAddress");
         var currentHubAddress = TryReadInt(context, "currentHubAddress");
-        var pastTopologyAddress = TryReadInt(context, "pastTopologyAddress");
         var currentTopologyAddress = TryReadInt(context, "currentTopologyAddress");
         return
         [
-            new RuntimeJumpEvent("hub", pastHubAddress, currentHubAddress, 0, "route_missing"),
-            new RuntimeJumpEvent("topology", pastTopologyAddress, currentTopologyAddress, 0, "route_missing")
+            new RuntimeJumpEvent("hub", currentHubAddress, 0, 0, "route_missing"),
+            new RuntimeJumpEvent("topology", currentTopologyAddress, 0, 0, "route_missing")
         ];
     }
 
+    // SSOT user_action: from=currentAddress, to=plannedAddress, planned=plannedAddress, reason=user_action.
+    // pastAddress is route state snapshot context; it does not enter the jump event from field.
     private static RuntimeJumpEvent? BuildUserActionJumpEvent(Dictionary<string, string>? context)
     {
         if (context is null) return null;
@@ -353,18 +355,16 @@ public class RuntimeExecutor : IDispatchableRuntime
 
         if (string.Equals(scope, "hub", StringComparison.Ordinal))
         {
-            var pastAddress = TryReadInt(context, "pastHubAddress");
             var currentAddress = TryReadInt(context, "currentHubAddress");
             var plannedAddress = TryReadInt(context, "plannedHubAddress");
-            return new RuntimeJumpEvent("hub", pastAddress, currentAddress, plannedAddress, "user_action");
+            return new RuntimeJumpEvent("hub", currentAddress, plannedAddress, plannedAddress, "user_action");
         }
 
         if (string.Equals(scope, "topology", StringComparison.Ordinal))
         {
-            var pastAddress = TryReadInt(context, "pastTopologyAddress");
             var currentAddress = TryReadInt(context, "currentTopologyAddress");
             var plannedAddress = TryReadInt(context, "plannedTopologyAddress");
-            return new RuntimeJumpEvent("topology", pastAddress, currentAddress, plannedAddress, "user_action");
+            return new RuntimeJumpEvent("topology", currentAddress, plannedAddress, plannedAddress, "user_action");
         }
 
         return null;

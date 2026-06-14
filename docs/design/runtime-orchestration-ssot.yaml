@@ -786,6 +786,24 @@ runtime_orchestration_ssot:
         from: currentTopologyAddress
         to: 0
         reason: route_missing
+    route_state_snapshot_vs_jump_event_supplement:
+      note: supplemental_clarification_no_new_model
+      route_state_snapshot:
+        fields: [pastAddress, currentAddress, plannedAddress]
+        role: request_context_state_not_jump_event_fields
+        note: pastAddress_is_snapshot_context_only_it_does_not_enter_jump_event_from_field
+      jump_event_field_mapping:
+        from: currentAddress_at_jump_origin
+        to: destination_address_0_for_missing_or_unresolved
+        planned: intended_destination_0_for_route_missing
+      zero_sentinel:
+        value: 0
+        meaning: top_fallback_unresolved_sentinel
+        not: physical_id
+      relationship_to_route_missing_and_user_action_jump_contract:
+        note: route_missing_and_user_action_jump_contract_address_shape_uses_pastAddress_currentAddress_plannedAddress_as_state_snapshot_names
+        route_missing_event_projection: from=currentAddress_to=0_planned=0
+        user_action_event_projection: from=currentAddress_to=plannedAddress_planned=plannedAddress
 
   canonical_flow_summary:
     frontend_client_command:
