@@ -10,19 +10,19 @@ namespace Topolactor.Runtime.Tests;
 /// </summary>
 internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
 {
-    public static readonly Guid DemoHubId = new("00000000-0000-0000-0000-000000000010");
-    public static readonly Guid DemoRelationId = new("00000000-0000-0000-0000-000000000011");
-    public static readonly Guid DemoEntityAlphaId = new("00000000-0000-0000-0000-000000000041");
-    public static readonly Guid DemoHubRelationId = new("00000000-0000-0000-0000-000000000045");
-    public static readonly Guid DemoTopologyManifestId = new("00000000-0000-0000-0000-000000000044");
-    public static readonly Guid DemoRelatedHubId = new("00000000-0000-0000-0000-00000000001d");
+    public static readonly Guid FixtureHubId = new("00000000-0000-0000-0000-000000000010");
+    public static readonly Guid FixtureRelationId = new("00000000-0000-0000-0000-000000000011");
+    public static readonly Guid FixtureEntityAlphaId = new("00000000-0000-0000-0000-000000000041");
+    public static readonly Guid FixtureHubRelationId = new("00000000-0000-0000-0000-000000000045");
+    public static readonly Guid FixtureTopologyManifestId = new("00000000-0000-0000-0000-000000000044");
+    public static readonly Guid FixtureRelatedHubId = new("00000000-0000-0000-0000-00000000001d");
     public static readonly Guid ActiveStateId = new("00000000-0000-0000-0000-000000000001");
 
     private readonly List<ContentEntityDraftRecord> _drafts = [];
     private readonly List<(Guid EntityId, Guid HubId, string Label, string StateName, IReadOnlyList<Guid> RelationIds, string EntityJsonb)> _entities =
     [
-        (DemoEntityAlphaId, DemoHubId, "Alpha Entity", "active",
-            [DemoRelationId],
+        (FixtureEntityAlphaId, FixtureHubId, "Alpha Entity", "active",
+            [FixtureRelationId],
             """{"label":"Alpha Entity","state":"active","hub_id":"00000000-0000-0000-0000-000000000010"}"""),
     ];
 
@@ -32,8 +32,8 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     {
         IReadOnlyList<ContentBundleListItemDto> items =
         [
-            new(DemoHubId.ToString(), "hub", "Hub demo…", "active", DemoHubId.ToString(), null,
-                "relation=demo_relation, state=active"),
+            new(FixtureHubId.ToString(), "hub", "Hub fixture…", "active", FixtureHubId.ToString(), null,
+                "relation=fixture_relation, state=active"),
         ];
         return Task.FromResult(items);
     }
@@ -51,8 +51,8 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     {
         IReadOnlyList<ContentBundleListItemDto> items =
         [
-            new(DemoRelationId.ToString(), "relation", "demo_relation", "active", null, null,
-                "relation_registry name=demo_relation"),
+            new(FixtureRelationId.ToString(), "relation", "fixture_relation", "active", null, null,
+                "relation_registry name=fixture_relation"),
         ];
         return Task.FromResult(items);
     }
@@ -71,20 +71,20 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     {
         IReadOnlyList<ContentBundleListItemDto> items =
         [
-            new(DemoHubRelationId.ToString(), "hub_relation", "demo_manifest", "active",
-                DemoHubId.ToString(), [DemoTopologyManifestId.ToString(), DemoRelatedHubId.ToString()],
-                $"source_hub={DemoHubId}, manifest={DemoTopologyManifestId}, related_hub={DemoRelatedHubId}, seq=1"),
+            new(FixtureHubRelationId.ToString(), "hub_relation", "fixture_manifest", "active",
+                FixtureHubId.ToString(), [FixtureTopologyManifestId.ToString(), FixtureRelatedHubId.ToString()],
+                $"source_hub={FixtureHubId}, manifest={FixtureTopologyManifestId}, related_hub={FixtureRelatedHubId}, seq=1"),
         ];
         return Task.FromResult(items);
     }
 
     public override Task<ContentBundleHubDetailDto?> LoadContentHubAsync(Guid hubId, CancellationToken ct = default)
     {
-        if (hubId != DemoHubId) return Task.FromResult<ContentBundleHubDetailDto?>(null);
+        if (hubId != FixtureHubId) return Task.FromResult<ContentBundleHubDetailDto?>(null);
         var entityIds = _entities.Where(e => e.HubId == hubId).Select(e => e.EntityId.ToString()).ToList();
         return Task.FromResult<ContentBundleHubDetailDto?>(new ContentBundleHubDetailDto(
-            DemoHubId.ToString(), "active", ActiveStateId.ToString(),
-            DemoRelationId.ToString(), "demo_relation",
+            FixtureHubId.ToString(), "active", ActiveStateId.ToString(),
+            FixtureRelationId.ToString(), "fixture_relation",
             entityIds.Count, 1, entityIds,
             $"hub with {entityIds.Count} entity(ies), 1 hub_relation(s)"));
     }
@@ -92,11 +92,11 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     public override Task<ContentBundleRelationDetailDto?> LoadContentRelationAsync(
         Guid relationRegistryId, CancellationToken ct = default)
     {
-        if (relationRegistryId != DemoRelationId) return Task.FromResult<ContentBundleRelationDetailDto?>(null);
-        var entityCount = _entities.Count(e => e.RelationIds.Contains(DemoRelationId));
+        if (relationRegistryId != FixtureRelationId) return Task.FromResult<ContentBundleRelationDetailDto?>(null);
+        var entityCount = _entities.Count(e => e.RelationIds.Contains(FixtureRelationId));
         return Task.FromResult<ContentBundleRelationDetailDto?>(new ContentBundleRelationDetailDto(
-            DemoRelationId.ToString(), "demo_relation", true, entityCount, 0,
-            $"relation demo_relation — {entityCount} entity(ies), 0 hub_relation(s)"));
+            FixtureRelationId.ToString(), "fixture_relation", true, entityCount, 0,
+            $"relation fixture_relation — {entityCount} entity(ies), 0 hub_relation(s)"));
     }
 
     public override Task<ContentBundleEntityDetailDto?> LoadContentEntityAsync(Guid entityId, CancellationToken ct = default)
@@ -106,8 +106,8 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
 
         return Task.FromResult<ContentBundleEntityDetailDto?>(new ContentBundleEntityDetailDto(
             e.EntityId.ToString(), e.Label, e.StateName, ActiveStateId.ToString(),
-            e.HubId.ToString(), "demo_relation",
-            e.RelationIds.Select(r => r.ToString()).ToList(), ["demo_relation"],
+            e.HubId.ToString(), "fixture_relation",
+            e.RelationIds.Select(r => r.ToString()).ToList(), ["fixture_relation"],
             e.EntityJsonb, $"entity {e.Label} in hub {e.HubId}"));
     }
 
@@ -279,15 +279,15 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     // Hub Navigation in-memory store
     private readonly List<(Guid HubRelationId, Guid TopologyManifestId, Guid RelatedHubId, int SequencePosition, string Status)> _hubRelations =
     [
-        (DemoHubRelationId, DemoTopologyManifestId, DemoRelatedHubId, 1, "active"),
+        (FixtureHubRelationId, FixtureTopologyManifestId, FixtureRelatedHubId, 1, "active"),
     ];
 
     public override Task<IReadOnlyList<HubNavigationManifestItemDto>> ListTopologyManifestsAsync(CancellationToken ct = default)
     {
-        var count = _hubRelations.Count(hr => hr.TopologyManifestId == DemoTopologyManifestId && hr.Status == "active");
+        var count = _hubRelations.Count(hr => hr.TopologyManifestId == FixtureTopologyManifestId && hr.Status == "active");
         IReadOnlyList<HubNavigationManifestItemDto> items =
         [
-            new(DemoTopologyManifestId.ToString(), "demo_manifest", DemoHubId.ToString(), count > 0, count),
+            new(FixtureTopologyManifestId.ToString(), "fixture_manifest", FixtureHubId.ToString(), count > 0, count),
         ];
         return Task.FromResult(items);
     }
@@ -308,7 +308,7 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> CreateHubRelationAsync(
         Guid topologyManifestId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
     {
-        if (topologyManifestId != DemoTopologyManifestId)
+        if (topologyManifestId != FixtureTopologyManifestId)
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
                 (new HubNavigationLifecycleResponseDto(false, null, "error", "Manifest not found.", "MANIFEST_NOT_FOUND"), null));
         if (_manifestSourceHubMap.TryGetValue(topologyManifestId, out var sourceHub) && sourceHub == relatedHubId)
@@ -324,10 +324,10 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
             (new HubNavigationLifecycleResponseDto(true, newId.ToString(), "active", "Hub relation created."), null));
     }
 
-    private static readonly HashSet<Guid> _validHubIds = [DemoHubId, DemoRelatedHubId];
+    private static readonly HashSet<Guid> _validHubIds = [FixtureHubId, FixtureRelatedHubId];
     private static readonly Dictionary<Guid, Guid> _manifestSourceHubMap = new()
     {
-        { DemoTopologyManifestId, DemoHubId },
+        { FixtureTopologyManifestId, FixtureHubId },
     };
 
     public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(
@@ -371,15 +371,15 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     private static ContentBundleRefContext BuildRefContext(
         Guid hubId, IReadOnlyList<Guid> relationIds, string? stateName)
     {
-        var hubExists = hubId == DemoHubId;
+        var hubExists = hubId == FixtureHubId;
         var relationNames = new Dictionary<Guid, string>();
         foreach (var rid in relationIds)
         {
-            if (rid == DemoRelationId) relationNames[rid] = "demo_relation";
+            if (rid == FixtureRelationId) relationNames[rid] = "fixture_relation";
         }
 
         var stateNames = new Dictionary<Guid, string> { [ActiveStateId] = "active" };
-        return new ContentBundleRefContext(hubExists, "demo_relation", relationNames, stateNames);
+        return new ContentBundleRefContext(hubExists, "fixture_relation", relationNames, stateNames);
     }
 
     public override Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(
@@ -403,7 +403,7 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
             return Task.FromResult<(HubNavigationReorderResponseDto, ValidationError?)>(
                 (new HubNavigationReorderResponseDto(true, "No items to reorder."), null));
 
-        if (topologyManifestId != DemoTopologyManifestId)
+        if (topologyManifestId != FixtureTopologyManifestId)
             return Task.FromResult<(HubNavigationReorderResponseDto, ValidationError?)>(
                 (new HubNavigationReorderResponseDto(false, "Manifest not found.", "MANIFEST_NOT_FOUND"), null));
 

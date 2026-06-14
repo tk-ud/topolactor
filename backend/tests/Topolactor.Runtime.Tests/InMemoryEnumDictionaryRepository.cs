@@ -5,7 +5,7 @@ namespace Topolactor.Runtime.Tests;
 
 public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
 {
-    public static readonly Guid DemoGroupId = Guid.Parse("22222222-2222-2222-2222-222222222201");
+    public static readonly Guid FixtureGroupId = Guid.Parse("22222222-2222-2222-2222-222222222201");
     public static readonly Guid UserStatusGroupId = AuthMasterRosterConstants.UserStatusGroupId;
 
     private readonly Dictionary<Guid, EnumDictionaryGroupDetailDto> _groups;
@@ -20,16 +20,16 @@ public sealed class InMemoryEnumDictionaryRepository : EnumDictionaryRepository
                 _itemsByIndex[item.IndexNum] = item.Name;
     }
 
-    public static InMemoryEnumDictionaryRepository WithDemoSeed() =>
+    public static InMemoryEnumDictionaryRepository WithFixtureSeed() =>
         new([
             new EnumDictionaryGroupDetailDto(
-                DemoGroupId,
+                FixtureGroupId,
                 1,
-                "demo_status",
+                "fixture_status",
                 [
-                    new EnumDictionaryItemDto(1, "demo_active"),
-                    new EnumDictionaryItemDto(2, "demo_inactive"),
-                    new EnumDictionaryItemDto(3, "demo_pending"),
+                    new EnumDictionaryItemDto(1, "fixture_active"),
+                    new EnumDictionaryItemDto(2, "fixture_inactive"),
+                    new EnumDictionaryItemDto(3, "fixture_pending"),
                 ],
                 [1, 2, 3]),
             new EnumDictionaryGroupDetailDto(

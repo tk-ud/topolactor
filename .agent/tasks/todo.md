@@ -38,7 +38,7 @@
 - [x] frontend tests を旧 demo seed 前提から更新（operationPresets.test.ts, userDemoStepper.test.ts, uiRenderedInteraction.test.ts, uiHandlerBehavior.test.ts, authTopologySecretBoundary.test.ts）
 - [x] `.agent/tests/check-ssot-vocabulary-contract.sh` を `db/demo_seed.sql` 非依存へ更新（seed_empty.sql のみ使用）
 - [x] SSOT docs の demo_seed 参照を削除（`docs/design/runtime-orchestration-ssot.yaml`, `docs/design/ui-ux-primitive-catalog-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`）
-- [ ] backend tests の demo attractor key / demo UUID 依存を現行 bootstrap 前提へ更新する（次 cycle）
+- [x] backend tests の demo attractor key / demo UUID 依存を現行 bootstrap 前提へ更新する（2026-06-14 完了）
 
 今回削除・更新した範囲 (2026-06-13):
 - 削除: `db/demo_seed.sql`, `docs/demo-walkthrough.md`
@@ -62,16 +62,44 @@
 - 更新: 各 test ファイル（UserDemoStepper/demoPreviewOptions/demo_seed 参照削除）
 - 更新: `backend/tests/.../InMemoryContentBundleRepository.cs`（demo_seed.sql comment 削除）
 
+今回削除・更新した範囲 (2026-06-14):
+- 更新: `backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`（Demo* 定数 → Fixture*、"demo_relation"/"demo_manifest" 文字列 → "fixture_relation"/"fixture_manifest"）
+- 更新: `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeContentBundleTests.cs`（InMemoryContentBundleRepository.Demo* 参照 → Fixture*、"demo_relation" アサーション → "fixture_relation"）
+- 更新: `backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs`（`DemoEntityValidRouteTopologyRepository` → `OverrideRouteTopologyRepository`、`DemoEntityListCalled` → `OverrideEntityListCalled`）
+- 更新: `backend/tests/Topolactor.Runtime.Tests/InMemoryEnumDictionaryRepository.cs`（`DemoGroupId` → `FixtureGroupId`、`WithDemoSeed()` → `WithFixtureSeed()`、"demo_status"/"demo_active"/"demo_inactive"/"demo_pending" → "fixture_*"）
+- 更新: `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeMasterRosterTests.cs`（`WithDemoSeed()` → `WithFixtureSeed()`）
+- 更新: `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs`（`WithDemoSeed()` → `WithFixtureSeed()`、`DemoGroupId` → `FixtureGroupId`）
+
 探索済み箇所（削除対象なし）:
 - `docs/system-roadmap.yaml`: demo 参照なし（確認済み）
 - `.github/workflows/bootstrap-validation.yml:96`: `topolactor_demo` は DB 名（demo_seed 依存なし）
 - `frontend/tests/sseLane.test.ts`: UUID は独立テスト fixtures（demo_seed 依存なし）
 - `.agent/reports/2026-05-20-db-init-compose-bootstrap-validation.md`: 歴史的レポート（変更不要）
 - `docs/design/pipeline-continuity-ssot.yaml`: demo 参照なし（確認済み）
+- `frontend/lib/demoSession.ts`: demo prefix は auth session 管理ライブラリ（SESSION_TOKEN_KEY="demo_jwt_token" は実際の cookie 名）— 削除・変更不可
+- `frontend/lib/demoSessionValidate.ts`: 実際の backend session 検証ライブラリ — 削除・変更不可
+- `frontend/routes/demo.tsx`: /demo は Draft Preview（publish 前プレビュー）— 旧 demo scaffold ではなく active feature
+- `backend/tests/.../AuthServiceProjectionLoginTests.cs`: `DEMO_JWT_SECRET`, `DEMO_JWT_EXPIRY_HOURS` は auth JWT 設定 env var（"demo_admin"/"demo_user" は auth_seed.sql のユーザー名）— demo seed 依存なし
+- `backend/tests/.../EnvDependentTestCollection.cs:6`: `DEMO_JWT_SECRET` コメント — auth env var コメント（変更不要）
+- `backend/runtime/TargetDispatchOverride.cs`: `demo:entity:*` dispatch は "dev/demo bypass" — 次 cycle で削除対象
+- `backend/repository/TopologyRepository.cs:205-214`: `LoadDemoEntityListAsync`, `LoadDemoEntityDetailAsync`, `DemoEntityProjection`, `DemoTransitionResult` — 次 cycle で削除対象
+- `backend/repository/NpgsqlTopologyRepository.cs:587-677`: demo entity/transition SQL実装 — 次 cycle で削除対象
+- `backend/tests/.../ProductionHardeningBoundaryTests.cs`: demo entity hardening tests — 次 cycle で削除対象（上記 production code 削除と連動）
+- `db/topology_tables.sql:329-341`: `topology.demo_state_transitions` テーブル — 次 cycle で削除対象（backend 実装削除と連動）
+- `docs/design/db-schema.yaml:163`: `topology.demo_state_transitions` テーブル参照 — 次 cycle で更新対象
+- `db/topology_tables.sql:290,306`: `demo_state_transitions` へのコメント参照 — 次 cycle で更新対象
+- `backend/repository/DiffLogRepository.cs:9-10`: `demo_state_transitions` 分離コメント — 次 cycle で更新対象
+- `backend/tests/.../RuntimeExecutorTests.cs:1119-1166`: `"demo"` target の test method（`DispatchAsync_DemoEntity*`）— TargetDispatchOverride demo 削除と連動。次 cycle で更新対象
 
 remaining_todo (次 cycle 対象):
-- `backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs`: `DemoEntityValidRouteTopologyRepository` クラスと demo:entity:* attractor key が残存（backend テスト内の in-memory test double — DB 依存なし、動作に影響なし）
-- `backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs`: demo UUID 定数（DemoHubId, DemoRelationId 等）が残存 — 次 cycle で canonical な UUID か別名に更新する
+- **coordinated demo:entity dispatch removal** — 以下を同一 PR で削除/更新する必要あり（個別削除は不可）:
+  - `backend/runtime/TargetDispatchOverride.cs`: `IsDemoEntity` check, `ApplyDemoStateLoopAsync` 削除
+  - `backend/repository/TopologyRepository.cs`: `LoadDemoEntityListAsync`, `LoadDemoEntityDetailAsync`, `ApplyDemoTransitionAsync`, `LoadDemoTransitionHistoryAsync`, `DemoEntityProjection`, `DemoTransitionResult` 削除
+  - `backend/repository/NpgsqlTopologyRepository.cs`: demo entity/transition 実装削除
+  - `backend/tests/.../ProductionHardeningBoundaryTests.cs`: Gap-11 demo method tests 削除
+  - `backend/tests/.../RuntimeExecutorTests.cs`: `DispatchAsync_DemoEntity*` test methods 更新（`OverrideRouteTopologyRepository` 利用 → 別シナリオへ）
+  - `db/topology_tables.sql`: `topology.demo_state_transitions` テーブルと index 削除、関連コメント更新
+  - `docs/design/db-schema.yaml`: `topology.demo_state_transitions` 参照削除
 
 対応資料:
 - `docs/framework-core.yaml`

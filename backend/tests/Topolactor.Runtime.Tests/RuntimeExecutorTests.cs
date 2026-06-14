@@ -1114,7 +1114,7 @@ public class ManifestDispatcherOverrideTests
     [Fact]
     public async Task DispatchAsync_DemoEntityUnknownAction_ReturnsInvalidOperation()
     {
-        var repo = new DemoEntityValidRouteTopologyRepository();
+        var repo = new OverrideRouteTopologyRepository();
         var dispatcher = CreateDispatcher(repo);
         var req = new EndpointRequestDto("Search", "demo", "entity", "noop", null, null, null);
 
@@ -1127,7 +1127,7 @@ public class ManifestDispatcherOverrideTests
     [Fact]
     public async Task DispatchAsync_DemoEntityDetailWithoutEntityId_ReturnsInvalidPayload()
     {
-        var repo = new DemoEntityValidRouteTopologyRepository();
+        var repo = new OverrideRouteTopologyRepository();
         var dispatcher = CreateDispatcher(repo);
         var payload = JsonSerializer.SerializeToElement(new { title = "x" });
         var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
@@ -1141,7 +1141,7 @@ public class ManifestDispatcherOverrideTests
     [Fact]
     public async Task DispatchAsync_DemoEntityDetailMalformedEntityId_ReturnsInvalidPayload()
     {
-        var repo = new DemoEntityValidRouteTopologyRepository();
+        var repo = new OverrideRouteTopologyRepository();
         var dispatcher = CreateDispatcher(repo);
         var payload = JsonSerializer.SerializeToElement(new { entityId = "not-a-uuid" });
         var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
@@ -1155,7 +1155,7 @@ public class ManifestDispatcherOverrideTests
     [Fact]
     public async Task DispatchAsync_DemoEntityList_ReachesOverrideRepositoryFlow()
     {
-        var repo = new DemoEntityValidRouteTopologyRepository();
+        var repo = new OverrideRouteTopologyRepository();
         var dispatcher = CreateDispatcher(repo);
         var req = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
 
@@ -1164,7 +1164,7 @@ public class ManifestDispatcherOverrideTests
         Assert.True(res.Success);
         Assert.NotNull(res.Emission);
         Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
-        Assert.True(repo.DemoEntityListCalled);
+        Assert.True(repo.OverrideEntityListCalled);
     }
 
     private static ManifestDispatcher CreateDispatcher(TopologyRepository topologyRepository)
@@ -1193,7 +1193,7 @@ public class ManifestDispatcherManifestDrivenTests
                 RelationRegistryId: null,
                 Topology: BuildTopology("topology_transform_runtime"),
                 Status: "active"));
-        var topologyRepo = new DemoEntityValidRouteTopologyRepository();
+        var topologyRepo = new OverrideRouteTopologyRepository();
         var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo, manifestRepo);
 
         var request = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
@@ -1202,7 +1202,7 @@ public class ManifestDispatcherManifestDrivenTests
         Assert.True(response.Success);
         Assert.NotNull(response.Emission);
         Assert.Empty(response.Errors);
-        Assert.False(topologyRepo.DemoEntityListCalled,
+        Assert.False(topologyRepo.OverrideEntityListCalled,
             "TargetDispatchOverride must not be called when manifest repository is configured.");
     }
 
@@ -1816,11 +1816,11 @@ internal sealed class RoleFilteredManifestRepository(string expectedRole, Manife
             ManifestRepositoryStubDefaults.NotImplementedMerge();
     }
 
-internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepository
+internal sealed class OverrideRouteTopologyRepository : TopologyRepository
 {
-    public bool DemoEntityListCalled { get; private set; }
+    public bool OverrideEntityListCalled { get; private set; }
 
-    public DemoEntityValidRouteTopologyRepository() : base(NullLogger<TopologyRepository>.Instance, "test-double") { }
+    public OverrideRouteTopologyRepository() : base(NullLogger<TopologyRepository>.Instance, "test-double") { }
 
     public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
     {
@@ -1839,7 +1839,7 @@ internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepositor
 
     public override Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
     {
-        DemoEntityListCalled = true;
+        OverrideEntityListCalled = true;
         return Task.FromResult<IReadOnlyList<DemoEntityProjection>>([]);
     }
 }

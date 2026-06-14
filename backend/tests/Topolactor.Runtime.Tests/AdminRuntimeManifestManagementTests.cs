@@ -455,9 +455,9 @@ public class AdminRuntimeManifestManagementTests
             manifestId, null, ValidTopology("admin", "tgt", "screen_list", "Read", "topology_transform_runtime"), "draft",
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
-        var enumRepo = InMemoryEnumDictionaryRepository.WithDemoSeed();
+        var enumRepo = InMemoryEnumDictionaryRepository.WithFixtureSeed();
         var runtime = CreateRuntime(repo, enumRepo);
-        var groupId = InMemoryEnumDictionaryRepository.DemoGroupId.ToString();
+        var groupId = InMemoryEnumDictionaryRepository.FixtureGroupId.ToString();
         var payload = JsonSerializer.SerializeToElement(new
         {
             manifestId = manifestId.ToString(),
@@ -495,7 +495,7 @@ public class AdminRuntimeManifestManagementTests
             manifestId, null, ValidTopology("admin", "tgt", "screen", "Read", "topology_transform_runtime"), "draft",
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
-        var runtime = CreateRuntime(repo, InMemoryEnumDictionaryRepository.WithDemoSeed());
+        var runtime = CreateRuntime(repo, InMemoryEnumDictionaryRepository.WithFixtureSeed());
         var payload = JsonSerializer.SerializeToElement(new
         {
             manifestId = manifestId.ToString(),
@@ -715,7 +715,7 @@ public class AdminRuntimeManifestManagementTests
     [Fact]
     public async Task EnumDictionary_ListGroups_Returns_Seeded_Group()
     {
-        var enumRepo = InMemoryEnumDictionaryRepository.WithDemoSeed();
+        var enumRepo = InMemoryEnumDictionaryRepository.WithFixtureSeed();
         var runtime = CreateRuntime(new InMemoryManifestAdminRepository(), enumRepo);
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "enum_dictionary", "list_groups", null, "admin", null, null), default);
@@ -725,7 +725,7 @@ public class AdminRuntimeManifestManagementTests
         var groupIds = data.Value.EnumerateArray()
             .Select(e => e.GetProperty("groupId").GetString())
             .ToHashSet(StringComparer.Ordinal);
-        Assert.Contains(InMemoryEnumDictionaryRepository.DemoGroupId.ToString(), groupIds);
+        Assert.Contains(InMemoryEnumDictionaryRepository.FixtureGroupId.ToString(), groupIds);
         Assert.Contains(InMemoryEnumDictionaryRepository.UserStatusGroupId.ToString(), groupIds);
     }
 
