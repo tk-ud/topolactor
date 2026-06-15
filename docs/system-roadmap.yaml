@@ -642,6 +642,139 @@ system_roadmap_ssot:
         - admin_role_port_write_ui_design_not_started
         - consumer_bundle_port_connection_design_not_started
 
+    product.email_port_consumer:
+      bundle_id: email-port-consumer
+      title: Email bundle port consumer design
+      status: not_started
+      production_ready: false
+      public_summary: Email Bundle as port consumer of external_port_substrate. Defines response_port connection and credential_requirement as port record attachment. Email send remains UI/human approval triggered. credential standalone plane not created.
+      scope:
+        - email_response_port_consumer_definition
+        - smtp_credential_requirement_as_port_attachment
+        - email_send_approval_boundary
+        - email_delivery_log_to_runtime_event_log
+      detail_ref:
+        - docs/design/runtime-bundle-email-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - .agent/tasks/todo.md#email-port-consumer
+      known_gap_ref:
+        - email_dispatch_service_design_not_started
+        - smtp_provider_adapter_design_not_started
+
+    product.stripe_port_consumer:
+      bundle_id: stripe-port-consumer
+      title: Stripe bundle port consumer design
+      status: not_started
+      production_ready: false
+      public_summary: Stripe Bundle as port consumer of external_port_substrate. Defines hook_port connection and credential_requirement as port record attachment. Paid state confirmed only via verified webhook event. webhook_verification_required enforced.
+      scope:
+        - stripe_hook_port_consumer_definition
+        - stripe_credential_requirement_as_port_attachment
+        - webhook_verification_required_boundary
+        - payment_state_projection_boundary
+      detail_ref:
+        - docs/design/runtime-bundle-stripe-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - .agent/tasks/todo.md#stripe-port-consumer
+      known_gap_ref:
+        - stripe_event_verification_service_design_not_started
+        - payment_state_projection_schema_not_started
+
+    product.file_storage_port_consumer:
+      bundle_id: file-storage-port-consumer
+      title: File/Storage bundle port consumer design
+      status: not_started
+      production_ready: false
+      public_summary: File/Storage Bundle as port consumer of external_port_substrate. Defines access_port and response_port connections for object storage. credential_requirement as port record attachment. object storage credential standalone plane not created.
+      scope:
+        - file_storage_access_and_response_port_consumer_definition
+        - object_storage_credential_requirement_as_port_attachment
+        - export_job_file_write_boundary
+        - signed_download_policy
+      detail_ref:
+        - docs/design/runtime-bundle-file-storage-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - .agent/tasks/todo.md#file-storage-port-consumer
+      known_gap_ref:
+        - storage_provider_adapter_design_not_started
+        - export_job_schema_design_not_started
+
+    product.export_sftp_port_consumer:
+      bundle_id: export-sftp-port-consumer
+      title: Export/SFTP bundle port consumer design
+      status: not_started
+      production_ready: false
+      public_summary: Export/SFTP Bundle as port consumer of external_port_substrate. Defines response_port connection for SFTP external transfer. credential_requirement as port record attachment. SFTP credential standalone plane not created.
+      scope:
+        - export_sftp_response_port_consumer_definition
+        - sftp_credential_requirement_as_port_attachment
+        - export_job_sftp_transfer_boundary
+        - transfer_manifest_checksum_required
+      detail_ref:
+        - docs/design/runtime-bundle-export-sftp-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - .agent/tasks/todo.md#export-sftp-port-consumer
+      known_gap_ref:
+        - sftp_transfer_service_design_not_started
+        - transfer_retry_policy_design_not_started
+
+    product.webhook_inbox_port_consumer:
+      bundle_id: webhook-inbox-port-consumer
+      title: Webhook Inbox bundle port consumer design
+      status: not_started
+      production_ready: false
+      public_summary: Webhook Inbox Bundle as port consumer of external_port_substrate. Defines hook_port connection. webhook direct runtime execution without scheduler prohibited. credential_requirement as port record attachment.
+      scope:
+        - webhook_inbox_hook_port_consumer_definition
+        - webhook_signing_key_credential_requirement_as_port_attachment
+        - scheduler_then_runtime_route_boundary
+        - signature_verification_required
+      detail_ref:
+        - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - .agent/tasks/todo.md#webhook-inbox-port-consumer
+      known_gap_ref:
+        - webhook_intake_schema_design_not_started
+        - scheduler_hook_trigger_wiring_design_not_started
+
+    product.job_scheduler_port_consumer:
+      bundle_id: job-scheduler-port-consumer
+      title: Job/Scheduler bundle port consumer design
+      status: not_started
+      production_ready: false
+      public_summary: Job/Scheduler Bundle as port consumer of external_port_substrate. Defines access_port and hook_port connections for external scheduler providers. credential_requirement as port record attachment. runtime_destination_selection owned by manifest_dispatcher not scheduler.
+      scope:
+        - job_scheduler_access_and_hook_port_consumer_definition
+        - scheduler_provider_credential_requirement_as_port_attachment
+        - trigger_alignment_and_runtime_queue_boundary
+        - manifest_dispatcher_owns_destination_selection
+      detail_ref:
+        - docs/design/runtime-bundle-job-scheduler-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - .agent/tasks/todo.md#job-scheduler-port-consumer
+      known_gap_ref:
+        - job_queue_schema_design_not_started
+        - cron_trigger_driver_loop_design_not_started
+
+    product.audit_approval_port_consumer:
+      bundle_id: audit-approval-port-consumer
+      title: Audit/Approval bundle port consumer design
+      status: not_started
+      production_ready: false
+      public_summary: Audit/Approval Bundle as port consumer of external_port_substrate. Defines response_port connection for approval notifications. credential_requirement as port record attachment. approval authority is UI/human explicit action only. CLI/MCP read/export boundary preserved.
+      scope:
+        - audit_approval_response_port_consumer_definition
+        - approval_notification_credential_requirement_as_port_attachment
+        - ui_human_explicit_action_only_boundary
+        - cli_mcp_read_export_boundary_preserved
+      detail_ref:
+        - docs/design/runtime-bundle-audit-approval-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - .agent/tasks/todo.md#audit-approval-port-consumer
+      known_gap_ref:
+        - approval_request_schema_design_not_started
+        - approval_notification_design_not_started
+
     product.helper_manual_policy:
       bundle_id: helper-manual
       title: User-facing helper and manual policy

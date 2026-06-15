@@ -172,7 +172,7 @@ extended_runtime_bundle_registry_ssot:
 
       secret_credential_bundle:
         id: secret_credential_bundle
-        status: reclassified_not_standalone_bundle
+        classification: reclassified_not_standalone_bundle
         description: >-
           Secret / Credential Bundle は独立実装 Bundle ではない。
           external_port_substrate の credential_requirement 境界定義として統合する。
@@ -181,7 +181,6 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: runtime-bundle-secret-credential-ssot
         owner_resolution: reclassified_to_port_substrate_component
-        owner_status: reclassified_to_port_substrate_component
         separate_ssot_path: docs/design/runtime-bundle-secret-credential-ssot.yaml
         substrate_ref: docs/design/external-port-substrate-ssot.yaml
         note: >-
@@ -190,7 +189,6 @@ extended_runtime_bundle_registry_ssot:
 
       external_port_substrate:
         id: external_port_substrate
-        status: not_started
         description: >-
           外部連携 Bundle 共通基盤。access_port / response_port / hook_port /
           credential_requirement を physical table + seed projection +
@@ -199,7 +197,6 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: external-port-substrate-ssot
         owner_resolution: covered_by_design_ssot
-        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/external-port-substrate-ssot.yaml
 
   future_optional_external_surface_bundles:

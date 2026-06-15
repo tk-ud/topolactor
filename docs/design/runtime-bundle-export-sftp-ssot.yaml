@@ -176,8 +176,6 @@ runtime_bundle_export_sftp_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: export_sftp_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -208,7 +206,7 @@ runtime_bundle_export_sftp_ssot:
     - managed_file_transfer_service_selection
     - non_sftp_transfer_protocols
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - export_job_schema_design
       - package_artifact_schema_design

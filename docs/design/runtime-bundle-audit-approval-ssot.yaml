@@ -150,8 +150,6 @@ runtime_bundle_audit_approval_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: audit_approval_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -170,7 +168,7 @@ runtime_bundle_audit_approval_ssot:
     - compliance_regulation_specification
     - cli_mcp_approval_trigger
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - approval_request_schema_design
       - approval_state_machine_design

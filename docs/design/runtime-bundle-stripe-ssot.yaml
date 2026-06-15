@@ -144,8 +144,6 @@ runtime_bundle_stripe_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: stripe_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -163,7 +161,7 @@ runtime_bundle_stripe_ssot:
     - cli_mcp_payment_trigger
     - ai_autonomous_payment_decision
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - webhook_inbox_schema_design
       - stripe_event_verification_service_design

@@ -94,7 +94,7 @@ REQUIRED_KEYS=(
   "relation_to_extended_runtime_bundle_registry"
   "relation_to_cli_mcp_port"
   "explicitly_out_of_scope"
-  "future_implementation_requirements"
+  "implementation_boundary_requirements"
 )
 
 for yaml in \
@@ -265,6 +265,42 @@ for yaml in \
   check_content "$yaml" "port_substrate_relation"
   check_content "$yaml" "external-port-substrate-ssot.yaml"
 done
+
+echo ""
+echo "=== Roadmap: all 8 consumer bundle entries present ==="
+
+ROADMAP="docs/system-roadmap.yaml"
+check_content "$ROADMAP" "product.external_port_substrate"
+check_content "$ROADMAP" "product.email_port_consumer"
+check_content "$ROADMAP" "product.stripe_port_consumer"
+check_content "$ROADMAP" "product.file_storage_port_consumer"
+check_content "$ROADMAP" "product.export_sftp_port_consumer"
+check_content "$ROADMAP" "product.webhook_inbox_port_consumer"
+check_content "$ROADMAP" "product.job_scheduler_port_consumer"
+check_content "$ROADMAP" "product.audit_approval_port_consumer"
+
+echo ""
+echo "=== Design SSOTs: no progress management terms ==="
+
+for yaml in \
+  "docs/design/runtime-bundle-email-ssot.yaml" \
+  "docs/design/runtime-bundle-stripe-ssot.yaml" \
+  "docs/design/runtime-bundle-file-storage-ssot.yaml" \
+  "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
+  "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
+  "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
+  "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
+  check_absent "$yaml" "owner_status:"
+  check_absent "$yaml" "core_bundle_status:"
+  check_absent "$yaml" "future_implementation_requirements:"
+done
+
+echo ""
+echo "=== ssot-map.yaml: external_port_substrate wiring present ==="
+
+check_content ".agent/docs/ssot-map.yaml" "external_port_substrate_ssot"
+check_content ".agent/docs/ssot-map.yaml" "docs/design/external-port-substrate-ssot.yaml"
 
 echo ""
 if [ "$FAILURES" -eq 0 ]; then

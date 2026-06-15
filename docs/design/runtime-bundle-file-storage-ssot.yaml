@@ -165,8 +165,6 @@ runtime_bundle_file_storage_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: file_storage_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -184,7 +182,7 @@ runtime_bundle_file_storage_ssot:
     - compression_algorithm_selection
     - media_file_management
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - export_job_schema_design
       - file_artifact_storage_schema_design

@@ -144,8 +144,6 @@ runtime_bundle_email_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: email_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -164,7 +162,7 @@ runtime_bundle_email_ssot:
     - cli_mcp_email_send
     - ai_autonomous_email_send
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - email_draft_surface_design
       - email_template_catalog_design
