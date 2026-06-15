@@ -308,8 +308,8 @@ for (const seedFile of SEED_FILES) {
 }
 
 Deno.test("[preset-line] aggregate_dashboard.v1 aggregation display nodes bind data without catalog gap", async () => {
-  const sql = await Deno.readTextFile("db/migrations/aggregate_dashboard_preset_seed.sql");
-  const snapshot = extractCompileSnapshot(sql, "db/migrations/aggregate_dashboard_preset_seed.sql");
+  const sql = await Deno.readTextFile("db/aggregate_dashboard_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/aggregate_dashboard_preset_seed.sql");
   const byId = new Map(snapshot.layoutPatchJson.nodes.map((node) => [String(node.nodeId), node]));
 
   const table = byId.get("dashboard_aggregation_table") as Record<string, unknown> | undefined;
@@ -327,8 +327,8 @@ Deno.test("[preset-line] aggregate_dashboard.v1 aggregation display nodes bind d
 });
 
 Deno.test("[preset-line] physical_details_inline_editor history binds emission.data.history without backend gap", async () => {
-  const sql = await Deno.readTextFile("db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql");
-  const snapshot = extractCompileSnapshot(sql, "db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const sql = await Deno.readTextFile("db/physical_details_inline_editor_md_generator_preset_seed.sql");
+  const snapshot = extractCompileSnapshot(sql, "db/physical_details_inline_editor_md_generator_preset_seed.sql");
   const historyNode = snapshot.layoutPatchJson.nodes.find((node) => node.nodeId === "details_history_list") as Record<string, unknown> | undefined;
   assert(historyNode, "details_history_list must exist");
   const bindings = historyNode.propBindings as Record<string, { source: string }> | undefined;
