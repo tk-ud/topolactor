@@ -31,9 +31,13 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml up -d  # fresh 
 `db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql` on a clean database. All canonical DDL
 and seed data lives in `db/*.sql` files applied in explicit order with `ON_ERROR_STOP`.
 
-`db/migrations/` and `db/patches/` are **retired as of 2026-06-15**. Do not add files there.
-Existing-DB incremental migration via `psql -f db/migrations/*.sql` is **not** the standard
-operational procedure. Use `docker compose -v` fresh bootstrap.
+`db/migrations/` and `db/patches/` are **retired as of 2026-06-15** and no longer exist.
+All canonical DDL and seed data lives in `db/*.sql` files. Do not add new migration or patch files.
+The standard operational procedure is always `docker compose -v` fresh bootstrap.
+
+Three data-preserving utilities for existing DBs with legacy schema shapes are in `db/legacy_utils/`
+(not `db/migrations/`). They are **not** executed during fresh bootstrap and are **not** included in
+`db/init.sql`. They exist solely as run-once utilities for existing deployments.
 
 **Bootstrap file order** (managed by `db/init.sql`):
 
@@ -95,6 +99,9 @@ seed rows for each canonical UIBuilder mock preset.
 | `aggregate_dashboard_preset_seed.sql` | UIBuilder aggregate_dashboard.v1 preset seed rows. |
 | `ui_component_registry_preset_catalog_bootstrap.sql` | Fixed-UUID `components_bucket` and `ui_component_registry` bootstrap rows for the preset ecosystem. |
 | `init.sql` | Docker initialization SSOT. Uses psql meta commands to execute all SQL files in explicit order with `ON_ERROR_STOP`. Container-path specific (`/db/...`). |
+| `legacy_utils/hub_relations_legacy_to_manifest_scoped.sql` | Data-preserving utility for existing DBs with legacy hub_relations shape. NOT in bootstrap. NOT in init.sql. |
+| `legacy_utils/ui_topology_to_canonical_schema.sql` | Data-preserving utility for existing DBs with legacy public.* UI topology tables. NOT in bootstrap. NOT in init.sql. |
+| `legacy_utils/admin_import_topology_manifest_migration.sql` | Data-preserving utility for existing DBs with legacy admin_import manifest FK shape. NOT in bootstrap. NOT in init.sql. |
 
 ---
 

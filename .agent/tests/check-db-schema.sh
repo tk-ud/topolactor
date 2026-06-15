@@ -109,9 +109,9 @@ else
   echo "OK  [sql] topology_tables.sql destructive DROP TABLE CASCADE absent"
 fi
 
-HUB_REL_MIGRATION="$REPO_ROOT/db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
+HUB_REL_MIGRATION="$REPO_ROOT/db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql"
 if [ ! -f "$HUB_REL_MIGRATION" ]; then
-  fail "hub_relations legacy migration SQL missing: db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
+  fail "hub_relations legacy migration SQL missing: db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql"
 else
   echo "OK  [sql] hub_relations legacy migration SQL present"
 fi
@@ -132,7 +132,7 @@ run_sql_file "db/sql_attention_logs_tables.sql"
 run_sql_file "db/seed_empty.sql"
 
 echo "=== Validating hub_relations legacy migration idempotency ==="
-run_sql_file "db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
+run_sql_file "db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql"
 query_equals_one "hub_relations legacy shape detection function present" \
   "SELECT COUNT(*) FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'hubs' AND p.proname = 'hub_relations_has_legacy_shape';"
 query_equals_one "hub_relations canonical shape after idempotent migration pass" \
@@ -182,7 +182,7 @@ BEGIN
 END;
 \$\$;
 
-\\i $REPO_ROOT/db/migrations/hub_relations_legacy_to_manifest_scoped.sql
+\\i $REPO_ROOT/db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql
 
 DO \$\$
 BEGIN

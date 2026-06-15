@@ -169,7 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_physical_table_manifest_bindings_manifest
 -- Bootstrap-only: CREATE TABLE IF NOT EXISTS applies on fresh DB only.
 -- Existing DBs with legacy hub_relations (hub_id / target_hub_id / relation_registry_id)
 -- require an explicit data-preserving migration:
---   db/migrations/hub_relations_legacy_to_manifest_scoped.sql
+--   db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS hubs.hub_relations (
     hub_relation_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -42,7 +42,7 @@ check_content() {
 
 echo ""
 echo "=== Static structure checks: ui_topology_to_canonical_schema.sql ==="
-MIGRATION="db/migrations/ui_topology_to_canonical_schema.sql"
+MIGRATION="db/legacy_utils/ui_topology_to_canonical_schema.sql"
 
 check_content "$MIGRATION" "v_bad_refs"
 check_content "$MIGRATION" "RAISE EXCEPTION"
@@ -66,7 +66,7 @@ check_content "$MIGRATION" "DROP TABLE IF EXISTS public.ui_component_registry CA
 
 echo ""
 echo "=== Static structure checks: admin_import_topology_manifest_migration.sql ==="
-ADMIN_MIGRATION="db/migrations/admin_import_topology_manifest_migration.sql"
+ADMIN_MIGRATION="db/legacy_utils/admin_import_topology_manifest_migration.sql"
 
 check_content "$ADMIN_MIGRATION" "orphaned_count"
 check_content "$ADMIN_MIGRATION" "default_manifest_id"
@@ -192,7 +192,7 @@ query_equals_zero "public.ui_package_component_map absent" \
 
 echo ""
 echo "=== DB: migration idempotency (re-run is a no-op) ==="
-run_sql_file "db/migrations/ui_topology_to_canonical_schema.sql"
+run_sql_file "db/legacy_utils/ui_topology_to_canonical_schema.sql"
 echo "OK  [idempotent] ui_topology_to_canonical_schema.sql re-run succeeded"
 
 echo ""

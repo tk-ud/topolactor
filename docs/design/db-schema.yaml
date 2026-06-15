@@ -14,11 +14,12 @@ db_schema:
     migration_note: >-
       db/migrations/ and db/patches/ are retired as of 2026-06-15.
       All canonical DDL and seed data lives in db/*.sql files.
-      Existing-DB incremental migration via psql -f db/migrations/*.sql is NOT
-      the standard operational procedure. Use docker compose -v fresh bootstrap.
-      Exception: db/migrations/hub_relations_legacy_to_manifest_scoped.sql is retained
-      as a data-preserving utility for existing DBs with legacy hub_relations shape;
-      it is NOT executed during fresh bootstrap and is NOT included in db/init.sql.
+      Existing-DB incremental migration is NOT the standard operational procedure.
+      Use docker compose -v fresh bootstrap.
+      Three data-preserving utilities for existing DBs are kept in db/legacy_utils/
+      (hub_relations_legacy_to_manifest_scoped.sql, ui_topology_to_canonical_schema.sql,
+      admin_import_topology_manifest_migration.sql); they are NOT executed during fresh
+      bootstrap and are NOT included in db/init.sql.
     canonical_bootstrap_files:
       - db/schema.sql
       - db/topology_tables.sql
@@ -308,12 +309,12 @@ db_schema:
         status: migration_completed
         migration_target: topology schema
         bootstrap_ddl: db/ui_topology_tables.sql
-        legacy_migration_utility: db/migrations/ui_topology_to_canonical_schema.sql
+        legacy_migration_utility: db/legacy_utils/ui_topology_to_canonical_schema.sql
         note: >-
           All public UI component/design/layout/package tables migrated to topology.* canonical schema
           and then retired (DROPped in reverse dependency order with CASCADE).
           Canonical DDL in db/ui_topology_tables.sql; migration file retired from standard bootstrap (2026-06-15).
-          db/migrations/ui_topology_to_canonical_schema.sql is retained as a data-preserving utility for
+          db/legacy_utils/ui_topology_to_canonical_schema.sql is retained as a data-preserving utility for
           existing DBs with legacy public.* UI topology tables; it is NOT part of the standard fresh bootstrap
           and is NOT included in db/init.sql. Required by .agent/tests/check-migration-ui-topology.sh.
         former_tables:
@@ -331,12 +332,12 @@ db_schema:
         status: migration_completed
         migration_target: hubs.topology_manifests
         bootstrap_ddl: db/manifest_tables.sql
-        legacy_migration_utility: db/migrations/admin_import_topology_manifest_migration.sql
+        legacy_migration_utility: db/legacy_utils/admin_import_topology_manifest_migration.sql
         note: >-
           admin_import_snapshot and admin_import_records migrated from public.manifest FK to
           hubs.topology_manifests topology_manifest_id. Canonical DDL in db/manifest_tables.sql;
           migration file retired from standard bootstrap (2026-06-15).
-          db/migrations/admin_import_topology_manifest_migration.sql is retained as a data-preserving
+          db/legacy_utils/admin_import_topology_manifest_migration.sql is retained as a data-preserving
           utility for existing DBs with legacy admin_import manifest FK shape; it is NOT part of the
           standard fresh bootstrap and is NOT included in db/init.sql.
           Required by .agent/tests/check-migration-ui-topology.sh.
@@ -344,15 +345,15 @@ db_schema:
         status: migration_completed
         migration_target: hubs.hub_relations
         bootstrap_ddl: db/topology_tables.sql
-        legacy_migration_utility: db/migrations/hub_relations_legacy_to_manifest_scoped.sql
+        legacy_migration_utility: db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql
         note: >-
           Legacy hub_relations used hub_id / target_hub_id / relation_registry_id as a global
           hub-to-hub graph. Canonical shape is manifest-scoped under hubs.topology_manifests
           (topology_manifest_id + related_hub_id + sequence_position + relation_config + status).
           Canonical DDL in db/topology_tables.sql (fresh bootstrap via docker compose -v).
-          db/migrations/hub_relations_legacy_to_manifest_scoped.sql is retained as a data-preserving
-          utility for existing DBs with legacy shape; it is NOT part of the standard fresh bootstrap.
-          db/migrations/ is retired as a standard bootstrap path as of 2026-06-15.
+          db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql is retained as a data-preserving
+          utility for existing DBs with legacy shape; it is NOT part of the standard fresh bootstrap
+          and is NOT included in db/init.sql.
         former_columns:
           - hub_id
           - target_hub_id
