@@ -505,6 +505,39 @@ public class SecretCredentialBundleRuntimeTests
         Assert.NotNull(failedEvent);
         Assert.Equal("rotate_fail_audit_key", failedEvent!.ReferenceKey);
         Assert.Equal("failure", failedEvent.Outcome);
+
+        // credential_rotated: success must NOT be written when validation fails (audit ordering contract)
+        var successAudit = repo.AuditEvents.FirstOrDefault(
+            e => e.EventType == "credential_rotated" && e.Outcome == "success");
+        Assert.Null(successAudit);
+    }
+
+    [Fact]
+    public async Task Rotate_Success_CredentialRotatedAuditWrittenAfterConfirm()
+    {
+        var repo = new InMemoryCredentialReferenceRepository();
+        var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        await RegisterCredential(runtime, "rotate_audit_order_key", "env_var");
+
+        var payload = BuildPayload(new { reference_key = "rotate_audit_order_key" });
+        var context = new Dictionary<string, string> { ["jwt_actor"] = "admin_user" };
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, context);
+
+        var response = await runtime.ExecuteAsync(request, manifestId: null);
+
+        Assert.True(response.Success);
+
+        // credential_rotated: success must be written after ConfirmRotationAsync
+        var rotatedEvent = repo.AuditEvents.FirstOrDefault(e => e.EventType == "credential_rotated");
+        Assert.NotNull(rotatedEvent);
+        Assert.Equal("success", rotatedEvent!.Outcome);
+
+        // status must be active (ConfirmRotationAsync was called before the audit)
+        var record = repo.AllRegistered.Single();
+        Assert.Equal("active", record.Status);
+
+        // no credential_rotation_failed event must exist
+        Assert.DoesNotContain(repo.AuditEvents, e => e.EventType == "credential_rotation_failed");
     }
 
     [Fact]

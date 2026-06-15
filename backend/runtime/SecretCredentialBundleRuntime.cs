@@ -314,32 +314,8 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 $"Failed to record rotation for credential reference '{referenceKey}'.");
         }
 
-        // Audit write failure is not silent — return explicit error rather than swallow.
-        try
-        {
-            await _repository.AppendAuditEventAsync(
-                new CredentialAuditEventRecord(
-                    EventType: "credential_rotated",
-                    CredentialReferenceId: reference.CredentialReferenceId,
-                    ReferenceKey: referenceKey,
-                    Outcome: "success",
-                    FailureCode: null),
-                ct);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "SecretCredentialBundleRuntime.rotate: audit log append failed referenceKey={ReferenceKey}",
-                referenceKey);
-            return ExplicitError("CREDENTIAL_AUDIT_WRITE_FAILED",
-                $"Failed to record rotation audit for credential '{referenceKey}'.");
-        }
-
         // Post-rotation validation: credential must be present in store before confirming active.
+        // credential_rotated audit is written ONLY after ConfirmRotationAsync (success path).
         CredentialValidationResult validation;
         try
         {
@@ -397,6 +373,32 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
 
         // Validation succeeded: confirm rotation by setting status=active.
         await _repository.ConfirmRotationAsync(referenceKey, ct);
+
+        // Audit: credential_rotated success is written only after ConfirmRotationAsync.
+        // On failure, only credential_rotation_failed is appended (see above).
+        try
+        {
+            await _repository.AppendAuditEventAsync(
+                new CredentialAuditEventRecord(
+                    EventType: "credential_rotated",
+                    CredentialReferenceId: reference.CredentialReferenceId,
+                    ReferenceKey: referenceKey,
+                    Outcome: "success",
+                    FailureCode: null),
+                ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "SecretCredentialBundleRuntime.rotate: credential_rotated audit write failed referenceKey={ReferenceKey}",
+                referenceKey);
+            return ExplicitError("CREDENTIAL_AUDIT_WRITE_FAILED",
+                $"Failed to record rotation audit for credential '{referenceKey}'.");
+        }
 
         _logger.LogInformation(
             "SecretCredentialBundleRuntime.rotate: rotation confirmed and validated for referenceKey={ReferenceKey}",

@@ -106,6 +106,7 @@ runtime_orchestration_ssot:
       - /admin/team-dashboard
       - /admin/enums
       - /admin/users
+      - /admin/credentials
 
   trigger_contract:
     kind_enum:
