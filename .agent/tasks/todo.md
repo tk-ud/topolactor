@@ -12,14 +12,14 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `secret-credential-implementation-contract` | secret_credential_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-secret-credential-ssot.yaml` |
-| `file-storage-implementation-contract` | file_storage_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
-| `email-implementation-contract` | email_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
-| `stripe-implementation-contract` | stripe_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
-| `webhook-inbox-implementation-contract` | webhook_inbox_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
-| `job-scheduler-implementation-contract` | job_scheduler_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
-| `audit-approval-implementation-contract` | audit_approval_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
-| `export-sftp-implementation-contract` | export_sftp_bundle 実装契約（file-storage 後） | not_started | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
+| `external-port-substrate-design` | external_port_substrate 共通基盤 SSOT 設計 | not_started | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
+| `file-storage-port-consumer` | file_storage_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
+| `email-port-consumer` | email_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
+| `stripe-port-consumer` | stripe_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
+| `webhook-inbox-port-consumer` | webhook_inbox_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
+| `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
+| `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
+| `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
 ---
 
@@ -236,315 +236,252 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ---
 
-## Bundle `secret-credential-implementation-contract`
+## Bundle `external-port-substrate-design`
 
 **Status:** not_started  
-**SSOT:** `docs/design/runtime-bundle-secret-credential-ssot.yaml`
+**Roadmap/status SSOT:** `product.external_port_substrate`  
+**SSOT:** `docs/design/external-port-substrate-ssot.yaml`
 
 問題点:
-secret_credential_bundle 設計 SSOT 点検済み（authority_boundary: admin_config_and_runtime_secret_store / validate-preview-apply: registration/validation/rotation/runtime_injection 定義済み）。実装に必要な credential_reference_schema / secret_store_adapter / credential_registration_ui / credential_rotation_service / credential_validation_service / credential_injection_pattern の設計詳細が未確定。email_bundle（SMTP credential）/ stripe_bundle（Stripe secret key）/ export_sftp_bundle（SFTP key）/ webhook_inbox_bundle（signing key）等の credential injection 前提 bundle であるため先行着手が望ましい。
+外部連携 8 Bundle がそれぞれ独立した credential 管理 plane（dedicated runtime / admin UI / audit log / rotation service）を持つ設計になっていた。secret_credential_bundle を独立実装 Bundle として扱い、credential 管理の主体を credential 自体に置いていた。port record（access_port / response_port / hook_port）が設計の主体ではなく、credential が主体になっていた。この設計は prohibited として明示された（SecretCredentialBundleRuntime / dedicated_credential_runtime / credential_rotation_service 等）。
 
 目的:
-secret_credential_bundle の実装契約を確定し、credential 管理基盤（参照登録 / rotation / validation / runtime injection）を bundle 単位で実装できる状態にする。
+外部連携 8 Bundle の共通基盤として external_port_substrate を確立する。access_port / response_port / hook_port を物理テーブルとして定義し、credential_requirement を port record 付属要件として管理する。secret_credential_bundle は独立 Bundle ではなく本 substrate の credential_requirement 境界定義として統合する。admin role write policy による port 設定管理を確立する。
 
 改善方針:
-- [ ] credential_reference_schema の設計（DB schema: topology schema 下の credential 参照テーブル）を確定する
-- [ ] secret_store_adapter の設計（runtime 環境変数 / secret manager API 抽象化 C# interface）を確定する
-- [ ] credential_registration_ui の設計（admin UI コンポーネント境界）を確定する
-- [ ] credential_rotation_service の設計（明示的 admin 操作 / 承認済み automation job として実行）を確定する
-- [ ] credential_validation_service の設計（registration / rotation / runtime startup での検証）を確定する
-- [ ] credential_injection_pattern の設計（runtime 起動時 secret store 経由注入パターン）を確定する
-- [ ] 実 credential 値を公開 SSOT / コード / audit log に含めない設計を確定する
-- [ ] IDispatchableRuntime.ExecuteAsync として実装し、validate-preview-apply boundary を維持する
+- [ ] external_port_substrate SSOT（access_port / response_port / hook_port / credential_requirement / admin_role_write_policy）境界定義を確定する
+- [ ] external_access_ports / external_response_ports / external_hook_ports 物理テーブル設計を確定する（topology schema）
+- [ ] credential_kind（auth | external | none）の port record 付属 seed / projection 設計を確定する
+- [ ] admin role による port 設定 validate → preview → apply 境界を確定する
+- [ ] 8 Bundle すべての port_substrate_relation（consumer bundle 対応）を SSOT で確定する
+- [ ] system-roadmap.yaml に product.external_port_substrate エントリを追加する
 
 対応資料:
-- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/auth-db-session-credential-ssot.yaml`
 
 対象ファイル名:
-- `backend/runtime/SecretCredentialBundleRuntime.cs`
-- `backend/schema/SecretCredentialBundleContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/SecretCredentialBundleRuntimeTests.cs`
-- `backend/Program.cs`（handler dictionary 登録）
-- `db/init.sql` bootstrap 経路に credential_reference テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
+- `docs/system-roadmap.yaml`
 
-対象関数名:
-- `SecretCredentialBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
-- `ICredentialStore.GetAsync`, `ICredentialStore.SetAsync`
-- `CredentialValidationService.ValidateAsync`
+対象 surface 名:
+- `external_port_substrate`（共通基盤 SSOT surface）
+- `credential_requirement`（port record 付属要件 surface）
+- `admin_setting_projection`（port 設定 admin role write surface）
 
 ---
 
-## Bundle `file-storage-implementation-contract`
+## Bundle `file-storage-port-consumer`
 
 **Status:** not_started  
 **SSOT:** `docs/design/runtime-bundle-file-storage-ssot.yaml`
 
 問題点:
-file_storage_bundle 設計 SSOT 点検済み（authority_boundary: export_job_or_authorized_api / validate-preview-apply: export_job/checksum/manifest/signed_download 定義済み）。実装に必要な export_job_schema / file_artifact_storage_schema / checksum_record_schema / signed_url_generation_service / manifest_schema / storage_provider_adapter の設計詳細が未確定。export_sftp_bundle が依存する前提 bundle であるため優先着手が望ましい。
+file_storage_bundle の credential（object storage access key / secret key）が standalone credential 管理 plane の対象として設計されていた。port substrate との接続設計が未確定。
 
 目的:
-file_storage_bundle の実装契約を確定し、export_job を通じた file write / checksum / manifest / signed_url_download を bundle 単位で実装できる状態にする。
+file_storage_bundle を external_port_substrate の access_port / response_port consumer として確立する。object storage credential は port record 付属の credential_requirement として管理し、standalone credential 管理 plane は作らない。
 
 改善方針:
-- [ ] export_job_schema の設計（DB schema）を確定する
-- [ ] file_artifact_storage_schema の設計（export 生成ファイルの参照・メタデータ管理）を確定する
-- [ ] checksum_record_schema の設計（ファイル整合性検証レコード）を確定する
-- [ ] signed_url_generation_service の設計（有効期限付き download URL 生成 C# service）を確定する
-- [ ] manifest_schema の設計（export package manifest 形式）を確定する
-- [ ] storage_provider_adapter の設計（object storage provider 抽象化 C# interface、credential は secret_store 経由）を確定する
-- [ ] IDispatchableRuntime.ExecuteAsync として実装し、checksum 必須・unauthenticated download 禁止を維持する
+- [ ] file_storage_bundle の access_port / response_port consumer としての port_substrate_relation を確定する
+- [ ] object storage credential_kind を external として port record に付属させる設計を確定する（standalone 管理 plane 不使用）
+- [ ] export_job → port record 解決 → object storage アクセスの設計境界を確定する
 
 対応資料:
 - `docs/design/runtime-bundle-file-storage-ssot.yaml`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
 
 対象ファイル名:
-- `backend/runtime/FileStorageBundleRuntime.cs`
-- `backend/schema/FileStorageBundleContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/FileStorageBundleRuntimeTests.cs`
-- `backend/Program.cs`（handler dictionary 登録）
-- `db/init.sql` bootstrap 経路に export_job / file_artifact テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
+- `docs/design/runtime-bundle-file-storage-ssot.yaml`
 
-対象関数名:
-- `FileStorageBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
-- `IFileStorageAdapter.WriteAsync`, `IFileStorageAdapter.GenerateSignedUrlAsync`
-- `ChecksumService.ComputeAsync`, `ChecksumService.VerifyAsync`
+対象 surface 名:
+- `access_port`（object storage アクセス）
+- `response_port`（object storage 返送）
+- `credential_requirement`（object storage credential 付属要件）
 
 ---
 
-## Bundle `email-implementation-contract`
+## Bundle `email-port-consumer`
 
 **Status:** not_started  
 **SSOT:** `docs/design/runtime-bundle-email-ssot.yaml`
 
 問題点:
-email_bundle 設計 SSOT 点検済み（authority_boundary: ui_approval_then_backend_dispatch / validate-preview-apply: draft/preview/approval/dispatch/delivery_log 定義済み）。実装に必要な email_draft_surface_schema / email_template_catalog / backend_email_dispatch_service / smtp_provider_adapter / delivery_log_schema / approval_confirmation_ui / idempotency_key_schema の設計詳細が未確定。CLI/MCP からの email send は禁止。AI 単独送信は禁止。
+email_bundle の SMTP credential が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての設計境界が未確定。
 
 目的:
-email_bundle の実装契約を確定し、UI approval → backend dispatch → SMTP 副作用の実装を bundle 単位で着手できる状態にする。
+email_bundle を external_port_substrate の response_port（provider_kind: smtp）consumer として確立する。SMTP credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
 改善方針:
-- [ ] email_draft_surface_schema の設計（DB schema + UI component 境界）を確定する
-- [ ] email_template_catalog の設計（テンプレート構造・格納方式）を確定する
-- [ ] backend_email_dispatch_service の設計（approval 後の SMTP / API provider 送信 C# handler）を確定する
-- [ ] smtp_provider_adapter の設計（SMTP / email API provider 抽象化 C# interface、credential は secret_store 経由）を確定する
-- [ ] delivery_log_schema の設計（runtime_event_log への送信結果記録形式）を確定する
-- [ ] approval_confirmation_ui_component の設計を確定する
-- [ ] idempotency_key_schema を確定する（同一 approval ID での二重送信防止）
-- [ ] IDispatchableRuntime.ExecuteAsync として実装し、承認なし送信・AI 単独送信を禁止する
+- [ ] email_bundle の response_port（smtp）consumer としての port_substrate_relation を確定する
+- [ ] SMTP credential_kind を external として port record に付属させる設計を確定する
+- [ ] UI approval → response_port 解決 → SMTP dispatch の境界設計を確定する
 
 対応資料:
 - `docs/design/runtime-bundle-email-ssot.yaml`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
 
 対象ファイル名:
-- `backend/runtime/EmailBundleRuntime.cs`
-- `backend/schema/EmailBundleContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/EmailBundleRuntimeTests.cs`
-- `backend/Program.cs`（handler dictionary 登録）
-- `db/init.sql` bootstrap 経路に email_draft / email_delivery_log テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
+- `docs/design/runtime-bundle-email-ssot.yaml`
 
-対象関数名:
-- `EmailBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
-- `ISmtpAdapter.SendAsync`
-- `EmailApprovalService.ConfirmAsync`
+対象 surface 名:
+- `response_port`（SMTP 送信 port）
+- `credential_requirement`（SMTP credential 付属要件）
 
 ---
 
-## Bundle `stripe-implementation-contract`
+## Bundle `stripe-port-consumer`
 
 **Status:** not_started  
 **SSOT:** `docs/design/runtime-bundle-stripe-ssot.yaml`
 
 問題点:
-stripe_bundle 設計 SSOT 点検済み（authority_boundary: verified_webhook_event_only / validate-preview-apply: webhook_inbox/event_verification/payment_state_projection/ledger_binding 定義済み）。実装に必要な webhook_inbox_schema / stripe_event_verification_service / payment_state_projection_schema / ledger_binding_schema / idempotency_key_schema の設計詳細が未確定。Stripe-Signature 検証なしの paid state 確定は禁止。
+stripe_bundle の webhook secret が standalone credential 管理 plane の対象として設計されていた。hook_port consumer としての設計境界が未確定。
 
 目的:
-stripe_bundle の実装契約を確定し、webhook intake → signature verification → payment state projection → ledger binding の実装を bundle 単位で着手できる状態にする。
+stripe_bundle を external_port_substrate の hook_port（provider_kind: stripe）consumer として確立する。Stripe webhook secret は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
 改善方針:
-- [ ] webhook_inbox_schema の設計（Stripe webhook 受信 DB schema）を確定する
-- [ ] stripe_event_verification_service の設計（Stripe-Signature ヘッダー検証 C# service、signing key は secret_store 経由）を確定する
-- [ ] payment_state_projection_schema の設計（検証済み event からの paid state 投影 schema）を確定する
-- [ ] ledger_binding_schema の設計（payment state 確定後の account 記録 schema）を確定する
-- [ ] idempotency_key_schema を確定する（同一 stripe_event_id での二重処理防止）
-- [ ] IDispatchableRuntime.ExecuteAsync として実装し、webhook_direct_runtime_execution を禁止する
+- [ ] stripe_bundle の hook_port（stripe）consumer としての port_substrate_relation を確定する
+- [ ] Stripe webhook secret の credential_kind を external として hook_port に付属させる設計を確定する
+- [ ] hook_port → signature verification → payment state projection の境界設計を確定する
 
 対応資料:
 - `docs/design/runtime-bundle-stripe-ssot.yaml`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
 
 対象ファイル名:
-- `backend/runtime/StripeBundleRuntime.cs`
-- `backend/schema/StripeBundleContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/StripeBundleRuntimeTests.cs`
-- `backend/Program.cs`（handler dictionary 登録）
-- `db/init.sql` bootstrap 経路に stripe_webhook_inbox / payment_state テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
+- `docs/design/runtime-bundle-stripe-ssot.yaml`
 
-対象関数名:
-- `StripeBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
-- `StripeWebhookVerificationService.VerifyAsync`
-- `PaymentStateProjectionService.ProjectAsync`
+対象 surface 名:
+- `hook_port`（Stripe webhook 受信 port）
+- `credential_requirement`（Stripe webhook secret 付属要件）
 
 ---
 
-## Bundle `webhook-inbox-implementation-contract`
+## Bundle `webhook-inbox-port-consumer`
 
 **Status:** not_started  
 **SSOT:** `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
 
 問題点:
-webhook_inbox_bundle 設計 SSOT 点検済み（authority_boundary: scheduler_then_runtime_route_only / validate-preview-apply: intake/signature_verification/snapshot/validate/preview/explicit_apply 定義済み）。実装に必要な webhook_intake_schema / webhook_event_signature_verification_service / intake_snapshot_schema / scheduler_hook_trigger_wiring / idempotency_key_schema の設計詳細が未確定。webhook_direct_runtime_execution は禁止。
+webhook_inbox_bundle の webhook signing key が standalone credential 管理 plane の対象として設計されていた。hook_port consumer としての設計境界が未確定。
 
 目的:
-webhook_inbox_bundle の実装契約を確定し、webhook → signature verification → intake snapshot → scheduler → runtime route の実装を bundle 単位で着手できる状態にする。
+webhook_inbox_bundle を external_port_substrate の hook_port consumer として確立する。webhook signing key は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
 改善方針:
-- [ ] webhook_intake_schema の設計（webhook 受信・署名前保存 DB schema）を確定する
-- [ ] webhook_event_signature_verification_service の設計（provider ごとの署名検証 C# service、signing key は secret_store 経由）を確定する
-- [ ] intake_snapshot_schema の設計（検証済み payload の canonical 入力候補 schema）を確定する
-- [ ] scheduler_hook_trigger_wiring の設計（runtime_orchestration_ssot の hook trigger kind との整合）を確定する
-- [ ] idempotency_key_schema を確定する（同一 webhook event ID での二重処理防止）
-- [ ] IDispatchableRuntime.ExecuteAsync として実装し、scheduler 経由を強制する
+- [ ] webhook_inbox_bundle の hook_port consumer としての port_substrate_relation を確定する
+- [ ] webhook signing key の credential_kind を external として hook_port に付属させる設計を確定する
+- [ ] hook_port → signature verification → scheduler 境界の設計を確定する
 
 対応資料:
 - `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
 
 対象ファイル名:
-- `backend/runtime/WebhookInboxBundleRuntime.cs`
-- `backend/schema/WebhookInboxBundleContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/WebhookInboxBundleRuntimeTests.cs`
-- `backend/Program.cs`（handler dictionary 登録）
-- `db/init.sql` bootstrap 経路に webhook_intake / intake_snapshot テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
+- `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
 
-対象関数名:
-- `WebhookInboxBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
-- `WebhookSignatureVerificationService.VerifyAsync`
-- `IntakeSnapshotService.CreateAsync`
+対象 surface 名:
+- `hook_port`（webhook 受信 port）
+- `credential_requirement`（webhook signing key 付属要件）
 
 ---
 
-## Bundle `job-scheduler-implementation-contract`
+## Bundle `job-scheduler-port-consumer`
 
 **Status:** not_started  
 **SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
 
 問題点:
-job_scheduler_bundle 設計 SSOT 点検済み（authority_boundary: trigger_alignment_and_runtime_queue_only / cron/hook/client trigger 統合境界定義済み）。runtime_orchestration_ssot の scheduler_contract を基礎とするが、job_queue_schema / cron_driver_loop / hook_trigger_intake / client_trigger_intake / collision_control / scheduler_overflow_policy / job_execution_log_schema の実装設計が未確定。runtime_destination_selection は manifest_dispatcher が所有する（変更なし）。
+job_scheduler_bundle の外部スケジューラー provider credential が standalone credential 管理 plane の対象として設計されていた。access_port / hook_port consumer としての設計境界が未確定。
 
 目的:
-job_scheduler_bundle の実装契約を確定し、cron / hook / client trigger を統合するスケジューラー基盤を bundle 単位で実装できる状態にする。
+job_scheduler_bundle を external_port_substrate の access_port / hook_port consumer として確立する。外部スケジューラー credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。topolactor 内蔵 scheduler 利用時は credential_kind: none。
 
 改善方針:
-- [ ] job_queue_schema の設計（DB schema: trigger event キュー）を確定する
-- [ ] cron_driver_loop の設計（既存 SqlAttentionScheduler との役割分担・周期実行境界）を確定する
-- [ ] hook_trigger_intake の設計（webhook_inbox_bundle からの hook 受信インターフェース）を確定する
-- [ ] client_trigger_intake の設計（API / frontend からの client trigger 受信インターフェース）を確定する
-- [ ] collision_control の実装設計（同一 trigger の二重実行防止）を確定する
-- [ ] scheduler_overflow_policy の実装設計（queue overflow 時の明示的エラー返却）を確定する
-- [ ] job_execution_log_schema の設計（runtime_event_log への実行履歴記録形式）を確定する
+- [ ] job_scheduler_bundle の access_port / hook_port consumer としての port_substrate_relation を確定する
+- [ ] 外部スケジューラー credential_kind（external または none）の設計境界を確定する
+- [ ] scheduler → manifest_dispatcher 境界が port substrate に依存しないことを確認する
 
 対応資料:
 - `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
 
 対象ファイル名:
-- `backend/runtime/JobSchedulerBundleRuntime.cs`
-- `backend/schema/JobSchedulerBundleContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/JobSchedulerBundleRuntimeTests.cs`
-- `backend/Program.cs`（handler dictionary 登録）
-- `db/init.sql` bootstrap 経路に job_queue テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
+- `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
 
-対象関数名:
-- `JobSchedulerBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
-- `IJobQueue.EnqueueAsync`, `IJobQueue.DequeueAsync`
-- `CollisionControlService.CheckAsync`
+対象 surface 名:
+- `access_port`（外部スケジューラーアクセス port）
+- `hook_port`（スケジューラー hook 受信 port）
+- `credential_requirement`（外部スケジューラー credential 付属要件）
 
 ---
 
-## Bundle `audit-approval-implementation-contract`
+## Bundle `audit-approval-port-consumer`
 
 **Status:** not_started  
 **SSOT:** `docs/design/runtime-bundle-audit-approval-ssot.yaml`
 
 問題点:
-audit_approval_bundle 設計 SSOT 点検済み（authority_boundary: ui_human_explicit_action_only / validate-preview-apply: request/review/approval/rejection 定義済み）。CLI/MCP read/export 境界との整合確認が必要。実装に必要な approval_request_schema / approval_state_machine / export_job_approval_schema / audit_log_schema / approval_notification / idempotency_key_schema の設計詳細が未確定。AI 単独承認・暗黙的承認は禁止。
+audit_approval_bundle の承認通知 credential が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての設計境界が未確定。
 
 目的:
-audit_approval_bundle の実装契約を確定し、承認フロー（UI human action）/ 監査ログ / export_job approval を bundle 単位で実装できる状態にする。
+audit_approval_bundle を external_port_substrate の response_port consumer として確立する。承認通知 credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
 改善方針:
-- [ ] approval_request_schema の設計（DB schema: 承認リクエスト管理テーブル）を確定する
-- [ ] approval_state_machine の設計（request → review → approved/rejected 状態遷移）を確定する
-- [ ] export_job_approval_schema の設計（export_job に紐付く承認レコード）を確定する
-- [ ] audit_log_schema の設計（runtime_event_log への監査記録形式、実値は記録しない）を確定する
-- [ ] approval_notification の設計（承認要求通知境界）を確定する
-- [ ] idempotency_key_schema を確定する（同一 approval_request_id での二重承認防止）
-- [ ] cli-model-context-protocols-port-ssot.yaml との整合を確認してから実装する（CLI/MCP approval は禁止）
+- [ ] audit_approval_bundle の response_port consumer としての port_substrate_relation を確定する
+- [ ] 承認通知 credential_kind の設計境界を確定する
+- [ ] approval → response_port 解決 → 通知送信の境界設計を確定する
 
 対応資料:
 - `docs/design/runtime-bundle-audit-approval-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
 
 対象ファイル名:
-- `backend/runtime/AuditApprovalBundleRuntime.cs`
-- `backend/schema/AuditApprovalBundleContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/AuditApprovalBundleRuntimeTests.cs`
-- `backend/Program.cs`（handler dictionary 登録）
-- `db/init.sql` bootstrap 経路に approval_request / export_job_approval テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
+- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
 
-対象関数名:
-- `AuditApprovalBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
-- `ApprovalStateMachine.TransitionAsync`
-- `AuditLogService.RecordAsync`
+対象 surface 名:
+- `response_port`（承認通知送信 port）
+- `credential_requirement`（承認通知 credential 付属要件）
 
 ---
 
-## Bundle `export-sftp-implementation-contract`
+## Bundle `export-sftp-port-consumer`
 
 **Status:** not_started  
 **SSOT:** `docs/design/runtime-bundle-export-sftp-ssot.yaml`
 
 問題点:
-export_sftp_bundle 設計 SSOT 点検済み（authority_boundary: authorized_export_job_only / validate-preview-apply: export_job/package/manifest/checksum/transfer 定義済み）。file_storage_bundle の実装契約が前提（file_storage_bundle が file_generation / checksum_computation / manifest_generation を担当）。実装に必要な sftp_transfer_service / transfer_log_schema / retry_policy / credential_injection_pattern の設計詳細が未確定。manifest + checksum 必須。
+export_sftp_bundle の SFTP credential（host / user / key）が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての設計境界が未確定。file_storage_bundle との責務分担境界も設計が必要。
 
 目的:
-export_sftp_bundle の実装契約を確定し、export_job が生成した package の SFTP 外部搬出を bundle 単位で実装できる状態にする。
+export_sftp_bundle を external_port_substrate の response_port（provider_kind: sftp）consumer として確立する。SFTP credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
 改善方針:
-- [ ] file-storage-implementation-contract の完了を前提条件とする
-- [ ] sftp_transfer_service の設計（SFTP push C# adapter、credential は secret_store 経由）を確定する
-- [ ] transfer_log_schema の設計（runtime_event_log への転送結果記録形式）を確定する
-- [ ] retry_policy の実装設計（明示的 retry / silent fallback 禁止 / scheduler 経由 retry）を確定する
-- [ ] credential_injection_pattern の設計（SFTP host / user / key を secret_store 経由注入）を確定する
-- [ ] 転送前・転送後両方の checksum 検証を実装する
-- [ ] IDispatchableRuntime.ExecuteAsync として実装し、manifest + checksum なし転送を禁止する
+- [ ] export_sftp_bundle の response_port（sftp）consumer としての port_substrate_relation を確定する
+- [ ] SFTP credential_kind を external として response_port に付属させる設計を確定する
+- [ ] export_job → port record 解決 → SFTP transfer の境界設計を確定する（file-storage-port-consumer の完了を前提）
+- [ ] 転送前後の checksum 検証境界を port substrate と独立して設計する
 
 対応資料:
 - `docs/design/runtime-bundle-export-sftp-ssot.yaml`
 - `docs/design/runtime-bundle-file-storage-ssot.yaml`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
 
 対象ファイル名:
-- `backend/runtime/ExportSftpBundleRuntime.cs`
-- `backend/schema/ExportSftpBundleContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/ExportSftpBundleRuntimeTests.cs`
-- `backend/Program.cs`（handler dictionary 登録）
+- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
 
-対象関数名:
-- `ExportSftpBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
-- `ISftpAdapter.TransferAsync`
-- `TransferChecksumVerificationService.VerifyAsync`
-- 各 bundle 実装時の関連 dotnet tests
+対象 surface 名:
+- `response_port`（SFTP 転送 port）
+- `credential_requirement`（SFTP credential 付属要件）

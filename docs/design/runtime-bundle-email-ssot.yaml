@@ -69,6 +69,18 @@ runtime_bundle_email_ssot:
       SMTP provider credential (host / port / API key / sender address) は
       公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
 
+  port_substrate_relation:
+    substrate_ssot: docs/design/external-port-substrate-ssot.yaml
+    classification: port_consumer_bundle
+    port_consumer:
+      - response_port
+    provider_kind: smtp
+    credential_kind: external
+    note: >-
+      SMTP credential は external_port_substrate の
+      response_port に付属する credential_requirement として管理する。
+      credential の standalone 管理 plane は作らない。
+
   email_flow_boundary:
     draft:
       description: >-
@@ -132,8 +144,6 @@ runtime_bundle_email_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: email_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -152,7 +162,7 @@ runtime_bundle_email_ssot:
     - cli_mcp_email_send
     - ai_autonomous_email_send
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - email_draft_surface_design
       - email_template_catalog_design

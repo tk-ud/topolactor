@@ -67,6 +67,18 @@ runtime_bundle_export_sftp_ssot:
       SFTP host / user / key実体は公開SSOTに記載しない。
       runtime環境変数またはsecret store経由で注入する。
 
+  port_substrate_relation:
+    substrate_ssot: docs/design/external-port-substrate-ssot.yaml
+    classification: port_consumer_bundle
+    port_consumer:
+      - response_port
+    provider_kind: sftp
+    credential_kind: external
+    note: >-
+      SFTP credential (host / user / key) は external_port_substrate の
+      response_port に付属する credential_requirement として管理する。
+      credential の standalone 管理 plane は作らない。
+
   export_transfer_flow:
     export_job:
       description: >-
@@ -164,8 +176,6 @@ runtime_bundle_export_sftp_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: export_sftp_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -196,7 +206,7 @@ runtime_bundle_export_sftp_ssot:
     - managed_file_transfer_service_selection
     - non_sftp_transfer_protocols
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - export_job_schema_design
       - package_artifact_schema_design

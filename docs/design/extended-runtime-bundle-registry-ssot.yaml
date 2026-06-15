@@ -61,7 +61,6 @@ extended_runtime_bundle_registry_ssot:
     bundles:
       email_bundle:
         id: email_bundle
-        status: not_started
         description: >-
           メール送信Bundle。CLI/MCPからは実行しない。
           UI / backend dispatch / approval route から専用設計で扱う。
@@ -71,8 +70,6 @@ extended_runtime_bundle_registry_ssot:
         out_of_scope_for: cli_mcp_read_export_port
         requires_separate_ssot: true
         owner: runtime-bundle-email-ssot
-        owner_resolution: covered_by_this_pr
-        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/runtime-bundle-email-ssot.yaml
         notes:
           - email send は CLI/MCP port の out_of_scope
@@ -80,7 +77,6 @@ extended_runtime_bundle_registry_ssot:
 
       stripe_bundle:
         id: stripe_bundle
-        status: not_started
         description: >-
           Stripe 決済Bundle。webhook verification なしに paid state を確定しない。
           後段SSOTが必要。
@@ -89,13 +85,10 @@ extended_runtime_bundle_registry_ssot:
         webhook_verification_required: true
         requires_separate_ssot: true
         owner: runtime-bundle-stripe-ssot
-        owner_resolution: covered_by_this_pr
-        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/runtime-bundle-stripe-ssot.yaml
 
       file_storage_bundle:
         id: file_storage_bundle
-        status: not_started
         description: >-
           ファイル・ストレージBundle。export job / Data Reader と連携。
           CLI/MCP export job からの file stream はこのBundleを経由。
@@ -105,13 +98,10 @@ extended_runtime_bundle_registry_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
         requires_separate_ssot: true
         owner: runtime-bundle-file-storage-ssot
-        owner_resolution: covered_by_this_pr
-        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/runtime-bundle-file-storage-ssot.yaml
 
       export_sftp_bundle:
         id: export_sftp_bundle
-        status: not_started
         description: >-
           Export / SFTP Bundle。export job の外部搬出。
           manifest + checksum を必須とする。
@@ -121,13 +111,10 @@ extended_runtime_bundle_registry_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
         requires_separate_ssot: true
         owner: runtime-bundle-export-sftp-ssot
-        owner_resolution: covered_by_this_pr
-        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/runtime-bundle-export-sftp-ssot.yaml
 
       webhook_inbox_bundle:
         id: webhook_inbox_bundle
-        status: not_started
         description: >-
           Webhook Inboxからscheduler/runtime routeを通す受信Bundle。
           direct runtime execution は禁止。必ずscheduler経由。
@@ -138,26 +125,20 @@ extended_runtime_bundle_registry_ssot:
           - runtime_route
         requires_separate_ssot: true
         owner: runtime-bundle-webhook-inbox-ssot
-        owner_resolution: covered_by_this_pr
-        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/runtime-bundle-webhook-inbox-ssot.yaml
 
       job_scheduler_bundle:
         id: job_scheduler_bundle
-        status: not_started
         description: cron / hook / client trigger を統合するJob Scheduler Bundle。
         trigger_kind: cron_or_hook_or_client
         related_ssot:
           - docs/design/runtime-orchestration-ssot.yaml
         requires_separate_ssot: true
         owner: runtime-bundle-job-scheduler-ssot
-        owner_resolution: covered_by_this_pr
-        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/runtime-bundle-job-scheduler-ssot.yaml
 
       audit_approval_bundle:
         id: audit_approval_bundle
-        status: not_started
         description: >-
           Audit / Approval Bundle。承認フロー・監査ログ・export job approval を管理。
           CLI/MCP audit log は cli-model-context-protocols-port-ssot で定義済み。
@@ -166,20 +147,36 @@ extended_runtime_bundle_registry_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
         requires_separate_ssot: true
         owner: runtime-bundle-audit-approval-ssot
-        owner_resolution: covered_by_this_pr
-        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/runtime-bundle-audit-approval-ssot.yaml
 
       secret_credential_bundle:
         id: secret_credential_bundle
-        status: not_started
-        description: Secret / Credential Bundle。外部連携に必要な認証情報を管理。
-        trigger_kind: api_or_admin_config
+        classification: reclassified_not_standalone_bundle
+        description: >-
+          Secret / Credential Bundle は独立実装 Bundle ではない。
+          external_port_substrate の credential_requirement 境界定義として統合する。
+          dedicated credential runtime / admin UI / audit log / rotation service は作らない。
+        trigger_kind: port_record_credential_requirement_attachment_only
         requires_separate_ssot: true
         owner: runtime-bundle-secret-credential-ssot
-        owner_resolution: covered_by_this_pr
-        owner_status: assigned_to_design_ssot
+        owner_resolution: reclassified_to_port_substrate_component
         separate_ssot_path: docs/design/runtime-bundle-secret-credential-ssot.yaml
+        substrate_ref: docs/design/external-port-substrate-ssot.yaml
+        note: >-
+          secret_credential_bundle_implemented_claim は prohibited。
+          credential_management_flow の standalone 実装は作らない。
+
+      external_port_substrate:
+        id: external_port_substrate
+        description: >-
+          外部連携 Bundle 共通基盤。access_port / response_port / hook_port /
+          credential_requirement を physical table + seed projection +
+          admin role write policy で定義する。8 Bundle 共通基盤。
+        trigger_kind: admin_role_port_record_write_via_validate_preview_apply
+        requires_separate_ssot: true
+        owner: external-port-substrate-ssot
+        owner_resolution: covered_by_design_ssot
+        separate_ssot_path: docs/design/external-port-substrate-ssot.yaml
 
   future_optional_external_surface_bundles:
     description: >-
@@ -196,7 +193,7 @@ extended_runtime_bundle_registry_ssot:
     bundles:
       notion_bundle:
         id: notion_bundle
-        status: future_bundle_candidate
+        role: future_optional_external_surface_candidate
         description: >-
           Notion database をintake / draft authoring surface として扱うBundle。
           Notion is never treated as canonical Topolactor SSOT。
@@ -205,7 +202,7 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: future_bundle_owner_unassigned
         owner_resolution: requires_future_specific_bundle_ssot
-        owner_status: unresolved_by_design
+        classification: unresolved_by_design
         implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
@@ -216,7 +213,7 @@ extended_runtime_bundle_registry_ssot:
 
       google_sheets_bundle:
         id: google_sheets_bundle
-        status: future_bundle_candidate
+        role: future_optional_external_surface_candidate
         description: >-
           Google Sheets をintake / draft authoring surface として扱うBundle。
           direct DB write は禁止。
@@ -225,7 +222,7 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: future_bundle_owner_unassigned
         owner_resolution: requires_future_specific_bundle_ssot
-        owner_status: unresolved_by_design
+        classification: unresolved_by_design
         implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
@@ -236,7 +233,7 @@ extended_runtime_bundle_registry_ssot:
 
       slack_bundle:
         id: slack_bundle
-        status: future_bundle_candidate
+        role: future_optional_external_surface_candidate
         description: >-
           Slack をnotification / approval surface として扱うBundle。
           Slack action から直接runtime execution しない。
@@ -245,7 +242,7 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: future_bundle_owner_unassigned
         owner_resolution: requires_future_specific_bundle_ssot
-        owner_status: unresolved_by_design
+        classification: unresolved_by_design
         implementation_gate: separate_ssot_required
         trigger_kind: notification_or_approval_trigger
         intake_snapshot_shape: defined_by_separate_ssot
@@ -256,7 +253,7 @@ extended_runtime_bundle_registry_ssot:
 
       github_issues_bundle:
         id: github_issues_bundle
-        status: future_bundle_candidate
+        role: future_optional_external_surface_candidate
         description: >-
           GitHub Issues を intake / approval surface として扱うBundle。
           direct DB write は禁止。
@@ -265,7 +262,7 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: future_bundle_owner_unassigned
         owner_resolution: requires_future_specific_bundle_ssot
-        owner_status: unresolved_by_design
+        classification: unresolved_by_design
         implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
@@ -276,7 +273,7 @@ extended_runtime_bundle_registry_ssot:
 
       generic_webhook_bundle:
         id: generic_webhook_bundle
-        status: future_bundle_candidate
+        role: future_optional_external_surface_candidate
         description: >-
           Generic Webhook Inbox Bundle。
           webhook → scheduler → runtime route の境界を必須とする。
@@ -294,7 +291,7 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: future_bundle_owner_unassigned
         owner_resolution: requires_future_specific_bundle_ssot
-        owner_status: unresolved_by_design
+        classification: unresolved_by_design
         implementation_gate: separate_ssot_required
         trigger_kind: webhook_intake
         intake_snapshot_shape: defined_by_separate_ssot
@@ -305,7 +302,7 @@ extended_runtime_bundle_registry_ssot:
 
       external_rest_api_connector_bundle:
         id: external_rest_api_connector_bundle
-        status: future_bundle_candidate
+        role: future_optional_external_surface_candidate
         description: >-
           External REST API Connector Bundle。
           外部APIからのデータ取得をconnector_adapter経由でintake_snapshotに変換。
@@ -313,7 +310,7 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: future_bundle_owner_unassigned
         owner_resolution: requires_future_specific_bundle_ssot
-        owner_status: unresolved_by_design
+        classification: unresolved_by_design
         implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
@@ -324,7 +321,7 @@ extended_runtime_bundle_registry_ssot:
 
       dynamic_support_nocode_loop_bundle:
         id: dynamic_support_nocode_loop_bundle
-        status: future_bundle_candidate
+        role: future_optional_external_surface_candidate
         description: >-
           Dynamic Support No-code Loop Bundle。
           product.dynamic_support_nocode_loop の外部surface連携部分。
@@ -334,7 +331,7 @@ extended_runtime_bundle_registry_ssot:
         requires_separate_ssot: true
         owner: future_bundle_owner_unassigned
         owner_resolution: requires_future_specific_bundle_ssot
-        owner_status: unresolved_by_design
+        classification: unresolved_by_design
         implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
@@ -366,11 +363,13 @@ extended_runtime_bundle_registry_ssot:
         実endpoint・credential・実運用詳細を書いてはならない。
         ただし、7項目の欄自体を省略することは許可しない。
       allowed_placeholder_values:
+        role:
+          - future_optional_external_surface_candidate
         owner:
           - future_bundle_owner_unassigned
         owner_resolution:
           - requires_future_specific_bundle_ssot
-        owner_status:
+        classification:
           - unresolved_by_design
         implementation_gate:
           - separate_ssot_required

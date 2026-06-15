@@ -717,6 +717,33 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: external_port_substrate_ssot
+    change_surfaces:
+      - external_port_substrate
+      - access_port
+      - response_port
+      - hook_port
+      - credential_requirement
+      - credential_kind
+      - admin_setting_projection
+      - port_substrate_relation
+      - docs/design/external-port-substrate-ssot.yaml
+    required_docs:
+      - docs/design/external-port-substrate-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-bundle-secret-credential-ssot.yaml
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/runtime-bundle-email-ssot.yaml
+      - docs/design/runtime-bundle-stripe-ssot.yaml
+      - docs/design/runtime-bundle-file-storage-ssot.yaml
+      - docs/design/runtime-bundle-export-sftp-ssot.yaml
+      - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+      - docs/design/runtime-bundle-job-scheduler-ssot.yaml
+      - docs/design/runtime-bundle-audit-approval-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
   - work_type: cli_mcp_port_implementation_ssot
     change_surfaces:
       - cli_mcp_port_implementation

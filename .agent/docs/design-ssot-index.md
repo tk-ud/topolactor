@@ -163,6 +163,37 @@ Wiring（dispatcher axes: role/target/layer/action）は `admin/manifests` で�
 
 ---
 
+### External Port Substrate（外部連携ポート基盤）
+
+| 種別 | パス |
+|---|---|
+| 仕様 YAML | `docs/design/external-port-substrate-ssot.yaml` |
+
+**概要**: 外部連携 8 Bundle 共通基盤 SSOT。`access_port` / `response_port` / `hook_port` を
+物理テーブルとして定義し、`credential_requirement` を port record 付属要件として扱う。
+`secret_credential_bundle` は独立実装 Bundle ではなく `credential_requirement` 境界定義として統合。
+`credential_kind` は `auth` / `external` / `none` の三値分類。
+admin role write policy で port 設定を管理（validate → preview → apply）。
+
+**参照すべき場面**:
+- external 系 Bundle の port consumer 関係を確認するとき
+- `credential_requirement` フィールド設計（`port_id` / `credential_kind` / `provider_kind` / `reference_key` / `required_by_bundle`）を確認するとき
+- `access_port` / `response_port` / `hook_port` テーブル設計を確認するとき
+- 各 consumer Bundle SSOT の `port_substrate_relation` を変更するとき
+
+**関連 SSOT**:
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/runtime-bundle-email-ssot.yaml`
+- `docs/design/runtime-bundle-stripe-ssot.yaml`
+- `docs/design/runtime-bundle-file-storage-ssot.yaml`
+- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
+- `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
+- `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
+- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
+- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
+
+---
+
 ## SSOT 原則のまとめ
 
 | 対象 | SSOT の場所 |

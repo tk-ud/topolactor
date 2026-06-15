@@ -307,7 +307,7 @@ team_markdown_dashboard_saved_view_ssot:
       - user_adjustment_patch_separate_from_bound_record_values
 
   saved_view_persistence_contract:
-    status: planned_schema_surface
+    classification: planned_schema_surface
     schema: topology
     planned_tables:
       team_markdown_template_registry:
@@ -444,7 +444,7 @@ team_markdown_dashboard_saved_view_ssot:
       ref: docs/design/mock-preset-intake-compiler-ssot.yaml
       role: adjacent visual preset intake; not the same feature
 
-  implementation_status:
+  implementation_scope_notes:
     current: implemented
     implemented_subscope:
       - md_translation_seed_candidate_builder_contract

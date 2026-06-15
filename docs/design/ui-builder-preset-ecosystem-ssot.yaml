@@ -243,7 +243,7 @@ ui_builder_preset_ecosystem_ssot:
 
     known_gaps:
       - gap: runtime_event_payload_binding_from_node_and_event_values
-        status: implemented
+        classification: implemented
         implementation_ref: frontend/runtime/payloadFromResolver.ts
 
   # ---------------------------------------------------------------------------
@@ -713,7 +713,7 @@ ui_builder_preset_ecosystem_ssot:
         authority remains in SSOT contracts, backend/runtime validation, preview-validate-apply,
         audit protocols, and physical DB constraints.
 
-  implementation_status:
+  implementation_scope_notes:
     payloadFrom_resolver: implemented (frontend/runtime/payloadFromResolver.ts)
     hub_search_wiring_alignment: implemented (db/migrations/hub_search_preset_seed.sql updated)
     physical_search_crud_aggregate_seed: implemented (db/migrations/physical_search_crud_aggregate_preset_seed.sql)

@@ -69,6 +69,17 @@ runtime_bundle_webhook_inbox_ssot:
       webhook signing key / endpoint secret / provider URL は
       公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
 
+  port_substrate_relation:
+    substrate_ssot: docs/design/external-port-substrate-ssot.yaml
+    classification: port_consumer_bundle
+    port_consumer:
+      - hook_port
+    credential_kind: external
+    note: >-
+      webhook signing key は external_port_substrate の
+      hook_port に付属する credential_requirement として管理する。
+      credential の standalone 管理 plane は作らない。
+
   webhook_intake_flow:
     intake:
       description: >-
@@ -149,8 +160,6 @@ runtime_bundle_webhook_inbox_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: webhook_inbox_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -176,7 +185,7 @@ runtime_bundle_webhook_inbox_ssot:
     - ai_autonomous_webhook_processing
     - webhook_retry_policy_implementation_detail
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - webhook_intake_schema_design
       - webhook_event_signature_verification_service_design

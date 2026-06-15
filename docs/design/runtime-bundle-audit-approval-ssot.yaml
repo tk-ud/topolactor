@@ -68,6 +68,17 @@ runtime_bundle_audit_approval_ssot:
       承認フローで使用するsecret token / credential実体は
       公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
 
+  port_substrate_relation:
+    substrate_ssot: docs/design/external-port-substrate-ssot.yaml
+    classification: port_consumer_bundle
+    port_consumer:
+      - response_port
+    credential_kind: external
+    note: >-
+      承認通知等の外部送信 credential は external_port_substrate の
+      response_port に付属する credential_requirement として管理する。
+      credential の standalone 管理 plane は作らない。
+
   approval_flow_boundary:
     request:
       description: 承認リクエストの作成。UI/adminから明示的に作成する。
@@ -139,8 +150,6 @@ runtime_bundle_audit_approval_ssot:
   relation_to_extended_runtime_bundle_registry:
     registry_entry: audit_approval_bundle
     registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
-    owner_status: assigned_to_design_ssot
-    core_bundle_status: not_started
 
   relation_to_cli_mcp_port:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
@@ -159,7 +168,7 @@ runtime_bundle_audit_approval_ssot:
     - compliance_regulation_specification
     - cli_mcp_approval_trigger
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - approval_request_schema_design
       - approval_state_machine_design

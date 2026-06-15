@@ -432,7 +432,7 @@ cli_mcp_port_implementation_ssot:
       Secret/Credential Bundle が credential 管理を担い、CLI/MCP への経路を提供しない。
       本SSOTの secret_credential_boundary は Secret/Credential Bundle の境界と矛盾しない。
 
-  future_implementation_requirements:
+  implementation_boundary_requirements:
     items:
       - data_reader_service_implementation
       - context_api_service_implementation

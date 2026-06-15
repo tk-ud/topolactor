@@ -666,7 +666,7 @@ admin_console_workflow_ssot:
               conditional_runtimeDispatch_binding (user-optional, implemented, advanced path).
             required_event_log_lane: implemented
             conditional_routeNavigation_binding:
-              status: implemented
+              classification: implemented
               surface: RouteNavigationWiringPreset
               binding: >
                 frontend-local; click → navigate to route_key;
@@ -676,14 +676,14 @@ admin_console_workflow_ssot:
                 - frontend/lib/packageWiringPicker.ts encodeRouteNavigationTargetRef
                 - frontend/lib/packageWiringPicker.ts parseRouteNavigationTargetRef
             conditional_runtimeDispatch_binding:
-              status: implemented
+              classification: implemented
               surface: PackageWiringEditor (advanced_details_disclosure only)
               binding: component/action-based conditional dispatching via raw dispatcher fields
               note: >
                 raw dispatcher fields (wiringKind / targetSurface / targetRef) are advanced path only;
                 not the normal-view completion path
         - projection_authoring_assist_boundary:
-            status: implemented_boundary
+            classification: implemented_boundary
             role: ui_builder_saved_projection_wiring_support
             source_contract:
               owner: /admin/contents Step 2.5 relationship_configuration plus Step 3 physical_table_and_page_binding
@@ -711,7 +711,7 @@ admin_console_workflow_ssot:
               - frontend/islands/UiBuilderAdmin.tsx AuthoringSuggestAssistPanel
               - frontend/tests/uiBuilderAuthoringSuggest.test.ts
         - frontend_local_derived_calculation_binding:
-            status: implemented
+            classification: implemented
             lane: frontend_local_only
             purpose: >
               input/change/select イベントで frontend-local calculation graph を実行し、
@@ -757,7 +757,7 @@ admin_console_workflow_ssot:
             runtime_canvas_ref: FlowLayoutCanvas evaluates bindings on node value change; injects result into target node runtime props
         - preset_ecosystem:
             role: ui_builder_authoring_support
-            status: planned_parent_surface
+            classification: planned_parent_surface
             rule: >
               Presets are reusable draft/seed/view structures under the UIBuilder ecosystem.
               They are not active topology until explicitly bound to a selected route package
@@ -805,7 +805,7 @@ admin_console_workflow_ssot:
                 ref: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
                 role: preset_child_saved_markdown_view_seed_and_md_viewer
                 hard_gate: completed_preset_seed_json
-            implementation_status:
+            implementation_scope_notes:
               current: planned_parent_surface
               scope: >-
                 preset_ecosystem parent surface is planned for UIBuilder authoring support for reusable

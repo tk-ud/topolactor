@@ -1,0 +1,240 @@
+external_port_substrate_ssot:
+  name: external_port_substrate
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/external-port-substrate-ssot.yaml
+
+  purpose:
+    summary: >-
+      外部連携 Bundle 共通基盤 SSOT。
+      access_port / response_port / hook_port / credential_requirement を
+      物理テーブル + seed projection + admin role write policy で定義する。
+      external 系 8 Bundle の共通基盤として機能し、
+      credential は独立した管理 plane にしない。
+      secret_credential_bundle は独立実装 Bundle ではなく、
+      本 substrate の credential_requirement 境界定義として統合する。
+    non_goals:
+      - dedicated_credential_runtime
+      - dedicated_credential_admin_ui
+      - dedicated_credential_audit_log
+      - credential_rotation_service
+      - credential_startup_validation_service
+      - secret_store_adapter_as_standalone_runtime
+      - secret_credential_bundle_as_standalone_runtime
+      - external_service_as_runtime_ssot
+
+  port_kinds:
+    access_port:
+      role: outbound_access_to_external_service
+      note: runtime は設定済み URL / env reference を使って外部へアクセスする
+      configuration:
+        - url_or_env_reference
+        - provider_kind
+        - credential_kind
+        - required_by_bundle
+    response_port:
+      role: outbound_response_to_external_service
+      note: runtime は設定済み URL / env reference を使って外部へ返す
+      configuration:
+        - url_or_env_reference
+        - provider_kind
+        - credential_kind
+        - required_by_bundle
+    hook_port:
+      role: inbound_hook_reception_from_external_service
+      note: >-
+        hook を受け取り、hook_path / provider / header / route key などから
+        該当 port record を特定する。secret credential runtime は不要。
+      configuration:
+        - hook_path
+        - provider_kind
+        - header_key
+        - route_key
+        - credential_kind
+        - required_by_bundle
+
+  credential_kind:
+    allowed_values:
+      - auth
+      - external
+      - none
+    semantics:
+      auth:
+        meaning: auth_boundary_credential_special_form
+        owner: docs/design/auth-db-session-credential-ssot.yaml
+        rule: >-
+          auth credential は既存 auth.credentials の最奥 boundary の特殊形として扱う。
+          external secret を auth.credentials に混ぜない。
+      external:
+        meaning: port_record_level_credential_requirement
+        rule: >-
+          実 secret 値を持たない。
+          provider_kind / reference_key / required_by_bundle を持つ requirement。
+          consumer bundle が実際に使う時点で fail-close する。
+          consumer bundle 未接続の状態で rotation / startup validation /
+          standalone admin credential UI を作らない。
+      none:
+        meaning: no_credential_required
+        rule: "credential が不要な port は credential_kind: none として明示する。"
+    constraint:
+      - external_credential_is_port_record_attachment_not_standalone_entity
+      - secret_value_never_stored_in_db_ui_ssot_or_audit_log
+      - consumer_bundle_unconnected_does_not_trigger_standalone_credential_service
+
+  credential_requirement:
+    role: port_record_level_requirement_not_standalone_entity
+    fields:
+      - port_id
+      - credential_kind
+      - provider_kind
+      - reference_key
+      - required_by_bundle
+    constraint:
+      - secret_value_not_stored_anywhere
+      - credential_requirement_travels_through_validate_preview_apply_with_port_record
+      - consumer_bundle_not_connected_triggers_fail_close_not_standalone_service
+
+  admin_setting_projection:
+    purpose: admin role による port 設定の write / projection 境界
+    owns:
+      - port_setting_projection (access_port / response_port / hook_port)
+      - credential_kind_switch (auth | external | none)
+      - provider_kind_setting
+      - reference_key_setting
+      - required_by_bundle_setting
+      - hook_path_url_env_reference_setting
+      - admin_role_write_policy
+      - consumer_bundle_binding
+    prohibited:
+      - dedicated_admin_credentials_route
+      - dedicated_credential_panel_outside_port_context
+      - standalone_credential_ui_without_port_record
+
+  physical_tables:
+    purpose: port / hook / credential_requirement の設定行を保持する surface
+    not_purpose: credential_management_plane
+    schema: topology
+    tables:
+      external_access_ports:
+        columns:
+          - access_port_id
+          - required_by_bundle
+          - provider_kind
+          - url_or_env_reference
+          - credential_kind
+          - reference_key
+          - active
+          - created_at
+          - updated_at
+        note: reference_key は runtime 環境変数または secret store への参照のみ。実値不可。
+      external_response_ports:
+        columns:
+          - response_port_id
+          - required_by_bundle
+          - provider_kind
+          - url_or_env_reference
+          - credential_kind
+          - reference_key
+          - active
+          - created_at
+          - updated_at
+      external_hook_ports:
+        columns:
+          - hook_port_id
+          - required_by_bundle
+          - provider_kind
+          - hook_path
+          - header_key
+          - route_key
+          - credential_kind
+          - reference_key
+          - active
+          - created_at
+          - updated_at
+
+  backend_boundary:
+    owns:
+      - admin_role_port_write
+      - physical_table_row_validate_preview_apply
+      - port_record_resolution_for_consumer_runtime
+    not_owns:
+      - secret_value_storage
+      - credential_rotation_service
+      - credential_startup_validation_service
+      - standalone_credential_management
+
+  runtime_boundary:
+    behavior:
+      access_port: 設定された URL / env reference を使って外部へアクセスする
+      response_port: 設定された URL / env reference を使って外部へ返す
+      hook_port: >-
+        hook を受け取り、hook_path / provider / header / route key から
+        該当 port record を特定する
+      credential_requirement: port record に紐づく reference として解決する
+    not_behavior:
+      - secret_value_stored_in_db_ui_ssot_or_audit_log
+      - credential_rotation_management
+      - startup_validation_management
+      - standalone_credential_runtime_execution
+
+  consumer_bundle_relation:
+    file_storage_bundle:
+      port_consumer: [access_port, response_port]
+      detail_ref: docs/design/runtime-bundle-file-storage-ssot.yaml
+    email_bundle:
+      port_consumer: [response_port]
+      provider_kind: smtp
+      detail_ref: docs/design/runtime-bundle-email-ssot.yaml
+    stripe_bundle:
+      port_consumer: [hook_port]
+      provider_kind: stripe
+      detail_ref: docs/design/runtime-bundle-stripe-ssot.yaml
+    webhook_inbox_bundle:
+      port_consumer: [hook_port]
+      detail_ref: docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+    job_scheduler_bundle:
+      port_consumer: [access_port, hook_port]
+      detail_ref: docs/design/runtime-bundle-job-scheduler-ssot.yaml
+    audit_approval_bundle:
+      port_consumer: [response_port]
+      detail_ref: docs/design/runtime-bundle-audit-approval-ssot.yaml
+    export_sftp_bundle:
+      port_consumer: [response_port]
+      provider_kind: sftp
+      detail_ref: docs/design/runtime-bundle-export-sftp-ssot.yaml
+    secret_credential_bundle:
+      classification: reclassified_as_credential_requirement_substrate
+      note: >-
+        secret_credential_bundle は独立した実装 Bundle ではない。
+        credential_requirement は本 substrate の port record 付属要件として扱う。
+        dedicated credential runtime / admin UI / audit log / rotation service は作らない。
+      detail_ref: docs/design/runtime-bundle-secret-credential-ssot.yaml
+
+  prohibited:
+    - SecretCredentialBundleRuntime
+    - dedicated_credential_runtime
+    - dedicated_credential_admin_ui
+    - dedicated_credential_repository
+    - dedicated_credential_audit_log
+    - credential_rotation_service
+    - credential_startup_validation_service
+    - secret_store_adapter_runtime
+    - secret_credential_bundle_implemented_claim
+    - external_service_as_runtime_ssot
+    - webhook_direct_runtime_execution_without_scheduler
+    - external_tool_direct_db_write
+    - frontend_direct_db_write
+    - ssot_entry_to_ratify_implementation_first_shape
+
+  related_ssot:
+    - docs/design/extended-runtime-bundle-registry-ssot.yaml
+    - docs/design/runtime-orchestration-ssot.yaml
+    - docs/design/auth-db-session-credential-ssot.yaml
+    - docs/design/runtime-bundle-secret-credential-ssot.yaml
+    - docs/design/runtime-bundle-file-storage-ssot.yaml
+    - docs/design/runtime-bundle-email-ssot.yaml
+    - docs/design/runtime-bundle-stripe-ssot.yaml
+    - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+    - docs/design/runtime-bundle-job-scheduler-ssot.yaml
+    - docs/design/runtime-bundle-audit-approval-ssot.yaml
+    - docs/design/runtime-bundle-export-sftp-ssot.yaml
