@@ -252,6 +252,7 @@ runtime_orchestration_ssot:
       - admin_runtime
       - sse_projection_runtime
       - auth_runtime
+      - secret_credential_runtime
     auth_command_lane:
       reference: docs/design/auth-db-session-credential-ssot.yaml
       owns:
@@ -695,15 +696,17 @@ runtime_orchestration_ssot:
       admin_runtime: AdminRuntimeDispatchAdapter
       sse_projection_runtime: SseProjectionRuntime
       registry_attractor_runtime: RegistryAttractorDispatchRuntime
+      secret_credential_runtime: SecretCredentialBundleRuntime
     handler_registry_scope_note: >-
       handler_registry lists the handlers registered in the production handler dictionary.
-      All four backend_dispatchable_kinds that enter via ManifestDispatcher are registered:
-      topology_transform_runtime, admin_runtime, sse_projection_runtime, and
+      All five backend_dispatchable_kinds that enter via ManifestDispatcher are registered:
+      topology_transform_runtime, admin_runtime, sse_projection_runtime,
       registry_attractor_runtime (RegistryAttractorDispatchRuntime, manifest-dispatched
       IDispatchableRuntime handler — distinct from the SqlAttentionScheduler BackgroundService
-      cron route). The SQL Attention cron runtime (HubAttractorExplorationRuntime +
-      SqlAttentionScheduler) is a BackgroundService that does not route through
-      ManifestDispatcher and is not a handler_registry entry.
+      cron route), and secret_credential_runtime (SecretCredentialBundleRuntime, direct manifest
+      routing for credential_registry layer — bypasses admin_runtime per SSOT boundary). The SQL
+      Attention cron runtime (HubAttractorExplorationRuntime + SqlAttentionScheduler) is a
+      BackgroundService that does not route through ManifestDispatcher and is not a handler_registry entry.
     test_stub_scope:
       allowed:
         - FakeDispatchableRuntime injected in test handler dictionary

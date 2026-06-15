@@ -40,7 +40,8 @@ public class SecretCredentialBundleRuntimeTests
         var registered = repo.AllRegistered.Single();
         Assert.Equal("smtp_api_key", registered.ReferenceKey);
         Assert.Equal("env_var", registered.ProviderKind);
-        Assert.Equal("registered", registered.Status);
+        // Post-registration ValidateAsync runs with AlwaysAvailableCredentialStore → status transitions to active
+        Assert.Equal("active", registered.Status);
     }
 
     [Fact]
@@ -403,14 +404,14 @@ public class SecretCredentialBundleRuntimeTests
         var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
         await RegisterCredential(runtime, "rotate_test_key", "env_var");
 
-        // rotation without explicit actor_id must be rejected
+        // rotation without jwt_actor in context must be rejected
         var payload = BuildPayload(new { reference_key = "rotate_test_key" });
         var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
 
         var response = await runtime.ExecuteAsync(request, manifestId: null);
 
         Assert.False(response.Success,
-            "rotation without explicit rotation_actor_id must be rejected");
+            "rotation without jwt_actor in request context must be rejected");
         Assert.Contains(response.Errors, e => e.Code == "CREDENTIAL_ROTATION_ACTOR_REQUIRED");
     }
 
@@ -419,9 +420,10 @@ public class SecretCredentialBundleRuntimeTests
     {
         var runtime = BuildRuntime(new InMemoryCredentialReferenceRepository(), new AlwaysAvailableCredentialStore());
 
-        // rotation_actor_id is the authenticated admin username (from JWT sub claim)
-        var payload = BuildPayload(new { reference_key = "nonexistent_for_rotate", rotation_actor_id = "admin_user" });
-        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
+        // jwt_actor is injected into context by the dispatch layer from the JWT sub claim
+        var payload = BuildPayload(new { reference_key = "nonexistent_for_rotate" });
+        var context = new Dictionary<string, string> { ["jwt_actor"] = "admin_user" };
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, context);
 
         var response = await runtime.ExecuteAsync(request, manifestId: null);
 
@@ -436,9 +438,10 @@ public class SecretCredentialBundleRuntimeTests
         var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
         await RegisterCredential(runtime, "smtp_pass_to_rotate", "env_var");
 
-        // rotation_actor_id is the authenticated admin username (from JWT sub claim)
-        var payload = BuildPayload(new { reference_key = "smtp_pass_to_rotate", rotation_actor_id = "admin_user" });
-        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
+        // jwt_actor is injected into context by the dispatch layer from the JWT sub claim
+        var payload = BuildPayload(new { reference_key = "smtp_pass_to_rotate" });
+        var context = new Dictionary<string, string> { ["jwt_actor"] = "admin_user" };
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, context);
 
         var response = await runtime.ExecuteAsync(request, manifestId: null);
 
@@ -471,8 +474,9 @@ public class SecretCredentialBundleRuntimeTests
 
         // Rotation attempt with a store where the new credential is absent
         var rotateRuntime = BuildRuntime(repo, new CredentialAbsentStore());
-        var payload = BuildPayload(new { reference_key = "post_rotate_absent_key", rotation_actor_id = "admin_user" });
-        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
+        var payload = BuildPayload(new { reference_key = "post_rotate_absent_key" });
+        var context = new Dictionary<string, string> { ["jwt_actor"] = "admin_user" };
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, context);
 
         var response = await rotateRuntime.ExecuteAsync(request, manifestId: null);
 
@@ -480,6 +484,65 @@ public class SecretCredentialBundleRuntimeTests
         Assert.False(response.Success,
             "rotation where new credential is not in store must fail with explicit validation error");
         Assert.Contains(response.Errors, e => e.Code == "CREDENTIAL_NOT_PRESENT_IN_STORE");
+    }
+
+    [Fact]
+    public async Task Rotate_NewCredentialNotInStore_AppendRotationFailedAuditEvent()
+    {
+        var repo = new InMemoryCredentialReferenceRepository();
+        var setupRuntime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        await RegisterCredential(setupRuntime, "rotate_fail_audit_key", "env_var");
+
+        var rotateRuntime = BuildRuntime(repo, new CredentialAbsentStore());
+        var payload = BuildPayload(new { reference_key = "rotate_fail_audit_key" });
+        var context = new Dictionary<string, string> { ["jwt_actor"] = "admin_user" };
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, context);
+
+        await rotateRuntime.ExecuteAsync(request, manifestId: null);
+
+        // credential_rotation_failed audit event must be appended on validation failure
+        var failedEvent = repo.AuditEvents.FirstOrDefault(e => e.EventType == "credential_rotation_failed");
+        Assert.NotNull(failedEvent);
+        Assert.Equal("rotate_fail_audit_key", failedEvent!.ReferenceKey);
+        Assert.Equal("failure", failedEvent.Outcome);
+    }
+
+    [Fact]
+    public async Task Rotate_Success_StatusBecomesActive()
+    {
+        var repo = new InMemoryCredentialReferenceRepository();
+        var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        await RegisterCredential(runtime, "rotate_lifecycle_key", "env_var");
+
+        var payload = BuildPayload(new { reference_key = "rotate_lifecycle_key" });
+        var context = new Dictionary<string, string> { ["jwt_actor"] = "admin_user" };
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, context);
+
+        var response = await runtime.ExecuteAsync(request, manifestId: null);
+
+        Assert.True(response.Success);
+        var record = repo.AllRegistered.Single();
+        // lifecycle: rotation_pending → validation success → active
+        Assert.Equal("active", record.Status);
+    }
+
+    [Fact]
+    public async Task Rotate_Failure_StatusRemainsRotationPending()
+    {
+        var repo = new InMemoryCredentialReferenceRepository();
+        var setupRuntime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        await RegisterCredential(setupRuntime, "rotate_pending_key", "env_var");
+
+        var rotateRuntime = BuildRuntime(repo, new CredentialAbsentStore());
+        var payload = BuildPayload(new { reference_key = "rotate_pending_key" });
+        var context = new Dictionary<string, string> { ["jwt_actor"] = "admin_user" };
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, context);
+
+        await rotateRuntime.ExecuteAsync(request, manifestId: null);
+
+        var record = repo.AllRegistered.Single();
+        // lifecycle: rotation_pending → validation failure → remains rotation_pending (fail-close)
+        Assert.Equal("rotation_pending", record.Status);
     }
 
     // ─── list: reference metadata only ───────────────────────────────────────
@@ -613,8 +676,20 @@ internal sealed class InMemoryCredentialReferenceRepository : CredentialReferenc
         _store[referenceKey] = existing with
         {
             LastRotatedAt = DateTimeOffset.UtcNow,
-            Status = "active",
+            Status = "rotation_pending",
             ValidationStatus = "unchecked",
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        return Task.FromResult(true);
+    }
+
+    public override Task<bool> ConfirmRotationAsync(
+        string referenceKey, CancellationToken ct = default)
+    {
+        if (!_store.TryGetValue(referenceKey, out var existing)) return Task.FromResult(false);
+        _store[referenceKey] = existing with
+        {
+            Status = "active",
             UpdatedAt = DateTimeOffset.UtcNow,
         };
         return Task.FromResult(true);

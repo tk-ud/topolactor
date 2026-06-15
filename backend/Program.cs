@@ -121,8 +121,7 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<AuthMasterRepository>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
         sp.GetRequiredService<MockPresetRepository>(),
-        sp.GetRequiredService<TeamMarkdownRepository>(),
-        sp.GetRequiredService<SecretCredentialBundleRuntime>()));
+        sp.GetRequiredService<TeamMarkdownRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 
 // ---------------------------------------------------------------------------
@@ -250,6 +249,7 @@ builder.Services.AddSingleton<RuntimeTimelineScheduler>();
 // Background services
 // ---------------------------------------------------------------------------
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RuntimeTimelineScheduler>());
+builder.Services.AddHostedService<CredentialStartupValidationService>();
 builder.Services.AddHostedService<RetentionScheduler>();
 builder.Services.AddHostedService<SystemOperationCiScheduler>();
 builder.Services.AddHostedService<SqlAttentionScheduler>();
@@ -313,7 +313,12 @@ app.MapPost("/dispatch", async (
     // Use body role for axes resolution (routing); fall back to JWT role when not set.
     // Capability gate in ManifestDispatcher enforces runtime-level requirements against routing role.
     var routingRole = bodyRole ?? jwtRole;
-    var authoritativeRequest = request with { Role = routingRole };
+    // Inject JWT subject as backend-authoritative actor identity for operations that require it (e.g. credential rotation).
+    var jwtSub = jwtGuard.TryGetSubject(token);
+    var context = new Dictionary<string, string>(request.Context ?? new Dictionary<string, string>());
+    if (!string.IsNullOrWhiteSpace(jwtSub))
+        context["jwt_actor"] = jwtSub;
+    var authoritativeRequest = request with { Role = routingRole, Context = context };
     var result = await dispatch.HandleAsync(authoritativeRequest, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });

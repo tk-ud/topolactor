@@ -54,6 +54,17 @@ public sealed class EnvironmentVariableCredentialStore : ICredentialStore
             "EnvironmentVariableCredentialStore.SetAsync: referenceKey={ReferenceKey} providerKind={ProviderKind}",
             referenceKey, providerKind);
 
+        if (!string.Equals(providerKind, "env_var", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "EnvironmentVariableCredentialStore.SetAsync: unsupported providerKind={ProviderKind} for referenceKey={ReferenceKey}",
+                providerKind, referenceKey);
+            return Task.FromResult(new CredentialStoreSetResult(
+                Success: false,
+                StoreAvailable: true,
+                FailureReason: $"Provider kind '{providerKind}' is not supported by EnvironmentVariableCredentialStore. Only 'env_var' is accepted."));
+        }
+
         return Task.FromResult(new CredentialStoreSetResult(
             Success: true,
             StoreAvailable: true,

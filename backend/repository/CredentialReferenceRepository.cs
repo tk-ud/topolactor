@@ -53,10 +53,20 @@ public abstract class CredentialReferenceRepository
         CancellationToken ct = default);
 
     /// <summary>
-    /// Updates status to 'active' and last_rotated_at timestamp after a successful rotation.
+    /// Records a rotation attempt: sets status to 'rotation_pending' and updates last_rotated_at.
+    /// Caller must call ConfirmRotationAsync after successful post-rotation validation.
     /// Returns false when reference_key not found.
     /// </summary>
     public abstract Task<bool> UpdateRotationTimestampAsync(
+        string referenceKey,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Confirms a completed rotation by setting status to 'active'.
+    /// Must only be called after post-rotation validation succeeds.
+    /// Returns false when reference_key not found.
+    /// </summary>
+    public abstract Task<bool> ConfirmRotationAsync(
         string referenceKey,
         CancellationToken ct = default);
 

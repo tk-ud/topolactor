@@ -181,6 +181,29 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 $"Failed to record registration audit for credential '{referenceKey}'.");
         }
 
+        // Post-registration validation: updates validation_status in DB (required_at: registration per SSOT).
+        // Registration itself succeeds regardless — validation status is informational at registration time.
+        try
+        {
+            var validation = await _validationService.ValidateAsync(referenceKey, ct);
+            if (!validation.IsValid)
+            {
+                _logger.LogInformation(
+                    "SecretCredentialBundleRuntime.register: post-registration validation: credential not yet in store referenceKey={ReferenceKey} failureCode={FailureCode}",
+                    referenceKey, validation.FailureCode);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "SecretCredentialBundleRuntime.register: post-registration validation threw exception referenceKey={ReferenceKey}. Registration succeeded.",
+                referenceKey);
+        }
+
         _logger.LogInformation(
             "SecretCredentialBundleRuntime.register: credential reference registered referenceKey={ReferenceKey}",
             referenceKey);
@@ -262,10 +285,14 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 "rotate: payload must include non-empty 'reference_key'.");
         }
 
-        if (!TryExtractString(request.Payload, "rotation_actor_id", out var rotationActorId) || string.IsNullOrWhiteSpace(rotationActorId))
+        // Actor confirmed from JWT subject (backend authority) — injected into Context by dispatch layer.
+        // Frontend must not supply rotation_actor_id; the backend derives it from the validated JWT.
+        string? rotationActorId = null;
+        request.Context?.TryGetValue("jwt_actor", out rotationActorId);
+        if (string.IsNullOrWhiteSpace(rotationActorId))
         {
             return ExplicitError("CREDENTIAL_ROTATION_ACTOR_REQUIRED",
-                "rotate: payload must include non-empty 'rotation_actor_id'. Rotation requires explicit admin actor identity.");
+                "rotate: JWT actor (sub claim) is required. Rotation requires explicit admin actor identity confirmed by the backend.");
         }
 
         _logger.LogDebug(
@@ -279,6 +306,7 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 $"No credential reference found for key '{referenceKey}'.");
         }
 
+        // Set rotation_pending (lifecycle: rotation_pending → validation success → active)
         var updated = await _repository.UpdateRotationTimestampAsync(referenceKey, ct);
         if (!updated)
         {
@@ -311,7 +339,7 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 $"Failed to record rotation audit for credential '{referenceKey}'.");
         }
 
-        // Validate that the rotated credential is present in the secret store.
+        // Post-rotation validation: credential must be present in store before confirming active.
         CredentialValidationResult validation;
         try
         {
@@ -333,18 +361,45 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
         if (!validation.IsValid)
         {
             _logger.LogWarning(
-                "SecretCredentialBundleRuntime.rotate: post-rotation validation failed referenceKey={ReferenceKey} failureCode={FailureCode}",
+                "SecretCredentialBundleRuntime.rotate: post-rotation validation failed referenceKey={ReferenceKey} failureCode={FailureCode}. Status remains rotation_pending.",
                 referenceKey, validation.FailureCode);
+
+            // Append credential_rotation_failed audit event (reference-only, no credential value).
+            try
+            {
+                await _repository.AppendAuditEventAsync(
+                    new CredentialAuditEventRecord(
+                        EventType: "credential_rotation_failed",
+                        CredentialReferenceId: reference.CredentialReferenceId,
+                        ReferenceKey: referenceKey,
+                        Outcome: "failure",
+                        FailureCode: validation.FailureCode),
+                    ct);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "SecretCredentialBundleRuntime.rotate: credential_rotation_failed audit write failed referenceKey={ReferenceKey}",
+                    referenceKey);
+            }
+
             return new EndpointResponseDto(
                 Success: false,
                 Emission: null,
                 Errors: [new ValidationError(
                     validation.FailureCode ?? "CREDENTIAL_POST_ROTATION_VALIDATION_FAILED",
-                    validation.FailureReason ?? "Post-rotation credential validation failed.")]);
+                    validation.FailureReason ?? "Post-rotation credential validation failed. Status remains rotation_pending.")]);
         }
 
+        // Validation succeeded: confirm rotation by setting status=active.
+        await _repository.ConfirmRotationAsync(referenceKey, ct);
+
         _logger.LogInformation(
-            "SecretCredentialBundleRuntime.rotate: rotation recorded and validated for referenceKey={ReferenceKey}",
+            "SecretCredentialBundleRuntime.rotate: rotation confirmed and validated for referenceKey={ReferenceKey}",
             referenceKey);
 
         var data = JsonSerializer.SerializeToElement(new

@@ -1,22 +1,50 @@
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
-import {
-  listCredentialReferences,
-  registerCredentialReference,
-  validateCredentialReference,
-  rotateCredentialReference,
-  type CredentialReferenceItem,
-} from "../api/adminApi.ts";
-import { getTokenClaims } from "../api/authApi.ts";
+import { queueAdminClientCommand } from "../runtime/frontendScheduler.ts";
 import { SESSION_TOKEN_KEY } from "../lib/demoSession.ts";
 
-function getAdminUsername(): string {
-  if (typeof globalThis.sessionStorage === "undefined") return "";
-  const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
-  if (!token) return "";
-  const claims = getTokenClaims(token);
-  return typeof claims?.sub === "string" ? claims.sub : "";
+function getToken(): string | undefined {
+  if (typeof globalThis.sessionStorage === "undefined") return undefined;
+  return sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined;
 }
+
+async function credentialDispatch(
+  action: string,
+  payload?: Record<string, unknown>,
+) {
+  const result = await queueAdminClientCommand(
+    {
+      operationType: "admin",
+      target: "admin",
+      layer: "credential_registry",
+      action,
+      payload,
+    },
+    getToken(),
+  );
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
+    const msg =
+      result.errors?.[0]?.message ??
+      result.errors?.[0]?.Message ??
+      "dispatch failed";
+    throw new Error(msg);
+  }
+  if (!result.emission) throw new Error("dispatch: no emission in response");
+  return result.emission;
+}
+
+type CredentialReferenceItem = {
+  credential_reference_id: string;
+  reference_key: string;
+  provider_kind: string;
+  status: string;
+  validation_status: string;
+  last_validated_at: string | null;
+  last_rotated_at: string | null;
+  registered_at: string;
+};
 
 type OpStatus = { ok: boolean; message: string } | null;
 
@@ -39,12 +67,15 @@ export default function AdminCredentialPanel(): JSX.Element {
     setLoading(true);
     setBackendUnavailable(false);
     try {
-      const list = await listCredentialReferences();
-      if (list === null) {
+      const emission = await credentialDispatch("list");
+      if (emission === null) {
         setBackendUnavailable(true);
         return;
       }
-      setItems(list);
+      const data = emission.data as { items: CredentialReferenceItem[] } | undefined;
+      setItems(data?.items ?? []);
+    } catch {
+      setBackendUnavailable(true);
     } finally {
       setLoading(false);
     }
@@ -64,11 +95,15 @@ export default function AdminCredentialPanel(): JSX.Element {
     setRegLoading(true);
     setRegStatus(null);
     try {
-      const result = await registerCredentialReference(key, kind);
-      if (result === null) {
+      const emission = await credentialDispatch("register", {
+        reference_key: key,
+        provider_kind: kind,
+      });
+      if (emission === null) {
         setRegStatus({ ok: false, message: "バックエンドと通信できませんでした。" });
         return;
       }
+      const result = emission.data as CredentialReferenceItem;
       setRegStatus({ ok: true, message: `登録しました: ${result.reference_key}` });
       setRegKey("");
       await load();
@@ -83,14 +118,15 @@ export default function AdminCredentialPanel(): JSX.Element {
     setRowLoading((prev) => ({ ...prev, [referenceKey]: true }));
     setRowStatus((prev) => ({ ...prev, [referenceKey]: null }));
     try {
-      const result = await validateCredentialReference(referenceKey);
-      if (result === null) {
+      const emission = await credentialDispatch("validate", { reference_key: referenceKey });
+      if (emission === null) {
         setRowStatus((prev) => ({
           ...prev,
           [referenceKey]: { ok: false, message: "バックエンドと通信できませんでした。" },
         }));
         return;
       }
+      const result = emission.data as { reference_key: string; is_valid: boolean };
       setRowStatus((prev) => ({
         ...prev,
         [referenceKey]: {
@@ -112,27 +148,26 @@ export default function AdminCredentialPanel(): JSX.Element {
   };
 
   const handleRotate = async (referenceKey: string) => {
-    const actorId = getAdminUsername();
-    if (!actorId) {
-      setRowStatus((prev) => ({
-        ...prev,
-        [referenceKey]: { ok: false, message: "管理者セッションが取得できません。再ログインしてください。" },
-      }));
+    if (
+      !globalThis.confirm(
+        `credential "${referenceKey}" の rotation を記録します。\n\nrotation 後に secret store の検証も実行されます。続けますか？`,
+      )
+    )
       return;
-    }
-    if (!globalThis.confirm(`credential "${referenceKey}" の rotation を記録します。\n\nrotation 後に secret store の検証も実行されます。続けますか？`)) return;
 
     setRowLoading((prev) => ({ ...prev, [referenceKey]: true }));
     setRowStatus((prev) => ({ ...prev, [referenceKey]: null }));
     try {
-      const result = await rotateCredentialReference(referenceKey, actorId);
-      if (result === null) {
+      // rotation_actor_id is confirmed by the backend from the JWT sub claim — not sent from frontend
+      const emission = await credentialDispatch("rotate", { reference_key: referenceKey });
+      if (emission === null) {
         setRowStatus((prev) => ({
           ...prev,
           [referenceKey]: { ok: false, message: "バックエンドと通信できませんでした。" },
         }));
         return;
       }
+      const result = emission.data as { reference_key: string; rotated: boolean };
       setRowStatus((prev) => ({
         ...prev,
         [referenceKey]: {

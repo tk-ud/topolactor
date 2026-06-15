@@ -137,8 +137,25 @@ public sealed class NpgsqlCredentialReferenceRepository : CredentialReferenceRep
         cmd.CommandText = """
             UPDATE topology.credential_references
             SET last_rotated_at = now(),
-                status = 'active',
+                status = 'rotation_pending',
                 validation_status = 'unchecked',
+                updated_at = now()
+            WHERE reference_key = @rk
+            """;
+        cmd.Parameters.AddWithValue("rk", referenceKey);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    public override async Task<bool> ConfirmRotationAsync(
+        string referenceKey,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE topology.credential_references
+            SET status = 'active',
                 updated_at = now()
             WHERE reference_key = @rk
             """;
