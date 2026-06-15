@@ -5,7 +5,6 @@
 import * as $_app from "./routes/_app.tsx";
 import * as $admin_middleware from "./routes/admin/_middleware.ts";
 import * as $admin_contents from "./routes/admin/contents.tsx";
-import * as $admin_credentials from "./routes/admin/credentials.tsx";
 import * as $admin_enums from "./routes/admin/enums.tsx";
 import * as $admin_index from "./routes/admin/index.tsx";
 import * as $admin_manifests from "./routes/admin/manifests.tsx";
@@ -32,7 +31,6 @@ import * as $index from "./routes/index.tsx";
 import * as $runtime_status from "./routes/runtime-status.tsx";
 import * as $super_auth from "./routes/super_auth.tsx";
 import * as $AdminAuthGate from "./islands/AdminAuthGate.tsx";
-import * as $AdminCredentialPanel from "./islands/AdminCredentialPanel.tsx";
 import * as $AdminEnumsRoster from "./islands/AdminEnumsRoster.tsx";
 import * as $AdminImport from "./islands/AdminImport.tsx";
 import * as $AdminMainFlowStepper from "./islands/AdminMainFlowStepper.tsx";
@@ -61,7 +59,6 @@ const manifest = {
     "./routes/_app.tsx": $_app,
     "./routes/admin/_middleware.ts": $admin_middleware,
     "./routes/admin/contents.tsx": $admin_contents,
-    "./routes/admin/credentials.tsx": $admin_credentials,
     "./routes/admin/enums.tsx": $admin_enums,
     "./routes/admin/index.tsx": $admin_index,
     "./routes/admin/manifests.tsx": $admin_manifests,
@@ -91,7 +88,6 @@ const manifest = {
   },
   islands: {
     "./islands/AdminAuthGate.tsx": $AdminAuthGate,
-    "./islands/AdminCredentialPanel.tsx": $AdminCredentialPanel,
     "./islands/AdminEnumsRoster.tsx": $AdminEnumsRoster,
     "./islands/AdminImport.tsx": $AdminImport,
     "./islands/AdminMainFlowStepper.tsx": $AdminMainFlowStepper,

@@ -19,6 +19,7 @@
 | `job-scheduler-implementation-contract` | job_scheduler_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
 | `audit-approval-implementation-contract` | audit_approval_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
 | `export-sftp-implementation-contract` | export_sftp_bundle 実装契約（file-storage 後） | not_started | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
+| `secret-credential-implementation-contract` | secret_credential_bundle 実装契約（consumer bundle 接続後） | not_started | 1 | - | `docs/design/runtime-bundle-secret-credential-ssot.yaml` |
 
 ---
 
@@ -237,62 +238,34 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `secret-credential-implementation-contract`
 
-**Status:** implemented  
+**Status:** not_started  
 **SSOT:** `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 
 問題点:
-secret_credential_bundle 設計 SSOT 点検済み（authority_boundary: admin_config_and_runtime_secret_store / trigger_kind: admin_config_credential_registration）。credential 管理基盤（参照登録 / rotation / validation / runtime injection）および admin UI を seed-driven dispatch 基板で実装完了。
+secret_credential_bundle 設計 SSOT 点検済み（authority_boundary: admin_config_and_runtime_secret_store / trigger_kind: admin_config_credential_registration）。PR#445 での実装試行（dedicated credential management plane: DB tables / repository / runtime / admin UI）はプロジェクトオーナー審査により取り下げ。consumer bundle（email / stripe / webhook_inbox / export_sftp）との接続なしに dedicated credential plane を先行実装することが blocking と判定された。
+
+取り下げ理由:
+- consumer bundle 未接続のまま dedicated surface（topology.credential_references / logs.credential_audit_log / CredentialReferenceRepository / ICredentialStore / CredentialValidationService / SecretCredentialBundleRuntime / CredentialStartupValidationService / /admin/credentials / AdminCredentialPanel）を追加することが blocking
+- 既存 credential boundary（auth.credentials）を bypass する parallel system を事前構築しないこと
+- consumer bundle が実際に必要とした時点で設計・実装する
 
 目的:
-secret_credential_bundle を後続 bundle（email / stripe / webhook_inbox / export_sftp）の credential injection 基盤として実装完了とする。
+consumer bundle (email / stripe / webhook_inbox / export_sftp) のいずれかが credential injection を必要とした段階で実装する。
 
-実装済み範囲:
-- [x] credential_reference_schema（db/credential_reference_tables.sql: topology.credential_references + logs.credential_audit_log）
-- [x] secret_store_adapter（ICredentialStore / EnvironmentVariableCredentialStore）
-- [x] EnvironmentVariableCredentialStore.SetAsync: provider_kind バリデーション（env_var 以外は明示エラー）
-- [x] credential_validation_service（CredentialValidationService.ValidateAsync: registration / rotation での検証）
-- [x] credential_rotation_service（rotate action: JWT sub → rotation_actor_id / rotation_pending lifecycle / post-rotation ValidateAsync / fail-close / credential_rotation_failed audit）
-- [x] rotation lifecycle: rotation_pending → [ValidateAsync success] → ConfirmRotationAsync → active（fail-close: validation 失敗時は rotation_pending のまま）
-- [x] ConfirmRotationAsync（NpgsqlCredentialReferenceRepository: post-rotation validation 成功後に status='active' を確定）
-- [x] credential_injection_pattern（ICredentialStore.GetAsync / SetAsync）
-- [x] register: ICredentialStore.SetAsync → fail-close（SECRET_STORE_UNAVAILABLE / CREDENTIAL_STORE_BINDING_FAILED）
-- [x] register: 登録成功時に credential_registered audit event 記録（audit failure = explicit error）
-- [x] register: 登録後に post-registration ValidateAsync を実行（validation_status を DB に反映）
-- [x] audit write failure を silent に swallow しない（CREDENTIAL_AUDIT_WRITE_FAILED で明示返却）
-- [x] credential_rotation_failed audit event（rotation validation 失敗時に reference_key + outcome のみ記録）
-- [x] 実 credential 値を public SSOT / コード / audit log に含めない設計
-- [x] IDispatchableRuntime.ExecuteAsync として実装（SecretCredentialBundleRuntime）
-- [x] seed-driven dispatch（db/seed_empty.sql: manifest 0xc7–0xca / structure_map 0xcd–0xd0 で credential_registry:list/register/validate/rotate → secret_credential_runtime に直接ルーティング）
-- [x] AdminRuntime.Credential.cs 削除（admin_runtime proxy 層撤廃 / ManifestDispatcher が直接 SecretCredentialBundleRuntime を呼ぶ）
-- [x] secret_credential_runtime を runtime-orchestration SSOT の backend_runtime_destinations + handler_registry に登録
-- [x] runtime_startup validation（CredentialStartupValidationService: IHostedService / 起動時に全 credential_reference を検証 / ログ記録 / 起動は非ブロック）
-- [x] JWT actor 権威（backend が /dispatch で JWT sub を context["jwt_actor"] に注入 / frontend payload に rotation_actor_id は不要）
-- [x] credential_registration_ui（AdminCredentialPanel.tsx: queueAdminClientCommand 直接呼び出し / seed-driven dispatch 回路 / 登録フォーム / 一覧 / 検証 / rotation 操作フロー）
-- [x] admin UI は credential 実値を一切表示しない境界を維持
-- [x] adminApi.ts から credential 専用 API 関数を削除（汎用 callAdminDispatch のみ維持）
-- [x] /admin/credentials route（AdminAuthGate 下に配置）
-- [x] 27+ unit tests（全ての SSOT 境界・rotation lifecycle・JWT actor 権威・fail-close を網羅）
+改善方針:
+- [ ] consumer bundle（email / stripe / webhook_inbox / export_sftp）のうち最初に credential injection を必要とするものを特定する
+- [ ] その consumer bundle の実装 SSOT と合わせて credential_reference_schema を設計する
+- [ ] credential management plane は consumer bundle 接続後に実装する（先行実装しない）
 
-今回実装した範囲（全コミット）:
-- 新規: `db/credential_reference_tables.sql`
-- 更新: `db/init.sql`
-- 更新: `db/seed_empty.sql`（manifest 0xc7–0xca + structure_map 0xcd–0xd0）
-- 新規: `backend/schema/SecretCredentialBundleContracts.cs`
-- 新規: `backend/repository/CredentialReferenceRepository.cs`（ConfirmRotationAsync 追加）
-- 新規: `backend/repository/NpgsqlCredentialReferenceRepository.cs`（rotation_pending lifecycle / ConfirmRotationAsync）
-- 新規: `backend/runtime/EnvironmentVariableCredentialStore.cs`（provider_kind バリデーション）
-- 新規: `backend/runtime/CredentialValidationService.cs`
-- 新規: `backend/runtime/SecretCredentialBundleRuntime.cs`（JWT actor / rotation lifecycle / post-registration validation / credential_rotation_failed audit）
-- 新規: `backend/runtime/CredentialStartupValidationService.cs`（IHostedService / runtime_startup 検証）
-- 削除: `backend/runtime/AdminRuntime.Credential.cs`（seed-driven 移行により撤廃）
-- 更新: `backend/runtime/AdminRuntime.cs`（credential_registry switch cases 削除）
-- 更新: `backend/Program.cs`（JWT actor 注入 / CredentialStartupValidationService 登録 / AdminRuntime への SecretCredentialBundleRuntime 注入解除）
-- 更新: `frontend/api/adminApi.ts`（credential 専用関数削除）
-- 新規: `frontend/islands/AdminCredentialPanel.tsx`（queueAdminClientCommand 直接呼び出し）
-- 新規: `frontend/routes/admin/credentials.tsx`
-- 更新: `frontend/fresh.gen.ts`（route + island 登録）
-- 更新: `docs/design/runtime-orchestration-ssot.yaml`（secret_credential_runtime を handler_registry / backend_runtime_destinations に追加）
-- 新規: `backend/tests/Topolactor.Runtime.Tests/SecretCredentialBundleRuntimeTests.cs`（27+ tests）
+設計 SSOT 記載済み要件（future_implementation_requirements.required_items）:
+- credential_reference_schema (topology.credential_references + logs.credential_audit_log)
+- secret_store_adapter (ICredentialStore / EnvironmentVariableCredentialStore pattern)
+- credential_registration_ui (seed-driven dispatch routing to secret_credential_runtime)
+- credential_rotation_service (JWT actor authority / rotation_pending lifecycle / fail-close)
+- credential_validation_service (ValidateAsync: registration / rotation / startup)
+- credential_injection_pattern (GetAsync / SetAsync via secret store)
+- audit_log_schema (reference_key + outcome only, no credential values)
+- runtime_startup_validation (IHostedService pattern)
 
 対応資料:
 - `docs/design/runtime-bundle-secret-credential-ssot.yaml`

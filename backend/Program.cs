@@ -73,8 +73,6 @@ builder.Services.AddSingleton<TeamMarkdownRepository>(sp =>
     new NpgsqlTeamMarkdownRepository(
         sp.GetRequiredService<ILogger<NpgsqlTeamMarkdownRepository>>(),
         connectionString));
-builder.Services.AddSingleton<CredentialReferenceRepository>(_ =>
-    new NpgsqlCredentialReferenceRepository(connectionString));
 builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
 builder.Services.AddSingleton<SqlAttentionEvidencePromotionRuntime>();
 builder.Services.AddSingleton<SqlAttentionTopologyProjectionRuntime>();
@@ -124,25 +122,6 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<TeamMarkdownRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 
-// ---------------------------------------------------------------------------
-// Secret Credential Bundle — secret_credential_runtime handler
-// SSOT: docs/design/runtime-bundle-secret-credential-ssot.yaml
-// ---------------------------------------------------------------------------
-builder.Services.AddSingleton<ICredentialStore>(sp =>
-    new EnvironmentVariableCredentialStore(
-        sp.GetRequiredService<ILogger<EnvironmentVariableCredentialStore>>()));
-builder.Services.AddSingleton<CredentialValidationService>(sp =>
-    new CredentialValidationService(
-        sp.GetRequiredService<ILogger<CredentialValidationService>>(),
-        sp.GetRequiredService<ICredentialStore>(),
-        sp.GetRequiredService<CredentialReferenceRepository>()));
-builder.Services.AddSingleton<SecretCredentialBundleRuntime>(sp =>
-    new SecretCredentialBundleRuntime(
-        sp.GetRequiredService<ILogger<SecretCredentialBundleRuntime>>(),
-        sp.GetRequiredService<ICredentialStore>(),
-        sp.GetRequiredService<CredentialReferenceRepository>(),
-        sp.GetRequiredService<CredentialValidationService>()));
-
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
     new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>()));
 builder.Services.AddSingleton<OutputLaneRouter>(sp =>
@@ -188,7 +167,6 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         ["admin_runtime"]               = sp.GetRequiredService<AdminRuntimeDispatchAdapter>(),
         ["sse_projection_runtime"]      = sp.GetRequiredService<SseProjectionRuntime>(),
         ["registry_attractor_runtime"]  = sp.GetRequiredService<RegistryAttractorDispatchRuntime>(),
-        ["secret_credential_runtime"]   = sp.GetRequiredService<SecretCredentialBundleRuntime>(),
     };
     return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
@@ -249,7 +227,6 @@ builder.Services.AddSingleton<RuntimeTimelineScheduler>();
 // Background services
 // ---------------------------------------------------------------------------
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RuntimeTimelineScheduler>());
-builder.Services.AddHostedService<CredentialStartupValidationService>();
 builder.Services.AddHostedService<RetentionScheduler>();
 builder.Services.AddHostedService<SystemOperationCiScheduler>();
 builder.Services.AddHostedService<SqlAttentionScheduler>();
@@ -313,12 +290,7 @@ app.MapPost("/dispatch", async (
     // Use body role for axes resolution (routing); fall back to JWT role when not set.
     // Capability gate in ManifestDispatcher enforces runtime-level requirements against routing role.
     var routingRole = bodyRole ?? jwtRole;
-    // Inject JWT subject as backend-authoritative actor identity for operations that require it (e.g. credential rotation).
-    var jwtSub = jwtGuard.TryGetSubject(token);
-    var context = new Dictionary<string, string>(request.Context ?? new Dictionary<string, string>());
-    if (!string.IsNullOrWhiteSpace(jwtSub))
-        context["jwt_actor"] = jwtSub;
-    var authoritativeRequest = request with { Role = routingRole, Context = context };
+    var authoritativeRequest = request with { Role = routingRole };
     var result = await dispatch.HandleAsync(authoritativeRequest, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });

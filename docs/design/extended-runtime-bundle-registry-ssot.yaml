@@ -172,15 +172,14 @@ extended_runtime_bundle_registry_ssot:
 
       secret_credential_bundle:
         id: secret_credential_bundle
-        status: implemented
+        status: not_started
         description: Secret / Credential Bundle。外部連携に必要な認証情報を管理。
         trigger_kind: api_or_admin_config
         requires_separate_ssot: true
         owner: runtime-bundle-secret-credential-ssot
         owner_resolution: covered_by_this_pr
-        owner_status: implemented
+        owner_status: assigned_to_design_ssot
         separate_ssot_path: docs/design/runtime-bundle-secret-credential-ssot.yaml
-        implementation_ssot_path: docs/design/runtime-bundle-secret-credential-implementation-ssot.yaml
 
   future_optional_external_surface_bundles:
     description: >-
