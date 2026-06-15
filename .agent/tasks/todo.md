@@ -236,19 +236,48 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 **Roadmap bundle:** `product.core_runtime_bundle_gate`  
 **SSOT:** `docs/design/extended-runtime-bundle-registry-ssot.yaml`
 
+**設計 SSOT 点検結果（2026-06-15 完了）:**
+
+8 bundle 全ての設計 SSOT を点検済み。全 bundle について以下を確認:
+- authority_boundary: 定義済み ✅
+- validate-preview-apply boundary: 定義済み ✅
+- scheduler_boundary: 定義済み ✅
+- audit_log_boundary: 定義済み ✅
+- failure_policy（no silent fallback）: 定義済み ✅
+- 実装 SSOT: 未作成 ❌
+- backend 実装: 未着手 ❌
+
+| Bundle | 設計 SSOT | VPA boundary | 実装 SSOT | 実装 |
+|--------|-----------|--------------|-----------|------|
+| email_bundle | ✅ | draft/preview/approval/dispatch | ❌ | ❌ |
+| stripe_bundle | ✅ | webhook_inbox/verify/project/ledger | ❌ | ❌ |
+| file_storage_bundle | ✅ | export_job/checksum/manifest/signed_dl | ❌ | ❌ |
+| export_sftp_bundle | ✅ | job/package/manifest/checksum/transfer | ❌ | ❌ |
+| webhook_inbox_bundle | ✅ | intake/verify/snapshot/validate/preview/apply | ❌ | ❌ |
+| job_scheduler_bundle | ✅ | trigger→scheduler→manifest_dispatcher→route | ❌ | ❌ |
+| audit_approval_bundle | ✅ | request/review/approval/rejection | ❌ | ❌ |
+| secret_credential_bundle | ✅ | register/validate/rotate/inject | ❌ | ❌ |
+
+**依存関係:**
+- `export_sftp_bundle` は `file_storage_bundle` の package artifact 生成に依存
+- `job_scheduler_bundle` は `runtime-orchestration-ssot.yaml` の scheduler_contract を基礎とする
+- `secret_credential_bundle` は credential injection が必要な他 bundle の前提
+
 問題点:
-`extended-runtime-bundle-registry-ssot.yaml` の `core_runtime_bundles` 下に 8 bundle が `not_started` / `requires_separate_ssot` として定義されているが、`.agent/tasks/todo.md` の未処理 bundle 索引および `docs/system-roadmap.yaml` の `implementation_registry` に可視化されていなかった。email_bundle と stripe_bundle は設計 SSOT（`runtime-bundle-email-ssot.yaml` / `runtime-bundle-stripe-ssot.yaml`）が存在するが runtime 実装は未着手。残り 6 bundle は設計 SSOT 割り当て済み（owner_status: assigned_to_design_ssot）で実装未着手。
+設計 SSOT 点検は完了したが、8 bundle すべてに実装 SSOT が未作成であり backend 実装は未着手。gate 完了条件（実装 SSOT 確定 + backend 実装 + テスト証跡）は未達。
 
 目的:
-8 core runtime bundle の not_started 状態を TODO と Roadmap で bundle 単位に可視化し、将来の実装・設計フェーズへの入口を確保する。今すぐ実装は行わない。
+各 bundle に実装 SSOT を作成し、bundle 単位で implementation_change worktype として実装を開始する準備を整える。
 
-改善方針（将来の実装サイクルで適用）:
-- [ ] email_bundle: `runtime-bundle-email-ssot.yaml` を実装 SSOT として確定し、UI approval → backend dispatch → SMTP 副作用の実装 bundle を着手する
-- [ ] stripe_bundle: `runtime-bundle-stripe-ssot.yaml` を実装 SSOT として確定し、webhook intake → verification → paid state projection の実装 bundle を着手する
-- [ ] file_storage_bundle / export_sftp_bundle: CLI/MCP export job との連携 SSOT を確定してから実装する
-- [ ] webhook_inbox_bundle: scheduler 経由 runtime route の実装 SSOT を確定してから実装する
-- [ ] job_scheduler_bundle: cron/hook/client trigger 統合 SSOT を確定してから実装する
-- [ ] audit_approval_bundle / secret_credential_bundle: それぞれの実装 SSOT を確定してから実装する
+改善方針（次サイクルで bundle 単位に適用）:
+- [ ] email_bundle: 実装 SSOT を新規作成し（email_draft_surface / email_template_catalog / backend_dispatch_service / delivery_log_schema / idempotency_key 設計）、UI approval → backend dispatch → SMTP 副作用の実装 bundle を着手する
+- [ ] stripe_bundle: 実装 SSOT を新規作成し（webhook_inbox_schema / stripe_event_verification_service / payment_state_projection_schema / ledger_binding_schema / idempotency_key 設計）、webhook intake → verification → paid state projection の実装 bundle を着手する
+- [ ] secret_credential_bundle: 実装 SSOT を新規作成し（credential_reference_schema / secret_store_adapter / registration_ui / rotation_service / validation_service / injection_pattern 設計）、他 bundle の credential injection 前提として先行着手を検討する
+- [ ] file_storage_bundle: 実装 SSOT を新規作成し（export_job_schema / file_artifact_storage_schema / checksum_record_schema / signed_url_service / manifest_schema / storage_adapter 設計）、CLI/MCP export job との連携を実装する
+- [ ] export_sftp_bundle: file_storage_bundle の実装 SSOT 確定後に実装 SSOT を作成し（export_job_schema / package_artifact_schema / sftp_transfer_service / transfer_log_schema / retry_policy / credential_injection 設計）、実装する
+- [ ] webhook_inbox_bundle: 実装 SSOT を新規作成し（webhook_intake_schema / signature_verification_service / intake_snapshot_schema / scheduler_hook_trigger_wiring / runtime_event_log_schema 設計）、scheduler 経由 runtime route の実装を着手する
+- [ ] job_scheduler_bundle: 実装 SSOT を新規作成し（job_queue_schema / cron_driver_loop / hook_trigger_intake / client_trigger_intake / collision_control / overflow_policy / job_execution_log_schema 設計）、runtime_orchestration_ssot との整合を確認してから実装する
+- [ ] audit_approval_bundle: 実装 SSOT を新規作成し（approval_request_schema / approval_state_machine / export_job_approval_schema / audit_log_schema / notification_design / idempotency_key 設計）、CLI/MCP read/export 境界との整合を確認してから実装する
 - 各 bundle 実装時は validate-preview-apply boundary を必須とし、direct runtime execution without scheduler は禁止する
 
 対応資料:
@@ -272,9 +301,10 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 - 各 bundle の `IDispatchableRuntime.ExecuteAsync` 実装
 
 remaining_todo:
-- 各 bundle は separate SSOT が実装レベルで確定するまで実装しない
-- email / stripe は設計 SSOT が存在するため実装サイクルの優先候補だが、UI approval boundary / webhook verification boundary の実装設計が必要
-- bundle 単位で実装フェーズに入る際は、`.agent/routes/worktype-required-protocols.yaml` の `implementation_change` worktype と `design_change` worktype を適用する
+- 各 bundle の実装 SSOT を作成してから実装に入る（設計 SSOT はあくまで境界・語彙・契約の正本であり、実装 SSOT は別に必要）
+- bundle 単位で実装フェーズに入る際は、`.agent/routes/worktype-required-protocols.yaml` の `implementation_change` worktype を適用する
+- 実装 SSOT 作成は `design_change` worktype として先行して行う
+- 依存関係の観点から secret_credential_bundle と file_storage_bundle の実装 SSOT を優先的に着手することを推奨
 
 SSOT修正が必要な場合の required checks:
 - `bash .agent/tests/check-worktype-routing.sh`
