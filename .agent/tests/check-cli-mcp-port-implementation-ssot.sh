@@ -79,7 +79,7 @@ REQUIRED_SECTIONS=(
   "relation_to_export_sftp_bundle"
   "relation_to_audit_approval_bundle"
   "relation_to_secret_credential_bundle"
-  "future_implementation_requirements"
+  "implementation_boundary_requirements"
 )
 
 for section in "${REQUIRED_SECTIONS[@]}"; do

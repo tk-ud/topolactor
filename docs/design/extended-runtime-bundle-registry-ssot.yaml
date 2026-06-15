@@ -193,7 +193,7 @@ extended_runtime_bundle_registry_ssot:
     bundles:
       notion_bundle:
         id: notion_bundle
-        status: future_bundle_candidate
+        classification: future_bundle_candidate
         description: >-
           Notion database をintake / draft authoring surface として扱うBundle。
           Notion is never treated as canonical Topolactor SSOT。
@@ -213,7 +213,7 @@ extended_runtime_bundle_registry_ssot:
 
       google_sheets_bundle:
         id: google_sheets_bundle
-        status: future_bundle_candidate
+        classification: future_bundle_candidate
         description: >-
           Google Sheets をintake / draft authoring surface として扱うBundle。
           direct DB write は禁止。
@@ -233,7 +233,7 @@ extended_runtime_bundle_registry_ssot:
 
       slack_bundle:
         id: slack_bundle
-        status: future_bundle_candidate
+        classification: future_bundle_candidate
         description: >-
           Slack をnotification / approval surface として扱うBundle。
           Slack action から直接runtime execution しない。
@@ -253,7 +253,7 @@ extended_runtime_bundle_registry_ssot:
 
       github_issues_bundle:
         id: github_issues_bundle
-        status: future_bundle_candidate
+        classification: future_bundle_candidate
         description: >-
           GitHub Issues を intake / approval surface として扱うBundle。
           direct DB write は禁止。
@@ -273,7 +273,7 @@ extended_runtime_bundle_registry_ssot:
 
       generic_webhook_bundle:
         id: generic_webhook_bundle
-        status: future_bundle_candidate
+        classification: future_bundle_candidate
         description: >-
           Generic Webhook Inbox Bundle。
           webhook → scheduler → runtime route の境界を必須とする。
@@ -302,7 +302,7 @@ extended_runtime_bundle_registry_ssot:
 
       external_rest_api_connector_bundle:
         id: external_rest_api_connector_bundle
-        status: future_bundle_candidate
+        classification: future_bundle_candidate
         description: >-
           External REST API Connector Bundle。
           外部APIからのデータ取得をconnector_adapter経由でintake_snapshotに変換。
@@ -321,7 +321,7 @@ extended_runtime_bundle_registry_ssot:
 
       dynamic_support_nocode_loop_bundle:
         id: dynamic_support_nocode_loop_bundle
-        status: future_bundle_candidate
+        classification: future_bundle_candidate
         description: >-
           Dynamic Support No-code Loop Bundle。
           product.dynamic_support_nocode_loop の外部surface連携部分。

@@ -354,7 +354,7 @@ pipeline_continuity_ssot:
               new targets must be routed through manifest_dispatcher, not hardcoded.
 
     frontend_component_event_log_lane:
-      status: implemented_contract
+      classification: implemented_contract
       description: >
         UI components emit operation events to a frontend runtime queue. The frontend runtime
         scheduler batches those events and flushes them to the backend component-event-log
@@ -775,7 +775,7 @@ pipeline_continuity_ssot:
         - frontend/tests/defaultEntitySearch.test.ts
 
     component_wiring_execution_lane:
-      status: implemented_contract
+      classification: implemented_contract
       description: >
         Admin-configured component wiring (UI Builder) connects to runtime execution.
         Backend LayoutNode enrichment: catalog_component nodes are enriched with

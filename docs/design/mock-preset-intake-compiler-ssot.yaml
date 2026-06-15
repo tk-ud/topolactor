@@ -278,7 +278,7 @@ mock_preset_intake_compiler_ssot:
 
   db_model:
     schema: topology
-    status: planned_schema_surface
+    classification: planned_schema_surface
     tables:
       mock_preset_registry:
         purpose: store reusable UI preset header and source snapshot
@@ -378,7 +378,7 @@ mock_preset_intake_compiler_ssot:
       ref: frontend/runtime/visualLayoutUtils.ts
       role: layout_patch_json and visual node payload compatibility
 
-  implementation_status:
+  implementation_scope_notes:
     current: not_started
     planned_change_surfaces:
       - db migration for topology.mock_preset_* tables

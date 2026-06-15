@@ -262,6 +262,7 @@ check_file "docs/design/runtime-bundle-secret-credential-ssot.yaml"
 check_file "docs/design/runtime-bundle-secret-credential-ssot.md"
 check_file "docs/design/external-port-substrate-ssot.yaml"
 check_file ".agent/tests/check-runtime-bundle-ssots.sh"
+check_file ".agent/tests/check-design-ssot-progress-terms.sh"
 check_file "docs/design/cli-mcp-port-implementation-ssot.yaml"
 check_file "docs/design/cli-mcp-port-implementation-ssot.md"
 check_file ".agent/tests/check-cli-mcp-port-implementation-ssot.sh"
@@ -927,6 +928,12 @@ if bash "$REPO_ROOT/.agent/tests/check-cli-mcp-port-implementation-ssot.sh"; the
   echo "OK  [subcheck] .agent/tests/check-cli-mcp-port-implementation-ssot.sh"
 else
   fail "Subcheck failed: .agent/tests/check-cli-mcp-port-implementation-ssot.sh"
+fi
+
+if bash "$REPO_ROOT/.agent/tests/check-design-ssot-progress-terms.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-design-ssot-progress-terms.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-design-ssot-progress-terms.sh"
 fi
 
 if [ "$FAILURES" -eq 0 ]; then
