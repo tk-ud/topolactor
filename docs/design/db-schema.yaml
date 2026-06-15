@@ -37,7 +37,11 @@ db_schema:
       - db/auth_seed.sql
       - db/legacy_mirror_tables.sql
       - db/seed_empty.sql
-      - db/preset_seed.sql
+      - db/hub_search_preset_seed.sql
+      - db/physical_search_crud_aggregate_preset_seed.sql
+      - db/physical_details_inline_editor_md_generator_preset_seed.sql
+      - db/aggregate_dashboard_preset_seed.sql
+      - db/ui_component_registry_preset_catalog_bootstrap.sql
 
   source_files:
     - db/schema.sql
@@ -54,7 +58,11 @@ db_schema:
     - db/mock_preset_tables.sql
     - db/team_markdown_tables.sql
     - db/manifest_tables.sql
-    - db/preset_seed.sql
+    - db/hub_search_preset_seed.sql
+    - db/physical_search_crud_aggregate_preset_seed.sql
+    - db/physical_details_inline_editor_md_generator_preset_seed.sql
+    - db/aggregate_dashboard_preset_seed.sql
+    - db/ui_component_registry_preset_catalog_bootstrap.sql
 
   categories:
     - topology_definition

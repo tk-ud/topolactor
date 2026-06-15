@@ -60,5 +60,17 @@
 \echo '[init.sql] applying seed_empty.sql'
 \i /db/seed_empty.sql
 
-\echo '[init.sql] applying preset_seed.sql'
-\i /db/preset_seed.sql
+\echo '[init.sql] applying hub_search_preset_seed.sql'
+\i /db/hub_search_preset_seed.sql
+
+\echo '[init.sql] applying physical_search_crud_aggregate_preset_seed.sql'
+\i /db/physical_search_crud_aggregate_preset_seed.sql
+
+\echo '[init.sql] applying physical_details_inline_editor_md_generator_preset_seed.sql'
+\i /db/physical_details_inline_editor_md_generator_preset_seed.sql
+
+\echo '[init.sql] applying aggregate_dashboard_preset_seed.sql'
+\i /db/aggregate_dashboard_preset_seed.sql
+
+\echo '[init.sql] applying ui_component_registry_preset_catalog_bootstrap.sql'
+\i /db/ui_component_registry_preset_catalog_bootstrap.sql

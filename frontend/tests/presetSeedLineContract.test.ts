@@ -31,10 +31,10 @@ import { parsePayloadFromSource } from "../runtime/payloadFromResolver.ts";
 // Add new seed SQL paths here to include them in all 6 contract checks.
 
 const SEED_FILES = [
-  "db/migrations/hub_search_preset_seed.sql",
-  "db/migrations/physical_search_crud_aggregate_preset_seed.sql",
-  "db/migrations/physical_details_inline_editor_md_generator_preset_seed.sql",
-  "db/migrations/aggregate_dashboard_preset_seed.sql",
+  "db/hub_search_preset_seed.sql",
+  "db/physical_search_crud_aggregate_preset_seed.sql",
+  "db/physical_details_inline_editor_md_generator_preset_seed.sql",
+  "db/aggregate_dashboard_preset_seed.sql",
 ];
 
 // Regression pin: target refs that are specifically banned as observed past violations.

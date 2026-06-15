@@ -42,7 +42,9 @@ schema.sql → topology_tables.sql → promotion_tables.sql → sql_attention_lo
 ci_attention_guidance_tables.sql → context_route_tables.sql → ui_topology_tables.sql →
 topology_cross_table_wiring.sql → mock_preset_tables.sql → team_markdown_tables.sql →
 manifest_tables.sql → enum_tables.sql → enum_seed.sql → auth_tables.sql → auth_seed.sql →
-legacy_mirror_tables.sql → seed_empty.sql → preset_seed.sql
+legacy_mirror_tables.sql → seed_empty.sql → hub_search_preset_seed.sql →
+physical_search_crud_aggregate_preset_seed.sql → physical_details_inline_editor_md_generator_preset_seed.sql →
+aggregate_dashboard_preset_seed.sql → ui_component_registry_preset_catalog_bootstrap.sql
 ```
 
 `schema.sql` creates all registry tables and `function_parameters`.
@@ -58,7 +60,11 @@ legacy_mirror_tables.sql → seed_empty.sql → preset_seed.sql
 `seed_empty.sql` inserts the minimum default topology rows including the
 `default:entity:search` structure map, the user login seed manifest, and the context route recommendation policy
 row in `function_parameters` needed for the canonical flow.
-`preset_seed.sql` inserts canonical preset seed rows for all mock presets and UI component registry entries.
+`hub_search_preset_seed.sql`, `physical_search_crud_aggregate_preset_seed.sql`,
+`physical_details_inline_editor_md_generator_preset_seed.sql`, `aggregate_dashboard_preset_seed.sql` — preset
+seed rows for each canonical UIBuilder mock preset.
+`ui_component_registry_preset_catalog_bootstrap.sql` inserts the fixed-UUID `components_bucket` and
+`ui_component_registry` rows needed for the preset ecosystem.
 
 ---
 
@@ -83,7 +89,11 @@ row in `function_parameters` needed for the canonical flow.
 | `auth_seed.sql` | Minimal user/admin credentials in `auth.*` for login. Apply after `auth_tables.sql`. |
 | `legacy_mirror_tables.sql` | Legacy compatibility tables retained for runtime routing compatibility only. |
 | `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`, admin dispatch manifests, and the user login seed manifest. No real business data. |
-| `preset_seed.sql` | Canonical preset seed rows for all mock presets and UI component registry entries. |
+| `hub_search_preset_seed.sql` | UIBuilder hub_search.readonly.v1 preset seed rows. |
+| `physical_search_crud_aggregate_preset_seed.sql` | UIBuilder physical_search_crud_aggregate.v1 preset seed rows. |
+| `physical_details_inline_editor_md_generator_preset_seed.sql` | UIBuilder physical_details_inline_editor_md_generator.v1 preset seed rows. |
+| `aggregate_dashboard_preset_seed.sql` | UIBuilder aggregate_dashboard.v1 preset seed rows. |
+| `ui_component_registry_preset_catalog_bootstrap.sql` | Fixed-UUID `components_bucket` and `ui_component_registry` bootstrap rows for the preset ecosystem. |
 | `init.sql` | Docker initialization SSOT. Uses psql meta commands to execute all SQL files in explicit order with `ON_ERROR_STOP`. Container-path specific (`/db/...`). |
 
 ---

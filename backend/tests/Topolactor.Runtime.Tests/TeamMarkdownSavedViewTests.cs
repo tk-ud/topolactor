@@ -194,7 +194,7 @@ public class TeamMarkdownSavedViewTests
     [Fact]
     public void PresetSeedRegistrationBootstrap_UsesExistingTeamMarkdownTemplateRegistry()
     {
-        var migrationPath = ResolveRepoPath("db/migrations/team_markdown_registry_tables.sql");
+        var migrationPath = ResolveRepoPath("db/team_markdown_tables.sql");
         var migration = File.ReadAllText(migrationPath);
         Assert.Contains("md_viewer.team_markdown.saved_view.completed_seed.v1", migration);
         Assert.Contains("topology.team_markdown_template_registry", migration);
