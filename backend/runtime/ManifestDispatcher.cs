@@ -21,8 +21,9 @@ namespace Topolactor.Runtime;
 ///   admin_runtime              -> AdminRuntimeDispatchAdapter -> AdminRuntime
 ///   sse_projection_runtime     -> SseProjectionRuntime
 ///
-/// Future dispatchable runtime (not yet injected):
-///   registry_attractor_runtime -> not_yet_implemented (separate from SQL Attention cron runtime)
+/// Boundary note:
+///   registry_attractor_runtime is not registered in the production handler registry;
+///   manifest dispatch to that destination returns RUNTIME_DESTINATION_UNKNOWN until a handler is registered.
 ///
 /// Dev bypass: when _manifestRepository is null (not injected), TargetDispatchOverride
 /// handles admin targets; unhandled requests fall through to the
