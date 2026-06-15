@@ -655,7 +655,7 @@ system_roadmap_ssot:
             note: prerequisite_for_other_bundles_requiring_credential_injection
             implementation_readiness: design_contract_complete_implementation_contract_required
       completion_condition:
-        - each_core_bundle_has_separate_ssot_and_implementation
+        - each_core_bundle_has_implementation_contract_and_implementation
         - each_bundle_satisfies_validate_preview_apply_boundary
         - each_bundle_is_covered_by_backend_tests_and_roadmap_evidence
       known_gap_ref:
