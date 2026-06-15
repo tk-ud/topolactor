@@ -77,6 +77,15 @@ required_files:
     - docs/design/runtime-bundle-file-storage-ssot.md
     - docs/design/runtime-bundle-export-sftp-ssot.yaml
     - docs/design/runtime-bundle-export-sftp-ssot.md
+    - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+    - docs/design/runtime-bundle-webhook-inbox-ssot.md
+    - docs/design/runtime-bundle-job-scheduler-ssot.yaml
+    - docs/design/runtime-bundle-job-scheduler-ssot.md
+    - docs/design/runtime-bundle-audit-approval-ssot.yaml
+    - docs/design/runtime-bundle-audit-approval-ssot.md
+    - docs/design/runtime-bundle-secret-credential-ssot.yaml
+    - docs/design/runtime-bundle-secret-credential-ssot.md
+    - docs/design/external-port-substrate-ssot.yaml
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml
