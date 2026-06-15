@@ -694,14 +694,16 @@ runtime_orchestration_ssot:
       topology_transform_runtime: RuntimeExecutor
       admin_runtime: AdminRuntimeDispatchAdapter
       sse_projection_runtime: SseProjectionRuntime
+      registry_attractor_runtime: RegistryAttractorDispatchRuntime
     handler_registry_scope_note: >-
       handler_registry lists the handlers registered in the production handler dictionary.
-      registry_attractor_runtime is declared as a backend_dispatchable_kind in
-      runtime_contract but has no handler_registry entry — dispatching to this
-      destination returns RUNTIME_DESTINATION_UNKNOWN from ManifestDispatcher.
-      The SQL Attention cron runtime (HubAttractorExplorationRuntime + SqlAttentionScheduler)
-      is a BackgroundService that does not route through ManifestDispatcher and is
-      not a handler_registry entry.
+      All four backend_dispatchable_kinds that enter via ManifestDispatcher are registered:
+      topology_transform_runtime, admin_runtime, sse_projection_runtime, and
+      registry_attractor_runtime (RegistryAttractorDispatchRuntime, manifest-dispatched
+      IDispatchableRuntime handler — distinct from the SqlAttentionScheduler BackgroundService
+      cron route). The SQL Attention cron runtime (HubAttractorExplorationRuntime +
+      SqlAttentionScheduler) is a BackgroundService that does not route through
+      ManifestDispatcher and is not a handler_registry entry.
     test_stub_scope:
       allowed:
         - FakeDispatchableRuntime injected in test handler dictionary

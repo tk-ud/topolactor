@@ -153,13 +153,19 @@ builder.Services.AddSingleton<AdminRuntimeDispatchAdapter>(sp =>
         sp.GetRequiredService<AdminRuntime>(),
         sp.GetRequiredService<OperationVectorResolver>()));
 builder.Services.AddSingleton<SseProjectionRuntime>();
+builder.Services.AddSingleton<RegistryAttractorDispatchRuntime>(sp =>
+    new RegistryAttractorDispatchRuntime(
+        sp.GetRequiredService<ILogger<RegistryAttractorDispatchRuntime>>(),
+        sp.GetRequiredService<HubAttractorExplorationRuntime>(),
+        sp.GetRequiredService<SqlAttentionLogsRepository>()));
 builder.Services.AddSingleton<ManifestDispatcher>(sp =>
 {
     var handlers = new Dictionary<string, IDispatchableRuntime>
     {
-        ["topology_transform_runtime"] = sp.GetRequiredService<RuntimeExecutor>(),
-        ["admin_runtime"]              = sp.GetRequiredService<AdminRuntimeDispatchAdapter>(),
-        ["sse_projection_runtime"]     = sp.GetRequiredService<SseProjectionRuntime>(),
+        ["topology_transform_runtime"]  = sp.GetRequiredService<RuntimeExecutor>(),
+        ["admin_runtime"]               = sp.GetRequiredService<AdminRuntimeDispatchAdapter>(),
+        ["sse_projection_runtime"]      = sp.GetRequiredService<SseProjectionRuntime>(),
+        ["registry_attractor_runtime"]  = sp.GetRequiredService<RegistryAttractorDispatchRuntime>(),
     };
     return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),

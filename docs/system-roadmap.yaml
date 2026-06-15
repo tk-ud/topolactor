@@ -516,9 +516,17 @@ system_roadmap_ssot:
     product.registry_attractor_runtime_dispatch_handler:
       bundle_id: registry-attractor-dispatch-handler
       title: registry_attractor_runtime manifest-dispatchable handler
-      status: not_started
+      status: implemented
       production_ready: false
-      public_summary: registry_attractor_runtime as a manifest-dispatched IDispatchableRuntime handler is not yet implemented. This is a future bundle separate from the SQL Attention cron-based BackgroundService route. Implementation requires handler class, Program.cs registration, manifest mapping, explicit error on unknown destination, and tests.
+      public_summary: >
+        RegistryAttractorDispatchRuntime implements IDispatchableRuntime for the
+        registry_attractor_runtime manifest dispatch destination. Registered in
+        Program.cs handler dictionary. Manifest dispatch with
+        runtime_mapping.runtime_destination="registry_attractor_runtime" routes
+        to this handler via ManifestDispatcher. Unknown destinations continue to
+        return RUNTIME_DESTINATION_UNKNOWN. Distinct from the SqlAttentionScheduler
+        BackgroundService cron route. Covered by dispatch routing and handler
+        behavior tests.
       scope:
         - registry_attractor_runtime_handler_class
         - program_cs_handler_dictionary_registration
@@ -526,7 +534,9 @@ system_roadmap_ssot:
         - dispatcher_explicit_error_path_coverage
       detail_ref:
         - docs/design/runtime-orchestration-ssot.yaml
-        - .agent/tasks/todo.md#registry-attractor-dispatch-handler
+      evidence_ref:
+        - backend/runtime/RegistryAttractorDispatchRuntime.cs
+        - backend/tests/Topolactor.Runtime.Tests/RegistryAttractorDispatchRuntimeTests.cs
       completion_condition:
         - IDispatchableRuntime_handler_for_registry_attractor_runtime_exists
         - handler_registered_in_Program_cs_handler_dictionary
@@ -534,9 +544,7 @@ system_roadmap_ssot:
         - unknown_destination_returns_RUNTIME_DESTINATION_UNKNOWN_not_silent_fallback
         - dispatch_boundary_covered_by_tests
       known_gap_ref:
-        - registry_attractor_runtime_handler_class_not_implemented
-        - program_cs_registration_not_added
-        - manifest_wiring_not_defined
+        - production_ready_requires_live_db_e2e_ci_confirmation
 
     product.core_runtime_bundle_gate:
       bundle_id: core-runtime-bundles-gate
