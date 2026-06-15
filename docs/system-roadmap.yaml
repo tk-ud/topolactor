@@ -546,33 +546,6 @@ system_roadmap_ssot:
       known_gap_ref:
         - production_ready_requires_live_db_e2e_ci_confirmation
 
-    product.core_runtime_bundle_gate:
-      bundle_id: core-runtime-bundles-gate
-      title: Core runtime bundle implementation gate
-      status: not_started
-      production_ready: false
-      public_summary: Eight core runtime bundles (email, stripe, file_storage, export_sftp, webhook_inbox, job_scheduler, audit_approval, secret_credential) are design-SSOT-assigned but not yet implemented. Each requires a separate implementation contract and validate-preview-apply boundary before implementation begins. email and stripe have existing design SSOTs; the remaining six have design-SSOT assignments only.
-      scope:
-        - email_bundle
-        - stripe_bundle
-        - file_storage_bundle
-        - export_sftp_bundle
-        - webhook_inbox_bundle
-        - job_scheduler_bundle
-        - audit_approval_bundle
-        - secret_credential_bundle
-      detail_ref:
-        - docs/design/extended-runtime-bundle-registry-ssot.yaml
-        - .agent/tasks/todo.md#core-runtime-bundles-gate
-      completion_condition:
-        - each_core_bundle_has_separate_ssot_and_implementation
-        - each_bundle_satisfies_validate_preview_apply_boundary
-        - each_bundle_is_covered_by_backend_tests_and_roadmap_evidence
-      known_gap_ref:
-        - all_eight_core_bundles_are_not_started
-        - separate_ssot_exists_for_email_and_stripe_but_runtime_implementation_not_started
-        - file_storage_export_sftp_webhook_inbox_job_scheduler_audit_approval_secret_credential_design_ssot_assigned_not_implemented
-
     product.system_ci_contract_audit:
       bundle_id: product.system_ci_contract_audit
       title: System CI contract audit lanes
