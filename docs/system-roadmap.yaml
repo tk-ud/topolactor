@@ -620,6 +620,28 @@ system_roadmap_ssot:
         - connector_adapter_contracts_not_defined
         - external_surfaces_not_implemented
 
+    product.external_port_substrate:
+      bundle_id: external-port-substrate-design
+      title: External port substrate shared foundation
+      status: not_started
+      production_ready: false
+      public_summary: Shared substrate for the 8 external integration bundles. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement boundary definition within this substrate. admin role write policy controls port settings via validate-preview-apply.
+      scope:
+        - external_access_ports_physical_table
+        - external_response_ports_physical_table
+        - external_hook_ports_physical_table
+        - credential_requirement_port_record_attachment
+        - admin_role_port_setting_write_policy
+        - credential_kind_taxonomy_auth_external_none
+      detail_ref:
+        - docs/design/external-port-substrate-ssot.yaml
+        - docs/design/runtime-bundle-secret-credential-ssot.yaml
+        - .agent/tasks/todo.md#external-port-substrate-design
+      known_gap_ref:
+        - physical_table_ddl_design_not_started
+        - admin_role_port_write_ui_design_not_started
+        - consumer_bundle_port_connection_design_not_started
+
     product.helper_manual_policy:
       bundle_id: helper-manual
       title: User-facing helper and manual policy

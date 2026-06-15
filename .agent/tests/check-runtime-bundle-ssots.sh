@@ -229,6 +229,44 @@ for yaml in \
 done
 
 echo ""
+echo "=== External port substrate SSOT existence ==="
+
+check_file "docs/design/external-port-substrate-ssot.yaml"
+check_content "docs/design/external-port-substrate-ssot.yaml" "external_port_substrate_ssot"
+check_content "docs/design/external-port-substrate-ssot.yaml" "access_port"
+check_content "docs/design/external-port-substrate-ssot.yaml" "response_port"
+check_content "docs/design/external-port-substrate-ssot.yaml" "hook_port"
+check_content "docs/design/external-port-substrate-ssot.yaml" "credential_requirement"
+check_content "docs/design/external-port-substrate-ssot.yaml" "credential_kind"
+check_content "docs/design/external-port-substrate-ssot.yaml" "reclassified_as_credential_requirement_substrate"
+
+echo ""
+echo "=== Secret/Credential bundle: reclassified as port substrate component ==="
+
+check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "reclassified_as_port_substrate_component"
+check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "port_substrate_relation"
+check_absent "docs/design/runtime-bundle-secret-credential-ssot.yaml" "credential_rotation_service_design"
+check_absent "docs/design/runtime-bundle-secret-credential-ssot.yaml" "credential_registration_ui_design"
+check_absent "docs/design/runtime-bundle-secret-credential-ssot.yaml" "credential_validation_service_design"
+check_absent "docs/design/runtime-bundle-secret-credential-ssot.yaml" "SecretCredentialBundleRuntime"
+
+echo ""
+echo "=== port_substrate_relation declared in each consumer bundle SSOT ==="
+
+for yaml in \
+  "docs/design/runtime-bundle-email-ssot.yaml" \
+  "docs/design/runtime-bundle-stripe-ssot.yaml" \
+  "docs/design/runtime-bundle-file-storage-ssot.yaml" \
+  "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
+  "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
+  "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
+  "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
+  check_content "$yaml" "port_substrate_relation"
+  check_content "$yaml" "external-port-substrate-ssot.yaml"
+done
+
+echo ""
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== check-runtime-bundle-ssots.sh: all checks passed ==="
   exit 0

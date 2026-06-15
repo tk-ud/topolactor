@@ -72,6 +72,18 @@ runtime_bundle_file_storage_ssot:
       object storage provider credential (access key / secret key / bucket name / endpoint) は
       公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
 
+  port_substrate_relation:
+    substrate_ssot: docs/design/external-port-substrate-ssot.yaml
+    classification: port_consumer_bundle
+    port_consumer:
+      - access_port
+      - response_port
+    credential_kind: external
+    note: >-
+      object storage credential は external_port_substrate の
+      access_port / response_port に付属する credential_requirement として管理する。
+      credential の standalone 管理 plane は作らない。
+
   supported_file_types:
     document_export:
       - pdf

@@ -68,6 +68,19 @@ runtime_bundle_job_scheduler_ssot:
       公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
       topolactor内蔵schedulerの場合はcredentialは不要。
 
+  port_substrate_relation:
+    substrate_ssot: docs/design/external-port-substrate-ssot.yaml
+    classification: port_consumer_bundle
+    port_consumer:
+      - access_port
+      - hook_port
+    credential_kind: external
+    note: >-
+      外部スケジューラー provider credential は external_port_substrate の
+      access_port / hook_port に付属する credential_requirement として管理する。
+      topolactor 内蔵 scheduler 利用時は credential_kind: none。
+      credential の standalone 管理 plane は作らない。
+
   scheduler_contract:
     role: trigger_alignment_and_runtime_queue
     input:

@@ -69,6 +69,18 @@ runtime_bundle_stripe_ssot:
       Stripe secret key / webhook secret / endpoint実体は
       公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
 
+  port_substrate_relation:
+    substrate_ssot: docs/design/external-port-substrate-ssot.yaml
+    classification: port_consumer_bundle
+    port_consumer:
+      - hook_port
+    provider_kind: stripe
+    credential_kind: external
+    note: >-
+      Stripe webhook secret は external_port_substrate の
+      hook_port に付属する credential_requirement として管理する。
+      credential の standalone 管理 plane は作らない。
+
   payment_flow_boundary:
     webhook_inbox:
       description: >-
