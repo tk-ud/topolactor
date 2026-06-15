@@ -12,7 +12,14 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `core-runtime-bundles-gate` | core runtime bundle 実装ゲート（8 bundle） | partial | 8 | `product.core_runtime_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
+| `secret-credential-implementation-contract` | secret_credential_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-secret-credential-ssot.yaml` |
+| `file-storage-implementation-contract` | file_storage_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
+| `email-implementation-contract` | email_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
+| `stripe-implementation-contract` | stripe_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
+| `webhook-inbox-implementation-contract` | webhook_inbox_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
+| `job-scheduler-implementation-contract` | job_scheduler_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
+| `audit-approval-implementation-contract` | audit_approval_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
+| `export-sftp-implementation-contract` | export_sftp_bundle 実装契約（file-storage 後） | not_started | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
 ---
 ---
@@ -230,101 +237,315 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ---
 
-## Bundle `core-runtime-bundles-gate`
+## Bundle `secret-credential-implementation-contract`
 
-**Status:** partial  
-**Roadmap bundle:** `product.core_runtime_bundle_gate`  
-**SSOT:** `docs/design/extended-runtime-bundle-registry-ssot.yaml`
-
-**partial 理由:**
-設計 SSOT 点検（8 bundle 全）は完了済み。ただし gate 完了条件（実装契約確定 + backend 実装 + テスト証跡）は未達のため削除不可。次の作業として個別実装契約 Bundle への切り出しが必要。
-
-**設計 SSOT 点検結果（2026-06-15 完了）:**
-
-8 bundle 全ての設計 SSOT を点検済み。全 bundle について以下を確認:
-- authority_boundary: 定義済み ✅
-- validate-preview-apply boundary: 定義済み ✅
-- scheduler_boundary: 定義済み ✅
-- audit_log_boundary: 定義済み ✅
-- failure_policy（no silent fallback）: 定義済み ✅
-- 実装契約: 未作成 ❌
-- backend 実装: 未着手 ❌
-
-| Bundle | 設計 SSOT | VPA boundary | 実装契約 | 実装 |
-|--------|-----------|--------------|----------|------|
-| email_bundle | ✅ | draft/preview/approval/dispatch | ❌ | ❌ |
-| stripe_bundle | ✅ | webhook_inbox/verify/project/ledger | ❌ | ❌ |
-| file_storage_bundle | ✅ | export_job/checksum/manifest/signed_dl | ❌ | ❌ |
-| export_sftp_bundle | ✅ | job/package/manifest/checksum/transfer | ❌ | ❌ |
-| webhook_inbox_bundle | ✅ | intake/verify/snapshot/validate/preview/apply | ❌ | ❌ |
-| job_scheduler_bundle | ✅ | trigger→scheduler→manifest_dispatcher→route | ❌ | ❌ |
-| audit_approval_bundle | ✅ | request/review/approval/rejection | ❌ | ❌ |
-| secret_credential_bundle | ✅ | register/validate/rotate/inject | ❌ | ❌ |
-
-**依存関係:**
-- `export_sftp_bundle` は `file_storage_bundle` の package artifact 生成に依存
-- `job_scheduler_bundle` は `runtime-orchestration-ssot.yaml` の scheduler_contract を基礎とする
-- `secret_credential_bundle` は credential injection が必要な他 bundle の前提
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 
 問題点:
-設計 SSOT 点検は完了したが、8 bundle すべてに実装契約が未作成であり backend 実装は未着手。gate 完了条件（実装契約確定 + backend 実装 + テスト証跡）は未達。
+secret_credential_bundle 設計 SSOT 点検済み（authority_boundary: admin_config_and_runtime_secret_store / validate-preview-apply: registration/validation/rotation/runtime_injection 定義済み）。実装に必要な credential_reference_schema / secret_store_adapter / credential_registration_ui / credential_rotation_service / credential_validation_service / credential_injection_pattern の設計詳細が未確定。email_bundle（SMTP credential）/ stripe_bundle（Stripe secret key）/ export_sftp_bundle（SFTP key）/ webhook_inbox_bundle（signing key）等の credential injection 前提 bundle であるため先行着手が望ましい。
 
 目的:
-各 bundle の実装契約を作成し、bundle 単位で implementation_change worktype として実装を開始する準備を整える。
+secret_credential_bundle の実装契約を確定し、credential 管理基盤（参照登録 / rotation / validation / runtime injection）を bundle 単位で実装できる状態にする。
 
-改善方針（次サイクルで bundle 単位に適用）:
-- [ ] email_bundle: 実装契約を作成し（email_draft_surface / email_template_catalog / backend_dispatch_service / delivery_log_schema / idempotency_key 設計）、UI approval → backend dispatch → SMTP 副作用の実装 bundle を着手する
-- [ ] stripe_bundle: 実装契約を作成し（webhook_inbox_schema / stripe_event_verification_service / payment_state_projection_schema / ledger_binding_schema / idempotency_key 設計）、webhook intake → verification → paid state projection の実装 bundle を着手する
-- [ ] secret_credential_bundle: 実装契約を作成し（credential_reference_schema / secret_store_adapter / registration_ui / rotation_service / validation_service / injection_pattern 設計）、他 bundle の credential injection 前提として先行着手を検討する
-- [ ] file_storage_bundle: 実装契約を作成し（export_job_schema / file_artifact_storage_schema / checksum_record_schema / signed_url_service / manifest_schema / storage_adapter 設計）、CLI/MCP export job との連携を実装する
-- [ ] export_sftp_bundle: file_storage_bundle の実装契約確定後に実装契約を作成し（export_job_schema / package_artifact_schema / sftp_transfer_service / transfer_log_schema / retry_policy / credential_injection 設計）、実装する
-- [ ] webhook_inbox_bundle: 実装契約を作成し（webhook_intake_schema / signature_verification_service / intake_snapshot_schema / scheduler_hook_trigger_wiring / runtime_event_log_schema 設計）、scheduler 経由 runtime route の実装を着手する
-- [ ] job_scheduler_bundle: 実装契約を作成し（job_queue_schema / cron_driver_loop / hook_trigger_intake / client_trigger_intake / collision_control / overflow_policy / job_execution_log_schema 設計）、runtime_orchestration_ssot との整合を確認してから実装する
-- [ ] audit_approval_bundle: 実装契約を作成し（approval_request_schema / approval_state_machine / export_job_approval_schema / audit_log_schema / notification_design / idempotency_key 設計）、CLI/MCP read/export 境界との整合を確認してから実装する
-- 各 bundle 実装時は validate-preview-apply boundary を必須とし、direct runtime execution without scheduler は禁止する
+改善方針:
+- [ ] credential_reference_schema の設計（DB schema: topology schema 下の credential 参照テーブル）を確定する
+- [ ] secret_store_adapter の設計（runtime 環境変数 / secret manager API 抽象化 C# interface）を確定する
+- [ ] credential_registration_ui の設計（admin UI コンポーネント境界）を確定する
+- [ ] credential_rotation_service の設計（明示的 admin 操作 / 承認済み automation job として実行）を確定する
+- [ ] credential_validation_service の設計（registration / rotation / runtime startup での検証）を確定する
+- [ ] credential_injection_pattern の設計（runtime 起動時 secret store 経由注入パターン）を確定する
+- [ ] 実 credential 値を公開 SSOT / コード / audit log に含めない設計を確定する
+- [ ] IDispatchableRuntime.ExecuteAsync として実装し、validate-preview-apply boundary を維持する
 
 対応資料:
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`（core_runtime_bundles）
-- `docs/design/runtime-bundle-email-ssot.yaml`
-- `docs/design/runtime-bundle-stripe-ssot.yaml`
-- `docs/design/runtime-bundle-file-storage-ssot.yaml`
-- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
-- `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
-- `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
-- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
 - `docs/design/runtime-bundle-secret-credential-ssot.yaml`
-- `docs/system-roadmap.yaml`（product.core_runtime_bundle_gate）
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
 
-対象ファイル名（各 bundle 実装時に確定）:
-- `backend/runtime/` 内に bundle ごとの handler クラス
-- `backend/tests/Topolactor.Runtime.Tests/` 内に bundle テスト
+対象ファイル名:
+- `backend/runtime/SecretCredentialBundleRuntime.cs`
+- `backend/schema/SecretCredentialBundleContracts.cs`
+- `backend/tests/Topolactor.Runtime.Tests/SecretCredentialBundleRuntimeTests.cs`
+- `backend/Program.cs`（handler dictionary 登録）
+- `db/migrations/` 内に credential_reference テーブル migration
+
+対象関数名:
+- `SecretCredentialBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
+- `ICredentialStore.GetAsync`, `ICredentialStore.SetAsync`
+- `CredentialValidationService.ValidateAsync`
+
+---
+
+## Bundle `file-storage-implementation-contract`
+
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-bundle-file-storage-ssot.yaml`
+
+問題点:
+file_storage_bundle 設計 SSOT 点検済み（authority_boundary: export_job_or_authorized_api / validate-preview-apply: export_job/checksum/manifest/signed_download 定義済み）。実装に必要な export_job_schema / file_artifact_storage_schema / checksum_record_schema / signed_url_generation_service / manifest_schema / storage_provider_adapter の設計詳細が未確定。export_sftp_bundle が依存する前提 bundle であるため優先着手が望ましい。
+
+目的:
+file_storage_bundle の実装契約を確定し、export_job を通じた file write / checksum / manifest / signed_url_download を bundle 単位で実装できる状態にする。
+
+改善方針:
+- [ ] export_job_schema の設計（DB schema）を確定する
+- [ ] file_artifact_storage_schema の設計（export 生成ファイルの参照・メタデータ管理）を確定する
+- [ ] checksum_record_schema の設計（ファイル整合性検証レコード）を確定する
+- [ ] signed_url_generation_service の設計（有効期限付き download URL 生成 C# service）を確定する
+- [ ] manifest_schema の設計（export package manifest 形式）を確定する
+- [ ] storage_provider_adapter の設計（object storage provider 抽象化 C# interface、credential は secret_store 経由）を確定する
+- [ ] IDispatchableRuntime.ExecuteAsync として実装し、checksum 必須・unauthenticated download 禁止を維持する
+
+対応資料:
+- `docs/design/runtime-bundle-file-storage-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/cli-model-context-protocols-port-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+
+対象ファイル名:
+- `backend/runtime/FileStorageBundleRuntime.cs`
+- `backend/schema/FileStorageBundleContracts.cs`
+- `backend/tests/Topolactor.Runtime.Tests/FileStorageBundleRuntimeTests.cs`
+- `backend/Program.cs`（handler dictionary 登録）
+- `db/migrations/` 内に export_job / file_artifact テーブル migration
+
+対象関数名:
+- `FileStorageBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
+- `IFileStorageAdapter.WriteAsync`, `IFileStorageAdapter.GenerateSignedUrlAsync`
+- `ChecksumService.ComputeAsync`, `ChecksumService.VerifyAsync`
+
+---
+
+## Bundle `email-implementation-contract`
+
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-bundle-email-ssot.yaml`
+
+問題点:
+email_bundle 設計 SSOT 点検済み（authority_boundary: ui_approval_then_backend_dispatch / validate-preview-apply: draft/preview/approval/dispatch/delivery_log 定義済み）。実装に必要な email_draft_surface_schema / email_template_catalog / backend_email_dispatch_service / smtp_provider_adapter / delivery_log_schema / approval_confirmation_ui / idempotency_key_schema の設計詳細が未確定。CLI/MCP からの email send は禁止。AI 単独送信は禁止。
+
+目的:
+email_bundle の実装契約を確定し、UI approval → backend dispatch → SMTP 副作用の実装を bundle 単位で着手できる状態にする。
+
+改善方針:
+- [ ] email_draft_surface_schema の設計（DB schema + UI component 境界）を確定する
+- [ ] email_template_catalog の設計（テンプレート構造・格納方式）を確定する
+- [ ] backend_email_dispatch_service の設計（approval 後の SMTP / API provider 送信 C# handler）を確定する
+- [ ] smtp_provider_adapter の設計（SMTP / email API provider 抽象化 C# interface、credential は secret_store 経由）を確定する
+- [ ] delivery_log_schema の設計（runtime_event_log への送信結果記録形式）を確定する
+- [ ] approval_confirmation_ui_component の設計を確定する
+- [ ] idempotency_key_schema を確定する（同一 approval ID での二重送信防止）
+- [ ] IDispatchableRuntime.ExecuteAsync として実装し、承認なし送信・AI 単独送信を禁止する
+
+対応資料:
+- `docs/design/runtime-bundle-email-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+
+対象ファイル名:
+- `backend/runtime/EmailBundleRuntime.cs`
+- `backend/schema/EmailBundleContracts.cs`
+- `backend/tests/Topolactor.Runtime.Tests/EmailBundleRuntimeTests.cs`
+- `backend/Program.cs`（handler dictionary 登録）
+- `db/migrations/` 内に email_draft / email_delivery_log テーブル migration
+
+対象関数名:
+- `EmailBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
+- `ISmtpAdapter.SendAsync`
+- `EmailApprovalService.ConfirmAsync`
+
+---
+
+## Bundle `stripe-implementation-contract`
+
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-bundle-stripe-ssot.yaml`
+
+問題点:
+stripe_bundle 設計 SSOT 点検済み（authority_boundary: verified_webhook_event_only / validate-preview-apply: webhook_inbox/event_verification/payment_state_projection/ledger_binding 定義済み）。実装に必要な webhook_inbox_schema / stripe_event_verification_service / payment_state_projection_schema / ledger_binding_schema / idempotency_key_schema の設計詳細が未確定。Stripe-Signature 検証なしの paid state 確定は禁止。
+
+目的:
+stripe_bundle の実装契約を確定し、webhook intake → signature verification → payment state projection → ledger binding の実装を bundle 単位で着手できる状態にする。
+
+改善方針:
+- [ ] webhook_inbox_schema の設計（Stripe webhook 受信 DB schema）を確定する
+- [ ] stripe_event_verification_service の設計（Stripe-Signature ヘッダー検証 C# service、signing key は secret_store 経由）を確定する
+- [ ] payment_state_projection_schema の設計（検証済み event からの paid state 投影 schema）を確定する
+- [ ] ledger_binding_schema の設計（payment state 確定後の account 記録 schema）を確定する
+- [ ] idempotency_key_schema を確定する（同一 stripe_event_id での二重処理防止）
+- [ ] IDispatchableRuntime.ExecuteAsync として実装し、webhook_direct_runtime_execution を禁止する
+
+対応資料:
+- `docs/design/runtime-bundle-stripe-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+
+対象ファイル名:
+- `backend/runtime/StripeBundleRuntime.cs`
+- `backend/schema/StripeBundleContracts.cs`
+- `backend/tests/Topolactor.Runtime.Tests/StripeBundleRuntimeTests.cs`
+- `backend/Program.cs`（handler dictionary 登録）
+- `db/migrations/` 内に stripe_webhook_inbox / payment_state テーブル migration
+
+対象関数名:
+- `StripeBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
+- `StripeWebhookVerificationService.VerifyAsync`
+- `PaymentStateProjectionService.ProjectAsync`
+
+---
+
+## Bundle `webhook-inbox-implementation-contract`
+
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
+
+問題点:
+webhook_inbox_bundle 設計 SSOT 点検済み（authority_boundary: scheduler_then_runtime_route_only / validate-preview-apply: intake/signature_verification/snapshot/validate/preview/explicit_apply 定義済み）。実装に必要な webhook_intake_schema / webhook_event_signature_verification_service / intake_snapshot_schema / scheduler_hook_trigger_wiring / idempotency_key_schema の設計詳細が未確定。webhook_direct_runtime_execution は禁止。
+
+目的:
+webhook_inbox_bundle の実装契約を確定し、webhook → signature verification → intake snapshot → scheduler → runtime route の実装を bundle 単位で着手できる状態にする。
+
+改善方針:
+- [ ] webhook_intake_schema の設計（webhook 受信・署名前保存 DB schema）を確定する
+- [ ] webhook_event_signature_verification_service の設計（provider ごとの署名検証 C# service、signing key は secret_store 経由）を確定する
+- [ ] intake_snapshot_schema の設計（検証済み payload の canonical 入力候補 schema）を確定する
+- [ ] scheduler_hook_trigger_wiring の設計（runtime_orchestration_ssot の hook trigger kind との整合）を確定する
+- [ ] idempotency_key_schema を確定する（同一 webhook event ID での二重処理防止）
+- [ ] IDispatchableRuntime.ExecuteAsync として実装し、scheduler 経由を強制する
+
+対応資料:
+- `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+
+対象ファイル名:
+- `backend/runtime/WebhookInboxBundleRuntime.cs`
+- `backend/schema/WebhookInboxBundleContracts.cs`
+- `backend/tests/Topolactor.Runtime.Tests/WebhookInboxBundleRuntimeTests.cs`
+- `backend/Program.cs`（handler dictionary 登録）
+- `db/migrations/` 内に webhook_intake / intake_snapshot テーブル migration
+
+対象関数名:
+- `WebhookInboxBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
+- `WebhookSignatureVerificationService.VerifyAsync`
+- `IntakeSnapshotService.CreateAsync`
+
+---
+
+## Bundle `job-scheduler-implementation-contract`
+
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
+
+問題点:
+job_scheduler_bundle 設計 SSOT 点検済み（authority_boundary: trigger_alignment_and_runtime_queue_only / cron/hook/client trigger 統合境界定義済み）。runtime_orchestration_ssot の scheduler_contract を基礎とするが、job_queue_schema / cron_driver_loop / hook_trigger_intake / client_trigger_intake / collision_control / scheduler_overflow_policy / job_execution_log_schema の実装設計が未確定。runtime_destination_selection は manifest_dispatcher が所有する（変更なし）。
+
+目的:
+job_scheduler_bundle の実装契約を確定し、cron / hook / client trigger を統合するスケジューラー基盤を bundle 単位で実装できる状態にする。
+
+改善方針:
+- [ ] job_queue_schema の設計（DB schema: trigger event キュー）を確定する
+- [ ] cron_driver_loop の設計（既存 SqlAttentionScheduler との役割分担・周期実行境界）を確定する
+- [ ] hook_trigger_intake の設計（webhook_inbox_bundle からの hook 受信インターフェース）を確定する
+- [ ] client_trigger_intake の設計（API / frontend からの client trigger 受信インターフェース）を確定する
+- [ ] collision_control の実装設計（同一 trigger の二重実行防止）を確定する
+- [ ] scheduler_overflow_policy の実装設計（queue overflow 時の明示的エラー返却）を確定する
+- [ ] job_execution_log_schema の設計（runtime_event_log への実行履歴記録形式）を確定する
+
+対応資料:
+- `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+
+対象ファイル名:
+- `backend/runtime/JobSchedulerBundleRuntime.cs`
+- `backend/schema/JobSchedulerBundleContracts.cs`
+- `backend/tests/Topolactor.Runtime.Tests/JobSchedulerBundleRuntimeTests.cs`
+- `backend/Program.cs`（handler dictionary 登録）
+- `db/migrations/` 内に job_queue テーブル migration
+
+対象関数名:
+- `JobSchedulerBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
+- `IJobQueue.EnqueueAsync`, `IJobQueue.DequeueAsync`
+- `CollisionControlService.CheckAsync`
+
+---
+
+## Bundle `audit-approval-implementation-contract`
+
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-bundle-audit-approval-ssot.yaml`
+
+問題点:
+audit_approval_bundle 設計 SSOT 点検済み（authority_boundary: ui_human_explicit_action_only / validate-preview-apply: request/review/approval/rejection 定義済み）。CLI/MCP read/export 境界との整合確認が必要。実装に必要な approval_request_schema / approval_state_machine / export_job_approval_schema / audit_log_schema / approval_notification / idempotency_key_schema の設計詳細が未確定。AI 単独承認・暗黙的承認は禁止。
+
+目的:
+audit_approval_bundle の実装契約を確定し、承認フロー（UI human action）/ 監査ログ / export_job approval を bundle 単位で実装できる状態にする。
+
+改善方針:
+- [ ] approval_request_schema の設計（DB schema: 承認リクエスト管理テーブル）を確定する
+- [ ] approval_state_machine の設計（request → review → approved/rejected 状態遷移）を確定する
+- [ ] export_job_approval_schema の設計（export_job に紐付く承認レコード）を確定する
+- [ ] audit_log_schema の設計（runtime_event_log への監査記録形式、実値は記録しない）を確定する
+- [ ] approval_notification の設計（承認要求通知境界）を確定する
+- [ ] idempotency_key_schema を確定する（同一 approval_request_id での二重承認防止）
+- [ ] cli-model-context-protocols-port-ssot.yaml との整合を確認してから実装する（CLI/MCP approval は禁止）
+
+対応資料:
+- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
+- `docs/design/cli-model-context-protocols-port-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+
+対象ファイル名:
+- `backend/runtime/AuditApprovalBundleRuntime.cs`
+- `backend/schema/AuditApprovalBundleContracts.cs`
+- `backend/tests/Topolactor.Runtime.Tests/AuditApprovalBundleRuntimeTests.cs`
+- `backend/Program.cs`（handler dictionary 登録）
+- `db/migrations/` 内に approval_request / export_job_approval テーブル migration
+
+対象関数名:
+- `AuditApprovalBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
+- `ApprovalStateMachine.TransitionAsync`
+- `AuditLogService.RecordAsync`
+
+---
+
+## Bundle `export-sftp-implementation-contract`
+
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-bundle-export-sftp-ssot.yaml`
+
+問題点:
+export_sftp_bundle 設計 SSOT 点検済み（authority_boundary: authorized_export_job_only / validate-preview-apply: export_job/package/manifest/checksum/transfer 定義済み）。file_storage_bundle の実装契約が前提（file_storage_bundle が file_generation / checksum_computation / manifest_generation を担当）。実装に必要な sftp_transfer_service / transfer_log_schema / retry_policy / credential_injection_pattern の設計詳細が未確定。manifest + checksum 必須。
+
+目的:
+export_sftp_bundle の実装契約を確定し、export_job が生成した package の SFTP 外部搬出を bundle 単位で実装できる状態にする。
+
+改善方針:
+- [ ] file-storage-implementation-contract の完了を前提条件とする
+- [ ] sftp_transfer_service の設計（SFTP push C# adapter、credential は secret_store 経由）を確定する
+- [ ] transfer_log_schema の設計（runtime_event_log への転送結果記録形式）を確定する
+- [ ] retry_policy の実装設計（明示的 retry / silent fallback 禁止 / scheduler 経由 retry）を確定する
+- [ ] credential_injection_pattern の設計（SFTP host / user / key を secret_store 経由注入）を確定する
+- [ ] 転送前・転送後両方の checksum 検証を実装する
+- [ ] IDispatchableRuntime.ExecuteAsync として実装し、manifest + checksum なし転送を禁止する
+
+対応資料:
+- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
+- `docs/design/runtime-bundle-file-storage-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/cli-model-context-protocols-port-ssot.yaml`
+
+対象ファイル名:
+- `backend/runtime/ExportSftpBundleRuntime.cs`
+- `backend/schema/ExportSftpBundleContracts.cs`
+- `backend/tests/Topolactor.Runtime.Tests/ExportSftpBundleRuntimeTests.cs`
 - `backend/Program.cs`（handler dictionary 登録）
 
-対象関数名（各 bundle 実装時に確定）:
-- 各 bundle の `IDispatchableRuntime.ExecuteAsync` 実装
-
-remaining_todo:
-- 各 bundle の実装契約（実装前提の detail plan: schema / handler class / API contract / test scope）を bundle 単位で作成してから実装に入る（設計 SSOT は境界・語彙・契約の正本に留め、実装詳細はコード・スキーマ・テスト側に持つ）
-- bundle 単位で実装フェーズに入る際は、`.agent/routes/worktype-required-protocols.yaml` の `implementation_change` worktype を適用する
-- 実装契約の作成は `design_change` worktype として先行して行い、SSOT 側ではなく Roadmap/TODO 側で進捗を管理する
-- 依存関係の観点から secret_credential_bundle と file_storage_bundle の実装契約を優先的に着手することを推奨
-- 本 gate bundle を削除するのは、8 bundle すべての実装契約確定 + backend 実装 + テスト証跡が揃った時のみ
-
-**個別実装契約 Bundle 切り出し（未完了）:**  
-設計 SSOT 点検完了を受け、次サイクルでは以下の個別 Bundle を TODO に追加し gate からは分離する:
-- `secret-credential-implementation-contract`（他 bundle の credential injection 前提 → 優先）
-- `file-storage-implementation-contract`（export_sftp_bundle の前提 → 優先）
-- `email-implementation-contract`
-- `stripe-implementation-contract`
-- `webhook-inbox-implementation-contract`
-- `job-scheduler-implementation-contract`
-- `export-sftp-implementation-contract`（file-storage の後）
-- `audit-approval-implementation-contract`
-
-各個別 Bundle には 問題点 / 目的 / 改善方針 / 対応資料 / 対象ファイル名 / 対象関数名 を明記する。
-
-SSOT修正が必要な場合の required checks:
-- `bash .agent/tests/check-worktype-routing.sh`
-- `bash .agent/tests/check-system-roadmap.sh`
-- `bash .agent/tests/check-structure.sh`
+対象関数名:
+- `ExportSftpBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
+- `ISftpAdapter.TransferAsync`
+- `TransferChecksumVerificationService.VerifyAsync`
 - 各 bundle 実装時の関連 dotnet tests
