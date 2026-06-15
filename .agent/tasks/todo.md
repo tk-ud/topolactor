@@ -12,7 +12,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `secret-credential-implementation-contract` | secret_credential_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-secret-credential-ssot.yaml` |
+| `secret-credential-implementation-contract` | secret_credential_bundle 実装契約 | partial | 1 | - | `docs/design/runtime-bundle-secret-credential-ssot.yaml` |
 | `file-storage-implementation-contract` | file_storage_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-implementation-contract` | email_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-implementation-contract` | stripe_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
@@ -238,7 +238,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `secret-credential-implementation-contract`
 
-**Status:** not_started  
+**Status:** partial  
 **SSOT:** `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 
 問題点:
@@ -248,14 +248,30 @@ secret_credential_bundle 設計 SSOT 点検済み（authority_boundary: admin_co
 secret_credential_bundle の実装契約を確定し、credential 管理基盤（参照登録 / rotation / validation / runtime injection）を bundle 単位で実装できる状態にする。
 
 改善方針:
-- [ ] credential_reference_schema の設計（DB schema: topology schema 下の credential 参照テーブル）を確定する
-- [ ] secret_store_adapter の設計（runtime 環境変数 / secret manager API 抽象化 C# interface）を確定する
+- [x] credential_reference_schema の設計（DB schema: topology schema 下の credential 参照テーブル）を確定する（2026-06-15 完了: db/credential_reference_tables.sql）
+- [x] secret_store_adapter の設計（runtime 環境変数 / secret manager API 抽象化 C# interface）を確定する（2026-06-15 完了: ICredentialStore / EnvironmentVariableCredentialStore）
 - [ ] credential_registration_ui の設計（admin UI コンポーネント境界）を確定する
-- [ ] credential_rotation_service の設計（明示的 admin 操作 / 承認済み automation job として実行）を確定する
-- [ ] credential_validation_service の設計（registration / rotation / runtime startup での検証）を確定する
-- [ ] credential_injection_pattern の設計（runtime 起動時 secret store 経由注入パターン）を確定する
-- [ ] 実 credential 値を公開 SSOT / コード / audit log に含めない設計を確定する
-- [ ] IDispatchableRuntime.ExecuteAsync として実装し、validate-preview-apply boundary を維持する
+- [x] credential_rotation_service の設計（明示的 admin 操作 / 承認済み automation job として実行）を確定する（2026-06-15 完了: rotate action with rotation_actor_id requirement）
+- [x] credential_validation_service の設計（registration / rotation / runtime startup での検証）を確定する（2026-06-15 完了: CredentialValidationService.ValidateAsync）
+- [x] credential_injection_pattern の設計（runtime 起動時 secret store 経由注入パターン）を確定する（2026-06-15 完了: ICredentialStore.GetAsync / EnvironmentVariableCredentialStore）
+- [x] 実 credential 値を公開 SSOT / コード / audit log に含めない設計を確定する（2026-06-15 完了: reference-only DB + audit log）
+- [x] IDispatchableRuntime.ExecuteAsync として実装し、validate-preview-apply boundary を維持する（2026-06-15 完了: SecretCredentialBundleRuntime）
+
+今回実装した範囲 (2026-06-15):
+- 新規: `db/credential_reference_tables.sql`（topology.credential_references + logs.credential_audit_log）
+- 更新: `db/init.sql`（credential_reference_tables.sql include 追加）
+- 新規: `backend/schema/SecretCredentialBundleContracts.cs`（contracts / interfaces）
+- 新規: `backend/repository/CredentialReferenceRepository.cs`（abstract base）
+- 新規: `backend/repository/NpgsqlCredentialReferenceRepository.cs`（Npgsql 実装）
+- 新規: `backend/runtime/EnvironmentVariableCredentialStore.cs`（env var store）
+- 新規: `backend/runtime/CredentialValidationService.cs`（validation service）
+- 新規: `backend/runtime/SecretCredentialBundleRuntime.cs`（IDispatchableRuntime handler）
+- 新規: `backend/tests/Topolactor.Runtime.Tests/SecretCredentialBundleRuntimeTests.cs`（20 tests）
+- 更新: `backend/Program.cs`（DI 登録 + handler dict への "secret_credential_runtime" 追加）
+
+remaining_todo:
+- credential_registration_ui（admin UI コンポーネント境界）は別 bundle として整理する（今回は backend contract / runtime / tests のみ）
+- 後続 bundle（email_bundle / stripe_bundle / webhook_inbox_bundle / export_sftp_bundle）がこの ICredentialStore 境界を利用する際の credential_injection 実装は各 bundle で行う
 
 対応資料:
 - `docs/design/runtime-bundle-secret-credential-ssot.yaml`
