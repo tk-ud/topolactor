@@ -12,6 +12,8 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
+| `registry-attractor-dispatch-handler` | registry_attractor_runtime 可観測ハンドラ実装 | not_started | 5 | `product.registry_attractor_runtime_dispatch_handler` | `docs/design/runtime-orchestration-ssot.yaml` |
+| `core-runtime-bundles-gate` | core runtime bundle 実装ゲート（8 bundle） | not_started | 8 | `product.core_runtime_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 
 ---
 ---
@@ -226,3 +228,104 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 実装 bundle ではなく、統合 UX の手動受入 / hand-debug evidence gap。runtime dispatch loop、ProjectionShell SSE refresh、recommend child island、SQL Attention feedback projection、admin CSV/JSON import、admin authoring routes は実装済みとして扱い、未実装扱いに戻さない。
 
 - [ ] `product.dynamic_support_nocode_loop` の combined UX を、authoring guidance → SQL Attention feedback → M6 admin loop の通し手動受入 / hand-debug で確認する
+
+---
+
+## Bundle `registry-attractor-dispatch-handler`
+
+**Status:** not_started  
+**Roadmap bundle:** `product.registry_attractor_runtime_dispatch_handler`  
+**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`
+
+問題点:
+`runtime-orchestration-ssot.yaml` の `backend_runtime_destinations` に `registry_attractor_runtime` は静的 runtime destination 語彙として含まれているが、production `handler_registry` には登録されていない。`backend/Program.cs` の handler dictionary にも未登録であり、この destination へ manifest dispatch した場合は `ManifestDispatcher` が `RUNTIME_DESTINATION_UNKNOWN` を返す境界で止まる。一方、SQL Attention cron runtime（HubAttractorExplorationRuntime + SqlAttentionScheduler）は BackgroundService として実装済みであり、ManifestDispatcher 経由の `registry_attractor_runtime` handler 実装とは別 bundle である。
+
+目的:
+`registry_attractor_runtime` を manifest-dispatched `IDispatchableRuntime` ハンドラとして実装し、production handler registry に登録することで、静的 runtime destination 語彙として予約済みの route を実行可能 handler へ接続する。SQL Attention cron runtime（BackgroundService route）とは独立した実装 bundle として扱う。
+
+改善方針:
+- [ ] `registry_attractor_runtime` 向け `IDispatchableRuntime` ハンドラクラスを実装する
+- [ ] `backend/Program.cs` の handler dictionary に `registry_attractor_runtime` → 実装クラス を登録する
+- [ ] manifest の `runtime_mapping.runtime_destination = "registry_attractor_runtime"` が正しく routing されることをテストで確認する
+- [ ] 未登録 destination が `RUNTIME_DESTINATION_UNKNOWN` error を返すことをテストで確認する（既存 `DispatchToHandlerAsync` で保証済みだが、新ハンドラ登録後のテストカバレッジを維持する）
+- [ ] 実装完了時は `docs/design/runtime-orchestration-ssot.yaml` の `handler_registry` に production handler entry を追加し、scope note を未登録境界から登録済み境界へ更新する（status 語彙は Roadmap/TODO 側で更新する）
+- [ ] `docs/system-roadmap.yaml` の `product.registry_attractor_runtime_dispatch_handler` を実装証跡に基づいて更新する
+
+対応資料:
+- `docs/design/runtime-orchestration-ssot.yaml`（handler_registry / backend_runtime_destinations / registry_attractor_contract）
+- `docs/system-roadmap.yaml`（product.registry_attractor_runtime_dispatch_handler / product.sql_attention_observation_runtime）
+- `docs/design/pipeline-continuity-ssot.yaml`
+
+対象ファイル名:
+- `backend/Program.cs`
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/runtime/` 内に新規ハンドラファイル（命名は実装時に確定）
+- `backend/tests/Topolactor.Runtime.Tests/`（DispatchToHandlerAsync / handler registry テスト）
+
+対象関数名:
+- `ManifestDispatcher.DispatchToHandlerAsync`
+- `Program.cs` の handler dictionary 登録部
+
+remaining_todo:
+- 実装前に `registry_attractor_runtime` ハンドラの責務・入出力・テスト境界を設計する（SSOT の `registry_attractor_contract` 参照）
+- SSOT は設計契約・語彙・境界としてのみ更新し、`not_started` / `not_yet_implemented` / `implemented` などの状態管理語彙は Roadmap/TODO 側へ置く
+
+SSOT修正が必要な場合の required checks:
+- `bash .agent/tests/check-worktype-routing.sh`
+- `bash .agent/tests/check-system-roadmap.sh`
+- `bash .agent/tests/check-structure.sh`
+- 関連 dotnet tests（RuntimeExecutorTests, SsotWiringAuditSchedulerRuntimeTests）
+
+---
+
+## Bundle `core-runtime-bundles-gate`
+
+**Status:** not_started  
+**Roadmap bundle:** `product.core_runtime_bundle_gate`  
+**SSOT:** `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+
+問題点:
+`extended-runtime-bundle-registry-ssot.yaml` の `core_runtime_bundles` 下に 8 bundle が `not_started` / `requires_separate_ssot` として定義されているが、`.agent/tasks/todo.md` の未処理 bundle 索引および `docs/system-roadmap.yaml` の `implementation_registry` に可視化されていなかった。email_bundle と stripe_bundle は設計 SSOT（`runtime-bundle-email-ssot.yaml` / `runtime-bundle-stripe-ssot.yaml`）が存在するが runtime 実装は未着手。残り 6 bundle は設計 SSOT 割り当て済み（owner_status: assigned_to_design_ssot）で実装未着手。
+
+目的:
+8 core runtime bundle の not_started 状態を TODO と Roadmap で bundle 単位に可視化し、将来の実装・設計フェーズへの入口を確保する。今すぐ実装は行わない。
+
+改善方針（将来の実装サイクルで適用）:
+- [ ] email_bundle: `runtime-bundle-email-ssot.yaml` を実装 SSOT として確定し、UI approval → backend dispatch → SMTP 副作用の実装 bundle を着手する
+- [ ] stripe_bundle: `runtime-bundle-stripe-ssot.yaml` を実装 SSOT として確定し、webhook intake → verification → paid state projection の実装 bundle を着手する
+- [ ] file_storage_bundle / export_sftp_bundle: CLI/MCP export job との連携 SSOT を確定してから実装する
+- [ ] webhook_inbox_bundle: scheduler 経由 runtime route の実装 SSOT を確定してから実装する
+- [ ] job_scheduler_bundle: cron/hook/client trigger 統合 SSOT を確定してから実装する
+- [ ] audit_approval_bundle / secret_credential_bundle: それぞれの実装 SSOT を確定してから実装する
+- 各 bundle 実装時は validate-preview-apply boundary を必須とし、direct runtime execution without scheduler は禁止する
+
+対応資料:
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`（core_runtime_bundles）
+- `docs/design/runtime-bundle-email-ssot.yaml`
+- `docs/design/runtime-bundle-stripe-ssot.yaml`
+- `docs/design/runtime-bundle-file-storage-ssot.yaml`
+- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
+- `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
+- `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
+- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
+- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
+- `docs/system-roadmap.yaml`（product.core_runtime_bundle_gate）
+
+対象ファイル名（各 bundle 実装時に確定）:
+- `backend/runtime/` 内に bundle ごとの handler クラス
+- `backend/tests/Topolactor.Runtime.Tests/` 内に bundle テスト
+- `backend/Program.cs`（handler dictionary 登録）
+
+対象関数名（各 bundle 実装時に確定）:
+- 各 bundle の `IDispatchableRuntime.ExecuteAsync` 実装
+
+remaining_todo:
+- 各 bundle は separate SSOT が実装レベルで確定するまで実装しない
+- email / stripe は設計 SSOT が存在するため実装サイクルの優先候補だが、UI approval boundary / webhook verification boundary の実装設計が必要
+- bundle 単位で実装フェーズに入る際は、`.agent/routes/worktype-required-protocols.yaml` の `implementation_change` worktype と `design_change` worktype を適用する
+
+SSOT修正が必要な場合の required checks:
+- `bash .agent/tests/check-worktype-routing.sh`
+- `bash .agent/tests/check-system-roadmap.sh`
+- `bash .agent/tests/check-structure.sh`
+- 各 bundle 実装時の関連 dotnet tests
