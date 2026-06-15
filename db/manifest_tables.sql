@@ -9,7 +9,7 @@
 --   public.manifest is retained for the admin edit flow only. It is NOT the new
 --   canonical wiring authority.
 --   admin_import_snapshot FK has been migrated to hubs.topology_manifests
---   (see db/migrations/admin_import_topology_manifest_migration.sql).
+--   (see db/legacy_utils/admin_import_topology_manifest_migration.sql).
 --
 -- ORIGINAL PURPOSE (compatibility context):
 --   Manifest stores ID references and topology vectors only.
@@ -87,7 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_manifest_topology
 --   admin_import_snapshot.topology_manifest_id FK references hubs.topology_manifests (canonical).
 --   admin_import_records.topology_manifest_id is a soft reference (no FK constraint) via snapshot linkage.
 --   manifest(manifest_id) FK has been removed from both tables.
---   Migration DDL: db/migrations/admin_import_topology_manifest_migration.sql
+--   Migration DDL: db/legacy_utils/admin_import_topology_manifest_migration.sql
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS topology.admin_import_snapshot (

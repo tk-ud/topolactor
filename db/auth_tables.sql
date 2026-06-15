@@ -20,12 +20,6 @@ CREATE TABLE IF NOT EXISTS auth.users (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS approve BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS status TEXT;
-ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS suspended_from TIMESTAMPTZ;
-ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMPTZ;
-ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS state_note TEXT;
-
 CREATE TABLE IF NOT EXISTS auth.credentials (
     credential_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID        NOT NULL REFERENCES auth.users(user_id) ON DELETE CASCADE,

@@ -1,15 +1,17 @@
 -- =============================================================================
 -- ui_component_registry_preset_catalog_bootstrap.sql
--- Bootstrap ui_component_registry (and missing bucket rows) for preset ecosystem
--- component keys so layout_patch_json nodes resolve componentId by component_key.
+-- Canonical: UIBuilder preset ecosystem seed data — ui_component_registry and components_bucket bootstrap rows.
 --
 -- SSOT: docs/design/ui-builder-preset-ecosystem-ssot.yaml
---       docs/design/component-catalog-classification-ssot.yaml
---       frontend/components/catalog.ts (RUNTIME_ALIAS_CATALOG_IDENTITIES)
+--       docs/design/mock-preset-intake-compiler-ssot.yaml
 --
--- Without these rows, draft preview / demo render fails with:
---   Layout node "crud_shell" has no componentId assigned.
+-- BOOTSTRAP POLICY: part of the canonical fresh bootstrap sequence in db/init.sql.
+-- Applied via docker-entrypoint-initdb.d/00-init.sql on fresh compose volume.
+-- IDEMPOTENT: all statements use ON CONFLICT DO UPDATE or ON CONFLICT DO NOTHING.
+-- PRECONDITION: topology.mock_preset_* tables must exist (db/mock_preset_tables.sql).
 -- =============================================================================
+
+-- -- ui_component_registry_preset_catalog_bootstrap --
 
 -- Runtime alias catalog entries (preset shells use section/search_input/panel.alias)
 INSERT INTO topology.components_bucket (component_key, source_path, component_kind, status, metadata_json)
@@ -55,3 +57,4 @@ ON CONFLICT (component_key) DO UPDATE
         source_path    = EXCLUDED.source_path,
         status         = EXCLUDED.status,
         updated_at     = now();
+

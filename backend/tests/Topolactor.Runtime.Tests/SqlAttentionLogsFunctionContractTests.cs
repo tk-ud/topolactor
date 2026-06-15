@@ -124,7 +124,7 @@ public class SqlAttentionLogsFunctionContractTests
         Assert.Contains("no_automatic_topology_mutation", sql);
     }
     [Fact]
-    public void Step4GenerationLine_HasExplicitResolverLineageColumnsAndMigration()
+    public void Step4GenerationLine_HasExplicitResolverLineageColumnsAndNoHubRelationMutation()
     {
         var sql = LoadSql();
         Assert.Contains("CREATE OR REPLACE FUNCTION logs.resolve_related_topology_manifests", sql);
@@ -135,11 +135,12 @@ public class SqlAttentionLogsFunctionContractTests
         Assert.Contains("source_topology_manifest_ids", sql);
         Assert.Contains("expanded_hub_relation_ids", sql);
         Assert.Contains("evidence_kind IN ('sql_attention_hit', 'phaseAT', 'draft_projection', 'adoption_result', 'rejection_result')", sql);
-        var migration = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../db/migrations/sql_attention_phase_generation_line.sql"));
-        Assert.Contains("ALTER TABLE logs.attention ALTER COLUMN hub_current_id DROP NOT NULL", migration);
-        Assert.Contains("fk_logs_attention_source_attention", migration);
-        Assert.Contains("CREATE OR REPLACE FUNCTION logs.resolve_related_topology_manifests", migration);
-        Assert.DoesNotContain("UPDATE hubs.hub_relations", migration);
+        // hub_current_id is nullable in canonical CREATE TABLE (migration retired; ALTER DROP NOT NULL integrated)
+        Assert.DoesNotContain("hub_current_id        UUID        NOT NULL", sql);
+        // source_attention_id FK to logs.attention is declared inline in canonical CREATE TABLE
+        Assert.Contains("source_attention_id   UUID        REFERENCES logs.attention(attention_id)", sql);
+        // canonical DDL must not mutate hubs.hub_relations
+        Assert.DoesNotContain("UPDATE hubs.hub_relations", sql);
     }
 
 }

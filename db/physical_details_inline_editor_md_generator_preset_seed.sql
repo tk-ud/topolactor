@@ -1,22 +1,17 @@
 -- =============================================================================
 -- physical_details_inline_editor_md_generator_preset_seed.sql
--- Seed: topology.mock_preset_* registration for the UIBuilder preset ecosystem.
+-- Canonical: UIBuilder preset ecosystem seed data — physical_details_inline_editor_md_generator.v1 preset registration.
 --
 -- SSOT: docs/design/ui-builder-preset-ecosystem-ssot.yaml
---       physical_details_inline_editor_md_generator_preset
--- Registry table authority: db/migrations/mock_preset_registry_tables.sql
+--       docs/design/mock-preset-intake-compiler-ssot.yaml
 --
--- Registers `physical_details_inline_editor_md_generator.v1` as a reusable
--- detail view + inline edit + history canvas draft built from existing catalog
--- entries only. It is NOT a new component implementation and is NOT active topology.
--- All mutation flows use contents topology assigned content_bundle:* operation refs.
--- Physical record history binding uses AdminRuntime physical_record:list_history
--- backed by logs.diff; topology_edit_log is not a history source.
--- UIBuilder loads this into a selected route package tmp canvas draft;
--- human edit → preview → validate → apply boundary remains mandatory.
+-- BOOTSTRAP POLICY: part of the canonical fresh bootstrap sequence in db/init.sql.
+-- Applied via docker-entrypoint-initdb.d/00-init.sql on fresh compose volume.
+-- IDEMPOTENT: all statements use ON CONFLICT DO UPDATE or ON CONFLICT DO NOTHING.
+-- PRECONDITION: topology.mock_preset_* tables must exist (db/mock_preset_tables.sql).
 -- =============================================================================
 
-BEGIN;
+-- -- physical_details_inline_editor_md_generator_preset_seed --
 
 WITH upserted_preset AS (
     INSERT INTO topology.mock_preset_registry (
@@ -200,4 +195,3 @@ VALUES (
     $$::jsonb
 );
 
-COMMIT;

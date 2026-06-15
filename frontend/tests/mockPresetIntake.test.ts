@@ -326,7 +326,7 @@ Deno.test("mockPresetIntake: parsed visual nodes do not have DB-identity fields"
 
 Deno.test("hub_search preset seed: wiring candidate uses content_bundle:search not hub:search", async () => {
   const sql = await Deno.readTextFile(
-    "db/migrations/hub_search_preset_seed.sql",
+    "db/hub_search_preset_seed.sql",
   );
   assert(
     sql.includes("content_bundle:search"),
@@ -344,7 +344,7 @@ Deno.test("hub_search preset seed: wiring candidate uses content_bundle:search n
 
 Deno.test("hub_search preset seed: payloadFrom uses keyword field for content_bundle:search", async () => {
   const sql = await Deno.readTextFile(
-    "db/migrations/hub_search_preset_seed.sql",
+    "db/hub_search_preset_seed.sql",
   );
   assert(
     sql.includes('"keyword": "node:hub_search_input.value"') ||

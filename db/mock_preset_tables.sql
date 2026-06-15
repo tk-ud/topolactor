@@ -1,23 +1,22 @@
 -- =============================================================================
--- mock_preset_registry_tables.sql
--- Migration: topology.mock_preset_* tables for the Mock Preset Intake Compiler.
+-- mock_preset_tables.sql
+-- Canonical: topology.mock_preset_* tables for the Mock Preset Intake Compiler.
 --
 -- SSOT: docs/design/mock-preset-intake-compiler-ssot.yaml
 -- SCHEMA AUTHORITY: docs/design/db-schema.yaml (topology namespace)
 --
--- Tables added:
+-- Tables:
 --   topology.mock_preset_registry         — preset header and source snapshot
 --   topology.mock_preset_object_mapping   — visual object → component/html/ignored mapping
 --   topology.mock_preset_wiring_candidate — pending/confirmed wiring candidates
 --   topology.mock_preset_compile_snapshot — deterministic compile output
 --
+-- BOOTSTRAP POLICY: part of the canonical fresh bootstrap sequence in db/init.sql.
+-- Applied via docker-entrypoint-initdb.d/00-init.sql on fresh compose volume.
 -- IDEMPOTENT: all CREATE TABLE statements use IF NOT EXISTS.
---   Safe to re-run on an already-migrated database.
---
 -- PRECONDITION: topology schema must exist (created by db/schema.sql).
 -- =============================================================================
 
-BEGIN;
 
 -- ---------------------------------------------------------------------------
 -- topology.mock_preset_registry
@@ -134,4 +133,3 @@ CREATE INDEX IF NOT EXISTS idx_mock_preset_wiring_candidate_preset
 CREATE INDEX IF NOT EXISTS idx_mock_preset_compile_snapshot_preset
     ON topology.mock_preset_compile_snapshot (preset_id, compiled_at DESC);
 
-COMMIT;

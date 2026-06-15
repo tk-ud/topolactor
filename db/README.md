@@ -20,41 +20,55 @@ stored_topology_data
 
 ## How to run
 
-Apply files in this order (this is the standard local `psql` path):
+**Standard procedure: docker compose fresh volume bootstrap.**
 
 ```bash
-psql -d <database> -f db/schema.sql
-psql -d <database> -f db/topology_tables.sql
-psql -d <database> -f db/promotion_tables.sql
-psql -d <database> -f db/sql_attention_logs_tables.sql
-psql -d <database> -f db/ci_attention_guidance_tables.sql
-psql -d <database> -f db/context_route_tables.sql
-psql -d <database> -f db/ui_topology_tables.sql
-psql -d <database> -f db/manifest_tables.sql
-psql -d <database> -f db/enum_tables.sql
-psql -d <database> -f db/enum_seed.sql
-psql -d <database> -f db/auth_tables.sql
-psql -d <database> -f db/auth_seed.sql
-psql -d <database> -f db/legacy_mirror_tables.sql
-psql -d <database> -f db/seed_empty.sql
+docker compose -v                                                      # remove Docker volumes
+docker compose --env-file infra/.env -f infra/docker-compose.yml up -d  # fresh bootstrap
+```
+
+`docker compose -v` removes Docker volumes. On the next `docker compose up`, the container executes
+`db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql` on a clean database. All canonical DDL
+and seed data lives in `db/*.sql` files applied in explicit order with `ON_ERROR_STOP`.
+
+`db/migrations/` and `db/patches/` are **retired as of 2026-06-15** and no longer exist.
+All canonical DDL and seed data lives in `db/*.sql` files. Do not add new migration or patch files.
+The standard operational procedure is always `docker compose -v` fresh bootstrap.
+
+Three data-preserving utilities for existing DBs with legacy schema shapes are in `db/legacy_utils/`
+(not `db/migrations/`). They are **not** executed during fresh bootstrap and are **not** included in
+`db/init.sql`. They exist solely as run-once utilities for existing deployments.
+
+**Bootstrap file order** (managed by `db/init.sql`):
+
+```
+schema.sql → topology_tables.sql → promotion_tables.sql → sql_attention_logs_tables.sql →
+ci_attention_guidance_tables.sql → context_route_tables.sql → ui_topology_tables.sql →
+topology_cross_table_wiring.sql → mock_preset_tables.sql → team_markdown_tables.sql →
+manifest_tables.sql → enum_tables.sql → enum_seed.sql → auth_tables.sql → auth_seed.sql →
+legacy_mirror_tables.sql → seed_empty.sql → hub_search_preset_seed.sql →
+physical_search_crud_aggregate_preset_seed.sql → physical_details_inline_editor_md_generator_preset_seed.sql →
+aggregate_dashboard_preset_seed.sql → ui_component_registry_preset_catalog_bootstrap.sql
 ```
 
 `schema.sql` creates all registry tables and `function_parameters`.
 `topology_tables.sql` creates `hubs`, `entities`, `hub_relations`, `structure_maps`.
 `promotion_tables.sql` creates `usage_metrics`, `promotion_candidates`.
 `context_route_tables.sql` creates the context route recommendation runtime tables.
+`topology_cross_table_wiring.sql` applies cross-table FK constraints that span separately loaded files.
+`mock_preset_tables.sql` creates `topology.mock_preset_*` tables.
+`team_markdown_tables.sql` creates `topology.team_markdown_*` tables.
 `manifest_tables.sql` creates manifest draft/active storage.
 `auth_tables.sql` creates the canonical `auth.*` identity, credential, session, refresh token, login event, role, scope, and grant tables.
 `auth_seed.sql` inserts minimal user/admin credentials into `auth.*`; credentials are not stored in topology or manifest rows.
 `seed_empty.sql` inserts the minimum default topology rows including the
 `default:entity:search` structure map, the user login seed manifest, and the context route recommendation policy
 row in `function_parameters` needed for the canonical flow.
-
-**docker compose:** On a fresh volume, `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`
-executes `db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql`. This file is **compose/container-path specific** (`/db/...`) and assumes `infra/docker-compose.yml` mounts `../db` to `/db`.
-It applies `schema.sql -> topology_tables.sql -> promotion_tables.sql -> sql_attention_logs_tables.sql -> ci_attention_guidance_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> manifest_tables.sql -> enum_tables.sql -> enum_seed.sql -> auth_tables.sql -> auth_seed.sql -> legacy_mirror_tables.sql -> seed_empty.sql` in one explicit order with `ON_ERROR_STOP`.
-For normal host-side `psql` usage, use the ordered per-file commands above (not `psql -f db/init.sql`).
-On an existing volume, run `psql -d topolactor_demo -f db/auth_tables.sql` and `psql -d topolactor_demo -f db/auth_seed.sql` manually if needed.
+`hub_search_preset_seed.sql`, `physical_search_crud_aggregate_preset_seed.sql`,
+`physical_details_inline_editor_md_generator_preset_seed.sql`, `aggregate_dashboard_preset_seed.sql` — preset
+seed rows for each canonical UIBuilder mock preset.
+`ui_component_registry_preset_catalog_bootstrap.sql` inserts the fixed-UUID `components_bucket` and
+`ui_component_registry` rows needed for the preset ecosystem.
 
 ---
 
@@ -62,17 +76,32 @@ On an existing volume, run `psql -d topolactor_demo -f db/auth_tables.sql` and `
 
 | File | Purpose |
 |---|---|
-| `schema.sql` | Top-level entrypoint. Extensions, all registry tables, `function_parameters`. References `topology_tables.sql` and `promotion_tables.sql` via `\i` comments. |
+| `schema.sql` | Top-level entrypoint. Extensions, all registry tables, `function_parameters`. |
 | `topology_tables.sql` | Topology definition tables (`hub_relations`, `structure_maps`) and converged entity data tables (`hubs`, `entities`). |
-| `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). Advisory only — no migrations executed here. |
-| `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, rebuildable sparse vector cache projections, transition stats. Optional cluster/drift tables isolated at bottom. |
+| `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). |
+| `sql_attention_logs_tables.sql` | SQL Attention signal and observation log tables. |
+| `ci_attention_guidance_tables.sql` | CI attention guidance tables. |
+| `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, rebuildable sparse vector cache projections, transition stats. |
+| `ui_topology_tables.sql` | UI component, package, layout, and wiring definition tables in `topology.*` schema. |
+| `topology_cross_table_wiring.sql` | Cross-table FK constraints that span separately loaded files (e.g., `structure_maps.layout_id → components_layout_design`). Must run after `topology_tables.sql` and `ui_topology_tables.sql`. |
+| `mock_preset_tables.sql` | `topology.mock_preset_*` tables: registry, object mapping, wiring candidates, compile snapshots. |
+| `team_markdown_tables.sql` | `topology.team_markdown_*` tables: template registry, saved views, saved view events. |
 | `manifest_tables.sql` | Manifest draft/active storage and promotion lifecycle tables. |
 | `enum_tables.sql` | Canonical enum item / enum group dictionary (`enum.items`, `enum.groups`, `enum.group_items`). |
-| `enum_seed.sql` | Minimal demo enum dictionary for admin select regression. Apply after `enum_tables.sql`. |
+| `enum_seed.sql` | Minimal enum dictionary for admin select. Apply after `enum_tables.sql`. |
 | `auth_tables.sql` | Canonical auth store for identities, password hashes, sessions, refresh-token hashes, login events, roles, scopes, and grants. |
 | `auth_seed.sql` | Minimal user/admin credentials in `auth.*` for login. Apply after `auth_tables.sql`. |
+| `legacy_mirror_tables.sql` | Legacy compatibility tables retained for runtime routing compatibility only. |
 | `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`, admin dispatch manifests, and the user login seed manifest. No real business data. |
-| `init.sql` | Docker initialization SSOT. Uses psql meta commands to execute all SQL files in explicit order with fail-fast behavior. |
+| `hub_search_preset_seed.sql` | UIBuilder hub_search.readonly.v1 preset seed rows. |
+| `physical_search_crud_aggregate_preset_seed.sql` | UIBuilder physical_search_crud_aggregate.v1 preset seed rows. |
+| `physical_details_inline_editor_md_generator_preset_seed.sql` | UIBuilder physical_details_inline_editor_md_generator.v1 preset seed rows. |
+| `aggregate_dashboard_preset_seed.sql` | UIBuilder aggregate_dashboard.v1 preset seed rows. |
+| `ui_component_registry_preset_catalog_bootstrap.sql` | Fixed-UUID `components_bucket` and `ui_component_registry` bootstrap rows for the preset ecosystem. |
+| `init.sql` | Docker initialization SSOT. Uses psql meta commands to execute all SQL files in explicit order with `ON_ERROR_STOP`. Container-path specific (`/db/...`). |
+| `legacy_utils/hub_relations_legacy_to_manifest_scoped.sql` | Data-preserving utility for existing DBs with legacy hub_relations shape. NOT in bootstrap. NOT in init.sql. |
+| `legacy_utils/ui_topology_to_canonical_schema.sql` | Data-preserving utility for existing DBs with legacy public.* UI topology tables. NOT in bootstrap. NOT in init.sql. |
+| `legacy_utils/admin_import_topology_manifest_migration.sql` | Data-preserving utility for existing DBs with legacy admin_import manifest FK shape. NOT in bootstrap. NOT in init.sql. |
 
 ---
 

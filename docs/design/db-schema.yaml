@@ -1,7 +1,49 @@
 db_schema:
   name: topolactor_db_schema
-  version: 0.1.0
+  version: 0.2.0
   status: ssot_design_document
+
+  bootstrap_policy:
+    standard_method: docker_compose_fresh_volume
+    entrypoint: db/init.sql
+    procedure: >-
+      docker compose -v removes Docker volumes; on next `docker compose up`,
+      docker-entrypoint-initdb.d/00-init.sql executes db/init.sql which applies
+      all canonical db/*.sql files in explicit order with ON_ERROR_STOP.
+    migration_policy: retired
+    migration_note: >-
+      db/migrations/ and db/patches/ are retired as of 2026-06-15.
+      All canonical DDL and seed data lives in db/*.sql files.
+      Existing-DB incremental migration is NOT the standard operational procedure.
+      Use docker compose -v fresh bootstrap.
+      Three data-preserving utilities for existing DBs are kept in db/legacy_utils/
+      (hub_relations_legacy_to_manifest_scoped.sql, ui_topology_to_canonical_schema.sql,
+      admin_import_topology_manifest_migration.sql); they are NOT executed during fresh
+      bootstrap and are NOT included in db/init.sql.
+    canonical_bootstrap_files:
+      - db/schema.sql
+      - db/topology_tables.sql
+      - db/promotion_tables.sql
+      - db/sql_attention_logs_tables.sql
+      - db/ci_attention_guidance_tables.sql
+      - db/context_route_tables.sql
+      - db/ui_topology_tables.sql
+      - db/topology_cross_table_wiring.sql
+      - db/mock_preset_tables.sql
+      - db/team_markdown_tables.sql
+      - db/manifest_tables.sql
+      - db/enum_tables.sql
+      - db/enum_seed.sql
+      - db/auth_tables.sql
+      - db/auth_seed.sql
+      - db/legacy_mirror_tables.sql
+      - db/seed_empty.sql
+      - db/hub_search_preset_seed.sql
+      - db/physical_search_crud_aggregate_preset_seed.sql
+      - db/physical_details_inline_editor_md_generator_preset_seed.sql
+      - db/aggregate_dashboard_preset_seed.sql
+      - db/ui_component_registry_preset_catalog_bootstrap.sql
+
   source_files:
     - db/schema.sql
     - db/auth_tables.sql
@@ -13,7 +55,15 @@ db_schema:
     - db/sql_attention_logs_tables.sql
     - db/context_route_tables.sql
     - db/ui_topology_tables.sql
+    - db/topology_cross_table_wiring.sql
+    - db/mock_preset_tables.sql
+    - db/team_markdown_tables.sql
     - db/manifest_tables.sql
+    - db/hub_search_preset_seed.sql
+    - db/physical_search_crud_aggregate_preset_seed.sql
+    - db/physical_details_inline_editor_md_generator_preset_seed.sql
+    - db/aggregate_dashboard_preset_seed.sql
+    - db/ui_component_registry_preset_catalog_bootstrap.sql
 
   categories:
     - topology_definition
@@ -87,29 +137,28 @@ db_schema:
         components_package_design: topology.components_package_design
         physical_tables: topology.physical_tables
         wiring_physical_to_package: topology.wiring_physical_to_package
-      migration_ddl_available_schema_surfaces:
-        status: migration_ddl_available_bootstrap_included
+      bootstrap_schema_surfaces:
+        status: bootstrap_included
         note: >-
-          DDL included in db/init.sql (bootstrap) and CI backend-tests.yml schema setup step.
+          DDL in db/mock_preset_tables.sql; included in db/init.sql bootstrap and CI backend-tests.yml schema setup.
           Fresh deployments and rebuilt Docker volumes automatically create topology.mock_preset_* tables via bootstrap.
-          Existing DBs outside the rebuild flow can apply db/migrations/mock_preset_registry_tables.sql manually.
           NpgsqlMockPresetRepository wired in Program.cs (DI/startup).
           E2E live DB integration tests (MockPresetLiveDbEndToEndTests) pass against local DB.
         mock_preset_registry: topology.mock_preset_registry
         mock_preset_object_mapping: topology.mock_preset_object_mapping
         mock_preset_wiring_candidate: topology.mock_preset_wiring_candidate
         mock_preset_compile_snapshot: topology.mock_preset_compile_snapshot
-      migration_ddl_available_surfaces:
+      bootstrap_schema_surfaces_extended:
         team_markdown_dashboard_saved_view:
-          status: migration_ddl_available_bootstrap_included
-          migration_status: created
+          status: bootstrap_included
           reference: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+          bootstrap_ddl: db/team_markdown_tables.sql
           parent_surface: Preset / preset seed / saved view ecosystem
           child_surface: team shared saved markdown view
           note: >-
-            DB migration, bootstrap DDL, NpgsqlTeamMarkdownRepository, backend runtime actions,
-            and frontend MdViewer component are available. The saved Markdown view is a
-            rendered projection; physical table / jsonb records remain the canonical data authority.
+            DDL in db/team_markdown_tables.sql; included in db/init.sql bootstrap.
+            NpgsqlTeamMarkdownRepository, backend runtime actions, and frontend MdViewer component available.
+            The saved Markdown view is a rendered projection; physical table / jsonb records remain the canonical data authority.
             completed_preset_seed_json is the required gate for refresh/rebind/clone/projection.
           ux_hard_gate_columns:
             - completed_preset_seed_json jsonb not null
@@ -174,37 +223,35 @@ db_schema:
         - topology.ui_builder_components
         - topology.components_style_design
         - topology.components_package_design
-      migration_ddl_available:
-        status: migration_ddl_available_bootstrap_included
+      bootstrap_ddl_mock_preset:
+        status: bootstrap_included
         reference: docs/design/mock-preset-intake-compiler-ssot.yaml
-        migration_ddl: db/migrations/mock_preset_registry_tables.sql
-        bootstrap_path: db/init.sql (includes mock_preset_registry_tables.sql after ui_topology_tables.sql)
+        bootstrap_ddl: db/mock_preset_tables.sql
+        bootstrap_path: db/init.sql (includes mock_preset_tables.sql after ui_topology_tables.sql)
         ci_path: .github/workflows/backend-tests.yml "Apply DB schema" step
         note: >-
-          DDL idempotent migration (CREATE TABLE IF NOT EXISTS) included in db/init.sql bootstrap
+          Canonical DDL in db/mock_preset_tables.sql; included in db/init.sql bootstrap
           and CI backend-tests.yml schema setup. Fresh deployments and rebuilt Docker volumes create
-          these tables automatically. Existing DBs outside the rebuild flow can apply
-          db/migrations/mock_preset_registry_tables.sql manually. NpgsqlMockPresetRepository wired in
+          these tables automatically via fresh bootstrap. NpgsqlMockPresetRepository wired in
           Program.cs. E2E live DB integration tests pass.
         tables:
           - topology.mock_preset_registry
           - topology.mock_preset_object_mapping
           - topology.mock_preset_wiring_candidate
           - topology.mock_preset_compile_snapshot
-      migration_ddl_available_team_markdown:
-        status: migration_ddl_available_bootstrap_included
+      bootstrap_ddl_team_markdown:
+        status: bootstrap_included
         reference: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
-        migration_ddl: db/migrations/team_markdown_registry_tables.sql
-        bootstrap_path: db/init.sql (includes team_markdown_registry_tables.sql after mock_preset_registry_tables.sql)
+        bootstrap_ddl: db/team_markdown_tables.sql
+        bootstrap_path: db/init.sql (includes team_markdown_tables.sql after mock_preset_tables.sql)
         ci_path: .github/workflows/backend-tests.yml "Apply DB schema" step
         note: >-
-          DDL idempotent migration (CREATE TABLE IF NOT EXISTS) included in db/init.sql bootstrap
+          Canonical DDL in db/team_markdown_tables.sql; included in db/init.sql bootstrap
           and CI backend-tests.yml schema setup. completed_preset_seed_json and card_metadata_json
           are required (NOT NULL) as UX hard-gate JSONB columns. Saved Markdown view is a projection;
           physical table / jsonb records remain the canonical data authority.
-          The migration also bootstraps the md_viewer Team Markdown completed-seed preset row
-          through topology.team_markdown_template_registry, using the existing preset ecosystem
-          registry path rather than a Markdown-only registry. NpgsqlTeamMarkdownRepository wired in Program.cs.
+          Also bootstraps the md_viewer Team Markdown completed-seed preset row
+          through topology.team_markdown_template_registry. NpgsqlTeamMarkdownRepository wired in Program.cs.
         ux_hard_gate_columns:
           - completed_preset_seed_json jsonb not null
           - card_metadata_json jsonb not null
@@ -245,51 +292,31 @@ db_schema:
         migration_target: hubs.hub
         note: hubs.hubs renamed to hubs.hub with relation JSONB join definition added.
       admin_import_manifest_fk:
-        status: migration_ddl_available
+        status: migration_completed
         migration_target: hubs.topology_manifests
         bootstrap_ddl: db/manifest_tables.sql
-        migration_ddl: db/migrations/admin_import_topology_manifest_migration.sql
-        remap_policy: >-
-          Existing admin_import_snapshot rows hold old manifest_id UUIDs from public.manifest,
-          which are not valid hubs.topology_manifests IDs. Before adding the FK constraint,
-          orphaned rows are remapped to the oldest hubs.topology_manifests row (by created_at).
-          Explicit RAISE EXCEPTION if no topology_manifests row exists and orphaned rows are present.
-          admin_import_records topology_manifest_id remains a soft reference (no FK); linked via snapshot_id.
         note: >-
           admin_import_snapshot.manifest_id FK to public.manifest retired.
           Column renamed to topology_manifest_id, FK now references hubs.topology_manifests.
           admin_import_records.manifest_id renamed to topology_manifest_id (soft reference, no FK).
           public.manifest retained as compatibility-only for SeedImportApplyRepository runtime routing.
+          Canonical DDL in db/manifest_tables.sql; migration retired from standard bootstrap (2026-06-15).
+          See admin_import_topology_manifest_migration entry for retained data-preserving utility file.
         former_columns:
           - admin_import_snapshot.manifest_id (FK to public.manifest)
           - admin_import_records.manifest_id (FK to public.manifest)
       ui_topology_to_canonical_schema:
-        status: migration_ddl_available
+        status: migration_completed
         migration_target: topology schema
         bootstrap_ddl: db/ui_topology_tables.sql
-        migration_ddl: db/migrations/ui_topology_to_canonical_schema.sql
-        upsert_policy: >-
-          Each INSERT uses ON CONFLICT (business_key) DO NOTHING. Canonical-table rows
-          take precedence over old public rows with the same business key. Child FKs
-          are remapped through canonical business keys. ui_topology_tensor.parent_tensor_id
-          is restored through the canonical logical parent tuple, not direct UUID match.
-          Non-NULL legacy parent references fail explicitly when the old parent row is
-          dangling or its canonical logical tuple cannot be resolved; no silent NULL
-          fallback is allowed. Idempotent on re-runs. DROP IF EXISTS is safe on fresh
-          DBs (old tables never existed).
+        legacy_migration_utility: db/legacy_utils/ui_topology_to_canonical_schema.sql
         note: >-
           All public UI component/design/layout/package tables migrated to topology.* canonical schema
           and then retired (DROPped in reverse dependency order with CASCADE).
-          public.ui_component_bucket -> topology.components_bucket,
-          public.ui_component_registry -> topology.ui_component_registry,
-          public.ui_component_package -> topology.ui_component_package,
-          public.ui_package_component_map -> topology.ui_package_component_map,
-          public.ui_layout_registry -> topology.components_layout_design,
-          public.ui_wiring_registry -> topology.ui_wiring_registry,
-          public.ui_topology_tensor -> topology.ui_topology_tensor,
-          public.components -> topology.ui_builder_components,
-          public.design -> topology.components_style_design,
-          public.packages -> topology.components_package_design.
+          Canonical DDL in db/ui_topology_tables.sql; migration file retired from standard bootstrap (2026-06-15).
+          db/legacy_utils/ui_topology_to_canonical_schema.sql is retained as a data-preserving utility for
+          existing DBs with legacy public.* UI topology tables; it is NOT part of the standard fresh bootstrap
+          and is NOT included in db/init.sql. Required by .agent/tests/check-migration-ui-topology.sh.
         former_tables:
           - public.ui_component_bucket
           - public.ui_component_registry
@@ -301,21 +328,32 @@ db_schema:
           - public.components
           - public.design
           - public.packages
+      admin_import_topology_manifest_migration:
+        status: migration_completed
+        migration_target: hubs.topology_manifests
+        bootstrap_ddl: db/manifest_tables.sql
+        legacy_migration_utility: db/legacy_utils/admin_import_topology_manifest_migration.sql
+        note: >-
+          admin_import_snapshot and admin_import_records migrated from public.manifest FK to
+          hubs.topology_manifests topology_manifest_id. Canonical DDL in db/manifest_tables.sql;
+          migration file retired from standard bootstrap (2026-06-15).
+          db/legacy_utils/admin_import_topology_manifest_migration.sql is retained as a data-preserving
+          utility for existing DBs with legacy admin_import manifest FK shape; it is NOT part of the
+          standard fresh bootstrap and is NOT included in db/init.sql.
+          Required by .agent/tests/check-migration-ui-topology.sh.
       hub_relations_legacy_global_graph:
-        status: migration_ddl_available
+        status: migration_completed
         migration_target: hubs.hub_relations
         bootstrap_ddl: db/topology_tables.sql
-        migration_ddl: db/migrations/hub_relations_legacy_to_manifest_scoped.sql
-        bootstrap_policy: CREATE TABLE IF NOT EXISTS only; no DROP TABLE CASCADE
+        legacy_migration_utility: db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql
         note: >-
           Legacy hub_relations used hub_id / target_hub_id / relation_registry_id as a global
           hub-to-hub graph. Canonical shape is manifest-scoped under hubs.topology_manifests
           (topology_manifest_id + related_hub_id + sequence_position + relation_config + status).
-          Fresh DB bootstrap applies the new shape via topology_tables.sql. Existing DBs with
-          legacy columns run db/migrations/hub_relations_legacy_to_manifest_scoped.sql:
-          resolve or create one active topology_manifest per source hub_id, map target_hub_id to
-          related_hub_id, preserve sequence_position, store relation_registry_id under
-          relation_config.legacy. Ambiguous cases fail explicitly (no silent fallback).
+          Canonical DDL in db/topology_tables.sql (fresh bootstrap via docker compose -v).
+          db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql is retained as a data-preserving
+          utility for existing DBs with legacy shape; it is NOT part of the standard fresh bootstrap
+          and is NOT included in db/init.sql.
         former_columns:
           - hub_id
           - target_hub_id
