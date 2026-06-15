@@ -299,7 +299,8 @@ db_schema:
           Column renamed to topology_manifest_id, FK now references hubs.topology_manifests.
           admin_import_records.manifest_id renamed to topology_manifest_id (soft reference, no FK).
           public.manifest retained as compatibility-only for SeedImportApplyRepository runtime routing.
-          Canonical DDL in db/manifest_tables.sql; migration file retired (db/migrations/ removed 2026-06-15).
+          Canonical DDL in db/manifest_tables.sql; migration retired from standard bootstrap (2026-06-15).
+          See admin_import_topology_manifest_migration entry for retained data-preserving utility file.
         former_columns:
           - admin_import_snapshot.manifest_id (FK to public.manifest)
           - admin_import_records.manifest_id (FK to public.manifest)
@@ -307,10 +308,14 @@ db_schema:
         status: migration_completed
         migration_target: topology schema
         bootstrap_ddl: db/ui_topology_tables.sql
+        legacy_migration_utility: db/migrations/ui_topology_to_canonical_schema.sql
         note: >-
           All public UI component/design/layout/package tables migrated to topology.* canonical schema
           and then retired (DROPped in reverse dependency order with CASCADE).
-          Canonical DDL in db/ui_topology_tables.sql; migration file retired (db/migrations/ removed 2026-06-15).
+          Canonical DDL in db/ui_topology_tables.sql; migration file retired from standard bootstrap (2026-06-15).
+          db/migrations/ui_topology_to_canonical_schema.sql is retained as a data-preserving utility for
+          existing DBs with legacy public.* UI topology tables; it is NOT part of the standard fresh bootstrap
+          and is NOT included in db/init.sql. Required by .agent/tests/check-migration-ui-topology.sh.
         former_tables:
           - public.ui_component_bucket
           - public.ui_component_registry
@@ -322,6 +327,19 @@ db_schema:
           - public.components
           - public.design
           - public.packages
+      admin_import_topology_manifest_migration:
+        status: migration_completed
+        migration_target: hubs.topology_manifests
+        bootstrap_ddl: db/manifest_tables.sql
+        legacy_migration_utility: db/migrations/admin_import_topology_manifest_migration.sql
+        note: >-
+          admin_import_snapshot and admin_import_records migrated from public.manifest FK to
+          hubs.topology_manifests topology_manifest_id. Canonical DDL in db/manifest_tables.sql;
+          migration file retired from standard bootstrap (2026-06-15).
+          db/migrations/admin_import_topology_manifest_migration.sql is retained as a data-preserving
+          utility for existing DBs with legacy admin_import manifest FK shape; it is NOT part of the
+          standard fresh bootstrap and is NOT included in db/init.sql.
+          Required by .agent/tests/check-migration-ui-topology.sh.
       hub_relations_legacy_global_graph:
         status: migration_completed
         migration_target: hubs.hub_relations
