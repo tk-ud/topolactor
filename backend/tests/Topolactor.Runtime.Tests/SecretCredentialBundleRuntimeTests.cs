@@ -142,6 +142,56 @@ public class SecretCredentialBundleRuntimeTests
         Assert.Contains(response.Errors, e => e.Code == "CREDENTIAL_REFERENCE_KEY_CONFLICT");
     }
 
+    [Fact]
+    public async Task Register_StoreUnavailable_FailsClose_NoDB()
+    {
+        var repo = new InMemoryCredentialReferenceRepository();
+        var runtime = BuildRuntime(repo, new StoreUnavailableCredentialStore());
+        var payload = BuildPayload(new { reference_key = "reg_unavail_key", provider_kind = "env_var" });
+        var request = new EndpointRequestDto("Create", "credential", "config", "register", null, payload, null);
+
+        var response = await runtime.ExecuteAsync(request, manifestId: null);
+
+        // store unavailable at registration → fail-close, no DB entry written
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "SECRET_STORE_UNAVAILABLE");
+        Assert.Empty(repo.AllRegistered);
+    }
+
+    [Fact]
+    public async Task Register_StoreBindingFailed_ExplicitError_NoDB()
+    {
+        var repo = new InMemoryCredentialReferenceRepository();
+        var runtime = BuildRuntime(repo, new StoreBindingFailedCredentialStore());
+        var payload = BuildPayload(new { reference_key = "reg_binding_fail_key", provider_kind = "unsupported_provider" });
+        var request = new EndpointRequestDto("Create", "credential", "config", "register", null, payload, null);
+
+        var response = await runtime.ExecuteAsync(request, manifestId: null);
+
+        // store rejects binding → explicit error, no DB entry written
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CREDENTIAL_STORE_BINDING_FAILED");
+        Assert.Empty(repo.AllRegistered);
+    }
+
+    [Fact]
+    public async Task Register_AppendsRegistrationAuditEvent()
+    {
+        var repo = new InMemoryCredentialReferenceRepository();
+        var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        var payload = BuildPayload(new { reference_key = "audit_reg_key", provider_kind = "env_var" });
+        var request = new EndpointRequestDto("Create", "credential", "config", "register", null, payload, null);
+
+        var response = await runtime.ExecuteAsync(request, manifestId: null);
+
+        Assert.True(response.Success);
+        var regEvent = repo.AuditEvents.FirstOrDefault(e => e.EventType == "credential_registered");
+        Assert.NotNull(regEvent);
+        Assert.Equal("audit_reg_key", regEvent!.ReferenceKey);
+        Assert.Equal("success", regEvent.Outcome);
+        Assert.NotEqual(Guid.Empty, regEvent.CredentialReferenceId);
+    }
+
     // ─── validation failure: explicit structured error ────────────────────────
 
     [Fact]
@@ -185,14 +235,16 @@ public class SecretCredentialBundleRuntimeTests
     [Fact]
     public async Task Validate_SecretStoreUnavailable_FailsClose_NoSilentFallback()
     {
+        // Register with a working store, then validate when store becomes unavailable.
         var repo = new InMemoryCredentialReferenceRepository();
-        var runtime = BuildRuntime(repo, new StoreUnavailableCredentialStore());
-        await RegisterCredential(runtime, "stripe_wh_secret", "env_var");
+        var setupRuntime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        await RegisterCredential(setupRuntime, "stripe_wh_secret", "env_var");
 
+        var validateRuntime = BuildRuntime(repo, new StoreUnavailableCredentialStore());
         var payload = BuildPayload(new { reference_key = "stripe_wh_secret" });
         var request = new EndpointRequestDto("Search", "credential", "config", "validate", null, payload, null);
 
-        var response = await runtime.ExecuteAsync(request, manifestId: null);
+        var response = await validateRuntime.ExecuteAsync(request, manifestId: null);
 
         // store unavailable → must fail-close with explicit error, no silent fallback
         Assert.False(response.Success,
@@ -203,14 +255,16 @@ public class SecretCredentialBundleRuntimeTests
     [Fact]
     public async Task Validate_SecretStoreUnavailable_DoesNotReturnCredentialValue()
     {
+        // Register with a working store, then validate when store becomes unavailable.
         var repo = new InMemoryCredentialReferenceRepository();
-        var runtime = BuildRuntime(repo, new StoreUnavailableCredentialStore());
-        await RegisterCredential(runtime, "cached_fallback_guard", "env_var");
+        var setupRuntime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        await RegisterCredential(setupRuntime, "cached_fallback_guard", "env_var");
 
+        var validateRuntime = BuildRuntime(repo, new StoreUnavailableCredentialStore());
         var payload = BuildPayload(new { reference_key = "cached_fallback_guard" });
         var request = new EndpointRequestDto("Search", "credential", "config", "validate", null, payload, null);
 
-        var response = await runtime.ExecuteAsync(request, manifestId: null);
+        var response = await validateRuntime.ExecuteAsync(request, manifestId: null);
 
         // even in failure, no credential values in response
         var responseJson = JsonSerializer.Serialize(response);
@@ -361,11 +415,29 @@ public class SecretCredentialBundleRuntimeTests
     }
 
     [Fact]
+    public async Task Rotate_ActorIdNotUUID_ReturnsExplicitError()
+    {
+        var repo = new InMemoryCredentialReferenceRepository();
+        var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        await RegisterCredential(runtime, "rotate_test_key_uuid", "env_var");
+
+        // rotation_actor_id must be a valid UUID (admin user IDs are UUIDs in this system)
+        var payload = BuildPayload(new { reference_key = "rotate_test_key_uuid", rotation_actor_id = "not-a-uuid" });
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
+
+        var response = await runtime.ExecuteAsync(request, manifestId: null);
+
+        Assert.False(response.Success,
+            "rotation_actor_id that is not a valid UUID must be rejected");
+        Assert.Contains(response.Errors, e => e.Code == "CREDENTIAL_ROTATION_ACTOR_INVALID");
+    }
+
+    [Fact]
     public async Task Rotate_MissingReference_ReturnsExplicitError()
     {
         var runtime = BuildRuntime(new InMemoryCredentialReferenceRepository(), new AlwaysAvailableCredentialStore());
 
-        var payload = BuildPayload(new { reference_key = "nonexistent_for_rotate", rotation_actor_id = "admin-user-1" });
+        var payload = BuildPayload(new { reference_key = "nonexistent_for_rotate", rotation_actor_id = Guid.NewGuid().ToString() });
         var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
 
         var response = await runtime.ExecuteAsync(request, manifestId: null);
@@ -375,13 +447,13 @@ public class SecretCredentialBundleRuntimeTests
     }
 
     [Fact]
-    public async Task Rotate_WithExplicitActor_RecordsRotation()
+    public async Task Rotate_WithExplicitActor_RecordsRotationAndValidates()
     {
         var repo = new InMemoryCredentialReferenceRepository();
         var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
         await RegisterCredential(runtime, "smtp_pass_to_rotate", "env_var");
 
-        var payload = BuildPayload(new { reference_key = "smtp_pass_to_rotate", rotation_actor_id = "admin-12345" });
+        var payload = BuildPayload(new { reference_key = "smtp_pass_to_rotate", rotation_actor_id = Guid.NewGuid().ToString() });
         var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
 
         var response = await runtime.ExecuteAsync(request, manifestId: null);
@@ -394,11 +466,36 @@ public class SecretCredentialBundleRuntimeTests
         Assert.Equal("smtp_pass_to_rotate", rotationEvent!.ReferenceKey);
         Assert.Equal("success", rotationEvent.Outcome);
 
+        // post-rotation validation audit event recorded
+        var validationEvent = repo.AuditEvents.FirstOrDefault(e => e.EventType == "credential_validated");
+        Assert.NotNull(validationEvent);
+
         // rotation response must not contain credential values
         var responseJson = JsonSerializer.Serialize(response);
         Assert.DoesNotContain("secret_value", responseJson);
         Assert.DoesNotContain("password", responseJson);
         Assert.DoesNotContain("private_key", responseJson);
+    }
+
+    [Fact]
+    public async Task Rotate_NewCredentialNotInStore_ExplicitValidationError()
+    {
+        // Setup: register with an always-available store
+        var repo = new InMemoryCredentialReferenceRepository();
+        var setupRuntime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
+        await RegisterCredential(setupRuntime, "post_rotate_absent_key", "env_var");
+
+        // Rotation attempt with a store where the new credential is absent
+        var rotateRuntime = BuildRuntime(repo, new CredentialAbsentStore());
+        var payload = BuildPayload(new { reference_key = "post_rotate_absent_key", rotation_actor_id = Guid.NewGuid().ToString() });
+        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
+
+        var response = await rotateRuntime.ExecuteAsync(request, manifestId: null);
+
+        // Rotation was recorded, but post-rotation validation must fail explicitly
+        Assert.False(response.Success,
+            "rotation where new credential is not in store must fail with explicit validation error");
+        Assert.Contains(response.Errors, e => e.Code == "CREDENTIAL_NOT_PRESENT_IN_STORE");
     }
 
     // ─── list: reference metadata only ───────────────────────────────────────
@@ -601,4 +698,23 @@ internal sealed class StoreUnavailableCredentialStore : ICredentialStore
             Success: false,
             StoreAvailable: false,
             FailureReason: "Secret store is unavailable (simulated for test)."));
+}
+
+/// <summary>
+/// Fake credential store where the store is available but rejects the binding for the given provider kind.
+/// Used to verify that registration binding failures produce explicit structured errors.
+/// </summary>
+internal sealed class StoreBindingFailedCredentialStore : ICredentialStore
+{
+    public Task<CredentialStoreResult> GetAsync(string referenceKey, CancellationToken ct = default) =>
+        Task.FromResult(new CredentialStoreResult(
+            StoreAvailable: true,
+            CredentialPresent: false,
+            FailureReason: "Credential not present."));
+
+    public Task<CredentialStoreSetResult> SetAsync(string referenceKey, string providerKind, CancellationToken ct = default) =>
+        Task.FromResult(new CredentialStoreSetResult(
+            Success: false,
+            StoreAvailable: true,
+            FailureReason: "PROVIDER_KIND_NOT_SUPPORTED_BY_STORE"));
 }

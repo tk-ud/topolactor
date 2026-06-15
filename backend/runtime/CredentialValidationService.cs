@@ -155,34 +155,19 @@ public sealed class CredentialValidationService
             FailureReason: null);
     }
 
-    private async Task AppendAuditAsync(
+    private Task AppendAuditAsync(
         Guid credentialReferenceId,
         string referenceKey,
         string eventType,
         string outcome,
         string? failureCode,
-        CancellationToken ct)
-    {
-        try
-        {
-            await _repository.AppendAuditEventAsync(
-                new CredentialAuditEventRecord(
-                    EventType: eventType,
-                    CredentialReferenceId: credentialReferenceId,
-                    ReferenceKey: referenceKey,
-                    Outcome: outcome,
-                    FailureCode: failureCode),
-                ct);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "CredentialValidationService: failed to append audit event eventType={EventType} referenceKey={ReferenceKey}",
-                eventType, referenceKey);
-        }
-    }
+        CancellationToken ct) =>
+        _repository.AppendAuditEventAsync(
+            new CredentialAuditEventRecord(
+                EventType: eventType,
+                CredentialReferenceId: credentialReferenceId,
+                ReferenceKey: referenceKey,
+                Outcome: outcome,
+                FailureCode: failureCode),
+            ct);
 }

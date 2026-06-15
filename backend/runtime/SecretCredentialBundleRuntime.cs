@@ -93,6 +93,43 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
             "SecretCredentialBundleRuntime.register: referenceKey={ReferenceKey} providerKind={ProviderKind}",
             referenceKey, providerKind);
 
+        // Check store binding before DB registration. Store unavailable → fail-close (no silent fallback).
+        CredentialStoreSetResult storeBinding;
+        try
+        {
+            storeBinding = await _credentialStore.SetAsync(referenceKey, providerKind, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "SecretCredentialBundleRuntime.register: secret store threw exception referenceKey={ReferenceKey}",
+                referenceKey);
+            return ExplicitError("CREDENTIAL_STORE_EXCEPTION",
+                $"Secret store threw an unexpected exception for key '{referenceKey}'.");
+        }
+
+        if (!storeBinding.StoreAvailable)
+        {
+            _logger.LogError(
+                "SecretCredentialBundleRuntime.register: secret store unavailable referenceKey={ReferenceKey}. Fail-close.",
+                referenceKey);
+            return ExplicitError("SECRET_STORE_UNAVAILABLE",
+                $"Secret store is unavailable. Registration failed for key '{referenceKey}'.");
+        }
+
+        if (!storeBinding.Success)
+        {
+            _logger.LogWarning(
+                "SecretCredentialBundleRuntime.register: store binding failed referenceKey={ReferenceKey}",
+                referenceKey);
+            return ExplicitError("CREDENTIAL_STORE_BINDING_FAILED",
+                storeBinding.FailureReason ?? $"Secret store binding failed for key '{referenceKey}'.");
+        }
+
         CredentialReferenceDto registered;
         try
         {
@@ -119,6 +156,31 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 $"Failed to register credential reference for key '{referenceKey}'.");
         }
 
+        // Audit write failure is not silent — return explicit error rather than swallow.
+        try
+        {
+            await _repository.AppendAuditEventAsync(
+                new CredentialAuditEventRecord(
+                    EventType: "credential_registered",
+                    CredentialReferenceId: registered.CredentialReferenceId,
+                    ReferenceKey: referenceKey,
+                    Outcome: "success",
+                    FailureCode: null),
+                ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "SecretCredentialBundleRuntime.register: audit log append failed referenceKey={ReferenceKey}",
+                referenceKey);
+            return ExplicitError("CREDENTIAL_AUDIT_WRITE_FAILED",
+                $"Failed to record registration audit for credential '{referenceKey}'.");
+        }
+
         _logger.LogInformation(
             "SecretCredentialBundleRuntime.register: credential reference registered referenceKey={ReferenceKey}",
             referenceKey);
@@ -143,7 +205,23 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
             "SecretCredentialBundleRuntime.validate: referenceKey={ReferenceKey}",
             referenceKey);
 
-        var result = await _validationService.ValidateAsync(referenceKey, ct);
+        CredentialValidationResult result;
+        try
+        {
+            result = await _validationService.ValidateAsync(referenceKey, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "SecretCredentialBundleRuntime.validate: unexpected exception referenceKey={ReferenceKey}",
+                referenceKey);
+            return ExplicitError("CREDENTIAL_AUDIT_WRITE_FAILED",
+                $"Failed to record audit event during credential validation for '{referenceKey}'.");
+        }
 
         if (!result.IsValid)
         {
@@ -190,6 +268,13 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 "rotate: payload must include non-empty 'rotation_actor_id'. Rotation requires explicit admin actor identity.");
         }
 
+        // rotation_actor_id must be a valid UUID — admin user IDs in this system are UUIDs.
+        if (!Guid.TryParse(rotationActorId, out _))
+        {
+            return ExplicitError("CREDENTIAL_ROTATION_ACTOR_INVALID",
+                "rotate: 'rotation_actor_id' must be a valid admin user UUID.");
+        }
+
         _logger.LogDebug(
             "SecretCredentialBundleRuntime.rotate: referenceKey={ReferenceKey} rotationActorId={RotationActorId}",
             referenceKey, rotationActorId);
@@ -208,6 +293,7 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 $"Failed to record rotation for credential reference '{referenceKey}'.");
         }
 
+        // Audit write failure is not silent — return explicit error rather than swallow.
         try
         {
             await _repository.AppendAuditEventAsync(
@@ -226,12 +312,46 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "SecretCredentialBundleRuntime.rotate: audit log append failed for referenceKey={ReferenceKey}",
+                "SecretCredentialBundleRuntime.rotate: audit log append failed referenceKey={ReferenceKey}",
                 referenceKey);
+            return ExplicitError("CREDENTIAL_AUDIT_WRITE_FAILED",
+                $"Failed to record rotation audit for credential '{referenceKey}'.");
+        }
+
+        // Validate that the rotated credential is present in the secret store.
+        CredentialValidationResult validation;
+        try
+        {
+            validation = await _validationService.ValidateAsync(referenceKey, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "SecretCredentialBundleRuntime.rotate: post-rotation validation threw exception referenceKey={ReferenceKey}",
+                referenceKey);
+            return ExplicitError("CREDENTIAL_AUDIT_WRITE_FAILED",
+                $"Failed to record post-rotation validation audit for '{referenceKey}'.");
+        }
+
+        if (!validation.IsValid)
+        {
+            _logger.LogWarning(
+                "SecretCredentialBundleRuntime.rotate: post-rotation validation failed referenceKey={ReferenceKey} failureCode={FailureCode}",
+                referenceKey, validation.FailureCode);
+            return new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors: [new ValidationError(
+                    validation.FailureCode ?? "CREDENTIAL_POST_ROTATION_VALIDATION_FAILED",
+                    validation.FailureReason ?? "Post-rotation credential validation failed.")]);
         }
 
         _logger.LogInformation(
-            "SecretCredentialBundleRuntime.rotate: rotation recorded for referenceKey={ReferenceKey}",
+            "SecretCredentialBundleRuntime.rotate: rotation recorded and validated for referenceKey={ReferenceKey}",
             referenceKey);
 
         var data = JsonSerializer.SerializeToElement(new
