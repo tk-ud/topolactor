@@ -556,9 +556,9 @@ system_roadmap_ssot:
         file_storage, export_sftp, webhook_inbox, job_scheduler, audit_approval,
         secret_credential). All eight design SSOTs confirm: authority_boundary,
         validate-preview-apply flow, scheduler_boundary, audit_log_boundary, and
-        failure_policy (no silent fallback) are defined. No implementation SSOT exists for
-        any bundle; backend implementation has not started for any bundle. Each bundle
-        requires a separate implementation SSOT before implementation can begin.
+        failure_policy (no silent fallback) are defined. No implementation contract exists
+        for any bundle; backend implementation has not started for any bundle. Each bundle
+        requires a separate implementation contract before implementation can begin.
         export_sftp_bundle depends on file_storage_bundle for package artifact generation.
         job_scheduler_bundle extends runtime-orchestration-ssot scheduler contract.
         secret_credential_bundle is a prerequisite for other bundles requiring credential
@@ -586,8 +586,8 @@ system_roadmap_ssot:
             scheduler_boundary: defined
             audit_log_boundary: defined
             failure_policy: explicit_failure_no_silent_fallback
-            implementation_ssot: not_yet_created
-            implementation_readiness: design_contract_complete_implementation_ssot_required
+            implementation_contract: not_yet_created
+            implementation_readiness: design_contract_complete_implementation_contract_required
           stripe_bundle:
             design_ssot: docs/design/runtime-bundle-stripe-ssot.yaml
             authority_boundary: verified_webhook_event_only
@@ -595,8 +595,8 @@ system_roadmap_ssot:
             scheduler_boundary: defined
             audit_log_boundary: defined
             failure_policy: explicit_failure_no_silent_fallback
-            implementation_ssot: not_yet_created
-            implementation_readiness: design_contract_complete_implementation_ssot_required
+            implementation_contract: not_yet_created
+            implementation_readiness: design_contract_complete_implementation_contract_required
           file_storage_bundle:
             design_ssot: docs/design/runtime-bundle-file-storage-ssot.yaml
             authority_boundary: export_job_or_authorized_api
@@ -604,8 +604,8 @@ system_roadmap_ssot:
             scheduler_boundary: defined
             audit_log_boundary: defined
             failure_policy: explicit_failure_no_silent_fallback
-            implementation_ssot: not_yet_created
-            implementation_readiness: design_contract_complete_implementation_ssot_required
+            implementation_contract: not_yet_created
+            implementation_readiness: design_contract_complete_implementation_contract_required
           export_sftp_bundle:
             design_ssot: docs/design/runtime-bundle-export-sftp-ssot.yaml
             authority_boundary: authorized_export_job_only
@@ -613,9 +613,9 @@ system_roadmap_ssot:
             scheduler_boundary: defined
             audit_log_boundary: defined
             failure_policy: explicit_failure_no_silent_fallback
-            implementation_ssot: not_yet_created
+            implementation_contract: not_yet_created
             dependency: file_storage_bundle_owns_file_generation_checksum_manifest
-            implementation_readiness: design_contract_complete_implementation_ssot_required
+            implementation_readiness: design_contract_complete_implementation_contract_required
           webhook_inbox_bundle:
             design_ssot: docs/design/runtime-bundle-webhook-inbox-ssot.yaml
             authority_boundary: scheduler_then_runtime_route_only
@@ -623,8 +623,8 @@ system_roadmap_ssot:
             scheduler_boundary: defined
             audit_log_boundary: defined
             failure_policy: explicit_failure_no_silent_fallback
-            implementation_ssot: not_yet_created
-            implementation_readiness: design_contract_complete_implementation_ssot_required
+            implementation_contract: not_yet_created
+            implementation_readiness: design_contract_complete_implementation_contract_required
           job_scheduler_bundle:
             design_ssot: docs/design/runtime-bundle-job-scheduler-ssot.yaml
             authority_boundary: trigger_alignment_and_runtime_queue_only
@@ -632,9 +632,9 @@ system_roadmap_ssot:
             scheduler_boundary: self_is_scheduler_layer
             audit_log_boundary: defined
             failure_policy: explicit_failure_no_silent_fallback
-            implementation_ssot: not_yet_created
+            implementation_contract: not_yet_created
             dependency: extends_runtime_orchestration_ssot_scheduler_contract
-            implementation_readiness: design_contract_complete_implementation_ssot_required
+            implementation_readiness: design_contract_complete_implementation_contract_required
           audit_approval_bundle:
             design_ssot: docs/design/runtime-bundle-audit-approval-ssot.yaml
             authority_boundary: ui_human_explicit_action_only
@@ -642,8 +642,8 @@ system_roadmap_ssot:
             scheduler_boundary: defined
             audit_log_boundary: defined
             failure_policy: explicit_failure_no_silent_fallback
-            implementation_ssot: not_yet_created
-            implementation_readiness: design_contract_complete_implementation_ssot_required
+            implementation_contract: not_yet_created
+            implementation_readiness: design_contract_complete_implementation_contract_required
           secret_credential_bundle:
             design_ssot: docs/design/runtime-bundle-secret-credential-ssot.yaml
             authority_boundary: admin_config_and_runtime_secret_store
@@ -651,25 +651,25 @@ system_roadmap_ssot:
             scheduler_boundary: defined
             audit_log_boundary: defined
             failure_policy: explicit_failure_no_silent_fallback
-            implementation_ssot: not_yet_created
+            implementation_contract: not_yet_created
             note: prerequisite_for_other_bundles_requiring_credential_injection
-            implementation_readiness: design_contract_complete_implementation_ssot_required
+            implementation_readiness: design_contract_complete_implementation_contract_required
       completion_condition:
         - each_core_bundle_has_separate_ssot_and_implementation
         - each_bundle_satisfies_validate_preview_apply_boundary
         - each_bundle_is_covered_by_backend_tests_and_roadmap_evidence
       known_gap_ref:
         - all_eight_design_ssots_inspected_and_confirmed_with_authority_validate_preview_apply_scheduler_audit_failure_boundaries
-        - no_implementation_ssot_exists_for_any_of_the_eight_bundles
+        - no_implementation_contract_exists_for_any_of_the_eight_bundles
         - no_backend_implementation_exists_for_any_of_the_eight_bundles
-        - email_bundle_implementation_ssot_not_yet_created
-        - stripe_bundle_implementation_ssot_not_yet_created
-        - file_storage_bundle_implementation_ssot_not_yet_created
-        - export_sftp_bundle_implementation_ssot_not_yet_created_dependency_on_file_storage_bundle
-        - webhook_inbox_bundle_implementation_ssot_not_yet_created
-        - job_scheduler_bundle_implementation_ssot_not_yet_created_extends_runtime_orchestration_ssot
-        - audit_approval_bundle_implementation_ssot_not_yet_created
-        - secret_credential_bundle_implementation_ssot_not_yet_created_prerequisite_for_credential_injection
+        - email_bundle_implementation_contract_not_yet_created
+        - stripe_bundle_implementation_contract_not_yet_created
+        - file_storage_bundle_implementation_contract_not_yet_created
+        - export_sftp_bundle_implementation_contract_not_yet_created_dependency_on_file_storage_bundle
+        - webhook_inbox_bundle_implementation_contract_not_yet_created
+        - job_scheduler_bundle_implementation_contract_not_yet_created_extends_runtime_orchestration_ssot
+        - audit_approval_bundle_implementation_contract_not_yet_created
+        - secret_credential_bundle_implementation_contract_not_yet_created_prerequisite_for_credential_injection
 
     product.system_ci_contract_audit:
       bundle_id: product.system_ci_contract_audit
