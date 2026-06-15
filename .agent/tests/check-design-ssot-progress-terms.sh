@@ -108,42 +108,51 @@ check_no_duplicate_keys() {
     return
   fi
   local result
-  result=$(python3 - "$file" <<'PYEOF'
-import sys, yaml
-from yaml.constructor import SafeConstructor
-
-class DuplicateKeyLoader(yaml.SafeLoader):
-    pass
-
-orig = SafeConstructor.construct_mapping
-def construct_mapping_unique(self, node, deep=False):
-    keys = []
-    for key_node, _ in node.value:
-        key = self.construct_object(key_node, deep=deep)
-        if key in keys:
-            raise ValueError(f"DUP_KEY: '{key}' at line {key_node.start_mark.line + 1}")
-        keys.append(key)
-    return orig(self, node, deep=deep)
-
-DuplicateKeyLoader.construct_mapping = construct_mapping_unique
-
-with open(sys.argv[1]) as f:
-    try:
-        yaml.load(f, Loader=DuplicateKeyLoader)
-        print("OK")
-    except ValueError as e:
-        # Duplicate key — hard failure
-        print(f"FAIL: {e}")
-    except yaml.YAMLError:
-        # Pre-existing YAML parse quirk (complex keys, colons in scalars, etc.)
-        # These are not duplicate-key issues; skip rather than falsely flagging.
-        print("SKIP")
-PYEOF
-)
+  result=$(awk '
+    # Reset per-file state
+    FNR == 1 {
+      for (k in seen) delete seen[k]
+      dup = ""
+    }
+    # Skip blank lines and comments
+    /^[[:space:]]*$/ || /^[[:space:]]*#/ { next }
+    {
+      line = $0
+      stripped = line
+      sub(/^[[:space:]]*/, "", stripped)
+      indent = length(line) - length(stripped)
+      # List item marker: a new list item opens a new sibling mapping scope.
+      # Clear all seen entries deeper than this indent so keys from the
+      # previous item do not collide with keys in this new item.
+      if (match(stripped, /^-([[:space:]]|$)/)) {
+        for (entry in seen) {
+          split(entry, parts, SUBSEP)
+          if (parts[1] + 0 > indent) delete seen[entry]
+        }
+        next
+      }
+      # Match a plain YAML mapping key: identifier chars followed by ":"
+      if (match(stripped, /^[a-zA-Z_][a-zA-Z0-9_.-]*[[:space:]]*:/)) {
+        key_colon = substr(stripped, 1, RLENGTH)
+        sub(/[[:space:]]*:.*/, "", key_colon)
+        key = key_colon
+        # Clear all seen entries that belong to deeper (child) scopes
+        for (entry in seen) {
+          split(entry, parts, SUBSEP)
+          if (parts[1] + 0 > indent) delete seen[entry]
+        }
+        sid = indent SUBSEP key
+        if (sid in seen) {
+          dup = sprintf("FAIL: duplicate key \"%s\" (indent %d) at line %d", key, indent, FNR)
+          exit
+        }
+        seen[sid] = 1
+      }
+    }
+    END { if (dup != "") print dup; else print "OK" }
+  ' "$file")
   if [[ "$result" == OK ]]; then
     echo "OK  [no-dup-keys] $1"
-  elif [[ "$result" == SKIP ]]; then
-    echo "SKIP [no-dup-keys] $1 (pre-existing YAML parse quirk — not a duplicate key)"
   else
     fail "Duplicate YAML key in $1: $result"
   fi
