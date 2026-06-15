@@ -83,6 +83,7 @@ Deno.test("Fresh /admin route registry matches runtime-orchestration SSOT exactl
   assertEquals(adminRoutes, [
     "/admin",
     "/admin/contents",
+    "/admin/credentials",
     "/admin/enums",
     "/admin/manifests",
     "/admin/team-dashboard",
