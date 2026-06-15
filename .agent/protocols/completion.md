@@ -116,10 +116,26 @@ Completion summary must keep these as separate facts:
 - local execution fact (`PASS` vs `REQUIRED_NOT_EXECUTED`)
 - remote evidence fact (`REMOTE_REQUIRED` pending vs remote `success`)
 
+
+## Architecture substrate conformance gate
+
+Implementation cannot be marked `implemented` unless architecture substrate conformance is satisfied.
+
+Completion must prove:
+
+- hardcoded surfaces are allowed by SSOT
+- seed/data-defined surfaces were not implemented as one-off hardcoded surfaces
+- reusable substrate was used where available
+- newly added abstractions are reusable across future bundles or explicitly justified by SSOT
+- implementation did not merely add SSOT entries to legitimize implementation-first shape
+
+This gate applies before TODO `[x]`, implemented claims, production-ready claims, and completion summaries. A dedicated route / island / frontend API wrapper / one-off helper / one-off status transition that bypasses available substrate is a blocking condition unless an explicit SSOT exception explains why the substrate route is impossible.
+
 ## Completion / failure decision
 
 Blocking (completion prohibited):
 
+- architecture substrate conformance gate not satisfied
 - any required gate/check status is FAIL
 - missing or ambiguous Required Check Scope declaration
 - REQUIRED_NOT_EXECUTED without equivalent remote CI success (scope-relevant)

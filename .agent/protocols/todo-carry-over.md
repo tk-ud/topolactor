@@ -36,6 +36,9 @@ Skip is allowed only for typo/format-only/unrelated text cleanup with explicit `
 - 既存抽象・既存基板・既存回路で表現できるものを、小粒専用実装（route / UI / helper / API wrapper 等）としてTODO化してはならない。
 - backend / UI / route / helper の implementation atom 分割で completion bundle を偽装してはならない。
 - reusable abstraction / architecture substrate restoration が必要な場合は、roadmap completion bundle 単位のTODOとして扱う。
+- 基板逸脱を `UI修正` / `API修正` / `helper修正` のような atom TODO に分割してはならない。
+- 既存基板へ戻す必要がある場合は `substrate restoration bundle` として、対象Bundleの completion condition / known_gap_ref に紐づけて扱う。
+- dedicated route / island / frontend API / one-off helper を後で消す作業も単独atomではなく、該当Bundleの基板復帰作業として扱う。
 
 ### 残すべき TODO 候補
 
