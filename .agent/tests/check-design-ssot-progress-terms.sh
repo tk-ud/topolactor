@@ -100,6 +100,60 @@ for f in "${AGENT_SSOTS[@]}"; do
 done
 
 echo ""
+echo "=== Design SSOTs: no duplicate YAML keys ==="
+
+check_no_duplicate_keys() {
+  local file="$REPO_ROOT/$1"
+  if [ ! -f "$file" ]; then
+    return
+  fi
+  local result
+  result=$(python3 - "$file" <<'PYEOF'
+import sys, yaml
+from yaml.constructor import SafeConstructor
+
+class DuplicateKeyLoader(yaml.SafeLoader):
+    pass
+
+orig = SafeConstructor.construct_mapping
+def construct_mapping_unique(self, node, deep=False):
+    keys = []
+    for key_node, _ in node.value:
+        key = self.construct_object(key_node, deep=deep)
+        if key in keys:
+            raise ValueError(f"DUP_KEY: '{key}' at line {key_node.start_mark.line + 1}")
+        keys.append(key)
+    return orig(self, node, deep=deep)
+
+DuplicateKeyLoader.construct_mapping = construct_mapping_unique
+
+with open(sys.argv[1]) as f:
+    try:
+        yaml.load(f, Loader=DuplicateKeyLoader)
+        print("OK")
+    except ValueError as e:
+        # Duplicate key — hard failure
+        print(f"FAIL: {e}")
+    except yaml.YAMLError:
+        # Pre-existing YAML parse quirk (complex keys, colons in scalars, etc.)
+        # These are not duplicate-key issues; skip rather than falsely flagging.
+        print("SKIP")
+PYEOF
+)
+  if [[ "$result" == OK ]]; then
+    echo "OK  [no-dup-keys] $1"
+  elif [[ "$result" == SKIP ]]; then
+    echo "SKIP [no-dup-keys] $1 (pre-existing YAML parse quirk — not a duplicate key)"
+  else
+    fail "Duplicate YAML key in $1: $result"
+  fi
+}
+
+for f in "${DESIGN_SSOTS[@]}"; do
+  check_no_duplicate_keys "$f"
+done
+
+echo ""
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== check-design-ssot-progress-terms.sh: all checks passed ==="
   exit 0

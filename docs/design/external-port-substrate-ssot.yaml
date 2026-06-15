@@ -75,7 +75,7 @@ external_port_substrate_ssot:
           standalone admin credential UI を作らない。
       none:
         meaning: no_credential_required
-        rule: credential が不要な port は credential_kind: none として明示する。
+        rule: "credential が不要な port は credential_kind: none として明示する。"
     constraint:
       - external_credential_is_port_record_attachment_not_standalone_entity
       - secret_value_never_stored_in_db_ui_ssot_or_audit_log
