@@ -12,7 +12,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `core-runtime-bundles-gate` | core runtime bundle 実装ゲート（8 bundle） | not_started | 8 | `product.core_runtime_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
+| `core-runtime-bundles-gate` | core runtime bundle 実装ゲート（8 bundle） | partial | 8 | `product.core_runtime_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 
 ---
 ---
@@ -232,9 +232,12 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `core-runtime-bundles-gate`
 
-**Status:** not_started  
+**Status:** partial  
 **Roadmap bundle:** `product.core_runtime_bundle_gate`  
 **SSOT:** `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+
+**partial 理由:**
+設計 SSOT 点検（8 bundle 全）は完了済み。ただし gate 完了条件（実装契約確定 + backend 実装 + テスト証跡）は未達のため削除不可。次の作業として個別実装契約 Bundle への切り出しが必要。
 
 **設計 SSOT 点検結果（2026-06-15 完了）:**
 
@@ -305,6 +308,20 @@ remaining_todo:
 - bundle 単位で実装フェーズに入る際は、`.agent/routes/worktype-required-protocols.yaml` の `implementation_change` worktype を適用する
 - 実装契約の作成は `design_change` worktype として先行して行い、SSOT 側ではなく Roadmap/TODO 側で進捗を管理する
 - 依存関係の観点から secret_credential_bundle と file_storage_bundle の実装契約を優先的に着手することを推奨
+- 本 gate bundle を削除するのは、8 bundle すべての実装契約確定 + backend 実装 + テスト証跡が揃った時のみ
+
+**個別実装契約 Bundle 切り出し（未完了）:**  
+設計 SSOT 点検完了を受け、次サイクルでは以下の個別 Bundle を TODO に追加し gate からは分離する:
+- `secret-credential-implementation-contract`（他 bundle の credential injection 前提 → 優先）
+- `file-storage-implementation-contract`（export_sftp_bundle の前提 → 優先）
+- `email-implementation-contract`
+- `stripe-implementation-contract`
+- `webhook-inbox-implementation-contract`
+- `job-scheduler-implementation-contract`
+- `export-sftp-implementation-contract`（file-storage の後）
+- `audit-approval-implementation-contract`
+
+各個別 Bundle には 問題点 / 目的 / 改善方針 / 対応資料 / 対象ファイル名 / 対象関数名 を明記する。
 
 SSOT修正が必要な場合の required checks:
 - `bash .agent/tests/check-worktype-routing.sh`

@@ -577,6 +577,7 @@ system_roadmap_ssot:
         - .agent/tasks/todo.md#core-runtime-bundles-gate
       gate_inspection:
         design_ssot_inspection_status: all_eight_design_ssots_inspected_and_confirmed
+        individual_bundle_creation_status: pending
         inspect_date: "2026-06-15"
         bundles_inspected:
           email_bundle:
