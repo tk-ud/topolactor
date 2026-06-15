@@ -33,6 +33,9 @@ Skip is allowed only for typo/format-only/unrelated text cleanup with explicit `
 - implementation atom の羅列（alias追加/adapter接続/emit追加等）を canonical TODO として列挙することは禁止。
 - TODO には対象 roadmap entry と `completion_condition` / `known_gap_ref` を紐づける。
 - non-blocker carry-over は分類タグ付きで許可するが、SSOT completion_condition 未達を non-blocker 扱いしてはならない。
+- 既存抽象・既存基板・既存回路で表現できるものを、小粒専用実装（route / UI / helper / API wrapper 等）としてTODO化してはならない。
+- backend / UI / route / helper の implementation atom 分割で completion bundle を偽装してはならない。
+- reusable abstraction / architecture substrate restoration が必要な場合は、roadmap completion bundle 単位のTODOとして扱う。
 
 ### 残すべき TODO 候補
 
