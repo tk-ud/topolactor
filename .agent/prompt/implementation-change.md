@@ -25,6 +25,53 @@ Worktype is `implementation_change`.
 - runtime/persistence/projection change -> scenario-contract
 - policy/scoring/threshold change -> policy-judgment
 
+
+## Substrate Plan (required before implementation when substrate surfaces change)
+
+When adding or changing any route / island / frontend API / action handler / helper / repository method / audit writer / validation flow / status transition flow, create this plan before implementation:
+
+```markdown
+## Substrate Plan
+
+- hardcoded runtime substrate:
+- seed-defined entity/projection/action/UI surface:
+- data-defined mapping:
+- reusable abstraction:
+- runtime/admin data:
+- external authority boundary:
+- existing substrate reused:
+- new substrate required:
+- explicit SSOT exception, if any:
+```
+
+Before implementation, check whether the requested behavior can be expressed by existing substrate:
+
+- existing seed/entity/projection/action surfaces
+- existing dispatch -> entity -> runtime circuit
+- existing frontend command lane
+- existing admin_runtime action pattern
+- existing repository pattern
+- existing audit append pattern
+- existing validation result persistence pattern
+- existing status transition helper or lifecycle pattern
+- existing enum/dictionary/select projection pattern
+
+Reusable substrate must be preferred before adding one-off implementation. If existing substrate is insufficient, add a reusable abstraction suitable for future bundles rather than a narrow one-off implementation, unless an explicit SSOT exception exists. This applies to frontend API wrappers, action handlers, dispatch payload mappers, projection builders, form/table renderers, repository methods, audit writers, validation flows, status transition flows, and provider compatibility checkers.
+
+Use `docs/design/runtime-orchestration-ssot.yaml` boundaries before coding:
+
+- hardcode allowed: runtime port, runtime handler, runtime skeleton, scheduler / dispatcher skeleton, endpoint shape, and abstract function shape when explicitly registered in SSOT.
+- seed/data-defined required: UI schema, form/table projection, action buttons, action wiring, dispatch payload mapping, admin surface registration, entity operation binding, projection constructor mapping, function parameters, and runtime mapping where SSOT treats mapping as data-defined.
+
+Forbidden for implementation agents:
+
+- Do not add UI that can be expressed by existing seed/entity/projection/action substrate as a dedicated route or island.
+- Do not add an action that can use the existing dispatch -> entity -> runtime circuit as a dedicated frontend API wrapper.
+- Do not add one-off helpers for behavior covered by existing repository / audit / validation / status transition patterns.
+- Do not create implementation-first shape and then add SSOT text to ratify it.
+- Do not confuse hardcode-allowed runtime ports with UI/action/mapping surfaces that must be seed/data-defined.
+- Do not proliferate narrow dedicated helpers that future bundles cannot reuse.
+
 ## output_shape
 scope, implementation delta, protocol decisions, foundation_ssot_read_judgment, todo_granularity_judgment, check results
 legacy_minimum_shape: scope, implementation delta, protocol decisions, todo_granularity_judgment, check results

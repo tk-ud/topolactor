@@ -26,6 +26,7 @@ Worktype is `audit`, including any of:
 - roadmap target milestone/unlocks and related implementation_registry entry
 - diff-target implementation files
 - .agent/protocols/audit.md
+- Gate 0 architecture substrate / reusable abstraction conformance from `.agent/protocols/audit.md`
 - target-specific SSOT discovery after top-level baseline:
   - .agent/docs/ssot-map.yaml (surface-specific discovery; do not replace top-level baseline reads)
 
@@ -51,6 +52,14 @@ Worktype is `audit`, including any of:
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
 - Repo implementation checked: yes/no (yes は実際に読んだ実装ファイル・テストのリストを出力必須; リストなしの yes は無効)
+- Architecture substrate judgment:
+  - runtime port hardcode:
+  - UI surface:
+  - action wiring:
+  - dispatch/entity circuit:
+  - reusable abstraction usage:
+  - new route/island/frontend API necessity:
+  - SSOT update classification:
 - problem
 - purpose
 - improvement_policy

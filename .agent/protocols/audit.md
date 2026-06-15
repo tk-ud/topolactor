@@ -24,6 +24,58 @@ Semantic PR/diff audit, merge judgment, or summary-truth verification requested.
 ## judgment_scope
 Implementation meaning consistency against stated intent and roadmap/todo status.
 
+
+## Gate 0: Architecture substrate and reusable abstraction conformance
+
+Before implementation completeness judgment, the auditor must classify every changed surface by architecture substrate:
+
+- `hardcoded runtime substrate`
+- `seed-defined entity / projection / action / UI surface`
+- `data-defined runtime/admin mapping`
+- `runtime/admin data`
+- `secret or external authority boundary`
+
+### hardcode allowed / seed-data-defined required boundary
+
+Use `docs/design/runtime-orchestration-ssot.yaml` boundaries as the judgment source. Hardcode is allowed only for:
+
+- runtime port
+- runtime handler
+- runtime skeleton
+- scheduler / dispatcher skeleton
+- endpoint shape
+- abstract function shape, when explicitly registered in SSOT
+
+Seed/data-defined representation is required for:
+
+- UI schema
+- form/table projection
+- action buttons
+- action wiring
+- dispatch payload mapping
+- admin surface registration
+- entity operation binding
+- projection constructor mapping
+- function parameters
+- runtime mapping where SSOT treats mapping as data-defined
+
+### reusable abstraction first rule
+
+Before accepting a new route, island, frontend API wrapper, action handler, helper, repository method, audit writer, validation flow, or status transition flow, the auditor must check whether existing reusable substrate can express the behavior.
+
+Reusable substrate must be preferred. If existing substrate is insufficient, the implementation must add a reusable abstraction suitable for future bundles rather than a narrow one-off implementation, unless an explicit SSOT exception exists.
+
+For each new route / island / frontend API / action handler / helper addition, the auditor must ask:
+
+- Can this be expressed through existing seed/entity/projection/action substrate?
+- Can this use the existing dispatch -> entity -> runtime circuit?
+- Can this use existing repository / audit / validation / status transition abstractions?
+- If a new abstraction is necessary, is it reusable by future bundles rather than narrow one-off code?
+
+Implementation-first shape must not pass by adding matching SSOT text after the fact. The auditor must classify each SSOT update as either `design-conformant` or `deviation-ratification`, and `deviation-ratification` cannot be used as an approval basis unless the SSOT explicitly creates an exception and explains why the substrate route is impossible.
+
+Gate 0 is blocking: a completeness judgment is invalid when this classification is omitted or when a dedicated implementation bypass is accepted without the checks above.
+
 ## evidence_based_classification
 
 For each implementation/status claim, auditor must classify by evidence only.
@@ -102,6 +154,14 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
 - Repo implementation checked: yes/no (yes は実際に読んだ実装ファイル・テストのリストを必須とする; ファイル・テスト読取なしの yes は無効 → Merge judgment: invalid audit / blocking)
+- Architecture substrate judgment:
+  - runtime port hardcode: pass/partial/fail + evidence
+  - UI surface: pass/partial/fail + evidence
+  - action wiring: pass/partial/fail + evidence
+  - dispatch/entity circuit: pass/partial/fail + evidence
+  - reusable abstraction usage: pass/partial/fail + evidence
+  - new route/island/frontend API necessity: pass/partial/fail + evidence
+  - SSOT update classification: pass/partial/fail + `design-conformant` or `deviation-ratification`
 - problem
 - purpose
 - improvement_policy
@@ -127,6 +187,12 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 - representative route / skeleton / ACK-only / partial wiring を implemented 根拠にしない
 - SSOT + コード + テストを読まずに実装実態が implemented かもしれないという保守的理由で partial/skeleton を保持しない（underclaim）
 - "overclaim を避けるため" という理由のみで、証拠が supported する implemented を抑制しない
+- 新規 dedicated route を、SSOT route registry へ追加するだけで合格扱いしない
+- 新規 dedicated island を、UIが存在するという理由だけで合格扱いしない
+- 新規 frontend API wrapper を、backend runtimeに到達できるという理由だけで合格扱いしない
+- dispatch -> entity -> runtime の既存回路を迂回する実装を、SSOT未登録だけの問題として扱わない
+- 既存抽象・共通関数・共通基板で表現できる処理を、専用処理として認めない
+- 実装を正本としてSSOTを後追いさせない
 
 
 ## todo_roadmap_finalization_gate
@@ -209,6 +275,7 @@ Auditor must treat the following as **blocking** (not non-blocker carry-over):
   - target_functions
   - todo
   - remaining_todo
+  - Architecture substrate judgment
 - Required alignment surfaces explicitly cross-checked.
 - Semantic findings grounded in diff + implementation reality.
 - `implemented` 判定時、roadmap/TODO/SSOT completion_condition 充足を明示できる。

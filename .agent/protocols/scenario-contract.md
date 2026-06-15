@@ -19,6 +19,20 @@ Before creating scenario contract:
 
 A scenario contract without docs/ SSOT reload is invalid.
 
+
+## Substrate Contract
+
+For changes that add or alter UI/action/runtime/admin surfaces, the scenario contract must declare before implementation:
+
+- which surfaces are hardcoded runtime substrate
+- which surfaces are seed-defined or data-defined
+- which existing abstractions are reused
+- which new reusable abstractions are introduced
+- why any dedicated route/island/API/helper is necessary
+- which SSOT grants the exception, if any
+
+A scenario contract that omits this declaration for touched UI/action/runtime/admin surfaces is invalid. Dedicated route / island / frontend API / helper additions require explicit proof that existing seed/entity/projection/action, dispatch -> entity -> runtime, repository, audit, validation, or lifecycle substrate cannot express the behavior.
+
 ## Position in completion sequence
 
 - Scenario Contract is created before implementation (intent fixation stage).
