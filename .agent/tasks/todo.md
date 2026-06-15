@@ -8,7 +8,6 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
-| `db-init-compose-volume-reset-contract` | DB 初期構築 init.sql 正本化 / migration 運用廃止 | not_started | 1 | - | `docs/design/db-schema.yaml`, `db/README.md`, `db/init.sql` |
 | `retire-legacy-demo-seed-runtime` | 旧 demo seed/runtime 退役 cleanup | partial | 10 | `cleanup.legacy_demo_seed_runtime` | `docs/framework-core.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
@@ -22,58 +21,6 @@
 | `audit-approval-implementation-contract` | audit_approval_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
 | `export-sftp-implementation-contract` | export_sftp_bundle 実装契約（file-storage 後） | not_started | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
----
-## Bundle `db-init-compose-volume-reset-contract`
-
-**Status:** not_started  
-**SSOT:** `docs/design/db-schema.yaml`, `db/README.md`, `db/init.sql`
-
-問題点:
-現状の DB 初期構築は `db/init.sql` から `db/migrations/` や `db/patches/` 配下の SQL を順次 include しており、ファイル名・README・SSOT 上にも migration / patch 運用前提の記述が残っている。運用実態は既存 DB への差分適用ではなく、`docker compose -v` による volume 破棄後の fresh bootstrap を正本とするため、migration 運用前提が残ると今後の bundle 実装で `db/migrations/` 追加や既存 DB 差分適用が完了条件として誤採用される。
-
-目的:
-DB 初期構築の正本を `docker compose -v` 後に実行される `db/init.sql` に統一し、`db/migrations/` / `db/patches/` 配下の既存 SQL も含めて fresh bootstrap 用 SQL として整理する。既存 DB 差分適用としての migration 運用は廃止し、今後の DB schema 追加は `init.sql` 配下の初期構築経路に統合する。
-
-改善方針:
-- [ ] `docs/design/db-schema.yaml` に、DB schema 正本は `docker compose -v` 後の `db/init.sql` fresh bootstrap であり、既存 DB migration 運用は廃止することを明記する
-- [ ] `db/README.md` に、標準手順は `docker compose -v` による volume 破棄からの再初期化であり、host-side `psql -f db/migrations/*.sql` による段階適用を標準運用にしないことを明記する
-- [ ] `db/init.sql` が `db/` 配下の現行 bootstrap 必要 SQL をすべて明示順序で実行することを確認・整理する
-- [ ] `db/migrations/` 配下の SQL を、差分 migration ではなく fresh bootstrap include 対象として扱うか、適切な初期構築 SQL へ統合する方針を確定する
-- [ ] `db/patches/` 配下の SQL を、差分 patch ではなく fresh bootstrap include 対象として扱うか、適切な初期構築 SQL へ統合する方針を確定する
-- [ ] 今後の runtime bundle TODO から `db/migrations/` 追加を完了条件にしないよう、credential / file-storage / email / stripe / webhook / job-scheduler / audit-approval などの対象ファイル記述を `db/init.sql` 初期構築経路へ修正する
-- [ ] CI / test / docs に残る “migration を手動適用すればよい” 前提を探索し、fresh bootstrap 前提へ更新する
-- [ ] `docker compose -v` 後の fresh DB 起動で auth / enum / topology / manifest / UI topology / preset / runtime dispatch に必要な schema と seed が構築されることを検証する
-
-対応資料:
-- `docs/design/db-schema.yaml`
-- `db/README.md`
-- `db/init.sql`
-- `infra/docker-compose.yml`
-- `.github/workflows/*`
-- `.agent/tasks/todo.md`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/pipeline-continuity-ssot.yaml`
-
-対象ファイル名:
-- `docs/design/db-schema.yaml`
-- `db/README.md`
-- `db/init.sql`
-- `db/migrations/**`
-- `db/patches/**`
-- `db/*.sql`
-- `.github/workflows/*`
-- `.agent/tasks/todo.md`
-
-対象関数名:
-- なし（DB 初期構築運用境界の整理 Bundle）
-
-完了条件:
-- `docs/design/db-schema.yaml` が migration 運用廃止と `docker compose -v` fresh bootstrap 正本を明記している
-- `db/README.md` が標準 DB 初期化手順を `docker compose -v` + `db/init.sql` として説明している
-- `db/init.sql` が現行 DB 初期構築の唯一の compose entrypoint として成立している
-- `db/migrations/` / `db/patches/` が既存 DB 差分適用の正本ではないことが docs / SSOT / TODO 上で明確になっている
-- 今後の bundle TODO が `db/migrations/` 追加を前提にしていない
-- fresh volume からの compose 起動で DB bootstrap が再現できる
 ---
 
 ## Bundle `retire-legacy-demo-seed-runtime`
@@ -320,7 +267,7 @@ secret_credential_bundle の実装契約を確定し、credential 管理基盤�
 - `backend/schema/SecretCredentialBundleContracts.cs`
 - `backend/tests/Topolactor.Runtime.Tests/SecretCredentialBundleRuntimeTests.cs`
 - `backend/Program.cs`（handler dictionary 登録）
-- `db/migrations/` 内に credential_reference テーブル migration
+- `db/init.sql` bootstrap 経路に credential_reference テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
 
 対象関数名:
 - `SecretCredentialBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
@@ -360,7 +307,7 @@ file_storage_bundle の実装契約を確定し、export_job を通じた file w
 - `backend/schema/FileStorageBundleContracts.cs`
 - `backend/tests/Topolactor.Runtime.Tests/FileStorageBundleRuntimeTests.cs`
 - `backend/Program.cs`（handler dictionary 登録）
-- `db/migrations/` 内に export_job / file_artifact テーブル migration
+- `db/init.sql` bootstrap 経路に export_job / file_artifact テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
 
 対象関数名:
 - `FileStorageBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
@@ -400,7 +347,7 @@ email_bundle の実装契約を確定し、UI approval → backend dispatch → 
 - `backend/schema/EmailBundleContracts.cs`
 - `backend/tests/Topolactor.Runtime.Tests/EmailBundleRuntimeTests.cs`
 - `backend/Program.cs`（handler dictionary 登録）
-- `db/migrations/` 内に email_draft / email_delivery_log テーブル migration
+- `db/init.sql` bootstrap 経路に email_draft / email_delivery_log テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
 
 対象関数名:
 - `EmailBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
@@ -438,7 +385,7 @@ stripe_bundle の実装契約を確定し、webhook intake → signature verific
 - `backend/schema/StripeBundleContracts.cs`
 - `backend/tests/Topolactor.Runtime.Tests/StripeBundleRuntimeTests.cs`
 - `backend/Program.cs`（handler dictionary 登録）
-- `db/migrations/` 内に stripe_webhook_inbox / payment_state テーブル migration
+- `db/init.sql` bootstrap 経路に stripe_webhook_inbox / payment_state テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
 
 対象関数名:
 - `StripeBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
@@ -476,7 +423,7 @@ webhook_inbox_bundle の実装契約を確定し、webhook → signature verific
 - `backend/schema/WebhookInboxBundleContracts.cs`
 - `backend/tests/Topolactor.Runtime.Tests/WebhookInboxBundleRuntimeTests.cs`
 - `backend/Program.cs`（handler dictionary 登録）
-- `db/migrations/` 内に webhook_intake / intake_snapshot テーブル migration
+- `db/init.sql` bootstrap 経路に webhook_intake / intake_snapshot テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
 
 対象関数名:
 - `WebhookInboxBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
@@ -515,7 +462,7 @@ job_scheduler_bundle の実装契約を確定し、cron / hook / client trigger 
 - `backend/schema/JobSchedulerBundleContracts.cs`
 - `backend/tests/Topolactor.Runtime.Tests/JobSchedulerBundleRuntimeTests.cs`
 - `backend/Program.cs`（handler dictionary 登録）
-- `db/migrations/` 内に job_queue テーブル migration
+- `db/init.sql` bootstrap 経路に job_queue テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
 
 対象関数名:
 - `JobSchedulerBundleRuntime.ExecuteAsync` (IDispatchableRuntime)
@@ -555,7 +502,7 @@ audit_approval_bundle の実装契約を確定し、承認フロー（UI human a
 - `backend/schema/AuditApprovalBundleContracts.cs`
 - `backend/tests/Topolactor.Runtime.Tests/AuditApprovalBundleRuntimeTests.cs`
 - `backend/Program.cs`（handler dictionary 登録）
-- `db/migrations/` 内に approval_request / export_job_approval テーブル migration
+- `db/init.sql` bootstrap 経路に approval_request / export_job_approval テーブル DDL を追加（`db/*.sql` canonical ファイルとして作成し `db/init.sql` に include する）
 
 対象関数名:
 - `AuditApprovalBundleRuntime.ExecuteAsync` (IDispatchableRuntime)

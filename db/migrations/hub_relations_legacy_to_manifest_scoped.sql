@@ -19,6 +19,10 @@
 -- Run manually on existing DBs that still carry legacy hub_relations columns:
 --   psql -d <database> -f db/migrations/hub_relations_legacy_to_manifest_scoped.sql
 --
+-- NOTE: This file is retained as a data-preserving utility for existing DBs with legacy shape.
+-- Fresh bootstrap via docker compose -v uses db/init.sql which creates the canonical shape directly.
+-- db/migrations/ is retired as a standard bootstrap path as of 2026-06-15.
+--
 -- SSOT: docs/design/db-schema.yaml compatibility_history.hub_relations_legacy_global_graph
 -- =============================================================================
 

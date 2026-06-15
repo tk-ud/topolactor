@@ -1,6 +1,6 @@
 -- =============================================================================
--- team_markdown_registry_tables.sql
--- Migration: topology.team_markdown_* tables for Team Markdown Dashboard Saved View.
+-- team_markdown_tables.sql
+-- Canonical: topology.team_markdown_* tables for Team Markdown Dashboard Saved View.
 --
 -- SSOT: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
 -- SCHEMA AUTHORITY: docs/design/db-schema.yaml (topology namespace)
@@ -17,13 +17,12 @@
 --   - rendered Markdown body is NOT the runtime SSOT
 --   - refresh uses completed_preset_seed binding_json, not Markdown body parsing
 --
+-- BOOTSTRAP POLICY: part of the canonical fresh bootstrap sequence in db/init.sql.
+-- Applied via docker-entrypoint-initdb.d/00-init.sql on fresh compose volume.
 -- IDEMPOTENT: all CREATE TABLE statements use IF NOT EXISTS.
---   Safe to re-run on an already-migrated database.
---
 -- PRECONDITION: topology schema must exist (created by db/schema.sql).
 -- =============================================================================
 
-BEGIN;
 
 -- ---------------------------------------------------------------------------
 -- topology.team_markdown_template_registry
@@ -145,4 +144,3 @@ SET template_label = EXCLUDED.template_label,
     status = 'active',
     updated_at = now();
 
-COMMIT;

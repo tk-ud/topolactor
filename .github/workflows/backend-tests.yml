@@ -11,6 +11,8 @@ on:
       - 'db/sql_attention_logs_tables.sql'
       - 'db/topology_tables.sql'
       - 'db/manifest_tables.sql'
+      - 'db/mock_preset_tables.sql'
+      - 'db/team_markdown_tables.sql'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
   push:
@@ -25,6 +27,8 @@ on:
       - 'db/sql_attention_logs_tables.sql'
       - 'db/topology_tables.sql'
       - 'db/manifest_tables.sql'
+      - 'db/mock_preset_tables.sql'
+      - 'db/team_markdown_tables.sql'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
 
@@ -69,8 +73,9 @@ jobs:
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/sql_attention_logs_tables.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/context_route_tables.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/ui_topology_tables.sql
-          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/migrations/mock_preset_registry_tables.sql
-          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/migrations/team_markdown_registry_tables.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/topology_cross_table_wiring.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/mock_preset_tables.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/team_markdown_tables.sql
 
       - name: Run backend tests
         run: bash .agent/tests/check-backend-tests.sh
