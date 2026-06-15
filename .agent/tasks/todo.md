@@ -12,8 +12,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `secret-credential-backend-contract` | secret_credential_bundle バックエンド実装契約 | acceptance_pending | 1 | - | `docs/design/runtime-bundle-secret-credential-ssot.yaml` |
-| `credential-registration-ui-contract` | credential 登録 admin UI bundle | not_started | 1 | - | `docs/design/runtime-bundle-secret-credential-ssot.yaml` |
+| `secret-credential-implementation-contract` | secret_credential_bundle 実装契約 | acceptance_pending | 1 | - | `docs/design/runtime-bundle-secret-credential-ssot.yaml` |
 | `file-storage-implementation-contract` | file_storage_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-implementation-contract` | email_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-implementation-contract` | stripe_bundle 実装契約 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
@@ -237,64 +236,57 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ---
 
-## Bundle `secret-credential-backend-contract`
+## Bundle `secret-credential-implementation-contract`
 
 **Status:** acceptance_pending  
 **SSOT:** `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 
 問題点:
-secret_credential_bundle バックエンド実装（credential_reference_schema / secret_store_adapter / credential_rotation_service / credential_validation_service / credential_injection_pattern）が実装済み。admin UI コンポーネント境界（credential_registration_ui）は別 bundle として分離。
+secret_credential_bundle 設計 SSOT 点検済み（authority_boundary: admin_config_and_runtime_secret_store / trigger_kind: admin_config_credential_registration）。credential 管理基盤（参照登録 / rotation / validation / runtime injection）および admin UI を bundle 単位で実装完了。
 
 目的:
-secret_credential_bundle のバックエンド契約（DB schema / store adapter / runtime handler / validation / audit log）を bundle 単位で実装完了とし、後続 bundle（email / stripe / webhook_inbox / export_sftp）が ICredentialStore 境界に依存できる状態にする。
+secret_credential_bundle を後続 bundle（email / stripe / webhook_inbox / export_sftp）の credential injection 基盤として実装完了とする。
 
 実装済み範囲:
-- [x] credential_reference_schema（db/credential_reference_tables.sql）
+- [x] credential_reference_schema（db/credential_reference_tables.sql: topology.credential_references + logs.credential_audit_log）
 - [x] secret_store_adapter（ICredentialStore / EnvironmentVariableCredentialStore）
-- [x] credential_rotation_service（rotate action: rotation_actor_id UUID 必須 / post-rotation ValidateAsync）
-- [x] credential_validation_service（registration / rotation / runtime startup での ValidateAsync）
+- [x] credential_validation_service（CredentialValidationService.ValidateAsync: registration / rotation での検証）
+- [x] credential_rotation_service（rotate action: rotation_actor_id 必須 / post-rotation ValidateAsync / explicit audit failure）
 - [x] credential_injection_pattern（ICredentialStore.GetAsync / SetAsync）
 - [x] register: ICredentialStore.SetAsync → fail-close（SECRET_STORE_UNAVAILABLE / CREDENTIAL_STORE_BINDING_FAILED）
-- [x] register: 登録成功時に credential_registered audit event 記録
-- [x] rotate: rotation_actor_id を UUID として検証（admin user ID 形式）
-- [x] rotate: UpdateRotationTimestampAsync → audit append → ValidateAsync（すべて explicit failure）
+- [x] register: 登録成功時に credential_registered audit event 記録（audit failure = explicit error）
 - [x] audit write failure を silent に swallow しない（CREDENTIAL_AUDIT_WRITE_FAILED で明示返却）
 - [x] 実 credential 値を public SSOT / コード / audit log に含めない設計
 - [x] IDispatchableRuntime.ExecuteAsync として実装（SecretCredentialBundleRuntime）
-- [x] 25 unit tests（全ての SSOT 境界を網羅）
+- [x] AdminRuntime.credential_registry 層（credential_registry:list/register/validate/rotate → SecretCredentialBundleRuntime 委譲）
+- [x] credential_registration_ui（AdminCredentialPanel.tsx: 登録フォーム / 一覧 / 検証 / rotation 操作フロー）
+- [x] admin UI は credential 実値を一切表示しない境界を維持
+- [x] rotation: JWT sub（admin username）を rotation_actor_id として使用（auth/admin 境界に接続）
+- [x] /admin/credentials route（AdminAuthGate 下に配置）
+- [x] 24 unit tests（全ての SSOT 境界を網羅）
 
-今回更新した範囲 (2026-06-15 audit fix):
-- 更新: `backend/runtime/SecretCredentialBundleRuntime.cs`（register: SetAsync + audit event, validate: try-catch wrapper, rotate: UUID check + ValidateAsync + explicit audit failure）
-- 更新: `backend/runtime/CredentialValidationService.cs`（AppendAuditAsync の silent swallow 削除）
-- 更新: `backend/tests/Topolactor.Runtime.Tests/SecretCredentialBundleRuntimeTests.cs`（5 tests 追加: store unavailable at register, binding failed, audit event, UUID actor validation, post-rotation absent）
+今回実装した範囲（全コミット）:
+- 新規: `db/credential_reference_tables.sql`
+- 更新: `db/init.sql`
+- 新規: `backend/schema/SecretCredentialBundleContracts.cs`
+- 新規: `backend/repository/CredentialReferenceRepository.cs`
+- 新規: `backend/repository/NpgsqlCredentialReferenceRepository.cs`
+- 新規: `backend/runtime/EnvironmentVariableCredentialStore.cs`
+- 新規: `backend/runtime/CredentialValidationService.cs`
+- 新規: `backend/runtime/SecretCredentialBundleRuntime.cs`
+- 新規: `backend/runtime/AdminRuntime.Credential.cs`（credential_registry 層）
+- 更新: `backend/runtime/AdminRuntime.cs`（credential_registry switch cases）
+- 更新: `backend/Program.cs`（DI 登録 + handler dict + AdminRuntime への SecretCredentialBundleRuntime 注入）
+- 新規: `frontend/api/adminApi.ts`（credential API functions）
+- 新規: `frontend/islands/AdminCredentialPanel.tsx`
+- 新規: `frontend/routes/admin/credentials.tsx`
+- 更新: `frontend/fresh.gen.ts`（route + island 登録）
+- 新規: `backend/tests/Topolactor.Runtime.Tests/SecretCredentialBundleRuntimeTests.cs`（24 tests）
 
 対応資料:
 - `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 - `docs/design/extended-runtime-bundle-registry-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
-
----
-
-## Bundle `credential-registration-ui-contract`
-
-**Status:** not_started  
-**SSOT:** `docs/design/runtime-bundle-secret-credential-ssot.yaml`
-
-問題点:
-secret_credential_backend_contract は完了済み。admin UI から credential_reference を登録・管理するフロントエンドコンポーネントが未実装。
-
-目的:
-credential_registration_ui（admin 画面からの credential reference 登録 / rotation 操作フロー）を実装する。
-
-改善方針:
-- [ ] credential 登録フォーム（reference_key / provider_kind 入力）admin UI コンポーネントを設計する
-- [ ] rotation 操作フロー（admin actor UUID 入力 / 承認確認）を設計する
-- [ ] credential 一覧表示（reference metadata のみ、実値非表示）を設計する
-- [ ] admin UI からの dispatch 呼び出し（secret_credential_runtime: register / rotate / validate）を設計する
-- [ ] UI は credential 実値を一切表示しない境界を維持する
-
-対応資料:
-- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 
 ---
 

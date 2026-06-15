@@ -415,29 +415,12 @@ public class SecretCredentialBundleRuntimeTests
     }
 
     [Fact]
-    public async Task Rotate_ActorIdNotUUID_ReturnsExplicitError()
-    {
-        var repo = new InMemoryCredentialReferenceRepository();
-        var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
-        await RegisterCredential(runtime, "rotate_test_key_uuid", "env_var");
-
-        // rotation_actor_id must be a valid UUID (admin user IDs are UUIDs in this system)
-        var payload = BuildPayload(new { reference_key = "rotate_test_key_uuid", rotation_actor_id = "not-a-uuid" });
-        var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
-
-        var response = await runtime.ExecuteAsync(request, manifestId: null);
-
-        Assert.False(response.Success,
-            "rotation_actor_id that is not a valid UUID must be rejected");
-        Assert.Contains(response.Errors, e => e.Code == "CREDENTIAL_ROTATION_ACTOR_INVALID");
-    }
-
-    [Fact]
     public async Task Rotate_MissingReference_ReturnsExplicitError()
     {
         var runtime = BuildRuntime(new InMemoryCredentialReferenceRepository(), new AlwaysAvailableCredentialStore());
 
-        var payload = BuildPayload(new { reference_key = "nonexistent_for_rotate", rotation_actor_id = Guid.NewGuid().ToString() });
+        // rotation_actor_id is the authenticated admin username (from JWT sub claim)
+        var payload = BuildPayload(new { reference_key = "nonexistent_for_rotate", rotation_actor_id = "admin_user" });
         var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
 
         var response = await runtime.ExecuteAsync(request, manifestId: null);
@@ -453,7 +436,8 @@ public class SecretCredentialBundleRuntimeTests
         var runtime = BuildRuntime(repo, new AlwaysAvailableCredentialStore());
         await RegisterCredential(runtime, "smtp_pass_to_rotate", "env_var");
 
-        var payload = BuildPayload(new { reference_key = "smtp_pass_to_rotate", rotation_actor_id = Guid.NewGuid().ToString() });
+        // rotation_actor_id is the authenticated admin username (from JWT sub claim)
+        var payload = BuildPayload(new { reference_key = "smtp_pass_to_rotate", rotation_actor_id = "admin_user" });
         var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
 
         var response = await runtime.ExecuteAsync(request, manifestId: null);
@@ -487,7 +471,7 @@ public class SecretCredentialBundleRuntimeTests
 
         // Rotation attempt with a store where the new credential is absent
         var rotateRuntime = BuildRuntime(repo, new CredentialAbsentStore());
-        var payload = BuildPayload(new { reference_key = "post_rotate_absent_key", rotation_actor_id = Guid.NewGuid().ToString() });
+        var payload = BuildPayload(new { reference_key = "post_rotate_absent_key", rotation_actor_id = "admin_user" });
         var request = new EndpointRequestDto("Update", "credential", "config", "rotate", null, payload, null);
 
         var response = await rotateRuntime.ExecuteAsync(request, manifestId: null);

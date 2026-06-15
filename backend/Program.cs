@@ -121,7 +121,8 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<AuthMasterRepository>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
         sp.GetRequiredService<MockPresetRepository>(),
-        sp.GetRequiredService<TeamMarkdownRepository>()));
+        sp.GetRequiredService<TeamMarkdownRepository>(),
+        sp.GetRequiredService<SecretCredentialBundleRuntime>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 
 // ---------------------------------------------------------------------------

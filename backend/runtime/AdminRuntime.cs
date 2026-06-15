@@ -32,6 +32,7 @@ public partial class AdminRuntime
     private readonly SqlAttentionLogsRepository? _sqlAttentionLogsRepository;
     private readonly MockPresetRepository? _mockPresetRepository;
     private readonly TeamMarkdownRepository? _teamMarkdownRepository;
+    private readonly SecretCredentialBundleRuntime? _credentialRuntime;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -58,7 +59,8 @@ public partial class AdminRuntime
         AuthMasterRepository? authMasterRepository = null,
         SqlAttentionLogsRepository? sqlAttentionLogsRepository = null,
         MockPresetRepository? mockPresetRepository = null,
-        TeamMarkdownRepository? teamMarkdownRepository = null)
+        TeamMarkdownRepository? teamMarkdownRepository = null,
+        SecretCredentialBundleRuntime? credentialRuntime = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -78,6 +80,7 @@ public partial class AdminRuntime
         _sqlAttentionLogsRepository = sqlAttentionLogsRepository;
         _mockPresetRepository = mockPresetRepository;
         _teamMarkdownRepository = teamMarkdownRepository;
+        _credentialRuntime = credentialRuntime;
     }
 
     // ---------------------------------------------------------------------------
@@ -307,6 +310,10 @@ public partial class AdminRuntime
             "mock_preset:compile"                       => await DataMockPresetCompileAsync(vector, ct),
             "mock_preset:bind"                          => await DataMockPresetBindAsync(vector, ct),
             "mock_preset:save_mappings"                 => await DataMockPresetSaveMappingsAsync(vector, ct),
+            "credential_registry:list"     => await DataCredentialListAsync(ct),
+            "credential_registry:register" => await DataCredentialRegisterAsync(vector, ct),
+            "credential_registry:validate" => await DataCredentialValidateAsync(vector, ct),
+            "credential_registry:rotate"   => await DataCredentialRotateAsync(vector, ct),
             var a when a.StartsWith("team_markdown:", StringComparison.OrdinalIgnoreCase)
                                                         => await ExecuteTeamMarkdownAsync(vector with { Action = a["team_markdown:".Length..] }, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",

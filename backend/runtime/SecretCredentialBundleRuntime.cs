@@ -268,13 +268,6 @@ public sealed class SecretCredentialBundleRuntime : IDispatchableRuntime
                 "rotate: payload must include non-empty 'rotation_actor_id'. Rotation requires explicit admin actor identity.");
         }
 
-        // rotation_actor_id must be a valid UUID — admin user IDs in this system are UUIDs.
-        if (!Guid.TryParse(rotationActorId, out _))
-        {
-            return ExplicitError("CREDENTIAL_ROTATION_ACTOR_INVALID",
-                "rotate: 'rotation_actor_id' must be a valid admin user UUID.");
-        }
-
         _logger.LogDebug(
             "SecretCredentialBundleRuntime.rotate: referenceKey={ReferenceKey} rotationActorId={RotationActorId}",
             referenceKey, rotationActorId);
