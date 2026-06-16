@@ -310,7 +310,8 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 
 実装方針:
 - [x] `external-port-substrate-seed-coding` bundle increment: external port physical tables / seed policy-step surface / generic resolver-executor boundary を partial 実装する
-- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の DB repository atomic update / admin projection / consumer bundle connection 実装 todo を進める
+- [x] `auth-external-credential-management-topology-projection` bundle increment: auth / external credential management を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する
+- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の DB repository atomic update / consumer bundle connection 実装 todo を進める
 
 対応資料:
 - `docs/design/external-port-substrate-ssot.yaml`
@@ -343,6 +344,7 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 対象 surface 名:
 - `external_port_substrate`（共通基盤 SSOT surface）
 - `external-port-substrate-seed-coding`（parent: `external-port-substrate-implementation`, partial）
+- `auth-external-credential-management-topology-projection`（parent: `external-port-substrate-implementation`, implemented）
 - `credential_requirement`（port record 付属要件 surface）
 - `admin_setting_projection`（port 設定 admin role write surface）
 
