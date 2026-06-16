@@ -230,6 +230,42 @@ external_port_substrate_ssot:
           - created_at
           - updated_at
 
+
+  policy_step_surface:
+    purpose: DB seed-driven ordered primitive execution for external port records.
+    port_kind_allowed_values:
+      - access_port
+      - response_port
+      - hook_port
+    operation_key_allowed_values:
+      - resolve_port_record
+      - resolve_credential_reference
+      - load_encrypted_credential_payload
+      - decrypt_for_runtime_use
+      - build_http_request
+      - inject_authorization_header
+      - send_http
+      - capture_response
+      - verify_signature_by_config
+      - enqueue_scheduler_event
+      - append_runtime_event_log
+      - fail_close
+      - acquire_refresh_lease
+      - request_token_by_config
+      - write_encrypted_credential_payload
+      - update_token_hash
+      - update_expires_at_and_version
+      - release_refresh_lease
+    execution_rule: >-
+      Runtime reads topology.external_port_policy_steps ordered by step_order and dispatches
+      operation_key through a generic registry/dictionary. provider_kind and
+      required_by_bundle are data constraints only and must not select provider-specific
+      runtime handlers. hook_port policies enqueue scheduler events instead of direct
+      runtime execution.
+    physical_tables:
+      - topology.external_port_policies
+      - topology.external_port_policy_steps
+
   backend_boundary:
     owns:
       - generic_access_port_connect_function

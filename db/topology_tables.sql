@@ -412,3 +412,83 @@ CREATE INDEX IF NOT EXISTS idx_external_credential_refresh_attempt_active
 
 COMMENT ON TABLE topology.external_credential_refresh_attempt IS
     'Generic external credential refresh lease/attempt surface. Provider-specific refresh handlers and external public TokenStore surfaces are prohibited.';
+
+-- ---------------------------------------------------------------------------
+-- topology.external_access_ports / response_ports / hook_ports
+-- DB seed-driven external port record surfaces. These rows carry only routing,
+-- provider classification, credential requirement references, and projection
+-- context. Plaintext credential values are prohibited.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.external_access_ports (
+    access_port_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    required_by_bundle   TEXT        NOT NULL,
+    provider_kind        TEXT        NOT NULL,
+    url_or_env_reference TEXT        NOT NULL,
+    credential_kind      TEXT        NOT NULL CHECK (credential_kind IN ('auth', 'external', 'none')),
+    reference_key        TEXT,
+    active               BOOLEAN     NOT NULL DEFAULT true,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_external_access_ports_reference_key CHECK (credential_kind = 'none' OR reference_key IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS topology.external_response_ports (
+    response_port_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    required_by_bundle   TEXT        NOT NULL,
+    provider_kind        TEXT        NOT NULL,
+    url_or_env_reference TEXT        NOT NULL,
+    credential_kind      TEXT        NOT NULL CHECK (credential_kind IN ('auth', 'external', 'none')),
+    reference_key        TEXT,
+    active               BOOLEAN     NOT NULL DEFAULT true,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_external_response_ports_reference_key CHECK (credential_kind = 'none' OR reference_key IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS topology.external_hook_ports (
+    hook_port_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    required_by_bundle TEXT        NOT NULL,
+    provider_kind      TEXT        NOT NULL,
+    hook_path          TEXT        NOT NULL,
+    header_key         TEXT,
+    route_key          TEXT        NOT NULL,
+    credential_kind    TEXT        NOT NULL CHECK (credential_kind IN ('auth', 'external', 'none')),
+    reference_key      TEXT,
+    active             BOOLEAN     NOT NULL DEFAULT true,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_external_hook_ports_reference_key CHECK (credential_kind = 'none' OR reference_key IS NOT NULL)
+);
+
+CREATE INDEX IF NOT EXISTS idx_external_access_ports_bundle_provider ON topology.external_access_ports (required_by_bundle, provider_kind) WHERE active = true;
+CREATE INDEX IF NOT EXISTS idx_external_response_ports_bundle_provider ON topology.external_response_ports (required_by_bundle, provider_kind) WHERE active = true;
+CREATE INDEX IF NOT EXISTS idx_external_hook_ports_route ON topology.external_hook_ports (hook_path, route_key, provider_kind) WHERE active = true;
+
+COMMENT ON TABLE topology.external_access_ports IS 'Seed-driven access_port records for external_port_substrate. provider_kind is data only; no plaintext credentials.';
+COMMENT ON TABLE topology.external_response_ports IS 'Seed-driven response_port records for external_port_substrate. provider_kind is data only; no plaintext credentials.';
+COMMENT ON TABLE topology.external_hook_ports IS 'Seed-driven hook_port records. Webhook handling must enqueue scheduler events and must not directly execute runtime.';
+
+CREATE TABLE IF NOT EXISTS topology.external_port_policies (
+    policy_id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    policy_key         TEXT        NOT NULL UNIQUE,
+    port_kind          TEXT        NOT NULL CHECK (port_kind IN ('access_port', 'response_port', 'hook_port')),
+    required_by_bundle TEXT        NOT NULL,
+    active             BOOLEAN     NOT NULL DEFAULT true,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.external_port_policy_steps (
+    policy_step_id UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    policy_id      UUID        NOT NULL REFERENCES topology.external_port_policies (policy_id) ON DELETE CASCADE,
+    step_order     INTEGER     NOT NULL CHECK (step_order > 0),
+    operation_key  TEXT        NOT NULL CHECK (operation_key IN ('resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload','decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http','capture_response','verify_signature_by_config','enqueue_scheduler_event','append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config','write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version','release_refresh_lease')),
+    step_config    JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    active         BOOLEAN     NOT NULL DEFAULT true,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (policy_id, step_order)
+);
+
+COMMENT ON TABLE topology.external_port_policies IS 'Seed-driven policy surface for external port generic primitive execution.';
+COMMENT ON TABLE topology.external_port_policy_steps IS 'Ordered operation_key steps. operation_key values are constrained to external-port SSOT allowed values.';

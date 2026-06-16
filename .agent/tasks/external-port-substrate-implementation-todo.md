@@ -126,3 +126,57 @@ partial / minimal primitive skeleton
 - `bash .agent/tests/check-completion-judgment.sh`
 - `bash .agent/tests/check-runtime-bundle-ssots.sh`
 - `bash .agent/tests/check-structure.sh`
+
+## Bundle increment `external-port-substrate-seed-coding`
+
+Status: partial
+Parent bundle: `external-port-substrate-implementation`
+
+問題点:
+- credential vault / generic refresher skeleton exists, but access_port / response_port / hook_port records and DB policy-step seed execution surface were not yet represented as runnable substrate.
+- provider-specific runtime handlers remain prohibited; provider_kind must stay seed/record data rather than C# control flow.
+
+目的:
+- Add DB seed-driven external port physical tables and generic ordered policy-step runtime substrate so consumer bundles can later bind through records instead of provider-specific services.
+
+改善方針:
+- Add minimal physical tables for `topology.external_access_ports`, `topology.external_response_ports`, `topology.external_hook_ports`, `topology.external_port_policies`, and `topology.external_port_policy_steps`.
+- Add seed policy rows whose `operation_key` values are constrained to the external-port SSOT allowed set.
+- Add generic resolver/executor C# records and interfaces; execution dispatch is by operation_key registry only.
+- Keep hook policies at scheduler enqueue boundary; do not directly execute webhook runtime.
+
+対応資料:
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
+- `docs/design/auth-db-session-credential-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+
+対象ファイル名:
+- `docs/design/external-port-substrate-ssot.yaml`
+- `db/topology_tables.sql`
+- `db/seed_empty.sql`
+- `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
+- `.agent/tests/check-external-port-substrate-seed-coding.sh`
+- `.agent/tasks/todo.md`
+- `.agent/tasks/external-port-substrate-implementation-todo.md`
+
+対象関数名またはruntime境界名:
+- `ExternalPortRecord`
+- `ExternalPortPolicy`
+- `ExternalPortPolicyStep`
+- `IExternalPortResolver`
+- `IExternalPortPolicyRepository`
+- `IExternalPortCredentialReferenceResolver`
+- `IExternalPortPolicyStepExecutor`
+- `ExternalPortResolver.ResolveAsync`
+- `ExternalPortResolver.FailCloseOnInvalidPortRecord`
+- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
+- `ExternalPortPolicyStepExecutor.ExecuteAsync`
+
+remaining_todo:
+- DB-backed `IExternalPortPolicyRepository` implementation is not implemented yet.
+- DB repository atomic encrypted credential payload update remains in the parent credential-vault bundle.
+- Admin setting projection, validate/preview/apply integration, and consumer bundle wiring remain out of scope for this partial increment.

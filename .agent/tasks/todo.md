@@ -26,8 +26,8 @@
 
 ## Bundle `retire-legacy-demo-seed-runtime`
 
-**Status:** partial  
-**Roadmap/status SSOT:** `cleanup.legacy_demo_seed_runtime`（TODO cleanup lane。実装状態の正本は実コード・テスト・SSOT 確認）  
+**Status:** partial
+**Roadmap/status SSOT:** `cleanup.legacy_demo_seed_runtime`（TODO cleanup lane。実装状態の正本は実コード・テスト・SSOT 確認）
 **SSOT:** `docs/framework-core.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`
 
 問題点:
@@ -228,7 +228,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `product-nocode-loop-acceptance`
 
-**Status:** acceptance_pending  
+**Status:** acceptance_pending
 **Roadmap/status SSOT:** `docs/system-roadmap.yaml`
 
 実装 bundle ではなく、統合 UX の手動受入 / hand-debug evidence gap。runtime dispatch loop、ProjectionShell SSE refresh、recommend child island、SQL Attention feedback projection、admin CSV/JSON import、admin authoring routes は実装済みとして扱い、未実装扱いに戻さない。
@@ -298,8 +298,8 @@ remaining_todo:
 
 ## Bundle `external-port-substrate-implementation`
 
-**Status:** not_started  
-**Roadmap/status SSOT:** `product.external_port_substrate`  
+**Status:** partial
+**Roadmap/status SSOT:** `product.external_port_substrate`
 **SSOT:** `docs/design/external-port-substrate-ssot.yaml`
 
 問題点:
@@ -309,7 +309,8 @@ external_port_substrate と external 8 bundle の SSOT 境界は確定済み。�
 SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各 runtime bundle SSOT に従って external_port_substrate と external 8 bundle の実装残を管理する。詳細作業は `.agent/tasks/external-port-substrate-implementation-todo.md` へ委譲する。
 
 実装方針:
-- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の external port tables / seed / projection / generic runtime resolution / consumer bundle connection 実装 todo を進める
+- [x] `external-port-substrate-seed-coding` bundle increment: external port physical tables / seed policy-step surface / generic resolver-executor boundary を partial 実装する
+- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の DB repository atomic update / admin projection / consumer bundle connection 実装 todo を進める
 
 対応資料:
 - `docs/design/external-port-substrate-ssot.yaml`
@@ -320,12 +321,28 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 
 対象ファイル名:
 - `docs/design/external-port-substrate-ssot.yaml`
+- `db/topology_tables.sql`
+- `db/seed_empty.sql`
+- `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
+- `.agent/tests/check-external-port-substrate-seed-coding.sh`
 - `docs/design/extended-runtime-bundle-registry-ssot.yaml`
 - `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 - `docs/system-roadmap.yaml`
 
+対象関数名またはruntime境界名:
+- `ExternalPortRecord`
+- `ExternalPortPolicy`
+- `ExternalPortPolicyStep`
+- `IExternalPortResolver`
+- `IExternalPortPolicyRepository`
+- `IExternalPortPolicyStepExecutor`
+- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
+- `ExternalPortResolver.ResolveAsync`
+
 対象 surface 名:
 - `external_port_substrate`（共通基盤 SSOT surface）
+- `external-port-substrate-seed-coding`（parent: `external-port-substrate-implementation`, partial）
 - `credential_requirement`（port record 付属要件 surface）
 - `admin_setting_projection`（port 設定 admin role write surface）
 
@@ -333,7 +350,7 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 
 ## Bundle `file-storage-port-consumer`
 
-**Status:** not_started  
+**Status:** not_started
 **SSOT:** `docs/design/runtime-bundle-file-storage-ssot.yaml`
 
 問題点:
@@ -364,7 +381,7 @@ file_storage_bundle を external_port_substrate の access_port / response_port 
 
 ## Bundle `email-port-consumer`
 
-**Status:** not_started  
+**Status:** not_started
 **SSOT:** `docs/design/runtime-bundle-email-ssot.yaml`
 
 問題点:
@@ -393,7 +410,7 @@ email_bundle を external_port_substrate の response_port（provider_kind: smtp
 
 ## Bundle `stripe-port-consumer`
 
-**Status:** not_started  
+**Status:** not_started
 **SSOT:** `docs/design/runtime-bundle-stripe-ssot.yaml`
 
 問題点:
@@ -422,7 +439,7 @@ stripe_bundle を external_port_substrate の hook_port（provider_kind: stripe�
 
 ## Bundle `webhook-inbox-port-consumer`
 
-**Status:** not_started  
+**Status:** not_started
 **SSOT:** `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
 
 問題点:
@@ -452,7 +469,7 @@ webhook_inbox_bundle を external_port_substrate の hook_port consumer とし�
 
 ## Bundle `job-scheduler-port-consumer`
 
-**Status:** not_started  
+**Status:** not_started
 **SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
 
 問題点:
@@ -483,7 +500,7 @@ job_scheduler_bundle を external_port_substrate の access_port / hook_port con
 
 ## Bundle `audit-approval-port-consumer`
 
-**Status:** not_started  
+**Status:** not_started
 **SSOT:** `docs/design/runtime-bundle-audit-approval-ssot.yaml`
 
 問題点:
@@ -513,7 +530,7 @@ audit_approval_bundle を external_port_substrate の response_port consumer と
 
 ## Bundle `export-sftp-port-consumer`
 
-**Status:** not_started  
+**Status:** not_started
 **SSOT:** `docs/design/runtime-bundle-export-sftp-ssot.yaml`
 
 問題点:
