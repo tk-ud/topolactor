@@ -963,18 +963,29 @@ admin_console_workflow_ssot:
                 priority: event binding source, not props binding
                 descriptor:
                   trigger: click | change | submit | toggle | select | input | focus | blur
-                  actionType: openModal | closeModal | toggleModal | openDrawer | closeDrawer | toggleDrawer | openDialog | closeDialog | toggleDialog | setActiveKey | setState
-                  targetNodeId: required layout_patch_json nodeId
+                  actionType: openModal | closeModal | toggleModal | openDrawer | closeDrawer | toggleDrawer | openDialog | closeDialog | toggleDialog | setActiveKey | setState | dispatchExternalPort
+                  targetNodeId: required layout_patch_json nodeId (not required for dispatchExternalPort)
                   statePath: open | activeKey
                   value: optional literal for setState/setActiveKey
+                  portTargetRef: "external-port:<portKind>:<portId>[:<routeKey>]" — required for dispatchExternalPort; must start with "external-port:"
+                  payloadFrom: optional Record<string,string> — field→source pattern map for dispatchExternalPort
+                  outputProp: optional string — response capture prop name for dispatchExternalPort
+                dispatchExternalPort_contract:
+                  scope: authoring-only; no runtime execution handler in renderEmission.ts in this bundle
+                  portTargetRef_source: DB-derived active external port candidates only (list_external_port_authoring_candidates op)
+                  provider_hardcode: prohibited
+                  runtime_handler: out of scope; deferred to a later dedicated runtime bundle
                 responsibility_split:
                   routeNavigation: frontend route change only
                   runtimeDispatch: backend dispatch lane only
                   local_ui_state_mutation: projection-local state store only
                 backend_validation:
-                  - targetNodeId must exist in layout_patch_json.nodes[]
+                  - targetNodeId must exist in layout_patch_json.nodes[] (all actionTypes except dispatchExternalPort)
                   - disclosure actions must target matching disclosure componentKind
                   - statePath/actionType unsupported values are blocking errors
+                  - dispatchExternalPort requires portTargetRef starting with "external-port:"
+                  - dispatchExternalPort payloadFrom must be object with string values if present
+                  - dispatchExternalPort outputProp must be non-empty string if present
               propBindings:
                 type: object (Record<string, PropBinding>)
                 meaning: >

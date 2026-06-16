@@ -711,6 +711,33 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     : null;
                 if (string.IsNullOrWhiteSpace(actionType))
                     return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED";
+                // dispatchExternalPort: authoring-only binding; uses portTargetRef instead of targetNodeId.
+                if (actionType == "dispatchExternalPort")
+                {
+                    var portTargetRef = interaction.TryGetProperty("portTargetRef", out var ptrEl) && ptrEl.ValueKind == JsonValueKind.String
+                        ? ptrEl.GetString()?.Trim()
+                        : null;
+                    if (string.IsNullOrWhiteSpace(portTargetRef))
+                        return "RUNTIME_INTERACTION_PORT_TARGET_REF_REQUIRED";
+                    if (!portTargetRef!.StartsWith("external-port:", StringComparison.Ordinal))
+                        return $"RUNTIME_INTERACTION_PORT_TARGET_REF_INVALID:{portTargetRef}";
+                    if (interaction.TryGetProperty("payloadFrom", out var payloadFromEl))
+                    {
+                        if (payloadFromEl.ValueKind != JsonValueKind.Object)
+                            return "RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT";
+                        foreach (var entry in payloadFromEl.EnumerateObject())
+                        {
+                            if (entry.Value.ValueKind != JsonValueKind.String)
+                                return $"RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:{entry.Name}";
+                        }
+                    }
+                    if (interaction.TryGetProperty("outputProp", out var outputPropEl))
+                    {
+                        if (outputPropEl.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(outputPropEl.GetString()))
+                            return "RUNTIME_INTERACTION_OUTPUT_PROP_MUST_BE_NONEMPTY_STRING";
+                    }
+                    continue;
+                }
                 var targetNodeId = interaction.TryGetProperty("targetNodeId", out var targetEl) && targetEl.ValueKind == JsonValueKind.String
                     ? targetEl.GetString()?.Trim()
                     : null;

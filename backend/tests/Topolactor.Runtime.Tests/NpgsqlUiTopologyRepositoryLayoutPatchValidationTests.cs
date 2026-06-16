@@ -245,4 +245,122 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.Equal("RUNTIME_INTERACTION_TARGET_NODE_NOT_FOUND:missing-modal", result.Message);
     }
 
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchExternalPort_ValidPortTargetRef_Passes()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchExternalPort", "portTargetRef": "external-port:access_port:port-abc-123" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchExternalPort_WithPayloadFromAndOutputProp_Passes()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            {
+              "trigger": "click",
+              "actionType": "dispatchExternalPort",
+              "portTargetRef": "external-port:access_port:port-abc-123",
+              "payloadFrom": { "entityId": "event.item.id", "keyword": "node:search-input.value" },
+              "outputProp": "result"
+            }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchExternalPort_MissingPortTargetRef_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchExternalPort" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_PORT_TARGET_REF_REQUIRED", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchExternalPort_MalformedPortTargetRef_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchExternalPort", "portTargetRef": "port-abc-123" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_PORT_TARGET_REF_INVALID:port-abc-123", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchExternalPort_PayloadFromNotObject_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchExternalPort", "portTargetRef": "external-port:access_port:port-abc-123", "payloadFrom": ["bad"] }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchExternalPort_PayloadFromValueNotString_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchExternalPort", "portTargetRef": "external-port:access_port:port-abc-123", "payloadFrom": { "entityId": 42 } }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:entityId", result.Message);
+    }
+
 }
