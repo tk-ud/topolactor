@@ -12,7 +12,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `external-port-substrate-db-credential-vault-refresher` | external credential vault / generic refresher minimal primitive | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
+| `external-port-substrate-db-credential-vault-refresher` | external credential vault / generic refresher DB repository atomic update | implemented | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `external-port-substrate-implementation` | external_port_substrate / external 8 bundle 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
@@ -241,7 +241,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `external-port-substrate-db-credential-vault-refresher`
 
-**Status:** partial / minimal primitive skeleton
+**Status:** implemented for DB repository atomic update / generic primitive boundary
 **Roadmap/status SSOT:** `product.external_port_substrate`
 **SSOT:** `docs/design/external-port-substrate-ssot.yaml`, `docs/design/runtime-bundle-secret-credential-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`
 
@@ -275,6 +275,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 対象ファイル名:
 - `db/topology_tables.sql`
 - `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `backend/repository/NpgsqlExternalCredentialVaultRepository.cs`
 - `backend/repository/NpgsqlExternalPortPolicyRepository.cs`
 - `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
 - `.agent/tests/check-external-port-credential-vault-refresher.sh`
@@ -293,8 +294,10 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 - `ExternalTokenRefresher.ShouldRefresh`
 - `ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential`
 
+implemented_scope:
+- DB repository atomic encrypted_payload + token_hash + expires_at/version update implementation is implemented with active-record checks, fail-close lease acquisition, refresh attempt rows, stale-version failure, and DI registration.
+
 remaining_todo:
-- DB repository atomic encrypted_payload + token_hash + expires_at/version update implementation is not implemented yet.
 - Consumer wiring, projection management surface, UI credential panel, KMS/vendor selection, and provider-specific clients remain out of scope for this bundle increment.
 
 ## Bundle `external-port-substrate-implementation`
@@ -312,7 +315,8 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 実装方針:
 - [x] `external-port-substrate-seed-coding` bundle increment: external port physical tables / seed policy-step surface / generic resolver-executor boundary を partial 実装する
 - [x] `auth-external-credential-management-topology-projection` bundle increment: auth / external credential management を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する
-- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の DB repository atomic encrypted credential update / consumer bundle connection / canonical physical binding execution todo を進める
+- [x] DB repository atomic encrypted credential update を実装する
+- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の consumer bundle connection / canonical physical binding execution todo を進める
 
 対応資料:
 - `docs/design/external-port-substrate-ssot.yaml`

@@ -77,6 +77,10 @@ builder.Services.AddSingleton<IExternalPortPolicyRepository>(sp =>
     new NpgsqlExternalPortPolicyRepository(
         sp.GetRequiredService<ILogger<NpgsqlExternalPortPolicyRepository>>(),
         connectionString));
+builder.Services.AddSingleton<IExternalCredentialVaultRepository>(sp =>
+    new NpgsqlExternalCredentialVaultRepository(
+        sp.GetRequiredService<ILogger<NpgsqlExternalCredentialVaultRepository>>(),
+        connectionString));
 builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
 builder.Services.AddSingleton<SqlAttentionEvidencePromotionRuntime>();
 builder.Services.AddSingleton<SqlAttentionTopologyProjectionRuntime>();
