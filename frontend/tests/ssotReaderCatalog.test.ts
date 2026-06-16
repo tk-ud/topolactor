@@ -43,6 +43,7 @@ const CATEGORY_KEYS = [
   "category_e_design_token",
   "category_f_calculation_topology",
   "category_g_external_lookup",
+  "category_g_media_primitives",
   "category_h_safety_guard",
 ];
 
@@ -78,23 +79,23 @@ Deno.test("ui-ux-primitive-catalog-ssot: file is readable and parseable", async 
   assert(ssot.version !== undefined, "SSOT must have version field");
 });
 
-Deno.test("ui-ux-primitive-catalog-ssot: catalog_summary declares 8 categories and 82 primitives", async () => {
+Deno.test("ui-ux-primitive-catalog-ssot: catalog_summary declares 9 categories and 84 primitives", async () => {
   const raw = await Deno.readTextFile(CATALOG_SSOT_PATH);
   const ssot = parse(raw) as UiUxSsot;
   assert(ssot.catalog_summary, "catalog_summary must exist");
   assertEquals(
     ssot.catalog_summary.total_categories,
-    8,
-    "catalog_summary.total_categories must be 8",
+    9,
+    "catalog_summary.total_categories must be 9",
   );
   assertEquals(
     ssot.catalog_summary.total_primitives,
-    82,
-    "catalog_summary.total_primitives must be 82",
+    84,
+    "catalog_summary.total_primitives must be 84",
   );
 });
 
-Deno.test("ui-ux-primitive-catalog-ssot: all 8 category keys are present", async () => {
+Deno.test("ui-ux-primitive-catalog-ssot: all 9 category keys are present", async () => {
   const raw = await Deno.readTextFile(CATALOG_SSOT_PATH);
   const ssot = parse(raw) as UiUxSsot;
   for (const key of CATEGORY_KEYS) {
