@@ -625,7 +625,7 @@ system_roadmap_ssot:
       title: External port substrate shared foundation
       status: partial
       production_ready: false
-      public_summary: Shared substrate for the 8 external integration bundles. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement boundary definition within this substrate. DB guarded credential vault DDL and generic refresher primitive skeleton are present as a minimal partial implementation; repository-backed atomic update behavior, projection management, and consumer wiring remain incomplete.
+      public_summary: Shared substrate for the 8 external integration bundles. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement boundary definition within this substrate. DB guarded credential vault DDL, generic refresher primitive skeleton, and the fixed-form auth/external credential management projection manifest seed are present as partial implementation. Repository-backed atomic update behavior, canonical physical binding execution beyond the seed/projection marker, and consumer wiring remain incomplete.
       scope:
         - external_access_ports_physical_table
         - external_response_ports_physical_table
@@ -650,7 +650,7 @@ system_roadmap_ssot:
         - external_port_tables_implementation_not_started
         - db_repository_atomic_encrypted_payload_token_hash_version_update_not_implemented
         - external_port_access_response_hook_tables_not_fully_seeded_or_connected
-        - projection_management_surface_implementation_not_started
+        - fixed_form_projection_manifest_seed_implemented_canonical_physical_binding_execution_not_wired
         - consumer_bundle_port_connection_implementation_not_started
         - credential_admin_ui_panel_out_of_scope
         - kms_or_encryption_vendor_selection_out_of_scope

@@ -22,7 +22,7 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 
 ## 問題点
 
-`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。todo 側では設計確定作業として残っていたが、実際の未処理は実装作業。DB guarded credential vault DDL と generic refresher primitive skeleton は追加済みだが、DB repository atomic update / consumer bundle wiring / projection management surface は未完了。
+`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。todo 側では設計確定作業として残っていたが、実際の未処理は実装作業。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed は追加済みだが、DB repository atomic update / consumer bundle wiring / canonical physical binding execution は未完了。
 
 ## 目的
 
@@ -32,7 +32,7 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 
 - `topology.external_access_ports`, `topology.external_response_ports`, `topology.external_hook_ports` を実装する。
 - `topology.external_credential_vault` / `topology.external_credential_refresh_attempt` は minimal DDL 済み。DB repository atomic update 実装は残作業。
-- `topology.physical_tables` catalog と external port tables の登録 / bootstrap / seed 整合を実装する。
+- `topology.physical_tables` catalog と external port tables の登録 / bootstrap / seed 整合を実装する。現状の `physical_binding` topology entry は seed/projection marker であり、canonical `screen_data_shape.tableRef` / `dbTableName` -> `topology.wiring_physical_to_package` binding execution は残作業として扱う。
 - `credential_kind` (`auth` / `external` / `none`), `port_kind` (`access_port` / `response_port` / `hook_port`), `provider_kind`, `port_setting_projection`, `consumer_bundle_binding`, `credential_requirement` を DB seed / projection で解決できるようにする。
 - [x] admin 権限の projection 側管理画面で、port record context 内の credential_kind / provider_kind / reference_key / required_by_bundle / consumer_bundle_binding を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する。
 - backend は provider 別 hardcode ではなく、汎用 access_port connect / response_port connect / hook_port receive / port record resolution のみを持つ。
@@ -198,9 +198,11 @@ Parent bundle: `external-port-substrate-implementation`
 - Reuse Step 2.5 relationIntents to join `external_port_context.auth_user_id` to active `auth.user.boundary` remote target manifest `00000000-0000-0000-0000-000000000091`.
 - Expose credential metadata only: `credential_kind`, `provider_kind`, `reference_key`, `required_by_bundle`, `port_kind`, `consumer_bundle_binding`, and policy template key.
 - Mark draft-edit / validate-preview-apply / no-UIBuilder-authority / no-physical-row-editor / policy-template-selection-only boundaries in manifest topology.
+- Classify the `physical_binding` topology entry as a seed/projection marker; canonical physical binding execution through `screen_data_shape.tableRef` / `dbTableName` and `topology.wiring_physical_to_package` remains TODO.
 - Add `.agent/tests/check-auth-external-credential-projection.sh` guard for projection presence, Step 2.5 relation, secret marker exclusion, and forbidden UI Builder / route / panel escapes.
 
 remaining_todo:
 - DB-backed `IExternalPortPolicyRepository` implementation is not implemented yet.
 - DB repository atomic encrypted credential payload update remains in the parent credential-vault bundle.
+- Canonical physical binding execution remains out of scope for this increment.
 - Consumer bundle wiring remains out of scope for this increment.
