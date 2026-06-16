@@ -2,7 +2,7 @@
 
 対象 repo: `github.com/tk-ud/topolactor`
 
-このファイルは `.agent/tasks/todo.md` の `external-port-substrate-design` / port consumer 群を、設計 todo ではなく実装 todo として扱うための詳細作業面。
+このファイルは `.agent/tasks/todo.md` の `external-port-substrate-implementation` / port consumer 群を、設計 todo ではなく実装 todo として扱うための詳細作業面。
 
 ## Status
 

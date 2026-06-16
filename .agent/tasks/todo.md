@@ -12,14 +12,14 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `external-port-substrate-design` | external_port_substrate 共通基盤 SSOT 設計 | not_started | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
-| `file-storage-port-consumer` | file_storage_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
-| `email-port-consumer` | email_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
-| `stripe-port-consumer` | stripe_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
-| `webhook-inbox-port-consumer` | webhook_inbox_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
-| `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
-| `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
-| `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続設計 | not_started | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
+| `external-port-substrate-implementation` | external_port_substrate / external 8 bundle 実装 todo | not_started | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
+| `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
+| `email-port-consumer` | email_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
+| `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
+| `webhook-inbox-port-consumer` | webhook_inbox_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
+| `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
+| `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
+| `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
 ---
 
@@ -236,25 +236,20 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ---
 
-## Bundle `external-port-substrate-design`
+## Bundle `external-port-substrate-implementation`
 
 **Status:** not_started  
 **Roadmap/status SSOT:** `product.external_port_substrate`  
 **SSOT:** `docs/design/external-port-substrate-ssot.yaml`
 
 問題点:
-外部連携 8 Bundle がそれぞれ独立した credential 管理 plane（dedicated runtime / admin UI / audit log / rotation service）を持つ設計になっていた。secret_credential_bundle を独立実装 Bundle として扱い、credential 管理の主体を credential 自体に置いていた。port record（access_port / response_port / hook_port）が設計の主体ではなく、credential が主体になっていた。この設計は prohibited として明示された（SecretCredentialBundleRuntime / dedicated_credential_runtime / credential_rotation_service 等）。
+external_port_substrate と external 8 bundle の SSOT 境界は確定済み。残作業は設計確定ではなく、DB seed / record / projection 解決、generic access/response/hook connect/receive、各 consumer bundle 接続を実装すること。
 
 目的:
-外部連携 8 Bundle の共通基盤として external_port_substrate を確立する。access_port / response_port / hook_port を物理テーブルとして定義し、credential_requirement を port record 付属要件として管理する。secret_credential_bundle は独立 Bundle ではなく本 substrate の credential_requirement 境界定義として統合する。admin role write policy による port 設定管理を確立する。
+SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各 runtime bundle SSOT に従って external_port_substrate と external 8 bundle の実装残を管理する。詳細作業は `.agent/tasks/external-port-substrate-implementation-todo.md` へ委譲する。
 
-改善方針:
-- [ ] external_port_substrate SSOT（access_port / response_port / hook_port / credential_requirement / admin_role_write_policy）境界定義を確定する
-- [ ] external_access_ports / external_response_ports / external_hook_ports 物理テーブル設計を確定する（topology schema）
-- [ ] credential_kind（auth | external | none）の port record 付属 seed / projection 設計を確定する
-- [ ] admin role による port 設定 validate → preview → apply 境界を確定する
-- [ ] 8 Bundle すべての port_substrate_relation（consumer bundle 対応）を SSOT で確定する
-- [ ] system-roadmap.yaml に product.external_port_substrate エントリを追加する
+実装方針:
+- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の external port tables / seed / projection / generic runtime resolution / consumer bundle connection 実装 todo を進める
 
 対応資料:
 - `docs/design/external-port-substrate-ssot.yaml`
@@ -282,15 +277,15 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 **SSOT:** `docs/design/runtime-bundle-file-storage-ssot.yaml`
 
 問題点:
-file_storage_bundle の credential（object storage access key / secret key）が standalone credential 管理 plane の対象として設計されていた。port substrate との接続設計が未確定。
+file_storage_bundle の credential（object storage access key / secret key）が standalone credential 管理 plane の対象として設計されていた。port substrate との接続実装が未着手。
 
 目的:
 file_storage_bundle を external_port_substrate の access_port / response_port consumer として確立する。object storage credential は port record 付属の credential_requirement として管理し、standalone credential 管理 plane は作らない。
 
-改善方針:
-- [ ] file_storage_bundle の access_port / response_port consumer としての port_substrate_relation を確定する
-- [ ] object storage credential_kind を external として port record に付属させる設計を確定する（standalone 管理 plane 不使用）
-- [ ] export_job → port record 解決 → object storage アクセスの設計境界を確定する
+実装方針:
+- [ ] file_storage_bundle の access_port / response_port consumer として seed / DB record / projection 接続を実装する
+- [ ] object storage credential_kind を external として port record に付属させる実装を追加する（standalone 管理 plane 不使用）
+- [ ] export_job → port record 解決 → generic access/response port connect の経路実装を追加する
 
 対応資料:
 - `docs/design/runtime-bundle-file-storage-ssot.yaml`
@@ -313,15 +308,15 @@ file_storage_bundle を external_port_substrate の access_port / response_port 
 **SSOT:** `docs/design/runtime-bundle-email-ssot.yaml`
 
 問題点:
-email_bundle の SMTP credential が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての設計境界が未確定。
+email_bundle の SMTP credential が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての接続実装が未着手。
 
 目的:
 email_bundle を external_port_substrate の response_port（provider_kind: smtp）consumer として確立する。SMTP credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
-改善方針:
-- [ ] email_bundle の response_port（smtp）consumer としての port_substrate_relation を確定する
-- [ ] SMTP credential_kind を external として port record に付属させる設計を確定する
-- [ ] UI approval → response_port 解決 → SMTP dispatch の境界設計を確定する
+実装方針:
+- [ ] email_bundle の response_port（smtp）consumer として seed / DB record / projection 接続を実装する
+- [ ] SMTP credential_kind を external として port record に付属させる実装を追加する
+- [ ] UI approval → response_port 解決 → SMTP dispatch の経路実装を追加する
 
 対応資料:
 - `docs/design/runtime-bundle-email-ssot.yaml`
@@ -342,15 +337,15 @@ email_bundle を external_port_substrate の response_port（provider_kind: smtp
 **SSOT:** `docs/design/runtime-bundle-stripe-ssot.yaml`
 
 問題点:
-stripe_bundle の webhook secret が standalone credential 管理 plane の対象として設計されていた。hook_port consumer としての設計境界が未確定。
+stripe_bundle の webhook secret が standalone credential 管理 plane の対象として設計されていた。hook_port consumer としての接続実装が未着手。
 
 目的:
 stripe_bundle を external_port_substrate の hook_port（provider_kind: stripe）consumer として確立する。Stripe webhook secret は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
-改善方針:
-- [ ] stripe_bundle の hook_port（stripe）consumer としての port_substrate_relation を確定する
-- [ ] Stripe webhook secret の credential_kind を external として hook_port に付属させる設計を確定する
-- [ ] hook_port → signature verification → payment state projection の境界設計を確定する
+実装方針:
+- [ ] stripe_bundle の hook_port（stripe）consumer として seed / DB record / projection 接続を実装する
+- [ ] Stripe webhook secret の credential_kind を external として hook_port に付属させる実装を追加する
+- [ ] hook_port → signature verification → payment state projection の経路実装を追加する
 
 対応資料:
 - `docs/design/runtime-bundle-stripe-ssot.yaml`
@@ -371,15 +366,15 @@ stripe_bundle を external_port_substrate の hook_port（provider_kind: stripe�
 **SSOT:** `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
 
 問題点:
-webhook_inbox_bundle の webhook signing key が standalone credential 管理 plane の対象として設計されていた。hook_port consumer としての設計境界が未確定。
+webhook_inbox_bundle の webhook signing key が standalone credential 管理 plane の対象として設計されていた。hook_port consumer としての接続実装が未着手。
 
 目的:
 webhook_inbox_bundle を external_port_substrate の hook_port consumer として確立する。webhook signing key は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
-改善方針:
-- [ ] webhook_inbox_bundle の hook_port consumer としての port_substrate_relation を確定する
-- [ ] webhook signing key の credential_kind を external として hook_port に付属させる設計を確定する
-- [ ] hook_port → signature verification → scheduler 境界の設計を確定する
+実装方針:
+- [ ] webhook_inbox_bundle の hook_port consumer として seed / DB record / projection 接続を実装する
+- [ ] webhook signing key の credential_kind を external として hook_port に付属させる実装を追加する
+- [ ] hook_port → signature verification → scheduler 境界の実装を追加する
 
 対応資料:
 - `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
@@ -401,14 +396,14 @@ webhook_inbox_bundle を external_port_substrate の hook_port consumer とし�
 **SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
 
 問題点:
-job_scheduler_bundle の外部スケジューラー provider credential が standalone credential 管理 plane の対象として設計されていた。access_port / hook_port consumer としての設計境界が未確定。
+job_scheduler_bundle の外部スケジューラー provider credential が standalone credential 管理 plane の対象として設計されていた。access_port / hook_port consumer としての接続実装が未着手。
 
 目的:
 job_scheduler_bundle を external_port_substrate の access_port / hook_port consumer として確立する。外部スケジューラー credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。topolactor 内蔵 scheduler 利用時は credential_kind: none。
 
-改善方針:
-- [ ] job_scheduler_bundle の access_port / hook_port consumer としての port_substrate_relation を確定する
-- [ ] 外部スケジューラー credential_kind（external または none）の設計境界を確定する
+実装方針:
+- [ ] job_scheduler_bundle の access_port / hook_port consumer として seed / DB record / projection 接続を実装する
+- [ ] 外部スケジューラー credential_kind（external または none）の port record 付属実装を追加する
 - [ ] scheduler → manifest_dispatcher 境界が port substrate に依存しないことを確認する
 
 対応資料:
@@ -432,15 +427,15 @@ job_scheduler_bundle を external_port_substrate の access_port / hook_port con
 **SSOT:** `docs/design/runtime-bundle-audit-approval-ssot.yaml`
 
 問題点:
-audit_approval_bundle の承認通知 credential が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての設計境界が未確定。
+audit_approval_bundle の承認通知 credential が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての接続実装が未着手。
 
 目的:
 audit_approval_bundle を external_port_substrate の response_port consumer として確立する。承認通知 credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
-改善方針:
-- [ ] audit_approval_bundle の response_port consumer としての port_substrate_relation を確定する
-- [ ] 承認通知 credential_kind の設計境界を確定する
-- [ ] approval → response_port 解決 → 通知送信の境界設計を確定する
+実装方針:
+- [ ] audit_approval_bundle の response_port consumer として seed / DB record / projection 接続を実装する
+- [ ] 承認通知 credential_kind の port record 付属実装を追加する
+- [ ] approval → response_port 解決 → 通知送信の経路実装を追加する
 
 対応資料:
 - `docs/design/runtime-bundle-audit-approval-ssot.yaml`
@@ -462,16 +457,16 @@ audit_approval_bundle を external_port_substrate の response_port consumer と
 **SSOT:** `docs/design/runtime-bundle-export-sftp-ssot.yaml`
 
 問題点:
-export_sftp_bundle の SFTP credential（host / user / key）が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての設計境界が未確定。file_storage_bundle との責務分担境界も設計が必要。
+export_sftp_bundle の SFTP credential（host / user / key）が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての接続実装が未着手。file_storage_bundle との責務分担境界は SSOT に従い、実装時に崩さない。
 
 目的:
 export_sftp_bundle を external_port_substrate の response_port（provider_kind: sftp）consumer として確立する。SFTP credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
 
-改善方針:
-- [ ] export_sftp_bundle の response_port（sftp）consumer としての port_substrate_relation を確定する
-- [ ] SFTP credential_kind を external として response_port に付属させる設計を確定する
-- [ ] export_job → port record 解決 → SFTP transfer の境界設計を確定する（file-storage-port-consumer の完了を前提）
-- [ ] 転送前後の checksum 検証境界を port substrate と独立して設計する
+実装方針:
+- [ ] export_sftp_bundle の response_port（sftp）consumer として seed / DB record / projection 接続を実装する
+- [ ] SFTP credential_kind を external として response_port に付属させる実装を追加する
+- [ ] export_job → port record 解決 → SFTP transfer の経路実装を追加する（file-storage-port-consumer の完了を前提）
+- [ ] 転送前後の checksum 検証境界を port substrate と独立して実装 / テストする
 
 対応資料:
 - `docs/design/runtime-bundle-export-sftp-ssot.yaml`
