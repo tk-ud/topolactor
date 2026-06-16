@@ -60,3 +60,78 @@ internal static class ExternalCredentialVaultRecordTestExtensions
     public static ExternalCredentialVaultRecord WithEncryptedPayload(this ExternalCredentialVaultRecord record, byte[]? payload) =>
         record with { EncryptedPayload = payload };
 }
+
+public class ExternalPortSeedDrivenPolicyTests
+{
+    [Fact]
+    public async Task ExecutePolicyAsync_RunsPolicyStepsInOrder()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(),
+            "test_policy",
+            "access_port",
+            "external-port-substrate-seed-coding",
+            new[]
+            {
+                NewStep(2, "append_runtime_event_log"),
+                NewStep(1, "resolve_port_record"),
+                NewStep(3, "capture_response")
+            },
+            Active: true);
+        var context = new ExternalPortExecutionContext();
+
+        await executor.ExecutePolicyAsync(policy, context);
+
+        Assert.Equal(new[] { "resolve_port_record", "append_runtime_event_log", "capture_response" }, context.ExecutedOperationKeys);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_MissingPortRecord_FailCloses()
+    {
+        var resolver = new ExternalPortResolver(new MissingPortPolicyRepository());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            resolver.ResolveAsync("missing_bundle", "access_port"));
+
+        Assert.Equal("EXTERNAL_PORT_RECORD_MISSING", error.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MissingCredentialReference_FailCloses()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            PortRecord = new ExternalPortRecord(
+                Guid.NewGuid(),
+                "access_port",
+                "external-port-substrate-seed-coding",
+                "generic-provider",
+                "https://example.invalid",
+                null,
+                null,
+                null,
+                "external",
+                null,
+                Active: true)
+        };
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "resolve_credential_reference"), context));
+
+        Assert.Equal("EXTERNAL_CREDENTIAL_REFERENCE_MISSING", error.Message);
+    }
+
+    private static ExternalPortPolicyStep NewStep(int order, string operationKey) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, new Dictionary<string, string>(), Active: true);
+
+    private sealed class MissingPortPolicyRepository : IExternalPortPolicyRepository
+    {
+        public Task<ExternalPortRecord?> LoadPortRecordAsync(string requiredByBundle, string portKind, string? routeKey, CancellationToken ct = default) =>
+            Task.FromResult<ExternalPortRecord?>(null);
+
+        public Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default) =>
+            Task.FromResult<ExternalPortPolicy?>(null);
+    }
+}

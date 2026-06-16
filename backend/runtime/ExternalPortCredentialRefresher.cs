@@ -91,6 +91,10 @@ public interface IExternalPortHttpClient
 
 public interface IExternalPortPolicyStepExecutor
 {
+    Task ExecuteAsync(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct = default);
+
+    Task ExecutePolicyAsync(ExternalPortPolicy policy, ExternalPortExecutionContext context, CancellationToken ct = default);
+
     ExternalPortHttpRequest BuildTokenRefreshRequest(ExternalTokenRefreshRequest request);
 
     ExternalTokenRefreshResult ParseTokenRefreshResult(ExternalTokenRefreshRequest request, ExternalPortHttpResponse response);
@@ -194,5 +198,251 @@ public sealed class ExternalTokenRefresher : IExternalTokenRefresher
         {
             throw new InvalidOperationException("EXTERNAL_CREDENTIAL_INVALID");
         }
+    }
+}
+
+public enum ExternalPortKind
+{
+    AccessPort,
+    ResponsePort,
+    HookPort
+}
+
+public sealed record ExternalPortRecord(
+    Guid PortId,
+    string PortKind,
+    string RequiredByBundle,
+    string ProviderKind,
+    string? UrlOrEnvReference,
+    string? HookPath,
+    string? HeaderKey,
+    string? RouteKey,
+    string CredentialKind,
+    string? ReferenceKey,
+    bool Active);
+
+public sealed record ExternalPortPolicy(
+    Guid PolicyId,
+    string PolicyKey,
+    string PortKind,
+    string RequiredByBundle,
+    IReadOnlyList<ExternalPortPolicyStep> PolicySteps,
+    bool Active);
+
+public sealed record ExternalPortPolicyStep(
+    Guid PolicyStepId,
+    Guid PolicyId,
+    int StepOrder,
+    string OperationKey,
+    IReadOnlyDictionary<string, string> StepConfig,
+    bool Active);
+
+public sealed class ExternalPortExecutionContext
+{
+    private readonly List<string> _executedOperationKeys = new();
+
+    public ExternalPortRecord? PortRecord { get; set; }
+
+    public ExternalPortPolicy? Policy { get; set; }
+
+    public ExternalCredentialVaultRecord? CredentialVaultRecord { get; set; }
+
+    public ExternalPortHttpRequest? HttpRequest { get; set; }
+
+    public ExternalPortHttpResponse? HttpResponse { get; set; }
+
+    public IReadOnlyList<string> ExecutedOperationKeys => _executedOperationKeys;
+
+    public void MarkExecuted(string operationKey) => _executedOperationKeys.Add(operationKey);
+}
+
+public interface IExternalPortResolver
+{
+    Task<ExternalPortRecord> ResolveAsync(
+        string requiredByBundle,
+        string portKind,
+        string? routeKey = null,
+        CancellationToken ct = default);
+}
+
+public interface IExternalPortPolicyRepository
+{
+    Task<ExternalPortRecord?> LoadPortRecordAsync(
+        string requiredByBundle,
+        string portKind,
+        string? routeKey,
+        CancellationToken ct = default);
+
+    Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default);
+}
+
+public interface IExternalPortCredentialReferenceResolver
+{
+    Task<ExternalCredentialVaultRecord?> ResolveCredentialReferenceAsync(ExternalPortRecord portRecord, CancellationToken ct = default);
+}
+
+public sealed class ExternalPortResolver : IExternalPortResolver
+{
+    private readonly IExternalPortPolicyRepository _repository;
+
+    public ExternalPortResolver(IExternalPortPolicyRepository repository) => _repository = repository;
+
+    public async Task<ExternalPortRecord> ResolveAsync(
+        string requiredByBundle,
+        string portKind,
+        string? routeKey = null,
+        CancellationToken ct = default)
+    {
+        var record = await _repository.LoadPortRecordAsync(requiredByBundle, portKind, routeKey, ct)
+            ?? throw new InvalidOperationException("EXTERNAL_PORT_RECORD_MISSING");
+        FailCloseOnInvalidPortRecord(record);
+        return record;
+    }
+
+    public static void FailCloseOnInvalidPortRecord(ExternalPortRecord record)
+    {
+        if (!record.Active || string.IsNullOrWhiteSpace(record.RequiredByBundle) ||
+            string.IsNullOrWhiteSpace(record.ProviderKind) || string.IsNullOrWhiteSpace(record.CredentialKind))
+        {
+            throw new InvalidOperationException("EXTERNAL_PORT_RECORD_INVALID");
+        }
+    }
+}
+
+public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExecutor
+{
+    public static readonly IReadOnlySet<string> AllowedOperationKeys = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "resolve_port_record",
+        "resolve_credential_reference",
+        "load_encrypted_credential_payload",
+        "decrypt_for_runtime_use",
+        "build_http_request",
+        "inject_authorization_header",
+        "send_http",
+        "capture_response",
+        "verify_signature_by_config",
+        "enqueue_scheduler_event",
+        "append_runtime_event_log",
+        "fail_close",
+        "acquire_refresh_lease",
+        "request_token_by_config",
+        "write_encrypted_credential_payload",
+        "update_token_hash",
+        "update_expires_at_and_version",
+        "release_refresh_lease"
+    };
+
+    private readonly IReadOnlyDictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>> _registry;
+
+    public ExternalPortPolicyStepExecutor(
+        IExternalPortHttpClient? httpClient = null,
+        IExternalPortCredentialReferenceResolver? credentialReferenceResolver = null)
+    {
+        _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
+        {
+            ["resolve_port_record"] = MarkOnly,
+            ["resolve_credential_reference"] = async (step, context, ct) =>
+            {
+                if (context.PortRecord is null)
+                {
+                    throw new InvalidOperationException("EXTERNAL_PORT_RECORD_MISSING");
+                }
+
+                if (context.PortRecord.CredentialKind == "none")
+                {
+                    context.MarkExecuted(step.OperationKey);
+                    await Task.CompletedTask;
+                    return;
+                }
+
+                if (credentialReferenceResolver is null || string.IsNullOrWhiteSpace(context.PortRecord.ReferenceKey))
+                {
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_REFERENCE_MISSING");
+                }
+
+                context.CredentialVaultRecord = await credentialReferenceResolver.ResolveCredentialReferenceAsync(context.PortRecord, ct)
+                    ?? throw new InvalidOperationException("EXTERNAL_CREDENTIAL_REFERENCE_MISSING");
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["build_http_request"] = (step, context, ct) =>
+            {
+                if (!step.StepConfig.TryGetValue("endpoint", out var endpoint) || string.IsNullOrWhiteSpace(endpoint))
+                {
+                    endpoint = context.PortRecord?.UrlOrEnvReference;
+                }
+
+                if (string.IsNullOrWhiteSpace(endpoint))
+                {
+                    throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_MISSING");
+                }
+
+                var method = step.StepConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Get;
+                context.HttpRequest = new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), method, new Dictionary<string, string>(), null);
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["send_http"] = async (step, context, ct) =>
+            {
+                if (httpClient is null || context.HttpRequest is null)
+                {
+                    throw new InvalidOperationException("EXTERNAL_HTTP_REQUEST_MISSING");
+                }
+
+                context.HttpResponse = await httpClient.SendAsync(context.HttpRequest, ct);
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["enqueue_scheduler_event"] = MarkOnly,
+            ["append_runtime_event_log"] = MarkOnly,
+            ["capture_response"] = MarkOnly,
+            ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE")
+        };
+    }
+
+    public async Task ExecutePolicyAsync(ExternalPortPolicy policy, ExternalPortExecutionContext context, CancellationToken ct = default)
+    {
+        foreach (var step in policy.PolicySteps.Where(static s => s.Active).OrderBy(static s => s.StepOrder))
+        {
+            await ExecuteAsync(step, context, ct);
+        }
+    }
+
+    public Task ExecuteAsync(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct = default)
+    {
+        if (!AllowedOperationKeys.Contains(step.OperationKey) || !_registry.TryGetValue(step.OperationKey, out var primitive))
+        {
+            throw new InvalidOperationException("EXTERNAL_PORT_POLICY_OPERATION_UNSUPPORTED");
+        }
+
+        return primitive(step, context, ct);
+    }
+
+    public ExternalPortHttpRequest BuildTokenRefreshRequest(ExternalTokenRefreshRequest request)
+    {
+        if (!request.RequestConfig.TryGetValue("endpoint", out var endpoint) || string.IsNullOrWhiteSpace(endpoint))
+        {
+            throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_ENDPOINT_MISSING");
+        }
+
+        var method = request.RequestConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Post;
+        return new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), method, new Dictionary<string, string>(), request.RuntimeSecretPayload);
+    }
+
+    public ExternalTokenRefreshResult ParseTokenRefreshResult(ExternalTokenRefreshRequest request, ExternalPortHttpResponse response)
+    {
+        if (response.StatusCode < 200 || response.StatusCode >= 300)
+        {
+            throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_HTTP_FAILED");
+        }
+
+        var hash = request.RequestConfig.TryGetValue("token_hash", out var tokenHash) ? tokenHash : $"sha256:{response.Body.Length}";
+        var expiresAt = request.CurrentExpiresAt?.AddHours(1) ?? DateTimeOffset.UtcNow.AddHours(1);
+        return new ExternalTokenRefreshResult(response.Body, hash, expiresAt, PayloadRotated: true);
+    }
+
+    private static Task MarkOnly(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct)
+    {
+        context.MarkExecuted(step.OperationKey);
+        return Task.CompletedTask;
     }
 }

@@ -1814,3 +1814,33 @@ VALUES (
 ON CONFLICT (manifest_id) DO UPDATE
     SET topology = EXCLUDED.topology,
         status   = EXCLUDED.status;
+-- ---------------------------------------------------------------------------
+-- external_port_substrate generic policy seed.
+-- No provider credential plaintext is stored here; provider_kind remains data
+-- classification and runtime executes by operation_key registry dispatch.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.external_port_policies (policy_id, policy_key, port_kind, required_by_bundle, active)
+VALUES
+    ('00000000-0000-0000-0000-0000000000e1', 'external_access_port_generic_http', 'access_port', 'external-port-substrate-seed-coding', true),
+    ('00000000-0000-0000-0000-0000000000e2', 'external_response_port_generic_http', 'response_port', 'external-port-substrate-seed-coding', true),
+    ('00000000-0000-0000-0000-0000000000e3', 'external_hook_port_scheduler_boundary', 'hook_port', 'external-port-substrate-seed-coding', true)
+ON CONFLICT (policy_id) DO NOTHING;
+
+INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-0000000000e1', 1, 'resolve_port_record', '{}', true),
+    ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-0000000000e1', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-0000000000e1', 3, 'build_http_request', '{}', true),
+    ('00000000-0000-0000-0000-000000000104', '00000000-0000-0000-0000-0000000000e1', 4, 'send_http', '{}', true),
+    ('00000000-0000-0000-0000-000000000105', '00000000-0000-0000-0000-0000000000e1', 5, 'capture_response', '{}', true),
+    ('00000000-0000-0000-0000-000000000201', '00000000-0000-0000-0000-0000000000e2', 1, 'resolve_port_record', '{}', true),
+    ('00000000-0000-0000-0000-000000000202', '00000000-0000-0000-0000-0000000000e2', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000203', '00000000-0000-0000-0000-0000000000e2', 3, 'build_http_request', '{}', true),
+    ('00000000-0000-0000-0000-000000000204', '00000000-0000-0000-0000-0000000000e2', 4, 'send_http', '{}', true),
+    ('00000000-0000-0000-0000-000000000205', '00000000-0000-0000-0000-0000000000e2', 5, 'capture_response', '{}', true),
+    ('00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-0000000000e3', 1, 'resolve_port_record', '{}', true),
+    ('00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-0000000000e3', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000303', '00000000-0000-0000-0000-0000000000e3', 3, 'verify_signature_by_config', '{}', true),
+    ('00000000-0000-0000-0000-000000000304', '00000000-0000-0000-0000-0000000000e3', 4, 'enqueue_scheduler_event', '{}', true),
+    ('00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-0000000000e3', 5, 'append_runtime_event_log', '{}', true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
