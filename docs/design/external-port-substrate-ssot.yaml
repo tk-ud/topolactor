@@ -11,6 +11,9 @@ external_port_substrate_ssot:
       物理テーブル + seed projection + admin role write policy で定義する。
       external 系 8 Bundle の共通基盤として機能し、
       credential は独立した管理 plane にしない。
+      credential 管理は行うが、admin 権限の projection 側管理画面で
+      port record context 内に統合し、provider 別・bundle 別の
+      hardcoded 管理 UI / runtime / handler は作らない。
       secret_credential_bundle は独立実装 Bundle ではなく、
       本 substrate の credential_requirement 境界定義として統合する。
     non_goals:
@@ -91,11 +94,33 @@ external_port_substrate_ssot:
       - required_by_bundle
     constraint:
       - secret_value_not_stored_anywhere
-      - credential_requirement_travels_through_validate_preview_apply_with_port_record
+      - credential_requirement_travels_through_projection_and_port_record
       - consumer_bundle_not_connected_triggers_fail_close_not_standalone_service
 
+  seed_projection_resolution:
+    purpose: projection 側管理画面と DB seed / record による port 接続解決境界
+    owns:
+      - credential_kind_seed (auth | external | none)
+      - port_kind_seed (access_port | response_port | hook_port)
+      - provider_kind_seed
+      - port_setting_projection_seed
+      - consumer_bundle_binding_seed
+      - credential_requirement_seed
+    rule: >-
+      接続管理は provider 固有の backend hardcode ではなく、seed / DB record / projection
+      により解決する。projection 側は credential_kind / provider_kind / reference_key /
+      required_by_bundle / consumer_bundle_binding を port record context 内で管理する。
+    prohibited:
+      - provider_specific_projection_hardcode
+      - bundle_specific_projection_hardcode
+      - backend_side_credential_management_plane
+
   admin_setting_projection:
-    purpose: admin role による port 設定の write / projection 境界
+    purpose: admin role による port 設定の projection 側 write / management 境界
+    rule: >-
+      admin 画面は projection を作る surface であり、credential 専用管理アプリではない。
+      credential 管理は admin 権限の projection 側管理画面で、port record context 内に
+      統合して行う。projection 側に provider 別・bundle 別の hardcode は置かない。
     owns:
       - port_setting_projection (access_port / response_port / hook_port)
       - credential_kind_switch (auth | external | none)
@@ -109,6 +134,8 @@ external_port_substrate_ssot:
       - dedicated_admin_credentials_route
       - dedicated_credential_panel_outside_port_context
       - standalone_credential_ui_without_port_record
+      - provider_specific_admin_projection_hardcode
+      - bundle_specific_admin_projection_hardcode
 
   physical_tables:
     purpose: port / hook / credential_requirement の設定行を保持する surface
@@ -154,28 +181,37 @@ external_port_substrate_ssot:
 
   backend_boundary:
     owns:
-      - admin_role_port_write
-      - physical_table_row_validate_preview_apply
-      - port_record_resolution_for_consumer_runtime
+      - generic_access_port_connect_function
+      - generic_response_port_connect_function
+      - generic_hook_port_receive_function
+      - db_seed_resolved_port_record_resolution_for_consumer_runtime
+      - physical_table_row_validate_preview_apply_boundary
+    rule: >-
+      backend は projection / seed / DB record で解決された port record を使い、
+      access_port / response_port / hook_port の汎用接続・受信関数だけを持つ。
+      provider 別・bundle 別の credential 管理 handler / 管理 UI / standalone runtime は持たない。
     not_owns:
       - secret_value_storage
       - credential_rotation_service
       - credential_startup_validation_service
       - standalone_credential_management
+      - provider_specific_credential_management_handler
+      - bundle_specific_external_service_handler
 
   runtime_boundary:
     behavior:
-      access_port: 設定された URL / env reference を使って外部へアクセスする
-      response_port: 設定された URL / env reference を使って外部へ返す
+      access_port: DB seed / port record で解決された URL / env reference を使って外部へアクセスする
+      response_port: DB seed / port record で解決された URL / env reference を使って外部へ返す
       hook_port: >-
         hook を受け取り、hook_path / provider / header / route key から
-        該当 port record を特定する
+        seed / DB record 解決済みの該当 port record を特定する
       credential_requirement: port record に紐づく reference として解決する
     not_behavior:
       - secret_value_stored_in_db_ui_ssot_or_audit_log
       - credential_rotation_management
       - startup_validation_management
       - standalone_credential_runtime_execution
+      - provider_specific_runtime_execution
 
   consumer_bundle_relation:
     file_storage_bundle:
@@ -207,6 +243,7 @@ external_port_substrate_ssot:
       note: >-
         secret_credential_bundle は独立した実装 Bundle ではない。
         credential_requirement は本 substrate の port record 付属要件として扱う。
+        credential 管理は projection 側管理画面で port context 内に統合する。
         dedicated credential runtime / admin UI / audit log / rotation service は作らない。
       detail_ref: docs/design/runtime-bundle-secret-credential-ssot.yaml
 
@@ -225,6 +262,9 @@ external_port_substrate_ssot:
     - external_tool_direct_db_write
     - frontend_direct_db_write
     - ssot_entry_to_ratify_implementation_first_shape
+    - provider_specific_projection_hardcode
+    - bundle_specific_projection_hardcode
+    - provider_specific_runtime_execution
 
   related_ssot:
     - docs/design/extended-runtime-bundle-registry-ssot.yaml
