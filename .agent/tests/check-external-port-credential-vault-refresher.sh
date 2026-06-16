@@ -43,3 +43,39 @@ for term in ExternalCredentialRefreshLease Version ExpiresAt RefreshBeforeSecond
     exit 1
   }
 done
+
+repo_file="backend/repository/NpgsqlExternalCredentialVaultRepository.cs"
+if [[ ! -f "$repo_file" ]]; then
+  echo "production Npgsql external credential vault repository missing" >&2
+  exit 1
+fi
+
+for term in \
+  "class NpgsqlExternalCredentialVaultRepository" \
+  "IExternalCredentialVaultRepository" \
+  "topology.external_credential_vault" \
+  "topology.external_credential_refresh_attempt" \
+  "AND active = true" \
+  "locked_until IS NULL OR locked_until <= @now" \
+  "RETURNING version" \
+  "encrypted_payload = @encryptedPayload" \
+  "token_hash = @tokenHash" \
+  "expires_at = @expiresAt" \
+  "version = version + 1" \
+  "AND version = @expectedVersion" \
+  "EXTERNAL_CREDENTIAL_STALE_VERSION_OR_INACTIVE"; do
+  rg -n --fixed-strings "$term" "$repo_file" >/dev/null || {
+    echo "Npgsql credential vault repository missing atomic guard: $term" >&2
+    exit 1
+  }
+done
+
+if ! rg -n "AddSingleton<IExternalCredentialVaultRepository>" backend/Program.cs >/dev/null; then
+  echo "production credential vault repository DI registration missing" >&2
+  exit 1
+fi
+
+if rg -n "provider_kind\s*(switch|if)|switch\s*\([^)]*provider_kind|if\s*\([^)]*provider_kind|ProviderKind\s*(switch|if)|switch\s*\([^)]*ProviderKind|if\s*\([^)]*ProviderKind" "$repo_file"; then
+  echo "provider_kind switch/if is forbidden in credential vault repository" >&2
+  exit 1
+fi

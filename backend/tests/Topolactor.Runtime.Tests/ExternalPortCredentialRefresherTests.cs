@@ -196,6 +196,39 @@ public class ExternalPortSeedDrivenPolicyTests
 
 
     [Fact]
+    public void NpgsqlCredentialVaultRepository_Source_ImplementsActiveLeaseAndAtomicVersionGuards()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalCredentialVaultRepository.cs"));
+
+        Assert.Contains("class NpgsqlExternalCredentialVaultRepository", source);
+        Assert.Contains("IExternalCredentialVaultRepository", source);
+        Assert.Contains("topology.external_credential_vault", source);
+        Assert.Contains("topology.external_credential_refresh_attempt", source);
+        Assert.Contains("AND active = true", source);
+        Assert.Contains("locked_until IS NULL OR locked_until <= @now", source);
+        Assert.Contains("RETURNING version", source);
+        Assert.Contains("attempt_status", source);
+        Assert.Contains("encrypted_payload = @encryptedPayload", source);
+        Assert.Contains("token_hash = @tokenHash", source);
+        Assert.Contains("expires_at = @expiresAt", source);
+        Assert.Contains("version = version + 1", source);
+        Assert.Contains("AND version = @expectedVersion", source);
+        Assert.Contains("EXTERNAL_CREDENTIAL_STALE_VERSION_OR_INACTIVE", source);
+        Assert.DoesNotContain("switch (provider", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("if (provider", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("auth.credentials", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Program_RegistersProductionExternalCredentialVaultRepository()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/Program.cs"));
+
+        Assert.Contains("AddSingleton<IExternalCredentialVaultRepository>", source);
+        Assert.Contains("NpgsqlExternalCredentialVaultRepository", source);
+    }
+
+    [Fact]
     public void NpgsqlRepository_ParseStepConfig_ConvertsJsonbObjectToStringDictionary()
     {
         var config = NpgsqlExternalPortPolicyRepository.ParseStepConfig("""{ "expected_signature": "sig-ok", "retry": 3 }""");
