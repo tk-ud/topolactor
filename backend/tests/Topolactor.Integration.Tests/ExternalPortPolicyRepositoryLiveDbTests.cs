@@ -137,8 +137,8 @@ public class ExternalPortPolicyRepositoryLiveDbTests
                 INSERT INTO topology.external_port_policy_steps
                     (policy_step_id, policy_id, step_order, operation_key, step_config, active)
                 VALUES
-                    (@stepTwo, @policyId, 2, 'send_http', '{""retry"":3}'::jsonb, true),
-                    (@stepOne, @policyId, 1, 'build_http_request', '{""expected_signature"":""sig-ok""}'::jsonb, true);
+                    (@stepTwo, @policyId, 2, 'send_http', '{"retry":3}'::jsonb, true),
+                    (@stepOne, @policyId, 1, 'build_http_request', '{"expected_signature":"sig-ok"}'::jsonb, true);
                 """,
                 ("accessId", accessId),
                 ("policyId", policyId),
