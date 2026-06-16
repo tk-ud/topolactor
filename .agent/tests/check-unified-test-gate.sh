@@ -77,7 +77,7 @@ echo ""
 echo "=== [FRONTEND_CONTRACT] Frontend API proxy and dispatch contract tests ==="
 echo "    Scope: adminApi.test.ts, adminImport.test.ts, adminUxGuard.test.ts,"
 echo "           defaultEntitySearch.test.ts, pipelineContinuity.test.ts,"
-echo "           userDemoStepper.test.ts, uiBuilderStepper.test.ts"
+echo "           emissionUserFacingResult.test.ts, uiBuilderStepper.test.ts"
 
 if deno test \
     frontend/tests/adminApi.test.ts \
@@ -85,7 +85,7 @@ if deno test \
     frontend/tests/adminUxGuard.test.ts \
     frontend/tests/defaultEntitySearch.test.ts \
     frontend/tests/pipelineContinuity.test.ts \
-    frontend/tests/userDemoStepper.test.ts \
+    frontend/tests/emissionUserFacingResult.test.ts \
     frontend/tests/uiBuilderStepper.test.ts \
     --allow-read; then
   echo "OK  [FRONTEND_CONTRACT] frontend contract tests passed"
