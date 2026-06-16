@@ -208,3 +208,19 @@ remaining_todo:
 - DB repository atomic encrypted credential payload update is implemented in the parent credential-vault bundle.
 - Canonical physical binding execution remains out of scope for this increment.
 - Consumer bundle wiring remains out of scope for this increment.
+
+## Bundle increment `external-port-credential-derived-authoring-wiring-and-media-primitives`
+
+Status: implemented
+Parent bundle: `external-port-substrate-implementation`
+
+実装内容:
+- Added UI Builder package wiring authoring for `external_port` target surface. Candidate rows are read from active `topology.external_access_ports`, `topology.external_response_ports`, and `topology.external_hook_ports`, not frontend provider/bundle fixed lists.
+- Candidate projection includes port id, port kind, provider kind, credential kind, reference key, required-by bundle tag, consumer binding tag, route/hook/url metadata, and a persistable `external-port:<portKind>:<portId>[:routeKey]` target ref.
+- Preserved explicit save/validate boundaries by reusing `ui_topology:update_package_wiring` and `topology.ui_wiring_registry.target_ref` rather than adding a standalone connector plane.
+- Added provider-agnostic `AudioPlayer` / `VideoPlayer` media primitives with explicit `src` requirement and no provider-specific props or credential logic.
+- Added `.agent/tests/check-external-port-authoring-wiring.sh` guard for data-derived authoring and provider/bundle fixed-list leakage.
+
+remaining_todo:
+- Consumer bundle runtime execution wiring remains separate from this authoring substrate increment.
+- Canonical physical binding execution remains tracked by the parent external port substrate implementation TODO.

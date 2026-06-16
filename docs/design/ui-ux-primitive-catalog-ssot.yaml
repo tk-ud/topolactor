@@ -979,6 +979,35 @@ category_g_document_canvas:
 # Category H: Safety / Inspector / Operation Guard UI
 # =============================================================================
 
+category_g_media_primitives:
+  label: Provider-agnostic Media UI
+  purpose: >
+    Abstract audio/video rendering primitives for media URLs produced by data,
+    manifests, or external port wiring. Components do not inspect provider_kind,
+    bundle names, credentials, or port_kind. Missing src is an explicit render
+    error, not a silent fallback.
+  boundary: provider_agnostic_display_only
+  primitives:
+    AudioPlayer:
+      key: audio_player.primitive
+      kind: media/audio_player
+      description: Provider-agnostic audio element for a bound media src
+      semantic_role: display
+      visual_role: panel
+      props: [src, mimeType, title, controls, autoplay, loop, ariaLabel]
+      provider_specific_props: forbidden
+      runtimeConnected: true
+
+    VideoPlayer:
+      key: video_player.primitive
+      kind: media/video_player
+      description: Provider-agnostic video element for a bound media src
+      semantic_role: display
+      visual_role: panel
+      props: [src, mimeType, title, controls, autoplay, loop, poster, ariaLabel]
+      provider_specific_props: forbidden
+      runtimeConnected: true
+
 category_h_safety_guard:
   label: Safety / Inspector / Operation Guard UI
   purpose: >
@@ -1089,8 +1118,9 @@ catalog_summary:
     - E: design_token (12 primitives)
     - F: calculation_topology (12 primitives)
     - G: external_lookup (7 primitives)
+    - G2: media_primitives (2 primitives)
     - H: safety_guard (10 primitives)
-  total_primitives: 82
+  total_primitives: 84
   primary_reference_for:
     - admin_visual_layout_builder (Issue #89)
     - no_code_db_driven_ui_operation_surface

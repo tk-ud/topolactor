@@ -1327,6 +1327,72 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return list;
     }
 
+
+    public override async Task<IReadOnlyList<ExternalPortAuthoringCandidateDto>> ListExternalPortAuthoringCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT access_port_id::text AS port_id,
+                   'access_port' AS port_kind,
+                   required_by_bundle,
+                   required_by_bundle AS consumer_bundle_binding,
+                   provider_kind, credential_kind, reference_key,
+                   url_or_env_reference, NULL::text AS hook_path, NULL::text AS route_key
+            FROM topology.external_access_ports
+            WHERE active = true
+            UNION ALL
+            SELECT response_port_id::text AS port_id,
+                   'response_port' AS port_kind,
+                   required_by_bundle,
+                   required_by_bundle AS consumer_bundle_binding,
+                   provider_kind, credential_kind, reference_key,
+                   url_or_env_reference, NULL::text AS hook_path, NULL::text AS route_key
+            FROM topology.external_response_ports
+            WHERE active = true
+            UNION ALL
+            SELECT hook_port_id::text AS port_id,
+                   'hook_port' AS port_kind,
+                   required_by_bundle,
+                   required_by_bundle AS consumer_bundle_binding,
+                   provider_kind, credential_kind, reference_key,
+                   NULL::text AS url_or_env_reference, hook_path, route_key
+            FROM topology.external_hook_ports
+            WHERE active = true
+            ORDER BY required_by_bundle, port_kind, provider_kind, port_id
+            """;
+        var list = new List<ExternalPortAuthoringCandidateDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var portId = reader.GetString(reader.GetOrdinal("port_id"));
+            var portKind = reader.GetString(reader.GetOrdinal("port_kind"));
+            var requiredByBundle = reader.GetString(reader.GetOrdinal("required_by_bundle"));
+            var providerKind = reader.GetString(reader.GetOrdinal("provider_kind"));
+            var credentialKind = reader.GetString(reader.GetOrdinal("credential_kind"));
+            var routeKey = GetNullableString(reader, "route_key");
+            var targetRef = routeKey is null
+                ? $"external-port:{portKind}:{portId}"
+                : $"external-port:{portKind}:{portId}:{routeKey}";
+            list.Add(new ExternalPortAuthoringCandidateDto(
+                portId,
+                portKind,
+                providerKind,
+                credentialKind,
+                GetNullableString(reader, "reference_key"),
+                requiredByBundle,
+                reader.GetString(reader.GetOrdinal("consumer_bundle_binding")),
+                GetNullableString(reader, "url_or_env_reference"),
+                GetNullableString(reader, "hook_path"),
+                routeKey,
+                targetRef));
+        }
+        return list;
+    }
+
     public override async Task<AdminPackageWiringDto?> GetPackageWiringAsync(
         Guid packageId,
         CancellationToken ct = default)
@@ -1847,5 +1913,11 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 PackageGenerateCode.DbUnavailable, null, [],
                 "DB_UNAVAILABLE", "Repository unavailable during detach.");
         }
+    }
+
+    private static string? GetNullableString(NpgsqlDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     }
 }

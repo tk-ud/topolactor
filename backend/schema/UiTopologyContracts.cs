@@ -318,6 +318,20 @@ public record AdminPackageWiringDto(
     [property: JsonPropertyName("targetRef")] string? TargetRef
 );
 
+public record ExternalPortAuthoringCandidateDto(
+    [property: JsonPropertyName("portId")] string PortId,
+    [property: JsonPropertyName("portKind")] string PortKind,
+    [property: JsonPropertyName("providerKind")] string ProviderKind,
+    [property: JsonPropertyName("credentialKind")] string CredentialKind,
+    [property: JsonPropertyName("referenceKey")] string? ReferenceKey,
+    [property: JsonPropertyName("requiredByBundle")] string RequiredByBundle,
+    [property: JsonPropertyName("consumerBundleBinding")] string ConsumerBundleBinding,
+    [property: JsonPropertyName("urlOrEnvReference")] string? UrlOrEnvReference,
+    [property: JsonPropertyName("hookPath")] string? HookPath,
+    [property: JsonPropertyName("routeKey")] string? RouteKey,
+    [property: JsonPropertyName("targetRef")] string TargetRef
+);
+
 public record PackageWiringUpdateRequestDto(
     [property: JsonPropertyName("packageId")] string PackageId,
     [property: JsonPropertyName("wiringId")] string WiringId,
