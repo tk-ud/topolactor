@@ -156,6 +156,10 @@
 - `frontend/api/adminApi.ts:4`: SESSION_TOKEN_KEY import（変更不要）
 - `.agent/docs/structure-map.yaml:62,65,70`: `local_demo_runtime_hosting_boundary` は infra role 名 — demo seed 依存なし（変更不要）
 
+今回 cycle (2026-06-16) — db/seed_empty.sql 変更差分の再探索:
+- `db/seed_empty.sql` 全体を再 grep（大文字小文字無視）— `demo` 一致は line 117 のみで、既存サイクルで確認済みの `non demo/admin override` dispatch path コメントのみ（変更不要、再確認のみ）
+- 新規削除候補なし。同 PR で追加した `audio_player.primitive` / `video_player.primitive` の `topology.components_bucket` seed row（PR#454 carry-over クローズ分）は demo 参照を含まない provider-agnostic media primitive seed であり、本 bundle のクリーンアップ対象ではないが同ファイル差分に同梱
+
 remaining_todo (次 cycle 対象):
 - demo 参照の全探索を継続し、削除候補が見当たらなくなるまで partial として反復する
 - 今回 cycle で探索した全ファイルが auth session / Draft Preview / infra naming のいずれかと確認。新規削除候補は demo-article.tsx と ReplyPanel.tsx のみ（今回削除済み）
