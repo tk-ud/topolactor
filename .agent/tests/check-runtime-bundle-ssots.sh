@@ -289,6 +289,18 @@ check_content "$ROADMAP" "product.webhook_inbox_port_consumer"
 check_content "$ROADMAP" "product.job_scheduler_port_consumer"
 check_content "$ROADMAP" "product.audit_approval_port_consumer"
 
+check_content "$ROADMAP" "external-port-substrate-implementation"
+check_content "$ROADMAP" "external_port_tables_implementation_not_started"
+check_content "$ROADMAP" "projection_management_surface_implementation_not_started"
+check_content "$ROADMAP" "consumer_bundle_port_connection_implementation_not_started"
+check_absent "$ROADMAP" "external-port-substrate-design"
+check_absent "$ROADMAP" "design_not_started"
+check_content ".agent/tasks/todo.md" "external-port-substrate-implementation"
+check_content ".agent/tasks/todo.md" "接続実装"
+check_absent ".agent/tasks/todo.md" "external-port-substrate-design"
+check_absent ".agent/tasks/todo.md" "接続設計"
+check_content ".agent/tasks/external-port-substrate-implementation-todo.md" "external_port_substrate"
+
 echo ""
 echo "=== Design SSOTs: no progress management terms ==="
 
