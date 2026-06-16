@@ -170,8 +170,15 @@ external_port_substrate_ssot:
     purpose: admin role による port 設定の projection 側 write / management 境界
     rule: >-
       admin 画面は projection を作る surface であり、credential 専用管理アプリではない。
-      credential 管理は admin 権限の projection 側管理画面で、port record context 内に
-      統合して行う。projection 側に provider 別・bundle 別の hardcode は置かない。
+      credential 管理は fixed-form operational projection として admin 権限の projection 側管理画面で、
+      port record context 内に統合して行う。これは manifest / runtime / pipeline / capability
+      boundary を通る operational metadata 管理面であり、dedicated admin credential route / panel
+      ではない。projection 側に provider 別・bundle 別の hardcode は置かない。
+    pipeline_contract_reason: >-
+      Credential management metadata belongs on the projection side because the pipeline contract
+      preserves manifest identity, runtime route identity, capability enforcement, and projection
+      refresh boundaries. A standalone admin credential panel or UI Builder preset would bypass
+      that contract and expand authority outside the port record context.
     owns:
       - port_setting_projection (access_port / response_port / hook_port)
       - credential_kind_switch (auth | external | none)

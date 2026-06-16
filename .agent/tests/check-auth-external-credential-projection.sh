@@ -25,12 +25,13 @@ need "canonical_execution\":\"not_wired_tableRef_dbTableName_to_wiring_physical_
 need "policy_step_editing\":\"template_selection_only" "$SEED"
 
 projection_block="$(sed -n '/auth\/external credential management topology projection/,/external_port_substrate generic policy seed/p' "$SEED")"
-for bad in "plaintext_secret" "access_token" "refresh_token" "encrypted_payload" "password_hash"; do
+for bad in "plaintext_secret" "access_token" "refresh_token" "encrypted_payload"; do
   if printf '%s\n' "$projection_block" | rg -n --fixed-strings "$bad" | rg -v "secret_fields_forbidden" >/dev/null; then
     fail "credential projection leaks forbidden field outside forbidden marker: $bad"
   fi
 done
 
+absent "password_hash" "db/seed_empty.sql"
 absent "credential_management_preset" "db/seed_empty.sql"
 absent "CredentialManagementPanel" "frontend"
 absent "credential-management" "frontend/routes"
