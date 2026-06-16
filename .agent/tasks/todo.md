@@ -275,6 +275,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 対象ファイル名:
 - `db/topology_tables.sql`
 - `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `backend/repository/NpgsqlExternalPortPolicyRepository.cs`
 - `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
 - `.agent/tests/check-external-port-credential-vault-refresher.sh`
 
@@ -311,7 +312,7 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 実装方針:
 - [x] `external-port-substrate-seed-coding` bundle increment: external port physical tables / seed policy-step surface / generic resolver-executor boundary を partial 実装する
 - [x] `auth-external-credential-management-topology-projection` bundle increment: auth / external credential management を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する
-- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の DB repository atomic update / consumer bundle connection 実装 todo を進める
+- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の DB repository atomic encrypted credential update / consumer bundle connection / canonical physical binding execution todo を進める
 
 対応資料:
 - `docs/design/external-port-substrate-ssot.yaml`
@@ -325,6 +326,7 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 - `db/topology_tables.sql`
 - `db/seed_empty.sql`
 - `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `backend/repository/NpgsqlExternalPortPolicyRepository.cs`
 - `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
 - `.agent/tests/check-external-port-substrate-seed-coding.sh`
 - `docs/design/extended-runtime-bundle-registry-ssot.yaml`

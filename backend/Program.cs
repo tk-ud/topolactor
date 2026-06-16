@@ -73,6 +73,10 @@ builder.Services.AddSingleton<TeamMarkdownRepository>(sp =>
     new NpgsqlTeamMarkdownRepository(
         sp.GetRequiredService<ILogger<NpgsqlTeamMarkdownRepository>>(),
         connectionString));
+builder.Services.AddSingleton<IExternalPortPolicyRepository>(sp =>
+    new NpgsqlExternalPortPolicyRepository(
+        sp.GetRequiredService<ILogger<NpgsqlExternalPortPolicyRepository>>(),
+        connectionString));
 builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
 builder.Services.AddSingleton<SqlAttentionEvidencePromotionRuntime>();
 builder.Services.AddSingleton<SqlAttentionTopologyProjectionRuntime>();

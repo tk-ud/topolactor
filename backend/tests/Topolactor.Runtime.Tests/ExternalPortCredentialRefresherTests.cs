@@ -1,3 +1,4 @@
+using Topolactor.Repository;
 using Topolactor.Runtime;
 using Xunit;
 
@@ -193,8 +194,62 @@ public class ExternalPortSeedDrivenPolicyTests
         Assert.Equal("EXTERNAL_CREDENTIAL_REFERENCE_MISSING", error.Message);
     }
 
+
+    [Fact]
+    public void NpgsqlRepository_ParseStepConfig_ConvertsJsonbObjectToStringDictionary()
+    {
+        var config = NpgsqlExternalPortPolicyRepository.ParseStepConfig("""{ "expected_signature": "sig-ok", "retry": 3 }""");
+
+        Assert.Equal("sig-ok", config["expected_signature"]);
+        Assert.Equal("3", config["retry"]);
+    }
+
+    [Fact]
+    public void NpgsqlRepository_Source_MapsPortTablesAndPolicyStepsWithoutPlaintextProjection()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalPortPolicyRepository.cs"));
+
+        Assert.Contains("topology.external_access_ports", source);
+        Assert.Contains("topology.external_response_ports", source);
+        Assert.Contains("topology.external_hook_ports", source);
+        Assert.Contains("topology.external_port_policies", source);
+        Assert.Contains("topology.external_port_policy_steps", source);
+        Assert.Contains("ORDER BY step_order ASC", source);
+        Assert.Contains("EXTERNAL_PORT_RECORD_AMBIGUOUS", source);
+        Assert.Contains("EXTERNAL_HOOK_PORT_ROUTE_KEY_REQUIRED", source);
+        Assert.Contains("EXTERNAL_PORT_POLICY_AMBIGUOUS", source);
+        Assert.DoesNotContain("encrypted_payload", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("token_hash", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ProviderKind switch", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("switch (provider", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Program_RegistersProductionExternalPortPolicyRepository()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/Program.cs"));
+
+        Assert.Contains("AddSingleton<IExternalPortPolicyRepository>", source);
+        Assert.Contains("NpgsqlExternalPortPolicyRepository", source);
+    }
+
     private static ExternalPortPolicyStep NewStep(int order, string operationKey, IReadOnlyDictionary<string, string>? config = null) =>
         new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, config ?? new Dictionary<string, string>(), Active: true);
+
+    private static string FindRepositoryFile(string relativePath)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find {relativePath} from {AppContext.BaseDirectory}.");
+    }
 
     private sealed class StaticPortResolver : IExternalPortResolver
     {
