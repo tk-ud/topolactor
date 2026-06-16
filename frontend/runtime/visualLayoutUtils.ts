@@ -222,7 +222,19 @@ export interface VisualNodePayload {
   /** Array prop bindings: runtime data path → component prop. Resolved after propsJson/stateJson in renderEmission. */
   propBindings?: Record<string, { source: string; keyPath?: string; labelPath?: string; valuePath?: string; childrenPath?: string; transform?: string }> | null;
   /** Canonical runtime UI interaction contract. Legacy propsJson.eventWirings is fallback only. */
-  runtimeInteractions?: Array<{ trigger: string; actionType: string; targetNodeId?: string; statePath?: string; value?: unknown }>;
+  runtimeInteractions?: Array<{
+    trigger: string;
+    actionType: string;
+    targetNodeId?: string;
+    statePath?: string;
+    value?: unknown;
+    /** Authoring-only payloadFrom field→source map. SSOT: ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract */
+    payloadFrom?: Record<string, string>;
+    /** Authoring-only output prop name for dispatchExternalPort result capture. */
+    outputProp?: string;
+    /** Authoring-only external port candidate targetRef. SSOT: external-port-substrate-ssot.yaml admin_setting_projection */
+    portTargetRef?: string;
+  }>;
 }
 
 export function isStructuralHtmlNode(node: Pick<VisualNodePayload, "nodeKind">): boolean {
@@ -384,7 +396,16 @@ function readPatchNode(
       ? raw.propBindings as Record<string, { source: string; keyPath?: string; labelPath?: string; valuePath?: string; childrenPath?: string; transform?: string }>
       : undefined,
     runtimeInteractions: (Array.isArray(raw.runtimeInteractions))
-      ? raw.runtimeInteractions.filter((v): v is { trigger: string; actionType: string; targetNodeId?: string; statePath?: string; value?: unknown } =>
+      ? raw.runtimeInteractions.filter((v): v is {
+          trigger: string;
+          actionType: string;
+          targetNodeId?: string;
+          statePath?: string;
+          value?: unknown;
+          payloadFrom?: Record<string, string>;
+          outputProp?: string;
+          portTargetRef?: string;
+        } =>
         typeof v === "object" && v !== null && !Array.isArray(v) &&
         typeof (v as Record<string, unknown>).trigger === "string" &&
         typeof (v as Record<string, unknown>).actionType === "string"

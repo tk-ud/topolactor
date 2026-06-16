@@ -172,6 +172,7 @@ import {
   previewBatchPropBinding,
   previewBatchWiringAssist,
 } from "../lib/uiBuilderBatchOperation.ts";
+import { parsePayloadFromSource } from "../runtime/payloadFromResolver.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -546,6 +547,24 @@ export type ComponentEventWiring = {
   eventType?: string;
   /** @deprecated legacy state-key compatibility only. */
   targetStateKey?: string;
+  /**
+   * Authoring-only: field → payloadFrom source descriptor map for dispatchExternalPort actions.
+   * Recognized source patterns: node:<nodeId>.value | event.<path> | literal:<value>
+   * Validated client-side via parsePayloadFromSource. Runtime execution is out of scope for this bundle.
+   * SSOT: docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+   */
+  payloadFrom?: Record<string, string>;
+  /**
+   * Authoring-only: target prop name on this node to receive the dispatch result.
+   * Used with dispatchExternalPort. Runtime execution is out of scope for this bundle.
+   */
+  outputProp?: string;
+  /**
+   * Authoring-only: external port candidate targetRef (`external-port:<portKind>:<portId>[:<routeKey>]`).
+   * Selected from active DB-derived ExternalPortAuthoringCandidates only — no provider/bundle fixed list.
+   * SSOT: docs/design/external-port-substrate-ssot.yaml admin_setting_projection
+   */
+  portTargetRef?: string;
 };
 
 export const COMPONENT_EVENT_TYPES = [
@@ -571,6 +590,7 @@ export const COMPONENT_ACTION_TYPES = [
   "closeDialog",
   "toggleDialog",
   "setActiveKey",
+  "dispatchExternalPort",
 ] as const;
 
 function bucketKindIcon(componentKind: string): string {
@@ -6814,6 +6834,59 @@ type AdminPackageWiringRow = {
 };
 
 /**
+ * Reusable hook: loads active ExternalPortAuthoringCandidates from DB-backed admin op.
+ * Candidates are derived solely from topology.external_access_ports / external_response_ports /
+ * external_hook_ports — no provider or bundle fixed list.
+ * SSOT: docs/design/external-port-substrate-ssot.yaml admin_setting_projection
+ */
+function useExternalPortAuthoringCandidates(active: boolean): {
+  candidates: ExternalPortAuthoringCandidate[];
+  error: string | null;
+} {
+  const [candidates, setCandidates] = useState<ExternalPortAuthoringCandidate[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!active) {
+      setCandidates([]);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const body = await dispatchAdminOp("ui_topology", "list_external_port_authoring_candidates");
+      if (cancelled) return;
+      const data = body?.emission?.data as { candidates?: ExternalPortAuthoringCandidate[] } | undefined;
+      if (Array.isArray(data?.candidates)) {
+        setCandidates(data.candidates);
+        setError(null);
+      } else {
+        setCandidates([]);
+        setError(body?.errors?.[0]?.message ?? "external port 候補を取得できませんでした。");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [active]);
+  return { candidates, error };
+}
+
+/**
+ * Validates a payloadFrom field→source map and returns PAYLOAD_FROM_UNRESOLVED_REF errors.
+ * No silent acceptance: unrecognized source patterns are surfaced explicitly.
+ * SSOT: docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+ */
+function validatePayloadFromEntries(entries: Array<{ field: string; source: string }>): string[] {
+  const errors: string[] = [];
+  for (const { field, source } of entries) {
+    if (!field.trim()) continue;
+    const parsed = parsePayloadFromSource(source.trim());
+    if (parsed.kind === "unresolved_ref") {
+      errors.push(`"${field}": PAYLOAD_FROM_UNRESOLVED_REF — "${source}" は認識されたパターンではありません (node:<nodeId>.value | event.<path> | literal:<value>)`);
+    }
+  }
+  return errors;
+}
+
+/**
  * Normal-view route navigation preset for package-level wiring.
  * Allows authors to configure "click → navigate to route" in business vocabulary
  * without exposing raw dispatcher fields.
@@ -8298,6 +8371,12 @@ function PackageDesignPanel({
   );
   const [propBindingsError, setPropBindingsError] = useState<string | null>(null);
 
+  const hasDispatchPortInteraction = (selectedCanvasNode?.runtimeInteractions ?? []).some(
+    (w) => w.actionType === "dispatchExternalPort",
+  );
+  const { candidates: externalPortCandidates, error: externalPortCandidateError } =
+    useExternalPortAuthoringCandidates(Boolean(selectedCanvasNode) && hasDispatchPortInteraction);
+
   const componentKind = selectedCanvasNode?.componentKind ?? "";
   const acceptsArrayProps = COMPONENT_ARRAY_PROP_CAPABILITIES[componentKind] ?? [];
   const isDisclosure = isDisclosureKind(selectedCanvasNode?.componentKind);
@@ -9140,36 +9219,164 @@ function PackageDesignPanel({
                     };
                     return (
                       <div class="space-y-2">
-                        {interactions.map((w, i) => (
-                          <div key={i} class="grid gap-2 rounded border border-blue-100 bg-white p-2 md:grid-cols-4">
-                            <label class="text-[0.65rem]">
-                              trigger
-                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.trigger ?? w.eventType ?? "click"} onChange={(e) => updateInteraction(i, { trigger: (e.target as HTMLSelectElement).value })}>
-                                {COMPONENT_EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </label>
-                            <label class="text-[0.65rem]">
-                              action
-                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.actionType} onChange={(e) => updateInteraction(i, { actionType: (e.target as HTMLSelectElement).value })}>
-                                {COMPONENT_ACTION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </label>
-                            <label class="text-[0.65rem]">
-                              target node
-                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.targetNodeId ?? ""} onChange={(e) => updateInteraction(i, { targetNodeId: (e.target as HTMLSelectElement).value || undefined })}>
-                                <option value="">選択してください</option>
-                                {targetNodes.map((n) => <option key={n.nodeId} value={n.nodeId}>{n.nodeId} / {n.componentKind ?? n.componentKey}</option>)}
-                              </select>
-                            </label>
-                            <label class="text-[0.65rem]">
-                              statePath
-                              <input class="input-mono mt-0.5 px-1 py-0.5 text-xs" value={w.statePath ?? "open"} onInput={(e) => updateInteraction(i, { statePath: (e.target as HTMLInputElement).value || undefined })} placeholder="open / activeKey" />
-                            </label>
-                            <div class="md:col-span-4 flex justify-end">
-                              <button type="button" class="text-[0.6rem] text-red-500" onClick={() => commitInteractions(interactions.filter((_, idx) => idx !== i), "操作配線を削除")}>削除</button>
+                        {interactions.map((w, i) => {
+                          const payloadFromEntries = Object.entries(w.payloadFrom ?? {});
+                          const payloadFromErrors = validatePayloadFromEntries(
+                            payloadFromEntries.map(([field, source]) => ({ field, source })),
+                          );
+                          const isPortDispatch = w.actionType === "dispatchExternalPort";
+                          return (
+                            <div key={i} class="rounded border border-blue-100 bg-white p-2 space-y-2">
+                              <div class="grid gap-2 md:grid-cols-4">
+                                <label class="text-[0.65rem]">
+                                  trigger
+                                  <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.trigger ?? w.eventType ?? "click"} onChange={(e) => updateInteraction(i, { trigger: (e.target as HTMLSelectElement).value })}>
+                                    {COMPONENT_EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                                  </select>
+                                </label>
+                                <label class="text-[0.65rem]">
+                                  action
+                                  <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.actionType} onChange={(e) => updateInteraction(i, { actionType: (e.target as HTMLSelectElement).value })}>
+                                    {COMPONENT_ACTION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                                  </select>
+                                </label>
+                                <label class="text-[0.65rem]">
+                                  target node
+                                  <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.targetNodeId ?? ""} onChange={(e) => updateInteraction(i, { targetNodeId: (e.target as HTMLSelectElement).value || undefined })}>
+                                    <option value="">選択してください</option>
+                                    {targetNodes.map((n) => <option key={n.nodeId} value={n.nodeId}>{n.nodeId} / {n.componentKind ?? n.componentKey}</option>)}
+                                  </select>
+                                </label>
+                                <label class="text-[0.65rem]">
+                                  statePath
+                                  <input class="input-mono mt-0.5 px-1 py-0.5 text-xs" value={w.statePath ?? "open"} onInput={(e) => updateInteraction(i, { statePath: (e.target as HTMLInputElement).value || undefined })} placeholder="open / activeKey" />
+                                </label>
+                              </div>
+                              {isPortDispatch && (
+                                <div class="rounded border border-indigo-100 bg-indigo-50/40 p-2 space-y-2 text-[0.65rem]">
+                                  <div class="font-semibold text-indigo-900">外部ポート接続 / 認証情報バインド（オーサリング）</div>
+                                  <p class="text-[0.6rem] text-indigo-700">
+                                    portTargetRef は DB 由来の active external port 候補のみ選択できます。provider / bundle 固定候補は使用しません。
+                                    実行（consumer bundle runtime execution）はこの Bundle 対象外です。
+                                  </p>
+                                  <label class="block">
+                                    portTargetRef（external port バインド）
+                                    {externalPortCandidateError && (
+                                      <p class="mt-0.5 text-[0.55rem] text-amber-700">{externalPortCandidateError}</p>
+                                    )}
+                                    <select
+                                      class="input mt-0.5 w-full px-1 py-0.5 text-xs"
+                                      value={w.portTargetRef ?? ""}
+                                      onChange={(e) => updateInteraction(i, { portTargetRef: (e.target as HTMLSelectElement).value || undefined })}
+                                    >
+                                      <option value="">— 選択なし —</option>
+                                      {externalPortCandidates.map((c) => (
+                                        <option key={c.targetRef} value={c.targetRef}>
+                                          {c.portKind} / {c.providerKind} / {c.requiredByBundle} (credential: {c.credentialKind}{c.referenceKey ? ` / ${c.referenceKey}` : ""})
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {w.portTargetRef && !externalPortCandidates.some((c) => c.targetRef === w.portTargetRef) && externalPortCandidates.length > 0 && (
+                                      <p class="mt-0.5 text-[0.55rem] text-amber-700">
+                                        現在の portTargetRef は active 候補にありません。候補を再読み込みするか別の port を選択してください。
+                                      </p>
+                                    )}
+                                    {w.portTargetRef && (() => {
+                                      const selected = externalPortCandidates.find((c) => c.targetRef === w.portTargetRef);
+                                      if (!selected) return null;
+                                      return (
+                                        <div class="mt-1 rounded border border-indigo-200 bg-white px-2 py-1 text-[0.6rem] text-indigo-800">
+                                          <span class="font-semibold">portKind:</span> {selected.portKind} ·{" "}
+                                          <span class="font-semibold">credentialKind:</span> {selected.credentialKind} ·{" "}
+                                          <span class="font-semibold">providerKind:</span> {selected.providerKind}
+                                          {selected.consumerBundleBinding && (
+                                            <span> · <span class="font-semibold">consumer:</span> {selected.consumerBundleBinding}</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </label>
+                                  <fieldset class="flex flex-col gap-1">
+                                    <legend class="font-semibold text-indigo-900">
+                                      payloadFrom（リクエストフィールド → ソース マッピング）
+                                    </legend>
+                                    <p class="text-[0.6rem] text-indigo-700">
+                                      認識パターン: node:&lt;nodeId&gt;.value | event.&lt;path&gt; | literal:&lt;value&gt;
+                                    </p>
+                                    {payloadFromErrors.length > 0 && (
+                                      <div class="rounded border border-amber-200 bg-amber-50 p-1">
+                                        {payloadFromErrors.map((err, ei) => (
+                                          <p key={ei} class="text-[0.55rem] text-amber-800">{err}</p>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {payloadFromEntries.map(([field, source], pi) => (
+                                      <div key={pi} class="flex items-center gap-1">
+                                        <input
+                                          class="input-mono flex-1 px-1 py-0.5 text-[0.6rem]"
+                                          value={field}
+                                          placeholder="フィールド名"
+                                          onBlur={(e) => {
+                                            const newField = (e.target as HTMLInputElement).value.trim();
+                                            if (newField === field) return;
+                                            const next: Record<string, string> = {};
+                                            payloadFromEntries.forEach(([f, s], idx) => {
+                                              next[idx === pi ? newField : f] = s;
+                                            });
+                                            if (newField) updateInteraction(i, { payloadFrom: next });
+                                          }}
+                                        />
+                                        <span class="text-indigo-400">→</span>
+                                        <input
+                                          class={`input-mono flex-1 px-1 py-0.5 text-[0.6rem] ${parsePayloadFromSource(source).kind === "unresolved_ref" ? "border-amber-400 bg-amber-50" : ""}`}
+                                          value={source}
+                                          placeholder="node:<nodeId>.value"
+                                          onInput={(e) => {
+                                            const newSource = (e.target as HTMLInputElement).value;
+                                            const next: Record<string, string> = {};
+                                            payloadFromEntries.forEach(([f, s], idx) => {
+                                              next[f] = idx === pi ? newSource : s;
+                                            });
+                                            updateInteraction(i, { payloadFrom: Object.keys(next).length > 0 ? next : undefined });
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          class="text-[0.55rem] text-red-400 hover:underline"
+                                          onClick={() => {
+                                            const next: Record<string, string> = {};
+                                            payloadFromEntries.forEach(([f, s], idx) => { if (idx !== pi) next[f] = s; });
+                                            updateInteraction(i, { payloadFrom: Object.keys(next).length > 0 ? next : undefined });
+                                          }}
+                                        >削除</button>
+                                      </div>
+                                    ))}
+                                    <button
+                                      type="button"
+                                      class="self-start text-[0.6rem] text-indigo-600 hover:underline"
+                                      onClick={() => {
+                                        const next = { ...(w.payloadFrom ?? {}), "": "" };
+                                        updateInteraction(i, { payloadFrom: next });
+                                      }}
+                                    >+ フィールドを追加</button>
+                                  </fieldset>
+                                  <label class="block">
+                                    outputProp（レスポンス受け取り先 prop 名）
+                                    <input
+                                      class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+                                      value={w.outputProp ?? ""}
+                                      placeholder="例: result / value"
+                                      onInput={(e) => updateInteraction(i, { outputProp: (e.target as HTMLInputElement).value || undefined })}
+                                    />
+                                  </label>
+                                </div>
+                              )}
+                              <div class="flex justify-end">
+                                <button type="button" class="text-[0.6rem] text-red-500" onClick={() => commitInteractions(interactions.filter((_, idx) => idx !== i), "操作配線を削除")}>削除</button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         <button type="button" class="btn-secondary text-xs" onClick={() => commitInteractions([...interactions, { trigger: "click", actionType: "openModal", targetNodeId: targetNodes[0]?.nodeId, statePath: "open" }], "操作配線を追加")}>+ 操作配線を追加</button>
                       </div>
                     );

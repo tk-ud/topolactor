@@ -2074,6 +2074,13 @@ Deno.test("COMPONENT_ACTION_TYPES: contains standard component action types", ()
   );
 });
 
+Deno.test("COMPONENT_ACTION_TYPES: includes dispatchExternalPort for port binding authoring", () => {
+  assert(
+    (COMPONENT_ACTION_TYPES as readonly string[]).includes("dispatchExternalPort"),
+    "must include dispatchExternalPort for Design Inspector port binding authoring",
+  );
+});
+
 Deno.test("ComponentEventWiring: runtimeInteractions canonical field round-trips through layout patch", () => {
   const node: VisualNodePayload = {
     ...sampleNode,
@@ -2087,6 +2094,54 @@ Deno.test("ComponentEventWiring: runtimeInteractions canonical field round-trips
   assertEquals(parsed.value.nodes[0].runtimeInteractions?.length, 2);
   assertEquals(parsed.value.nodes[0].runtimeInteractions?.[0].trigger, "click");
   assertEquals(parsed.value.nodes[0].runtimeInteractions?.[0].targetNodeId, "modal-1");
+});
+
+Deno.test("ComponentEventWiring: payloadFrom / outputProp / portTargetRef round-trip through layout patch", () => {
+  const portRef = "external-port:access_port:port-abc-123";
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    runtimeInteractions: [
+      {
+        trigger: "submit",
+        actionType: "dispatchExternalPort",
+        payloadFrom: { entityId: "event.item.id", keyword: "node:search-input.value" },
+        outputProp: "result",
+        portTargetRef: portRef,
+      },
+    ],
+  };
+  const parsed = parseVisualLayoutPatchJson(buildVisualLayoutPatchJson([node]));
+  assert(parsed.ok);
+  const ri = parsed.value.nodes[0].runtimeInteractions;
+  assertEquals(ri?.length, 1);
+  assertEquals(ri?.[0].trigger, "submit");
+  assertEquals(ri?.[0].actionType, "dispatchExternalPort");
+  assertEquals(ri?.[0].payloadFrom?.["entityId"], "event.item.id");
+  assertEquals(ri?.[0].payloadFrom?.["keyword"], "node:search-input.value");
+  assertEquals(ri?.[0].outputProp, "result");
+  assertEquals(ri?.[0].portTargetRef, portRef);
+});
+
+Deno.test("ComponentEventWiring: portTargetRef from port binding coexists with existing interaction fields", () => {
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    runtimeInteractions: [
+      { trigger: "click", actionType: "openModal", targetNodeId: "modal-1", statePath: "open" },
+      {
+        trigger: "submit",
+        actionType: "dispatchExternalPort",
+        payloadFrom: { userId: "literal:admin" },
+        portTargetRef: "external-port:response_port:port-xyz-456",
+      },
+    ],
+  };
+  const parsed = parseVisualLayoutPatchJson(buildVisualLayoutPatchJson([node]));
+  assert(parsed.ok);
+  assertEquals(parsed.value.nodes[0].runtimeInteractions?.length, 2);
+  assertEquals(parsed.value.nodes[0].runtimeInteractions?.[0].actionType, "openModal");
+  assertEquals(parsed.value.nodes[0].runtimeInteractions?.[1].portTargetRef, "external-port:response_port:port-xyz-456");
+  assertEquals(parsed.value.nodes[0].runtimeInteractions?.[1].payloadFrom?.["userId"], "literal:admin");
+  assertEquals(parsed.value.nodes[0].runtimeInteractions?.[1].outputProp, undefined);
 });
 
 Deno.test("ComponentEventWiring: legacy propsJson.eventWirings remains fallback-compatible", () => {
