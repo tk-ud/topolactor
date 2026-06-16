@@ -659,7 +659,7 @@ system_roadmap_ssot:
         - .agent/tasks/todo.md#email-port-consumer
       known_gap_ref:
         - email_dispatch_service_implementation_not_started
-        - smtp_provider_adapter_implementation_not_started
+        - email_response_port_connection_implementation_not_started
 
     product.stripe_port_consumer:
       bundle_id: stripe-port-consumer
@@ -677,7 +677,7 @@ system_roadmap_ssot:
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#stripe-port-consumer
       known_gap_ref:
-        - stripe_event_verification_service_implementation_not_started
+        - stripe_hook_port_receive_implementation_not_started
         - payment_state_projection_schema_not_started
 
     product.file_storage_port_consumer:
@@ -696,7 +696,7 @@ system_roadmap_ssot:
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#file-storage-port-consumer
       known_gap_ref:
-        - storage_provider_adapter_implementation_not_started
+        - file_storage_access_response_port_connection_implementation_not_started
         - export_job_schema_implementation_not_started
 
     product.export_sftp_port_consumer:
@@ -715,7 +715,7 @@ system_roadmap_ssot:
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#export-sftp-port-consumer
       known_gap_ref:
-        - sftp_transfer_service_implementation_not_started
+        - export_sftp_response_port_connection_implementation_not_started
         - transfer_retry_policy_implementation_not_started
 
     product.webhook_inbox_port_consumer:
