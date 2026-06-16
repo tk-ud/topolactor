@@ -6,7 +6,7 @@
 
 ## Status
 
-partial / minimal primitive skeleton
+partial / minimal primitive skeleton; auth/external credential management topology projection implemented
 
 ## SSOT
 
@@ -34,7 +34,7 @@ partial / minimal primitive skeleton
 - `topology.external_credential_vault` / `topology.external_credential_refresh_attempt` は minimal DDL 済み。DB repository atomic update 実装は残作業。
 - `topology.physical_tables` catalog と external port tables の登録 / bootstrap / seed 整合を実装する。
 - `credential_kind` (`auth` / `external` / `none`), `port_kind` (`access_port` / `response_port` / `hook_port`), `provider_kind`, `port_setting_projection`, `consumer_bundle_binding`, `credential_requirement` を DB seed / projection で解決できるようにする。
-- admin 権限の projection 側管理画面で、port record context 内の credential_kind / provider_kind / reference_key / required_by_bundle / consumer_bundle_binding を管理できるようにする。
+- [x] admin 権限の projection 側管理画面で、port record context 内の credential_kind / provider_kind / reference_key / required_by_bundle / consumer_bundle_binding を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する。
 - backend は provider 別 hardcode ではなく、汎用 access_port connect / response_port connect / hook_port receive / port record resolution のみを持つ。
 - file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp / credential requirement substrate を consumer として接続する。
 
@@ -180,3 +180,27 @@ remaining_todo:
 - DB-backed `IExternalPortPolicyRepository` implementation is not implemented yet.
 - DB repository atomic encrypted credential payload update remains in the parent credential-vault bundle.
 - Admin setting projection, validate/preview/apply integration, and consumer bundle wiring remain out of scope for this partial increment.
+
+
+## Bundle increment `auth-external-credential-management-topology-projection`
+
+Status: implemented
+Parent bundle: `external-port-substrate-implementation`
+
+問題点:
+- external port physical tables and generic policy-step seed existed, but auth / external credential management had no fixed-form topology projection tying auth boundary, external port context, policy template selection, and validate-preview-apply boundaries together.
+
+目的:
+- Establish credential management as an existing manifest projection surface, not as a UI Builder component/preset, dedicated credential route/panel, or physical-table generic row editor.
+
+実装内容:
+- Seed active manifest `auth.external.credential_management.projection` with screen_data_shape logical tables for `external_port_context` and `policy_template_selection`.
+- Reuse Step 2.5 relationIntents to join `external_port_context.auth_user_id` to active `auth.user.boundary` remote target manifest `00000000-0000-0000-0000-000000000091`.
+- Expose credential metadata only: `credential_kind`, `provider_kind`, `reference_key`, `required_by_bundle`, `port_kind`, `consumer_bundle_binding`, and policy template key.
+- Mark draft-edit / validate-preview-apply / no-UIBuilder-authority / no-physical-row-editor / policy-template-selection-only boundaries in manifest topology.
+- Add `.agent/tests/check-auth-external-credential-projection.sh` guard for projection presence, Step 2.5 relation, secret marker exclusion, and forbidden UI Builder / route / panel escapes.
+
+remaining_todo:
+- DB-backed `IExternalPortPolicyRepository` implementation is not implemented yet.
+- DB repository atomic encrypted credential payload update remains in the parent credential-vault bundle.
+- Consumer bundle wiring remains out of scope for this increment.
