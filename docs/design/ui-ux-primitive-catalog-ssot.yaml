@@ -976,7 +976,7 @@ category_g_document_canvas:
       runtimeConnected: true
 
 # =============================================================================
-# Category H: Safety / Inspector / Operation Guard UI
+# Category G2: Provider-agnostic Media UI
 # =============================================================================
 
 category_g_media_primitives:
@@ -1007,6 +1007,10 @@ category_g_media_primitives:
       props: [src, mimeType, title, controls, autoplay, loop, poster, ariaLabel]
       provider_specific_props: forbidden
       runtimeConnected: true
+
+# =============================================================================
+# Category H: Safety / Inspector / Operation Guard UI
+# =============================================================================
 
 category_h_safety_guard:
   label: Safety / Inspector / Operation Guard UI

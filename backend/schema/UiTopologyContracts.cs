@@ -325,7 +325,7 @@ public record ExternalPortAuthoringCandidateDto(
     [property: JsonPropertyName("credentialKind")] string CredentialKind,
     [property: JsonPropertyName("referenceKey")] string? ReferenceKey,
     [property: JsonPropertyName("requiredByBundle")] string RequiredByBundle,
-    [property: JsonPropertyName("consumerBundleBinding")] string ConsumerBundleBinding,
+    [property: JsonPropertyName("consumerBundleBinding")] string? ConsumerBundleBinding,
     [property: JsonPropertyName("urlOrEnvReference")] string? UrlOrEnvReference,
     [property: JsonPropertyName("hookPath")] string? HookPath,
     [property: JsonPropertyName("routeKey")] string? RouteKey,

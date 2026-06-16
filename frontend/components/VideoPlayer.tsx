@@ -18,11 +18,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
   const controls = props.controls !== false;
   return (
     <figure class={mergeDesignClassName(props.className, props.design)}>
-      {props.title && (
-        <figcaption class="mb-1 text-sm font-medium text-slate-700">
-          {props.title}
-        </figcaption>
-      )}
+      {props.title && <figcaption class="mb-1 text-sm font-medium text-slate-700">{props.title}</figcaption>}
       <video
         src={props.src}
         controls={controls}

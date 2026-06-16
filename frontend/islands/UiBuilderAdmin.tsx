@@ -1,16 +1,7 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "preact/hooks";
-import { type ComponentChildren, JSX } from "preact";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { JSX, type ComponentChildren } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
-import {
-  type CanvasPresetSeed,
-  PresetUploaderDrawer,
-} from "./PresetUploaderDrawer.tsx";
+import { PresetUploaderDrawer, type CanvasPresetSeed } from "./PresetUploaderDrawer.tsx";
 import {
   bindMockPreset,
   listMockPresets,
@@ -23,10 +14,7 @@ import {
 } from "../runtime/cssDictionary.ts";
 import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "../runtime/topologyLayoutClassDictionary.ts";
 import { resolveTopologyLayoutClassRefs } from "../runtime/topologyLayoutClassResolver.ts";
-import {
-  type ValidationErrorEntry,
-  ValidationErrorPanel,
-} from "../components/ValidationErrorPanel.tsx";
+import { ValidationErrorPanel, type ValidationErrorEntry } from "../components/ValidationErrorPanel.tsx";
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
@@ -51,31 +39,31 @@ import {
 } from "../content/adminUxTerms.ts";
 import {
   buildVisualLayoutPatchJson,
-  emptySelectionSet,
   enrichDraftNodesWithPaletteComponentIds,
+  emptySelectionSet,
   filterEmptyResponsiveRules,
   invertSelection,
-  isLegacyAbsoluteLayoutPatch,
   type LayoutDimension,
-  layoutDimensionLabel,
   type LayoutNodeKind,
+  layoutDimensionLabel,
+  isLegacyAbsoluteLayoutPatch,
   makeStructuralHtmlNode,
   migrateAbsolutePatchToFlowStack,
-  type PaletteDraftSeedEntry,
   parseLayoutDimensionInput,
+  type PaletteDraftSeedEntry,
   parseVisualLayoutPatchJson,
   removeFromSelectionSet,
   reorderLayoutNodeStack,
   resolveSizingModeAfterToggle,
   RESPONSIVE_BREAKPOINTS,
   type ResponsiveTokenRules,
-  seedDraftNodesFromPalette,
   selectAll,
   selectByComponentKind,
   selectByNodeKind,
   type SelectionSetContract,
   selectSubtree,
   type SizingMode,
+  seedDraftNodesFromPalette,
   snapToGrid,
   STRUCTURAL_HTML_TAG_ALLOWLIST,
   type StructuralHtmlTag,
@@ -84,14 +72,11 @@ import {
 } from "../runtime/visualLayoutUtils.ts";
 import { resolveCanvasRootPreviewClassName } from "../runtime/layoutClassPreviewUtils.ts";
 import {
-  type FlowCanvasDesignDraft,
   FlowLayoutCanvas,
+  type FlowCanvasDesignDraft,
 } from "../components/FlowLayoutCanvas.tsx";
 import { lookupTopologyLayoutClassKey } from "../runtime/topologyLayoutClassResolver.ts";
-import {
-  findLinkHrefPlaceholders,
-  interpolateLinkHrefReadOnly,
-} from "../runtime/linkPlaceholderInterpolation.ts";
+import { findLinkHrefPlaceholders, interpolateLinkHrefReadOnly } from "../runtime/linkPlaceholderInterpolation.ts";
 import {
   LayoutPatchApplyModal,
   type LayoutPatchApplyModalPhase,
@@ -118,30 +103,26 @@ import { getStoredScreenLabel } from "../runtime/screenAuthoringIntent.ts";
 import {
   extractScreenDataShapeFromTopology,
   type LogicalTableShape,
-  type OperationEntityBindingShape,
   type RelationIntentShape,
+  type OperationEntityBindingShape,
 } from "../lib/manifestTopologyExtensions.ts";
 import {
-  applyCalcTargetPropAdoption,
-  applyColumnFieldAdoption,
-  applyEmissionSourceAdoption,
-  applyRuleTableMatchConditionAdoption,
-  deriveDbColumnCandidates,
   deriveDbTableCandidates,
-  deriveEmissionArrayPathCandidates,
-  deriveEmissionScalarPathCandidates,
+  deriveDbColumnCandidates,
   deriveQualifiedColumnCandidates,
-  deriveRuleTableMatchConditionSuggestCandidates,
   deriveSourceNodeSuggestCandidates,
   deriveTargetNodeSuggestCandidates,
   deriveTargetPropSuggestCandidates,
+  deriveRuleTableMatchConditionSuggestCandidates,
+  deriveEmissionScalarPathCandidates,
+  deriveEmissionArrayPathCandidates,
+  applyColumnFieldAdoption,
+  applyEmissionSourceAdoption,
+  applyCalcTargetPropAdoption,
+  applyRuleTableMatchConditionAdoption,
   type MatchConditionValueSourceCandidate,
 } from "../lib/uiBuilderAuthoringSuggest.ts";
-import {
-  isValidTopologySystemName,
-  resolveVisibleTopologyName,
-  topologySystemNameToUiBuilderKey,
-} from "../lib/topologySystemName.ts";
+import { resolveVisibleTopologyName, topologySystemNameToUiBuilderKey, isValidTopologySystemName } from "../lib/topologySystemName.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
   enrichLayoutPreviewNodes,
@@ -149,28 +130,28 @@ import {
   resolveComponentKindForLayoutPreview,
 } from "../runtime/layoutComponentPreview.ts";
 import {
-  ALLOWED_PROP_BINDING_TRANSFORMS,
   COMPONENT_ARRAY_PROP_CAPABILITIES,
+  ALLOWED_PROP_BINDING_TRANSFORMS,
   validatePropBindingsStructure,
 } from "../runtime/propBindingResolver.ts";
 import {
+  evaluateAllCalcBindings,
+  resolveAllowedTargetProps,
+  validateCalcBinding,
+  validateCalcTargetProp,
   type CalcBinding,
   type CalcOperation,
   type CalcVariableSource,
-  evaluateAllCalcBindings,
-  resolveAllowedTargetProps,
   type RoundingPolicy,
   type RuleMatchCondition,
-  validateCalcBinding,
-  validateCalcTargetProp,
 } from "../runtime/frontendLocalCalculationResolver.ts";
 import {
   deriveComponentKeyCandidates,
   deriveComponentKindCandidates,
   deriveEmissionPathCandidates,
   deriveNodeCandidates,
-  deriveRouteKeyCandidates,
   deriveRuleTableFieldCandidates,
+  deriveRouteKeyCandidates,
   type DraftNodeMinimal,
 } from "../lib/uiBuilderAutocompleteCandidates.ts";
 import { searchRouteKeyCandidates } from "../lib/uiBuilderSearchProvider.ts";
@@ -179,12 +160,12 @@ import {
   applyBatchJsonPatch,
   applyBatchLayoutClassRefs,
   applyBatchPropBinding,
-  type BatchCalcBindingAssistPreviewResult,
   type BatchLayoutClassRefOpKind,
-  type BatchPreviewResult,
   type BatchPropBindingDraft,
+  type BatchPreviewResult,
   type BatchWiringAssistDraft,
   type BatchWiringAssistPreviewResult,
+  type BatchCalcBindingAssistPreviewResult,
   previewBatchCalcBindingAssist,
   previewBatchJsonPatch,
   previewBatchLayoutClassRefs,
@@ -205,10 +186,7 @@ import {
  * SSOT: docs/design/admin-console-workflow-ssot.yaml (step 4 package-only edit route)
  */
 
-import {
-  queueAdminClientCommand,
-  type ScheduledCommandResult,
-} from "../runtime/frontendScheduler.ts";
+import { queueAdminClientCommand, type ScheduledCommandResult } from "../runtime/frontendScheduler.ts";
 import type { ValidationError } from "../api/dispatch.ts";
 
 /** Canvas workspace contract marker (SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract). */
@@ -220,16 +198,11 @@ export const UI_BUILDER_LEFT_PANEL_DOCKED = true as const;
 /** Design save action is positioned above the inspector tabs (not tab-specific). */
 export const UI_BUILDER_DESIGN_SAVE_ABOVE_TABS = true as const;
 /** Drawer shells are display-density chrome inside the same canvas workspace. */
-export const UI_BUILDER_DRAWER_SHELL_KIND =
-  "same_workspace_display_shell" as const;
+export const UI_BUILDER_DRAWER_SHELL_KIND = "same_workspace_display_shell" as const;
 /** Drawer open/closed flags are frontend-local UI state only, never persisted. */
-export const UI_BUILDER_DRAWER_STATE_BOUNDARY =
-  "frontend_local_state_only" as const;
+export const UI_BUILDER_DRAWER_STATE_BOUNDARY = "frontend_local_state_only" as const;
 /** Selection set is transient draft interaction state only; not persisted to layout_patch_json. */
-// Test sentinel: title={`${UX_LAYOUT_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
-// Test sentinel: title={`${UX_DESIGN_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
-export const UI_BUILDER_SELECTION_STATE_BOUNDARY =
-  "transient_draft_interaction_state_only" as const;
+export const UI_BUILDER_SELECTION_STATE_BOUNDARY = "transient_draft_interaction_state_only" as const;
 /**
  * SelectionSetContract re-export for batch operation bundle.
  * SSOT: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
@@ -346,9 +319,7 @@ type BucketCardDragPayload = {
 
 const BUCKET_CARD_DRAG_MIME = "application/x-topolactor-bucket-card";
 
-function paletteEntryFromDragPayload(
-  payload: BucketCardDragPayload,
-): PaletteEntry {
+function paletteEntryFromDragPayload(payload: BucketCardDragPayload): PaletteEntry {
   return {
     componentKey: payload.componentKey,
     componentKind: payload.componentKind,
@@ -380,10 +351,7 @@ function bucketCardDragPayloadFromEntry(
   };
 }
 
-function writeBucketCardDragData(
-  e: DragEvent,
-  payload: BucketCardDragPayload,
-): void {
+function writeBucketCardDragData(e: DragEvent, payload: BucketCardDragPayload): void {
   e.dataTransfer?.setData(BUCKET_CARD_DRAG_MIME, JSON.stringify(payload));
   e.dataTransfer?.setData("text/plain", payload.componentKey);
   if (e.dataTransfer) e.dataTransfer.effectAllowed = "copy";
@@ -566,6 +534,7 @@ const COMPONENT_BUCKET_KIND_ICONS: Record<string, string> = {
   data_display: "▤",
 };
 
+
 /** Canonical runtime UI interaction entry saved to layout_patch_json.nodes[].runtimeInteractions. */
 export type ComponentEventWiring = {
   trigger: string;
@@ -656,15 +625,11 @@ function ComponentBucketCard({
       <div
         draggable={draggable && placementReady}
         onDragStart={(e: DragEvent) => {
-          if (
-            !draggable || !placementReady || !onDragStart || !dragPayload
-          ) return;
+          if (!draggable || !placementReady || !onDragStart || !dragPayload) return;
           writeBucketCardDragData(e, dragPayload);
           onDragStart(e, dragPayload);
         }}
-        class={`component-bucket-card__body flex gap-2 ${
-          draggable && placementReady ? "cursor-grab" : ""
-        }`}
+        class={`component-bucket-card__body flex gap-2 ${draggable && placementReady ? "cursor-grab" : ""}`}
       >
         <div
           class="component-bucket-card__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-base text-slate-700"
@@ -674,21 +639,13 @@ function ComponentBucketCard({
           {bucketKindIcon(componentKind)}
         </div>
         <div class="min-w-0 flex-1">
-          <div
-            class="truncate text-xs font-semibold text-slate-900"
-            title={componentKey}
-          >
+          <div class="truncate text-xs font-semibold text-slate-900" title={componentKey}>
             {friendlyComponentLabel(componentKey)}
           </div>
-          <div
-            class="truncate font-mono text-[0.6rem] text-slate-500"
-            title={componentKey}
-          >
+          <div class="truncate font-mono text-[0.6rem] text-slate-500" title={componentKey}>
             {componentKey}
           </div>
-          <div class="mt-0.5 truncate text-[0.6rem] text-slate-600">
-            {componentKind}
-          </div>
+          <div class="mt-0.5 truncate text-[0.6rem] text-slate-600">{componentKind}</div>
           {sourcePath && (
             <div
               class="component-bucket-card__source-path mt-0.5 truncate font-mono text-[0.55rem] text-slate-500"
@@ -735,12 +692,8 @@ function ComponentBucketCard({
 
       {sourcePath && (
         <details class="mt-1">
-          <summary class="cursor-pointer text-[0.55rem] text-gray-400">
-            技術詳細
-          </summary>
-          <code class="block break-all text-[0.55rem] text-gray-500">
-            {sourcePath}
-          </code>
+          <summary class="cursor-pointer text-[0.55rem] text-gray-400">技術詳細</summary>
+          <code class="block break-all text-[0.55rem] text-gray-500">{sourcePath}</code>
         </details>
       )}
     </div>
@@ -750,9 +703,7 @@ function ComponentBucketCard({
 // ─── 一括操作パネル ──────────────────────────────────────────────────────────
 
 /** Preview table row for batch operation results. */
-function BatchPreviewTable(
-  { result }: { result: BatchPreviewResult },
-): JSX.Element {
+function BatchPreviewTable({ result }: { result: BatchPreviewResult }): JSX.Element {
   return (
     <div class="mt-2 max-h-48 overflow-y-auto rounded border border-slate-200 bg-white text-[0.65rem]">
       <table class="w-full">
@@ -777,22 +728,13 @@ function BatchPreviewTable(
                   : "bg-green-50"
               }`}
             >
-              <td
-                class="px-2 py-1 font-mono text-slate-700 truncate max-w-[120px]"
-                title={e.nodeId}
-              >
+              <td class="px-2 py-1 font-mono text-slate-700 truncate max-w-[120px]" title={e.nodeId}>
                 {e.nodeLabel}
               </td>
               <td class="px-2 py-1">
-                {e.status === "error" && (
-                  <span class="badge-error">
-                    エラー
-                  </span>
-                )}
+                {e.status === "error" && <span class="badge-error">エラー</span>}
                 {e.status === "warning" && <span class="badge-warn">警告</span>}
-                {e.status === "no_change" && (
-                  <span class="badge-info">変更なし</span>
-                )}
+                {e.status === "no_change" && <span class="badge-info">変更なし</span>}
                 {e.status === "ok" && <span class="badge-ok">OK</span>}
               </td>
               <td class="px-2 py-1 text-slate-600">
@@ -807,8 +749,7 @@ function BatchPreviewTable(
         </tbody>
       </table>
       <div class="border-t border-slate-100 bg-slate-50 px-2 py-1 text-slate-500">
-        対象: {result.targetCount} 件 / 変更: {result.willChangeCount}{" "}
-        件 / エラー: {result.errorCount} 件
+        対象: {result.targetCount} 件 / 変更: {result.willChangeCount} 件 / エラー: {result.errorCount} 件
       </div>
     </div>
   );
@@ -839,51 +780,33 @@ function BatchOperationPanel({
   onApplyCalcBindings: (bindings: CalcBinding[]) => void;
 }): JSX.Element {
   // layoutClassRefs tab state
-  const [batchClassOp, setBatchClassOp] = useState<BatchLayoutClassRefOpKind>(
-    "add",
-  );
+  const [batchClassOp, setBatchClassOp] = useState<BatchLayoutClassRefOpKind>("add");
   const [batchClassKey, setBatchClassKey] = useState("");
-  const [batchClassPreview, setBatchClassPreview] = useState<
-    BatchPreviewResult | null
-  >(null);
+  const [batchClassPreview, setBatchClassPreview] = useState<BatchPreviewResult | null>(null);
 
   // propsJson / stateJson tab state
-  const [batchJsonField, setBatchJsonField] = useState<
-    "propsJson" | "stateJson"
-  >("propsJson");
+  const [batchJsonField, setBatchJsonField] = useState<"propsJson" | "stateJson">("propsJson");
   const [batchJsonPatch, setBatchJsonPatch] = useState("");
-  const [batchJsonPreview, setBatchJsonPreview] = useState<
-    BatchPreviewResult | null
-  >(null);
+  const [batchJsonPreview, setBatchJsonPreview] = useState<BatchPreviewResult | null>(null);
 
   // propBindings tab state
-  const [batchBindingDraft, setBatchBindingDraft] = useState<
-    BatchPropBindingDraft
-  >({
+  const [batchBindingDraft, setBatchBindingDraft] = useState<BatchPropBindingDraft>({
     propName: "",
     source: "emission.data.",
   });
-  const [batchBindingPreview, setBatchBindingPreview] = useState<
-    BatchPreviewResult | null
-  >(null);
+  const [batchBindingPreview, setBatchBindingPreview] = useState<BatchPreviewResult | null>(null);
 
   // wiring assist tab state
-  const [batchWiringDraft, setBatchWiringDraft] = useState<
-    BatchWiringAssistDraft
-  >({
+  const [batchWiringDraft, setBatchWiringDraft] = useState<BatchWiringAssistDraft>({
     wiringKind: "",
     targetSurface: "route",
     targetRef: "",
   });
-  const [batchWiringPreview, setBatchWiringPreview] = useState<
-    BatchWiringAssistPreviewResult | null
-  >(null);
+  const [batchWiringPreview, setBatchWiringPreview] = useState<BatchWiringAssistPreviewResult | null>(null);
 
   // calc binding assist tab state
   const [batchCalcJson, setBatchCalcJson] = useState("");
-  const [batchCalcPreview, setBatchCalcPreview] = useState<
-    BatchCalcBindingAssistPreviewResult | null
-  >(null);
+  const [batchCalcPreview, setBatchCalcPreview] = useState<BatchCalcBindingAssistPreviewResult | null>(null);
   const [batchCalcError, setBatchCalcError] = useState<string | null>(null);
 
   if (selectedNodeIds.size === 0) {
@@ -896,71 +819,35 @@ function BatchOperationPanel({
 
   const handlePreviewClassRefs = () => {
     setBatchClassPreview(
-      previewBatchLayoutClassRefs(
-        draftNodes,
-        selectedNodeIds,
-        batchClassOp,
-        batchClassKey.trim(),
-      ),
+      previewBatchLayoutClassRefs(draftNodes, selectedNodeIds, batchClassOp, batchClassKey.trim()),
     );
   };
   const handleApplyClassRefs = () => {
     if (!batchClassPreview || batchClassPreview.hasAnyError) return;
-    onApplyNodes(
-      applyBatchLayoutClassRefs(
-        draftNodes,
-        selectedNodeIds,
-        batchClassOp,
-        batchClassKey.trim(),
-      ) as DraftNode[],
-    );
+    onApplyNodes(applyBatchLayoutClassRefs(draftNodes, selectedNodeIds, batchClassOp, batchClassKey.trim()) as DraftNode[]);
     setBatchClassPreview(null);
   };
 
   const handlePreviewJsonPatch = () => {
-    setBatchJsonPreview(
-      previewBatchJsonPatch(
-        draftNodes,
-        selectedNodeIds,
-        batchJsonField,
-        batchJsonPatch,
-      ),
-    );
+    setBatchJsonPreview(previewBatchJsonPatch(draftNodes, selectedNodeIds, batchJsonField, batchJsonPatch));
   };
   const handleApplyJsonPatch = () => {
     if (!batchJsonPreview || batchJsonPreview.hasAnyError) return;
-    onApplyNodes(
-      applyBatchJsonPatch(
-        draftNodes,
-        selectedNodeIds,
-        batchJsonField,
-        batchJsonPatch,
-      ) as DraftNode[],
-    );
+    onApplyNodes(applyBatchJsonPatch(draftNodes, selectedNodeIds, batchJsonField, batchJsonPatch) as DraftNode[]);
     setBatchJsonPreview(null);
   };
 
   const handlePreviewPropBinding = () => {
-    setBatchBindingPreview(
-      previewBatchPropBinding(draftNodes, selectedNodeIds, batchBindingDraft),
-    );
+    setBatchBindingPreview(previewBatchPropBinding(draftNodes, selectedNodeIds, batchBindingDraft));
   };
   const handleApplyPropBinding = () => {
     if (!batchBindingPreview || batchBindingPreview.hasAnyError) return;
-    onApplyNodes(
-      applyBatchPropBinding(
-        draftNodes,
-        selectedNodeIds,
-        batchBindingDraft,
-      ) as DraftNode[],
-    );
+    onApplyNodes(applyBatchPropBinding(draftNodes, selectedNodeIds, batchBindingDraft) as DraftNode[]);
     setBatchBindingPreview(null);
   };
 
   const handlePreviewWiring = () => {
-    setBatchWiringPreview(
-      previewBatchWiringAssist(draftNodes, selectedNodeIds, batchWiringDraft),
-    );
+    setBatchWiringPreview(previewBatchWiringAssist(draftNodes, selectedNodeIds, batchWiringDraft));
   };
 
   const handlePreviewCalcBinding = () => {
@@ -983,28 +870,17 @@ function BatchOperationPanel({
       setBatchCalcPreview(null);
       return;
     }
-    setBatchCalcPreview(
-      previewBatchCalcBindingAssist(
-        calculationBindings,
-        selectedNodeIds,
-        parsed,
-        draftNodes,
-      ),
-    );
+    setBatchCalcPreview(previewBatchCalcBindingAssist(calculationBindings, selectedNodeIds, parsed, draftNodes));
   };
   const handleApplyCalcBinding = () => {
-    if (!batchCalcPreview || batchCalcPreview.validationErrors.length > 0) {
-      return;
-    }
+    if (!batchCalcPreview || batchCalcPreview.validationErrors.length > 0) return;
     let parsed: CalcBinding;
     try {
       parsed = JSON.parse(batchCalcJson) as CalcBinding;
     } catch {
       return;
     }
-    onApplyCalcBindings(
-      applyBatchCalcBindingAssist(calculationBindings, parsed),
-    );
+    onApplyCalcBindings(applyBatchCalcBindingAssist(calculationBindings, parsed));
     setBatchCalcJson("");
     setBatchCalcPreview(null);
   };
@@ -1017,10 +893,7 @@ function BatchOperationPanel({
           class="rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.65rem]"
           value={batchClassOp}
           onChange={(e) => {
-            setBatchClassOp(
-              (e.target as HTMLSelectElement)
-                .value as BatchLayoutClassRefOpKind,
-            );
+            setBatchClassOp((e.target as HTMLSelectElement).value as BatchLayoutClassRefOpKind);
             setBatchClassPreview(null);
           }}
         >
@@ -1056,8 +929,7 @@ function BatchOperationPanel({
         >
           プレビュー
         </button>
-        {batchClassPreview && !batchClassPreview.hasAnyError &&
-          batchClassPreview.willChangeCount > 0 && (
+        {batchClassPreview && !batchClassPreview.hasAnyError && batchClassPreview.willChangeCount > 0 && (
           <button
             type="button"
             class="btn-success px-2 py-0.5 text-[0.65rem]"
@@ -1079,11 +951,7 @@ function BatchOperationPanel({
           class="rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.65rem]"
           value={batchJsonField}
           onChange={(e) => {
-            setBatchJsonField(
-              (e.target as HTMLSelectElement).value as
-                | "propsJson"
-                | "stateJson",
-            );
+            setBatchJsonField((e.target as HTMLSelectElement).value as "propsJson" | "stateJson");
             setBatchJsonPreview(null);
           }}
         >
@@ -1102,8 +970,7 @@ function BatchOperationPanel({
         }}
       />
       <p class="text-[0.6rem] text-slate-400">
-        JSON
-        オブジェクト（配列・スカラー不可）。既存値とマージします。上書きになるキーはプレビューで確認してください。
+        JSON オブジェクト（配列・スカラー不可）。既存値とマージします。上書きになるキーはプレビューで確認してください。
       </p>
       <div class="flex gap-1">
         <button
@@ -1114,8 +981,7 @@ function BatchOperationPanel({
         >
           プレビュー
         </button>
-        {batchJsonPreview && !batchJsonPreview.hasAnyError &&
-          batchJsonPreview.willChangeCount > 0 && (
+        {batchJsonPreview && !batchJsonPreview.hasAnyError && batchJsonPreview.willChangeCount > 0 && (
           <button
             type="button"
             class="btn-success px-2 py-0.5 text-[0.65rem]"
@@ -1132,42 +998,31 @@ function BatchOperationPanel({
   const propBindingsTab: JSX.Element = (
     <div class="flex flex-col gap-2 p-1">
       <div class="flex gap-1 items-center">
-        <label class="text-[0.62rem] text-slate-600 shrink-0 w-16">
-          propName:
-        </label>
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-16">propName:</label>
         <input
           class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
           placeholder="items"
           value={batchBindingDraft.propName}
           onInput={(e) => {
-            setBatchBindingDraft((d) => ({
-              ...d,
-              propName: (e.target as HTMLInputElement).value,
-            }));
+            setBatchBindingDraft((d) => ({ ...d, propName: (e.target as HTMLInputElement).value }));
             setBatchBindingPreview(null);
           }}
         />
       </div>
       <div class="flex gap-1 items-center">
-        <label class="text-[0.62rem] text-slate-600 shrink-0 w-16">
-          source:
-        </label>
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-16">source:</label>
         <input
           class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
           placeholder="emission.data.rows"
           value={batchBindingDraft.source}
           onInput={(e) => {
-            setBatchBindingDraft((d) => ({
-              ...d,
-              source: (e.target as HTMLInputElement).value,
-            }));
+            setBatchBindingDraft((d) => ({ ...d, source: (e.target as HTMLInputElement).value }));
             setBatchBindingPreview(null);
           }}
         />
       </div>
       <p class="text-[0.6rem] text-slate-400">
-        source は emission.data. で始まる必要があります。配列 prop
-        に対応した部品種別のみ適用されます。
+        source は emission.data. で始まる必要があります。配列 prop に対応した部品種別のみ適用されます。
       </p>
       <div class="flex gap-1">
         <button
@@ -1178,8 +1033,7 @@ function BatchOperationPanel({
         >
           プレビュー
         </button>
-        {batchBindingPreview && !batchBindingPreview.hasAnyError &&
-          batchBindingPreview.willChangeCount > 0 && (
+        {batchBindingPreview && !batchBindingPreview.hasAnyError && batchBindingPreview.willChangeCount > 0 && (
           <button
             type="button"
             class="btn-success px-2 py-0.5 text-[0.65rem]"
@@ -1189,50 +1043,35 @@ function BatchOperationPanel({
           </button>
         )}
       </div>
-      {batchBindingPreview && (
-        <BatchPreviewTable
-          result={batchBindingPreview}
-        />
-      )}
+      {batchBindingPreview && <BatchPreviewTable result={batchBindingPreview} />}
     </div>
   );
 
   const wiringAssistTab: JSX.Element = (
     <div class="flex flex-col gap-2 p-1">
       <p class="rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[0.6rem] text-blue-800">
-        配線参照: テンプレートを入力して per-node
-        バリデーション結果を確認できます。
+        配線参照: テンプレートを入力して per-node バリデーション結果を確認できます。
         実際の保存は既存の単一ノード配線エディターから行ってください。
       </p>
       <div class="flex gap-1 items-center">
-        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">
-          wiringKind:
-        </label>
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">wiringKind:</label>
         <input
           class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
           placeholder="navigation"
           value={batchWiringDraft.wiringKind}
           onInput={(e) => {
-            setBatchWiringDraft((d) => ({
-              ...d,
-              wiringKind: (e.target as HTMLInputElement).value,
-            }));
+            setBatchWiringDraft((d) => ({ ...d, wiringKind: (e.target as HTMLInputElement).value }));
             setBatchWiringPreview(null);
           }}
         />
       </div>
       <div class="flex gap-1 items-center">
-        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">
-          targetSurface:
-        </label>
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">targetSurface:</label>
         <select
           class="flex-1 rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.65rem]"
           value={batchWiringDraft.targetSurface}
           onChange={(e) => {
-            setBatchWiringDraft((d) => ({
-              ...d,
-              targetSurface: (e.target as HTMLSelectElement).value,
-            }));
+            setBatchWiringDraft((d) => ({ ...d, targetSurface: (e.target as HTMLSelectElement).value }));
             setBatchWiringPreview(null);
           }}
         >
@@ -1242,18 +1081,13 @@ function BatchOperationPanel({
         </select>
       </div>
       <div class="flex gap-1 items-center">
-        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">
-          targetRef:
-        </label>
+        <label class="text-[0.62rem] text-slate-600 shrink-0 w-20">targetRef:</label>
         <input
           class="flex-1 rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
           placeholder="route:my-page または (接続先 ref)"
           value={batchWiringDraft.targetRef}
           onInput={(e) => {
-            setBatchWiringDraft((d) => ({
-              ...d,
-              targetRef: (e.target as HTMLInputElement).value,
-            }));
+            setBatchWiringDraft((d) => ({ ...d, targetRef: (e.target as HTMLInputElement).value }));
             setBatchWiringPreview(null);
           }}
         />
@@ -1283,20 +1117,9 @@ function BatchOperationPanel({
             </thead>
             <tbody>
               {batchWiringPreview.entries.map((e) => (
-                <tr
-                  key={e.nodeId}
-                  class={`border-b border-slate-100 ${
-                    e.validationStatus === "error" ? "bg-red-50" : "bg-green-50"
-                  }`}
-                >
-                  <td class="px-2 py-1 font-mono text-slate-700 truncate max-w-[100px]">
-                    {e.nodeLabel}
-                  </td>
-                  <td class="px-2 py-1 font-mono text-slate-500 text-[0.6rem]">
-                    {e.currentWiringId
-                      ? e.currentWiringId.slice(0, 8) + "…"
-                      : "(なし)"}
-                  </td>
+                <tr key={e.nodeId} class={`border-b border-slate-100 ${e.validationStatus === "error" ? "bg-red-50" : "bg-green-50"}`}>
+                  <td class="px-2 py-1 font-mono text-slate-700 truncate max-w-[100px]">{e.nodeLabel}</td>
+                  <td class="px-2 py-1 font-mono text-slate-500 text-[0.6rem]">{e.currentWiringId ? e.currentWiringId.slice(0, 8) + "…" : "(なし)"}</td>
                   <td class="px-2 py-1 text-slate-600 break-all">
                     {e.error
                       ? <span class="text-red-700">{e.error}</span>
@@ -1314,8 +1137,7 @@ function BatchOperationPanel({
   const calcAssistTab: JSX.Element = (
     <div class="flex flex-col gap-2 p-1">
       <p class="rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[0.6rem] text-blue-800">
-        選択ノードを参照する CalcBinding
-        を追加します。計算はブラウザ内で完結し、外部送信は行いません。
+        選択ノードを参照する CalcBinding を追加します。計算はブラウザ内で完結し、外部送信は行いません。
       </p>
       <textarea
         class="w-full rounded border border-slate-200 px-1 py-0.5 font-mono text-[0.65rem]"
@@ -1361,9 +1183,8 @@ function BatchOperationPanel({
             </ul>
           )}
           <p class="mt-1 text-[0.6rem] text-slate-500">
-            外部送信:{" "}
-            {batchCalcPreview.dispatchAdded ? "あり（エラー）" : "なし"}{" "}
-            / 動的評価: {batchCalcPreview.evalAdded ? "あり（エラー）" : "なし"}
+            外部送信: {batchCalcPreview.dispatchAdded ? "あり（エラー）" : "なし"} /
+            動的評価: {batchCalcPreview.evalAdded ? "あり（エラー）" : "なし"}
           </p>
         </div>
       )}
@@ -1378,9 +1199,8 @@ function BatchOperationPanel({
       class="flex flex-col gap-1"
     >
       <div class="rounded border border-violet-200 bg-violet-50 px-2 py-1 text-[0.62rem] text-violet-800">
-        {selectedNodeIds.size}{" "}
-        件のノードが選択中です。 apply は draftNodes のみを更新します。DB
-        への保存は既存の「適用」モーダルから行ってください。
+        {selectedNodeIds.size} 件のノードが選択中です。
+        apply は draftNodes のみを更新します。DB への保存は既存の「適用」モーダルから行ってください。
       </div>
       <InspectorTabPanel
         ariaLabel="一括操作"
@@ -1388,11 +1208,7 @@ function BatchOperationPanel({
         tabs={[
           { id: "class_refs", label: "クラス", content: classRefsTab },
           { id: "props_state", label: "Props", content: propsStateTab },
-          {
-            id: "prop_bindings",
-            label: "データ接続",
-            content: propBindingsTab,
-          },
+          { id: "prop_bindings", label: "データ接続", content: propBindingsTab },
           { id: "wiring", label: "配線参照", content: wiringAssistTab },
           { id: "calc", label: "計算", content: calcAssistTab },
         ]}
@@ -1437,9 +1253,7 @@ function AuthoringSuggestAssistPanel({
   const [selectedTargetNodeId, setSelectedTargetNodeId] = useState("");
   const [selectedRuleTablePath, setSelectedRuleTablePath] = useState("");
   const [selectedMatchField, setSelectedMatchField] = useState("");
-  const [selectedMatchVsIndex, setSelectedMatchVsIndex] = useState<
-    number | null
-  >(null);
+  const [selectedMatchVsIndex, setSelectedMatchVsIndex] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<
     "db" | "calc" | "binding" | "ruleTable" | null
   >(null);
@@ -1451,68 +1265,48 @@ function AuthoringSuggestAssistPanel({
   const dbColumnResult = selectedTableRef
     ? deriveDbColumnCandidates(logicalTables, selectedTableRef)
     : null;
-  const qualifiedColResult = deriveQualifiedColumnCandidates(
-    logicalTables,
-    relationIntents,
-  );
+  const qualifiedColResult = deriveQualifiedColumnCandidates(logicalTables, relationIntents);
   const sourceNodeResult = deriveSourceNodeSuggestCandidates(draftNodes);
   const targetNodeResult = deriveTargetNodeSuggestCandidates(draftNodes);
 
   const selectedTargetNode = targetNodeResult.ok
-    ? (targetNodeResult as {
-      ok: true;
-      candidates: Array<{ nodeId: string; componentKind?: string }>;
-    }).candidates.find(
-      (c) => c.nodeId === selectedTargetNodeId,
-    )
+    ? (targetNodeResult as { ok: true; candidates: Array<{ nodeId: string; componentKind?: string }> }).candidates.find(
+        (c) => c.nodeId === selectedTargetNodeId,
+      )
     : null;
   const targetPropResult = selectedTargetNode?.componentKind
     ? deriveTargetPropSuggestCandidates(selectedTargetNode.componentKind)
     : null;
 
-  const emissionArrayResult = deriveEmissionArrayPathCandidates(
-    emissionDataJson,
-  );
-  const emissionScalarResult = deriveEmissionScalarPathCandidates(
-    emissionDataJson,
-  );
+  const emissionArrayResult = deriveEmissionArrayPathCandidates(emissionDataJson);
+  const emissionScalarResult = deriveEmissionScalarPathCandidates(emissionDataJson);
 
   const matchCondResult = selectedRuleTablePath
     ? deriveRuleTableMatchConditionSuggestCandidates(
-      selectedRuleTablePath,
-      emissionDataJson,
-      draftNodes,
-      logicalTables,
-    )
+        selectedRuleTablePath,
+        emissionDataJson,
+        draftNodes,
+        logicalTables,
+      )
     : null;
   type FieldCand = { field: string; description: string };
   const matchFieldCandidates: FieldCand[] = matchCondResult?.ok
-    ? (matchCondResult as { ok: true; fieldCandidates: FieldCand[] })
-      .fieldCandidates
+    ? (matchCondResult as { ok: true; fieldCandidates: FieldCand[] }).fieldCandidates
     : [];
-  const matchVsCandidates: MatchConditionValueSourceCandidate[] =
-    matchCondResult?.ok
-      ? (matchCondResult as {
-        ok: true;
-        valueSourceCandidates: MatchConditionValueSourceCandidate[];
-      }).valueSourceCandidates
-      : [];
+  const matchVsCandidates: MatchConditionValueSourceCandidate[] = matchCondResult?.ok
+    ? (matchCondResult as { ok: true; valueSourceCandidates: MatchConditionValueSourceCandidate[] }).valueSourceCandidates
+    : [];
 
   // ── adoption helpers ───────────────────────────────────────────────────────
   const firstArrayPropName =
-    COMPONENT_ARRAY_PROP_CAPABILITIES[selectedNode?.componentKind ?? ""]?.[0] ??
-      null;
-  const canAdoptPropBinding = !!selectedNode && !!onCommitNode &&
-    !!firstArrayPropName;
+    COMPONENT_ARRAY_PROP_CAPABILITIES[selectedNode?.componentKind ?? ""]?.[0] ?? null;
+  const canAdoptPropBinding = !!selectedNode && !!onCommitNode && !!firstArrayPropName;
 
   function adoptColumnAsField(
     columnName: string,
     fieldKey: "keyPath" | "labelPath" | "valuePath" | "childrenPath",
   ) {
-    if (
-      !canAdoptPropBinding || !selectedNode || !onCommitNode ||
-      !firstArrayPropName
-    ) return;
+    if (!canAdoptPropBinding || !selectedNode || !onCommitNode || !firstArrayPropName) return;
     const updated = applyColumnFieldAdoption(
       selectedNode.propBindings ?? {},
       firstArrayPropName,
@@ -1523,10 +1317,7 @@ function AuthoringSuggestAssistPanel({
   }
 
   function adoptEmissionArrayAsSource(path: string) {
-    if (
-      !canAdoptPropBinding || !selectedNode || !onCommitNode ||
-      !firstArrayPropName
-    ) return;
+    if (!canAdoptPropBinding || !selectedNode || !onCommitNode || !firstArrayPropName) return;
     const updated = applyEmissionSourceAdoption(
       selectedNode.propBindings ?? {},
       firstArrayPropName,
@@ -1537,29 +1328,22 @@ function AuthoringSuggestAssistPanel({
 
   function adoptCalcTargetProp(targetNodeId: string, prop: string) {
     if (!onCalcBindingsChange || !calculationBindings) return;
-    onCalcBindingsChange(
-      applyCalcTargetPropAdoption(calculationBindings, targetNodeId, prop),
-    );
+    onCalcBindingsChange(applyCalcTargetPropAdoption(calculationBindings, targetNodeId, prop));
   }
 
   function adoptRuleTableMatchCondition() {
     if (
-      !selectedRuleTablePath || !selectedMatchField ||
-      selectedMatchVsIndex === null ||
+      !selectedRuleTablePath || !selectedMatchField || selectedMatchVsIndex === null ||
       !onCalcBindingsChange || !calculationBindings
     ) return;
     const vs = matchVsCandidates[selectedMatchVsIndex];
     if (!vs || vs.kind === "db_column") return;
-    const valueFrom: RuleMatchCondition["valueFrom"] = vs.kind === "node"
-      ? { kind: "node", nodeId: vs.nodeId, propKey: vs.propKey }
-      : { kind: "literal", value: "" };
+    const valueFrom: RuleMatchCondition["valueFrom"] =
+      vs.kind === "node"
+        ? { kind: "node", nodeId: vs.nodeId, propKey: vs.propKey }
+        : { kind: "literal", value: "" };
     onCalcBindingsChange(
-      applyRuleTableMatchConditionAdoption(
-        calculationBindings,
-        selectedRuleTablePath,
-        selectedMatchField,
-        valueFrom,
-      ),
+      applyRuleTableMatchConditionAdoption(calculationBindings, selectedRuleTablePath, selectedMatchField, valueFrom),
     );
   }
 
@@ -1570,9 +1354,7 @@ function AuthoringSuggestAssistPanel({
   );
 
   // ── inner sub-components ───────────────────────────────────────────────────
-  function SectionToggle(
-    { id, label }: { id: typeof activeSection; label: string },
-  ) {
+  function SectionToggle({ id, label }: { id: typeof activeSection; label: string }) {
     return (
       <button
         type="button"
@@ -1599,9 +1381,7 @@ function AuthoringSuggestAssistPanel({
     );
   }
 
-  function AdoptBtn(
-    { onClick, label }: { onClick: () => void; label: string },
-  ) {
+  function AdoptBtn({ onClick, label }: { onClick: () => void; label: string }) {
     return (
       <button
         type="button"
@@ -1626,13 +1406,9 @@ function AuthoringSuggestAssistPanel({
   }
 
   return (
-    <div
-      class="flex flex-col gap-2 p-2 text-[0.65rem]"
-      data-authoring-suggest-panel="true"
-    >
+    <div class="flex flex-col gap-2 p-2 text-[0.65rem]" data-authoring-suggest-panel="true">
       <p class="text-[0.6rem] text-slate-500">
-        候補を確認して採用ボタンを押してください。採用前は draft
-        を変更しません。
+        候補を確認して採用ボタンを押してください。採用前は draft を変更しません。
       </p>
 
       {/* Section toggles */}
@@ -1647,121 +1423,68 @@ function AuthoringSuggestAssistPanel({
       {activeSection === "db" && (
         <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
           <p class="font-semibold text-slate-700">テーブル候補</p>
-          {dbTableResult.ok
-            ? (
-              <div class="flex flex-wrap gap-1">
-                {(dbTableResult as {
-                  ok: true;
-                  candidates: Array<
-                    { tableRef: string; source: string; columnCount: number }
-                  >;
-                }).candidates.map((c) => (
-                  <button
-                    key={c.tableRef}
-                    type="button"
-                    class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
-                      selectedTableRef === c.tableRef
-                        ? "border-blue-400 bg-blue-50 text-blue-800"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
-                    title={`source: ${c.source}, count: ${c.columnCount}`}
-                    onClick={() =>
-                      setSelectedTableRef(
-                        selectedTableRef === c.tableRef ? "" : c.tableRef,
-                      )}
-                  >
-                    {c.tableRef}
-                    <span class="ml-0.5 text-slate-400">
-                      ({c.source === "local" ? "ローカル" : "関連"})
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )
-            : (
-              <ReasonNote
-                reason={(dbTableResult as { ok: false; reason: string }).reason}
-              />
-            )}
+          {dbTableResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(dbTableResult as { ok: true; candidates: Array<{ tableRef: string; source: string; columnCount: number }> }).candidates.map((c) => (
+                <button
+                  key={c.tableRef}
+                  type="button"
+                  class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
+                    selectedTableRef === c.tableRef
+                      ? "border-blue-400 bg-blue-50 text-blue-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                  title={`source: ${c.source}, count: ${c.columnCount}`}
+                  onClick={() => setSelectedTableRef(selectedTableRef === c.tableRef ? "" : c.tableRef)}
+                >
+                  {c.tableRef}
+                  <span class="ml-0.5 text-slate-400">({c.source === "local" ? "ローカル" : "関連"})</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(dbTableResult as { ok: false; reason: string }).reason} />
+          )}
 
           {selectedTableRef && (
             <>
               <p class="font-semibold text-slate-700">
-                フィールド候補:{" "}
-                <span class="font-mono text-blue-700">{selectedTableRef}</span>
+                フィールド候補: <span class="font-mono text-blue-700">{selectedTableRef}</span>
               </p>
               {!canAdoptPropBinding && (
                 <p class="text-[0.6rem] text-slate-400">
                   採用するには配列対応ノードを選択してください。
                 </p>
               )}
-              {dbColumnResult?.ok
-                ? (
-                  <div class="flex flex-col gap-1">
-                    {(dbColumnResult as {
-                      ok: true;
-                      columns: Array<
-                        {
-                          columnName: string;
-                          qualifiedKey: string;
-                          dataType: string;
-                        }
-                      >;
-                    }).columns.map((c) => (
-                      <div
-                        key={c.qualifiedKey}
-                        class="flex flex-wrap items-center gap-0.5"
-                      >
-                        <CandidatePill
-                          label={c.qualifiedKey}
-                          title={`${c.columnName} (${c.dataType})`}
-                        />
-                        {canAdoptPropBinding && (
-                          <>
-                            {([
-                              "keyPath",
-                              "labelPath",
-                              "valuePath",
-                              "childrenPath",
-                            ] as const).map((field) => (
-                              <AdoptBtn
-                                key={field}
-                                label={field}
-                                onClick={() =>
-                                  adoptColumnAsField(c.columnName, field)}
-                              />
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )
-                : dbColumnResult
-                ? (
-                  <ReasonNote
-                    reason={(dbColumnResult as { ok: false; reason: string })
-                      .reason}
-                  />
-                )
-                : null}
+              {dbColumnResult?.ok ? (
+                <div class="flex flex-col gap-1">
+                  {(dbColumnResult as { ok: true; columns: Array<{ columnName: string; qualifiedKey: string; dataType: string }> }).columns.map((c) => (
+                    <div key={c.qualifiedKey} class="flex flex-wrap items-center gap-0.5">
+                      <CandidatePill label={c.qualifiedKey} title={`${c.columnName} (${c.dataType})`} />
+                      {canAdoptPropBinding && (
+                        <>
+                          {(["keyPath", "labelPath", "valuePath", "childrenPath"] as const).map((field) => (
+                            <AdoptBtn key={field} label={field} onClick={() => adoptColumnAsField(c.columnName, field)} />
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : dbColumnResult ? (
+                <ReasonNote reason={(dbColumnResult as { ok: false; reason: string }).reason} />
+              ) : null}
             </>
           )}
 
-          {qualifiedColResult.ok &&
-            (qualifiedColResult as { ok: true; unresolvedErrors: string[] })
-                .unresolvedErrors.length > 0 &&
-            (
-              <div class="rounded border border-amber-200 bg-amber-50 p-1.5">
-                <p class="mb-0.5 font-semibold text-amber-800">未解決の関連</p>
-                {(qualifiedColResult as {
-                  ok: true;
-                  unresolvedErrors: string[];
-                }).unresolvedErrors.map((e, i) => (
-                  <p key={i} class="text-[0.6rem] text-amber-700">{e}</p>
-                ))}
-              </div>
-            )}
+          {qualifiedColResult.ok && (qualifiedColResult as { ok: true; unresolvedErrors: string[] }).unresolvedErrors.length > 0 && (
+            <div class="rounded border border-amber-200 bg-amber-50 p-1.5">
+              <p class="mb-0.5 font-semibold text-amber-800">未解決の関連</p>
+              {(qualifiedColResult as { ok: true; unresolvedErrors: string[] }).unresolvedErrors.map((e, i) => (
+                <p key={i} class="text-[0.6rem] text-amber-700">{e}</p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1775,79 +1498,47 @@ function AuthoringSuggestAssistPanel({
             </p>
           )}
 
-          <p class="font-semibold text-slate-600">
-            source パス（emission.data.* 配列）
-          </p>
-          {emissionArrayResult.ok
-            ? (
+          <p class="font-semibold text-slate-600">source パス（emission.data.* 配列）</p>
+          {emissionArrayResult.ok ? (
+            <div class="flex flex-col gap-1">
+              {(emissionArrayResult as { ok: true; candidates: Array<{ path: string }> }).candidates.map((c) => (
+                <div key={c.path} class="flex items-center gap-1">
+                  <CandidatePill label={c.path} />
+                  {canAdoptPropBinding && (
+                    <AdoptBtn label="source採用" onClick={() => adoptEmissionArrayAsSource(c.path)} />
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(emissionArrayResult as { ok: false; reason: string }).reason} />
+          )}
+
+          {selectedTableRef && dbColumnResult?.ok ? (
+            <>
+              <p class="font-semibold text-slate-600">
+                フィールド候補: <span class="font-mono">{selectedTableRef}</span>
+              </p>
               <div class="flex flex-col gap-1">
-                {(emissionArrayResult as {
-                  ok: true;
-                  candidates: Array<{ path: string }>;
-                }).candidates.map((c) => (
-                  <div key={c.path} class="flex items-center gap-1">
-                    <CandidatePill label={c.path} />
+                {(dbColumnResult as { ok: true; columns: Array<{ columnName: string }> }).columns.map((c) => (
+                  <div key={c.columnName} class="flex flex-wrap items-center gap-0.5">
+                    <CandidatePill label={c.columnName} />
                     {canAdoptPropBinding && (
-                      <AdoptBtn
-                        label="source採用"
-                        onClick={() => adoptEmissionArrayAsSource(c.path)}
-                      />
+                      <>
+                        {(["keyPath", "labelPath", "valuePath", "childrenPath"] as const).map((field) => (
+                          <AdoptBtn key={field} label={field} onClick={() => adoptColumnAsField(c.columnName, field)} />
+                        ))}
+                      </>
                     )}
                   </div>
                 ))}
               </div>
-            )
-            : (
-              <ReasonNote
-                reason={(emissionArrayResult as { ok: false; reason: string })
-                  .reason}
-              />
-            )}
-
-          {selectedTableRef && dbColumnResult?.ok
-            ? (
-              <>
-                <p class="font-semibold text-slate-600">
-                  フィールド候補:{" "}
-                  <span class="font-mono">{selectedTableRef}</span>
-                </p>
-                <div class="flex flex-col gap-1">
-                  {(dbColumnResult as {
-                    ok: true;
-                    columns: Array<{ columnName: string }>;
-                  }).columns.map((c) => (
-                    <div
-                      key={c.columnName}
-                      class="flex flex-wrap items-center gap-0.5"
-                    >
-                      <CandidatePill label={c.columnName} />
-                      {canAdoptPropBinding && (
-                        <>
-                          {([
-                            "keyPath",
-                            "labelPath",
-                            "valuePath",
-                            "childrenPath",
-                          ] as const).map((field) => (
-                            <AdoptBtn
-                              key={field}
-                              label={field}
-                              onClick={() =>
-                                adoptColumnAsField(c.columnName, field)}
-                            />
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )
-            : (
-              <p class="text-[0.6rem] text-slate-400">
-                テーブルセクションでテーブルを選択するとフィールド候補が表示されます。
-              </p>
-            )}
+            </>
+          ) : (
+            <p class="text-[0.6rem] text-slate-400">
+              テーブルセクションでテーブルを選択するとフィールド候補が表示されます。
+            </p>
+          )}
         </div>
       )}
 
@@ -1857,128 +1548,74 @@ function AuthoringSuggestAssistPanel({
           <p class="font-semibold text-slate-700">calc source 候補</p>
 
           <p class="font-semibold text-slate-600">node source</p>
-          {sourceNodeResult.ok
-            ? (
-              <div class="flex flex-wrap gap-1">
-                {(sourceNodeResult as {
-                  ok: true;
-                  candidates: Array<
-                    { nodeId: string; propKey: string; label: string }
-                  >;
-                }).candidates.map((c) => (
-                  <CandidatePill
-                    key={`${c.nodeId}-${c.propKey}`}
-                    label={c.propKey}
-                    title={c.label}
-                  />
-                ))}
-              </div>
-            )
-            : (
-              <ReasonNote
-                reason={(sourceNodeResult as { ok: false; reason: string })
-                  .reason}
-              />
-            )}
+          {sourceNodeResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(sourceNodeResult as { ok: true; candidates: Array<{ nodeId: string; propKey: string; label: string }> }).candidates.map((c) => (
+                <CandidatePill key={`${c.nodeId}-${c.propKey}`} label={c.propKey} title={c.label} />
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(sourceNodeResult as { ok: false; reason: string }).reason} />
+          )}
 
           <p class="font-semibold text-slate-600">emission scalar source</p>
-          {emissionScalarResult.ok
-            ? (
-              <div class="flex flex-wrap gap-1">
-                {(emissionScalarResult as {
-                  ok: true;
-                  candidates: Array<{ path: string }>;
-                }).candidates.map((c) => (
-                  <CandidatePill key={c.path} label={c.path} />
-                ))}
-              </div>
-            )
-            : (
-              <ReasonNote
-                reason={(emissionScalarResult as { ok: false; reason: string })
-                  .reason}
-              />
-            )}
+          {emissionScalarResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(emissionScalarResult as { ok: true; candidates: Array<{ path: string }> }).candidates.map((c) => (
+                <CandidatePill key={c.path} label={c.path} />
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(emissionScalarResult as { ok: false; reason: string }).reason} />
+          )}
 
-          <p class="font-semibold text-slate-700 mt-1">
-            targetNode / targetProp 候補
-          </p>
-          {targetNodeResult.ok
-            ? (
-              <div class="flex flex-col gap-1">
-                {(targetNodeResult as {
-                  ok: true;
-                  candidates: Array<
-                    {
-                      nodeId: string;
-                      componentKind?: string;
-                      label: string;
-                      allowedTargetProps: string[] | null;
-                    }
-                  >;
-                }).candidates.map((c) => (
-                  <button
-                    key={c.nodeId}
-                    type="button"
-                    class={`rounded border px-1.5 py-0.5 text-left text-[0.6rem] ${
-                      selectedTargetNodeId === c.nodeId
-                        ? "border-indigo-400 bg-indigo-50 text-indigo-800"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
-                    onClick={() =>
-                      setSelectedTargetNodeId(
-                        selectedTargetNodeId === c.nodeId ? "" : c.nodeId,
-                      )}
-                  >
-                    <span class="font-mono">{c.label}</span>
-                    {c.allowedTargetProps && (
-                      <span class="ml-1 text-slate-500">
-                        → {c.allowedTargetProps.join(", ")}
-                      </span>
-                    )}
-                    {!c.allowedTargetProps && (
-                      <span class="ml-1 text-slate-400">(unknown kind)</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )
-            : (
-              <ReasonNote
-                reason={(targetNodeResult as { ok: false; reason: string })
-                  .reason}
-              />
-            )}
+          <p class="font-semibold text-slate-700 mt-1">targetNode / targetProp 候補</p>
+          {targetNodeResult.ok ? (
+            <div class="flex flex-col gap-1">
+              {(targetNodeResult as { ok: true; candidates: Array<{ nodeId: string; componentKind?: string; label: string; allowedTargetProps: string[] | null }> }).candidates.map((c) => (
+                <button
+                  key={c.nodeId}
+                  type="button"
+                  class={`rounded border px-1.5 py-0.5 text-left text-[0.6rem] ${
+                    selectedTargetNodeId === c.nodeId
+                      ? "border-indigo-400 bg-indigo-50 text-indigo-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                  onClick={() =>
+                    setSelectedTargetNodeId(selectedTargetNodeId === c.nodeId ? "" : c.nodeId)
+                  }
+                >
+                  <span class="font-mono">{c.label}</span>
+                  {c.allowedTargetProps && (
+                    <span class="ml-1 text-slate-500">→ {c.allowedTargetProps.join(", ")}</span>
+                  )}
+                  {!c.allowedTargetProps && (
+                    <span class="ml-1 text-slate-400">(unknown kind)</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(targetNodeResult as { ok: false; reason: string }).reason} />
+          )}
 
           {selectedTargetNodeId && targetPropResult && (
             <div class="mt-1">
-              {targetPropResult.ok
-                ? (
-                  <div class="flex flex-col gap-1">
-                    <p class="text-[0.6rem] font-semibold text-slate-600">
-                      targetProp 候補:
-                    </p>
-                    {(targetPropResult as { ok: true; targetProps: string[] })
-                      .targetProps.map((p) => (
-                        <div key={p} class="flex items-center gap-1">
-                          <CandidatePill label={p} />
-                          {onCalcBindingsChange && calculationBindings && (
-                            <AdoptBtn
-                              label="採用"
-                              onClick={() =>
-                                adoptCalcTargetProp(selectedTargetNodeId, p)}
-                            />
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                )
-                : (
-                  <ReasonNote
-                    reason={(targetPropResult as { ok: false; reason: string })
-                      .reason}
-                  />
-                )}
+              {targetPropResult.ok ? (
+                <div class="flex flex-col gap-1">
+                  <p class="text-[0.6rem] font-semibold text-slate-600">targetProp 候補:</p>
+                  {(targetPropResult as { ok: true; targetProps: string[] }).targetProps.map((p) => (
+                    <div key={p} class="flex items-center gap-1">
+                      <CandidatePill label={p} />
+                      {onCalcBindingsChange && calculationBindings && (
+                        <AdoptBtn label="採用" onClick={() => adoptCalcTargetProp(selectedTargetNodeId, p)} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <ReasonNote reason={(targetPropResult as { ok: false; reason: string }).reason} />
+              )}
             </div>
           )}
         </div>
@@ -1989,158 +1626,122 @@ function AuthoringSuggestAssistPanel({
         <div class="flex flex-col gap-2 rounded border border-slate-200 p-2">
           <p class="font-semibold text-slate-700">ruleTable 候補</p>
 
-          <p class="font-semibold text-slate-600">
-            tablePath（配列パスを選択）
-          </p>
-          {emissionArrayResult.ok
-            ? (
-              <div class="flex flex-wrap gap-1">
-                {(emissionArrayResult as {
-                  ok: true;
-                  candidates: Array<{ path: string }>;
-                }).candidates.map((c) => (
-                  <button
-                    key={c.path}
-                    type="button"
-                    class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
-                      selectedRuleTablePath === c.path
-                        ? "border-blue-400 bg-blue-50 text-blue-800"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
-                    onClick={() => {
-                      setSelectedRuleTablePath(
-                        selectedRuleTablePath === c.path ? "" : c.path,
-                      );
-                      setSelectedMatchField("");
-                      setSelectedMatchVsIndex(null);
-                    }}
-                  >
-                    {c.path}
-                  </button>
-                ))}
-              </div>
-            )
-            : (
-              <ReasonNote
-                reason={(emissionArrayResult as { ok: false; reason: string })
-                  .reason}
-              />
-            )}
+          <p class="font-semibold text-slate-600">tablePath（配列パスを選択）</p>
+          {emissionArrayResult.ok ? (
+            <div class="flex flex-wrap gap-1">
+              {(emissionArrayResult as { ok: true; candidates: Array<{ path: string }> }).candidates.map((c) => (
+                <button
+                  key={c.path}
+                  type="button"
+                  class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
+                    selectedRuleTablePath === c.path
+                      ? "border-blue-400 bg-blue-50 text-blue-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                  onClick={() => {
+                    setSelectedRuleTablePath(selectedRuleTablePath === c.path ? "" : c.path);
+                    setSelectedMatchField("");
+                    setSelectedMatchVsIndex(null);
+                  }}
+                >
+                  {c.path}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <ReasonNote reason={(emissionArrayResult as { ok: false; reason: string }).reason} />
+          )}
 
           {selectedRuleTablePath && matchCondResult && (
-            matchCondResult.ok
-              ? (
-                <>
-                  <p class="font-semibold text-slate-600">
-                    matchCondition フィールド候補
-                  </p>
-                  {matchFieldCandidates.length === 0
-                    ? (
-                      <p class="text-[0.6rem] text-slate-400">
-                        フィールド候補がありません。
-                      </p>
-                    )
-                    : (
-                      <div class="flex flex-wrap gap-1">
-                        {matchFieldCandidates.map((fc) => (
-                          <button
-                            key={fc.field}
-                            type="button"
-                            class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
-                              selectedMatchField === fc.field
-                                ? "border-blue-400 bg-blue-50 text-blue-800"
-                                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                            }`}
-                            title={fc.description}
-                            onClick={() =>
-                              setSelectedMatchField(
-                                selectedMatchField === fc.field ? "" : fc.field,
-                              )}
-                          >
-                            {fc.field}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                  <p class="font-semibold text-slate-600">値ソース候補</p>
-                  <div class="flex flex-col gap-0.5">
-                    {matchVsCandidates.map((vs, i) => (
+            matchCondResult.ok ? (
+              <>
+                <p class="font-semibold text-slate-600">matchCondition フィールド候補</p>
+                {matchFieldCandidates.length === 0 ? (
+                  <p class="text-[0.6rem] text-slate-400">フィールド候補がありません。</p>
+                ) : (
+                  <div class="flex flex-wrap gap-1">
+                    {matchFieldCandidates.map((fc) => (
                       <button
-                        key={i}
+                        key={fc.field}
                         type="button"
-                        class={`rounded border px-1.5 py-0.5 text-left text-[0.6rem] ${
-                          selectedMatchVsIndex === i
-                            ? "border-indigo-400 bg-indigo-50 text-indigo-800"
+                        class={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] ${
+                          selectedMatchField === fc.field
+                            ? "border-blue-400 bg-blue-50 text-blue-800"
                             : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                         }`}
-                        onClick={() =>
-                          setSelectedMatchVsIndex(
-                            selectedMatchVsIndex === i ? null : i,
-                          )}
+                        title={fc.description}
+                        onClick={() => setSelectedMatchField(selectedMatchField === fc.field ? "" : fc.field)}
                       >
-                        {vs.kind === "node"
-                          ? `node: ${vs.label} / ${vs.propKey}`
-                          : vs.kind === "db_column"
-                          ? `フィールド: ${vs.qualifiedKey}`
-                          : "固定値（手動入力）"}
+                        {fc.field}
                       </button>
                     ))}
                   </div>
+                )}
 
-                  {selectedMatchField && selectedMatchVsIndex !== null &&
-                    (() => {
-                      const vs = matchVsCandidates[selectedMatchVsIndex];
-                      const isDbColumn = vs?.kind === "db_column";
-                      const canAdopt = !isDbColumn && !!onCalcBindingsChange &&
-                        !!calculationBindings && hasMatchingRuleTableBinding;
-                      return (
-                        <>
-                          {isDbColumn && (
-                            <p class="text-[0.6rem] text-amber-600">
-                              フィールド参照は matchCondition
-                              値ソースとして使用できません。node
-                              または固定値を選択してください。
-                            </p>
-                          )}
-                          {!isDbColumn && !hasMatchingRuleTableBinding &&
-                            onCalcBindingsChange && calculationBindings && (
-                            <p class="text-[0.6rem] text-amber-600">
-                              この tablePath の ruleTable
-                              変数がありません。ローカル計算パネルで先に追加してください。
-                            </p>
-                          )}
-                          {!isDbColumn && onCalcBindingsChange &&
-                            calculationBindings && (
-                            <button
-                              type="button"
-                              disabled={!canAdopt}
-                              class={`rounded border px-2 py-0.5 text-[0.6rem] ${
-                                canAdopt
-                                  ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
-                                  : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
-                              }`}
-                              onClick={() => adoptRuleTableMatchCondition()}
-                            >
-                              条件追加
-                            </button>
-                          )}
-                          {!onCalcBindingsChange && (
-                            <p class="text-[0.6rem] text-slate-400">
-                              採用にはローカル計算コールバックが必要です。
-                            </p>
-                          )}
-                        </>
-                      );
-                    })()}
-                </>
-              )
-              : (
-                <ReasonNote
-                  reason={(matchCondResult as { ok: false; reason: string })
-                    .reason}
-                />
-              )
+                <p class="font-semibold text-slate-600">値ソース候補</p>
+                <div class="flex flex-col gap-0.5">
+                  {matchVsCandidates.map((vs, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      class={`rounded border px-1.5 py-0.5 text-left text-[0.6rem] ${
+                        selectedMatchVsIndex === i
+                          ? "border-indigo-400 bg-indigo-50 text-indigo-800"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                      onClick={() => setSelectedMatchVsIndex(selectedMatchVsIndex === i ? null : i)}
+                    >
+                      {vs.kind === "node"
+                        ? `node: ${vs.label} / ${vs.propKey}`
+                        : vs.kind === "db_column"
+                        ? `フィールド: ${vs.qualifiedKey}`
+                        : "固定値（手動入力）"}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedMatchField && selectedMatchVsIndex !== null && (() => {
+                  const vs = matchVsCandidates[selectedMatchVsIndex];
+                  const isDbColumn = vs?.kind === "db_column";
+                  const canAdopt = !isDbColumn && !!onCalcBindingsChange && !!calculationBindings && hasMatchingRuleTableBinding;
+                  return (
+                    <>
+                      {isDbColumn && (
+                        <p class="text-[0.6rem] text-amber-600">
+                          フィールド参照は matchCondition 値ソースとして使用できません。node または固定値を選択してください。
+                        </p>
+                      )}
+                      {!isDbColumn && !hasMatchingRuleTableBinding && onCalcBindingsChange && calculationBindings && (
+                        <p class="text-[0.6rem] text-amber-600">
+                          この tablePath の ruleTable 変数がありません。ローカル計算パネルで先に追加してください。
+                        </p>
+                      )}
+                      {!isDbColumn && onCalcBindingsChange && calculationBindings && (
+                        <button
+                          type="button"
+                          disabled={!canAdopt}
+                          class={`rounded border px-2 py-0.5 text-[0.6rem] ${
+                            canAdopt
+                              ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+                              : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                          }`}
+                          onClick={() => adoptRuleTableMatchCondition()}
+                        >
+                          条件追加
+                        </button>
+                      )}
+                      {!onCalcBindingsChange && (
+                        <p class="text-[0.6rem] text-slate-400">
+                          採用にはローカル計算コールバックが必要です。
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+              </>
+            ) : (
+              <ReasonNote reason={(matchCondResult as { ok: false; reason: string }).reason} />
+            )
           )}
         </div>
       )}
@@ -2182,11 +1783,7 @@ function LayoutRightDock({
   packageId: string;
   canvasDesignDraft?: DesignDraft;
   onSelectNode: (id: string | null) => void;
-  onReparent: (
-    nodeId: string,
-    newParentId: string | null,
-    insertBeforeId: string | null,
-  ) => void;
+  onReparent: (nodeId: string, newParentId: string | null, insertBeforeId: string | null) => void;
   onCopy: (id: string) => void;
   onDelete: (id: string) => void;
   slotKeyCandidates: string[];
@@ -2197,14 +1794,7 @@ function LayoutRightDock({
   routeCandidates?: string[];
   calculationBindings: CalcBinding[];
   draftNodeIds: string[];
-  calcResults: ReadonlyMap<
-    string,
-    {
-      targetNodeId: string;
-      targetProp: string;
-      result: { ok: true; value: number } | { ok: false; error: string };
-    }
-  >;
+  calcResults: ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>;
   onCalcBindingsChange: (bindings: CalcBinding[]) => void;
   emissionDataJson: string;
   onEmissionDataJsonChange: (json: string) => void;
@@ -2216,11 +1806,7 @@ function LayoutRightDock({
   return (
     <aside
       class="layout-right-dock flex shrink-0 flex-col gap-2 self-stretch overflow-y-auto"
-      style={{
-        width: LAYOUT_RIGHT_DOCK_WIDTH,
-        minWidth: "320px",
-        maxWidth: "420px",
-      }}
+      style={{ width: LAYOUT_RIGHT_DOCK_WIDTH, minWidth: "320px", maxWidth: "420px" }}
       aria-label="レイアウト編集ドック"
       data-selected-node-id={selectedNodeId ?? ""}
       data-selection-count={selectedNodeIds?.size ?? (selectedNodeId ? 1 : 0)}
@@ -2241,72 +1827,58 @@ function LayoutRightDock({
       {/* Batch operation panel: shown when multiple nodes selected (batch mode). */}
       {/* Single-node inspector: shown when exactly one node is selected (primarySelectedNodeId). */}
       {/* Boundary: single-select = inspector, multi-select = batch panel. */}
-      {(selectedNodeIds?.size ?? 0) > 1
-        ? (
+      {(selectedNodeIds?.size ?? 0) > 1 ? (
+        <Accordion title={`一括操作 (${selectedNodeIds!.size} 件選択中)`} defaultOpen>
+          <BatchOperationPanel
+            selectedNodeIds={selectedNodeIds!}
+            draftNodes={draftNodes}
+            calculationBindings={calculationBindings}
+            onApplyNodes={onBatchApplyNodes}
+            onApplyCalcBindings={onCalcBindingsChange}
+          />
+        </Accordion>
+      ) : selectedNode ? (
+        <>
           <Accordion
-            title={`一括操作 (${selectedNodeIds!.size} 件選択中)`}
-            defaultOpen
+            title={`${UX_LAYOUT_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
+            // deno-lint-ignore jsx-boolean-value
+            defaultOpen={true}
           >
-            <BatchOperationPanel
-              selectedNodeIds={selectedNodeIds!}
+            <CanvasInspector
+              key={selectedNode.nodeId}
+              embedded
+              node={selectedNode}
               draftNodes={draftNodes}
-              calculationBindings={calculationBindings}
-              onApplyNodes={onBatchApplyNodes}
-              onApplyCalcBindings={onCalcBindingsChange}
+              slotKeyCandidates={slotKeyCandidates}
+              onUpdate={onUpdateNode}
+              onCommit={onCommitNode}
+              onToggleLayoutClassRef={onToggleLayoutClassRef}
+              onCopy={() => onCopy(selectedNode.nodeId)}
+              onClose={() => onSelectNode(null)}
             />
           </Accordion>
-        )
-        : selectedNode
-        ? (
-          <>
-            <Accordion
-              title={`${UX_LAYOUT_INSPECTOR_SECTION} — ${
-                friendlyNodeLabel(selectedNode)
-              }`}
-              // deno-lint-ignore jsx-boolean-value
-              defaultOpen={true}
-            >
-              <CanvasInspector
-                key={selectedNode.nodeId}
-                embedded
-                node={selectedNode}
-                draftNodes={draftNodes}
-                slotKeyCandidates={slotKeyCandidates}
-                onUpdate={onUpdateNode}
-                onCommit={onCommitNode}
-                onToggleLayoutClassRef={onToggleLayoutClassRef}
-                onCopy={() => onCopy(selectedNode.nodeId)}
-                onClose={() => onSelectNode(null)}
-              />
-            </Accordion>
-            <Accordion
-              title={`${UX_DESIGN_INSPECTOR_SECTION} — ${
-                friendlyNodeLabel(selectedNode)
-              }`}
-              defaultOpen={false}
-            >
-              <PackageDesignPanel
-                selectedPackageId={packageId}
-                selectedCanvasNode={selectedNode}
-                routeCandidates={routeCandidates}
-                canvasDesignDraft={canvasDesignDraft}
-                onDesignPreviewChange={onDesignChange}
-                onCommitNode={onCommitNode}
-                emissionDataJson={emissionDataJson}
-                draftNodes={draftNodes}
-              />
-            </Accordion>
-          </>
-        )
-        : (
-          <p class="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-500">
-            ノードを選択してください
-          </p>
-        )}
-      <Accordion
-        title={`ローカル計算 (${calculationBindings.length})`}
-        defaultOpen={false}
-      >
+          <Accordion
+            title={`${UX_DESIGN_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
+            defaultOpen={false}
+          >
+            <PackageDesignPanel
+              selectedPackageId={packageId}
+              selectedCanvasNode={selectedNode}
+              routeCandidates={routeCandidates}
+              canvasDesignDraft={canvasDesignDraft}
+              onDesignPreviewChange={onDesignChange}
+              onCommitNode={onCommitNode}
+              emissionDataJson={emissionDataJson}
+              draftNodes={draftNodes}
+            />
+          </Accordion>
+        </>
+      ) : (
+        <p class="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-500">
+          ノードを選択してください
+        </p>
+      )}
+      <Accordion title={`ローカル計算 (${calculationBindings.length})`} defaultOpen={false}>
         <LocalCalcBindingPanel
           bindings={calculationBindings}
           draftNodes={draftNodes}
@@ -2342,9 +1914,7 @@ function nextOrderIndexForParent(
   nodes: DraftNode[],
   parentNodeId: string | null,
 ): number {
-  const siblings = nodes.filter((n) =>
-    (n.parentNodeId ?? null) === parentNodeId
-  );
+  const siblings = nodes.filter((n) => (n.parentNodeId ?? null) === parentNodeId);
   if (siblings.length === 0) return 0;
   return Math.max(...siblings.map((n) => n.orderIndex)) + 1;
 }
@@ -2426,8 +1996,7 @@ const ERROR_CODE_FIX: Record<
   },
   CSS_TOKEN_INVALID: {
     cause: "CSSトークン参照が無効です",
-    suggestion:
-      "右パネルのデザインインスペクタで正しいトークンを選択してください",
+    suggestion: "右パネルのデザインインスペクタで正しいトークンを選択してください",
   },
   LAYOUT_CLASS_REF_INVALID: {
     cause: "レイアウトクラス参照が解決できません",
@@ -2449,8 +2018,7 @@ const ERROR_CODE_FIX: Record<
   },
   PROMOTE_FAILED: {
     cause: "配置可能化に失敗しました",
-    suggestion:
-      "先にパッケージ化を完了するか /admin/contents で登録を進めてください",
+    suggestion: "先にパッケージ化を完了するか /admin/contents で登録を進めてください",
   },
   LAYOUT_ID_MISMATCH: {
     cause: "サーバーが異なるレイアウトIDを返しました",
@@ -2511,9 +2079,7 @@ async function findPackageForRoute(
 
 async function ensureShellPackageForRoute(
   routeKey: string,
-): Promise<
-  { handoff: PackagedHandoff | null; error: UiValidationError | null }
-> {
+): Promise<{ handoff: PackagedHandoff | null; error: UiValidationError | null }> {
   const existing = await findPackageForRoute(routeKey);
   if (existing?.packageId && existing?.layoutId) {
     return {
@@ -2615,14 +2181,10 @@ async function registerCatalogComponentInPackage(
     }
   }
 
-  const promBody = await dispatchAdminOp(
-    "package_generator",
-    "promote_package",
-    {
-      routeKey,
-      bucketItemIds: [bucketId],
-    },
-  );
+  const promBody = await dispatchAdminOp("package_generator", "promote_package", {
+    routeKey,
+    bucketItemIds: [bucketId],
+  });
   if (dispatchOpFailed(promBody)) {
     return {
       ok: false,
@@ -3108,8 +2670,7 @@ function ApplyReadinessPanel({
       </ul>
       {allClear && (
         <p class="mt-2 text-green-700 font-semibold text-xs">
-          すべてのローカルチェック通過。「適用」でバリデーション後に DB
-          へ保存できます。
+          すべてのローカルチェック通過。「適用」でバリデーション後に DB へ保存できます。
         </p>
       )}
     </div>
@@ -3222,10 +2783,7 @@ function RouteLayoutSelector({
         </select>
       </label>
       {loadError && loadError.length > 0 && (
-        <ValidationErrorPanel
-          errors={asValidationErrorEntries(loadError)}
-          title="候補ロードエラー"
-        />
+        <ValidationErrorPanel errors={asValidationErrorEntries(loadError)} title="候補ロードエラー" />
       )}
       {candidates.length === 0 && !loadError?.length && (
         <div class="w-full rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -3333,12 +2891,8 @@ function CssTokenPicker({
   const filtered = CSS_DICTIONARY_TOKENS.filter((t) => {
     if (tokenFilter) {
       const label = t.userLabel ?? "";
-      const matchesKey = t.tokenKey.toLowerCase().includes(
-        tokenFilter.toLowerCase(),
-      );
-      const matchesLabel = label.toLowerCase().includes(
-        tokenFilter.toLowerCase(),
-      );
+      const matchesKey = t.tokenKey.toLowerCase().includes(tokenFilter.toLowerCase());
+      const matchesLabel = label.toLowerCase().includes(tokenFilter.toLowerCase());
       if (!matchesKey && !matchesLabel) return false;
     }
     if (categoryFilter && t.category !== categoryFilter) return false;
@@ -3519,8 +3073,7 @@ function TopologyLayoutClassPicker({
     // preview_state classes are for runtime preview only — not shown in normal inspector view
     if (e.category === "state") return false;
     if (
-      keyFilter &&
-      !e.classKey.toLowerCase().includes(keyFilter.toLowerCase()) &&
+      keyFilter && !e.classKey.toLowerCase().includes(keyFilter.toLowerCase()) &&
       !e.label.toLowerCase().includes(keyFilter.toLowerCase())
     ) return false;
     if (categoryFilter && e.category !== categoryFilter) return false;
@@ -3577,9 +3130,7 @@ function TopologyLayoutClassPicker({
           </strong>
           <div class="mt-1 flex flex-wrap gap-1">
             {selectedClassRefs.map((key) => {
-              const entry = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.find((e) =>
-                e.classKey === key
-              );
+              const entry = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.find((e) => e.classKey === key);
               return (
                 <button
                   key={key}
@@ -3618,9 +3169,7 @@ function TopologyLayoutClassPicker({
                     key={e.classKey}
                     type="button"
                     onClick={() => onToggle(e.classKey)}
-                    title={`${e.classKey}${
-                      e.description ? "\n" + e.description : ""
-                    }`}
+                    title={`${e.classKey}${e.description ? "\n" + e.description : ""}`}
                     class={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
                       isSelected
                         ? "border-blue-500 bg-blue-100 font-semibold"
@@ -3629,9 +3178,7 @@ function TopologyLayoutClassPicker({
                   >
                     <span>{e.label}</span>
                     {e.conflictGroup && (
-                      <span class="text-[0.5rem] text-gray-400 font-mono">
-                        [{e.conflictGroup}]
-                      </span>
+                      <span class="text-[0.5rem] text-gray-400 font-mono">[{e.conflictGroup}]</span>
                     )}
                   </button>
                 );
@@ -3641,15 +3188,10 @@ function TopologyLayoutClassPicker({
         ))}
       </div>
       <details class="mt-2">
-        <summary class="cursor-pointer text-[0.6rem] text-gray-400">
-          raw keys (advanced)
-        </summary>
+        <summary class="cursor-pointer text-[0.6rem] text-gray-400">raw keys (advanced)</summary>
         <div class="mt-1 flex flex-wrap gap-1">
           {filtered.map((e) => (
-            <span
-              key={e.classKey}
-              class="font-mono text-[0.6rem] text-gray-500"
-            >
+            <span key={e.classKey} class="font-mono text-[0.6rem] text-gray-500">
               {e.classKey}
             </span>
           ))}
@@ -3678,8 +3220,7 @@ type ManifestSuggestShape = {
 
 function readUiBuilderHandoffManifestId(): string {
   if (typeof globalThis.location === "undefined") return "";
-  return new URLSearchParams(globalThis.location.search).get("manifestId")
-    ?.trim() ??
+  return new URLSearchParams(globalThis.location.search).get("manifestId")?.trim() ??
     "";
 }
 
@@ -3727,19 +3268,13 @@ function ManifestRouteEntry({
           const sysName = shape?.topologySystemName?.trim() ?? "";
           if (!sysName || !isValidTopologySystemName(sysName)) continue;
           const derivedRouteKey = topologySystemNameToUiBuilderKey(sysName);
-          const label = resolveVisibleTopologyName(
-            shape?.userFacingTopologyLabel,
-            sysName,
-          );
+          const label = resolveVisibleTopologyName(shape?.userFacingTopologyLabel, sysName);
           resolved.push({
             manifestId: item.manifestId,
             topologySystemName: sysName,
             label,
             derivedRouteKey,
-            logicalTables: shape?.logicalTables?.map((t) => ({
-              tableName: t.tableName,
-              columns: t.columns,
-            })) ?? [],
+            logicalTables: shape?.logicalTables?.map((t) => ({ tableName: t.tableName, columns: t.columns })) ?? [],
             relationIntents: shape?.relationIntents ?? [],
             operationEntityBindings: shape?.operationEntityBindings ?? [],
           });
@@ -3752,16 +3287,11 @@ function ManifestRouteEntry({
       }
     };
     load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (
-      loading || options.length === 0 || committedRouteKey ||
-      autoCommitAttempted.current
-    ) {
+    if (loading || options.length === 0 || committedRouteKey || autoCommitAttempted.current) {
       return;
     }
     const handoff = initialManifestId.trim();
@@ -3800,7 +3330,8 @@ function ManifestRouteEntry({
     return (
       <div class="mb-3 flex flex-wrap items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
         <span>
-          編集中: <strong>{committedOption.label}</strong>{" "}
+          編集中: <strong>{committedOption.label}</strong>
+          {" "}
           <span class="font-mono text-slate-600">
             ({committedOption.topologySystemName} → {committedRouteKey})
           </span>
@@ -3828,8 +3359,8 @@ function ManifestRouteEntry({
       {loadError && <p class="text-red-700">読み込みエラー: {loadError}</p>}
       {!loading && options.length === 0 && !loadError && (
         <p class="text-slate-600">
-          topology.name が登録済みのマニフェストが見つかりません。 先に
-          /admin/contents で Step 1 を完了させてください。
+          topology.name が登録済みのマニフェストが見つかりません。
+          先に /admin/contents で Step 1 を完了させてください。
         </p>
       )}
       {options.length > 0 && (
@@ -3975,8 +3506,8 @@ function LegacyManualRouteInput({
       </label>
       {draftDiffers && (
         <p class="mt-1 text-xs text-amber-800">
-          未確定: <code class="font-mono">{manualRouteDraft.trim()}</code>{" "}
-          — Enter または「確定」で反映されます
+          未確定: <code class="font-mono">{manualRouteDraft.trim()}</code>
+          {" "}— Enter または「確定」で反映されます
         </p>
       )}
     </div>
@@ -4087,11 +3618,7 @@ function LayerTree({
   };
 
   return (
-    <div
-      class={`${
-        embedded ? "w-full" : "w-44 shrink-0"
-      } rounded-lg border border-gray-200 bg-white`}
-    >
+    <div class={`${embedded ? "w-full" : "w-44 shrink-0"} rounded-lg border border-gray-200 bg-white`}>
       {!embedded && (
         <div class="border-b border-gray-200 px-2 py-1.5">
           <h4 class="text-xs font-semibold text-gray-600">
@@ -4114,8 +3641,7 @@ function LayerTree({
         )}
         {items.map(({ node, depth }) => {
           const isSelected = node.nodeId === selectedNodeId;
-          const isInSelectionSet = selectedNodeIds != null &&
-            selectedNodeIds.has(node.nodeId) && !isSelected;
+          const isInSelectionSet = selectedNodeIds != null && selectedNodeIds.has(node.nodeId) && !isSelected;
           const isDragging = node.nodeId === draggedId;
           const isTarget = dropTarget?.id === node.nodeId;
           const dropPos = isTarget ? dropTarget?.pos : null;
@@ -4145,11 +3671,7 @@ function LayerTree({
                 }
               }}
               class={`relative flex cursor-pointer items-center gap-1 border-b border-gray-100 py-1 text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400 ${
-                isSelected
-                  ? "bg-blue-50"
-                  : isInSelectionSet
-                  ? "bg-indigo-50"
-                  : "hover:bg-gray-50"
+                isSelected ? "bg-blue-50" : isInSelectionSet ? "bg-indigo-50" : "hover:bg-gray-50"
               } ${isDragging ? "opacity-40" : ""} ${
                 isTarget && dropPos === "into"
                   ? "outline outline-1 outline-blue-400"
@@ -4257,24 +3779,12 @@ function CanvasInspector({
   const [manualSlotKey, setManualSlotKey] = useState("");
   const [parentCycleError, setParentCycleError] = useState<string | null>(null);
   const [responsiveLayoutJson, setResponsiveLayoutJson] = useState(() =>
-    JSON.stringify(
-      filterEmptyResponsiveRules(node.responsiveLayoutRules ?? {}),
-      null,
-      2,
-    )
+    JSON.stringify(filterEmptyResponsiveRules(node.responsiveLayoutRules ?? {}), null, 2)
   );
-  const [responsiveLayoutError, setResponsiveLayoutError] = useState<
-    string | null
-  >(null);
+  const [responsiveLayoutError, setResponsiveLayoutError] = useState<string | null>(null);
 
   useEffect(() => {
-    setResponsiveLayoutJson(
-      JSON.stringify(
-        filterEmptyResponsiveRules(node.responsiveLayoutRules ?? {}),
-        null,
-        2,
-      ),
-    );
+    setResponsiveLayoutJson(JSON.stringify(filterEmptyResponsiveRules(node.responsiveLayoutRules ?? {}), null, 2));
     setResponsiveLayoutError(null);
   }, [node.nodeId]);
 
@@ -4344,9 +3854,7 @@ function CanvasInspector({
     }
     setResponsiveLayoutError(null);
     onCommit(
-      {
-        responsiveLayoutRules: filterEmptyResponsiveRules(parsed.rules),
-      } as Partial<DraftNode>,
+      { responsiveLayoutRules: filterEmptyResponsiveRules(parsed.rules) } as Partial<DraftNode>,
       "レスポンシブ配置ルールを変更",
     );
   };
@@ -4371,12 +3879,8 @@ function CanvasInspector({
           </div>
         )}
         {node.nodeKind !== "structural_html" && (() => {
-          const keyCandidates = deriveComponentKeyCandidates(
-            draftNodes as DraftNodeMinimal[],
-          );
-          const kindCandidates = deriveComponentKindCandidates(
-            draftNodes as DraftNodeMinimal[],
-          );
+          const keyCandidates = deriveComponentKeyCandidates(draftNodes as DraftNodeMinimal[]);
+          const kindCandidates = deriveComponentKindCandidates(draftNodes as DraftNodeMinimal[]);
           return (
             <div class="mt-1 flex flex-col gap-1">
               <label class="flex flex-col gap-0.5">
@@ -4384,17 +3888,11 @@ function CanvasInspector({
                 <select
                   class="rounded border border-slate-200 bg-white px-1 py-0.5 font-mono text-[0.6rem]"
                   value={node.componentKey ?? ""}
-                  onChange={(e) =>
-                    onCommit({
-                      componentKey: (e.target as HTMLSelectElement).value,
-                    }, "componentKeyを変更")}
+                  onChange={(e) => onCommit({ componentKey: (e.target as HTMLSelectElement).value }, "componentKeyを変更")}
                 >
                   <option value="">— 選択 —</option>
                   {keyCandidates.map(({ value, source }) => (
-                    <option key={value} value={value}>
-                      {value}
-                      {source === "draft" ? " ＊" : ""}
-                    </option>
+                    <option key={value} value={value}>{value}{source === "draft" ? " ＊" : ""}</option>
                   ))}
                 </select>
               </label>
@@ -4403,10 +3901,7 @@ function CanvasInspector({
                 <select
                   class="rounded border border-slate-200 bg-white px-1 py-0.5 font-mono text-[0.6rem]"
                   value={node.componentKind ?? ""}
-                  onChange={(e) =>
-                    onCommit({
-                      componentKind: (e.target as HTMLSelectElement).value,
-                    }, "componentKindを変更")}
+                  onChange={(e) => onCommit({ componentKind: (e.target as HTMLSelectElement).value }, "componentKindを変更")}
                 >
                   <option value="">— 選択 —</option>
                   {kindCandidates.map((k) => (
@@ -4421,10 +3916,7 @@ function CanvasInspector({
                     class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
                     defaultValue={node.componentKey ?? ""}
                     placeholder="例: action/button"
-                    onBlur={(e) =>
-                      onCommit({
-                        componentKey: (e.target as HTMLInputElement).value,
-                      }, "componentKeyを手入力で変更")}
+                    onBlur={(e) => onCommit({ componentKey: (e.target as HTMLInputElement).value }, "componentKeyを手入力で変更")}
                   />
                 </label>
                 <label class="mt-1 block">
@@ -4433,10 +3925,7 @@ function CanvasInspector({
                     class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
                     defaultValue={node.componentKind ?? ""}
                     placeholder="例: action/button"
-                    onBlur={(e) =>
-                      onCommit({
-                        componentKind: (e.target as HTMLInputElement).value,
-                      }, "componentKindを手入力で変更")}
+                    onBlur={(e) => onCommit({ componentKind: (e.target as HTMLInputElement).value }, "componentKindを手入力で変更")}
                   />
                 </label>
               </AdvancedManualOverride>
@@ -4458,8 +3947,7 @@ function CanvasInspector({
         </legend>
         {node.widthMode === "preset" && (
           <p class="mb-1 rounded bg-blue-50 px-1.5 py-0.5 text-[0.6rem] text-blue-700">
-            幅は sizing classRef が制御しています（preset
-            モード）。カスタム幅入力は無効です。
+            幅は sizing classRef が制御しています（preset モード）。カスタム幅入力は無効です。
           </p>
         )}
         <div class="grid grid-cols-2 gap-1">
@@ -4480,11 +3968,11 @@ function CanvasInspector({
                   type="text"
                   inputMode="decimal"
                   value={isPreset ? "" : layoutDimensionLabel(node[f])}
-                  placeholder={isPreset
-                    ? "sizing classRef が制御"
-                    : f === "width"
-                    ? "140 / 50% / auto"
-                    : "60 / 100% / auto"}
+                  placeholder={
+                    isPreset
+                      ? "sizing classRef が制御"
+                      : f === "width" ? "140 / 50% / auto" : "60 / 100% / auto"
+                  }
                   disabled={isPreset}
                   onInput={(e) =>
                     handleDimension(
@@ -4500,9 +3988,7 @@ function CanvasInspector({
                       true,
                       true,
                     )}
-                  class={`input px-1 py-0.5 ${
-                    isPreset ? "cursor-not-allowed opacity-50" : ""
-                  }`}
+                  class={`input px-1 py-0.5 ${isPreset ? "cursor-not-allowed opacity-50" : ""}`}
                   aria-label={FIELD_LABELS[f]}
                 />
               </label>
@@ -4627,8 +4113,7 @@ function CanvasInspector({
       </label>
       <AdvancedManualOverride title="グリッド位置（フロープレビューに影響しません）">
         <p class="text-muted-xs mb-1">
-          gridCol / gridRow
-          はフローレイアウトのプレビューには反映されません。レガシー補助項目です。
+          gridCol / gridRow はフローレイアウトのプレビューには反映されません。レガシー補助項目です。
         </p>
         <div class="grid grid-cols-2 gap-1">
           <label class="flex flex-col gap-0.5">
@@ -4684,27 +4169,23 @@ function CanvasInspector({
   const classTab = (
     <fieldset class="flex flex-col gap-1.5">
       <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-        {isContainer
-          ? "layoutClassRefs（コンテナ）"
-          : "layoutClassRefs（部品ラッパー）"}
+        {isContainer ? "layoutClassRefs（コンテナ）" : "layoutClassRefs（部品ラッパー）"}
       </legend>
-      {isContainer
-        ? (
-          <TopologyLayoutClassPicker
-            selectedClassRefs={node.layoutClassRefs ?? []}
-            onToggle={onToggleLayoutClassRef}
-            scopeFilter=""
-            allowedForAny={["layout_root", "layout_section", "layout_row"]}
-          />
-        )
-        : (
-          <TopologyLayoutClassPicker
-            selectedClassRefs={node.layoutClassRefs ?? []}
-            onToggle={onToggleLayoutClassRef}
-            scopeFilter=""
-            allowedForFilter="component_wrapper"
-          />
-        )}
+      {isContainer ? (
+        <TopologyLayoutClassPicker
+          selectedClassRefs={node.layoutClassRefs ?? []}
+          onToggle={onToggleLayoutClassRef}
+          scopeFilter=""
+          allowedForAny={["layout_root", "layout_section", "layout_row"]}
+        />
+      ) : (
+        <TopologyLayoutClassPicker
+          selectedClassRefs={node.layoutClassRefs ?? []}
+          onToggle={onToggleLayoutClassRef}
+          scopeFilter=""
+          allowedForFilter="component_wrapper"
+        />
+      )}
     </fieldset>
   );
 
@@ -4714,9 +4195,7 @@ function CanvasInspector({
         レスポンシブ配置 / サイズ
       </legend>
       <p class="text-muted-xs">
-        ブレークポイント別の layoutClassRefs
-        は配置インスペクタで管理します。デザインインスペクタの cssTokenRefs
-        とは分離されています。
+        ブレークポイント別の layoutClassRefs は配置インスペクタで管理します。デザインインスペクタの cssTokenRefs とは分離されています。
       </p>
       <ResponsiveLayoutRuleEditor
         rules={node.responsiveLayoutRules ?? {}}
@@ -4726,14 +4205,9 @@ function CanvasInspector({
       <label class="flex flex-col gap-1 text-[0.65rem] text-gray-600">
         JSON（明示バリデーション / 空欄はクリア）
         <textarea
-          class={`min-h-[88px] rounded border px-1 py-0.5 font-mono text-[0.6rem] ${
-            responsiveLayoutError
-              ? "border-red-400 bg-red-50"
-              : "border-slate-200"
-          }`}
+          class={`min-h-[88px] rounded border px-1 py-0.5 font-mono text-[0.6rem] ${responsiveLayoutError ? "border-red-400 bg-red-50" : "border-slate-200"}`}
           value={responsiveLayoutJson}
-          onInput={(e) =>
-            setResponsiveLayoutJson((e.target as HTMLTextAreaElement).value)}
+          onInput={(e) => setResponsiveLayoutJson((e.target as HTMLTextAreaElement).value)}
           onBlur={commitResponsiveLayoutJson}
           aria-invalid={Boolean(responsiveLayoutError)}
           aria-label="レスポンシブ配置ルール JSON"
@@ -4743,10 +4217,7 @@ function CanvasInspector({
         />
       </label>
       {responsiveLayoutError && (
-        <p
-          role="alert"
-          class="rounded border border-red-200 bg-red-50 p-1 text-[0.6rem] text-red-700"
-        >
+        <p role="alert" class="rounded border border-red-200 bg-red-50 p-1 text-[0.6rem] text-red-700">
           {responsiveLayoutError}
         </p>
       )}
@@ -4757,9 +4228,7 @@ function CanvasInspector({
     <div
       role="complementary"
       aria-label={`${friendlyNodeLabel(node)} の${UX_LAYOUT_INSPECTOR_SECTION}`}
-      class={`${
-        embedded ? "w-full" : "w-52 shrink-0"
-      } rounded-lg border border-blue-600 bg-blue-50 p-2.5 font-mono text-xs`}
+      class={`${embedded ? "w-full" : "w-52 shrink-0"} rounded-lg border border-blue-600 bg-blue-50 p-2.5 font-mono text-xs`}
     >
       <div class="mb-2 flex items-center justify-between">
         <strong class="text-sm">{UX_LAYOUT_INSPECTOR_SECTION}</strong>
@@ -4780,16 +4249,13 @@ function CanvasInspector({
           { id: "overview", label: "概要", content: overviewTab },
           { id: "tree", label: "ツリー", content: treeTab },
           { id: "class", label: "クラス", content: classTab },
-          {
-            id: "responsive_layout",
-            label: "レスポンシブ",
-            content: responsiveTab,
-          },
+          { id: "responsive_layout", label: "レスポンシブ", content: responsiveTab },
         ]}
       />
     </div>
   );
 }
+
 
 function ResponsiveLayoutRuleEditor({
   rules,
@@ -4800,9 +4266,7 @@ function ResponsiveLayoutRuleEditor({
   onChange: (rules: ResponsiveTokenRules) => void;
   isContainer: boolean;
 }): JSX.Element {
-  const [activeBreakpoint, setActiveBreakpoint] = useState<string>(
-    RESPONSIVE_BREAKPOINTS[1],
-  );
+  const [activeBreakpoint, setActiveBreakpoint] = useState<string>(RESPONSIVE_BREAKPOINTS[1]);
   const activeTokens = rules[activeBreakpoint] ?? [];
   const clearBreakpoint = (bp: string) => {
     const next = { ...rules };
@@ -4818,11 +4282,7 @@ function ResponsiveLayoutRuleEditor({
   };
   return (
     <div class="rounded border border-slate-200 bg-white p-2">
-      <div
-        class="mb-2 flex flex-wrap gap-1"
-        role="tablist"
-        aria-label="レスポンシブ配置ブレークポイント"
-      >
+      <div class="mb-2 flex flex-wrap gap-1" role="tablist" aria-label="レスポンシブ配置ブレークポイント">
         {RESPONSIVE_BREAKPOINTS.map((bp) => {
           const count = rules[bp]?.length ?? 0;
           const active = bp === activeBreakpoint;
@@ -4834,30 +4294,20 @@ function ResponsiveLayoutRuleEditor({
               aria-selected={active}
               onClick={() => setActiveBreakpoint(bp)}
               class={`rounded border px-2 py-0.5 font-mono text-[0.65rem] ${
-                active
-                  ? "border-blue-500 bg-blue-600 text-white"
-                  : count > 0
-                  ? "border-blue-300 bg-blue-50 text-blue-700"
-                  : "border-slate-200 bg-slate-50 text-slate-600"
+                active ? "border-blue-500 bg-blue-600 text-white" : count > 0 ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50 text-slate-600"
               }`}
             >
-              {bp}
-              {count > 0 ? ` (${count})` : ""}
+              {bp}{count > 0 ? ` (${count})` : ""}
             </button>
           );
         })}
       </div>
       <div class="mb-1 flex items-center justify-between">
         <span class="text-[0.65rem] font-semibold text-slate-700">
-          {BREAKPOINT_LABELS[activeBreakpoint] ?? activeBreakpoint}{" "}
-          の layoutClassRefs
+          {BREAKPOINT_LABELS[activeBreakpoint] ?? activeBreakpoint} の layoutClassRefs
         </span>
         {activeTokens.length > 0 && (
-          <button
-            type="button"
-            class="text-[0.6rem] text-red-500"
-            onClick={() => clearBreakpoint(activeBreakpoint)}
-          >
+          <button type="button" class="text-[0.6rem] text-red-500" onClick={() => clearBreakpoint(activeBreakpoint)}>
             クリア
           </button>
         )}
@@ -4871,8 +4321,7 @@ function ResponsiveLayoutRuleEditor({
           : { allowedForFilter: "component_wrapper" })}
       />
       <p class="mt-2 text-[0.6rem] text-slate-500">
-        保存時は layout_patch_json の responsiveLayoutRules
-        として明示的にシリアライズされます。
+        保存時は layout_patch_json の responsiveLayoutRules として明示的にシリアライズされます。
       </p>
     </div>
   );
@@ -5072,10 +4521,7 @@ function LayoutPalette({
       {filtered.length === 0 && (
         <p class="py-3 text-center text-[0.65rem] text-gray-400">該当なし</p>
       )}
-      <div
-        class="component-bucket-panel flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
-        role="list"
-      >
+      <div class="component-bucket-panel flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto" role="list">
         {filtered.map((c) => {
           const draftOnly = c.isDraftOnly;
           const catalogEntry = COMPONENT_CATALOG_ENTRIES.find(
@@ -5153,10 +4599,7 @@ function DashboardCandidatePalette({
       {filtered.length === 0 && (
         <p class="py-3 text-center text-[0.65rem] text-blue-400">該当なし</p>
       )}
-      <div
-        class="component-bucket-panel flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
-        role="list"
-      >
+      <div class="component-bucket-panel flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto" role="list">
         {filtered.map((c) => {
           const catalogEntry = COMPONENT_CATALOG_ENTRIES.find(
             (e) => e.componentKey === c.componentKey,
@@ -5171,10 +4614,7 @@ function DashboardCandidatePalette({
               statusVariant="info"
               draggable={!disabled}
               placementReady
-              dragPayload={bucketCardDragPayloadFromEntry(
-                c,
-                UX_DASHBOARD_PRESET_CANDIDATE_LABEL,
-              )}
+              dragPayload={bucketCardDragPayloadFromEntry(c, UX_DASHBOARD_PRESET_CANDIDATE_LABEL)}
               onDragStart={(_e, payload) => onDragStart(c, payload)}
               onAddToCanvas={() => onAddToCanvas(c)}
             />
@@ -5214,10 +4654,7 @@ function StructuralHtmlPalette({
       {filtered.length === 0 && (
         <p class="py-3 text-center text-[0.65rem] text-emerald-500">該当なし</p>
       )}
-      <div
-        class="component-bucket-panel flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
-        role="list"
-      >
+      <div class="component-bucket-panel flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto" role="list">
         {filtered.map((tag) => (
           <button
             key={tag}
@@ -5233,12 +4670,8 @@ function StructuralHtmlPalette({
               &lt;{tag.slice(0, 1)}&gt;
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate font-mono text-xs font-semibold text-emerald-950">
-                &lt;{tag}&gt;
-              </span>
-              <span class="block truncate text-[0.58rem] text-emerald-800">
-                構造 HTML
-              </span>
+              <span class="block truncate font-mono text-xs font-semibold text-emerald-950">&lt;{tag}&gt;</span>
+              <span class="block truncate text-[0.58rem] text-emerald-800">構造 HTML</span>
             </span>
           </button>
         ))}
@@ -5266,9 +4699,7 @@ function LeftDockedPalettePanel({
   onAddStructuralHtmlTag: (tag: StructuralHtmlTag) => void;
   selectorsDisabled: boolean;
 }): JSX.Element {
-  const [activeTab, setActiveTab] = useState<"bucket" | "dashboard" | "html">(
-    "bucket",
-  );
+  const [activeTab, setActiveTab] = useState<"bucket" | "dashboard" | "html">("bucket");
   const tabs: Array<{ id: "bucket" | "dashboard" | "html"; label: string }> = [
     { id: "bucket", label: "配置可能部品" },
     { id: "dashboard", label: "preset 候補" },
@@ -5278,11 +4709,7 @@ function LeftDockedPalettePanel({
   return (
     <aside
       class="left-docked-panel flex shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
-      style={{
-        width: "clamp(180px, 15vw, 240px)",
-        minWidth: "180px",
-        maxWidth: "240px",
-      }}
+      style={{ width: "clamp(180px, 15vw, 240px)", minWidth: "180px", maxWidth: "240px" }}
       aria-label={UX_COMPONENT_ADD_PANEL_LABEL}
       data-component-add-panel="true"
     >
@@ -5378,9 +4805,7 @@ function LayoutBuilderSection({
   // selectedNodeIds: full selection set contract (batch operation target).
   // SSOT: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
   // Not persisted to layout_patch_json — transient draft interaction state only.
-  const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(
-    emptySelectionSet(),
-  );
+  const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(emptySelectionSet());
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
 
@@ -5430,9 +4855,7 @@ function LayoutBuilderSection({
   const [layoutCandidates, setLayoutCandidates] = useState<
     LayoutRouteCandidate[]
   >([]);
-  const [candidateErrors, setCandidateErrors] = useState<UiValidationError[]>(
-    [],
-  );
+  const [candidateErrors, setCandidateErrors] = useState<UiValidationError[]>([]);
   const [paletteLoadFailed, setPaletteLoadFailed] = useState(false);
 
   // ── palette drag (HTML5 drag API — palette→canvas only) ─────────────────
@@ -5440,34 +4863,17 @@ function LayoutBuilderSection({
 
   // ── preset intake state ──────────────────────────────────────────────────
   const [presetDrawerOpen, setPresetDrawerOpen] = useState(false);
-  const [canvasPresetSeed, setCanvasPresetSeed] = useState<
-    CanvasPresetSeed | null
-  >(null);
+  const [canvasPresetSeed, setCanvasPresetSeed] = useState<CanvasPresetSeed | null>(null);
   const [savedPresets, setSavedPresets] = useState<MockPresetListItem[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
-  const [presetLoadStatus, setPresetLoadStatus] = useState<
-    "idle" | "loading" | "error"
-  >("idle");
+  const [presetLoadStatus, setPresetLoadStatus] = useState<"idle" | "loading" | "error">("idle");
   const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
   const [presetsLoaded, setPresetsLoaded] = useState(false);
 
   // ── frontend-local calc bindings ─────────────────────────────────────────
-  const [calculationBindings, setCalculationBindings] = useState<CalcBinding[]>(
-    [],
-  );
-  const [, setNodeValues] = useState<Record<string, Record<string, unknown>>>(
-    {},
-  );
-  const [calcResults, setCalcResults] = useState<
-    ReadonlyMap<
-      string,
-      {
-        targetNodeId: string;
-        targetProp: string;
-        result: { ok: true; value: number } | { ok: false; error: string };
-      }
-    >
-  >(new Map());
+  const [calculationBindings, setCalculationBindings] = useState<CalcBinding[]>([]);
+  const [, setNodeValues] = useState<Record<string, Record<string, unknown>>>({});
+  const [calcResults, setCalcResults] = useState<ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>>(new Map());
   const lastEmissionDataRef = useRef<Record<string, unknown>>({});
   const [emissionDataJson, setEmissionDataJson] = useState<string>("");
 
@@ -5475,15 +4881,9 @@ function LayoutBuilderSection({
   // loop: onSearch → debounce → searchRouteKeyCandidates (read-only) → suggestions update
   // SSOT: candidate_source_boundary: debounce_backend_readonly_search (no mutation during typing)
   // UIBuilder does not own topology judgment. No mutation / DB write / apply during typing.
-  const [searchSuggestionsByNodeId, setSearchSuggestionsByNodeId] = useState<
-    Record<string, string[]>
-  >({});
-  const [_searchErrorByNodeId, setSearchErrorByNodeId] = useState<
-    Record<string, string>
-  >({});
-  const searchDebounceTimers = useRef<
-    Record<string, ReturnType<typeof setTimeout>>
-  >({});
+  const [searchSuggestionsByNodeId, setSearchSuggestionsByNodeId] = useState<Record<string, string[]>>({});
+  const [_searchErrorByNodeId, setSearchErrorByNodeId] = useState<Record<string, string>>({});
+  const searchDebounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const handleNodeSearch = useCallback(
     (componentId: string, query: string) => {
@@ -5491,9 +4891,10 @@ function LayoutBuilderSection({
         clearTimeout(searchDebounceTimers.current[componentId]);
       }
       searchDebounceTimers.current[componentId] = setTimeout(async () => {
-        const sessionToken = typeof globalThis.sessionStorage !== "undefined"
-          ? (sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined)
-          : undefined;
+        const sessionToken =
+          typeof globalThis.sessionStorage !== "undefined"
+            ? (sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined)
+            : undefined;
         // read-only search — no mutation / DB write / apply during typing
         const result = await searchRouteKeyCandidates(query, sessionToken);
         if (result.ok) {
@@ -5530,9 +4931,7 @@ function LayoutBuilderSection({
     }
     try {
       const parsed = JSON.parse(emissionDataJson);
-      if (
-        typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-      ) {
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         lastEmissionDataRef.current = parsed as Record<string, unknown>;
       }
     } catch {
@@ -5626,10 +5025,7 @@ function LayoutBuilderSection({
     for (const [, entry] of calcResults) {
       if (entry.result.ok) {
         const existing = map.get(entry.targetNodeId) ?? {};
-        map.set(entry.targetNodeId, {
-          ...existing,
-          [entry.targetProp]: entry.result.value,
-        });
+        map.set(entry.targetNodeId, { ...existing, [entry.targetProp]: entry.result.value });
       }
     }
     return map;
@@ -5658,11 +5054,7 @@ function LayoutBuilderSection({
 
   // combobox candidate boundary: local derivation from layoutCandidates — no backend fetch
   const comboboxPreviewOptions = useMemo(
-    () =>
-      deriveRouteKeyCandidates(layoutCandidates).map((k) => ({
-        label: k,
-        value: k,
-      })),
+    () => deriveRouteKeyCandidates(layoutCandidates).map((k) => ({ label: k, value: k })),
     [layoutCandidates],
   );
 
@@ -5672,14 +5064,10 @@ function LayoutBuilderSection({
       return true;
     }
     if (!packageAuthoringReady) {
-      announce(
-        "パッケージを自動生成中です。少し待ってから再度お試しください。",
-      );
+      announce("パッケージを自動生成中です。少し待ってから再度お試しください。");
       return true;
     }
-    if (
-      scopedPackageId && entry.packageId && entry.packageId !== scopedPackageId
-    ) {
+    if (scopedPackageId && entry.packageId && entry.packageId !== scopedPackageId) {
       announce("選択中パッケージに属さない部品は配置できません。");
       return true;
     }
@@ -5788,24 +5176,20 @@ function LayoutBuilderSection({
     if (!selectedPresetId) return;
     const activeRouteKey = scopedRouteKey?.trim() ?? effectiveRouteKey;
     if (!activeRouteKey) {
-      setPresetLoadError(
-        "ルートキーが選択されていません。先にルートパッケージを選択してください。",
-      );
+      setPresetLoadError("ルートキーが選択されていません。先にルートパッケージを選択してください。");
       setPresetLoadStatus("error");
       return;
     }
 
     // Confirm merge/replace when canvas has existing nodes.
     if (draftNodes.length > 0) {
-      if (
-        !(await confirm(
-          "既存のキャンバスノードがあります。プリセットを読み込むと現在のキャンバスが置き換えられます。続きますか？",
-          {
-            title: "プリセット読み込み",
-            confirmLabel: "読み込む",
-          },
-        ))
-      ) {
+      if (!(await confirm(
+        "既存のキャンバスノードがあります。プリセットを読み込むと現在のキャンバスが置き換えられます。続きますか？",
+        {
+          title: "プリセット読み込み",
+          confirmLabel: "読み込む",
+        },
+      ))) {
         return;
       }
     }
@@ -5820,27 +5204,19 @@ function LayoutBuilderSection({
       });
 
       if (!result.ok) {
-        setPresetLoadError(
-          result.message ?? result.errorCode ?? "読み込みに失敗しました",
-        );
+        setPresetLoadError(result.message ?? result.errorCode ?? "読み込みに失敗しました");
         setPresetLoadStatus("error");
         return;
       }
 
       if (!result.layoutPatchJson) {
-        setPresetLoadError(
-          "プリセットの layout_patch_json がありません。先にコンパイルしてください。",
-        );
+        setPresetLoadError("プリセットの layout_patch_json がありません。先にコンパイルしてください。");
         setPresetLoadStatus("error");
         return;
       }
 
       const patchStr = JSON.stringify(result.layoutPatchJson);
-      const applied = applyCanvasFromTensorPatch(
-        patchStr,
-        "プリセット読み込み",
-        { seedWhenEmpty: false },
-      );
+      const applied = applyCanvasFromTensorPatch(patchStr, "プリセット読み込み", { seedWhenEmpty: false });
       if (!applied) {
         setPresetLoadError("プリセットをキャンバスに適用できませんでした。");
         setPresetLoadStatus("error");
@@ -5848,13 +5224,9 @@ function LayoutBuilderSection({
       }
 
       setPresetLoadStatus("idle");
-      announce(
-        "プリセットをキャンバス（一時ドラフト）に読み込みました。active topology には反映されていません。",
-      );
+      announce("プリセットをキャンバス（一時ドラフト）に読み込みました。active topology には反映されていません。");
     } catch (err) {
-      setPresetLoadError(
-        err instanceof Error ? err.message : "読み込みに失敗しました",
-      );
+      setPresetLoadError(err instanceof Error ? err.message : "読み込みに失敗しました");
       setPresetLoadStatus("error");
     }
   };
@@ -5865,9 +5237,7 @@ function LayoutBuilderSection({
   // SSOT: docs/design/mock-preset-intake-compiler-ssot.yaml §save_current_canvas_as_preset_button
   const handleSaveCanvasAsPreset = () => {
     if (draftNodes.length === 0) {
-      announce(
-        "キャンバスが空です。部品を配置してからプリセット保存してください。",
-      );
+      announce("キャンバスが空です。部品を配置してからプリセット保存してください。");
       return;
     }
 
@@ -5875,13 +5245,8 @@ function LayoutBuilderSection({
     const componentMappings = draftNodes.map((n) => ({
       sourceObjectId: n.nodeId,
       nodeId: n.nodeId,
-      mappingKind:
-        (n.nodeKind === "structural_html"
-          ? "structural_html"
-          : "catalog_component") as "catalog_component" | "structural_html",
-      componentKey: n.nodeKind === "structural_html"
-        ? undefined
-        : n.componentKey,
+      mappingKind: (n.nodeKind === "structural_html" ? "structural_html" : "catalog_component") as "catalog_component" | "structural_html",
+      componentKey: n.nodeKind === "structural_html" ? undefined : n.componentKey,
       componentKind: n.componentKind,
       htmlTag: n.htmlTag as string | undefined,
     }));
@@ -6095,13 +5460,7 @@ function LayoutBuilderSection({
       }
     };
     load();
-  }, [
-    scopedPackageId,
-    scopedRouteKey,
-    scopedLayoutId,
-    paletteReloadToken,
-    packageScopedLayout,
-  ]);
+  }, [scopedPackageId, scopedRouteKey, scopedLayoutId, paletteReloadToken, packageScopedLayout]);
 
   // ── hydrate layout_patch_json from DB on package / route / layout selection ─
   useEffect(() => {
@@ -6266,8 +5625,7 @@ function LayoutBuilderSection({
     action: "validate" | "apply",
     options?: { viaApplyModal?: boolean },
   ) => {
-    const inApplyModal = options?.viaApplyModal === true ||
-      layoutApplyModalOpen;
+    const inApplyModal = options?.viaApplyModal === true || layoutApplyModalOpen;
     setPatchErrors([]);
     if (action === "validate") {
       setPatchSummary(null);
@@ -6562,7 +5920,8 @@ function LayoutBuilderSection({
     setDesignDraftByNodeId((prev) => {
       const current = prev.get(nodeId) ?? {};
       const merged: DesignDraft = { ...current, ...partial };
-      const cssUnchanged = JSON.stringify(current.cssTokenRefs ?? []) ===
+      const cssUnchanged =
+        JSON.stringify(current.cssTokenRefs ?? []) ===
         JSON.stringify(merged.cssTokenRefs ?? []);
       if (
         current.inlineText === merged.inlineText &&
@@ -6675,10 +6034,7 @@ function LayoutBuilderSection({
         const layoutClassRefs = toggledOn
           ? [...current, classKey]
           : current.filter((k) => k !== classKey);
-        const widthMode = resolveSizingModeAfterToggle(
-          layoutClassRefs,
-          n.widthMode,
-        );
+        const widthMode = resolveSizingModeAfterToggle(layoutClassRefs, n.widthMode);
         return { ...n, layoutClassRefs, widthMode };
       });
       pushHistory(next, "ノード layoutClassRefs を変更");
@@ -6718,10 +6074,7 @@ function LayoutBuilderSection({
   };
 
   // ── palette drag ─────────────────────────────────────────────────────────
-  const handleDragStartPalette = (
-    entry: PaletteEntry,
-    _payload: BucketCardDragPayload,
-  ) => {
+  const handleDragStartPalette = (entry: PaletteEntry, _payload: BucketCardDragPayload) => {
     dragSrc.current = { kind: "palette", entry };
   };
 
@@ -6749,9 +6102,7 @@ function LayoutBuilderSection({
       dropCatalogEntry?.registrationRequired !== false && entry.componentKey &&
       onRegisterComponentBeforePlace
     ) {
-      const registered = await onRegisterComponentBeforePlace(
-        entry.componentKey,
-      );
+      const registered = await onRegisterComponentBeforePlace(entry.componentKey);
       if (!registered) return;
     }
     if (entry.routeKey && !routeKey) setRouteKey(entry.routeKey);
@@ -6769,9 +6120,7 @@ function LayoutBuilderSection({
       addCatalogEntry?.registrationRequired !== false && entry.componentKey &&
       onRegisterComponentBeforePlace
     ) {
-      const registered = await onRegisterComponentBeforePlace(
-        entry.componentKey,
-      );
+      const registered = await onRegisterComponentBeforePlace(entry.componentKey);
       if (!registered) return;
     }
     const parentNodeId = selectedNodeId;
@@ -6931,10 +6280,8 @@ function LayoutBuilderSection({
           </strong>
           <span class="text-[0.7rem] text-blue-700">
             左パネルの部品カードをドラッグしてキャンバスへ配置します。
-            parentNodeId・slotKey・orderIndex
-            は右ドックの配置インスペクタで編集してください。 layoutClassRefs
-            は右ドックの配置インスペクタで編集し、canvas
-            に即時反映されます。適用で DB 保存します。
+            parentNodeId・slotKey・orderIndex は右ドックの配置インスペクタで編集してください。
+            layoutClassRefs は右ドックの配置インスペクタで編集し、canvas に即時反映されます。適用で DB 保存します。
           </span>
         </div>
       )}
@@ -6942,398 +6289,373 @@ function LayoutBuilderSection({
       {/* Canvas workspace — maximized viewport block (left dock + canvas + right dock) */}
       <section
         class="ui-builder-canvas-workspace mb-4 flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm"
-        style={{
-          height: CANVAS_WORKSPACE_HEIGHT,
-          minHeight: CANVAS_WORKSPACE_HEIGHT,
-        }}
+        style={{ height: CANVAS_WORKSPACE_HEIGHT, minHeight: CANVAS_WORKSPACE_HEIGHT }}
         aria-label="キャンバスワークスペース"
       >
-        {/* layout draft プレビュー & 操作ツールバー */}
-        <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2">
-          <div class="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={undo}
-              disabled={!canUndo}
-              class="btn-secondary py-1 px-2 text-xs disabled:opacity-40"
-              title="元に戻す (Ctrl+Z)"
-              aria-label="元に戻す"
-            >
-              ↩ 元に戻す
-            </button>
-            <button
-              type="button"
-              onClick={redo}
-              disabled={!canRedo}
-              class="btn-secondary py-1 px-2 text-xs disabled:opacity-40"
-              title="やり直す (Ctrl+Y)"
-              aria-label="やり直す"
-            >
-              ↪ やり直す
-            </button>
+      {/* layout draft プレビュー & 操作ツールバー */}
+      <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2">
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            class="btn-secondary py-1 px-2 text-xs disabled:opacity-40"
+            title="元に戻す (Ctrl+Z)"
+            aria-label="元に戻す"
+          >
+            ↩ 元に戻す
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            class="btn-secondary py-1 px-2 text-xs disabled:opacity-40"
+            title="やり直す (Ctrl+Y)"
+            aria-label="やり直す"
+          >
+            ↪ やり直す
+          </button>
+        </div>
+
+        <div class="h-4 w-px bg-gray-300" />
+
+        <details class="text-xs">
+          <summary class="cursor-pointer text-gray-600">ルート layoutClassRefs</summary>
+          <div class="mt-1 max-w-md">
+            <TopologyLayoutClassPicker
+              selectedClassRefs={selectedLayoutClassRefs}
+              onToggle={toggleRootLayoutClassRef}
+              scopeFilter=""
+              allowedForAny={["layout_root", "layout_section", "layout_row"]}
+            />
           </div>
+        </details>
 
-          <div class="h-4 w-px bg-gray-300" />
+        {draftNodes.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              const next: DraftNode[] = [];
+              setDraftNodes(next);
+              setSelectedNodeId(null);
+              setSelectedNodeIds(emptySelectionSet());
+              pushHistory(next, "キャンバスをクリア");
+              setLifecyclePhase("idle");
+              announce("キャンバスをクリアしました");
+            }}
+            class="btn-danger py-0.5 px-2 text-xs"
+            aria-label="キャンバスを全クリア"
+          >
+            クリア
+          </button>
+        )}
 
-          <details class="text-xs">
-            <summary class="cursor-pointer text-gray-600">
-              ルート layoutClassRefs
-            </summary>
-            <div class="mt-1 max-w-md">
-              <TopologyLayoutClassPicker
-                selectedClassRefs={selectedLayoutClassRefs}
-                onToggle={toggleRootLayoutClassRef}
-                scopeFilter=""
-                allowedForAny={["layout_root", "layout_section", "layout_row"]}
-              />
-            </div>
-          </details>
+        <div class="h-4 w-px bg-gray-300" />
 
-          {draftNodes.length > 0 && (
+        {/* Preset controls — SSOT: mock-preset-intake-compiler-ssot.yaml §canvas_workspace_action_group */}
+        <button
+          type="button"
+          class="btn-secondary py-0.5 px-2 text-xs"
+          aria-label="ビジュアルモックをアップロード"
+          title="SVG/XML ビジュアルモックをインポートしてプリセット作成"
+          onClick={() => setPresetDrawerOpen(true)}
+        >
+          ↑ モックをインポート
+        </button>
+
+        <button
+          type="button"
+          class="btn-secondary py-0.5 px-2 text-xs"
+          aria-label="現在のキャンバスをプリセットとして保存"
+          title="現在のキャンバス状態をプリセットとして保存"
+          disabled={draftNodes.length === 0}
+          onClick={handleSaveCanvasAsPreset}
+        >
+          ☆ プリセット保存
+        </button>
+
+        <span class="text-[0.6rem] text-gray-400">|</span>
+
+        <select
+          class="rounded border border-gray-300 px-1 py-0.5 text-xs disabled:opacity-50"
+          value={selectedPresetId}
+          aria-label="保存済みプリセットを選択"
+          onFocus={!presetsLoaded ? loadPresetList : undefined}
+          onChange={(e) => setSelectedPresetId((e.target as HTMLSelectElement).value)}
+        >
+          <option value="">プリセットを選択...</option>
+          {savedPresets.map((p) => (
+            <option key={p.presetId} value={p.presetId}>
+              {p.presetLabel}
+            </option>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          class="btn-secondary py-0.5 px-2 text-xs disabled:opacity-50"
+          disabled={!selectedPresetId || presetLoadStatus === "loading" || !packageScopedLayout}
+          aria-label="選択したプリセットをキャンバスに読み込む"
+          title={!packageScopedLayout ? "ルートパッケージを選択してからプリセットを読み込んでください" : "プリセットを一時キャンバスドラフトに読み込む"}
+          onClick={handleLoadPreset}
+        >
+          {presetLoadStatus === "loading" ? "読み込み中..." : "↓ プリセット読み込み"}
+        </button>
+
+        {presetLoadError && (
+          <span class="text-xs text-red-600" role="alert">
+            {presetLoadError}
+          </span>
+        )}
+
+        <span class="ml-auto text-xs text-gray-400" aria-live="polite">
+          {draftNodes.length} 部品
+          {selectedNode
+            ? ` — 選択中: ${friendlyComponentLabel(selectedNode.componentKey)}`
+            : ""}
+          {selectedNodeIds.size > 1
+            ? ` (${selectedNodeIds.size}件選択)`
+            : ""}
+        </span>
+
+        {/* Selection set operations — draft interaction only; not persisted */}
+        {draftNodes.length > 0 && (
+          <div
+            class="flex items-center gap-1"
+            data-selection-boundary={UI_BUILDER_SELECTION_STATE_BOUNDARY}
+          >
             <button
               type="button"
-              onClick={() => {
-                const next: DraftNode[] = [];
-                setDraftNodes(next);
-                setSelectedNodeId(null);
-                setSelectedNodeIds(emptySelectionSet());
-                pushHistory(next, "キャンバスをクリア");
-                setLifecyclePhase("idle");
-                announce("キャンバスをクリアしました");
-              }}
-              class="btn-danger py-0.5 px-2 text-xs"
-              aria-label="キャンバスを全クリア"
+              class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
+              onClick={handleSelectAll}
+              title="全ノードを選択"
+              aria-label="全ノードを選択"
             >
-              クリア
+              全選択
             </button>
-          )}
-
-          <div class="h-4 w-px bg-gray-300" />
-
-          {/* Preset controls — SSOT: mock-preset-intake-compiler-ssot.yaml §canvas_workspace_action_group */}
-          <button
-            type="button"
-            class="btn-secondary py-0.5 px-2 text-xs"
-            aria-label="ビジュアルモックをアップロード"
-            title="SVG/XML ビジュアルモックをインポートしてプリセット作成"
-            onClick={() => setPresetDrawerOpen(true)}
-          >
-            ↑ モックをインポート
-          </button>
-
-          <button
-            type="button"
-            class="btn-secondary py-0.5 px-2 text-xs"
-            aria-label="現在のキャンバスをプリセットとして保存"
-            title="現在のキャンバス状態をプリセットとして保存"
-            disabled={draftNodes.length === 0}
-            onClick={handleSaveCanvasAsPreset}
-          >
-            ☆ プリセット保存
-          </button>
-
-          <span class="text-[0.6rem] text-gray-400">|</span>
-
-          <select
-            class="rounded border border-gray-300 px-1 py-0.5 text-xs disabled:opacity-50"
-            value={selectedPresetId}
-            aria-label="保存済みプリセットを選択"
-            onFocus={!presetsLoaded ? loadPresetList : undefined}
-            onChange={(e) =>
-              setSelectedPresetId((e.target as HTMLSelectElement).value)}
-          >
-            <option value="">プリセットを選択...</option>
-            {savedPresets.map((p) => (
-              <option key={p.presetId} value={p.presetId}>
-                {p.presetLabel}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            class="btn-secondary py-0.5 px-2 text-xs disabled:opacity-50"
-            disabled={!selectedPresetId || presetLoadStatus === "loading" ||
-              !packageScopedLayout}
-            aria-label="選択したプリセットをキャンバスに読み込む"
-            title={!packageScopedLayout
-              ? "ルートパッケージを選択してからプリセットを読み込んでください"
-              : "プリセットを一時キャンバスドラフトに読み込む"}
-            onClick={handleLoadPreset}
-          >
-            {presetLoadStatus === "loading"
-              ? "読み込み中..."
-              : "↓ プリセット読み込み"}
-          </button>
-
-          {presetLoadError && (
-            <span class="text-xs text-red-600" role="alert">
-              {presetLoadError}
-            </span>
-          )}
-
-          <span class="ml-auto text-xs text-gray-400" aria-live="polite">
-            {draftNodes.length} 部品
-            {selectedNode
-              ? ` — 選択中: ${
-                friendlyComponentLabel(selectedNode.componentKey)
-              }`
-              : ""}
-            {selectedNodeIds.size > 1 ? ` (${selectedNodeIds.size}件選択)` : ""}
-          </span>
-
-          {/* Selection set operations — draft interaction only; not persisted */}
-          {draftNodes.length > 0 && (
-            <div
-              class="flex items-center gap-1"
-              data-selection-boundary={UI_BUILDER_SELECTION_STATE_BOUNDARY}
-            >
+            {selectedNodeId && (
               <button
                 type="button"
                 class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
-                onClick={handleSelectAll}
-                title="全ノードを選択"
-                aria-label="全ノードを選択"
+                onClick={() => handleSelectSubtree(selectedNodeId)}
+                title="選択中ノードのサブツリーを選択"
+                aria-label="サブツリー選択"
               >
-                全選択
+                サブツリー
               </button>
-              {selectedNodeId && (
-                <button
-                  type="button"
-                  class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
-                  onClick={() => handleSelectSubtree(selectedNodeId)}
-                  title="選択中ノードのサブツリーを選択"
-                  aria-label="サブツリー選択"
-                >
-                  サブツリー
-                </button>
-              )}
-              {selectedNodeIds.size > 0 && (
-                <button
-                  type="button"
-                  class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
-                  onClick={handleInvertSelection}
-                  title="選択を反転"
-                  aria-label="選択反転"
-                >
-                  反転
-                </button>
-              )}
-              {selectedNodeIds.size > 0 && (
-                <button
-                  type="button"
-                  class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
-                  onClick={handleClearSelection}
-                  title="選択解除"
-                  aria-label="選択解除"
-                >
-                  解除
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Preset uploader drawer — SSOT: mock-preset-intake-compiler-ssot.yaml §preset_uploader_surface */}
-        <PresetUploaderDrawer
-          open={presetDrawerOpen}
-          onClose={() => {
-            setPresetDrawerOpen(false);
-            setCanvasPresetSeed(null);
-          }}
-          onPresetSaved={(preset) => {
-            setSavedPresets((prev) => [preset, ...prev]);
-            setSelectedPresetId(preset.presetId);
-            setPresetsLoaded(true);
-            setCanvasPresetSeed(null);
-          }}
-          canvasPreset={canvasPresetSeed}
-        />
-
-        {legacyLayoutWarning && (
-          <div
-            class="mx-2 mb-2 flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
-            role="alert"
-          >
-            <span>
-              座標ベース（x/y）のレガシーレイアウトです。フロー配置へ明示的に変換してください。
-            </span>
-            <button
-              type="button"
-              class="btn-secondary py-0.5 px-2 text-xs"
-              onClick={handleMigrateLegacyLayout}
-            >
-              フロースタックへ変換
-            </button>
+            )}
+            {selectedNodeIds.size > 0 && (
+              <button
+                type="button"
+                class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
+                onClick={handleInvertSelection}
+                title="選択を反転"
+                aria-label="選択反転"
+              >
+                反転
+              </button>
+            )}
+            {selectedNodeIds.size > 0 && (
+              <button
+                type="button"
+                class="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-gray-600 hover:bg-gray-50"
+                onClick={handleClearSelection}
+                title="選択解除"
+                aria-label="選択解除"
+              >
+                解除
+              </button>
+            )}
           </div>
         )}
+      </div>
 
-        {/* layout draft プレビュー & 操作エリア: left dock + flow canvas + right inspector */}
-        <div class={`flex min-h-0 flex-1 gap-2.5 p-2 ${canvasPreviewClass}`}>
-          {/* Left Drawer shell — display-density chrome only; bucket semantics stay inside existing panel. */}
-          {leftDrawerOpen && (
-            <div
-              class="ui-builder-left-drawer-shell flex shrink-0 flex-col overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 shadow-sm"
-              data-ui-builder-drawer-shell="left"
-              data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
+      {/* Preset uploader drawer — SSOT: mock-preset-intake-compiler-ssot.yaml §preset_uploader_surface */}
+      <PresetUploaderDrawer
+        open={presetDrawerOpen}
+        onClose={() => {
+          setPresetDrawerOpen(false);
+          setCanvasPresetSeed(null);
+        }}
+        onPresetSaved={(preset) => {
+          setSavedPresets((prev) => [preset, ...prev]);
+          setSelectedPresetId(preset.presetId);
+          setPresetsLoaded(true);
+          setCanvasPresetSeed(null);
+        }}
+        canvasPreset={canvasPresetSeed}
+      />
+
+      {legacyLayoutWarning && (
+        <div
+          class="mx-2 mb-2 flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+          role="alert"
+        >
+          <span>
+            座標ベース（x/y）のレガシーレイアウトです。フロー配置へ明示的に変換してください。
+          </span>
+          <button
+            type="button"
+            class="btn-secondary py-0.5 px-2 text-xs"
+            onClick={handleMigrateLegacyLayout}
+          >
+            フロースタックへ変換
+          </button>
+        </div>
+      )}
+
+      {/* layout draft プレビュー & 操作エリア: left dock + flow canvas + right inspector */}
+      <div class={`flex min-h-0 flex-1 gap-2.5 p-2 ${canvasPreviewClass}`}>
+        {/* Left Drawer shell — display-density chrome only; bucket semantics stay inside existing panel. */}
+        {leftDrawerOpen && (
+          <div
+            class="ui-builder-left-drawer-shell flex shrink-0 flex-col overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 shadow-sm"
+            data-ui-builder-drawer-shell="left"
+            data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
+          >
+            <div class="flex items-center justify-between border-b border-blue-100 bg-white px-2 py-1 text-[0.62rem] font-semibold text-blue-900">
+              <span>部品パネル</span>
+              <button
+                type="button"
+                class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[0.62rem] text-blue-800 hover:bg-blue-100"
+                aria-label="左パネルを閉じる"
+                onClick={() => setLeftDrawerOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            {packageScopedLayout ? (
+              <LeftDockedPalettePanel
+                onDragStart={handleDragStartPalette}
+                onAddToCanvas={handleAddFromPalette}
+                paletteEntries={paletteEntries}
+                paletteStatus={paletteStatus}
+                onAddStructuralHtmlTag={addStructuralHtmlNode}
+                selectorsDisabled={selectorsDisabled}
+              />
+            ) : (
+              <aside
+                class="left-docked-panel flex shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2 py-4 text-center text-[0.65rem] text-slate-400"
+                style={{ width: "clamp(180px, 15vw, 240px)", minWidth: "180px", maxWidth: "240px" }}
+                aria-label={UX_COMPONENT_ADD_PANEL_LABEL}
+              >
+                {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
+              </aside>
+            )}
+          </div>
+        )}
+        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <div class="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between">
+            <button
+              type="button"
+              class="pointer-events-auto rounded-full border border-blue-200 bg-white/90 px-2 py-1 text-xs font-semibold text-blue-800 shadow-sm hover:bg-blue-50"
+              aria-label={leftDrawerOpen ? "左パネルを閉じる" : "左パネルを開く"}
+              aria-pressed={leftDrawerOpen}
+              onClick={() => setLeftDrawerOpen((open) => !open)}
             >
-              <div class="flex items-center justify-between border-b border-blue-100 bg-white px-2 py-1 text-[0.62rem] font-semibold text-blue-900">
-                <span>部品パネル</span>
-                <button
-                  type="button"
-                  class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[0.62rem] text-blue-800 hover:bg-blue-100"
-                  aria-label="左パネルを閉じる"
-                  onClick={() => setLeftDrawerOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-              {packageScopedLayout
-                ? (
-                  <LeftDockedPalettePanel
-                    onDragStart={handleDragStartPalette}
-                    onAddToCanvas={handleAddFromPalette}
-                    paletteEntries={paletteEntries}
-                    paletteStatus={paletteStatus}
-                    onAddStructuralHtmlTag={addStructuralHtmlNode}
-                    selectorsDisabled={selectorsDisabled}
-                  />
-                )
-                : (
-                  <aside
-                    class="left-docked-panel flex shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2 py-4 text-center text-[0.65rem] text-slate-400"
-                    style={{
-                      width: "clamp(180px, 15vw, 240px)",
-                      minWidth: "180px",
-                      maxWidth: "240px",
-                    }}
-                    aria-label={UX_COMPONENT_ADD_PANEL_LABEL}
-                  >
-                    {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
-                  </aside>
-                )}
-            </div>
-          )}
-          <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            <div class="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between">
+              ◧
+            </button>
+            <button
+              type="button"
+              class="pointer-events-auto rounded-full border border-indigo-200 bg-white/90 px-2 py-1 text-xs font-semibold text-indigo-800 shadow-sm hover:bg-indigo-50"
+              aria-label={rightDrawerOpen ? "右パネルを閉じる" : "右パネルを開く"}
+              aria-pressed={rightDrawerOpen}
+              onClick={() => setRightDrawerOpen((open) => !open)}
+            >
+              ◨
+            </button>
+          </div>
+          <FlowLayoutCanvas
+            nodes={draftNodes}
+            selectedNodeId={selectedNodeId}
+            selectedNodeIds={selectedNodeIds}
+            rootLayoutClassRefs={selectedLayoutClassRefs}
+            designDraftByNodeId={designDraftByNodeId}
+            canvasRef={canvasRef}
+            minHeight={CANVAS_MIN_HEIGHT}
+            onSelectNode={(id) => {
+              setSelectedNodeId(id);
+              setSelectedNodeIds(new Set([id]));
+              setRightDrawerOpen(true);
+            }}
+            onDeselectAll={() => {
+              setSelectedNodeId(null);
+              setSelectedNodeIds(emptySelectionSet());
+            }}
+            onDragOver={handleDragOverCanvas}
+            onDrop={handleDropOnCanvas}
+            onDeleteNode={removeNode}
+            onAddFromEmptyState={packageScopedLayout
+              ? handleAddFromEmptyState
+              : undefined}
+            allowEmptyStateTemplates={packageScopedLayout}
+            emptyGuidance={UX_EMPTY_CANVAS_DRAG_GUIDANCE}
+            calcTriggerNodeIds={calcTriggerNodeIds}
+            calcOverridesByNodeId={calcOverridesByNodeId}
+            onNodeValueChange={handleNodeValueChange}
+            searchNodeIds={searchNodeIds}
+            suggestionsByNodeId={searchSuggestionsByNodeIdMap}
+            onNodeSearch={handleNodeSearch}
+            comboboxPreviewOptions={comboboxPreviewOptions}
+          />
+        </div>
+
+        {rightDrawerOpen && (
+          <div
+            class="ui-builder-right-drawer-shell flex shrink-0 flex-col overflow-hidden rounded-lg border border-indigo-100 bg-indigo-50/50 shadow-sm"
+            data-ui-builder-drawer-shell="right"
+            data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
+          >
+            <div class="flex items-center justify-between border-b border-indigo-100 bg-white px-2 py-1 text-[0.62rem] font-semibold text-indigo-900">
+              <span>インスペクターパネル</span>
               <button
                 type="button"
-                class="pointer-events-auto rounded-full border border-blue-200 bg-white/90 px-2 py-1 text-xs font-semibold text-blue-800 shadow-sm hover:bg-blue-50"
-                aria-label={leftDrawerOpen
-                  ? "左パネルを閉じる"
-                  : "左パネルを開く"}
-                aria-pressed={leftDrawerOpen}
-                onClick={() => setLeftDrawerOpen((open) => !open)}
+                class="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[0.62rem] text-indigo-800 hover:bg-indigo-100"
+                aria-label="右パネルを閉じる"
+                onClick={() => setRightDrawerOpen(false)}
               >
-                ◧
-              </button>
-              <button
-                type="button"
-                class="pointer-events-auto rounded-full border border-indigo-200 bg-white/90 px-2 py-1 text-xs font-semibold text-indigo-800 shadow-sm hover:bg-indigo-50"
-                aria-label={rightDrawerOpen
-                  ? "右パネルを閉じる"
-                  : "右パネルを開く"}
-                aria-pressed={rightDrawerOpen}
-                onClick={() => setRightDrawerOpen((open) => !open)}
-              >
-                ◨
+                ×
               </button>
             </div>
-            <FlowLayoutCanvas
-              nodes={draftNodes}
+            <LayoutRightDock
+              draftNodes={draftNodes}
               selectedNodeId={selectedNodeId}
               selectedNodeIds={selectedNodeIds}
-              rootLayoutClassRefs={selectedLayoutClassRefs}
-              designDraftByNodeId={designDraftByNodeId}
-              canvasRef={canvasRef}
-              minHeight={CANVAS_MIN_HEIGHT}
+              selectedNode={selectedNode}
+              packageId={scopedPackageId ?? ""}
               onSelectNode={(id) => {
                 setSelectedNodeId(id);
-                setSelectedNodeIds(new Set([id]));
-                setRightDrawerOpen(true);
+                setSelectedNodeIds(id ? new Set([id]) : emptySelectionSet());
               }}
-              onDeselectAll={() => {
-                setSelectedNodeId(null);
-                setSelectedNodeIds(emptySelectionSet());
-              }}
-              onDragOver={handleDragOverCanvas}
-              onDrop={handleDropOnCanvas}
-              onDeleteNode={removeNode}
-              onAddFromEmptyState={packageScopedLayout
-                ? handleAddFromEmptyState
+              canvasDesignDraft={selectedNodeId
+                ? designDraftByNodeId.get(selectedNodeId)
                 : undefined}
-              allowEmptyStateTemplates={packageScopedLayout}
-              emptyGuidance={UX_EMPTY_CANVAS_DRAG_GUIDANCE}
-              calcTriggerNodeIds={calcTriggerNodeIds}
-              calcOverridesByNodeId={calcOverridesByNodeId}
-              onNodeValueChange={handleNodeValueChange}
-              searchNodeIds={searchNodeIds}
-              suggestionsByNodeId={searchSuggestionsByNodeIdMap}
-              onNodeSearch={handleNodeSearch}
-              comboboxPreviewOptions={comboboxPreviewOptions}
+              onReparent={reparentNode}
+              onCopy={copyNode}
+              onDelete={removeNode}
+              slotKeyCandidates={slotKeyCandidates}
+              onUpdateNode={(updates) => selectedNode && updateNode(selectedNode.nodeId, updates)}
+              onCommitNode={(updates, label) => selectedNode && commitNodeUpdate(selectedNode.nodeId, updates, label)}
+              onToggleLayoutClassRef={(classKey) =>
+                selectedNode && toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
+              onDesignChange={handleDesignDraftChange}
+              routeCandidates={routeOptions}
+              calculationBindings={calculationBindings}
+              draftNodeIds={draftNodes.map((n) => n.nodeId)}
+              calcResults={calcResults}
+              onCalcBindingsChange={setCalculationBindings}
+              onBatchApplyNodes={(updatedNodes) => {
+                setDraftNodes(updatedNodes);
+                pushHistory(updatedNodes, "一括操作適用");
+                setLifecyclePhase("idle");
+              }}
+              emissionDataJson={emissionDataJson}
+              onEmissionDataJsonChange={setEmissionDataJson}
+              suggestShape={suggestShape}
             />
           </div>
-
-          {rightDrawerOpen && (
-            <div
-              class="ui-builder-right-drawer-shell flex shrink-0 flex-col overflow-hidden rounded-lg border border-indigo-100 bg-indigo-50/50 shadow-sm"
-              data-ui-builder-drawer-shell="right"
-              data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
-            >
-              <div class="flex items-center justify-between border-b border-indigo-100 bg-white px-2 py-1 text-[0.62rem] font-semibold text-indigo-900">
-                <span>インスペクターパネル</span>
-                <button
-                  type="button"
-                  class="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[0.62rem] text-indigo-800 hover:bg-indigo-100"
-                  aria-label="右パネルを閉じる"
-                  onClick={() => setRightDrawerOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-              <LayoutRightDock
-                draftNodes={draftNodes}
-                selectedNodeId={selectedNodeId}
-                selectedNodeIds={selectedNodeIds}
-                selectedNode={selectedNode}
-                packageId={scopedPackageId ?? ""}
-                onSelectNode={(id) => {
-                  setSelectedNodeId(id);
-                  setSelectedNodeIds(id ? new Set([id]) : emptySelectionSet());
-                }}
-                canvasDesignDraft={selectedNodeId
-                  ? designDraftByNodeId.get(selectedNodeId)
-                  : undefined}
-                onReparent={reparentNode}
-                onCopy={copyNode}
-                onDelete={removeNode}
-                slotKeyCandidates={slotKeyCandidates}
-                onUpdateNode={(updates) =>
-                  selectedNode && updateNode(selectedNode.nodeId, updates)}
-                onCommitNode={(updates, label) =>
-                  selectedNode &&
-                  commitNodeUpdate(selectedNode.nodeId, updates, label)}
-                onToggleLayoutClassRef={(classKey) =>
-                  selectedNode &&
-                  toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
-                onDesignChange={handleDesignDraftChange}
-                routeCandidates={routeOptions}
-                calculationBindings={calculationBindings}
-                draftNodeIds={draftNodes.map((n) => n.nodeId)}
-                calcResults={calcResults}
-                onCalcBindingsChange={setCalculationBindings}
-                onBatchApplyNodes={(updatedNodes) => {
-                  setDraftNodes(updatedNodes);
-                  pushHistory(updatedNodes, "一括操作適用");
-                  setLifecyclePhase("idle");
-                }}
-                emissionDataJson={emissionDataJson}
-                onEmissionDataJsonChange={setEmissionDataJson}
-                suggestShape={suggestShape}
-              />
-            </div>
-          )}
-        </div>
+        )}
+      </div>
       </section>
 
       {/* _tmp auto-save status indicator */}
@@ -7402,8 +6724,7 @@ function LayoutBuilderSection({
           )}
         </div>
         <p class="mt-1 text-[0.65rem] text-gray-400">
-          canvas
-          は編集中の配置をリアルタイム表示します。適用でバリデーション後に
+          canvas は編集中の配置をリアルタイム表示します。適用でバリデーション後に
           layout_patch_json へ保存します。
         </p>
       </div>
@@ -7450,8 +6771,7 @@ function LayoutBuilderSection({
 
       <Accordion title="詳細情報（開発者向け）" defaultOpen={false}>
         <p class="text-muted-xs mb-2">
-          フロー配置 (parentNodeId/orderIndex/layoutClassRefs +
-          width/height)。x/y は出力しません。
+          フロー配置 (parentNodeId/orderIndex/layoutClassRefs + width/height)。x/y は出力しません。
         </p>
         <pre class="pre-box max-h-40 overflow-y-auto m-0 mb-2">{tensorPatchJson}</pre>
         {debugJson && (
@@ -7478,7 +6798,7 @@ type ExternalPortAuthoringCandidate = {
   credentialKind: string;
   referenceKey?: string | null;
   requiredByBundle: string;
-  consumerBundleBinding: string;
+  consumerBundleBinding?: string | null;
   urlOrEnvReference?: string | null;
   hookPath?: string | null;
   routeKey?: string | null;
@@ -7544,8 +6864,7 @@ function RouteNavigationWiringPreset({
         setWiringId(null);
         setSavedRouteKey(null);
         setLoadStatus(
-          body?.errors?.[0]?.message ??
-            "配線が未登録です（ルートを確定後に配線が生成されます）。",
+          body?.errors?.[0]?.message ?? "配線が未登録です（ルートを確定後に配線が生成されます）。",
         );
       }
     })();
@@ -7553,9 +6872,7 @@ function RouteNavigationWiringPreset({
 
   const handleSaveRouteNavigation = async () => {
     if (!wiringId) {
-      setSaveStatus(
-        "配線が未登録です。先にルートを選択してパッケージを確定してください。",
-      );
+      setSaveStatus("配線が未登録です。先にルートを選択してパッケージを確定してください。");
       return;
     }
     setSaving(true);
@@ -7604,41 +6921,43 @@ function RouteNavigationWiringPreset({
       <h4 class="mb-1 font-semibold text-emerald-900">
         {UX_ROUTE_NAVIGATION_PRESET_LABEL}
       </h4>
-      {loadStatus ? <p class="text-slate-600">{loadStatus}</p> : (
-        <>
-          <label class="block">
-            {UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL}
-            <select
-              class="mt-1 w-full rounded border bg-white px-2 py-1 text-xs"
-              value={selectedRouteKey}
-              onChange={(e) =>
-                setSelectedRouteKey((e.target as HTMLSelectElement).value)}
+      {loadStatus
+        ? <p class="text-slate-600">{loadStatus}</p>
+        : (
+          <>
+            <label class="block">
+              {UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL}
+              <select
+                class="mt-1 w-full rounded border bg-white px-2 py-1 text-xs"
+                value={selectedRouteKey}
+                onChange={(e) =>
+                  setSelectedRouteKey((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">{UX_ROUTE_NAVIGATION_NONE_LABEL}</option>
+                {routeCandidates.map((rk) => (
+                  <option key={rk} value={rk}>{rk}</option>
+                ))}
+              </select>
+            </label>
+            {savedRouteKey && (
+              <p class="mt-1 text-[0.7rem] text-emerald-800">
+                保存済み: <span class="font-mono">{savedRouteKey}</span>
+              </p>
+            )}
+            <button
+              type="button"
+              class={`btn-primary mt-2 text-xs ${
+                (!isDirty || saving || !wiringId)
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
+              disabled={!isDirty || saving || !wiringId}
+              onClick={handleSaveRouteNavigation}
             >
-              <option value="">{UX_ROUTE_NAVIGATION_NONE_LABEL}</option>
-              {routeCandidates.map((rk) => (
-                <option key={rk} value={rk}>{rk}</option>
-              ))}
-            </select>
-          </label>
-          {savedRouteKey && (
-            <p class="mt-1 text-[0.7rem] text-emerald-800">
-              保存済み: <span class="font-mono">{savedRouteKey}</span>
-            </p>
-          )}
-          <button
-            type="button"
-            class={`btn-primary mt-2 text-xs ${
-              (!isDirty || saving || !wiringId)
-                ? "opacity-50 cursor-not-allowed"
-                : ""
-            }`}
-            disabled={!isDirty || saving || !wiringId}
-            onClick={handleSaveRouteNavigation}
-          >
-            {saving ? "保存中…" : UX_ROUTE_NAVIGATION_SAVE_LABEL}
-          </button>
-        </>
-      )}
+              {saving ? "保存中…" : UX_ROUTE_NAVIGATION_SAVE_LABEL}
+            </button>
+          </>
+        )}
       {saveStatus && (
         <p class="mt-2 text-xs font-semibold text-emerald-900">{saveStatus}</p>
       )}
@@ -7763,8 +7082,7 @@ function PackageWiringEditor({
       } else {
         setExternalPortCandidates([]);
         setCandidateLoadError(
-          body?.errors?.[0]?.message ??
-            "external port 候補を取得できませんでした。",
+          body?.errors?.[0]?.message ?? "external port 候補を取得できませんでした。",
         );
       }
     })();
@@ -7831,7 +7149,8 @@ function PackageWiringEditor({
       } else {
         // Both primary and fallback failed — explicit error, not silent empty.
         setScreenWiringCandidates([]);
-        const errMsg = getBody?.errors?.[0]?.message ??
+        const errMsg =
+          getBody?.errors?.[0]?.message ??
           body?.errors?.[0]?.message ??
           "マニフェストの read/query 配線情報を取得できませんでした。";
         setCandidateLoadError(errMsg);
@@ -7882,17 +7201,11 @@ function PackageWiringEditor({
     }
     if (targetSurface === "external_port") {
       if (candidateLoadError) {
-        setSaveStatus(
-          `external port 候補の取得に失敗しています: ${candidateLoadError}`,
-        );
+        setSaveStatus(`external port 候補の取得に失敗しています: ${candidateLoadError}`);
         return;
       }
-      if (
-        !externalPortCandidates.some((c) => c.targetRef === targetRef.trim())
-      ) {
-        setSaveStatus(
-          "DB/管理画面由来の active external port 候補を選択してください。",
-        );
+      if (!externalPortCandidates.some((c) => c.targetRef === targetRef.trim())) {
+        setSaveStatus("DB/管理画面由来の active external port 候補を選択してください。");
         return;
       }
     }
@@ -8041,8 +7354,7 @@ function PackageWiringEditor({
                       ? (
                         <p class="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-800">
                           read/query 配線候補がありません。Step 3 で
-                          searchConditions / havingConditions /
-                          aggregationMeasures / displayColumns
+                          searchConditions / havingConditions / aggregationMeasures / displayColumns
                           を設定してから再試行してください（保存不可）。
                         </p>
                       )
@@ -8080,19 +7392,13 @@ function PackageWiringEditor({
             {targetSurface === "external_port" && (
               <div class="sm:col-span-2 space-y-2 rounded border border-indigo-200 bg-white p-3">
                 <p class="text-[0.65rem] text-slate-600">
-                  候補は active な external port / credential requirement DB
-                  record から取得します。frontend は provider や bundle
-                  の固定候補を持ちません。
+                  候補は active な external port / credential requirement DB record から取得します。frontend は provider や bundle の固定候補を持ちません。
                 </p>
                 {candidateLoadError && (
-                  <p class="rounded border border-red-300 bg-red-50 px-2 py-1.5 text-red-700">
-                    {candidateLoadError}
-                  </p>
+                  <p class="rounded border border-red-300 bg-red-50 px-2 py-1.5 text-red-700">{candidateLoadError}</p>
                 )}
                 {!candidateLoadError && externalPortCandidates.length === 0 && (
-                  <p class="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-800">
-                    active external port 候補がありません。
-                  </p>
+                  <p class="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-800">active external port 候補がありません。</p>
                 )}
                 <ul class="space-y-2">
                   {externalPortCandidates.map((c) => (
@@ -8104,23 +7410,19 @@ function PackageWiringEditor({
                           checked={targetRef === c.targetRef}
                           onChange={() => {
                             setTargetRef(c.targetRef);
-                            if (!wiringKind.trim()) {
-                              setWiringKind("external_port");
-                            }
+                            if (!wiringKind.trim()) setWiringKind("external_port");
                           }}
                         />
                         <span>
-                          <span class="font-mono text-indigo-900">
-                            {c.portKind} / {c.providerKind}
-                          </span>
+                          <span class="font-mono text-indigo-900">{c.portKind} / {c.providerKind}</span>
                           <span class="mt-0.5 block text-slate-600">
-                            {c.requiredByBundle} / credential:{" "}
-                            {c.credentialKind}
-                            {c.referenceKey ? ` / ${c.referenceKey}` : ""}
+                            {c.requiredByBundle} / credential: {c.credentialKind}{c.referenceKey ? ` / ${c.referenceKey}` : ""}
                           </span>
+                          {c.consumerBundleBinding && (
+                            <span class="mt-0.5 block text-slate-600">consumer binding: {c.consumerBundleBinding}</span>
+                          )}
                           <span class="mt-0.5 block font-mono text-[0.6rem] text-slate-500">
-                            ref: {c.targetRef}
-                            {c.routeKey ? ` / routeKey: ${c.routeKey}` : ""}
+                            ref: {c.targetRef}{c.routeKey ? ` / routeKey: ${c.routeKey}` : ""}
                           </span>
                         </span>
                       </label>
@@ -8130,12 +7432,9 @@ function PackageWiringEditor({
               </div>
             )}
 
-            {targetSurface !== "manifest" &&
-              targetSurface !== "external_port" && (
+            {targetSurface !== "manifest" && targetSurface !== "external_port" && (
               <div class="sm:col-span-2 flex flex-col gap-1">
-                <span class="text-[0.7rem] text-slate-700">
-                  接続先参照 (target_ref)
-                </span>
+                <span class="text-[0.7rem] text-slate-700">接続先参照 (target_ref)</span>
                 {routeCandidates && routeCandidates.length > 0 && (
                   <div class="flex flex-wrap gap-1">
                     {routeCandidates.map((rk) => {
@@ -8144,11 +7443,7 @@ function PackageWiringEditor({
                         <button
                           key={rk}
                           type="button"
-                          class={`rounded border px-2 py-0.5 text-[0.65rem] font-mono ${
-                            targetRef === encoded
-                              ? "border-blue-500 bg-blue-100 text-blue-800"
-                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                          }`}
+                          class={`rounded border px-2 py-0.5 text-[0.65rem] font-mono ${targetRef === encoded ? "border-blue-500 bg-blue-100 text-blue-800" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
                           onClick={() => setTargetRef(encoded)}
                         >
                           {rk}
@@ -8157,11 +7452,7 @@ function PackageWiringEditor({
                     })}
                     <button
                       type="button"
-                      class={`rounded border px-2 py-0.5 text-[0.65rem] ${
-                        !targetRef
-                          ? "border-slate-400 bg-slate-100 text-slate-600"
-                          : "border-slate-200 text-slate-500 hover:bg-slate-50"
-                      }`}
+                      class={`rounded border px-2 py-0.5 text-[0.65rem] ${!targetRef ? "border-slate-400 bg-slate-100 text-slate-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
                       onClick={() => setTargetRef("")}
                     >
                       なし
@@ -8169,9 +7460,7 @@ function PackageWiringEditor({
                   </div>
                 )}
                 {(!routeCandidates || routeCandidates.length === 0) && (
-                  <p class="text-[0.65rem] text-slate-500">
-                    ルート候補がありません。レイアウト登録後に再度確認してください。
-                  </p>
+                  <p class="text-[0.65rem] text-slate-500">ルート候補がありません。レイアウト登録後に再度確認してください。</p>
                 )}
                 <AdvancedManualOverride title="target_ref 手入力（SSOT key 直接指定 / 移行 / デバッグ用）">
                   <input
@@ -8226,10 +7515,7 @@ function buildManifestPickerOptions(
     const shape = detail
       ? extractScreenDataShapeFromTopology(detail.topologyRawJson)
       : null;
-    const label = resolveVisibleTopologyName(
-      shape?.userFacingTopologyLabel,
-      shape?.topologySystemName,
-    ) ||
+    const label = resolveVisibleTopologyName(shape?.userFacingTopologyLabel, shape?.topologySystemName) ||
       `${item.status} ${item.manifestId.slice(0, 8)}…`;
     return { manifestId: item.manifestId, label, status: item.status };
   }));
@@ -8314,9 +7600,9 @@ function hasCanvasDesignDraft(draft: DesignDraft | undefined): boolean {
   if (!draft) return false;
   return Boolean(
     draft.inlineText?.trim() ||
-      draft.linkHref?.trim() ||
-      draft.linkTarget?.trim() ||
-      (draft.cssTokenRefs && draft.cssTokenRefs.length > 0),
+    draft.linkHref?.trim() ||
+    draft.linkTarget?.trim() ||
+    (draft.cssTokenRefs && draft.cssTokenRefs.length > 0),
   );
 }
 
@@ -8338,16 +7624,8 @@ function hydrateDesignFormFromDraft(
 // ─── ローカル計算バインドコンポーネント ────────────────────────────────────────
 
 const ALLOWED_OPERATIONS = [
-  "multiply",
-  "add",
-  "subtract",
-  "divide",
-  "percent",
-  "taxIncluded",
-  "taxAmount",
-  "round",
-  "floor",
-  "ceil",
+  "multiply", "add", "subtract", "divide", "percent",
+  "taxIncluded", "taxAmount", "round", "floor", "ceil",
 ] as const;
 
 const ROUNDING_POLICIES: RoundingPolicy[] = ["none", "round", "floor", "ceil"];
@@ -8383,22 +7661,13 @@ function LocalCalcBindingPanel({
   bindings: CalcBinding[];
   draftNodes: DraftNode[];
   draftNodeIds: string[];
-  calcResults: ReadonlyMap<
-    string,
-    {
-      targetNodeId: string;
-      targetProp: string;
-      result: { ok: true; value: number } | { ok: false; error: string };
-    }
-  >;
+  calcResults: ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>;
   onBindingsChange: (bindings: CalcBinding[]) => void;
   emissionDataJson: string;
   onEmissionDataJsonChange: (json: string) => void;
 }): JSX.Element {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [emissionJsonError, setEmissionJsonError] = useState<string | null>(
-    null,
-  );
+  const [emissionJsonError, setEmissionJsonError] = useState<string | null>(null);
 
   function addBinding() {
     const b = emptyCalcBinding(draftNodeIds[0] ?? "");
@@ -8412,32 +7681,23 @@ function LocalCalcBindingPanel({
   }
 
   function updateBinding(updated: CalcBinding) {
-    onBindingsChange(
-      bindings.map((b) =>
-        b.calculationId === updated.calculationId ? updated : b
-      ),
-    );
+    onBindingsChange(bindings.map((b) => b.calculationId === updated.calculationId ? updated : b));
   }
 
   return (
     <div class="flex flex-col gap-2 text-xs">
       <p class="text-[0.65rem] text-slate-500">
-        入力変更でリアルタイムに計算値を確認できます。外部参照データは下の詳細パネルから設定してください。
+          入力変更でリアルタイムに計算値を確認できます。外部参照データは下の詳細パネルから設定してください。
       </p>
       <details class="rounded border border-slate-200 p-1.5">
         <summary class="cursor-pointer text-[0.65rem] font-semibold text-slate-600">
           参照データ (emission.data.*) — テスト用 JSON
         </summary>
         <p class="mt-1 text-[0.6rem] text-slate-400">
-          本番では backend から emission.data に自動供給されます。ここで入力した
-          JSON はキャンバスプレビューの計算テストにのみ使われます。
+          本番では backend から emission.data に自動供給されます。ここで入力した JSON はキャンバスプレビューの計算テストにのみ使われます。
         </p>
         <textarea
-          class={`mt-1 w-full rounded border px-1 py-0.5 font-mono text-[0.65rem] ${
-            emissionJsonError
-              ? "border-red-400 bg-red-50"
-              : "border-slate-300 bg-white"
-          }`}
+          class={`mt-1 w-full rounded border px-1 py-0.5 font-mono text-[0.65rem] ${emissionJsonError ? "border-red-400 bg-red-50" : "border-slate-300 bg-white"}`}
           rows={5}
           value={emissionDataJson}
           placeholder='{\n  "laborRates": [{"rate": 2500, "priority": 1, "enabled": true}]\n}'
@@ -8448,9 +7708,7 @@ function LocalCalcBindingPanel({
               JSON.parse(raw || "{}");
               setEmissionJsonError(null);
             } catch (err) {
-              setEmissionJsonError(
-                err instanceof Error ? err.message : "JSON parse error",
-              );
+              setEmissionJsonError(err instanceof Error ? err.message : "JSON parse error");
             }
           }}
         />
@@ -8463,9 +7721,7 @@ function LocalCalcBindingPanel({
       )}
       {bindings.map((binding) => {
         const resultEntry = [...calcResults.values()].find(
-          (e) =>
-            e.targetNodeId === binding.targetNodeId &&
-            e.targetProp === binding.targetProp,
+          (e) => e.targetNodeId === binding.targetNodeId && e.targetProp === binding.targetProp,
         );
         const errors = validateCalcBinding(binding);
         const isExpanded = expandedId === binding.calculationId;
@@ -8478,8 +7734,7 @@ function LocalCalcBindingPanel({
               <button
                 type="button"
                 class="flex-1 text-left text-[0.7rem] font-semibold text-slate-700"
-                onClick={() =>
-                  setExpandedId(isExpanded ? null : binding.calculationId)}
+                onClick={() => setExpandedId(isExpanded ? null : binding.calculationId)}
               >
                 {isExpanded ? "▲" : "▼"} {binding.calculationId}
               </button>
@@ -8494,11 +7749,7 @@ function LocalCalcBindingPanel({
                 </span>
               )}
               {resultEntry && !resultEntry.result.ok && (
-                <span
-                  class="rounded bg-red-100 px-1 text-[0.6rem] text-red-600"
-                  title={(resultEntry.result as { ok: false; error: string })
-                    .error}
-                >
+                <span class="rounded bg-red-100 px-1 text-[0.6rem] text-red-600" title={(resultEntry.result as { ok: false; error: string }).error}>
                   !
                 </span>
               )}
@@ -8552,16 +7803,10 @@ function CalcBindingEditor({
   onChange: (b: CalcBinding) => void;
   emissionDataJson?: string;
 }): JSX.Element {
-  const targetNodeKind =
-    draftNodes.find((n) => n.nodeId === binding.targetNodeId)?.componentKind ??
-      null;
-  const allowedTargetProps = targetNodeKind
-    ? resolveAllowedTargetProps(targetNodeKind)
-    : null;
+  const targetNodeKind = draftNodes.find((n) => n.nodeId === binding.targetNodeId)?.componentKind ?? null;
+  const allowedTargetProps = targetNodeKind ? resolveAllowedTargetProps(targetNodeKind) : null;
   const targetPropOptions = allowedTargetProps ?? TARGET_PROPS;
-  const targetPropErrors = targetNodeKind
-    ? validateCalcTargetProp(targetNodeKind, binding.targetProp)
-    : [];
+  const targetPropErrors = targetNodeKind ? validateCalcTargetProp(targetNodeKind, binding.targetProp) : [];
   const [varName, setVarName] = useState("a");
 
   const varEntries = Object.entries(binding.variables);
@@ -8579,34 +7824,19 @@ function CalcBindingEditor({
     // Build minimal valid operation for the selected op
     if (op === "round" || op === "floor" || op === "ceil") {
       onChange({ ...binding, operation: { op, a: varEntries[0]?.[0] ?? "a" } });
-    } else if (
-      op === "multiply" || op === "add" || op === "subtract" || op === "divide"
-    ) {
+    } else if (op === "multiply" || op === "add" || op === "subtract" || op === "divide") {
       const names = varEntries.map(([n]) => n);
-      onChange({
-        ...binding,
-        operation: { op, a: names[0] ?? "a", b: names[1] ?? "b" },
-      });
+      onChange({ ...binding, operation: { op, a: names[0] ?? "a", b: names[1] ?? "b" } });
     } else if (op === "percent" || op === "taxIncluded" || op === "taxAmount") {
       const names = varEntries.map(([n]) => n);
-      onChange({
-        ...binding,
-        operation: { op, base: names[0] ?? "base", rate: names[1] ?? "rate" },
-      });
+      onChange({ ...binding, operation: { op, base: names[0] ?? "base", rate: names[1] ?? "rate" } });
     }
   }
 
   function addVar(name: string) {
     if (!name.trim() || name in binding.variables) return;
-    const newSource: CalcVariableSource = {
-      kind: "literal",
-      value: 0,
-      note: "テスト用。業務基準値には literal を使わないでください",
-    };
-    onChange({
-      ...binding,
-      variables: { ...binding.variables, [name.trim()]: newSource },
-    });
+    const newSource: CalcVariableSource = { kind: "literal", value: 0, note: "テスト用。業務基準値には literal を使わないでください" };
+    onChange({ ...binding, variables: { ...binding.variables, [name.trim()]: newSource } });
   }
 
   function removeVar(name: string) {
@@ -8616,10 +7846,7 @@ function CalcBindingEditor({
   }
 
   function updateVarSource(name: string, source: CalcVariableSource) {
-    onChange({
-      ...binding,
-      variables: { ...binding.variables, [name]: source },
-    });
+    onChange({ ...binding, variables: { ...binding.variables, [name]: source } });
   }
 
   function updateRounding(policy: RoundingPolicy) {
@@ -8630,33 +7857,24 @@ function CalcBindingEditor({
     <div class="mt-2 flex flex-col gap-2 border-t border-slate-200 pt-2">
       {/* Target */}
       <div class="flex flex-col gap-1">
-        <span class="text-[0.65rem] font-semibold text-slate-600">
-          反映先 (target)
-        </span>
+        <span class="text-[0.65rem] font-semibold text-slate-600">反映先 (target)</span>
         <div class="flex gap-1">
           <select
             class="flex-1 rounded border border-slate-300 bg-white px-1 py-0.5 text-[0.65rem]"
             value={binding.targetNodeId}
-            onChange={(e) =>
-              updateTargetNodeId((e.currentTarget as HTMLSelectElement).value)}
+            onChange={(e) => updateTargetNodeId((e.currentTarget as HTMLSelectElement).value)}
           >
             <option value="">ノードを選択...</option>
-            {deriveNodeCandidates(draftNodes as DraftNodeMinimal[]).map((
-              { nodeId, label },
-            ) => <option key={nodeId} value={nodeId}>{label}</option>)}
+            {deriveNodeCandidates(draftNodes as DraftNodeMinimal[]).map(({ nodeId, label }) => (
+              <option key={nodeId} value={nodeId}>{label}</option>
+            ))}
           </select>
           <select
-            class={`w-24 rounded border px-1 py-0.5 text-[0.65rem] bg-white ${
-              targetPropErrors.length > 0
-                ? "border-red-400"
-                : "border-slate-300"
-            }`}
+            class={`w-24 rounded border px-1 py-0.5 text-[0.65rem] bg-white ${targetPropErrors.length > 0 ? "border-red-400" : "border-slate-300"}`}
             value={binding.targetProp}
-            onChange={(e) =>
-              updateTargetProp((e.currentTarget as HTMLSelectElement).value)}
+            onChange={(e) => updateTargetProp((e.currentTarget as HTMLSelectElement).value)}
           >
-            {targetPropOptions.map((p) => <option key={p} value={p}>{p}
-            </option>)}
+            {targetPropOptions.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
         {targetPropErrors.length > 0 && (
@@ -8686,8 +7904,7 @@ function CalcBindingEditor({
             class="w-16 rounded border border-slate-200 px-1 py-0.5 text-[0.65rem]"
             placeholder="変数名"
             value={varName}
-            onInput={(e) =>
-              setVarName((e.currentTarget as HTMLInputElement).value)}
+            onInput={(e) => setVarName((e.currentTarget as HTMLInputElement).value)}
           />
           <button
             type="button"
@@ -8705,12 +7922,9 @@ function CalcBindingEditor({
         <select
           class="rounded border border-slate-300 bg-white px-1 py-0.5 text-[0.65rem]"
           value={binding.operation.op}
-          onChange={(e) =>
-            updateOp((e.currentTarget as HTMLSelectElement).value)}
+          onChange={(e) => updateOp((e.currentTarget as HTMLSelectElement).value)}
         >
-          {ALLOWED_OPERATIONS.map((op) => (
-            <option key={op} value={op}>{op}</option>
-          ))}
+          {ALLOWED_OPERATIONS.map((op) => <option key={op} value={op}>{op}</option>)}
         </select>
         <pre class="rounded bg-slate-100 px-1 py-0.5 text-[0.6rem] text-slate-600">
           {JSON.stringify(binding.operation, null, 0)}
@@ -8723,9 +7937,7 @@ function CalcBindingEditor({
         <select
           class="rounded border border-slate-300 bg-white px-1 py-0.5 text-[0.65rem]"
           value={binding.roundingPolicy ?? "none"}
-          onChange={(e) => updateRounding(
-            (e.currentTarget as HTMLSelectElement).value as RoundingPolicy,
-          )}
+          onChange={(e) => updateRounding((e.currentTarget as HTMLSelectElement).value as RoundingPolicy)}
         >
           {ROUNDING_POLICIES.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
@@ -8748,11 +7960,7 @@ function CalcMatchConditionsEditor({
   function addCondition() {
     const newCond: RuleMatchCondition = {
       field: "",
-      valueFrom: {
-        kind: "node",
-        nodeId: draftNodeIds[0] ?? "",
-        propKey: "value",
-      },
+      valueFrom: { kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" },
     };
     onChange([...conditions, newCond]);
   }
@@ -8768,9 +7976,7 @@ function CalcMatchConditionsEditor({
   return (
     <div class="flex flex-col gap-0.5 rounded border border-blue-100 bg-blue-50 p-1">
       <div class="flex items-center justify-between">
-        <span class="text-[0.55rem] font-semibold text-blue-700">
-          matchConditions ({conditions.length}件)
-        </span>
+        <span class="text-[0.55rem] font-semibold text-blue-700">matchConditions ({conditions.length}件)</span>
         <button
           type="button"
           class="rounded border border-dashed border-blue-300 px-1 py-0 text-[0.55rem] text-blue-600 hover:bg-blue-100"
@@ -8780,9 +7986,7 @@ function CalcMatchConditionsEditor({
         </button>
       </div>
       {conditions.length === 0 && (
-        <span class="text-[0.55rem] text-blue-400">
-          条件なし — 全行が対象（優先度/日付で最上位を選択）
-        </span>
+        <span class="text-[0.55rem] text-blue-400">条件なし — 全行が対象（優先度/日付で最上位を選択）</span>
       )}
       {tableFieldCandidates && tableFieldCandidates.length > 0 && (
         <datalist id="calc-match-field-list">
@@ -8790,24 +7994,15 @@ function CalcMatchConditionsEditor({
         </datalist>
       )}
       {conditions.map((cond, idx) => (
-        <div
-          key={idx}
-          class="flex flex-col gap-0.5 rounded border border-blue-200 bg-white p-0.5"
-        >
+        <div key={idx} class="flex flex-col gap-0.5 rounded border border-blue-200 bg-white p-0.5">
           <div class="flex items-center gap-0.5">
             <input
               type="text"
               class="flex-1 rounded border border-slate-200 px-0.5 py-0 text-[0.6rem] font-mono"
-              list={tableFieldCandidates && tableFieldCandidates.length > 0
-                ? "calc-match-field-list"
-                : undefined}
+              list={tableFieldCandidates && tableFieldCandidates.length > 0 ? "calc-match-field-list" : undefined}
               placeholder="フィールド名 (例: transactionType)"
               value={cond.field}
-              onInput={(e) =>
-                updateCondition(idx, {
-                  ...cond,
-                  field: (e.currentTarget as HTMLInputElement).value,
-                })}
+              onInput={(e) => updateCondition(idx, { ...cond, field: (e.currentTarget as HTMLInputElement).value })}
             />
             <select
               class="rounded border border-slate-200 bg-white px-0.5 py-0 text-[0.55rem]"
@@ -8816,11 +8011,7 @@ function CalcMatchConditionsEditor({
                 const kind = (e.currentTarget as HTMLSelectElement).value;
                 const newCond = { ...cond };
                 if (kind === "node") {
-                  newCond.valueFrom = {
-                    kind: "node",
-                    nodeId: draftNodeIds[0] ?? "",
-                    propKey: "value",
-                  };
+                  newCond.valueFrom = { kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" };
                 } else {
                   newCond.valueFrom = { kind: "literal", value: "" };
                 }
@@ -8843,41 +8034,22 @@ function CalcMatchConditionsEditor({
               <select
                 class="flex-1 rounded border border-slate-200 bg-white px-0.5 py-0 text-[0.55rem]"
                 value={cond.valueFrom.nodeId}
-                onChange={(e) =>
-                  updateCondition(idx, {
-                    ...cond,
-                    valueFrom: {
-                      ...cond.valueFrom as {
-                        kind: "node";
-                        nodeId: string;
-                        propKey: string;
-                      },
-                      nodeId: (e.currentTarget as HTMLSelectElement).value,
-                    },
-                  })}
+                onChange={(e) => updateCondition(idx, {
+                  ...cond,
+                  valueFrom: { ...cond.valueFrom as { kind: "node"; nodeId: string; propKey: string }, nodeId: (e.currentTarget as HTMLSelectElement).value },
+                })}
               >
-                {draftNodeIds.map((id) => (
-                  <option key={id} value={id}>{id}</option>
-                ))}
+                {draftNodeIds.map((id) => <option key={id} value={id}>{id}</option>)}
               </select>
               <input
                 type="text"
                 class="w-14 rounded border border-slate-200 px-0.5 py-0 text-[0.55rem]"
                 placeholder="propKey"
-                value={(cond.valueFrom as { kind: "node"; propKey: string })
-                  .propKey}
-                onInput={(e) =>
-                  updateCondition(idx, {
-                    ...cond,
-                    valueFrom: {
-                      ...cond.valueFrom as {
-                        kind: "node";
-                        nodeId: string;
-                        propKey: string;
-                      },
-                      propKey: (e.currentTarget as HTMLInputElement).value,
-                    },
-                  })}
+                value={(cond.valueFrom as { kind: "node"; propKey: string }).propKey}
+                onInput={(e) => updateCondition(idx, {
+                  ...cond,
+                  valueFrom: { ...cond.valueFrom as { kind: "node"; nodeId: string; propKey: string }, propKey: (e.currentTarget as HTMLInputElement).value },
+                })}
               />
             </div>
           )}
@@ -8886,17 +8058,11 @@ function CalcMatchConditionsEditor({
               type="text"
               class="w-full rounded border border-slate-200 px-0.5 py-0 text-[0.6rem] font-mono"
               placeholder="値 (例: standard, reduced)"
-              value={String(
-                (cond.valueFrom as { kind: "literal"; value: unknown }).value,
-              )}
-              onInput={(e) =>
-                updateCondition(idx, {
-                  ...cond,
-                  valueFrom: {
-                    kind: "literal",
-                    value: (e.currentTarget as HTMLInputElement).value,
-                  },
-                })}
+              value={String((cond.valueFrom as { kind: "literal"; value: unknown }).value)}
+              onInput={(e) => updateCondition(idx, {
+                ...cond,
+                valueFrom: { kind: "literal", value: (e.currentTarget as HTMLInputElement).value },
+              })}
             />
           )}
         </div>
@@ -8923,38 +8089,16 @@ function CalcVarEditor({
   return (
     <div class="flex flex-col gap-0.5 rounded border border-slate-100 bg-white p-1">
       <div class="flex items-center gap-1">
-        <span class="font-mono text-[0.65rem] font-semibold text-slate-700">
-          {name}
-        </span>
+        <span class="font-mono text-[0.65rem] font-semibold text-slate-700">{name}</span>
         <select
           class="ml-auto rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.6rem]"
           value={source.kind}
           onChange={(e) => {
             const kind = (e.currentTarget as HTMLSelectElement).value;
-            if (kind === "literal") {
-              onChange({
-                kind: "literal",
-                value: 0,
-                note: "テスト・固定係数のみ",
-              });
-            } else if (kind === "node") {
-              onChange({
-                kind: "node",
-                nodeId: draftNodeIds[0] ?? "",
-                propKey: "value",
-              });
-            } else if (kind === "emission") {
-              onChange({ kind: "emission", path: "emission.data." });
-            } else if (kind === "ruleTable") {
-              onChange({
-                kind: "ruleTable",
-                tablePath: "emission.data.",
-                matchConditions: [],
-                priorityOrder: "desc",
-                effectiveDateHandling: "latest_effective",
-                selectedField: "",
-              });
-            }
+            if (kind === "literal") onChange({ kind: "literal", value: 0, note: "テスト・固定係数のみ" });
+            else if (kind === "node") onChange({ kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" });
+            else if (kind === "emission") onChange({ kind: "emission", path: "emission.data." });
+            else if (kind === "ruleTable") onChange({ kind: "ruleTable", tablePath: "emission.data.", matchConditions: [], priorityOrder: "desc", effectiveDateHandling: "latest_effective", selectedField: "" });
           }}
         >
           <option value="node">node</option>
@@ -8962,30 +8106,16 @@ function CalcVarEditor({
           <option value="ruleTable">ruleTable</option>
           <option value="literal">literal (テスト用)</option>
         </select>
-        <button
-          type="button"
-          class="text-[0.6rem] text-red-400 hover:text-red-600"
-          onClick={onRemove}
-        >
-          ✕
-        </button>
+        <button type="button" class="text-[0.6rem] text-red-400 hover:text-red-600" onClick={onRemove}>✕</button>
       </div>
       {source.kind === "literal" && (
         <div>
-          <span class="text-[0.55rem] text-amber-600">
-            ⚠ literal は業務基準値に使わないでください。税率・レートは
-            ruleTable/emission を使ってください。
-          </span>
+          <span class="text-[0.55rem] text-amber-600">⚠ literal は業務基準値に使わないでください。税率・レートは ruleTable/emission を使ってください。</span>
           <input
             type="number"
             class="mt-0.5 w-full rounded border border-slate-200 px-1 py-0.5 text-[0.65rem]"
             value={source.value}
-            onInput={(e) =>
-              onChange({
-                ...source,
-                value:
-                  parseFloat((e.currentTarget as HTMLInputElement).value) || 0,
-              })}
+            onInput={(e) => onChange({ ...source, value: parseFloat((e.currentTarget as HTMLInputElement).value) || 0 })}
           />
         </div>
       )}
@@ -8994,26 +8124,16 @@ function CalcVarEditor({
           <select
             class="flex-1 rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.6rem]"
             value={source.nodeId}
-            onChange={(e) =>
-              onChange({
-                ...source,
-                nodeId: (e.currentTarget as HTMLSelectElement).value,
-              })}
+            onChange={(e) => onChange({ ...source, nodeId: (e.currentTarget as HTMLSelectElement).value })}
           >
-            {draftNodeIds.map((id) => (
-              <option key={id} value={id}>{id}</option>
-            ))}
+            {draftNodeIds.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
           <input
             type="text"
             class="w-16 rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
             placeholder="propKey"
             value={source.propKey}
-            onInput={(e) =>
-              onChange({
-                ...source,
-                propKey: (e.currentTarget as HTMLInputElement).value,
-              })}
+            onInput={(e) => onChange({ ...source, propKey: (e.currentTarget as HTMLInputElement).value })}
           />
         </div>
       )}
@@ -9021,58 +8141,39 @@ function CalcVarEditor({
         const emResult = deriveEmissionPathCandidates(emissionDataJson ?? "");
         return (
           <>
-            {emResult.ok
-              ? (
-                <>
-                  <datalist id={`calc-var-emission-list-${name}`}>
-                    {emResult.candidates.map((c) => (
-                      <option key={c.path} value={c.path} />
-                    ))}
-                  </datalist>
-                  <input
-                    type="text"
-                    class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
-                    list={`calc-var-emission-list-${name}`}
-                    placeholder="emission.data.path"
-                    value={source.path}
-                    onInput={(e) =>
-                      onChange({
-                        ...source,
-                        path: (e.currentTarget as HTMLInputElement).value,
-                      })}
-                  />
-                </>
-              )
-              : (
-                <>
-                  <p class="text-[0.55rem] text-amber-600">{emResult.reason}</p>
-                  <input
-                    type="text"
-                    class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
-                    placeholder="emission.data.path"
-                    value={source.path}
-                    onInput={(e) =>
-                      onChange({
-                        ...source,
-                        path: (e.currentTarget as HTMLInputElement).value,
-                      })}
-                  />
-                </>
-              )}
+            {emResult.ok ? (
+              <>
+                <datalist id={`calc-var-emission-list-${name}`}>
+                  {emResult.candidates.map((c) => <option key={c.path} value={c.path} />)}
+                </datalist>
+                <input
+                  type="text"
+                  class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
+                  list={`calc-var-emission-list-${name}`}
+                  placeholder="emission.data.path"
+                  value={source.path}
+                  onInput={(e) => onChange({ ...source, path: (e.currentTarget as HTMLInputElement).value })}
+                />
+              </>
+            ) : (
+              <>
+                <p class="text-[0.55rem] text-amber-600">{emResult.reason}</p>
+                <input
+                  type="text"
+                  class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
+                  placeholder="emission.data.path"
+                  value={source.path}
+                  onInput={(e) => onChange({ ...source, path: (e.currentTarget as HTMLInputElement).value })}
+                />
+              </>
+            )}
           </>
         );
       })()}
       {source.kind === "ruleTable" && (() => {
-        const tableResult = deriveEmissionPathCandidates(
-          emissionDataJson ?? "",
-        );
-        const arrayPaths = tableResult.ok
-          ? tableResult.candidates.filter((c) => c.isArray).map((c) => c.path)
-          : [];
-        const fieldResult = deriveRuleTableFieldCandidates(
-          source.tablePath,
-          emissionDataJson ?? "",
-        );
+        const tableResult = deriveEmissionPathCandidates(emissionDataJson ?? "");
+        const arrayPaths = tableResult.ok ? tableResult.candidates.filter((c) => c.isArray).map((c) => c.path) : [];
+        const fieldResult = deriveRuleTableFieldCandidates(source.tablePath, emissionDataJson ?? "");
         const fieldCandidates = fieldResult.ok ? fieldResult.fields : [];
         return (
           <div class="flex flex-col gap-0.5">
@@ -9084,77 +8185,49 @@ function CalcVarEditor({
             <input
               type="text"
               class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem] font-mono"
-              list={arrayPaths.length > 0
-                ? `calc-var-table-list-${name}`
-                : undefined}
+              list={arrayPaths.length > 0 ? `calc-var-table-list-${name}` : undefined}
               placeholder="emission.data.tablePath"
               value={source.tablePath}
-              onInput={(e) =>
-                onChange({
-                  ...source,
-                  tablePath: (e.currentTarget as HTMLInputElement).value,
-                })}
+              onInput={(e) => onChange({ ...source, tablePath: (e.currentTarget as HTMLInputElement).value })}
             />
-            {fieldCandidates.length > 0
-              ? (
-                <>
-                  <select
-                    class="w-full rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.6rem]"
-                    value={source.selectedField}
-                    onChange={(e) =>
-                      onChange({
-                        ...source,
-                        selectedField:
-                          (e.currentTarget as HTMLSelectElement).value,
-                      })}
-                  >
-                    <option value="">— フィールドを選択 —</option>
-                    {fieldCandidates.map((f) => (
-                      <option key={f} value={f}>{f}</option>
-                    ))}
-                  </select>
-                  <AdvancedManualOverride title="selectedField 手入力（SSOT key 直接指定）">
-                    <input
-                      type="text"
-                      class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
-                      placeholder="selectedField (例: hourlyRate, taxRate)"
-                      value={source.selectedField}
-                      onInput={(e) =>
-                        onChange({
-                          ...source,
-                          selectedField:
-                            (e.currentTarget as HTMLInputElement).value,
-                        })}
-                    />
-                  </AdvancedManualOverride>
-                </>
-              )
-              : (
-                <>
-                  {fieldResult.ok === false && source.tablePath.trim() && (
-                    <p class="text-[0.55rem] text-amber-600">
-                      {fieldResult.reason}
-                    </p>
-                  )}
+            {fieldCandidates.length > 0 ? (
+              <>
+                <select
+                  class="w-full rounded border border-slate-200 bg-white px-1 py-0.5 text-[0.6rem]"
+                  value={source.selectedField}
+                  onChange={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLSelectElement).value })}
+                >
+                  <option value="">— フィールドを選択 —</option>
+                  {fieldCandidates.map((f) => <option key={f} value={f}>{f}</option>)}
+                </select>
+                <AdvancedManualOverride title="selectedField 手入力（SSOT key 直接指定）">
                   <input
                     type="text"
                     class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
                     placeholder="selectedField (例: hourlyRate, taxRate)"
                     value={source.selectedField}
-                    onInput={(e) =>
-                      onChange({
-                        ...source,
-                        selectedField:
-                          (e.currentTarget as HTMLInputElement).value,
-                      })}
+                    onInput={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLInputElement).value })}
                   />
-                </>
-              )}
+                </AdvancedManualOverride>
+              </>
+            ) : (
+              <>
+                {fieldResult.ok === false && source.tablePath.trim() && (
+                  <p class="text-[0.55rem] text-amber-600">{fieldResult.reason}</p>
+                )}
+                <input
+                  type="text"
+                  class="w-full rounded border border-slate-200 px-1 py-0.5 text-[0.6rem]"
+                  placeholder="selectedField (例: hourlyRate, taxRate)"
+                  value={source.selectedField}
+                  onInput={(e) => onChange({ ...source, selectedField: (e.currentTarget as HTMLInputElement).value })}
+                />
+              </>
+            )}
             <CalcMatchConditionsEditor
               conditions={source.matchConditions}
               draftNodeIds={draftNodeIds}
-              onChange={(conds) =>
-                onChange({ ...source, matchConditions: conds })}
+              onChange={(conds) => onChange({ ...source, matchConditions: conds })}
               tableFieldCandidates={fieldCandidates}
             />
           </div>
@@ -9216,26 +8289,17 @@ function PackageDesignPanel({
   );
   const designTmpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastDesignInitKeyRef = useRef<string | null>(null);
-  const [propsDraft, setPropsDraft] = useState(
-    selectedCanvasNode?.propsJson ?? "",
-  );
+  const [propsDraft, setPropsDraft] = useState(selectedCanvasNode?.propsJson ?? "");
   const [propsError, setPropsError] = useState<string | null>(null);
-  const [stateDraft, setStateDraft] = useState(
-    selectedCanvasNode?.stateJson ?? "",
-  );
+  const [stateDraft, setStateDraft] = useState(selectedCanvasNode?.stateJson ?? "");
   const [stateError, setStateError] = useState<string | null>(null);
-  const [propBindingsDraft, setPropBindingsDraft] = useState<
-    Record<string, PropBindingDraft>
-  >(
+  const [propBindingsDraft, setPropBindingsDraft] = useState<Record<string, PropBindingDraft>>(
     selectedCanvasNode?.propBindings ?? {},
   );
-  const [propBindingsError, setPropBindingsError] = useState<string | null>(
-    null,
-  );
+  const [propBindingsError, setPropBindingsError] = useState<string | null>(null);
 
   const componentKind = selectedCanvasNode?.componentKind ?? "";
-  const acceptsArrayProps = COMPONENT_ARRAY_PROP_CAPABILITIES[componentKind] ??
-    [];
+  const acceptsArrayProps = COMPONENT_ARRAY_PROP_CAPABILITIES[componentKind] ?? [];
   const isDisclosure = isDisclosureKind(selectedCanvasNode?.componentKind);
 
   const layoutNodeId = selectedCanvasNode?.nodeId ?? "";
@@ -9262,12 +8326,7 @@ function PackageDesignPanel({
     );
   };
 
-  const pushCanvasPreview = (
-    nodeId: string,
-    text: string,
-    href: string,
-    target: string,
-  ) => {
+  const pushCanvasPreview = (nodeId: string, text: string, href: string, target: string) => {
     onDesignPreviewChange?.(nodeId, designPreviewDraft(text, href, target));
   };
 
@@ -9413,9 +8472,7 @@ function PackageDesignPanel({
     } else if (saved) {
       applySavedDesign(saved);
     } else {
-      const defaultText = selectedCanvasNode.htmlTag === "a"
-        ? "リンクテキスト"
-        : "";
+      const defaultText = selectedCanvasNode.htmlTag === "a" ? "リンクテキスト" : "";
       setDesignName(`${nodeId}_design`);
       setCssTokenRefs([]);
       setResponsiveTokenRefs({});
@@ -9539,6 +8596,7 @@ function PackageDesignPanel({
     }
   };
 
+
   if (!selectedPackageId) {
     return (
       <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
@@ -9635,8 +8693,7 @@ function PackageDesignPanel({
       </div>
 
       <p class="text-muted-xs mb-2">
-        タブごとに編集項目を分けています。変更は _tmp
-        に自動保存され、明示保存で正本に反映されます。
+        タブごとに編集項目を分けています。変更は _tmp に自動保存され、明示保存で正本に反映されます。
       </p>
 
       {componentsLoadStatus && (
@@ -9665,16 +8722,9 @@ function PackageDesignPanel({
                       <input
                         type="checkbox"
                         checked={(() => {
-                          try {
-                            return Boolean(JSON.parse(stateDraft || "{}").open);
-                          } catch {
-                            return false;
-                          }
+                          try { return Boolean(JSON.parse(stateDraft || "{}").open); } catch { return false; }
                         })()}
-                        onChange={(e) =>
-                          commitOpenState(
-                            (e.target as HTMLInputElement).checked,
-                          )}
+                        onChange={(e) => commitOpenState((e.target as HTMLInputElement).checked)}
                         aria-label="open state"
                       />
                       open（previewで開いた状態で表示）
@@ -9709,8 +8759,7 @@ function PackageDesignPanel({
                         {savedForSelectedNode.map((d) => (
                           <option key={d.designId} value={d.name}>
                             {d.name}
-                            {d.hasDesignTmpDraft ? "（_tmp）" : ""}（トークン
-                            {" "}
+                            {d.hasDesignTmpDraft ? "（_tmp）" : ""}（トークン{" "}
                             {d.cssTokenRefs.length} 件）
                           </option>
                         ))}
@@ -9740,29 +8789,19 @@ function PackageDesignPanel({
                       onInput={(e) => {
                         const v = (e.target as HTMLInputElement).value;
                         setLinkHref(v);
-                        pushCanvasPreview(
-                          layoutNodeId,
-                          inlineText,
-                          v,
-                          linkTarget,
-                        );
+                        pushCanvasPreview(layoutNodeId, inlineText, v, linkTarget);
                       }}
                       placeholder="https://..."
                     />
                     {linkHref.trim() && (
                       <div
                         class={`mt-1 rounded border px-2 py-1 text-[0.6rem] ${
-                          linkHrefPreview.ok
-                            ? "border-slate-200 bg-slate-50 text-slate-600"
-                            : "border-red-200 bg-red-50 text-red-700"
+                          linkHrefPreview.ok ? "border-slate-200 bg-slate-50 text-slate-600" : "border-red-200 bg-red-50 text-red-700"
                         }`}
                         role={linkHrefPreview.ok ? "note" : "alert"}
                       >
-                        <span class="font-semibold">read-only preview:</span>
-                        {" "}
-                        {linkHrefPreview.ok
-                          ? linkHrefPreview.value
-                          : linkHrefPreview.message}
+                        <span class="font-semibold">read-only preview:</span>{" "}
+                        {linkHrefPreview.ok ? linkHrefPreview.value : linkHrefPreview.message}
                         {linkHrefPlaceholders.length > 0 && (
                           <span class="ml-1 font-mono">
                             placeholders: {linkHrefPlaceholders.join(", ")}
@@ -9779,12 +8818,7 @@ function PackageDesignPanel({
                       onInput={(e) => {
                         const v = (e.target as HTMLInputElement).value;
                         setLinkTarget(v);
-                        pushCanvasPreview(
-                          layoutNodeId,
-                          inlineText,
-                          linkHref,
-                          v,
-                        );
+                        pushCanvasPreview(layoutNodeId, inlineText, linkHref, v);
                       }}
                       placeholder="_blank 等"
                     />
@@ -9827,13 +8861,10 @@ function PackageDesignPanel({
             content: (
               <div class="space-y-3">
                 <p class="text-[0.65rem] text-slate-600">
-                  API受信データ（emission.data.*）をこのコンポーネントの配列
-                  props に接続します。 DB rows を複数表示したい場合は{" "}
-                  <strong>CardList / List / Table / Tree</strong>{" "}
-                  を配置してください。
+                  API受信データ（emission.data.*）をこのコンポーネントの配列 props に接続します。
+                  DB rows を複数表示したい場合は <strong>CardList / List / Table / Tree</strong> を配置してください。
                 </p>
-                {acceptsArrayProps.length === 0 && componentKind &&
-                  componentKind !== "data_display/tree" && (
+                {acceptsArrayProps.length === 0 && componentKind && componentKind !== "data_display/tree" && (
                   <div class="rounded border border-amber-200 bg-amber-50 p-2">
                     <p class="mb-1 text-[0.65rem] font-semibold text-amber-800">
                       {componentKind === "display/card"
@@ -9850,14 +8881,11 @@ function PackageDesignPanel({
                 {componentKind === "data_display/tree" && (
                   <div class="rounded border border-slate-200 bg-slate-50 p-2">
                     <p class="mb-1 text-[0.65rem] font-semibold text-slate-700">
-                      data_display/tree — propBindings 対応・ランタイム factory
-                      未接続
+                      data_display/tree — propBindings 対応・ランタイム factory 未接続
                     </p>
                     <p class="text-[0.6rem] text-slate-600">
-                      nodes / items の propBindings 設定は保存されますが、canvas
-                      preview はランタイム factory 未接続のため表示されません。
-                      propBindings を設定する場合は
-                      childrenPath（再帰構造フィールド名）も指定してください。
+                      nodes / items の propBindings 設定は保存されますが、canvas preview はランタイム factory 未接続のため表示されません。
+                      propBindings を設定する場合は childrenPath（再帰構造フィールド名）も指定してください。
                     </p>
                   </div>
                 )}
@@ -9872,397 +8900,210 @@ function PackageDesignPanel({
                     {acceptsArrayProps.map((propName) => {
                       const binding = propBindingsDraft[propName];
                       return (
-                        <div
-                          key={propName}
-                          class="rounded border border-slate-200 p-2 text-[0.65rem]"
-                        >
+                        <div key={propName} class="rounded border border-slate-200 p-2 text-[0.65rem]">
                           <div class="mb-1 flex items-center justify-between">
-                            <span class="font-semibold text-slate-700">
-                              {propName}
-                            </span>
-                            {binding
-                              ? (
-                                <button
-                                  type="button"
-                                  class="text-[0.6rem] text-red-500 hover:underline"
-                                  onClick={() => {
-                                    const next = { ...propBindingsDraft };
-                                    delete next[propName];
-                                    setPropBindingsDraft(next);
-                                    setPropBindingsError(null);
-                                    onCommitNode?.({
-                                      propBindings: Object.keys(next).length > 0
-                                        ? next
-                                        : undefined,
-                                    }, `propBindings.${propName}を削除`);
-                                  }}
-                                >
-                                  削除
-                                </button>
-                              )
-                              : (
-                                <button
-                                  type="button"
-                                  class="text-[0.6rem] text-blue-500 hover:underline"
-                                  onClick={() => {
-                                    const next = {
-                                      ...propBindingsDraft,
-                                      [propName]: {
-                                        source: "emission.data.rows",
-                                      },
-                                    };
-                                    setPropBindingsDraft(next);
-                                  }}
-                                >
-                                  + バインドを追加
-                                </button>
-                              )}
+                            <span class="font-semibold text-slate-700">{propName}</span>
+                            {binding ? (
+                              <button
+                                type="button"
+                                class="text-[0.6rem] text-red-500 hover:underline"
+                                onClick={() => {
+                                  const next = { ...propBindingsDraft };
+                                  delete next[propName];
+                                  setPropBindingsDraft(next);
+                                  setPropBindingsError(null);
+                                  onCommitNode?.({ propBindings: Object.keys(next).length > 0 ? next : undefined }, `propBindings.${propName}を削除`);
+                                }}
+                              >
+                                削除
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                class="text-[0.6rem] text-blue-500 hover:underline"
+                                onClick={() => {
+                                  const next = { ...propBindingsDraft, [propName]: { source: "emission.data.rows" } };
+                                  setPropBindingsDraft(next);
+                                }}
+                              >
+                                + バインドを追加
+                              </button>
+                            )}
                           </div>
                           {binding && (() => {
-                            const emissionResult = deriveEmissionPathCandidates(
-                              emissionDataJson ?? "",
-                            );
-                            const arraySourcePaths = emissionResult.ok
-                              ? emissionResult.candidates.filter((c) =>
-                                c.isArray
-                              ).map((c) => c.path)
-                              : [];
-                            const _allSourcePaths = emissionResult.ok
-                              ? emissionResult.candidates.map((c) => c.path)
-                              : [];
-                            const sourceFieldResult =
-                              deriveRuleTableFieldCandidates(
-                                binding.source,
-                                emissionDataJson ?? "",
-                              );
-                            const sourceFieldCandidates = sourceFieldResult.ok
-                              ? sourceFieldResult.fields
-                              : [];
-                            const sourceListId =
-                              `propbinding-source-list-${propName}`;
-                            const pathListId =
-                              `propbinding-path-list-${propName}`;
+                            const emissionResult = deriveEmissionPathCandidates(emissionDataJson ?? "");
+                            const arraySourcePaths = emissionResult.ok ? emissionResult.candidates.filter((c) => c.isArray).map((c) => c.path) : [];
+                            const _allSourcePaths = emissionResult.ok ? emissionResult.candidates.map((c) => c.path) : [];
+                            const sourceFieldResult = deriveRuleTableFieldCandidates(binding.source, emissionDataJson ?? "");
+                            const sourceFieldCandidates = sourceFieldResult.ok ? sourceFieldResult.fields : [];
+                            const sourceListId = `propbinding-source-list-${propName}`;
+                            const pathListId = `propbinding-path-list-${propName}`;
                             return (
-                              <div class="flex flex-col gap-1">
-                                <label class="block">
-                                  source（必須 — emission.data.* パス）
-                                  {emissionResult.ok
-                                    ? (
-                                      <>
-                                        <datalist id={sourceListId}>
-                                          {arraySourcePaths.map((p) => (
-                                            <option key={p} value={p} />
-                                          ))}
-                                        </datalist>
-                                        <input
-                                          class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
-                                          list={sourceListId}
-                                          value={binding.source}
-                                          placeholder="emission.data.rows"
-                                          onInput={(e) => {
-                                            const v =
-                                              (e.target as HTMLInputElement)
-                                                .value;
-                                            const next = {
-                                              ...propBindingsDraft,
-                                              [propName]: {
-                                                ...binding,
-                                                source: v,
-                                              },
-                                            };
-                                            setPropBindingsDraft(next);
-                                          }}
-                                          onBlur={() => {
-                                            const errs =
-                                              validatePropBindingsStructure(
-                                                propBindingsDraft,
-                                                componentKind,
-                                              );
-                                            if (errs.length > 0) {
-                                              setPropBindingsError(errs[0]);
-                                              return;
-                                            }
-                                            setPropBindingsError(null);
-                                            onCommitNode?.(
-                                              {
-                                                propBindings: propBindingsDraft,
-                                              },
-                                              `propBindings.${propName}.sourceを更新`,
-                                            );
-                                          }}
-                                        />
-                                      </>
-                                    )
-                                    : (
-                                      <>
-                                        <p class="mt-0.5 text-[0.55rem] text-amber-700">
-                                          {emissionResult.reason}
-                                        </p>
-                                        <input
-                                          class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
-                                          value={binding.source}
-                                          placeholder="emission.data.rows"
-                                          onInput={(e) => {
-                                            const v =
-                                              (e.target as HTMLInputElement)
-                                                .value;
-                                            const next = {
-                                              ...propBindingsDraft,
-                                              [propName]: {
-                                                ...binding,
-                                                source: v,
-                                              },
-                                            };
-                                            setPropBindingsDraft(next);
-                                          }}
-                                          onBlur={() => {
-                                            const errs =
-                                              validatePropBindingsStructure(
-                                                propBindingsDraft,
-                                                componentKind,
-                                              );
-                                            if (errs.length > 0) {
-                                              setPropBindingsError(errs[0]);
-                                              return;
-                                            }
-                                            setPropBindingsError(null);
-                                            onCommitNode?.(
-                                              {
-                                                propBindings: propBindingsDraft,
-                                              },
-                                              `propBindings.${propName}.sourceを更新`,
-                                            );
-                                          }}
-                                        />
-                                      </>
-                                    )}
-                                </label>
-                                <label class="block">
-                                  transform（任意）
-                                  <select
-                                    class="mt-0.5 w-full rounded border px-1 py-0.5 text-[0.6rem]"
-                                    value={binding.transform ?? ""}
-                                    onChange={(e) => {
-                                      const v =
-                                        (e.target as HTMLSelectElement).value;
-                                      const next = {
-                                        ...propBindingsDraft,
-                                        [propName]: {
-                                          ...binding,
-                                          transform: v || undefined,
-                                        },
-                                      };
-                                      setPropBindingsDraft(next);
-                                      const errs =
-                                        validatePropBindingsStructure(
-                                          next,
-                                          componentKind,
-                                        );
-                                      if (errs.length > 0) {
-                                        setPropBindingsError(errs[0]);
-                                        return;
-                                      }
-                                      setPropBindingsError(null);
-                                      onCommitNode?.(
-                                        { propBindings: next },
-                                        `propBindings.${propName}.transformを更新`,
-                                      );
-                                    }}
-                                  >
-                                    <option value="">（なし）</option>
-                                    {[...ALLOWED_PROP_BINDING_TRANSFORMS].map((
-                                      t,
-                                    ) => (
-                                      <option key={t} value={t}>{t}</option>
-                                    ))}
-                                  </select>
-                                </label>
-                                {sourceFieldCandidates.length > 0
-                                  ? (
-                                    <datalist id={pathListId}>
-                                      {sourceFieldCandidates.map((f) => (
-                                        <option key={f} value={f} />
-                                      ))}
+                            <div class="flex flex-col gap-1">
+                              <label class="block">
+                                source（必須 — emission.data.* パス）
+                                {emissionResult.ok ? (
+                                  <>
+                                    <datalist id={sourceListId}>
+                                      {arraySourcePaths.map((p) => <option key={p} value={p} />)}
                                     </datalist>
-                                  )
-                                  : binding.source.trim()
-                                  ? (
-                                    <p class="text-[0.55rem] text-amber-700">
-                                      フィールド候補なし:{" "}
-                                      {sourceFieldResult.ok === false
-                                        ? sourceFieldResult.reason
-                                        : ""}
-                                    </p>
-                                  )
-                                  : null}
-                                <label class="block">
-                                  keyPath（任意 — 行キーフィールド）
-                                  <input
-                                    class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
-                                    list={sourceFieldCandidates.length > 0
-                                      ? pathListId
-                                      : undefined}
-                                    value={binding.keyPath ?? ""}
-                                    placeholder="id"
-                                    onInput={(e) => {
-                                      const v =
-                                        (e.target as HTMLInputElement).value;
-                                      const next = {
-                                        ...propBindingsDraft,
-                                        [propName]: {
-                                          ...binding,
-                                          keyPath: v || undefined,
-                                        },
-                                      };
-                                      setPropBindingsDraft(next);
-                                    }}
-                                    onBlur={() => {
-                                      const errs =
-                                        validatePropBindingsStructure(
-                                          propBindingsDraft,
-                                          componentKind,
-                                        );
-                                      if (errs.length > 0) {
-                                        setPropBindingsError(errs[0]);
-                                        return;
-                                      }
-                                      setPropBindingsError(null);
-                                      onCommitNode?.(
-                                        { propBindings: propBindingsDraft },
-                                        `propBindings.${propName}.keyPathを更新`,
-                                      );
-                                    }}
-                                  />
-                                </label>
-                                <label class="block">
-                                  labelPath（任意 — 表示ラベルフィールド）
-                                  <input
-                                    class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
-                                    list={sourceFieldCandidates.length > 0
-                                      ? pathListId
-                                      : undefined}
-                                    value={binding.labelPath ?? ""}
-                                    placeholder="name"
-                                    onInput={(e) => {
-                                      const v =
-                                        (e.target as HTMLInputElement).value;
-                                      const next = {
-                                        ...propBindingsDraft,
-                                        [propName]: {
-                                          ...binding,
-                                          labelPath: v || undefined,
-                                        },
-                                      };
-                                      setPropBindingsDraft(next);
-                                    }}
-                                    onBlur={() => {
-                                      const errs =
-                                        validatePropBindingsStructure(
-                                          propBindingsDraft,
-                                          componentKind,
-                                        );
-                                      if (errs.length > 0) {
-                                        setPropBindingsError(errs[0]);
-                                        return;
-                                      }
-                                      setPropBindingsError(null);
-                                      onCommitNode?.(
-                                        { propBindings: propBindingsDraft },
-                                        `propBindings.${propName}.labelPathを更新`,
-                                      );
-                                    }}
-                                  />
-                                </label>
-                                <label class="block">
-                                  valuePath（任意 — 値フィールド）
-                                  <input
-                                    class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
-                                    list={sourceFieldCandidates.length > 0
-                                      ? pathListId
-                                      : undefined}
-                                    value={binding.valuePath ?? ""}
-                                    placeholder="id"
-                                    onInput={(e) => {
-                                      const v =
-                                        (e.target as HTMLInputElement).value;
-                                      const next = {
-                                        ...propBindingsDraft,
-                                        [propName]: {
-                                          ...binding,
-                                          valuePath: v || undefined,
-                                        },
-                                      };
-                                      setPropBindingsDraft(next);
-                                    }}
-                                    onBlur={() => {
-                                      const errs =
-                                        validatePropBindingsStructure(
-                                          propBindingsDraft,
-                                          componentKind,
-                                        );
-                                      if (errs.length > 0) {
-                                        setPropBindingsError(errs[0]);
-                                        return;
-                                      }
-                                      setPropBindingsError(null);
-                                      onCommitNode?.(
-                                        { propBindings: propBindingsDraft },
-                                        `propBindings.${propName}.valuePathを更新`,
-                                      );
-                                    }}
-                                  />
-                                </label>
-                                <label class="block">
-                                  childrenPath（任意 — 子ノードフィールド / tree
-                                  用）
-                                  <input
-                                    class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
-                                    list={sourceFieldCandidates.length > 0
-                                      ? pathListId
-                                      : undefined}
-                                    value={binding.childrenPath ?? ""}
-                                    placeholder="children"
-                                    onInput={(e) => {
-                                      const v =
-                                        (e.target as HTMLInputElement).value;
-                                      const next = {
-                                        ...propBindingsDraft,
-                                        [propName]: {
-                                          ...binding,
-                                          childrenPath: v || undefined,
-                                        },
-                                      };
-                                      setPropBindingsDraft(next);
-                                    }}
-                                    onBlur={() => {
-                                      const errs =
-                                        validatePropBindingsStructure(
-                                          propBindingsDraft,
-                                          componentKind,
-                                        );
-                                      if (errs.length > 0) {
-                                        setPropBindingsError(errs[0]);
-                                        return;
-                                      }
-                                      setPropBindingsError(null);
-                                      onCommitNode?.(
-                                        { propBindings: propBindingsDraft },
-                                        `propBindings.${propName}.childrenPathを更新`,
-                                      );
-                                    }}
-                                  />
-                                </label>
-                              </div>
+                                    <input
+                                      class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                      list={sourceListId}
+                                      value={binding.source}
+                                      placeholder="emission.data.rows"
+                                      onInput={(e) => {
+                                        const v = (e.target as HTMLInputElement).value;
+                                        const next = { ...propBindingsDraft, [propName]: { ...binding, source: v } };
+                                        setPropBindingsDraft(next);
+                                      }}
+                                      onBlur={() => {
+                                        const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                        if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                        setPropBindingsError(null);
+                                        onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.sourceを更新`);
+                                      }}
+                                    />
+                                  </>
+                                ) : (
+                                  <>
+                                    <p class="mt-0.5 text-[0.55rem] text-amber-700">{emissionResult.reason}</p>
+                                    <input
+                                      class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                      value={binding.source}
+                                      placeholder="emission.data.rows"
+                                      onInput={(e) => {
+                                        const v = (e.target as HTMLInputElement).value;
+                                        const next = { ...propBindingsDraft, [propName]: { ...binding, source: v } };
+                                        setPropBindingsDraft(next);
+                                      }}
+                                      onBlur={() => {
+                                        const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                        if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                        setPropBindingsError(null);
+                                        onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.sourceを更新`);
+                                      }}
+                                    />
+                                  </>
+                                )}
+                              </label>
+                              <label class="block">
+                                transform（任意）
+                                <select
+                                  class="mt-0.5 w-full rounded border px-1 py-0.5 text-[0.6rem]"
+                                  value={binding.transform ?? ""}
+                                  onChange={(e) => {
+                                    const v = (e.target as HTMLSelectElement).value;
+                                    const next = { ...propBindingsDraft, [propName]: { ...binding, transform: v || undefined } };
+                                    setPropBindingsDraft(next);
+                                    const errs = validatePropBindingsStructure(next, componentKind);
+                                    if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                    setPropBindingsError(null);
+                                    onCommitNode?.({ propBindings: next }, `propBindings.${propName}.transformを更新`);
+                                  }}
+                                >
+                                  <option value="">（なし）</option>
+                                  {[...ALLOWED_PROP_BINDING_TRANSFORMS].map((t) => (
+                                    <option key={t} value={t}>{t}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              {sourceFieldCandidates.length > 0 ? (
+                                <datalist id={pathListId}>
+                                  {sourceFieldCandidates.map((f) => <option key={f} value={f} />)}
+                                </datalist>
+                              ) : binding.source.trim() ? (
+                                <p class="text-[0.55rem] text-amber-700">
+                                  フィールド候補なし: {sourceFieldResult.ok === false ? sourceFieldResult.reason : ""}
+                                </p>
+                              ) : null}
+                              <label class="block">
+                                keyPath（任意 — 行キーフィールド）
+                                <input
+                                  class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                  list={sourceFieldCandidates.length > 0 ? pathListId : undefined}
+                                  value={binding.keyPath ?? ""}
+                                  placeholder="id"
+                                  onInput={(e) => {
+                                    const v = (e.target as HTMLInputElement).value;
+                                    const next = { ...propBindingsDraft, [propName]: { ...binding, keyPath: v || undefined } };
+                                    setPropBindingsDraft(next);
+                                  }}
+                                  onBlur={() => {
+                                    const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                    if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                    setPropBindingsError(null);
+                                    onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.keyPathを更新`);
+                                  }}
+                                />
+                              </label>
+                              <label class="block">
+                                labelPath（任意 — 表示ラベルフィールド）
+                                <input
+                                  class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                  list={sourceFieldCandidates.length > 0 ? pathListId : undefined}
+                                  value={binding.labelPath ?? ""}
+                                  placeholder="name"
+                                  onInput={(e) => {
+                                    const v = (e.target as HTMLInputElement).value;
+                                    const next = { ...propBindingsDraft, [propName]: { ...binding, labelPath: v || undefined } };
+                                    setPropBindingsDraft(next);
+                                  }}
+                                  onBlur={() => {
+                                    const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                    if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                    setPropBindingsError(null);
+                                    onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.labelPathを更新`);
+                                  }}
+                                />
+                              </label>
+                              <label class="block">
+                                valuePath（任意 — 値フィールド）
+                                <input
+                                  class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                  list={sourceFieldCandidates.length > 0 ? pathListId : undefined}
+                                  value={binding.valuePath ?? ""}
+                                  placeholder="id"
+                                  onInput={(e) => {
+                                    const v = (e.target as HTMLInputElement).value;
+                                    const next = { ...propBindingsDraft, [propName]: { ...binding, valuePath: v || undefined } };
+                                    setPropBindingsDraft(next);
+                                  }}
+                                  onBlur={() => {
+                                    const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                    if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                    setPropBindingsError(null);
+                                    onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.valuePathを更新`);
+                                  }}
+                                />
+                              </label>
+                              <label class="block">
+                                childrenPath（任意 — 子ノードフィールド / tree 用）
+                                <input
+                                  class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                  list={sourceFieldCandidates.length > 0 ? pathListId : undefined}
+                                  value={binding.childrenPath ?? ""}
+                                  placeholder="children"
+                                  onInput={(e) => {
+                                    const v = (e.target as HTMLInputElement).value;
+                                    const next = { ...propBindingsDraft, [propName]: { ...binding, childrenPath: v || undefined } };
+                                    setPropBindingsDraft(next);
+                                  }}
+                                  onBlur={() => {
+                                    const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                    if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                    setPropBindingsError(null);
+                                    onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.childrenPathを更新`);
+                                  }}
+                                />
+                              </label>
+                            </div>
                             );
                           })()}
                         </div>
                       );
                     })}
-                    {propBindingsError && (
-                      <p class="text-[0.6rem] text-red-600">
-                        {propBindingsError}
-                      </p>
-                    )}
+                    {propBindingsError && <p class="text-[0.6rem] text-red-600">{propBindingsError}</p>}
                   </fieldset>
                 )}
               </div>
@@ -10281,145 +9122,55 @@ function PackageDesignPanel({
                 )}
                 <section class="rounded border border-blue-100 bg-blue-50/40 p-3">
                   <div class="mb-2">
-                    <h4 class="text-xs font-semibold text-blue-900">
-                      イベント配線 / 操作配線
-                    </h4>
+                    <h4 class="text-xs font-semibold text-blue-900">イベント配線 / 操作配線</h4>
                     <details class="text-[0.6rem] text-blue-700">
-                      <summary class="cursor-pointer">
-                        実装詳細（上級者向け）
-                      </summary>
-                      <p class="mt-1">
-                        通常 runtime interaction。保存先は
-                        layout_patch_json.nodes[].runtimeInteractions
-                        です。propsJson.eventWirings は legacy fallback のみ。
-                      </p>
+                      <summary class="cursor-pointer">実装詳細（上級者向け）</summary>
+                      <p class="mt-1">通常 runtime interaction。保存先は layout_patch_json.nodes[].runtimeInteractions です。propsJson.eventWirings は legacy fallback のみ。</p>
                     </details>
                   </div>
                   {(() => {
-                    const interactions =
-                      selectedCanvasNode?.runtimeInteractions ?? [];
-                    const targetNodes = (_draftNodes ?? []).filter((n) =>
-                      n.nodeId !== selectedCanvasNode?.nodeId
-                    );
-                    const commitInteractions = (
-                      next: ComponentEventWiring[],
-                      label: string,
-                    ) => {
-                      onCommitNode?.({
-                        runtimeInteractions: next.length > 0 ? next : undefined,
-                      }, label);
+                    const interactions = selectedCanvasNode?.runtimeInteractions ?? [];
+                    const targetNodes = (_draftNodes ?? []).filter((n) => n.nodeId !== selectedCanvasNode?.nodeId);
+                    const commitInteractions = (next: ComponentEventWiring[], label: string) => {
+                      onCommitNode?.({ runtimeInteractions: next.length > 0 ? next : undefined }, label);
                     };
-                    const updateInteraction = (
-                      idx: number,
-                      updates: Partial<ComponentEventWiring>,
-                    ) => {
-                      const next = interactions.map((w, i) =>
-                        i === idx ? { ...w, ...updates } : w
-                      );
+                    const updateInteraction = (idx: number, updates: Partial<ComponentEventWiring>) => {
+                      const next = interactions.map((w, i) => i === idx ? { ...w, ...updates } : w);
                       commitInteractions(next, "操作配線を更新");
                     };
                     return (
                       <div class="space-y-2">
                         {interactions.map((w, i) => (
-                          <div
-                            key={i}
-                            class="grid gap-2 rounded border border-blue-100 bg-white p-2 md:grid-cols-4"
-                          >
+                          <div key={i} class="grid gap-2 rounded border border-blue-100 bg-white p-2 md:grid-cols-4">
                             <label class="text-[0.65rem]">
                               trigger
-                              <select
-                                class="input mt-0.5 px-1 py-0.5 text-xs"
-                                value={w.trigger ?? w.eventType ?? "click"}
-                                onChange={(e) =>
-                                  updateInteraction(i, {
-                                    trigger:
-                                      (e.target as HTMLSelectElement).value,
-                                  })}
-                              >
-                                {COMPONENT_EVENT_TYPES.map((t) => (
-                                  <option key={t} value={t}>{t}</option>
-                                ))}
+                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.trigger ?? w.eventType ?? "click"} onChange={(e) => updateInteraction(i, { trigger: (e.target as HTMLSelectElement).value })}>
+                                {COMPONENT_EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                               </select>
                             </label>
                             <label class="text-[0.65rem]">
                               action
-                              <select
-                                class="input mt-0.5 px-1 py-0.5 text-xs"
-                                value={w.actionType}
-                                onChange={(e) =>
-                                  updateInteraction(i, {
-                                    actionType:
-                                      (e.target as HTMLSelectElement).value,
-                                  })}
-                              >
-                                {COMPONENT_ACTION_TYPES.map((t) => (
-                                  <option key={t} value={t}>{t}</option>
-                                ))}
+                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.actionType} onChange={(e) => updateInteraction(i, { actionType: (e.target as HTMLSelectElement).value })}>
+                                {COMPONENT_ACTION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                               </select>
                             </label>
                             <label class="text-[0.65rem]">
                               target node
-                              <select
-                                class="input mt-0.5 px-1 py-0.5 text-xs"
-                                value={w.targetNodeId ?? ""}
-                                onChange={(e) =>
-                                  updateInteraction(i, {
-                                    targetNodeId:
-                                      (e.target as HTMLSelectElement).value ||
-                                      undefined,
-                                  })}
-                              >
+                              <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.targetNodeId ?? ""} onChange={(e) => updateInteraction(i, { targetNodeId: (e.target as HTMLSelectElement).value || undefined })}>
                                 <option value="">選択してください</option>
-                                {targetNodes.map((n) => (
-                                  <option key={n.nodeId} value={n.nodeId}>
-                                    {n.nodeId} /{" "}
-                                    {n.componentKind ?? n.componentKey}
-                                  </option>
-                                ))}
+                                {targetNodes.map((n) => <option key={n.nodeId} value={n.nodeId}>{n.nodeId} / {n.componentKind ?? n.componentKey}</option>)}
                               </select>
                             </label>
                             <label class="text-[0.65rem]">
                               statePath
-                              <input
-                                class="input-mono mt-0.5 px-1 py-0.5 text-xs"
-                                value={w.statePath ?? "open"}
-                                onInput={(e) =>
-                                  updateInteraction(i, {
-                                    statePath:
-                                      (e.target as HTMLInputElement).value ||
-                                      undefined,
-                                  })}
-                                placeholder="open / activeKey"
-                              />
+                              <input class="input-mono mt-0.5 px-1 py-0.5 text-xs" value={w.statePath ?? "open"} onInput={(e) => updateInteraction(i, { statePath: (e.target as HTMLInputElement).value || undefined })} placeholder="open / activeKey" />
                             </label>
                             <div class="md:col-span-4 flex justify-end">
-                              <button
-                                type="button"
-                                class="text-[0.6rem] text-red-500"
-                                onClick={() =>
-                                  commitInteractions(
-                                    interactions.filter((_, idx) => idx !== i),
-                                    "操作配線を削除",
-                                  )}
-                              >
-                                削除
-                              </button>
+                              <button type="button" class="text-[0.6rem] text-red-500" onClick={() => commitInteractions(interactions.filter((_, idx) => idx !== i), "操作配線を削除")}>削除</button>
                             </div>
                           </div>
                         ))}
-                        <button
-                          type="button"
-                          class="btn-secondary text-xs"
-                          onClick={() =>
-                            commitInteractions([...interactions, {
-                              trigger: "click",
-                              actionType: "openModal",
-                              targetNodeId: targetNodes[0]?.nodeId,
-                              statePath: "open",
-                            }], "操作配線を追加")}
-                        >
-                          + 操作配線を追加
-                        </button>
+                        <button type="button" class="btn-secondary text-xs" onClick={() => commitInteractions([...interactions, { trigger: "click", actionType: "openModal", targetNodeId: targetNodes[0]?.nodeId, statePath: "open" }], "操作配線を追加")}>+ 操作配線を追加</button>
                       </div>
                     );
                   })()}
@@ -10446,8 +9197,7 @@ function PackageDesignPanel({
               <div class="space-y-3">
                 <AdvancedManualOverride title="classname / tailwind 手入力（補助メモのみ）">
                   <p class="text-muted-xs mb-2">
-                    通常は cssTokenRefs
-                    を使ってください。補助メモとしてのみ保存されます。
+                    通常は cssTokenRefs を使ってください。補助メモとしてのみ保存されます。
                   </p>
                   <label class="mb-2 block text-xs">
                     classname（補助メモ）
@@ -10477,16 +9227,12 @@ function PackageDesignPanel({
                     </legend>
                     <textarea
                       value={propsDraft}
-                      onInput={(e) =>
-                        setPropsDraft((e.target as HTMLTextAreaElement).value)}
+                      onInput={(e) => setPropsDraft((e.target as HTMLTextAreaElement).value)}
                       onBlur={() => {
                         const v = propsDraft.trim();
                         if (!v) {
                           setPropsError(null);
-                          onCommitNode?.(
-                            { propsJson: undefined },
-                            "propsJsonをクリア",
-                          );
+                          onCommitNode?.({ propsJson: undefined }, "propsJsonをクリア");
                           return;
                         }
                         try {
@@ -10502,9 +9248,7 @@ function PackageDesignPanel({
                       class="input-mono w-full text-[0.6rem]"
                       aria-label="propsJson（生JSON）"
                     />
-                    {propsError && (
-                      <p class="text-red-600 text-[0.6rem]">{propsError}</p>
-                    )}
+                    {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
                   </fieldset>
                   <fieldset class="flex flex-col gap-1">
                     <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
@@ -10512,16 +9256,12 @@ function PackageDesignPanel({
                     </legend>
                     <textarea
                       value={stateDraft}
-                      onInput={(e) =>
-                        setStateDraft((e.target as HTMLTextAreaElement).value)}
+                      onInput={(e) => setStateDraft((e.target as HTMLTextAreaElement).value)}
                       onBlur={() => {
                         const v = stateDraft.trim();
                         if (!v) {
                           setStateError(null);
-                          onCommitNode?.(
-                            { stateJson: undefined },
-                            "stateJsonをクリア",
-                          );
+                          onCommitNode?.({ stateJson: undefined }, "stateJsonをクリア");
                           return;
                         }
                         try {
@@ -10537,9 +9277,7 @@ function PackageDesignPanel({
                       class="input-mono w-full text-[0.6rem]"
                       aria-label="stateJson（生JSON）"
                     />
-                    {stateError && (
-                      <p class="text-red-600 text-[0.6rem]">{stateError}</p>
-                    )}
+                    {stateError && <p class="text-red-600 text-[0.6rem]">{stateError}</p>}
                   </fieldset>
                 </AdvancedManualOverride>
               </div>
@@ -10566,24 +9304,20 @@ export default function UiBuilderAdmin(): JSX.Element {
   const [layoutCandidates, setLayoutCandidates] = useState<
     LayoutRouteCandidate[]
   >([]);
-  const [candidateErrors, setCandidateErrors] = useState<UiValidationError[]>(
-    [],
-  );
+  const [candidateErrors, setCandidateErrors] = useState<UiValidationError[]>([]);
   const [autoPackageLoading, setAutoPackageLoading] = useState(false);
   const [autoPackageError, setAutoPackageError] = useState<
     UiValidationError | null
   >(null);
   const [paletteReloadToken, setPaletteReloadToken] = useState(0);
   const [flowStep, setFlowStep] = useState<UiBuilderFlowStepId>("route");
-  const [suggestShape, setSuggestShape] = useState<ManifestSuggestShape | null>(
-    null,
-  );
+  const [suggestShape, setSuggestShape] = useState<ManifestSuggestShape | null>(null);
 
   const committedRouteKey = committedManualRouteKey.trim() || routeKey;
   const routeCanvasReady = Boolean(committedRouteKey);
-  const selectedPackage =
-    packages.find((p) => p.packageId === selectedPackageId) ??
-      packages.find((p) => p.routeKey === committedRouteKey);
+  const selectedPackage = packages.find((p) =>
+    p.packageId === selectedPackageId
+  ) ?? packages.find((p) => p.routeKey === committedRouteKey);
 
   const reloadPackages = async (): Promise<AdminPackageRow[]> => {
     const body = await dispatchAdminOp("ui_topology", "list_packages");
@@ -10619,12 +9353,10 @@ export default function UiBuilderAdmin(): JSX.Element {
       );
       if (cancelled) return;
       if (error || !handoff) {
-        setAutoPackageError(
-          error ?? {
-            code: "SHELL_PACKAGE_FAILED",
-            message: "ルート用パッケージの自動生成に失敗しました。",
-          },
-        );
+        setAutoPackageError(error ?? {
+          code: "SHELL_PACKAGE_FAILED",
+          message: "ルート用パッケージの自動生成に失敗しました。",
+        });
         setSelectedPackageId("");
         setFlowStep("route");
       } else {
@@ -10660,12 +9392,10 @@ export default function UiBuilderAdmin(): JSX.Element {
       componentKey,
     );
     if (!result.ok) {
-      setAutoPackageError(
-        result.error ?? {
-          code: "REGISTER_FAILED",
-          message: "部品の自動追加に失敗しました。",
-        },
-      );
+      setAutoPackageError(result.error ?? {
+        code: "REGISTER_FAILED",
+        message: "部品の自動追加に失敗しました。",
+      });
       return false;
     }
     setPaletteReloadToken((n) => n + 1);
@@ -10682,12 +9412,10 @@ export default function UiBuilderAdmin(): JSX.Element {
       componentKey,
     );
     if (!result.ok) {
-      setAutoPackageError(
-        result.error ?? {
-          code: "DETACH_FAILED",
-          message: "パッケージからの部品削除に失敗しました。",
-        },
-      );
+      setAutoPackageError(result.error ?? {
+        code: "DETACH_FAILED",
+        message: "パッケージからの部品削除に失敗しました。",
+      });
       return;
     }
     setPaletteReloadToken((n) => n + 1);
@@ -10717,9 +9445,8 @@ export default function UiBuilderAdmin(): JSX.Element {
           class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
           role="note"
         >
-          ページ内容（/admin/contents）で登録した topology.name から routeKey
-          を自動派生します。 単一ページまたは handoff 付きで開いた場合は自動で
-          canvas workspace が有効になります。
+          ページ内容（/admin/contents）で登録した topology.name から routeKey を自動派生します。
+          単一ページまたは handoff 付きで開いた場合は自動で canvas workspace が有効になります。
         </div>
       )}
 
@@ -10738,49 +9465,50 @@ export default function UiBuilderAdmin(): JSX.Element {
         <summary class="cursor-pointer rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 hover:bg-slate-100">
           legacy / debug: 既存ルート候補・手動ルートキー（移行用）
         </summary>
-        <div class="mt-2 rounded border border-slate-200 bg-white p-3">
-          <BucketPackageRouteFields
-            routeKey={routeKey}
-            committedRouteKey={committedRouteKey}
-            routeOptions={routeOptions}
-            candidateErrors={candidateErrors}
-            onRouteKeyChange={(key) => {
-              setRouteKey(key);
-              setCommittedManualRouteKey("");
-              setManualRouteDraft("");
-            }}
+      <div class="mt-2 rounded border border-slate-200 bg-white p-3">
+        <BucketPackageRouteFields
+          routeKey={routeKey}
+          committedRouteKey={committedRouteKey}
+          routeOptions={routeOptions}
+          candidateErrors={candidateErrors}
+          onRouteKeyChange={(key) => {
+            setRouteKey(key);
+            setCommittedManualRouteKey("");
+            setManualRouteDraft("");
+          }}
+        />
+        <LegacyManualRouteInput
+          manualRouteDraft={manualRouteDraft}
+          committedRouteKey={committedRouteKey}
+          routeKey={routeKey}
+          onManualRouteDraftChange={setManualRouteDraft}
+          onManualRouteCommit={() => {
+            const next = manualRouteDraft.trim();
+            if (!next) return;
+            setCommittedManualRouteKey(next);
+            setRouteKey("");
+          }}
+        />
+        {autoPackageLoading && (
+          <p class="mt-2 text-xs text-blue-800">パッケージを自動生成中…</p>
+        )}
+        {autoPackageError && (
+          <ValidationErrorPanel
+            errors={asValidationErrorEntries([autoPackageError])}
+            title="パッケージ自動生成エラー"
           />
-          <LegacyManualRouteInput
-            manualRouteDraft={manualRouteDraft}
-            committedRouteKey={committedRouteKey}
-            routeKey={routeKey}
-            onManualRouteDraftChange={setManualRouteDraft}
-            onManualRouteCommit={() => {
-              const next = manualRouteDraft.trim();
-              if (!next) return;
-              setCommittedManualRouteKey(next);
-              setRouteKey("");
-            }}
-          />
-          {autoPackageLoading && (
-            <p class="mt-2 text-xs text-blue-800">パッケージを自動生成中…</p>
-          )}
-          {autoPackageError && (
-            <ValidationErrorPanel
-              errors={asValidationErrorEntries([autoPackageError])}
-              title="パッケージ自動生成エラー"
-            />
-          )}
-          {selectedPackage && routeCanvasReady && !autoPackageLoading && (
-            <p class="mt-2 text-xs text-slate-600">
-              自動生成パッケージ:{" "}
-              <code class="font-mono">{selectedPackage.packageKey}</code>{" "}
-              <span class="text-slate-400">
-                ({selectedPackage.packageId.slice(0, 8)}…)
-              </span>
-            </p>
-          )}
-        </div>
+        )}
+        {selectedPackage && routeCanvasReady && !autoPackageLoading && (
+          <p class="mt-2 text-xs text-slate-600">
+            自動生成パッケージ:{" "}
+            <code class="font-mono">{selectedPackage.packageKey}</code>
+            {" "}
+            <span class="text-slate-400">
+              ({selectedPackage.packageId.slice(0, 8)}…)
+            </span>
+          </p>
+        )}
+      </div>
       </details>
 
       <div class="mb-4">

@@ -267,6 +267,23 @@ public class ExternalPortSeedDrivenPolicyTests
         Assert.Contains("NpgsqlExternalPortPolicyRepository", source);
     }
 
+
+    [Fact]
+    public void ExternalPortAuthoringCandidates_ReadActivePortsWithoutConsumerAliasOrPlaintext()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlUiTopologyRepository.cs"));
+
+        Assert.Contains("FROM topology.external_access_ports", source);
+        Assert.Contains("FROM topology.external_response_ports", source);
+        Assert.Contains("FROM topology.external_hook_ports", source);
+        Assert.Contains("WHERE active = true", source);
+        Assert.DoesNotContain("required_by_bundle AS consumer_bundle_binding", source);
+        Assert.Contains("NULL::text AS consumer_bundle_binding", source);
+        Assert.Contains("external-port:{portKind}:{portId}", source);
+        Assert.DoesNotContain("password", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", source, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ExternalPortPolicyStep NewStep(int order, string operationKey, IReadOnlyDictionary<string, string>? config = null) =>
         new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, config ?? new Dictionary<string, string>(), Active: true);
 

@@ -107,10 +107,7 @@ import { MdViewer } from "../components/MdViewer.tsx";
 import { AudioPlayer } from "../components/AudioPlayer.tsx";
 import { VideoPlayer } from "../components/VideoPlayer.tsx";
 import type { MdViewerDisabledActionReasons } from "../components/MdViewer.tsx";
-import type {
-  CompletedPresetSeed,
-  SavedViewDetail,
-} from "../api/teamMarkdownApi.ts";
+import type { CompletedPresetSeed, SavedViewDetail } from "../api/teamMarkdownApi.ts";
 import Box from "../components/Box.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
@@ -188,9 +185,7 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     if (typeof action !== "string" || !action.trim()) return null;
     if (typeof target !== "string" || !target.trim()) return null;
     if (typeof layer !== "string" || !layer.trim()) return null;
-    const operationType = typeof rd.operationType === "string"
-      ? rd.operationType.trim()
-      : action.trim();
+    const operationType = typeof rd.operationType === "string" ? rd.operationType.trim() : action.trim();
     runtimeDispatch = {
       operationType,
       target: target.trim(),
@@ -211,16 +206,12 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     ) {
       const rn = routeNavigationRaw as Record<string, unknown>;
       const rnTargetRef = rn.targetRef;
-      if (
-        typeof rnTargetRef === "string" &&
-        rnTargetRef.trim().startsWith("route:")
-      ) {
+      if (typeof rnTargetRef === "string" && rnTargetRef.trim().startsWith("route:")) {
         routeNavigation = { targetRef: rnTargetRef.trim() };
       }
     }
   }
-  const localStateMutationRaw =
-    (value as Record<string, unknown>).localStateMutation;
+  const localStateMutationRaw = (value as Record<string, unknown>).localStateMutation;
   let localStateMutation: EventBindingValue["localStateMutation"] | undefined;
   if (localStateMutationRaw !== undefined) {
     if (
@@ -263,10 +254,7 @@ function emitBoundEvent(
 ): { ok: true } | { ok: false; error: string } {
   // Lane 3: frontend_local_derived_calculation_binding — fires BEFORE previewMode gate.
   // No backend dispatch. No ManifestDispatcher. No queueAdminClientCommand.
-  if (
-    spec.calcTriggerCallback &&
-    (trigger === "change" || trigger === "input" || trigger === "select")
-  ) {
+  if (spec.calcTriggerCallback && (trigger === "change" || trigger === "input" || trigger === "select")) {
     spec.calcTriggerCallback(payload.value ?? payload.raw ?? payload);
   }
   // Lane 3 (search): search_suggest candidate boundary — fires BEFORE previewMode gate.
@@ -304,9 +292,7 @@ function emitBoundEvent(
   // route:<routeKey> must not reach ManifestDispatcher; navigation executes client-side only.
   if (binding.routeNavigation) {
     const ref = binding.routeNavigation.targetRef;
-    const routeKey = ref.startsWith("route:")
-      ? ref.slice("route:".length).trim()
-      : null;
+    const routeKey = ref.startsWith("route:") ? ref.slice("route:".length).trim() : null;
     if (routeKey) {
       const href = routeKey.startsWith("/") ? routeKey : `/${routeKey}`;
       globalThis.location.href = href;
@@ -325,11 +311,7 @@ function emitBoundEvent(
     const nextValue = mutation.action === "toggle"
       ? !spec.localStateStore.get(mutation.targetNodeId, mutation.statePath)
       : mutation.value;
-    spec.localStateStore.set(
-      mutation.targetNodeId,
-      mutation.statePath,
-      nextValue,
-    );
+    spec.localStateStore.set(mutation.targetNodeId, mutation.statePath, nextValue);
   }
   return { ok: true };
 }
@@ -357,8 +339,7 @@ function requireBinding(
 
 function buttonFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   if (typeof data.label !== "string") {
@@ -370,8 +351,8 @@ function buttonFactory(spec: RuntimeComponentSpec): RenderResult {
   const bindingCheck = requireBinding(spec, "click");
   if (!bindingCheck.ok) return bindingCheck;
   return {
-    ok: true,
-    node: h(Button, {
+      ok: true,
+      node: h(Button, {
       label: data.label as string,
       disabled: data.disabled as boolean | undefined,
       variant: data.variant as "primary" | "secondary" | "danger" | undefined,
@@ -388,8 +369,7 @@ function buttonFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function inputFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   if (data.value !== undefined && typeof data.value !== "string") {
@@ -440,8 +420,7 @@ function inputFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function cardFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -483,22 +462,14 @@ function cardListFactory(spec: RuntimeComponentSpec): RenderResult {
         title: it.title as string | undefined,
         body: it.body as string | undefined,
         footer: it.footer as string | undefined,
-        variant: it.variant as
-          | "default"
-          | "info"
-          | "warning"
-          | "error"
-          | undefined,
+        variant: it.variant as "default" | "info" | "warning" | "error" | undefined,
       })),
       emptyMessage: props.emptyMessage as string | undefined,
       className: spec.className,
       design: spec.design ?? {},
       onSelect: spec.eventBinding.select
         ? (_item, idx) => {
-          const result = emitBoundEvent(spec, "select", {
-            index: idx,
-            item: items[idx],
-          });
+          const result = emitBoundEvent(spec, "select", { index: idx, item: items[idx] });
           if (!result.ok) throw new Error(result.error);
         }
         : undefined,
@@ -508,8 +479,7 @@ function cardListFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function tableFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const table = (typeof props.table === "object" && props.table !== null &&
-      !Array.isArray(props.table))
+  const table = (typeof props.table === "object" && props.table !== null && !Array.isArray(props.table))
     ? props.table as Record<string, unknown>
     : props;
   if (!Array.isArray(table.columns) || !Array.isArray(table.rows)) {
@@ -541,15 +511,11 @@ function tableFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function autoCompleteInputFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   if (data.value !== undefined && typeof data.value !== "string") {
-    return {
-      ok: false,
-      error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_AUTOCOMPLETE_INPUT_PROPS",
-    };
+    return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_AUTOCOMPLETE_INPUT_PROPS" };
   }
   const bindingCheck = requireBinding(spec, "change");
   if (!bindingCheck.ok) return bindingCheck;
@@ -589,15 +555,11 @@ function autoCompleteInputFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function searchComboboxFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   if (data.value !== undefined && typeof data.value !== "string") {
-    return {
-      ok: false,
-      error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_SEARCH_COMBOBOX_PROPS",
-    };
+    return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_SEARCH_COMBOBOX_PROPS" };
   }
   const bindingCheck = requireBinding(spec, "change");
   if (!bindingCheck.ok) return bindingCheck;
@@ -635,26 +597,18 @@ function searchComboboxFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function candidateConfidenceBadgeFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function candidateConfidenceBadgeFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   if (typeof data.label !== "string") {
-    return {
-      ok: false,
-      error:
-        "RUNTIME_PRIMITIVE_RENDERER_INVALID_CANDIDATE_CONFIDENCE_BADGE_PROPS",
-    };
+    return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_CANDIDATE_CONFIDENCE_BADGE_PROPS" };
   }
   const rawConf = data.confidence;
-  const confidence =
-    rawConf === "high" || rawConf === "medium" || rawConf === "low"
-      ? rawConf
-      : "unknown";
+  const confidence = rawConf === "high" || rawConf === "medium" || rawConf === "low"
+    ? rawConf
+    : "unknown";
   const score = typeof data.score === "number" ? data.score : undefined;
   return {
     ok: true,
@@ -670,15 +624,11 @@ function candidateConfidenceBadgeFactory(
 
 function inlineEditableFieldFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   if (data.value !== undefined && typeof data.value !== "string") {
-    return {
-      ok: false,
-      error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_INLINE_EDITABLE_FIELD_PROPS",
-    };
+    return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_INLINE_EDITABLE_FIELD_PROPS" };
   }
   const bindingCheck = requireBinding(spec, "change");
   if (!bindingCheck.ok) return bindingCheck;
@@ -708,8 +658,7 @@ function inlineEditableFieldFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function patchPreviewPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawFields = Array.isArray(data.fields) ? data.fields : [];
@@ -735,8 +684,7 @@ function patchPreviewPanelFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function applyConfirmDialogFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const submitCheck = requireBinding(spec, "submit");
@@ -767,8 +715,7 @@ function applyConfirmDialogFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function styleTokenPickerFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "select");
@@ -798,8 +745,7 @@ function styleTokenPickerFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function themePreviewPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawTokens = Array.isArray(data.tokens) ? data.tokens : [];
@@ -822,8 +768,7 @@ function themePreviewPanelFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function validationErrorPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawErrors = Array.isArray(data.errors) ? data.errors : [];
@@ -847,8 +792,7 @@ function validationErrorPanelFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function suggestInputFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -888,8 +832,7 @@ function suggestInputFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function recentInputSuggestFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -920,12 +863,9 @@ function recentInputSuggestFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function relationCandidatePickerFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function relationCandidatePickerFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "select");
@@ -953,12 +893,9 @@ function relationCandidatePickerFactory(
   };
 }
 
-function duplicateMergeCandidatePanelFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function duplicateMergeCandidatePanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawCandidates = Array.isArray(data.candidates) ? data.candidates : [];
@@ -987,8 +924,7 @@ function duplicateMergeCandidatePanelFactory(
 
 function relationPathPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawSegments = Array.isArray(data.segments) ? data.segments : [];
@@ -1008,12 +944,9 @@ function relationPathPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function fieldResolverInspectorFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function fieldResolverInspectorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -1029,12 +962,9 @@ function fieldResolverInspectorFactory(
   };
 }
 
-function schemaPromotionCandidatePanelFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function schemaPromotionCandidatePanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawCandidates = Array.isArray(data.candidates) ? data.candidates : [];
@@ -1063,8 +993,7 @@ function schemaPromotionCandidatePanelFactory(
 
 function selectImportDialogFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const submitCheck = requireBinding(spec, "submit");
@@ -1107,18 +1036,14 @@ function selectImportDialogFactory(spec: RuntimeComponentSpec): RenderResult {
 
 // === Cat B: Inline Edit / Preview Update / Audit UI ===
 
-function inlineEditableJsonbFieldFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function inlineEditableJsonbFieldFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
   if (!bindingCheck.ok) return bindingCheck;
-  const value = (typeof data.value === "object" && data.value !== null &&
-      !Array.isArray(data.value))
+  const value = (typeof data.value === "object" && data.value !== null && !Array.isArray(data.value))
     ? data.value as Record<string, unknown>
     : undefined;
   return {
@@ -1146,8 +1071,7 @@ function inlineEditableJsonbFieldFactory(
 
 function diffStrikeTextFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -1163,22 +1087,14 @@ function diffStrikeTextFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function auditDiffDrawerFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "toggle");
   if (!bindingCheck.ok) return bindingCheck;
   const rawEntries = Array.isArray(data.entries) ? data.entries : [];
   const entries = rawEntries.filter(
-    (
-      e,
-    ): e is {
-      field: string;
-      before: string;
-      after: string;
-      timestamp?: string;
-    } =>
+    (e): e is { field: string; before: string; after: string; timestamp?: string } =>
       typeof e === "object" && e !== null &&
       typeof (e as Record<string, unknown>).field === "string",
   );
@@ -1198,12 +1114,9 @@ function auditDiffDrawerFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function optimisticUpdateBoundaryFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function optimisticUpdateBoundaryFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -1218,12 +1131,9 @@ function optimisticUpdateBoundaryFactory(
   };
 }
 
-function confirmedUpdateButtonFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function confirmedUpdateButtonFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "submit");
@@ -1247,8 +1157,7 @@ function confirmedUpdateButtonFactory(
 
 function undoTimelineFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawItems = Array.isArray(data.items) ? data.items : [];
@@ -1276,12 +1185,9 @@ function undoTimelineFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function conflictResolutionPanelFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function conflictResolutionPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawConflicts = Array.isArray(data.conflicts) ? data.conflicts : [];
@@ -1311,8 +1217,7 @@ function conflictResolutionPanelFactory(
 
 function facetedFilterBarFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1323,11 +1228,7 @@ function facetedFilterBarFactory(spec: RuntimeComponentSpec): RenderResult {
       typeof f === "object" && f !== null &&
       typeof (f as Record<string, unknown>).key === "string" &&
       typeof (f as Record<string, unknown>).label === "string",
-  ).map((f) => ({
-    key: f.key,
-    label: f.label,
-    value: typeof f.value === "string" ? f.value : "",
-  }));
+  ).map((f) => ({ key: f.key, label: f.label, value: typeof f.value === "string" ? f.value : "" }));
   return {
     ok: true,
     node: h(FacetedFilterBar, {
@@ -1344,8 +1245,7 @@ function facetedFilterBarFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function columnFilterFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1366,12 +1266,9 @@ function columnFilterFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function columnVisibilityEditorFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function columnVisibilityEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1382,11 +1279,7 @@ function columnVisibilityEditorFactory(
       typeof c === "object" && c !== null &&
       typeof (c as Record<string, unknown>).key === "string" &&
       typeof (c as Record<string, unknown>).label === "string",
-  ).map((c) => ({
-    key: c.key,
-    label: c.label,
-    visible: typeof c.visible === "boolean" ? c.visible : true,
-  }));
+  ).map((c) => ({ key: c.key, label: c.label, visible: typeof c.visible === "boolean" ? c.visible : true }));
   return {
     ok: true,
     node: h(ColumnVisibilityEditor, {
@@ -1403,8 +1296,7 @@ function columnVisibilityEditorFactory(
 
 function sortControlFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1414,10 +1306,7 @@ function sortControlFactory(spec: RuntimeComponentSpec): RenderResult {
     (f): f is { key: string; label: string } =>
       typeof f === "object" && f !== null &&
       typeof (f as Record<string, unknown>).key === "string",
-  ).map((f) => ({
-    key: f.key,
-    label: typeof f.label === "string" ? f.label : f.key,
-  }));
+  ).map((f) => ({ key: f.key, label: typeof f.label === "string" ? f.label : f.key }));
   const rawDir = data.direction;
   const direction = rawDir === "asc" || rawDir === "desc" ? rawDir : null;
   return {
@@ -1438,8 +1327,7 @@ function sortControlFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function groupByControlFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1449,10 +1337,7 @@ function groupByControlFactory(spec: RuntimeComponentSpec): RenderResult {
     (o): o is { key: string; label: string } =>
       typeof o === "object" && o !== null &&
       typeof (o as Record<string, unknown>).key === "string",
-  ).map((o) => ({
-    key: o.key,
-    label: typeof o.label === "string" ? o.label : o.key,
-  }));
+  ).map((o) => ({ key: o.key, label: typeof o.label === "string" ? o.label : o.key }));
   return {
     ok: true,
     node: h(GroupByControl, {
@@ -1471,8 +1356,7 @@ function groupByControlFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function savedViewSelectorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawViews = Array.isArray(data.views) ? data.views : [];
@@ -1502,8 +1386,7 @@ function savedViewSelectorFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function bulkActionPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "select");
@@ -1518,9 +1401,7 @@ function bulkActionPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   return {
     ok: true,
     node: h(BulkActionPanel, {
-      selectedCount: typeof data.selectedCount === "number"
-        ? data.selectedCount
-        : 0,
+      selectedCount: typeof data.selectedCount === "number" ? data.selectedCount : 0,
       actions,
       className: spec.className,
       design: spec.design ?? {},
@@ -1534,8 +1415,7 @@ function bulkActionPanelFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function virtualizedDataTableFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawColumns = Array.isArray(data.columns) ? data.columns : [];
@@ -1543,14 +1423,9 @@ function virtualizedDataTableFactory(spec: RuntimeComponentSpec): RenderResult {
     (c): c is { key: string; header: string } =>
       typeof c === "object" && c !== null &&
       typeof (c as Record<string, unknown>).key === "string",
-  ).map((c) => ({
-    key: c.key,
-    header: typeof c.header === "string" ? c.header : c.key,
-  }));
+  ).map((c) => ({ key: c.key, header: typeof c.header === "string" ? c.header : c.key }));
   const rows = Array.isArray(data.rows)
-    ? data.rows.filter((r): r is Record<string, unknown> =>
-      typeof r === "object" && r !== null && !Array.isArray(r)
-    )
+    ? data.rows.filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null && !Array.isArray(r))
     : [];
   return {
     ok: true,
@@ -1572,14 +1447,12 @@ function virtualizedDataTableFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function rowDetailDrawerFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "toggle");
   if (!bindingCheck.ok) return bindingCheck;
-  const row = (typeof data.row === "object" && data.row !== null &&
-      !Array.isArray(data.row))
+  const row = (typeof data.row === "object" && data.row !== null && !Array.isArray(data.row))
     ? data.row as Record<string, unknown>
     : undefined;
   return {
@@ -1600,8 +1473,7 @@ function rowDetailDrawerFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function paginationControlFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1624,8 +1496,7 @@ function paginationControlFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function exportCandidatePanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawCandidates = Array.isArray(data.candidates) ? data.candidates : [];
@@ -1650,8 +1521,7 @@ function exportCandidatePanelFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function fontTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1679,12 +1549,9 @@ function fontTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function backgroundColorEditorFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function backgroundColorEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1714,8 +1581,7 @@ function backgroundColorEditorFactory(
 
 function textColorEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1745,8 +1611,7 @@ function textColorEditorFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function spacingTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1776,8 +1641,7 @@ function spacingTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function borderRadiusEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1807,8 +1671,7 @@ function borderRadiusEditorFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function cssVariablePreviewFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawVariables = Array.isArray(data.variables) ? data.variables : [];
@@ -1831,8 +1694,7 @@ function cssVariablePreviewFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function shadowTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1854,8 +1716,7 @@ function shadowTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function animationTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -1887,8 +1748,7 @@ function animationTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function commandPaletteFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const toggleCheck = requireBinding(spec, "toggle");
@@ -1922,12 +1782,9 @@ function commandPaletteFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function emptyStateActionPanelFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function emptyStateActionPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawActions = Array.isArray(data.actions) ? data.actions : [];
@@ -1957,15 +1814,13 @@ function emptyStateActionPanelFactory(
 
 function operationGuardBannerFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawLevel = data.level;
-  const level =
-    rawLevel === "info" || rawLevel === "warning" || rawLevel === "error"
-      ? rawLevel
-      : undefined;
+  const level = rawLevel === "info" || rawLevel === "warning" || rawLevel === "error"
+    ? rawLevel
+    : undefined;
   return {
     ok: true,
     node: h(OperationGuardBanner, {
@@ -1978,12 +1833,9 @@ function operationGuardBannerFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function mutationBoundaryInspectorFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function mutationBoundaryInspectorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2002,8 +1854,7 @@ function mutationBoundaryInspectorFactory(
 
 function permissionHintPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2020,8 +1871,7 @@ function permissionHintPanelFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function dryRunResultPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawResults = Array.isArray(data.results) ? data.results : [];
@@ -2042,12 +1892,9 @@ function dryRunResultPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function rollbackCandidatePanelFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function rollbackCandidatePanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawCandidates = Array.isArray(data.candidates) ? data.candidates : [];
@@ -2074,24 +1921,14 @@ function rollbackCandidatePanelFactory(
   };
 }
 
-function operationAuditLogPanelFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function operationAuditLogPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawEntries = Array.isArray(data.entries) ? data.entries : [];
   const entries = rawEntries.filter(
-    (
-      e,
-    ): e is {
-      id: string;
-      operation: string;
-      timestamp?: string;
-      actor?: string;
-    } =>
+    (e): e is { id: string; operation: string; timestamp?: string; actor?: string } =>
       typeof e === "object" && e !== null &&
       typeof (e as Record<string, unknown>).id === "string" &&
       typeof (e as Record<string, unknown>).operation === "string",
@@ -2109,8 +1946,7 @@ function operationAuditLogPanelFactory(
 
 function formFieldFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2130,19 +1966,12 @@ function formFieldFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function kanbanBoardFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawColumns = Array.isArray(data.columns) ? data.columns : [];
   const columns = rawColumns.filter(
-    (
-      c,
-    ): c is {
-      key: string;
-      label: string;
-      items?: Array<{ id: string; label: string; description?: string }>;
-    } =>
+    (c): c is { key: string; label: string; items?: Array<{ id: string; label: string; description?: string }> } =>
       typeof c === "object" && c !== null &&
       typeof (c as Record<string, unknown>).key === "string" &&
       typeof (c as Record<string, unknown>).label === "string",
@@ -2166,8 +1995,7 @@ function kanbanBoardFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function layoutGridEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2187,12 +2015,9 @@ function layoutGridEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function calculationPreviewPanelFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function calculationPreviewPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2207,17 +2032,15 @@ function calculationPreviewPanelFactory(
   };
 }
 
-function documentCanvasTemplateEditorFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+
+
+function documentCanvasTemplateEditorFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
   const backgroundImageUrl = typeof props.backgroundImageUrl === "string"
     ? props.backgroundImageUrl
     : undefined;
   const fields = Array.isArray(props.fields)
-    ? (props.fields as Array<
-      { key: string; label?: string; x?: number; y?: number; value?: string }
-    >)
+    ? (props.fields as Array<{ key: string; label?: string; x?: number; y?: number; value?: string }>)
     : undefined;
   return {
     ok: true,
@@ -2232,8 +2055,7 @@ function documentCanvasTemplateEditorFactory(
 
 function selectFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -2266,16 +2088,10 @@ function selectFactory(spec: RuntimeComponentSpec): RenderResult {
         if (!r.ok) throw new Error(r.error);
       },
       onFocus: spec.eventBinding.focus
-        ? () => {
-          const r = emitBoundEvent(spec, "focus", {});
-          if (!r.ok) throw new Error(r.error);
-        }
+        ? () => { const r = emitBoundEvent(spec, "focus", {}); if (!r.ok) throw new Error(r.error); }
         : undefined,
       onBlur: spec.eventBinding.blur
-        ? () => {
-          const r = emitBoundEvent(spec, "blur", {});
-          if (!r.ok) throw new Error(r.error);
-        }
+        ? () => { const r = emitBoundEvent(spec, "blur", {}); if (!r.ok) throw new Error(r.error); }
         : undefined,
     }),
   };
@@ -2283,8 +2099,7 @@ function selectFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function checkboxFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -2308,17 +2123,13 @@ function checkboxFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function badgeFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const label = typeof data.label === "string" ? data.label : "badge";
   const rawTone = data.tone;
-  const tone =
-    (rawTone === "neutral" || rawTone === "info" || rawTone === "success" ||
-        rawTone === "warning" || rawTone === "error")
-      ? rawTone
-      : "neutral";
+  const tone = (rawTone === "neutral" || rawTone === "info" || rawTone === "success" || rawTone === "warning" || rawTone === "error")
+    ? rawTone : "neutral";
   return {
     ok: true,
     node: h(Badge, {
@@ -2332,17 +2143,13 @@ function badgeFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function statusBadgeFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const label = typeof data.label === "string" ? data.label : "";
   const rawTone = data.tone;
-  const tone =
-    (rawTone === "neutral" || rawTone === "info" || rawTone === "success" ||
-        rawTone === "warning" || rawTone === "error")
-      ? rawTone
-      : "neutral";
+  const tone = (rawTone === "neutral" || rawTone === "info" || rawTone === "success" || rawTone === "warning" || rawTone === "error")
+    ? rawTone : "neutral";
   return {
     ok: true,
     node: h(StatusBadge, {
@@ -2357,17 +2164,13 @@ function statusBadgeFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function alertFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const message = typeof data.message === "string" ? data.message : "Alert";
   const rawTone = data.tone;
-  const tone =
-    (rawTone === "info" || rawTone === "success" || rawTone === "warning" ||
-        rawTone === "error")
-      ? rawTone
-      : "info";
+  const tone = (rawTone === "info" || rawTone === "success" || rawTone === "warning" || rawTone === "error")
+    ? rawTone : "info";
   return {
     ok: true,
     node: h(Alert, {
@@ -2382,8 +2185,7 @@ function alertFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function loadingStateFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2398,8 +2200,7 @@ function loadingStateFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function emptyStateFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2415,8 +2216,7 @@ function emptyStateFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function errorStateFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2450,8 +2250,7 @@ function jsonViewerFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function adminPageShellFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2461,19 +2260,14 @@ function adminPageShellFactory(spec: RuntimeComponentSpec): RenderResult {
       description: data.description as string | undefined,
       className: spec.className,
       design: spec.design ?? {},
-      children: h(
-        "div",
-        { style: "color:#888;font-size:0.85rem;padding:8px" },
-        "（コンテンツ）",
-      ),
+      children: h("div", { style: "color:#888;font-size:0.85rem;padding:8px" }, "（コンテンツ）"),
     }),
   };
 }
 
 function adminSectionFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
@@ -2483,30 +2277,21 @@ function adminSectionFactory(spec: RuntimeComponentSpec): RenderResult {
       description: data.description as string | undefined,
       className: spec.className,
       design: spec.design ?? {},
-      children: h(
-        "div",
-        { style: "color:#888;font-size:0.85rem;padding:4px" },
-        "（コンテンツ）",
-      ),
+      children: h("div", { style: "color:#888;font-size:0.85rem;padding:4px" }, "（コンテンツ）"),
     }),
   };
 }
 
-function validationResultPanelFactory(
-  spec: RuntimeComponentSpec,
-): RenderResult {
+function validationResultPanelFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   return {
     ok: true,
     node: h(ValidationResultPanel, {
       title: data.title as string | undefined,
-      result:
-        data.result as Parameters<typeof ValidationResultPanel>[0]["result"] ??
-          null,
+      result: data.result as Parameters<typeof ValidationResultPanel>[0]["result"] ?? null,
       className: spec.className,
       design: spec.design ?? {},
     }),
@@ -2515,8 +2300,7 @@ function validationResultPanelFactory(
 
 function textareaTemplateFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "change");
@@ -2538,16 +2322,10 @@ function textareaTemplateFactory(spec: RuntimeComponentSpec): RenderResult {
         if (!r.ok) throw new Error(r.error);
       },
       onFocus: spec.eventBinding.focus
-        ? () => {
-          const r = emitBoundEvent(spec, "focus", {});
-          if (!r.ok) throw new Error(r.error);
-        }
+        ? () => { const r = emitBoundEvent(spec, "focus", {}); if (!r.ok) throw new Error(r.error); }
         : undefined,
       onBlur: spec.eventBinding.blur
-        ? () => {
-          const r = emitBoundEvent(spec, "blur", {});
-          if (!r.ok) throw new Error(r.error);
-        }
+        ? () => { const r = emitBoundEvent(spec, "blur", {}); if (!r.ok) throw new Error(r.error); }
         : undefined,
     }),
   };
@@ -2555,8 +2333,7 @@ function textareaTemplateFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function tabsFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const rawItems = Array.isArray(data.items) ? data.items : [];
@@ -2576,8 +2353,7 @@ function tabsFactory(spec: RuntimeComponentSpec): RenderResult {
     { key: "tab1", label: "タブ 1", children: h("div", null, "") },
     { key: "tab2", label: "タブ 2", children: h("div", null, "") },
   ];
-  const activeKey = typeof data.activeKey === "string" &&
-      previewItems.some((it) => it.key === data.activeKey)
+  const activeKey = typeof data.activeKey === "string" && previewItems.some((it) => it.key === data.activeKey)
     ? (data.activeKey as string)
     : previewItems[0].key;
   return {
@@ -2597,6 +2373,7 @@ function tabsFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
+
 function mediaPlayerFactory(kind: "audio" | "video") {
   return (spec: RuntimeComponentSpec): RenderResult => {
     const props = spec.props;
@@ -2609,57 +2386,35 @@ function mediaPlayerFactory(kind: "audio" | "video") {
       controls: props.controls !== false,
       autoplay: props.autoplay === true,
       loop: props.loop === true,
-      ariaLabel: typeof props.ariaLabel === "string"
-        ? props.ariaLabel
-        : undefined,
+      ariaLabel: typeof props.ariaLabel === "string" ? props.ariaLabel : undefined,
       className: spec.className,
       design: spec.design ?? {},
     };
     return {
       ok: true,
-      node: kind === "audio" ? h(AudioPlayer, common) : h(VideoPlayer, {
-        ...common,
-        poster: typeof props.poster === "string" ? props.poster : undefined,
-      }),
+      node: kind === "audio"
+        ? h(AudioPlayer, common)
+        : h(VideoPlayer, { ...common, poster: typeof props.poster === "string" ? props.poster : undefined }),
     };
   };
 }
 
 function treeFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
-  type TreeNodeInput = {
-    key: string;
-    label: string;
-    children?: unknown[];
-    disabled?: boolean;
-  };
+  type TreeNodeInput = { key: string; label: string; children?: unknown[]; disabled?: boolean };
   function parseNode(n: unknown): TreeNodeInput | null {
     if (typeof n !== "object" || n === null) return null;
     const obj = n as Record<string, unknown>;
-    if (typeof obj.key !== "string" || typeof obj.label !== "string") {
-      return null;
-    }
-    return {
-      key: obj.key,
-      label: obj.label,
-      children: Array.isArray(obj.children) ? obj.children : undefined,
-      disabled: obj.disabled === true,
-    };
+    if (typeof obj.key !== "string" || typeof obj.label !== "string") return null;
+    return { key: obj.key, label: obj.label, children: Array.isArray(obj.children) ? obj.children : undefined, disabled: obj.disabled === true };
   }
   const rawNodes = Array.isArray(data.nodes) ? data.nodes : [];
-  const nodes = rawNodes.map(parseNode).filter((n): n is TreeNodeInput =>
-    n !== null
-  );
+  const nodes = rawNodes.map(parseNode).filter((n): n is TreeNodeInput => n !== null);
   const previewNodes = nodes.length > 0 ? nodes : [
-    {
-      key: "node1",
-      label: "ノード 1",
-      children: [{ key: "node1-1", label: "子ノード 1-1" }],
-    },
+    { key: "node1", label: "ノード 1", children: [{ key: "node1-1", label: "子ノード 1-1" }] },
     { key: "node2", label: "ノード 2" },
   ];
   return {
@@ -2683,25 +2438,12 @@ function isCompletedPresetSeedStructureValid(seed: unknown): boolean {
   if (!seed || typeof seed !== "object" || Array.isArray(seed)) return false;
   const s = seed as Record<string, unknown>;
   if (typeof s.seed_version !== "string" || !s.seed_version) return false;
-  const requiredObjects = [
-    "template_ref",
-    "source_ref",
-    "binding_ref",
-    "render_ref",
-    "adjustment_ref",
-    "dashboard_ref",
-    "lineage_ref",
-  ] as const;
+  const requiredObjects = ["template_ref", "source_ref", "binding_ref", "render_ref", "adjustment_ref", "dashboard_ref", "lineage_ref"] as const;
   for (const key of requiredObjects) {
-    if (!s[key] || typeof s[key] !== "object" || Array.isArray(s[key])) {
-      return false;
-    }
+    if (!s[key] || typeof s[key] !== "object" || Array.isArray(s[key])) return false;
   }
   const renderRef = s.render_ref as Record<string, unknown>;
-  if (
-    typeof renderRef.rendered_markdown_hash !== "string" ||
-    !renderRef.rendered_markdown_hash
-  ) return false;
+  if (typeof renderRef.rendered_markdown_hash !== "string" || !renderRef.rendered_markdown_hash) return false;
   if (typeof renderRef.rendered_at !== "string") return false;
   if (typeof renderRef.renderer_version !== "string") return false;
   if (!Array.isArray(renderRef.unresolved_placeholder_keys)) return false;
@@ -2711,63 +2453,43 @@ function isCompletedPresetSeedStructureValid(seed: unknown): boolean {
   return true;
 }
 
-function normalizeMdViewerSavedView(
-  raw: Record<string, unknown>,
-): SavedViewDetail | null {
+function normalizeMdViewerSavedView(raw: Record<string, unknown>): SavedViewDetail | null {
   if (typeof raw.savedViewId !== "string" || !raw.savedViewId) return null;
   if (typeof raw.title !== "string") return null;
   if (typeof raw.renderedMarkdown !== "string") return null;
   const completedPresetSeedJson = raw.completedPresetSeedJson;
-  if (
-    !completedPresetSeedJson || typeof completedPresetSeedJson !== "object" ||
-    Array.isArray(completedPresetSeedJson)
-  ) return null;
-  if (!isCompletedPresetSeedStructureValid(completedPresetSeedJson)) {
-    return null;
-  }
+  if (!completedPresetSeedJson || typeof completedPresetSeedJson !== "object" || Array.isArray(completedPresetSeedJson)) return null;
+  if (!isCompletedPresetSeedStructureValid(completedPresetSeedJson)) return null;
   return {
     savedViewId: raw.savedViewId,
     title: raw.title,
     templateKey: typeof raw.templateKey === "string" ? raw.templateKey : "",
     templateId: typeof raw.templateId === "string" ? raw.templateId : "",
-    sourceTableRef: typeof raw.sourceTableRef === "string"
-      ? raw.sourceTableRef
-      : "",
-    sourceRecordRef: typeof raw.sourceRecordRef === "string"
-      ? raw.sourceRecordRef
-      : "",
+    sourceTableRef: typeof raw.sourceTableRef === "string" ? raw.sourceTableRef : "",
+    sourceRecordRef: typeof raw.sourceRecordRef === "string" ? raw.sourceRecordRef : "",
     status: typeof raw.status === "string" ? raw.status : "active",
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : "",
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
-    cardMetadataJson: (typeof raw.cardMetadataJson === "object" &&
-        raw.cardMetadataJson !== null && !Array.isArray(raw.cardMetadataJson))
+    cardMetadataJson: (typeof raw.cardMetadataJson === "object" && raw.cardMetadataJson !== null && !Array.isArray(raw.cardMetadataJson))
       ? raw.cardMetadataJson as Record<string, unknown>
       : {},
-    bindingJson:
-      (typeof raw.bindingJson === "object" && raw.bindingJson !== null &&
-          !Array.isArray(raw.bindingJson))
-        ? raw.bindingJson as Record<string, unknown>
-        : {},
+    bindingJson: (typeof raw.bindingJson === "object" && raw.bindingJson !== null && !Array.isArray(raw.bindingJson))
+      ? raw.bindingJson as Record<string, unknown>
+      : {},
     renderedMarkdown: raw.renderedMarkdown,
-    userAdjustmentPatchJson: (typeof raw.userAdjustmentPatchJson === "object" &&
-        raw.userAdjustmentPatchJson !== null &&
-        !Array.isArray(raw.userAdjustmentPatchJson))
+    userAdjustmentPatchJson: (typeof raw.userAdjustmentPatchJson === "object" && raw.userAdjustmentPatchJson !== null && !Array.isArray(raw.userAdjustmentPatchJson))
       ? raw.userAdjustmentPatchJson as Record<string, unknown>
       : {},
-    searchIndexText: typeof raw.searchIndexText === "string"
-      ? raw.searchIndexText
-      : "",
+    searchIndexText: typeof raw.searchIndexText === "string" ? raw.searchIndexText : "",
     completedPresetSeedJson: completedPresetSeedJson as CompletedPresetSeed,
   };
 }
 
 function mdViewerPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const savedViewRaw =
-    (typeof props.savedView === "object" && props.savedView !== null &&
-        !Array.isArray(props.savedView))
-      ? props.savedView as Record<string, unknown>
-      : null;
+  const savedViewRaw = (typeof props.savedView === "object" && props.savedView !== null && !Array.isArray(props.savedView))
+    ? props.savedView as Record<string, unknown>
+    : null;
   if (!savedViewRaw) {
     return { ok: false, error: "RUNTIME_MD_VIEWER_MISSING_SAVED_VIEW_PROPS" };
   }
@@ -2775,33 +2497,22 @@ function mdViewerPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
   if (!savedView) {
     return { ok: false, error: "RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS" };
   }
-  const seedValid = typeof props.seedValid === "boolean"
-    ? props.seedValid
-    : true;
-  const seedError = typeof props.seedError === "string"
-    ? props.seedError
-    : undefined;
+  const seedValid = typeof props.seedValid === "boolean" ? props.seedValid : true;
+  const seedError = typeof props.seedError === "string" ? props.seedError : undefined;
   // Mutation action callbacks are intentionally not provided.
   // Saved view refresh/clone/rebind/editAdjustment authority stays at /admin/team-dashboard.
   // In preview mode, explicit disabled reasons are shown; in runtime canvas, MdViewer
   // renders unbound action buttons as disabled naturally (no callback → disabled).
-  const disabledActionReasons: MdViewerDisabledActionReasons | undefined =
-    spec.previewMode
-      ? {
-        refresh:
-          "canvas preview — refresh は /admin/team-dashboard で操作してください",
-        clone:
-          "canvas preview — clone は /admin/team-dashboard で操作してください",
-        rebind:
-          "canvas preview — rebind は /admin/team-dashboard で操作してください",
-        editAdjustment:
-          "canvas preview — 調整編集は /admin/team-dashboard で操作してください",
-        openSourceRecord:
-          "canvas preview — ソースレコードナビゲーションは canvas では利用不可",
-        createTodoCandidate:
-          "canvas preview — todo 候補作成は canvas では利用不可",
-      }
-      : undefined;
+  const disabledActionReasons: MdViewerDisabledActionReasons | undefined = spec.previewMode
+    ? {
+      refresh: "canvas preview — refresh は /admin/team-dashboard で操作してください",
+      clone: "canvas preview — clone は /admin/team-dashboard で操作してください",
+      rebind: "canvas preview — rebind は /admin/team-dashboard で操作してください",
+      editAdjustment: "canvas preview — 調整編集は /admin/team-dashboard で操作してください",
+      openSourceRecord: "canvas preview — ソースレコードナビゲーションは canvas では利用不可",
+      createTodoCandidate: "canvas preview — todo 候補作成は canvas では利用不可",
+    }
+    : undefined;
   return {
     ok: true,
     node: h(MdViewer, {
@@ -2816,8 +2527,7 @@ function mdViewerPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function modalFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const data = (typeof props.data === "object" && props.data !== null &&
-      !Array.isArray(props.data))
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
   const bindingCheck = requireBinding(spec, "toggle");
@@ -2841,8 +2551,7 @@ function modalFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function boxFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const style = (typeof props.style === "object" && props.style !== null &&
-      !Array.isArray(props.style))
+  const style = (typeof props.style === "object" && props.style !== null && !Array.isArray(props.style))
     ? props.style as Record<string, string>
     : undefined;
   const preview = isPreviewMode(spec);
@@ -2871,48 +2580,19 @@ function boxFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function thinPreviewFactory(
-  component: any,
-  requiredBinding?: string,
-): (spec: RuntimeComponentSpec) => RenderResult {
+function thinPreviewFactory(component: any, requiredBinding?: string): (spec: RuntimeComponentSpec)=>RenderResult {
   return (spec) => {
-    if (requiredBinding) {
-      const check = requireBinding(spec, requiredBinding);
-      if (!check.ok) return check;
-    }
-    return {
-      ok: true,
-      node: h(component, {
-        title: typeof spec.props.title === "string"
-          ? spec.props.title
-          : undefined,
-        value: typeof spec.props.value === "string"
-          ? spec.props.value
-          : undefined,
-        items: Array.isArray(spec.props.items) ? spec.props.items : undefined,
-        preview: spec.props.preview ?? spec.props.result ?? spec.props.data,
-        onChange: spec.eventBinding.change
-          ? (value: string) => {
-            const r = emitBoundEvent(spec, "change", { value });
-            if (!r.ok) throw new Error(r.error);
-          }
-          : undefined,
-        onSelect: spec.eventBinding.select
-          ? (value: string) => {
-            const r = emitBoundEvent(spec, "select", { value });
-            if (!r.ok) throw new Error(r.error);
-          }
-          : undefined,
-        onConfirm: spec.eventBinding.submit
-          ? () => {
-            const r = emitBoundEvent(spec, "submit", {});
-            if (!r.ok) throw new Error(r.error);
-          }
-          : undefined,
-        className: spec.className,
-        design: spec.design ?? {},
-      }),
-    };
+    if (requiredBinding) { const check = requireBinding(spec, requiredBinding); if (!check.ok) return check; }
+    return { ok: true, node: h(component, {
+      title: typeof spec.props.title === "string" ? spec.props.title : undefined,
+      value: typeof spec.props.value === "string" ? spec.props.value : undefined,
+      items: Array.isArray(spec.props.items) ? spec.props.items : undefined,
+      preview: spec.props.preview ?? spec.props.result ?? spec.props.data,
+      onChange: spec.eventBinding.change ? (value: string) => { const r = emitBoundEvent(spec, "change", { value }); if (!r.ok) throw new Error(r.error);} : undefined,
+      onSelect: spec.eventBinding.select ? (value: string) => { const r = emitBoundEvent(spec, "select", { value }); if (!r.ok) throw new Error(r.error);} : undefined,
+      onConfirm: spec.eventBinding.submit ? () => { const r = emitBoundEvent(spec, "submit", {}); if (!r.ok) throw new Error(r.error);} : undefined,
+      className: spec.className, design: spec.design ?? {},
+    })};
   };
 }
 
@@ -2979,294 +2659,81 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
     componentKinds: ["safety_guard/validation_error_panel"],
     render: validationErrorPanelFactory,
   },
-  {
-    componentKinds: ["search_suggest/suggest_input"],
-    render: suggestInputFactory,
-  },
-  {
-    componentKinds: ["search_suggest/recent_input_suggest"],
-    render: recentInputSuggestFactory,
-  },
-  {
-    componentKinds: ["search_suggest/relation_candidate_picker"],
-    render: relationCandidatePickerFactory,
-  },
-  {
-    componentKinds: ["search_suggest/duplicate_merge_candidate_panel"],
-    render: duplicateMergeCandidatePanelFactory,
-  },
-  {
-    componentKinds: ["search_suggest/relation_path_preview"],
-    render: relationPathPreviewFactory,
-  },
-  {
-    componentKinds: ["search_suggest/field_resolver_inspector"],
-    render: fieldResolverInspectorFactory,
-  },
-  {
-    componentKinds: ["search_suggest/schema_promotion_candidate_panel"],
-    render: schemaPromotionCandidatePanelFactory,
-  },
-  {
-    componentKinds: ["search_suggest/select_import_dialog"],
-    render: selectImportDialogFactory,
-  },
-  {
-    componentKinds: ["inline_edit/inline_editable_jsonb_field"],
-    render: inlineEditableJsonbFieldFactory,
-  },
-  {
-    componentKinds: ["inline_edit/diff_strike_text"],
-    render: diffStrikeTextFactory,
-  },
-  {
-    componentKinds: ["inline_edit/audit_diff_drawer"],
-    render: auditDiffDrawerFactory,
-  },
-  {
-    componentKinds: ["inline_edit/optimistic_update_boundary"],
-    render: optimisticUpdateBoundaryFactory,
-  },
-  {
-    componentKinds: ["inline_edit/confirmed_update_button"],
-    render: confirmedUpdateButtonFactory,
-  },
-  {
-    componentKinds: ["inline_edit/undo_timeline"],
-    render: undoTimelineFactory,
-  },
-  {
-    componentKinds: ["inline_edit/conflict_resolution_panel"],
-    render: conflictResolutionPanelFactory,
-  },
-  {
-    componentKinds: ["table_op/faceted_filter_bar"],
-    render: facetedFilterBarFactory,
-  },
+  { componentKinds: ["search_suggest/suggest_input"], render: suggestInputFactory },
+  { componentKinds: ["search_suggest/recent_input_suggest"], render: recentInputSuggestFactory },
+  { componentKinds: ["search_suggest/relation_candidate_picker"], render: relationCandidatePickerFactory },
+  { componentKinds: ["search_suggest/duplicate_merge_candidate_panel"], render: duplicateMergeCandidatePanelFactory },
+  { componentKinds: ["search_suggest/relation_path_preview"], render: relationPathPreviewFactory },
+  { componentKinds: ["search_suggest/field_resolver_inspector"], render: fieldResolverInspectorFactory },
+  { componentKinds: ["search_suggest/schema_promotion_candidate_panel"], render: schemaPromotionCandidatePanelFactory },
+  { componentKinds: ["search_suggest/select_import_dialog"], render: selectImportDialogFactory },
+  { componentKinds: ["inline_edit/inline_editable_jsonb_field"], render: inlineEditableJsonbFieldFactory },
+  { componentKinds: ["inline_edit/diff_strike_text"], render: diffStrikeTextFactory },
+  { componentKinds: ["inline_edit/audit_diff_drawer"], render: auditDiffDrawerFactory },
+  { componentKinds: ["inline_edit/optimistic_update_boundary"], render: optimisticUpdateBoundaryFactory },
+  { componentKinds: ["inline_edit/confirmed_update_button"], render: confirmedUpdateButtonFactory },
+  { componentKinds: ["inline_edit/undo_timeline"], render: undoTimelineFactory },
+  { componentKinds: ["inline_edit/conflict_resolution_panel"], render: conflictResolutionPanelFactory },
+  { componentKinds: ["table_op/faceted_filter_bar"], render: facetedFilterBarFactory },
   { componentKinds: ["table_op/column_filter"], render: columnFilterFactory },
-  {
-    componentKinds: ["table_op/column_visibility_editor"],
-    render: columnVisibilityEditorFactory,
-  },
+  { componentKinds: ["table_op/column_visibility_editor"], render: columnVisibilityEditorFactory },
   { componentKinds: ["table_op/sort_control"], render: sortControlFactory },
-  {
-    componentKinds: ["table_op/group_by_control"],
-    render: groupByControlFactory,
-  },
-  {
-    componentKinds: ["table_op/saved_view_selector"],
-    render: savedViewSelectorFactory,
-  },
-  {
-    componentKinds: ["table_op/bulk_action_panel"],
-    render: bulkActionPanelFactory,
-  },
-  {
-    componentKinds: ["table_op/virtualized_data_table"],
-    render: virtualizedDataTableFactory,
-  },
-  {
-    componentKinds: ["table_op/row_detail_drawer"],
-    render: rowDetailDrawerFactory,
-  },
-  {
-    componentKinds: ["table_op/pagination_control"],
-    render: paginationControlFactory,
-  },
-  {
-    componentKinds: ["table_op/export_candidate_panel"],
-    render: exportCandidatePanelFactory,
-  },
-  {
-    componentKinds: ["design_token/font_token_editor"],
-    render: fontTokenEditorFactory,
-  },
-  {
-    componentKinds: ["design_token/background_color_editor"],
-    render: backgroundColorEditorFactory,
-  },
-  {
-    componentKinds: ["design_token/text_color_editor"],
-    render: textColorEditorFactory,
-  },
-  {
-    componentKinds: ["design_token/spacing_token_editor"],
-    render: spacingTokenEditorFactory,
-  },
-  {
-    componentKinds: ["design_token/border_radius_editor"],
-    render: borderRadiusEditorFactory,
-  },
-  {
-    componentKinds: ["design_token/css_variable_preview"],
-    render: cssVariablePreviewFactory,
-  },
-  {
-    componentKinds: ["design_token/shadow_token_editor"],
-    render: shadowTokenEditorFactory,
-  },
-  {
-    componentKinds: ["design_token/animation_token_editor"],
-    render: animationTokenEditorFactory,
-  },
-  {
-    componentKinds: ["safety_guard/command_palette"],
-    render: commandPaletteFactory,
-  },
-  {
-    componentKinds: ["safety_guard/empty_state_action_panel"],
-    render: emptyStateActionPanelFactory,
-  },
-  {
-    componentKinds: ["safety_guard/operation_guard_banner"],
-    render: operationGuardBannerFactory,
-  },
-  {
-    componentKinds: ["safety_guard/mutation_boundary_inspector"],
-    render: mutationBoundaryInspectorFactory,
-  },
-  {
-    componentKinds: ["safety_guard/permission_hint_panel"],
-    render: permissionHintPanelFactory,
-  },
-  {
-    componentKinds: ["safety_guard/dry_run_result_panel"],
-    render: dryRunResultPanelFactory,
-  },
-  {
-    componentKinds: ["safety_guard/rollback_candidate_panel"],
-    render: rollbackCandidatePanelFactory,
-  },
-  {
-    componentKinds: ["safety_guard/operation_audit_log_panel"],
-    render: operationAuditLogPanelFactory,
-  },
+  { componentKinds: ["table_op/group_by_control"], render: groupByControlFactory },
+  { componentKinds: ["table_op/saved_view_selector"], render: savedViewSelectorFactory },
+  { componentKinds: ["table_op/bulk_action_panel"], render: bulkActionPanelFactory },
+  { componentKinds: ["table_op/virtualized_data_table"], render: virtualizedDataTableFactory },
+  { componentKinds: ["table_op/row_detail_drawer"], render: rowDetailDrawerFactory },
+  { componentKinds: ["table_op/pagination_control"], render: paginationControlFactory },
+  { componentKinds: ["table_op/export_candidate_panel"], render: exportCandidatePanelFactory },
+  { componentKinds: ["design_token/font_token_editor"], render: fontTokenEditorFactory },
+  { componentKinds: ["design_token/background_color_editor"], render: backgroundColorEditorFactory },
+  { componentKinds: ["design_token/text_color_editor"], render: textColorEditorFactory },
+  { componentKinds: ["design_token/spacing_token_editor"], render: spacingTokenEditorFactory },
+  { componentKinds: ["design_token/border_radius_editor"], render: borderRadiusEditorFactory },
+  { componentKinds: ["design_token/css_variable_preview"], render: cssVariablePreviewFactory },
+  { componentKinds: ["design_token/shadow_token_editor"], render: shadowTokenEditorFactory },
+  { componentKinds: ["design_token/animation_token_editor"], render: animationTokenEditorFactory },
+  { componentKinds: ["safety_guard/command_palette"], render: commandPaletteFactory },
+  { componentKinds: ["safety_guard/empty_state_action_panel"], render: emptyStateActionPanelFactory },
+  { componentKinds: ["safety_guard/operation_guard_banner"], render: operationGuardBannerFactory },
+  { componentKinds: ["safety_guard/mutation_boundary_inspector"], render: mutationBoundaryInspectorFactory },
+  { componentKinds: ["safety_guard/permission_hint_panel"], render: permissionHintPanelFactory },
+  { componentKinds: ["safety_guard/dry_run_result_panel"], render: dryRunResultPanelFactory },
+  { componentKinds: ["safety_guard/rollback_candidate_panel"], render: rollbackCandidatePanelFactory },
+  { componentKinds: ["safety_guard/operation_audit_log_panel"], render: operationAuditLogPanelFactory },
   { componentKinds: ["form_input/form_field"], render: formFieldFactory },
   { componentKinds: ["kanban_drag/kanban_board"], render: kanbanBoardFactory },
-  {
-    componentKinds: ["kanban_drag/drag_drop_state_transition"],
-    render: thinPreviewFactory(DragDropStateTransition),
-  },
-  {
-    componentKinds: ["kanban_drag/drag_sort_list"],
-    render: thinPreviewFactory(DragSortList),
-  },
-  {
-    componentKinds: ["kanban_drag/relation_drop_zone"],
-    render: thinPreviewFactory(RelationDropZone),
-  },
-  {
-    componentKinds: ["kanban_drag/tree_reorder_drop_zone"],
-    render: thinPreviewFactory(TreeReorderDropZone),
-  },
-  {
-    componentKinds: ["kanban_drag/layout_drop_zone"],
-    render: thinPreviewFactory(LayoutDropZone),
-  },
-  {
-    componentKinds: ["kanban_drag/component_placement_handle"],
-    render: thinPreviewFactory(ComponentPlacementHandle),
-  },
-  {
-    componentKinds: ["kanban_drag/snap_grid_overlay"],
-    render: thinPreviewFactory(SnapGridOverlay),
-  },
-  {
-    componentKinds: ["kanban_drag/state_transition_arrow"],
-    render: thinPreviewFactory(StateTransitionArrow),
-  },
-  {
-    componentKinds: ["kanban_drag/slot_placeholder_panel"],
-    render: thinPreviewFactory(SlotPlaceholderPanel),
-  },
-  {
-    componentKinds: ["design_token/responsive_rule_editor"],
-    render: thinPreviewFactory(ResponsiveRuleEditor, "change"),
-  },
-  {
-    componentKinds: ["calc_topology/formula_builder"],
-    render: thinPreviewFactory(FormulaBuilder, "change"),
-  },
-  {
-    componentKinds: ["calc_topology/computed_field_preview"],
-    render: thinPreviewFactory(ComputedFieldPreview),
-  },
-  {
-    componentKinds: ["calc_topology/relation_score_preview"],
-    render: thinPreviewFactory(RelationScorePreview),
-  },
-  {
-    componentKinds: ["calc_topology/hub_statistics_panel"],
-    render: thinPreviewFactory(HubStatisticsPanel),
-  },
-  {
-    componentKinds: ["calc_topology/aggregation_preview_table"],
-    render: thinPreviewFactory(AggregationPreviewTable),
-  },
-  {
-    componentKinds: ["calc_topology/cross_entity_calculation_panel"],
-    render: thinPreviewFactory(CrossEntityCalculationPanel),
-  },
-  {
-    componentKinds: ["calc_topology/topology_distance_preview"],
-    render: thinPreviewFactory(TopologyDistancePreview),
-  },
-  {
-    componentKinds: ["calc_topology/route_cost_preview"],
-    render: thinPreviewFactory(RouteCostPreview),
-  },
-  {
-    componentKinds: ["calc_topology/attention_weight_preview"],
-    render: thinPreviewFactory(AttentionWeightPreview),
-  },
-  {
-    componentKinds: ["calc_topology/cooccurrence_matrix_preview"],
-    render: thinPreviewFactory(CooccurrenceMatrixPreview),
-  },
-  {
-    componentKinds: ["calc_topology/rank_score_preview"],
-    render: thinPreviewFactory(RankScorePreview),
-  },
-  {
-    componentKinds: ["external_lookup/kana_assist_input"],
-    render: thinPreviewFactory(KanaAssistInput, "change"),
-  },
-  {
-    componentKinds: ["external_lookup/postal_address_lookup"],
-    render: thinPreviewFactory(PostalAddressLookup, "change"),
-  },
-  {
-    componentKinds: ["external_lookup/address_postal_lookup"],
-    render: thinPreviewFactory(AddressPostalLookup, "change"),
-  },
-  {
-    componentKinds: ["external_lookup/tel_address_candidate_lookup"],
-    render: thinPreviewFactory(TelAddressCandidateLookup, "change"),
-  },
-  {
-    componentKinds: ["external_lookup/normalize_address_candidate"],
-    render: thinPreviewFactory(NormalizeAddressCandidate),
-  },
-  {
-    componentKinds: ["external_lookup/lookup_candidate_confirm_panel"],
-    render: thinPreviewFactory(LookupCandidateConfirmPanel, "submit"),
-  },
-  {
-    componentKinds: ["external_lookup/bulk_import_candidate_panel"],
-    render: thinPreviewFactory(BulkImportCandidatePanel, "submit"),
-  },
-  {
-    componentKinds: ["design_token/layout_grid_editor"],
-    render: layoutGridEditorFactory,
-  },
-  {
-    componentKinds: ["calc_topology/calculation_preview_panel"],
-    render: calculationPreviewPanelFactory,
-  },
-  {
-    componentKinds: ["document_canvas/document_canvas_template_editor"],
-    render: documentCanvasTemplateEditorFactory,
-  },
+  { componentKinds: ["kanban_drag/drag_drop_state_transition"], render: thinPreviewFactory(DragDropStateTransition) },
+  { componentKinds: ["kanban_drag/drag_sort_list"], render: thinPreviewFactory(DragSortList) },
+  { componentKinds: ["kanban_drag/relation_drop_zone"], render: thinPreviewFactory(RelationDropZone) },
+  { componentKinds: ["kanban_drag/tree_reorder_drop_zone"], render: thinPreviewFactory(TreeReorderDropZone) },
+  { componentKinds: ["kanban_drag/layout_drop_zone"], render: thinPreviewFactory(LayoutDropZone) },
+  { componentKinds: ["kanban_drag/component_placement_handle"], render: thinPreviewFactory(ComponentPlacementHandle) },
+  { componentKinds: ["kanban_drag/snap_grid_overlay"], render: thinPreviewFactory(SnapGridOverlay) },
+  { componentKinds: ["kanban_drag/state_transition_arrow"], render: thinPreviewFactory(StateTransitionArrow) },
+  { componentKinds: ["kanban_drag/slot_placeholder_panel"], render: thinPreviewFactory(SlotPlaceholderPanel) },
+  { componentKinds: ["design_token/responsive_rule_editor"], render: thinPreviewFactory(ResponsiveRuleEditor, "change") },
+  { componentKinds: ["calc_topology/formula_builder"], render: thinPreviewFactory(FormulaBuilder, "change") },
+  { componentKinds: ["calc_topology/computed_field_preview"], render: thinPreviewFactory(ComputedFieldPreview) },
+  { componentKinds: ["calc_topology/relation_score_preview"], render: thinPreviewFactory(RelationScorePreview) },
+  { componentKinds: ["calc_topology/hub_statistics_panel"], render: thinPreviewFactory(HubStatisticsPanel) },
+  { componentKinds: ["calc_topology/aggregation_preview_table"], render: thinPreviewFactory(AggregationPreviewTable) },
+  { componentKinds: ["calc_topology/cross_entity_calculation_panel"], render: thinPreviewFactory(CrossEntityCalculationPanel) },
+  { componentKinds: ["calc_topology/topology_distance_preview"], render: thinPreviewFactory(TopologyDistancePreview) },
+  { componentKinds: ["calc_topology/route_cost_preview"], render: thinPreviewFactory(RouteCostPreview) },
+  { componentKinds: ["calc_topology/attention_weight_preview"], render: thinPreviewFactory(AttentionWeightPreview) },
+  { componentKinds: ["calc_topology/cooccurrence_matrix_preview"], render: thinPreviewFactory(CooccurrenceMatrixPreview) },
+  { componentKinds: ["calc_topology/rank_score_preview"], render: thinPreviewFactory(RankScorePreview) },
+  { componentKinds: ["external_lookup/kana_assist_input"], render: thinPreviewFactory(KanaAssistInput, "change") },
+  { componentKinds: ["external_lookup/postal_address_lookup"], render: thinPreviewFactory(PostalAddressLookup, "change") },
+  { componentKinds: ["external_lookup/address_postal_lookup"], render: thinPreviewFactory(AddressPostalLookup, "change") },
+  { componentKinds: ["external_lookup/tel_address_candidate_lookup"], render: thinPreviewFactory(TelAddressCandidateLookup, "change") },
+  { componentKinds: ["external_lookup/normalize_address_candidate"], render: thinPreviewFactory(NormalizeAddressCandidate) },
+  { componentKinds: ["external_lookup/lookup_candidate_confirm_panel"], render: thinPreviewFactory(LookupCandidateConfirmPanel, "submit") },
+  { componentKinds: ["external_lookup/bulk_import_candidate_panel"], render: thinPreviewFactory(BulkImportCandidatePanel, "submit") },
+  { componentKinds: ["design_token/layout_grid_editor"], render: layoutGridEditorFactory },
+  { componentKinds: ["calc_topology/calculation_preview_panel"], render: calculationPreviewPanelFactory },
+  { componentKinds: ["document_canvas/document_canvas_template_editor"], render: documentCanvasTemplateEditorFactory },
   { componentKinds: ["layout/box"], render: boxFactory },
   { componentKinds: ["disclosure/modal"], render: modalFactory },
   { componentKinds: ["form_input/select"], render: selectFactory },
@@ -3280,28 +2747,13 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["data_display/json"], render: jsonViewerFactory },
   { componentKinds: ["shell/admin_page"], render: adminPageShellFactory },
   { componentKinds: ["shell/admin_section"], render: adminSectionFactory },
-  {
-    componentKinds: ["validation/result"],
-    render: validationResultPanelFactory,
-  },
-  {
-    componentKinds: ["form_input/textarea_template"],
-    render: textareaTemplateFactory,
-  },
+  { componentKinds: ["validation/result"], render: validationResultPanelFactory },
+  { componentKinds: ["form_input/textarea_template"], render: textareaTemplateFactory },
   { componentKinds: ["disclosure/tabs"], render: tabsFactory },
   { componentKinds: ["data_display/tree"], render: treeFactory },
-  {
-    componentKinds: ["data_display/md_viewer"],
-    render: mdViewerPreviewFactory,
-  },
-  {
-    componentKinds: ["media/audio_player"],
-    render: mediaPlayerFactory("audio"),
-  },
-  {
-    componentKinds: ["media/video_player"],
-    render: mediaPlayerFactory("video"),
-  },
+  { componentKinds: ["data_display/md_viewer"], render: mdViewerPreviewFactory },
+  { componentKinds: ["media/audio_player"], render: mediaPlayerFactory("audio") },
+  { componentKinds: ["media/video_player"], render: mediaPlayerFactory("video") },
 ];
 
 export {

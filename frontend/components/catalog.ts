@@ -281,8 +281,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["accepts_children", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "single-record display only — does not accept items/rows array; use card_list.primitive for DB rows array display",
+    notes: "single-record display only — does not accept items/rows array; use card_list.primitive for DB rows array display",
   },
   {
     componentKey: "card_list.primitive",
@@ -295,8 +294,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["displays_backend_result", "selectable", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "array-display component — use propBindings.items with source emission.data.rows; display/card is single-record only and does not accept items",
+    notes: "array-display component — use propBindings.items with source emission.data.rows; display/card is single-record only and does not accept items",
   },
   {
     componentKey: "textarea.alias",
@@ -620,12 +618,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     semanticRole: "display",
     visualRole: "modal",
     lifecycleStatus: "code_only_drift",
-    capabilityTags: [
-      "accepts_children",
-      "accepts_actions",
-      "accepts_design",
-      "requires_event_binding",
-    ],
+    capabilityTags: ["accepts_children", "accepts_actions", "accepts_design", "requires_event_binding"],
     runtimeConnected: true,
     registrationRequired: true,
   },
@@ -652,8 +645,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["recursive", "selectable", "accepts_design"],
     runtimeConnected: false,
     registrationRequired: false,
-    notes:
-      "non_runtime: tree sub-component, not for standalone UI Builder placement; use data_display/tree (tree.template) for tree rendering; excluded from placement palette via registrationRequired:false",
+    notes: "non_runtime: tree sub-component, not for standalone UI Builder placement; use data_display/tree (tree.template) for tree rendering; excluded from placement palette via registrationRequired:false",
   },
 
   // =========================================================================
@@ -675,8 +667,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "candidateSurface:true | mutation_boundary:preview_before_apply | candidate_source_boundary:debounce_backend_readonly_search | no_mutation_during_typing:true | use_case:single_row_search_select",
+    notes: "candidateSurface:true | mutation_boundary:preview_before_apply | candidate_source_boundary:debounce_backend_readonly_search | no_mutation_during_typing:true | use_case:single_row_search_select",
   },
   {
     componentKey: "suggest_input.primitive",
@@ -689,8 +680,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "candidateSurface:true | candidate_source_boundary:debounce_backend_readonly_search | no_mutation_during_typing:true | use_case:multi_row_product_item_input_assist",
+    notes: "candidateSurface:true | candidate_source_boundary:debounce_backend_readonly_search | no_mutation_during_typing:true | use_case:multi_row_product_item_input_assist",
   },
   {
     componentKey: "search_combobox.primitive",
@@ -708,8 +698,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     ],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "candidateSurface:true | scale:small_scale_known_candidates | combobox_candidate_source:uiBuilderAutocompleteCandidates.ts | no_backend_search:local_derivation_only",
+    notes: "candidateSurface:true | scale:small_scale_known_candidates | combobox_candidate_source:uiBuilderAutocompleteCandidates.ts | no_backend_search:local_derivation_only",
   },
   {
     componentKey: "select_import_dialog.primitive",
@@ -1672,6 +1661,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
 
+
   {
     componentKey: "audio_player.primitive",
     componentKind: "media/audio_player",
@@ -1683,8 +1673,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "abstract_media_primitive | provider_agnostic | explicit_src_required",
+    notes: "abstract_media_primitive | provider_agnostic | explicit_src_required",
   },
   {
     componentKey: "video_player.primitive",
@@ -1697,8 +1686,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "abstract_media_primitive | provider_agnostic | explicit_src_required",
+    notes: "abstract_media_primitive | provider_agnostic | explicit_src_required",
   },
 
   // Category H: Safety / Inspector / Operation Guard UI

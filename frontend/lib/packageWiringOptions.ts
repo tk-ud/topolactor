@@ -1,13 +1,7 @@
 /** Admin package wiring editor — target surfaces allowed in ui_wiring_registry. */
-export const PACKAGE_WIRING_TARGET_SURFACES = [
-  "route",
-  "ui",
-  "manifest",
-  "external_port",
-] as const;
+export const PACKAGE_WIRING_TARGET_SURFACES = ["route", "ui", "manifest", "external_port"] as const;
 
-export type PackageWiringTargetSurface =
-  (typeof PACKAGE_WIRING_TARGET_SURFACES)[number];
+export type PackageWiringTargetSurface = (typeof PACKAGE_WIRING_TARGET_SURFACES)[number];
 
 export function mergeWiringKindSuggestions(componentKinds: string[]): string[] {
   const base = ["button", "form", "layout", "navigation", "evt"];
@@ -22,8 +16,6 @@ export function mergeWiringKindSuggestions(componentKinds: string[]): string[] {
   return out.sort((a, b) => a.localeCompare(b));
 }
 
-export function isPackageWiringTargetSurface(
-  value: string,
-): value is PackageWiringTargetSurface {
+export function isPackageWiringTargetSurface(value: string): value is PackageWiringTargetSurface {
   return (PACKAGE_WIRING_TARGET_SURFACES as readonly string[]).includes(value);
 }
