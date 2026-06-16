@@ -9257,7 +9257,6 @@ function PackageDesignPanel({
                                   <div class="font-semibold text-indigo-900">外部ポート接続 / 認証情報バインド（オーサリング）</div>
                                   <p class="text-[0.6rem] text-indigo-700">
                                     portTargetRef は DB 由来の active external port 候補のみ選択できます。provider / bundle 固定候補は使用しません。
-                                    実行（consumer bundle runtime execution）はこの Bundle 対象外です。
                                   </p>
                                   <label class="block">
                                     portTargetRef（external port バインド）
