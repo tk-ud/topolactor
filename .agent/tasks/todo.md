@@ -12,7 +12,8 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `external-port-substrate-implementation` | external_port_substrate / external 8 bundle 実装 todo | not_started | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
+| `external-port-substrate-db-credential-vault-refresher` | external credential vault / generic refresher minimal primitive | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
+| `external-port-substrate-implementation` | external_port_substrate / external 8 bundle 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
@@ -240,7 +241,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `external-port-substrate-db-credential-vault-refresher`
 
-**Status:** partial
+**Status:** partial / minimal primitive skeleton
 **Roadmap/status SSOT:** `product.external_port_substrate`
 **SSOT:** `docs/design/external-port-substrate-ssot.yaml`, `docs/design/runtime-bundle-secret-credential-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`
 
@@ -292,7 +293,8 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 - `ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential`
 
 remaining_todo:
-- Provider-specific clients, UI credential panel, KMS/vendor selection, and consumer bundle wiring remain out of scope for this bundle increment.
+- DB repository atomic encrypted_payload + token_hash + expires_at/version update implementation is not implemented yet.
+- Consumer wiring, projection management surface, UI credential panel, KMS/vendor selection, and provider-specific clients remain out of scope for this bundle increment.
 
 ## Bundle `external-port-substrate-implementation`
 

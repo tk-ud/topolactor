@@ -6,7 +6,7 @@
 
 ## Status
 
-not_started
+partial / minimal primitive skeleton
 
 ## SSOT
 
@@ -22,7 +22,7 @@ not_started
 
 ## 問題点
 
-`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。todo 側では設計確定作業として残っていたが、実際の未処理は実装作業。
+`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。todo 側では設計確定作業として残っていたが、実際の未処理は実装作業。DB guarded credential vault DDL と generic refresher primitive skeleton は追加済みだが、DB repository atomic update / consumer bundle wiring / projection management surface は未完了。
 
 ## 目的
 
@@ -31,6 +31,7 @@ not_started
 ## 実装方針
 
 - `topology.external_access_ports`, `topology.external_response_ports`, `topology.external_hook_ports` を実装する。
+- `topology.external_credential_vault` / `topology.external_credential_refresh_attempt` は minimal DDL 済み。DB repository atomic update 実装は残作業。
 - `topology.physical_tables` catalog と external port tables の登録 / bootstrap / seed 整合を実装する。
 - `credential_kind` (`auth` / `external` / `none`), `port_kind` (`access_port` / `response_port` / `hook_port`), `provider_kind`, `port_setting_projection`, `consumer_bundle_binding`, `credential_requirement` を DB seed / projection で解決できるようにする。
 - admin 権限の projection 側管理画面で、port record context 内の credential_kind / provider_kind / reference_key / required_by_bundle / consumer_bundle_binding を管理できるようにする。
@@ -43,7 +44,7 @@ not_started
 - backend 側 standalone credential 管理 plane
 - dedicated credential route / panel
 - provider 別 runtime execution
-- raw credential value persistence in DB / UI / SSOT / logs
+- raw credential plaintext persistence in DB / UI / SSOT / logs（provider再提示が必要な場合の DB guarded encrypted_payload は例外）
 
 ## 対象ファイル候補
 

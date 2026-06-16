@@ -177,7 +177,7 @@ check_content "docs/design/runtime-bundle-audit-approval-ssot.yaml" "export_job_
 echo ""
 echo "=== Secret/Credential bundle: no real credential in SSOT ==="
 
-check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "runtime_secret_store_not_in_public_ssot"
+check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "db_guarded_vault_or_runtime_reference_not_public_ssot"
 check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "real_credential_in_public_ssot"
 check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "credential_in_audit_log_plaintext"
 
@@ -204,7 +204,11 @@ for yaml in \
   "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   check_content "$yaml" "secret_credential_boundary"
   check_content "$yaml" "prohibited_in_public_ssot"
-  check_content "$yaml" "runtime_secret_store_not_in_public_ssot"
+  if [[ "$yaml" == "docs/design/runtime-bundle-secret-credential-ssot.yaml" ]]; then
+    check_content "$yaml" "db_guarded_vault_or_runtime_reference_not_public_ssot"
+  else
+    check_content "$yaml" "runtime_secret_store_not_in_public_ssot"
+  fi
 done
 
 echo ""
