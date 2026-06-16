@@ -9297,7 +9297,7 @@ function PackageDesignPanel({
                                   </label>
                                   <fieldset class="flex flex-col gap-1">
                                     <legend class="font-semibold text-indigo-900">
-                                      payloadFrom（リクエストフィールド → ソース マッピング）
+                                      フィールドマッピング（リクエストフィールド → ソース）
                                     </legend>
                                     <p class="text-[0.6rem] text-indigo-700">
                                       認識パターン: node:&lt;nodeId&gt;.value | event.&lt;path&gt; | literal:&lt;value&gt;
