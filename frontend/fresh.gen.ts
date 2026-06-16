@@ -14,6 +14,7 @@ import * as $admin_users from "./routes/admin/users.tsx";
 import * as $api_auth_login_manifest from "./routes/api/auth/login-manifest.ts";
 import * as $api_auth_login from "./routes/api/auth/login.ts";
 import * as $api_auth_logout from "./routes/api/auth/logout.ts";
+import * as $api_auth_projection_login from "./routes/api/auth/projection-login.ts";
 import * as $api_auth_refresh from "./routes/api/auth/refresh.ts";
 import * as $api_auth_register from "./routes/api/auth/register.ts";
 import * as $api_auth_session from "./routes/api/auth/session.ts";
@@ -68,6 +69,7 @@ const manifest = {
     "./routes/api/auth/login-manifest.ts": $api_auth_login_manifest,
     "./routes/api/auth/login.ts": $api_auth_login,
     "./routes/api/auth/logout.ts": $api_auth_logout,
+    "./routes/api/auth/projection-login.ts": $api_auth_projection_login,
     "./routes/api/auth/refresh.ts": $api_auth_refresh,
     "./routes/api/auth/register.ts": $api_auth_register,
     "./routes/api/auth/session.ts": $api_auth_session,

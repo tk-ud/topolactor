@@ -1113,7 +1113,7 @@ category_h_safety_guard:
 # =============================================================================
 
 catalog_summary:
-  total_categories: 8
+  total_categories: 9
   categories:
     - A: search_suggest (11 primitives)
     - B: inline_edit_audit (9 primitives)
