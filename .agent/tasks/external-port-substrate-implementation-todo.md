@@ -22,7 +22,7 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 
 ## 問題点
 
-`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。todo 側では設計確定作業として残っていたが、実際の未処理は実装作業。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed は追加済みだが、DB repository atomic update / consumer bundle wiring / canonical physical binding execution は未完了。
+`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。todo 側では設計確定作業として残っていたが、実際の未処理は実装作業。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed / production DB-backed external port policy read repository は追加済みだが、DB repository atomic encrypted credential payload update / consumer bundle wiring / canonical physical binding execution は未完了。
 
 ## 目的
 
@@ -31,7 +31,8 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 ## 実装方針
 
 - `topology.external_access_ports`, `topology.external_response_ports`, `topology.external_hook_ports` を実装する。
-- `topology.external_credential_vault` / `topology.external_credential_refresh_attempt` は minimal DDL 済み。DB repository atomic update 実装は残作業。
+- `topology.external_credential_vault` / `topology.external_credential_refresh_attempt` は minimal DDL 済み。DB repository atomic encrypted_payload + token_hash + expires_at/version update 実装は残作業。
+- `IExternalPortPolicyRepository` の production Npgsql read substrate は実装済み。active port/policy を fail-close で読み、provider_kind は DB data として扱う。
 - `topology.physical_tables` catalog と external port tables の登録 / bootstrap / seed 整合を実装する。現状の `physical_binding` topology entry は seed/projection marker であり、canonical `screen_data_shape.tableRef` / `dbTableName` -> `topology.wiring_physical_to_package` binding execution は残作業として扱う。
 - `credential_kind` (`auth` / `external` / `none`), `port_kind` (`access_port` / `response_port` / `hook_port`), `provider_kind`, `port_setting_projection`, `consumer_bundle_binding`, `credential_requirement` を DB seed / projection で解決できるようにする。
 - [x] admin 権限の projection 側管理画面で、port record context 内の credential_kind / provider_kind / reference_key / required_by_bundle / consumer_bundle_binding を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する。
@@ -143,6 +144,7 @@ Parent bundle: `external-port-substrate-implementation`
 - Add minimal physical tables for `topology.external_access_ports`, `topology.external_response_ports`, `topology.external_hook_ports`, `topology.external_port_policies`, and `topology.external_port_policy_steps`.
 - Add seed policy rows whose `operation_key` values are constrained to the external-port SSOT allowed set.
 - Add generic resolver/executor C# records and interfaces; execution dispatch is by operation_key registry only.
+- Add production Npgsql `IExternalPortPolicyRepository` read substrate for active port records and policy steps without plaintext credential projection.
 - Keep hook policies at scheduler enqueue boundary; do not directly execute webhook runtime.
 
 対応資料:
@@ -177,7 +179,7 @@ Parent bundle: `external-port-substrate-implementation`
 - `ExternalPortPolicyStepExecutor.ExecuteAsync`
 
 remaining_todo:
-- DB-backed `IExternalPortPolicyRepository` implementation is not implemented yet.
+- DB-backed `IExternalPortPolicyRepository` production read implementation is implemented for active port records, active policies, and ordered active policy steps.
 - DB repository atomic encrypted credential payload update remains in the parent credential-vault bundle.
 - Admin setting projection, validate/preview/apply integration, and consumer bundle wiring remain out of scope for this partial increment.
 
@@ -202,7 +204,7 @@ Parent bundle: `external-port-substrate-implementation`
 - Add `.agent/tests/check-auth-external-credential-projection.sh` guard for projection presence, Step 2.5 relation, secret marker exclusion, and forbidden UI Builder / route / panel escapes.
 
 remaining_todo:
-- DB-backed `IExternalPortPolicyRepository` implementation is not implemented yet.
+- DB-backed `IExternalPortPolicyRepository` production read implementation is implemented for active port records, active policies, and ordered active policy steps.
 - DB repository atomic encrypted credential payload update remains in the parent credential-vault bundle.
 - Canonical physical binding execution remains out of scope for this increment.
 - Consumer bundle wiring remains out of scope for this increment.

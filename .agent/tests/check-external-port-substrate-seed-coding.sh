@@ -5,6 +5,10 @@ cd "$ROOT"
 
 fail() { echo "FAIL $*" >&2; exit 1; }
 
+rg -n "class NpgsqlExternalPortPolicyRepository" backend/repository/NpgsqlExternalPortPolicyRepository.cs >/dev/null || fail "missing NpgsqlExternalPortPolicyRepository"
+rg -n "IExternalPortPolicyRepository" backend/repository/NpgsqlExternalPortPolicyRepository.cs backend/Program.cs >/dev/null || fail "missing production IExternalPortPolicyRepository implementation or DI"
+rg -n "AddSingleton<IExternalPortPolicyRepository>" backend/Program.cs >/dev/null || fail "missing IExternalPortPolicyRepository production DI registration"
+
 for table in external_access_ports external_response_ports external_hook_ports external_port_policies external_port_policy_steps; do
   rg -n "CREATE TABLE IF NOT EXISTS topology\.${table}" db/topology_tables.sql >/dev/null || fail "missing topology.${table} DDL"
 done
@@ -46,15 +50,19 @@ if missing:
     raise SystemExit(f'seed operation_key missing C# registry handler: {sorted(missing)}')
 PY
 
-if rg -n "if \s*\([^\)]*(provider_kind|ProviderKind)|switch\s*\([^\)]*(provider_kind|ProviderKind)" backend/runtime; then
-  fail "provider_kind if/switch found in backend/runtime"
+if rg -n "if \s*\([^\)]*(provider_kind|ProviderKind)|switch\s*\([^\)]*(provider_kind|ProviderKind)" backend/runtime backend/repository; then
+  fail "provider_kind if/switch found in backend runtime/repository"
+fi
+
+if rg -n "case \"(freee|stripe|smtp|s3|sftp|sendgrid|aws|oauth)" backend/runtime backend/repository; then
+  fail "provider-specific operation_key/provider handler switch found"
 fi
 
 if rg -n "class\s+(Freee|Stripe|Smtp|S3|Sftp)|Service|Refresher|ApiClient" backend/runtime | rg -n "Freee|Stripe|Smtp|S3|Sftp"; then
   fail "provider-specific runtime class/service found"
 fi
 
-if rg -n "BEGIN (RSA|OPENSSH) PRIVATE KEY|sk_live_|xox[baprs]-|AKIA[0-9A-Z]{16}|password\s*[:=]\s*[^,} ]+|client_secret\s*[:=]\s*[^,} ]+" db/seed_empty.sql docs/design/external-port-substrate-ssot.yaml; then
+if rg -n "BEGIN (RSA|OPENSSH) PRIVATE KEY|sk_live_|xox[baprs]-|AKIA[0-9A-Z]{16}|password\s*[:=]\s*[^,} ]+|client_secret\s*[:=]\s*[^,} ]+" db/seed_empty.sql docs/design/external-port-substrate-ssot.yaml backend/repository/NpgsqlExternalPortPolicyRepository.cs; then
   fail "raw credential plaintext marker found"
 fi
 
