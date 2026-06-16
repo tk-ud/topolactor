@@ -185,6 +185,8 @@ export const RUNTIME_ALIAS_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
     componentKind: "data_display/list",
     sourcePath: "frontend/runtime/runtimeComponentFactory.ts",
   },
+
+
 ];
 
 // UI/UX Primitive Catalog identities — catalog lineup definitions (no implementation yet)
@@ -208,7 +210,6 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
   // Category F: Calculation / Topology Computation UI
   // calculation_preview_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
   // Category G: External / Helper Lookup UI
-
   // Category H: Safety / Inspector / Operation Guard UI
   // apply_confirm_dialog.primitive promoted to runtimeConnected:true — removed from catalog-only list
   // validation_error_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
@@ -1660,8 +1661,6 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     notes:
       "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
-
-
   {
     componentKey: "audio_player.primitive",
     componentKind: "media/audio_player",
@@ -1688,6 +1687,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     registrationRequired: true,
     notes: "abstract_media_primitive | provider_agnostic | explicit_src_required",
   },
+
 
   // Category H: Safety / Inspector / Operation Guard UI
   {
