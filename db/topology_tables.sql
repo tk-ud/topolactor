@@ -348,3 +348,67 @@ COMMENT ON TABLE topology.content_entity_drafts IS
 CREATE INDEX IF NOT EXISTS idx_content_entity_drafts_status
     ON topology.content_entity_drafts (status)
     WHERE status = 'draft';
+
+-- ---------------------------------------------------------------------------
+-- topology.external_credential_vault
+-- DB guarded credential vault for external port credential attachments.
+-- Stores hash metadata and encrypted payload only; plaintext tokens never enter
+-- seed SQL, topology projections, manifests, audit logs, or runtime event logs.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.external_credential_vault (
+    credential_vault_id      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider_kind            TEXT        NOT NULL,
+    required_by_bundle       TEXT        NOT NULL,
+    token_kind               TEXT        NOT NULL,
+    token_hash               TEXT,
+    encrypted_payload        BYTEA,
+    encryption_key_reference TEXT,
+    expires_at               TIMESTAMPTZ,
+    refresh_before_seconds   INTEGER     NOT NULL DEFAULT 300 CHECK (refresh_before_seconds >= 0),
+    version                  INTEGER     NOT NULL DEFAULT 1 CHECK (version > 0),
+    locked_until             TIMESTAMPTZ,
+    active                   BOOLEAN     NOT NULL DEFAULT true,
+    created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT chk_external_credential_vault_encrypted_payload_reference
+        CHECK (encrypted_payload IS NULL OR encryption_key_reference IS NOT NULL)
+);
+
+CREATE INDEX IF NOT EXISTS idx_external_credential_vault_provider_bundle
+    ON topology.external_credential_vault (provider_kind, required_by_bundle)
+    WHERE active = true;
+
+CREATE INDEX IF NOT EXISTS idx_external_credential_vault_token_hash
+    ON topology.external_credential_vault (token_hash)
+    WHERE active = true AND token_hash IS NOT NULL;
+
+COMMENT ON TABLE topology.external_credential_vault IS
+    'DB guarded external credential vault for external_port_substrate port record attachments. '
+    'Contains token_hash and encrypted_payload only; plaintext credential values are prohibited in DB seed, UI projection, SSOT, manifests, audit logs, and runtime_event_log. '
+    'External credentials are not stored in auth.credentials.';
+
+COMMENT ON COLUMN topology.external_credential_vault.encrypted_payload IS
+    'Encrypted runtime-only payload for provider re-presentation cases such as OAuth refresh_token rotation. Never expose through UI/projection/logs.';
+
+-- ---------------------------------------------------------------------------
+-- topology.external_credential_refresh_attempt
+-- Lease/attempt surface for the generic refresher primitive.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.external_credential_refresh_attempt (
+    credential_refresh_attempt_id UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    credential_vault_id           UUID        NOT NULL REFERENCES topology.external_credential_vault (credential_vault_id) ON DELETE CASCADE,
+    lease_owner                   TEXT        NOT NULL,
+    locked_until                  TIMESTAMPTZ NOT NULL,
+    attempt_status                TEXT        NOT NULL DEFAULT 'acquired'
+                                  CHECK (attempt_status IN ('acquired', 'succeeded', 'failed', 'released')),
+    failure_code                  TEXT,
+    created_at                    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_external_credential_refresh_attempt_active
+    ON topology.external_credential_refresh_attempt (credential_vault_id, locked_until)
+    WHERE attempt_status = 'acquired';
+
+COMMENT ON TABLE topology.external_credential_refresh_attempt IS
+    'Generic external credential refresh lease/attempt surface. Provider-specific refresh handlers and external public TokenStore surfaces are prohibited.';

@@ -236,6 +236,64 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ---
 
+
+
+## Bundle `external-port-substrate-db-credential-vault-refresher`
+
+**Status:** partial
+**Roadmap/status SSOT:** `product.external_port_substrate`
+**SSOT:** `docs/design/external-port-substrate-ssot.yaml`, `docs/design/runtime-bundle-secret-credential-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`
+
+問題点:
+- 現SSOTの旧 `secret_value_never_stored_in_db_ui_ssot_or_audit_log` は、API key参照やhash検証型tokenには適合する。
+- しかし freee型 refresh token 再提示OAuthには不足する。
+- refresh token を provider に再提示する必要がある場合、hashだけでは access token を再発行できない。
+- 外部公開API TokenStoreに逃がす一般論は、TopolactorのDB/pipeline境界を弱める。
+
+目的:
+- external credential を standalone credential plane ではなく external_port_substrate の port record attachment / credential_requirement として扱う。
+- Topolactor DB内に guarded credential vault と generic refresher primitive の最小境界を追加する。
+
+改善方針:
+- token_hash は監査・照合・重複検知・既存auth思想との整合に使う。
+- encrypted_payload は provider再提示が必要な token に限って保持する。
+- access_token / refresh_token / client_secret 等の実値は UI / projection / SSOT / seed SQL / log に出さない。
+- refresherは provider別 service ではなく、DB policy / config に従う generic primitive とする。
+- refresh lease / version check / expires_at / last_refreshed_at をDBで管理する。
+- refresh token rotation がある provider では、新 refresh_token が返った場合に encrypted_payload と token_hash を atomic に更新する。
+
+対応資料:
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
+- `docs/design/auth-db-session-credential-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `db/auth_tables.sql`
+- `db/topology_tables.sql`
+
+対象ファイル名:
+- `db/topology_tables.sql`
+- `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
+- `.agent/tests/check-external-port-credential-vault-refresher.sh`
+
+対象関数名または新規runtime境界名:
+- `ExternalCredentialVaultRecord`
+- `ExternalCredentialRefreshLease`
+- `ExternalTokenRefreshRequest`
+- `ExternalTokenRefreshResult`
+- `IExternalCredentialVaultRepository`
+- `IExternalCredentialCrypto`
+- `IExternalTokenRefresher`
+- `IExternalPortHttpClient`
+- `IExternalPortPolicyStepExecutor`
+- `ExternalTokenRefresher.RefreshIfNeededAsync`
+- `ExternalTokenRefresher.ShouldRefresh`
+- `ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential`
+
+remaining_todo:
+- Provider-specific clients, UI credential panel, KMS/vendor selection, and consumer bundle wiring remain out of scope for this bundle increment.
+
 ## Bundle `external-port-substrate-implementation`
 
 **Status:** not_started  
