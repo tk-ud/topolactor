@@ -104,6 +104,8 @@ import { Textarea } from "../components/Textarea.tsx";
 import { Tabs } from "../components/Tabs.tsx";
 import { Tree } from "../components/Tree.tsx";
 import { MdViewer } from "../components/MdViewer.tsx";
+import { AudioPlayer } from "../components/AudioPlayer.tsx";
+import { VideoPlayer } from "../components/VideoPlayer.tsx";
 import type { MdViewerDisabledActionReasons } from "../components/MdViewer.tsx";
 import type { CompletedPresetSeed, SavedViewDetail } from "../api/teamMarkdownApi.ts";
 import Box from "../components/Box.tsx";
@@ -2371,6 +2373,32 @@ function tabsFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
+
+function mediaPlayerFactory(kind: "audio" | "video") {
+  return (spec: RuntimeComponentSpec): RenderResult => {
+    const props = spec.props;
+    const src = typeof props.src === "string" ? props.src.trim() : "";
+    if (!src) return { ok: false, error: `${kind}_player requires src` };
+    const common = {
+      src,
+      mimeType: typeof props.mimeType === "string" ? props.mimeType : undefined,
+      title: typeof props.title === "string" ? props.title : undefined,
+      controls: props.controls !== false,
+      autoplay: props.autoplay === true,
+      loop: props.loop === true,
+      ariaLabel: typeof props.ariaLabel === "string" ? props.ariaLabel : undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    };
+    return {
+      ok: true,
+      node: kind === "audio"
+        ? h(AudioPlayer, common)
+        : h(VideoPlayer, { ...common, poster: typeof props.poster === "string" ? props.poster : undefined }),
+    };
+  };
+}
+
 function treeFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
   const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
@@ -2724,6 +2752,8 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["disclosure/tabs"], render: tabsFactory },
   { componentKinds: ["data_display/tree"], render: treeFactory },
   { componentKinds: ["data_display/md_viewer"], render: mdViewerPreviewFactory },
+  { componentKinds: ["media/audio_player"], render: mediaPlayerFactory("audio") },
+  { componentKinds: ["media/video_player"], render: mediaPlayerFactory("video") },
 ];
 
 export {

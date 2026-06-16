@@ -138,6 +138,16 @@ export const COMPONENT_TEMPLATE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] =
       sourcePath: "frontend/components/MdViewer.tsx",
     },
     {
+      componentKey: "audio_player.primitive",
+      componentKind: "media/audio_player",
+      sourcePath: "frontend/components/AudioPlayer.tsx",
+    },
+    {
+      componentKey: "video_player.primitive",
+      componentKind: "media/video_player",
+      sourcePath: "frontend/components/VideoPlayer.tsx",
+    },
+    {
       componentKey: "md_translation_authoring_surface.authoring",
       componentKind: "authoring/md_translation",
       sourcePath: "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
@@ -175,6 +185,8 @@ export const RUNTIME_ALIAS_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
     componentKind: "data_display/list",
     sourcePath: "frontend/runtime/runtimeComponentFactory.ts",
   },
+
+
 ];
 
 // UI/UX Primitive Catalog identities — catalog lineup definitions (no implementation yet)
@@ -1649,6 +1661,33 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     notes:
       "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
+  {
+    componentKey: "audio_player.primitive",
+    componentKind: "media/audio_player",
+    sourcePath: "frontend/components/AudioPlayer.tsx",
+    componentFamily: "primitive",
+    semanticRole: "display",
+    visualRole: "panel",
+    lifecycleStatus: "code_only_drift",
+    capabilityTags: ["accepts_design"],
+    runtimeConnected: true,
+    registrationRequired: true,
+    notes: "abstract_media_primitive | provider_agnostic | explicit_src_required",
+  },
+  {
+    componentKey: "video_player.primitive",
+    componentKind: "media/video_player",
+    sourcePath: "frontend/components/VideoPlayer.tsx",
+    componentFamily: "primitive",
+    semanticRole: "display",
+    visualRole: "panel",
+    lifecycleStatus: "code_only_drift",
+    capabilityTags: ["accepts_design"],
+    runtimeConnected: true,
+    registrationRequired: true,
+    notes: "abstract_media_primitive | provider_agnostic | explicit_src_required",
+  },
+
 
   // Category H: Safety / Inspector / Operation Guard UI
   {

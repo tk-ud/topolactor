@@ -1,5 +1,5 @@
 /** Admin package wiring editor — target surfaces allowed in ui_wiring_registry. */
-export const PACKAGE_WIRING_TARGET_SURFACES = ["route", "ui", "manifest"] as const;
+export const PACKAGE_WIRING_TARGET_SURFACES = ["route", "ui", "manifest", "external_port"] as const;
 
 export type PackageWiringTargetSurface = (typeof PACKAGE_WIRING_TARGET_SURFACES)[number];
 

@@ -111,6 +111,44 @@ public class AdminRuntimePackageWiringTests
         Assert.Equal("PACKAGE_WIRING_NOT_FOUND", error!.Code);
     }
 
+
+    [Fact]
+    public async Task ExecuteDataAsync_ListExternalPortAuthoringCandidates_ReturnsDbDerivedCandidateShape()
+    {
+        var candidate = new ExternalPortAuthoringCandidateDto(
+            PortId: Guid.NewGuid().ToString(),
+            PortKind: "hook_port",
+            ProviderKind: "generic_provider",
+            CredentialKind: "external",
+            ReferenceKey: "credential.ref",
+            RequiredByBundle: "consumer.bundle",
+            ConsumerBundleBinding: null,
+            UrlOrEnvReference: null,
+            HookPath: "/hooks/generic",
+            RouteKey: "generic.route",
+            TargetRef: "external-port:hook_port:port-id:generic.route");
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(null, candidates: new[] { candidate }));
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "list_external_port_authoring_candidates", null, "admin",
+            null,
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(error);
+        Assert.NotNull(data);
+        var first = data!.Value.GetProperty("candidates")[0];
+        Assert.Equal("hook_port", first.GetProperty("portKind").GetString());
+        Assert.Equal("generic_provider", first.GetProperty("providerKind").GetString());
+        Assert.Equal("external", first.GetProperty("credentialKind").GetString());
+        Assert.Equal("consumer.bundle", first.GetProperty("requiredByBundle").GetString());
+        Assert.Equal(JsonValueKind.Null, first.GetProperty("consumerBundleBinding").ValueKind);
+        Assert.Equal("external-port:hook_port:port-id:generic.route", first.GetProperty("targetRef").GetString());
+        Assert.False(first.TryGetProperty("secret", out _));
+        Assert.False(first.TryGetProperty("password", out _));
+    }
+
     // ─── Manifest surface wiring key validation ───────────────────────────────
 
     [Fact]
@@ -542,17 +580,23 @@ public class AdminRuntimePackageWiringTests
         private AdminPackageWiringDto? _wiring;
         private readonly AdminPackageWiringDto? _afterUpdate;
         private readonly ValidationError? _updateError;
+        private readonly IReadOnlyList<ExternalPortAuthoringCandidateDto> _candidates;
 
         public WiringStubUiTopologyRepository(
             AdminPackageWiringDto? wiring,
             AdminPackageWiringDto? afterUpdate = null,
-            ValidationError? updateError = null)
+            ValidationError? updateError = null,
+            IReadOnlyList<ExternalPortAuthoringCandidateDto>? candidates = null)
             : base(NullLogger<UiTopologyRepository>.Instance, "test-double")
         {
             _wiring = wiring;
             _afterUpdate = afterUpdate ?? wiring;
             _updateError = updateError;
+            _candidates = candidates ?? Array.Empty<ExternalPortAuthoringCandidateDto>();
         }
+
+        public override Task<IReadOnlyList<ExternalPortAuthoringCandidateDto>> ListExternalPortAuthoringCandidatesAsync(CancellationToken ct = default)
+            => Task.FromResult(_candidates);
 
         public override Task<AdminPackageWiringDto?> GetPackageWiringAsync(Guid packageId, CancellationToken ct = default)
             => Task.FromResult(_wiring);

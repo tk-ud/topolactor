@@ -208,3 +208,21 @@ remaining_todo:
 - DB repository atomic encrypted credential payload update is implemented in the parent credential-vault bundle.
 - Canonical physical binding execution remains out of scope for this increment.
 - Consumer bundle wiring remains out of scope for this increment.
+
+
+## Bundle increment `external-port-package-wiring-candidate-authoring-and-media-primitives`
+
+Status: partial
+Parent bundle: `external-port-credential-derived-authoring-wiring-and-media-primitives`
+
+実装内容:
+- Added package wiring editor support for an `external_port` target surface as a narrow authoring increment. Candidate rows are read from active `topology.external_access_ports`, `topology.external_response_ports`, and `topology.external_hook_ports`, not frontend provider/bundle fixed lists.
+- Candidate projection includes DB-derived port id, port kind, provider kind, credential kind, reference key, required-by bundle tag, optional consumer binding, route/hook/url metadata, and a persistable `external-port:<portKind>:<portId>[:routeKey]` target ref.
+- Preserved explicit save boundary by reusing `ui_topology:update_package_wiring` and `topology.ui_wiring_registry.target_ref` rather than adding a standalone connector plane.
+- Added provider-agnostic `AudioPlayer` / `VideoPlayer` media primitives with explicit `src` requirement and no provider-specific props or credential logic.
+- Added `.agent/tests/check-external-port-authoring-wiring.sh` guard for candidate semantics and provider/bundle fixed-list leakage.
+
+not_implemented_in_this_increment:
+- Full Design Inspector component event / payloadFrom / output prop / credential / port binding authoring.
+- Event trigger binding execution and consumer bundle runtime execution wiring.
+- Canonical physical binding execution.

@@ -6791,6 +6791,20 @@ type AdminPackageComponentRow = {
   componentKind: string;
 };
 
+type ExternalPortAuthoringCandidate = {
+  portId: string;
+  portKind: string;
+  providerKind: string;
+  credentialKind: string;
+  referenceKey?: string | null;
+  requiredByBundle: string;
+  consumerBundleBinding?: string | null;
+  urlOrEnvReference?: string | null;
+  hookPath?: string | null;
+  routeKey?: string | null;
+  targetRef: string;
+};
+
 type AdminPackageWiringRow = {
   wiringId: string;
   wiringKey: string;
@@ -6973,6 +6987,9 @@ function PackageWiringEditor({
   const [screenWiringCandidates, setScreenWiringCandidates] = useState<
     ScreenReadQueryWiringCandidate[]
   >([]);
+  const [externalPortCandidates, setExternalPortCandidates] = useState<
+    ExternalPortAuthoringCandidate[]
+  >([]);
   const [candidateLoadError, setCandidateLoadError] = useState<string | null>(
     null,
   );
@@ -7021,6 +7038,7 @@ function PackageWiringEditor({
       setSelectedManifestId("");
       setSelectedManifestWiringKey("");
       setCandidateLoadError(null);
+      setExternalPortCandidates([]);
       setLoadStatus(null);
       setSaveStatus(null);
       return;
@@ -7044,6 +7062,31 @@ function PackageWiringEditor({
       }
     })();
   }, [selectedPackageId]);
+
+  useEffect(() => {
+    if (targetSurface !== "external_port") {
+      setExternalPortCandidates([]);
+      return;
+    }
+    (async () => {
+      setCandidateLoadError(null);
+      const body = await dispatchAdminOp(
+        "ui_topology",
+        "list_external_port_authoring_candidates",
+      );
+      const data = body?.emission?.data as {
+        candidates?: ExternalPortAuthoringCandidate[];
+      } | undefined;
+      if (Array.isArray(data?.candidates)) {
+        setExternalPortCandidates(data.candidates);
+      } else {
+        setExternalPortCandidates([]);
+        setCandidateLoadError(
+          body?.errors?.[0]?.message ?? "external port 候補を取得できませんでした。",
+        );
+      }
+    })();
+  }, [targetSurface]);
 
   useEffect(() => {
     if (targetSurface !== "manifest") {
@@ -7156,6 +7199,16 @@ function PackageWiringEditor({
       );
       return;
     }
+    if (targetSurface === "external_port") {
+      if (candidateLoadError) {
+        setSaveStatus(`external port 候補の取得に失敗しています: ${candidateLoadError}`);
+        return;
+      }
+      if (!externalPortCandidates.some((c) => c.targetRef === targetRef.trim())) {
+        setSaveStatus("DB/管理画面由来の active external port 候補を選択してください。");
+        return;
+      }
+    }
     if (!(await confirm("パッケージ配線を保存します。よろしいですか？"))) {
       return;
     }
@@ -7245,6 +7298,8 @@ function PackageWiringEditor({
                     setSelectedManifestId("");
                     setSelectedManifestWiringKey("");
                   }
+                  if (next !== "external_port") setExternalPortCandidates([]);
+                  setTargetRef("");
                 }}
               >
                 {PACKAGE_WIRING_TARGET_SURFACES.map((s) => (
@@ -7334,7 +7389,50 @@ function PackageWiringEditor({
               </div>
             )}
 
-            {targetSurface !== "manifest" && (
+            {targetSurface === "external_port" && (
+              <div class="sm:col-span-2 space-y-2 rounded border border-indigo-200 bg-white p-3">
+                <p class="text-[0.65rem] text-slate-600">
+                  候補は active な external port / credential requirement DB record から取得します。frontend は provider や bundle の固定候補を持ちません。
+                </p>
+                {candidateLoadError && (
+                  <p class="rounded border border-red-300 bg-red-50 px-2 py-1.5 text-red-700">{candidateLoadError}</p>
+                )}
+                {!candidateLoadError && externalPortCandidates.length === 0 && (
+                  <p class="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-800">active external port 候補がありません。</p>
+                )}
+                <ul class="space-y-2">
+                  {externalPortCandidates.map((c) => (
+                    <li key={c.targetRef}>
+                      <label class="flex cursor-pointer items-start gap-2 rounded border border-slate-200 px-2 py-1.5 hover:bg-slate-50">
+                        <input
+                          type="radio"
+                          name={`external-port-${wiring.wiringId}`}
+                          checked={targetRef === c.targetRef}
+                          onChange={() => {
+                            setTargetRef(c.targetRef);
+                            if (!wiringKind.trim()) setWiringKind("external_port");
+                          }}
+                        />
+                        <span>
+                          <span class="font-mono text-indigo-900">{c.portKind} / {c.providerKind}</span>
+                          <span class="mt-0.5 block text-slate-600">
+                            {c.requiredByBundle} / credential: {c.credentialKind}{c.referenceKey ? ` / ${c.referenceKey}` : ""}
+                          </span>
+                          {c.consumerBundleBinding && (
+                            <span class="mt-0.5 block text-slate-600">consumer binding: {c.consumerBundleBinding}</span>
+                          )}
+                          <span class="mt-0.5 block font-mono text-[0.6rem] text-slate-500">
+                            ref: {c.targetRef}{c.routeKey ? ` / routeKey: ${c.routeKey}` : ""}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {targetSurface !== "manifest" && targetSurface !== "external_port" && (
               <div class="sm:col-span-2 flex flex-col gap-1">
                 <span class="text-[0.7rem] text-slate-700">接続先参照 (target_ref)</span>
                 {routeCandidates && routeCandidates.length > 0 && (
