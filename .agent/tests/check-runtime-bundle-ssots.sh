@@ -294,7 +294,7 @@ check_content "$ROADMAP" "product.job_scheduler_port_consumer"
 check_content "$ROADMAP" "product.audit_approval_port_consumer"
 
 check_content "$ROADMAP" "external-port-substrate-implementation"
-check_content "$ROADMAP" "external_port_tables_implementation_not_started"
+check_content "$ROADMAP" "external_port_policy_read_repository_implemented_consumer_runtime_wiring_not_started"
 check_content "$ROADMAP" "fixed_form_projection_manifest_seed_implemented_canonical_physical_binding_execution_not_wired"
 check_content "$ROADMAP" "consumer_bundle_port_connection_implementation_not_started"
 check_content "$ROADMAP" "email_response_port_connection_implementation_not_started"
