@@ -155,6 +155,8 @@ extended_runtime_bundle_registry_ssot:
         description: >-
           Secret / Credential Bundle は独立実装 Bundle ではない。
           external_port_substrate の credential_requirement 境界定義として統合する。
+          freee型OAuthのような再提示credentialは external-port-substrate-db-credential-vault-refresher の
+          DB guarded vault + generic refresher primitive で扱い、provider別 runtime handler は作らない。
           dedicated credential runtime / admin UI / audit log / rotation service は作らない。
         trigger_kind: port_record_credential_requirement_attachment_only
         requires_separate_ssot: true

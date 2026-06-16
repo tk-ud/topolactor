@@ -12,7 +12,8 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `external-port-substrate-implementation` | external_port_substrate / external 8 bundle 実装 todo | not_started | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
+| `external-port-substrate-db-credential-vault-refresher` | external credential vault / generic refresher minimal primitive | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
+| `external-port-substrate-implementation` | external_port_substrate / external 8 bundle 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
@@ -235,6 +236,65 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 - [ ] `product.dynamic_support_nocode_loop` の combined UX を、authoring guidance → SQL Attention feedback → M6 admin loop の通し手動受入 / hand-debug で確認する
 
 ---
+
+
+
+## Bundle `external-port-substrate-db-credential-vault-refresher`
+
+**Status:** partial / minimal primitive skeleton
+**Roadmap/status SSOT:** `product.external_port_substrate`
+**SSOT:** `docs/design/external-port-substrate-ssot.yaml`, `docs/design/runtime-bundle-secret-credential-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`
+
+問題点:
+- 現SSOTの旧 `secret_value_never_stored_in_db_ui_ssot_or_audit_log` は、API key参照やhash検証型tokenには適合する。
+- しかし freee型 refresh token 再提示OAuthには不足する。
+- refresh token を provider に再提示する必要がある場合、hashだけでは access token を再発行できない。
+- 外部公開API TokenStoreに逃がす一般論は、TopolactorのDB/pipeline境界を弱める。
+
+目的:
+- external credential を standalone credential plane ではなく external_port_substrate の port record attachment / credential_requirement として扱う。
+- Topolactor DB内に guarded credential vault と generic refresher primitive の最小境界を追加する。
+
+改善方針:
+- token_hash は監査・照合・重複検知・既存auth思想との整合に使う。
+- encrypted_payload は provider再提示が必要な token に限って保持する。
+- access_token / refresh_token / client_secret 等の実値は UI / projection / SSOT / seed SQL / log に出さない。
+- refresherは provider別 service ではなく、DB policy / config に従う generic primitive とする。
+- refresh lease / version check / expires_at / last_refreshed_at をDBで管理する。
+- refresh token rotation がある provider では、新 refresh_token が返った場合に encrypted_payload と token_hash を atomic に更新する。
+
+対応資料:
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
+- `docs/design/auth-db-session-credential-ssot.yaml`
+- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `db/auth_tables.sql`
+- `db/topology_tables.sql`
+
+対象ファイル名:
+- `db/topology_tables.sql`
+- `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
+- `.agent/tests/check-external-port-credential-vault-refresher.sh`
+
+対象関数名または新規runtime境界名:
+- `ExternalCredentialVaultRecord`
+- `ExternalCredentialRefreshLease`
+- `ExternalTokenRefreshRequest`
+- `ExternalTokenRefreshResult`
+- `IExternalCredentialVaultRepository`
+- `IExternalCredentialCrypto`
+- `IExternalTokenRefresher`
+- `IExternalPortHttpClient`
+- `IExternalPortPolicyStepExecutor`
+- `ExternalTokenRefresher.RefreshIfNeededAsync`
+- `ExternalTokenRefresher.ShouldRefresh`
+- `ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential`
+
+remaining_todo:
+- DB repository atomic encrypted_payload + token_hash + expires_at/version update implementation is not implemented yet.
+- Consumer wiring, projection management surface, UI credential panel, KMS/vendor selection, and provider-specific clients remain out of scope for this bundle increment.
 
 ## Bundle `external-port-substrate-implementation`
 

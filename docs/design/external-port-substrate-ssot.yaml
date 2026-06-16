@@ -81,8 +81,59 @@ external_port_substrate_ssot:
         rule: "credential が不要な port は credential_kind: none として明示する。"
     constraint:
       - external_credential_is_port_record_attachment_not_standalone_entity
-      - secret_value_never_stored_in_db_ui_ssot_or_audit_log
+      - secret_plaintext_never_stored_in_db_ui_ssot_or_audit_log
       - consumer_bundle_unconnected_does_not_trigger_standalone_credential_service
+
+
+  db_guarded_credential_vault_refresher:
+    bundle: external-port-substrate-db-credential-vault-refresher
+    problem:
+      - secret_value_never_stored_in_db_ui_ssot_or_audit_log fits API-key references and hash-verification tokens, but is insufficient for OAuth refresh tokens that must be re-presented to a provider.
+      - Hash-only storage cannot reissue access tokens when the Topolactor backend/refresher must present the refresh_token again.
+      - Moving these secrets to an external public API TokenStore or standalone secret-store adapter runtime weakens the Topolactor DB/pipeline boundary and expands the attack surface.
+    policy:
+      authority_boundary: Topolactor DB + pipeline + validate_preview_apply + canonical runtime route
+      auth_hash_token_model:
+        reference: docs/design/auth-db-session-credential-ssot.yaml#auth.refresh_tokens
+        rule: Topolactor auth refresh tokens remain token_hash-only; plaintext refresh tokens are never stored in DB/topology/manifest/log.
+      external_oauth_representation_model:
+        rule: Provider re-presentation tokens may store encrypted_payload in topology.external_credential_vault when hash-only storage cannot satisfy refresh semantics.
+        constraints:
+          - token_hash is retained for audit, comparison, duplicate detection, and continuity with auth token-hash thinking.
+          - encrypted_payload is limited to runtime-decryptable provider re-presentation payloads.
+          - access_token, refresh_token, client_secret, and equivalent plaintext values must not appear in UI, projection, SSOT, seed SQL, audit log, runtime_event_log, or manifest.
+      storage_surface:
+        schema: topology
+        tables:
+          - topology.external_credential_vault
+          - topology.external_credential_refresh_attempt
+        forbidden_schema: auth.credentials
+      refresher_boundary:
+        kind: generic_primitive
+        required_primitives:
+          - acquire_refresh_lease
+          - release_refresh_lease
+          - load_encrypted_credential_payload
+          - decrypt_for_runtime_use
+          - request_token_by_config
+          - write_encrypted_credential_payload
+          - update_token_hash
+          - update_expires_at_and_version
+          - fail_close_on_missing_or_invalid_credential
+        db_guards:
+          - refresh lease
+          - version check
+          - expires_at
+          - last_refreshed_at_or_attempt_timestamp
+        rotation_rule: When a provider returns a rotated refresh payload, encrypted_payload and token_hash are updated atomically with expires_at/version.
+    prohibitions:
+      - external_public_api_token_store
+      - standalone_secret_store_adapter_runtime
+      - provider_specific_refresher_class
+      - provider_kind_switch_or_if_runtime_handler
+      - dedicated_credential_admin_route_or_panel
+      - credential_plaintext_in_seed_ssot_projection_or_log
+      - pipeline_outside_credential_mutation
 
   credential_requirement:
     role: port_record_level_requirement_not_standalone_entity
@@ -93,7 +144,7 @@ external_port_substrate_ssot:
       - reference_key
       - required_by_bundle
     constraint:
-      - secret_value_not_stored_anywhere
+      - secret_plaintext_not_exposed_in_ui_projection_ssot_seed_log_with_db_guarded_encrypted_payload_exception
       - credential_requirement_travels_through_projection_and_port_record
       - consumer_bundle_not_connected_triggers_fail_close_not_standalone_service
 
@@ -153,7 +204,7 @@ external_port_substrate_ssot:
           - active
           - created_at
           - updated_at
-        note: reference_key は runtime 環境変数または secret store への参照のみ。実値不可。
+        note: reference_key は runtime 環境変数、DB guarded vault、または provider 再提示不要の外部参照を指す識別子のみ。plaintext 実値不可。
       external_response_ports:
         columns:
           - response_port_id
@@ -191,7 +242,9 @@ external_port_substrate_ssot:
       access_port / response_port / hook_port の汎用接続・受信関数だけを持つ。
       provider 別・bundle 別の credential 管理 handler / 管理 UI / standalone runtime は持たない。
     not_owns:
-      - secret_value_storage
+      - credential_plaintext_storage_outside_db_guarded_vault
+      - standalone_external_secret_store_runtime
+      - external_public_api_token_store
       - credential_rotation_service
       - credential_startup_validation_service
       - standalone_credential_management
@@ -206,8 +259,11 @@ external_port_substrate_ssot:
         hook を受け取り、hook_path / provider / header / route key から
         seed / DB record 解決済みの該当 port record を特定する
       credential_requirement: port record に紐づく reference として解決する
+      db_guarded_vault_payload: provider 再提示が必要な credential に限り topology.external_credential_vault.encrypted_payload を runtime-only に復号する
     not_behavior:
-      - secret_value_stored_in_db_ui_ssot_or_audit_log
+      - secret_plaintext_stored_in_ui_projection_ssot_seed_audit_log_or_runtime_event_log
+      - hash_only_provider_re_presentation_token_refresh
+      - encrypted_payload_export_to_projection_or_log
       - credential_rotation_management
       - startup_validation_management
       - standalone_credential_runtime_execution
