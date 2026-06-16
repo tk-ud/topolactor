@@ -21,7 +21,7 @@ done
 
 python3 - <<'PY'
 from pathlib import Path
-import re, sys
+import re
 ssot = Path('docs/design/external-port-substrate-ssot.yaml').read_text()
 seed = Path('db/seed_empty.sql').read_text()
 allowed_block = ssot.split('operation_key_allowed_values:',1)[1].split('execution_rule:',1)[0]
@@ -31,6 +31,19 @@ seed_ops = {op for op in seed_ops if op.endswith('_record') or op.endswith('_ref
 missing = seed_ops - allowed
 if missing:
     raise SystemExit(f'seed operation_key outside SSOT: {sorted(missing)}')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
+import re
+seed = Path('db/seed_empty.sql').read_text()
+runtime = Path('backend/runtime/ExternalPortCredentialRefresher.cs').read_text()
+seed_ops = set(re.findall(r"'([a-z_]+)'", seed.split('external_port_policy_steps',1)[-1]))
+seed_ops = {op for op in seed_ops if op.endswith('_record') or op.endswith('_reference') or op.endswith('_request') or op.endswith('_http') or op.endswith('_response') or op.endswith('_config') or op.endswith('_event') or op.endswith('_log') or op == 'fail_close'}
+registry = set(re.findall(r'\["([a-z_]+)"\]\s*=', runtime))
+missing = seed_ops - registry
+if missing:
+    raise SystemExit(f'seed operation_key missing C# registry handler: {sorted(missing)}')
 PY
 
 if rg -n "if \s*\([^\)]*(provider_kind|ProviderKind)|switch\s*\([^\)]*(provider_kind|ProviderKind)" backend/runtime; then
@@ -53,5 +66,7 @@ rg -n "enqueue_scheduler_event" db/seed_empty.sql docs/design/external-port-subs
 if rg -n "webhook_direct_runtime_execution" db/seed_empty.sql backend/runtime; then
   fail "webhook direct runtime execution marker found"
 fi
+
+rg -n "ExecutePolicyAsync_HookSeedOperations_VerifiesSignatureAndReachesSchedulerBoundary" backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs >/dev/null || fail "missing hook seeded policy scheduler-boundary test"
 
 echo "OK external port substrate seed coding guard"

@@ -241,6 +241,12 @@ public sealed class ExternalPortExecutionContext
 {
     private readonly List<string> _executedOperationKeys = new();
 
+    public string? RequiredByBundle { get; set; }
+
+    public string? PortKind { get; set; }
+
+    public string? RouteKey { get; set; }
+
     public ExternalPortRecord? PortRecord { get; set; }
 
     public ExternalPortPolicy? Policy { get; set; }
@@ -250,6 +256,12 @@ public sealed class ExternalPortExecutionContext
     public ExternalPortHttpRequest? HttpRequest { get; set; }
 
     public ExternalPortHttpResponse? HttpResponse { get; set; }
+
+    public IReadOnlyDictionary<string, string> SignatureConfig { get; set; } = new Dictionary<string, string>();
+
+    public IReadOnlyDictionary<string, string> SignatureInput { get; set; } = new Dictionary<string, string>();
+
+    public bool SchedulerEventEnqueued { get; set; }
 
     public IReadOnlyList<string> ExecutedOperationKeys => _executedOperationKeys;
 
@@ -337,11 +349,32 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
     public ExternalPortPolicyStepExecutor(
         IExternalPortHttpClient? httpClient = null,
-        IExternalPortCredentialReferenceResolver? credentialReferenceResolver = null)
+        IExternalPortCredentialReferenceResolver? credentialReferenceResolver = null,
+        IExternalPortResolver? portResolver = null)
     {
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
         {
-            ["resolve_port_record"] = MarkOnly,
+            ["resolve_port_record"] = async (step, context, ct) =>
+            {
+                if (context.PortRecord is null)
+                {
+                    if (portResolver is null)
+                    {
+                        throw new InvalidOperationException("EXTERNAL_PORT_RESOLVER_MISSING");
+                    }
+
+                    var requiredByBundle = FirstNonBlank(context.RequiredByBundle, context.Policy?.RequiredByBundle);
+                    var portKind = FirstNonBlank(context.PortKind, context.Policy?.PortKind);
+                    if (requiredByBundle is null || portKind is null)
+                    {
+                        throw new InvalidOperationException("EXTERNAL_PORT_RESOLUTION_INPUT_MISSING");
+                    }
+
+                    context.PortRecord = await portResolver.ResolveAsync(requiredByBundle, portKind, context.RouteKey, ct);
+                }
+
+                context.MarkExecuted(step.OperationKey);
+            },
             ["resolve_credential_reference"] = async (step, context, ct) =>
             {
                 if (context.PortRecord is null)
@@ -392,7 +425,34 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 context.HttpResponse = await httpClient.SendAsync(context.HttpRequest, ct);
                 context.MarkExecuted(step.OperationKey);
             },
-            ["enqueue_scheduler_event"] = MarkOnly,
+            ["verify_signature_by_config"] = (step, context, ct) =>
+            {
+                var expected = FirstNonBlank(
+                    ReadConfig(step.StepConfig, "expected_signature"),
+                    ReadConfig(context.SignatureConfig, "expected_signature"));
+                var actual = FirstNonBlank(
+                    ReadConfig(context.SignatureInput, "signature"),
+                    ReadConfig(step.StepConfig, "signature"));
+
+                if (expected is null || actual is null)
+                {
+                    throw new InvalidOperationException("EXTERNAL_SIGNATURE_CONFIG_MISSING");
+                }
+
+                if (!string.Equals(expected, actual, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("EXTERNAL_SIGNATURE_VERIFICATION_FAILED");
+                }
+
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["enqueue_scheduler_event"] = (step, context, ct) =>
+            {
+                context.SchedulerEventEnqueued = true;
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
             ["append_runtime_event_log"] = MarkOnly,
             ["capture_response"] = MarkOnly,
             ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE")
@@ -401,6 +461,10 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
     public async Task ExecutePolicyAsync(ExternalPortPolicy policy, ExternalPortExecutionContext context, CancellationToken ct = default)
     {
+        context.Policy = policy;
+        context.RequiredByBundle ??= policy.RequiredByBundle;
+        context.PortKind ??= policy.PortKind;
+
         foreach (var step in policy.PolicySteps.Where(static s => s.Active).OrderBy(static s => s.StepOrder))
         {
             await ExecuteAsync(step, context, ct);
@@ -445,4 +509,10 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         context.MarkExecuted(step.OperationKey);
         return Task.CompletedTask;
     }
+
+    private static string? FirstNonBlank(params string?[] values) =>
+        values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value));
+
+    private static string? ReadConfig(IReadOnlyDictionary<string, string> config, string key) =>
+        config.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 }
