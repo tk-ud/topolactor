@@ -284,6 +284,140 @@ public class ExternalPortSeedDrivenPolicyTests
         Assert.DoesNotContain("secret", source, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Program_RegistersHttpClientAndCredentialResolverAndCryptoForExecutor()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/Program.cs"));
+        Assert.Contains("IExternalPortHttpClient", source);
+        Assert.Contains("HttpExternalPortHttpClient", source);
+        Assert.Contains("IExternalPortCredentialReferenceResolver", source);
+        Assert.Contains("ExternalPortCredentialReferenceResolver", source);
+        Assert.Contains("IExternalCredentialCrypto", source);
+        Assert.Contains("AesExternalCredentialCrypto", source);
+        Assert.Contains("httpClient:", source);
+        Assert.Contains("credentialReferenceResolver:", source);
+        Assert.Contains("crypto:", source);
+    }
+
+    [Fact]
+    public async Task LoadEncryptedCredentialPayload_MissingEncryptedPayload_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = new ExternalCredentialVaultRecord(
+                Guid.NewGuid(), "generic", "bundle", "oauth", null,
+                null, null, null, 300, 1, null, true)
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(NewStep(1, "load_encrypted_credential_payload"), context));
+        Assert.Contains("EXTERNAL_CREDENTIAL_PAYLOAD_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task DecryptForRuntimeUse_WithoutCrypto_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = new ExternalCredentialVaultRecord(
+                Guid.NewGuid(), "generic", "bundle", "oauth", "sha256:h",
+                new byte[] { 1, 2, 3 }, "env:KEY", null, 300, 1, null, true)
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(NewStep(1, "decrypt_for_runtime_use"), context));
+        Assert.Contains("EXTERNAL_CREDENTIAL_CRYPTO_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task DecryptForRuntimeUse_WithCrypto_SetsDecryptedPayloadOnContext()
+    {
+        var crypto = new FakeExternalCredentialCrypto("plaintext-credential");
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto);
+        var context = new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = new ExternalCredentialVaultRecord(
+                Guid.NewGuid(), "generic", "bundle", "oauth", "sha256:h",
+                new byte[] { 1, 2, 3 }, "env:KEY", null, 300, 1, null, true)
+        };
+
+        await executor.ExecuteAsync(NewStep(1, "decrypt_for_runtime_use"), context);
+
+        Assert.Equal("plaintext-credential", context.DecryptedCredentialPayload);
+        Assert.Contains("decrypt_for_runtime_use", context.ExecutedOperationKeys);
+    }
+
+    [Fact]
+    public async Task InjectAuthorizationHeader_SetsHeaderOnHttpRequest()
+    {
+        var crypto = new FakeExternalCredentialCrypto("Bearer token-abc");
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto);
+        var context = new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = new ExternalCredentialVaultRecord(
+                Guid.NewGuid(), "generic", "bundle", "oauth", "sha256:h",
+                new byte[] { 1, 2, 3 }, "env:KEY", null, 300, 1, null, true),
+            HttpRequest = new ExternalPortHttpRequest(
+                new Uri("https://example.invalid"), HttpMethod.Get,
+                new Dictionary<string, string>(), null),
+            DecryptedCredentialPayload = "Bearer token-abc"
+        };
+
+        await executor.ExecuteAsync(NewStep(1, "inject_authorization_header"), context);
+
+        Assert.NotNull(context.HttpRequest);
+        Assert.True(context.HttpRequest.Headers.ContainsKey("Authorization"));
+        Assert.Equal("Bearer token-abc", context.HttpRequest.Headers["Authorization"]);
+        Assert.Contains("inject_authorization_header", context.ExecutedOperationKeys);
+    }
+
+    [Fact]
+    public void CredentialReferenceResolver_Source_UsesReferenceKeyViaLoadByReferenceKeyAsync()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/runtime/ExternalPortCredentialReferenceResolver.cs"));
+        Assert.Contains("LoadByReferenceKeyAsync", source);
+        Assert.Contains("portRecord.ReferenceKey", source);
+        Assert.DoesNotContain("LoadByProviderAndBundleAsync", source);
+        Assert.DoesNotContain("portRecord.ProviderKind", source);
+        Assert.DoesNotContain("portRecord.RequiredByBundle", source);
+    }
+
+    [Fact]
+    public void CredentialReferenceResolver_MissingReferenceKey_FailsClose()
+    {
+        var resolver = new ExternalPortCredentialReferenceResolver(new NullVaultRepository());
+        var portRecord = new ExternalPortRecord(
+            Guid.NewGuid(), "access_port", "file_storage_bundle",
+            "object_storage", "env:ENDPOINT", null, null, null, "external", null, Active: true);
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => resolver.ResolveCredentialReferenceAsync(portRecord).GetAwaiter().GetResult());
+        Assert.Contains("EXTERNAL_PORT_REFERENCE_KEY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public void NpgsqlCredentialVaultRepository_Source_ImplementsLoadByReferenceKey()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalCredentialVaultRepository.cs"));
+        Assert.Contains("LoadByReferenceKeyAsync", source);
+        Assert.Contains("reference_key = @referenceKey", source);
+        Assert.Contains("AND active = true", source);
+        Assert.DoesNotContain("switch (provider", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void NpgsqlCredentialVaultRepository_Source_ImplementsLoadByProviderAndBundle()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalCredentialVaultRepository.cs"));
+        Assert.Contains("LoadByProviderAndBundleAsync", source);
+        Assert.Contains("provider_kind = @providerKind", source);
+        Assert.Contains("required_by_bundle = @requiredByBundle", source);
+        Assert.Contains("AND active = true", source);
+        Assert.DoesNotContain("switch (provider", source, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ExternalPortPolicyStep NewStep(int order, string operationKey, IReadOnlyDictionary<string, string>? config = null) =>
         new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, config ?? new Dictionary<string, string>(), Active: true);
 
@@ -346,5 +480,43 @@ public class ExternalPortSeedDrivenPolicyTests
 
         public Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default) =>
             Task.FromResult<ExternalPortPolicy?>(null);
+    }
+
+    private sealed class FakeExternalCredentialCrypto : IExternalCredentialCrypto
+    {
+        private readonly string _plaintext;
+
+        public FakeExternalCredentialCrypto(string plaintext) => _plaintext = plaintext;
+
+        public string DecryptForRuntimeUse(byte[] encryptedPayload, string encryptionKeyReference) => _plaintext;
+
+        public byte[] EncryptForVaultStorage(string plaintextPayload, string encryptionKeyReference) =>
+            System.Text.Encoding.UTF8.GetBytes(plaintextPayload);
+
+        public string ComputeTokenHash(string plaintextPayload) => $"sha256:{plaintextPayload.GetHashCode():x8}";
+    }
+
+    private sealed class NullVaultRepository : IExternalCredentialVaultRepository
+    {
+        public Task<ExternalCredentialVaultRecord?> LoadAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+
+        public Task<ExternalCredentialVaultRecord?> LoadByReferenceKeyAsync(string referenceKey, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+
+        public Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+
+        public Task<ExternalCredentialRefreshLease?> AcquireRefreshLeaseAsync(Guid credentialVaultId, string leaseOwner, TimeSpan leaseDuration, DateTimeOffset now, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialRefreshLease?>(null);
+
+        public Task WriteEncryptedCredentialPayloadAsync(Guid credentialVaultId, int expectedVersion, byte[] encryptedPayload, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task ReleaseRefreshLeaseAsync(ExternalCredentialRefreshLease lease, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task FailRefreshLeaseAsync(ExternalCredentialRefreshLease lease, string failureCode, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Topolactor.Scheduler;
 using Topolactor.Schema;
 
 namespace Topolactor.Runtime;
@@ -9,21 +10,26 @@ namespace Topolactor.Runtime;
 /// Resolves a DB active port record and its active policy, then executes only
 /// generic operation_key primitives. Provider kind remains DB data; this runtime
 /// contains no provider-specific branching or client implementation.
+/// After policy execution, broadcasts the dispatch result via SseEventBroadcaster
+/// so the response enters the SSE lane.
 /// </summary>
 public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
 {
     private readonly ILogger<ExternalPortDispatchRuntime> _logger;
     private readonly IExternalPortPolicyRepository _repository;
     private readonly IExternalPortPolicyStepExecutor _policyStepExecutor;
+    private readonly SseEventBroadcaster? _sseBroadcaster;
 
     public ExternalPortDispatchRuntime(
         ILogger<ExternalPortDispatchRuntime> logger,
         IExternalPortPolicyRepository repository,
-        IExternalPortPolicyStepExecutor policyStepExecutor)
+        IExternalPortPolicyStepExecutor policyStepExecutor,
+        SseEventBroadcaster? sseBroadcaster = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _policyStepExecutor = policyStepExecutor ?? throw new ArgumentNullException(nameof(policyStepExecutor));
+        _sseBroadcaster = sseBroadcaster;
     }
 
     public async Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
@@ -63,22 +69,25 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
             };
             await _policyStepExecutor.ExecutePolicyAsync(policy, context, ct);
 
-            var data = JsonSerializer.SerializeToElement(new
+            var dispatchResult = new
             {
-                externalPortDispatch = new
-                {
-                    status = "boundary_reached",
-                    portTargetRef = rawRef,
-                    portKind = record.PortKind,
-                    portId = record.PortId,
-                    requiredByBundle = record.RequiredByBundle,
-                    providerKind = record.ProviderKind,
-                    credentialKind = record.CredentialKind,
-                    policyKey = policy.PolicyKey,
-                    executedOperationKeys = context.ExecutedOperationKeys,
-                    outputProp = context.OutputProp
-                }
-            });
+                status = "boundary_reached",
+                portTargetRef = rawRef,
+                portKind = record.PortKind,
+                portId = record.PortId,
+                requiredByBundle = record.RequiredByBundle,
+                providerKind = record.ProviderKind,
+                credentialKind = record.CredentialKind,
+                policyKey = policy.PolicyKey,
+                executedOperationKeys = context.ExecutedOperationKeys,
+                outputProp = context.OutputProp
+            };
+
+            _sseBroadcaster?.Broadcast(new SseEvent(
+                "external_port_dispatch",
+                JsonSerializer.Serialize(dispatchResult)));
+
+            var data = JsonSerializer.SerializeToElement(new { externalPortDispatch = dispatchResult });
             return new EndpointResponseDto(true, new Emission(null, null, null, [], data, []), []);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)

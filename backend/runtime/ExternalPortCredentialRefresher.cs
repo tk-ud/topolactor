@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using Topolactor.Schema;
+
 namespace Topolactor.Runtime;
 
 /// <summary>
@@ -56,6 +58,10 @@ public sealed record ExternalPortHttpResponse(
 public interface IExternalCredentialVaultRepository
 {
     Task<ExternalCredentialVaultRecord?> LoadAsync(Guid credentialVaultId, CancellationToken ct = default);
+
+    Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default);
+
+    Task<ExternalCredentialVaultRecord?> LoadByReferenceKeyAsync(string referenceKey, CancellationToken ct = default);
 
     Task<ExternalCredentialRefreshLease?> AcquireRefreshLeaseAsync(
         Guid credentialVaultId,
@@ -269,6 +275,16 @@ public sealed class ExternalPortExecutionContext
 
     public bool SchedulerEventEnqueued { get; set; }
 
+    public string? DecryptedCredentialPayload { get; set; }
+
+    public Guid? ExportJobId { get; set; }
+
+    public string? ChecksumValue { get; set; }
+
+    public Guid? FileArtifactId { get; set; }
+
+    public string? AuthorizationKey { get; set; }
+
     public IReadOnlyList<string> ExecutedOperationKeys => _executedOperationKeys;
 
     public void MarkExecuted(string operationKey) => _executedOperationKeys.Add(operationKey);
@@ -313,6 +329,44 @@ public interface IExternalPortCredentialReferenceResolver
     Task<ExternalCredentialVaultRecord?> ResolveCredentialReferenceAsync(ExternalPortRecord portRecord, CancellationToken ct = default);
 }
 
+public interface IFileStorageRepository
+{
+    Task<Guid> RecordExportJobAsync(RecordExportJobCommand command, CancellationToken ct = default);
+    Task UpdateExportJobStatusAsync(Guid exportJobId, string status, string? failureCode = null, CancellationToken ct = default);
+    Task<FileChecksumRecord> RecordChecksumAsync(RecordChecksumCommand command, CancellationToken ct = default);
+    Task<FileArtifactRecord> RecordFileArtifactAsync(RecordFileArtifactCommand command, CancellationToken ct = default);
+    Task<ExportManifestRecord> WriteManifestRecordAsync(WriteManifestCommand command, CancellationToken ct = default);
+    Task<SignedDownloadAuthorizationRecord> AuthorizeSignedDownloadAsync(AuthorizeSignedDownloadCommand command, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Generic abstract function boundary for DB-driven domain mutations via execute_db_function
+/// operation_key. Implementations call named PostgreSQL functions (e.g. topology.fs_*) using
+/// context-derived parameters. This is the data-driven path for all consumer bundle domain
+/// mutations that are not hard-runtime compute operations.
+/// </summary>
+public interface IExternalPortDbFunctionRepository
+{
+    Task ExecuteAsync(
+        string functionName,
+        IReadOnlyDictionary<string, string> stepConfig,
+        ExternalPortExecutionContext context,
+        CancellationToken ct = default);
+}
+
+/// <summary>
+/// Reusable extension point for consumer bundle-specific operation_key handlers.
+/// Each consumer bundle (file_storage, email, audit_approval, export_sftp, etc.) registers
+/// its own implementation. The generic ExternalPortPolicyStepExecutor stays free of
+/// bundle-specific dependencies.
+/// </summary>
+public interface IExternalPortBundleStepHandler
+{
+    IReadOnlySet<string> SupportedOperationKeys { get; }
+
+    Task ExecuteAsync(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct = default);
+}
+
 public sealed class ExternalPortResolver : IExternalPortResolver
 {
     private readonly IExternalPortPolicyRepository _repository;
@@ -353,6 +407,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         "inject_authorization_header",
         "send_http",
         "capture_response",
+        "execute_db_function",
         "verify_signature_by_config",
         "enqueue_scheduler_event",
         "append_runtime_event_log",
@@ -366,12 +421,17 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
     };
 
     private readonly IReadOnlyDictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>> _registry;
+    private readonly IReadOnlyList<IExternalPortBundleStepHandler> _bundleHandlers;
 
     public ExternalPortPolicyStepExecutor(
         IExternalPortHttpClient? httpClient = null,
         IExternalPortCredentialReferenceResolver? credentialReferenceResolver = null,
-        IExternalPortResolver? portResolver = null)
+        IExternalPortResolver? portResolver = null,
+        IExternalCredentialCrypto? crypto = null,
+        IExternalPortDbFunctionRepository? dbFunctionRepository = null,
+        IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null)
     {
+        _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
         {
             ["resolve_port_record"] = async (step, context, ct) =>
@@ -474,8 +534,61 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 return Task.CompletedTask;
             },
             ["append_runtime_event_log"] = MarkOnly,
-            ["capture_response"] = MarkOnly,
-            ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE")
+            ["capture_response"] = (step, context, ct) =>
+            {
+                if (context.HttpResponse is not null)
+                    context.OutputProp = context.HttpResponse.Body;
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["execute_db_function"] = async (step, context, ct) =>
+            {
+                if (dbFunctionRepository is null)
+                    throw new InvalidOperationException("EXTERNAL_PORT_DB_FUNCTION_REPOSITORY_MISSING");
+                if (!step.StepConfig.TryGetValue("function", out var functionName) || string.IsNullOrWhiteSpace(functionName))
+                    throw new InvalidOperationException("EXTERNAL_PORT_DB_FUNCTION_NAME_MISSING");
+                await dbFunctionRepository.ExecuteAsync(functionName, step.StepConfig, context, ct);
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE"),
+            ["load_encrypted_credential_payload"] = (step, context, ct) =>
+            {
+                if (context.CredentialVaultRecord?.EncryptedPayload is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_PAYLOAD_MISSING");
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["decrypt_for_runtime_use"] = (step, context, ct) =>
+            {
+                if (crypto is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_CRYPTO_MISSING");
+                if (context.CredentialVaultRecord is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
+                ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential(context.CredentialVaultRecord);
+                context.DecryptedCredentialPayload = crypto.DecryptForRuntimeUse(
+                    context.CredentialVaultRecord.EncryptedPayload!,
+                    context.CredentialVaultRecord.EncryptionKeyReference!);
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["inject_authorization_header"] = (step, context, ct) =>
+            {
+                if (context.DecryptedCredentialPayload is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_DECRYPTED_PAYLOAD_MISSING");
+                if (context.HttpRequest is null)
+                    throw new InvalidOperationException("EXTERNAL_HTTP_REQUEST_MISSING");
+                var headerKey = FirstNonBlank(
+                    ReadConfig(step.StepConfig, "header_key"),
+                    context.PortRecord?.HeaderKey,
+                    "Authorization");
+                var headers = new Dictionary<string, string>(context.HttpRequest.Headers, StringComparer.OrdinalIgnoreCase)
+                {
+                    [headerKey!] = context.DecryptedCredentialPayload
+                };
+                context.HttpRequest = context.HttpRequest with { Headers = headers };
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
         };
     }
 
@@ -493,12 +606,16 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
     public Task ExecuteAsync(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct = default)
     {
-        if (!AllowedOperationKeys.Contains(step.OperationKey) || !_registry.TryGetValue(step.OperationKey, out var primitive))
+        if (_registry.TryGetValue(step.OperationKey, out var primitive))
+            return primitive(step, context, ct);
+
+        foreach (var handler in _bundleHandlers)
         {
-            throw new InvalidOperationException("EXTERNAL_PORT_POLICY_OPERATION_UNSUPPORTED");
+            if (handler.SupportedOperationKeys.Contains(step.OperationKey))
+                return handler.ExecuteAsync(step, context, ct);
         }
 
-        return primitive(step, context, ct);
+        throw new InvalidOperationException("EXTERNAL_PORT_POLICY_OPERATION_UNSUPPORTED");
     }
 
     public ExternalPortHttpRequest BuildTokenRefreshRequest(ExternalTokenRefreshRequest request)
@@ -535,4 +652,5 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
     private static string? ReadConfig(IReadOnlyDictionary<string, string> config, string key) =>
         config.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+
 }

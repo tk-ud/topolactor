@@ -368,11 +368,16 @@ CREATE TABLE IF NOT EXISTS topology.external_credential_vault (
     version                  INTEGER     NOT NULL DEFAULT 1 CHECK (version > 0),
     locked_until             TIMESTAMPTZ,
     active                   BOOLEAN     NOT NULL DEFAULT true,
+    reference_key            TEXT,
     created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_external_credential_vault_encrypted_payload_reference
         CHECK (encrypted_payload IS NULL OR encryption_key_reference IS NOT NULL)
 );
+
+-- Add reference_key column to existing tables (idempotent for re-runs)
+ALTER TABLE topology.external_credential_vault
+    ADD COLUMN IF NOT EXISTS reference_key TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_external_credential_vault_provider_bundle
     ON topology.external_credential_vault (provider_kind, required_by_bundle)
@@ -381,6 +386,10 @@ CREATE INDEX IF NOT EXISTS idx_external_credential_vault_provider_bundle
 CREATE INDEX IF NOT EXISTS idx_external_credential_vault_token_hash
     ON topology.external_credential_vault (token_hash)
     WHERE active = true AND token_hash IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_external_credential_vault_reference_key
+    ON topology.external_credential_vault (reference_key)
+    WHERE reference_key IS NOT NULL;
 
 COMMENT ON TABLE topology.external_credential_vault IS
     'DB guarded external credential vault for external_port_substrate port record attachments. '
@@ -482,7 +491,7 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policy_steps (
     policy_step_id UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     policy_id      UUID        NOT NULL REFERENCES topology.external_port_policies (policy_id) ON DELETE CASCADE,
     step_order     INTEGER     NOT NULL CHECK (step_order > 0),
-    operation_key  TEXT        NOT NULL CHECK (operation_key IN ('resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload','decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http','capture_response','verify_signature_by_config','enqueue_scheduler_event','append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config','write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version','release_refresh_lease')),
+    operation_key  TEXT        NOT NULL CHECK (operation_key IN ('resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload','decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http','capture_response','verify_signature_by_config','enqueue_scheduler_event','append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config','write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version','release_refresh_lease','record_export_job','compute_checksum','record_file_artifact','write_manifest_record','authorize_signed_download')),
     step_config    JSONB       NOT NULL DEFAULT '{}'::jsonb,
     active         BOOLEAN     NOT NULL DEFAULT true,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -491,4 +500,275 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policy_steps (
 );
 
 COMMENT ON TABLE topology.external_port_policies IS 'Seed-driven policy surface for external port generic primitive execution.';
+
+-- Update operation_key CHECK constraint on existing databases to include file_storage domain keys.
+ALTER TABLE topology.external_port_policy_steps
+    DROP CONSTRAINT IF EXISTS external_port_policy_steps_operation_key_check;
+
+ALTER TABLE topology.external_port_policy_steps
+    ADD CONSTRAINT external_port_policy_steps_operation_key_check
+    CHECK (operation_key IN (
+        'resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload',
+        'decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http',
+        'capture_response','verify_signature_by_config','enqueue_scheduler_event',
+        'append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config',
+        'write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version',
+        'release_refresh_lease',
+        'record_export_job','compute_checksum','record_file_artifact',
+        'write_manifest_record','authorize_signed_download',
+        'execute_db_function'
+    ));
+
+-- ---------------------------------------------------------------------------
+-- File storage bundle physical tables.
+-- These are the domain-side metadata tables for export_job / file_artifact /
+-- checksum / manifest / signed download authorization tracking.
+-- Plaintext credentials, bucket names, endpoints, and actual signed URLs are
+-- prohibited. storage_ref is env-var reference identifier only.
+-- authorization_key is a non-guessable reference identifier, NOT a signed URL.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.export_jobs (
+    export_job_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    port_id           UUID,
+    port_kind         TEXT        NOT NULL DEFAULT 'access_port'
+                                  CHECK (port_kind IN ('access_port', 'response_port')),
+    requested_by      TEXT        NOT NULL,
+    requested_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    period            TEXT,
+    target_scope      TEXT,
+    export_format     TEXT,
+    status            TEXT        NOT NULL DEFAULT 'initiated'
+                                  CHECK (status IN ('initiated', 'in_progress', 'completed', 'failed')),
+    source_record_ids JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    idempotency_key   TEXT        NOT NULL UNIQUE,
+    checksum          TEXT,
+    manifest_path     TEXT,
+    completed_at      TIMESTAMPTZ,
+    failed_at         TIMESTAMPTZ,
+    failure_code      TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_export_jobs_status
+    ON topology.export_jobs (status)
+    WHERE status IN ('initiated', 'in_progress');
+
+CREATE INDEX IF NOT EXISTS idx_export_jobs_requested_at
+    ON topology.export_jobs (requested_at DESC);
+
+COMMENT ON TABLE topology.export_jobs IS
+    'File storage bundle export job tracking. storage_ref and authorization_key are '
+    'env-var reference identifiers only; plaintext credentials, bucket names, and '
+    'actual signed URLs are prohibited.';
+
+CREATE TABLE IF NOT EXISTS topology.file_artifacts (
+    file_artifact_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    export_job_id      UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
+    file_name          TEXT        NOT NULL,
+    file_type          TEXT        NOT NULL
+                                   CHECK (file_type IN ('pdf', 'csv', 'json', 'zip', 'receipt_image', 'manifest_json')),
+    storage_ref        TEXT        NOT NULL,
+    byte_size          BIGINT,
+    checksum_value     TEXT        NOT NULL,
+    checksum_record_id UUID,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_artifacts_export_job
+    ON topology.file_artifacts (export_job_id);
+
+COMMENT ON TABLE topology.file_artifacts IS
+    'File artifact metadata for file_storage_bundle. storage_ref is env-var reference identifier only; '
+    'plaintext storage URL/path is prohibited.';
+
+CREATE TABLE IF NOT EXISTS topology.file_checksum_records (
+    checksum_record_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    export_job_id       UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
+    file_artifact_id    UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
+    algorithm           TEXT        NOT NULL DEFAULT 'sha256',
+    checksum_value      TEXT        NOT NULL,
+    verified_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    verification_status TEXT        NOT NULL DEFAULT 'pending'
+                                    CHECK (verification_status IN ('pending', 'verified', 'failed')),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_checksum_export_job
+    ON topology.file_checksum_records (export_job_id);
+
+COMMENT ON TABLE topology.file_checksum_records IS
+    'Checksum integrity records for file_storage_bundle. Required for all export_job file artifacts.';
+
+CREATE TABLE IF NOT EXISTS topology.export_manifests (
+    manifest_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    export_job_id     UUID        NOT NULL UNIQUE REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
+    manifest_version  TEXT        NOT NULL DEFAULT '1.0',
+    generated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    generated_by      TEXT        NOT NULL,
+    period            TEXT,
+    export_format     TEXT,
+    checksum          TEXT,
+    file_artifact_ids JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    manifest_jsonb    JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE topology.export_manifests IS
+    'Export package manifest records for file_storage_bundle. Required for all export_job packages.';
+
+CREATE TABLE IF NOT EXISTS topology.signed_download_authorizations (
+    authorization_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_artifact_id  UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
+    authorized_by     TEXT        NOT NULL,
+    authorized_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at        TIMESTAMPTZ NOT NULL,
+    authorization_key TEXT        NOT NULL UNIQUE,
+    used_at           TIMESTAMPTZ,
+    status            TEXT        NOT NULL DEFAULT 'active'
+                                  CHECK (status IN ('active', 'used', 'expired', 'revoked')),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_signed_download_auth_artifact
+    ON topology.signed_download_authorizations (file_artifact_id);
+
+CREATE INDEX IF NOT EXISTS idx_signed_download_auth_key
+    ON topology.signed_download_authorizations (authorization_key)
+    WHERE status = 'active';
+
+COMMENT ON TABLE topology.signed_download_authorizations IS
+    'Signed download authorization records for file_storage_bundle. authorization_key is a non-guessable '
+    'reference identifier; actual signed URL value is managed by runtime secret store and is prohibited '
+    'from this table.';
 COMMENT ON TABLE topology.external_port_policy_steps IS 'Ordered operation_key steps. operation_key values are constrained to external-port SSOT allowed values.';
+
+-- ---------------------------------------------------------------------------
+-- file_storage_bundle domain PostgreSQL functions.
+-- Called via execute_db_function operation_key from ExternalPortPolicyStepExecutor.
+-- These are abstract function boundary implementations; bundle-specific C# handler
+-- code (FileStorageBundleStepHandler) must NOT call these directly.
+-- storage_ref / authorization_key are opaque reference identifiers — never plaintext.
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION topology.fs_record_export_job(
+    p_idempotency_key    TEXT,
+    p_required_by_bundle TEXT,
+    p_port_id            UUID,
+    p_port_kind          TEXT,
+    p_requested_by       TEXT,
+    p_export_format      TEXT DEFAULT NULL,
+    p_period             TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    INSERT INTO topology.export_jobs (
+        idempotency_key, port_id, port_kind, requested_by,
+        export_format, period, status
+    ) VALUES (
+        p_idempotency_key, p_port_id, p_port_kind, p_requested_by,
+        p_export_format, p_period, 'in_progress'
+    )
+    ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = now()
+    RETURNING export_job_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_record_export_job IS
+    'Records or idempotently upserts a file_storage export job. Called via execute_db_function policy step.';
+
+CREATE OR REPLACE FUNCTION topology.fs_record_file_artifact(
+    p_export_job_id   UUID,
+    p_file_name       TEXT,
+    p_file_type       TEXT,
+    p_storage_ref     TEXT,
+    p_checksum_value  TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_artifact_id UUID;
+    v_checksum_id UUID;
+BEGIN
+    INSERT INTO topology.file_artifacts (
+        export_job_id, file_name, file_type, storage_ref
+    ) VALUES (
+        p_export_job_id, p_file_name, p_file_type, p_storage_ref
+    )
+    RETURNING file_artifact_id INTO v_artifact_id;
+
+    INSERT INTO topology.file_checksum_records (
+        export_job_id, file_artifact_id, algorithm, checksum_value, verification_status
+    ) VALUES (
+        p_export_job_id, v_artifact_id, 'sha256', p_checksum_value, 'verified'
+    )
+    RETURNING checksum_record_id INTO v_checksum_id;
+
+    UPDATE topology.file_artifacts
+       SET checksum_record_id = v_checksum_id, updated_at = now()
+     WHERE file_artifact_id = v_artifact_id;
+
+    RETURN v_artifact_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_record_file_artifact IS
+    'Atomically inserts file_artifact and its checksum_record in a single transaction. Called via execute_db_function policy step.';
+
+CREATE OR REPLACE FUNCTION topology.fs_write_manifest_record(
+    p_export_job_id    UUID,
+    p_file_artifact_id UUID,
+    p_requested_by     TEXT DEFAULT 'system',
+    p_period           TEXT DEFAULT NULL,
+    p_export_format    TEXT DEFAULT NULL,
+    p_checksum_value   TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    INSERT INTO topology.export_manifests (
+        export_job_id, manifest_version, generated_by, period,
+        export_format, manifest_jsonb
+    ) VALUES (
+        p_export_job_id, '1.0', p_requested_by, p_period,
+        p_export_format,
+        jsonb_build_object(
+            'file_artifact_ids', jsonb_build_array(p_file_artifact_id::text),
+            'checksum', p_checksum_value
+        )
+    )
+    ON CONFLICT (export_job_id) DO UPDATE
+        SET manifest_jsonb = EXCLUDED.manifest_jsonb,
+            updated_at = now()
+    RETURNING manifest_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_write_manifest_record IS
+    'Writes or updates export package manifest record. Called via execute_db_function policy step.';
+
+CREATE OR REPLACE FUNCTION topology.fs_authorize_signed_download(
+    p_file_artifact_id UUID,
+    p_authorized_by    TEXT DEFAULT 'system'
+) RETURNS TEXT
+LANGUAGE plpgsql AS $$
+DECLARE v_key TEXT;
+BEGIN
+    v_key := 'auth-ref:' || replace(p_file_artifact_id::text, '-', '') || ':' || replace(gen_random_uuid()::text, '-', '');
+    INSERT INTO topology.signed_download_authorizations (
+        file_artifact_id, authorized_by, expires_at, authorization_key
+    ) VALUES (
+        p_file_artifact_id, p_authorized_by, now() + INTERVAL '1 hour', v_key
+    );
+    RETURN v_key;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_authorize_signed_download IS
+    'Creates a non-guessable authorization_key reference for signed download. authorization_key is opaque ref — not a signed URL. Called via execute_db_function policy step.';

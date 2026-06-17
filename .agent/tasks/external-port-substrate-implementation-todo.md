@@ -103,7 +103,20 @@ consumer dispatch path は `port_target_ref` lane のみ。PR#458/#459 で `cano
 ### file_storage_bundle
 
 - [x] access_port / response_port binding を seed / DB record として追加した (provider_kind: object_storage, credential_kind: external, reference_key: vault:ref:file_storage_credential).
-- [ ] export_job → port record resolution → generic access/response port connect の経路実装は未着手 (runtime新設なし; 既存 port_target_ref lane を使用すること).
+- [x] export_job → port record resolution → generic access/response port connect の経路実装 (既存 port_target_ref lane 使用)
+  - [x] export_jobs / file_artifacts / file_checksum_records / export_manifests / signed_download_authorizations physical tables を topology_tables.sql に追加
+  - [x] physical_table catalog seed (topology.physical_tables) に5テーブル登録
+  - [x] hub (0000...a2) + topology_manifests (manifest 093) file_storage dispatch binding seed
+  - [x] physical_table_manifest_bindings で5テーブルを manifest 093 に binding
+  - [x] policy steps 6-10 を e4 (access_port) / e5 (response_port) に追加: record_export_job → compute_checksum → record_file_artifact → write_manifest_record → authorize_signed_download
+  - [x] 5 新 operation_key を external_port_policy_steps CHECK 制約・AllowedOperationKeys・seed 定義に追加
+  - [x] ExternalPortExecutionContext に ExportJobId / ChecksumValue / FileArtifactId / AuthorizationKey プロパティ追加
+  - [x] IFileStorageRepository interface + 5 domain operation_key handler を ExternalPortPolicyStepExecutor に追加
+  - [x] NpgsqlFileStorageRepository 実装 (backend/repository/NpgsqlFileStorageRepository.cs)
+  - [x] backend/schema/FileStorageContracts.cs (C# records + command types)
+  - [x] Program.cs に IFileStorageRepository singleton 登録 + ExternalPortPolicyStepExecutor に注入
+  - [x] FileStorageBundleDispatchTests (backend/tests/Topolactor.Runtime.Tests/)
+  - [x] fileStoragePortConsumer.test.ts (frontend/tests/)
 
 ### email_bundle
 
