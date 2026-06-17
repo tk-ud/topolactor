@@ -54,6 +54,22 @@ Because promoted runtime behavior flows through manifest-backed dispatch instead
 
 It does not replace security review, permission design, or load testing; it narrows a common class of human-error risks by making runtime wiring explicit and auditable.
 
+## Flexible external integrations
+
+topolactor keeps integration surfaces explicit and data-driven instead of scattering service-specific wiring through application code.
+
+External services are connected through connector or port surfaces. Those surfaces stay on the intake, response, trigger, notification, approval, or export side, while promoted topology, manifests, registry state, schema, and runtime logs remain on the canonical runtime side.
+
+This keeps integration flexible while preserving pipeline boundaries such as validation, preview/apply, scheduling, dispatch, and audit/event recording.
+
+## Service switching by DB instance
+
+topolactor can be re-pointed at a different DB instance to run as a different service context without forking the application code.
+
+The environment selects the target DB instance. Service-specific topology, manifests, connector settings, runtime data, and audit history live behind that DB instance.
+
+Changing the DB instance changes the service context: the data, external connections, operational state, and promoted runtime identities can differ while the shared application code, canonical dispatch route, and projection model stay the same.
+
 ## What you can build
 
 topolactor is not limited to business applications. It is useful for any app where state, events, UI layout, and runtime behavior are data-driven.
