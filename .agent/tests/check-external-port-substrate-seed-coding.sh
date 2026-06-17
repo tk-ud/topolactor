@@ -9,6 +9,16 @@ rg -n "class NpgsqlExternalPortPolicyRepository" backend/repository/NpgsqlExtern
 rg -n "IExternalPortPolicyRepository" backend/repository/NpgsqlExternalPortPolicyRepository.cs backend/Program.cs >/dev/null || fail "missing production IExternalPortPolicyRepository implementation or DI"
 rg -n "AddSingleton<IExternalPortPolicyRepository>" backend/Program.cs >/dev/null || fail "missing IExternalPortPolicyRepository production DI registration"
 
+# Guard: canonical_binding_ must NOT appear in ExternalPortDispatchRuntime consumer path.
+if rg -n "canonical_binding_" backend/runtime/ExternalPortDispatchRuntime.cs; then
+  fail "canonical_binding_ found in ExternalPortDispatchRuntime.cs — consumer dispatch path must use port_target_ref lane only"
+fi
+
+# Guard: canonical_binding_ must NOT appear in frontend runtime.
+if find frontend/runtime -name "*.ts" -o -name "*.tsx" 2>/dev/null | xargs rg -ln "canonical_binding_" 2>/dev/null | grep -q .; then
+  fail "canonical_binding_ found in frontend/runtime — consumer dispatch must use port_target_ref"
+fi
+
 for table in external_access_ports external_response_ports external_hook_ports external_port_policies external_port_policy_steps; do
   rg -n "CREATE TABLE IF NOT EXISTS topology\.${table}" db/topology_tables.sql >/dev/null || fail "missing topology.${table} DDL"
 done
@@ -74,6 +84,16 @@ if rg -n "webhook_direct_runtime_execution" db/seed_empty.sql backend/runtime; t
 fi
 
 rg -n "ExecutePolicyAsync_HookSeedOperations_VerifiesSignatureAndReachesSchedulerBoundary" backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs >/dev/null || fail "missing hook seeded policy scheduler-boundary test"
+
+# Guard: consumer bundle seed binding rows must be present (required_by_bundle).
+for bundle in file_storage_bundle email_bundle stripe_bundle webhook_inbox_bundle job_scheduler_bundle audit_approval_bundle export_sftp_bundle; do
+  rg -n "'${bundle}'" db/seed_empty.sql >/dev/null || fail "consumer bundle seed binding missing: ${bundle}"
+done
+
+# Guard: consumer bundle seed rows must not contain plaintext credential values.
+if rg -n "vault:[^:r]|sk_live_|AKIA[0-9A-Z]{16}|secret_access_key|smtp_password|sftp_password" db/seed_empty.sql; then
+  fail "plaintext credential value found in consumer bundle seed rows"
+fi
 
 echo "OK external port substrate seed coding guard"
 

@@ -12,13 +12,13 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `external-port-substrate-implementation` | external_port_substrate / external 8 bundle 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
-| `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
-| `email-port-consumer` | email_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
-| `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
-| `webhook-inbox-port-consumer` | webhook_inbox_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
-| `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
-| `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
-| `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | not_started | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
+| `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
+| `email-port-consumer` | email_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
+| `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
+| `webhook-inbox-port-consumer` | webhook_inbox_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
+| `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
+| `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
+| `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
 ---
 
@@ -72,8 +72,9 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 - [x] `external-port-substrate-seed-coding` bundle increment: external port physical tables / seed policy-step surface / generic resolver-executor boundary を partial 実装する
 - [x] `auth-external-credential-management-topology-projection` bundle increment: auth / external credential management を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する
 - [x] DB repository atomic encrypted credential update を実装する
-- [x] `external-port-canonical-physical-binding-execution` bundle increment: fixed-form projection から `screen_data_shape.tableRef` / `dbTableName` -> `topology.physical_table_manifest_bindings` -> external port physical tables までの runtime binding execution を実装する
-- [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の consumer bundle connection todo を進める
+- [x] `external-port-canonical-physical-binding-execution` bundle increment: physical table catalog / manifest binding seed / `LoadPortRecordByCanonicalBindingAsync` (admin projection validation only) を実装した。PR#458/#459 で追加された `canonical_binding_*` consumer dispatch branch は post-merge cleanup で削除済み。consumer path は `port_target_ref` lane のみ。
+- [x] consumer bundle seed binding: file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp の port records / policies / policy_steps を seed で追加した (runtime新設なし、port_target_ref lane 既存利用)。
+- [ ] consumer bundle 経路実装 (export_job → port record → generic connect 等) は各 bundle consumer todo で管理する。
 
 対応資料:
 - `docs/design/external-port-substrate-ssot.yaml`

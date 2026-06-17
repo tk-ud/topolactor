@@ -1972,3 +1972,130 @@ VALUES
     ('00000000-0000-0000-0000-000000000304', '00000000-0000-0000-0000-0000000000e3', 4, 'enqueue_scheduler_event', '{}', true),
     ('00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-0000000000e3', 5, 'append_runtime_event_log', '{}', true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- Consumer bundle seed binding.
+-- Each consumer bundle registers required_by_bundle + port_kind + policy_steps
+-- through the existing port_target_ref lane. No provider-specific clients,
+-- runtime branches, or credential plaintext values are stored here.
+-- reference_key values are vault reference identifiers, not credential payloads.
+-- url_or_env_reference values are env-variable reference names, not real URLs.
+-- ---------------------------------------------------------------------------
+
+-- file_storage_bundle: object_storage access_port + response_port
+INSERT INTO topology.external_access_ports
+    (access_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f01', 'file_storage_bundle', 'object_storage', 'env:FILE_STORAGE_ENDPOINT_REF', 'external', 'vault:ref:file_storage_credential', true)
+ON CONFLICT (access_port_id) DO NOTHING;
+
+INSERT INTO topology.external_response_ports
+    (response_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f02', 'file_storage_bundle', 'object_storage', 'env:FILE_STORAGE_ENDPOINT_REF', 'external', 'vault:ref:file_storage_credential', true)
+ON CONFLICT (response_port_id) DO NOTHING;
+
+-- email_bundle: smtp response_port
+INSERT INTO topology.external_response_ports
+    (response_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f03', 'email_bundle', 'smtp', 'env:SMTP_HOST_REF', 'external', 'vault:ref:email_smtp_credential', true)
+ON CONFLICT (response_port_id) DO NOTHING;
+
+-- stripe_bundle: stripe hook_port
+INSERT INTO topology.external_hook_ports
+    (hook_port_id, required_by_bundle, provider_kind, hook_path, header_key, route_key, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f04', 'stripe_bundle', 'stripe', '/hooks/stripe', 'stripe-signature', 'stripe', 'external', 'vault:ref:stripe_webhook_signing_key', true)
+ON CONFLICT (hook_port_id) DO NOTHING;
+
+-- webhook_inbox_bundle: generic_webhook hook_port
+INSERT INTO topology.external_hook_ports
+    (hook_port_id, required_by_bundle, provider_kind, hook_path, header_key, route_key, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f05', 'webhook_inbox_bundle', 'generic_webhook', '/hooks/webhook_inbox', 'x-webhook-signature', 'webhook_inbox', 'external', 'vault:ref:webhook_inbox_signing_key', true)
+ON CONFLICT (hook_port_id) DO NOTHING;
+
+-- job_scheduler_bundle: external scheduler access_port (built-in scheduler path does not depend on this record)
+INSERT INTO topology.external_access_ports
+    (access_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f06', 'job_scheduler_bundle', 'external_scheduler', 'env:JOB_SCHEDULER_ENDPOINT_REF', 'none', NULL, true)
+ON CONFLICT (access_port_id) DO NOTHING;
+
+-- audit_approval_bundle: notification response_port
+INSERT INTO topology.external_response_ports
+    (response_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f07', 'audit_approval_bundle', 'notification', 'env:APPROVAL_NOTIFICATION_ENDPOINT_REF', 'external', 'vault:ref:audit_approval_notification_credential', true)
+ON CONFLICT (response_port_id) DO NOTHING;
+
+-- export_sftp_bundle: sftp response_port
+INSERT INTO topology.external_response_ports
+    (response_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f08', 'export_sftp_bundle', 'sftp', 'env:SFTP_HOST_REF', 'external', 'vault:ref:export_sftp_credential', true)
+ON CONFLICT (response_port_id) DO NOTHING;
+
+-- Consumer bundle policies
+INSERT INTO topology.external_port_policies (policy_id, policy_key, port_kind, required_by_bundle, active)
+VALUES
+    ('00000000-0000-0000-0000-0000000000e4', 'file_storage_access_port_generic',     'access_port',   'file_storage_bundle',   true),
+    ('00000000-0000-0000-0000-0000000000e5', 'file_storage_response_port_generic',    'response_port', 'file_storage_bundle',   true),
+    ('00000000-0000-0000-0000-0000000000e6', 'email_response_port_generic',           'response_port', 'email_bundle',          true),
+    ('00000000-0000-0000-0000-0000000000e7', 'stripe_hook_port_scheduler_boundary',   'hook_port',     'stripe_bundle',         true),
+    ('00000000-0000-0000-0000-0000000000e8', 'webhook_inbox_hook_port_scheduler',     'hook_port',     'webhook_inbox_bundle',  true),
+    ('00000000-0000-0000-0000-0000000000e9', 'job_scheduler_access_port_generic',     'access_port',   'job_scheduler_bundle',  true),
+    ('00000000-0000-0000-0000-0000000000ea', 'audit_approval_response_port_generic',  'response_port', 'audit_approval_bundle', true),
+    ('00000000-0000-0000-0000-0000000000eb', 'export_sftp_response_port_generic',     'response_port', 'export_sftp_bundle',    true)
+ON CONFLICT (policy_id) DO NOTHING;
+
+-- Consumer bundle policy steps (operation_key values constrained to external-port SSOT allowed set)
+INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
+VALUES
+    -- file_storage_bundle access_port
+    ('00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-0000000000e4', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-0000000000e4', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000403', '00000000-0000-0000-0000-0000000000e4', 3, 'build_http_request',           '{}', true),
+    ('00000000-0000-0000-0000-000000000404', '00000000-0000-0000-0000-0000000000e4', 4, 'send_http',                    '{}', true),
+    ('00000000-0000-0000-0000-000000000405', '00000000-0000-0000-0000-0000000000e4', 5, 'capture_response',             '{}', true),
+    -- file_storage_bundle response_port
+    ('00000000-0000-0000-0000-000000000411', '00000000-0000-0000-0000-0000000000e5', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000412', '00000000-0000-0000-0000-0000000000e5', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000413', '00000000-0000-0000-0000-0000000000e5', 3, 'build_http_request',           '{}', true),
+    ('00000000-0000-0000-0000-000000000414', '00000000-0000-0000-0000-0000000000e5', 4, 'send_http',                    '{}', true),
+    ('00000000-0000-0000-0000-000000000415', '00000000-0000-0000-0000-0000000000e5', 5, 'capture_response',             '{}', true),
+    -- email_bundle response_port
+    ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000423', '00000000-0000-0000-0000-0000000000e6', 3, 'build_http_request',           '{}', true),
+    ('00000000-0000-0000-0000-000000000424', '00000000-0000-0000-0000-0000000000e6', 4, 'send_http',                    '{}', true),
+    ('00000000-0000-0000-0000-000000000425', '00000000-0000-0000-0000-0000000000e6', 5, 'append_runtime_event_log',     '{}', true),
+    -- stripe_bundle hook_port
+    ('00000000-0000-0000-0000-000000000431', '00000000-0000-0000-0000-0000000000e7', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000432', '00000000-0000-0000-0000-0000000000e7', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000433', '00000000-0000-0000-0000-0000000000e7', 3, 'verify_signature_by_config',   '{}', true),
+    ('00000000-0000-0000-0000-000000000434', '00000000-0000-0000-0000-0000000000e7', 4, 'enqueue_scheduler_event',      '{}', true),
+    ('00000000-0000-0000-0000-000000000435', '00000000-0000-0000-0000-0000000000e7', 5, 'append_runtime_event_log',     '{}', true),
+    -- webhook_inbox_bundle hook_port
+    ('00000000-0000-0000-0000-000000000441', '00000000-0000-0000-0000-0000000000e8', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000442', '00000000-0000-0000-0000-0000000000e8', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000443', '00000000-0000-0000-0000-0000000000e8', 3, 'verify_signature_by_config',   '{}', true),
+    ('00000000-0000-0000-0000-000000000444', '00000000-0000-0000-0000-0000000000e8', 4, 'enqueue_scheduler_event',      '{}', true),
+    ('00000000-0000-0000-0000-000000000445', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',     '{}', true),
+    -- job_scheduler_bundle access_port
+    ('00000000-0000-0000-0000-000000000451', '00000000-0000-0000-0000-0000000000e9', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000452', '00000000-0000-0000-0000-0000000000e9', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e9', 3, 'append_runtime_event_log',     '{}', true),
+    -- audit_approval_bundle response_port
+    ('00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-0000000000ea', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-0000000000ea', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000463', '00000000-0000-0000-0000-0000000000ea', 3, 'build_http_request',           '{}', true),
+    ('00000000-0000-0000-0000-000000000464', '00000000-0000-0000-0000-0000000000ea', 4, 'send_http',                    '{}', true),
+    ('00000000-0000-0000-0000-000000000465', '00000000-0000-0000-0000-0000000000ea', 5, 'append_runtime_event_log',     '{}', true),
+    -- export_sftp_bundle response_port
+    ('00000000-0000-0000-0000-000000000471', '00000000-0000-0000-0000-0000000000eb', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-0000000000eb', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{}', true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;

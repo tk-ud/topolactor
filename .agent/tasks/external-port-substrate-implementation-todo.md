@@ -75,46 +75,45 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 
 ### file_storage_bundle
 
-- access_port / response_port binding を seed / DB record / projection に追加する。
-- object storage credential_kind を external として port record に付属させる。
-- export_job -> port record resolution -> generic access/response port connect の経路を実装する。
+- [x] access_port / response_port binding を seed / DB record として追加した (provider_kind: object_storage, credential_kind: external, reference_key: vault:ref:file_storage_credential).
+- [ ] export_job → port record resolution → generic access/response port connect の経路実装は未着手 (runtime新設なし; 既存 port_target_ref lane を使用すること).
 
 ### email_bundle
 
-- response_port (`provider_kind: smtp`) binding を seed / DB record / projection に追加する。
-- SMTP credential_kind を external として port record に付属させる。
-- UI approval -> port record resolution -> generic response_port connect の経路を実装する。
+- [x] response_port (provider_kind: smtp) binding を seed / DB record として追加した (credential_kind: external, reference_key: vault:ref:email_smtp_credential).
+- [ ] UI approval → response_port 解決 → generic response_port connect の経路実装は未着手.
 
 ### stripe_bundle
 
-- hook_port (`provider_kind: stripe`) binding を seed / DB record / projection に追加する。
-- webhook credential_kind を external として hook_port に付属させる。
-- hook_path / provider / header / route key -> port record resolution -> scheduler aligned runtime event の経路を実装する。
+- [x] hook_port (provider_kind: stripe) binding を seed / DB record として追加した (hook_path: /hooks/stripe, header_key: stripe-signature, route_key: stripe, credential_kind: external, reference_key: vault:ref:stripe_webhook_signing_key).
+- policy steps: resolve_port_record → resolve_credential_reference → verify_signature_by_config → enqueue_scheduler_event → append_runtime_event_log.
+- [ ] hook_path → port record resolution → scheduler event dispatch の経路実装は未着手.
 
 ### webhook_inbox_bundle
 
-- hook_port binding を seed / DB record / projection に追加する。
-- webhook credential_kind を external として hook_port に付属させる。
-- hook_port -> scheduler 境界の受信経路を実装する。
+- [x] hook_port (provider_kind: generic_webhook) binding を seed / DB record として追加した (hook_path: /hooks/webhook_inbox, credential_kind: external, reference_key: vault:ref:webhook_inbox_signing_key).
+- policy steps: resolve_port_record → resolve_credential_reference → verify_signature_by_config → enqueue_scheduler_event → append_runtime_event_log.
+- [ ] hook_port → scheduler 境界の受信経路実装は未着手.
 
 ### job_scheduler_bundle
 
-- access_port / hook_port binding を seed / DB record / projection に追加する。
-- external / none credential_kind を port record に付属させる。
-- built-in scheduler path が port substrate に依存しないことをテストする。
+- [x] access_port (provider_kind: external_scheduler, credential_kind: none) binding を seed / DB record として追加した (built-in scheduler path は port substrate に依存しない).
+- [ ] built-in scheduler path が port substrate に依存しないことの test / guard は未着手.
 
 ### audit_approval_bundle
 
-- response_port binding を seed / DB record / projection に追加する。
-- approval notification credential_kind を port record に付属させる。
-- approval -> port record resolution -> generic response_port connect の経路を実装する。
+- [x] response_port (provider_kind: notification) binding を seed / DB record として追加した (credential_kind: external, reference_key: vault:ref:audit_approval_notification_credential).
+- [ ] approval → response_port 解決 → 通知送信の経路実装は未着手.
 
 ### export_sftp_bundle
 
-- response_port (`provider_kind: sftp`) binding を seed / DB record / projection に追加する。
-- SFTP credential_kind を external として response_port に付属させる。
-- export_job -> port record resolution -> generic response_port connect の経路を実装する。
-- checksum 検証境界を port substrate と独立して実装 / テストする。
+- [x] response_port (provider_kind: sftp) binding を seed / DB record として追加した (credential_kind: external, reference_key: vault:ref:export_sftp_credential).
+- [ ] export_job → response_port 解決 → SFTP transfer の経路実装は未着手 (SFTP client hardcode は禁止; checksum 境界は port substrate と独立すること).
+
+### credential requirement substrate
+
+- standalone bundle として実装しない。
+- `credential_requirement` seed / projection / port record attachment として扱う。
 
 ### credential requirement substrate
 
@@ -247,16 +246,21 @@ not_implemented_in_this_increment:
 
 ## Bundle increment `external-port-canonical-physical-binding-execution`
 
-Status: implemented
+Status: cleanup_required
 Parent bundle: `external-port-substrate-implementation`
 
-実装内容:
-- Registered external port substrate physical tables in `topology.physical_tables` and bound them to `auth.external.credential_management.projection` through `topology.physical_table_manifest_bindings` (not `wiring_physical_to_package`; that table is physical→package wiring for the UI Component Builder layer).
-- Updated the fixed-form projection manifest to declare `canonical_port_bindings` entry (access/response/hook portKind→tableRef mapping) and set `screen_data_shape.tableRef/dbTableName = topology.external_response_ports` for the response_port primary projection surface.
-- Added `LoadPortRecordByCanonicalBindingAsync` to `IExternalPortPolicyRepository` and `NpgsqlExternalPortPolicyRepository` with: (a) fail-close C# guard verifying tableRef corresponds to portKind's canonical physical table; (b) DB query through `hubs.topology_manifests` + `physical_table_manifest_bindings`; (c) delegate to `LoadPortRecordByIdAsync` after verified binding.
-- Extended `ExternalPortDispatchRuntime.ExecuteAsync` to accept `canonical_binding_*` fields and route to `LoadPortRecordByCanonicalBindingAsync` without provider-specific branching.
-- Added live DB integration tests covering happy path (all three port kinds), inactive binding fail-close, missing manifest fail-close, and tableRef/portKind mismatch fail-close.
-- Updated `.agent/tests/check-auth-external-credential-projection.sh` and `.agent/tests/check-external-port-substrate-seed-coding.sh` guards.
+実装内容 (partial / over-scoped):
+- Registered external port substrate physical tables in `topology.physical_tables` and bound them to `auth.external.credential_management.projection` through `topology.physical_table_manifest_bindings`.
+- Updated the fixed-form projection manifest to declare `canonical_port_bindings` entry and set `screen_data_shape.tableRef/dbTableName`.
+- Added `LoadPortRecordByCanonicalBindingAsync` to `IExternalPortPolicyRepository` and `NpgsqlExternalPortPolicyRepository` for admin projection validate/preview/apply internal validation (retained; isolated from consumer dispatch path).
+- Added live DB integration tests for `LoadPortRecordByCanonicalBindingAsync` repository layer.
+
+cleanup_done (post-merge PR#458/#459):
+- Removed `canonical_binding_*` payload branch from `ExternalPortDispatchRuntime.ExecuteAsync`. Consumer dispatch path is `port_target_ref` / `target_ref` lane only.
+- Removed `TryReadCanonicalBinding` / `CanonicalPhysicalBindingInput` from runtime.
+- Removed canonical binding dispatch test from `ExternalPortDispatchRuntimeTests`.
+- `LoadPortRecordByCanonicalBindingAsync` remains in the repository interface for admin projection validation only; it is not reachable through `dispatchExternalPort` payload.
 
 remaining_todo:
-- Consumer bundle wiring for file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp remains out of scope.
+- Consumer bundle wiring completed via seed binding increment `external-port-seed-lane-cleanup-and-consumer-binding`.
+- Admin projection validate/preview/apply full integration remains out of scope.
