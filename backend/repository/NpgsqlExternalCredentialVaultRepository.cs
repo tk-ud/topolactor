@@ -51,6 +51,38 @@ public sealed class NpgsqlExternalCredentialVaultRepository : IExternalCredentia
         return await reader.ReadAsync(ct) ? MapVaultRecord(reader) : null;
     }
 
+    public async Task<ExternalCredentialVaultRecord?> LoadByReferenceKeyAsync(string referenceKey, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(referenceKey))
+            throw new ArgumentException("referenceKey is required.", nameof(referenceKey));
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT credential_vault_id,
+                   provider_kind,
+                   required_by_bundle,
+                   token_kind,
+                   token_hash,
+                   encrypted_payload,
+                   encryption_key_reference,
+                   expires_at,
+                   refresh_before_seconds,
+                   version,
+                   locked_until,
+                   active
+            FROM topology.external_credential_vault
+            WHERE reference_key = @referenceKey
+              AND active = true
+            """;
+        cmd.Parameters.AddWithValue("referenceKey", referenceKey);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        return await reader.ReadAsync(ct) ? MapVaultRecord(reader) : null;
+    }
+
     public async Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(providerKind))

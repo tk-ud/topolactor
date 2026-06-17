@@ -4,6 +4,8 @@ import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { __testOnly as factoryTestOnly } from "../runtime/runtimeComponentFactory.ts";
 import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
 import type { Emission } from "../api/dispatch.ts";
+import { draftPreviewResultToEmission } from "../runtime/draftPreviewToEmission.ts";
+import type { DraftPreviewResult } from "../api/draftPreview.ts";
 
 const FILE_STORAGE_ACCESS_PORT_ID = "00000000-0000-0000-0000-000000000f01";
 const FILE_STORAGE_RESPONSE_PORT_ID = "00000000-0000-0000-0000-000000000f02";
@@ -107,6 +109,54 @@ Deno.test("fileStoragePortConsumer: resolved payload enqueues backend command th
   assertEquals(schedulerTestOnly.isCommandQueueRunning(), true);
   globalThis.fetch = originalFetch;
   schedulerTestOnly.resetCommandQueue();
+});
+
+Deno.test("fileStoragePortConsumer: dispatchExternalPort runtimeInteraction is produced from DB projection result", () => {
+  const dbProjectionResult: DraftPreviewResult = {
+    success: true,
+    layoutId: "layout-file-storage-projection",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    layoutNodes: [{
+      nodeId: "export_button",
+      nodeKind: "catalog_component",
+      componentId: "button-1",
+      componentKey: "submit_button.primitive",
+      componentKind: "action/button",
+      orderIndex: 0,
+      runtimeInteractions: [{
+        trigger: "click",
+        actionType: "dispatchExternalPort",
+        portTargetRef: `external-port:access_port:${FILE_STORAGE_ACCESS_PORT_ID}`,
+        payloadFrom: {
+          export_job_id: "literal:job-proj-001",
+          requested_by: "literal:system",
+          period: "literal:2026-06",
+          export_format: "literal:pdf",
+        },
+        outputProp: "exportResult",
+      }],
+    }],
+  };
+
+  const emission = draftPreviewResultToEmission(dbProjectionResult);
+  assertExists(emission);
+  assertExists(emission.layoutNodes);
+  assertEquals(emission.layoutNodes!.length, 1);
+  const node = emission.layoutNodes![0];
+  assertExists(node.runtimeInteractions);
+  assertEquals(node.runtimeInteractions!.length, 1);
+  const interaction = node.runtimeInteractions![0];
+  assertEquals(interaction.actionType, "dispatchExternalPort");
+  assertEquals(interaction.portTargetRef, `external-port:access_port:${FILE_STORAGE_ACCESS_PORT_ID}`);
+
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  assertExists(specs[0].runtimeSpec);
+  const parsed = factoryTestOnly.parseEventBinding(specs[0].runtimeSpec!.eventBinding.click);
+  assertExists(parsed);
+  assertEquals(
+    parsed.externalPortDispatch?.portTargetRef,
+    `external-port:access_port:${FILE_STORAGE_ACCESS_PORT_ID}`,
+  );
 });
 
 Deno.test("fileStoragePortConsumer: missing payloadFrom node fails explicitly without enqueue", () => {

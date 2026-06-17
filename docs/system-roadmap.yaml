@@ -725,14 +725,16 @@ system_roadmap_ssot:
       public_summary: >-
         File/Storage Bundle as port consumer of external_port_substrate. Seed binding
         (access_port / response_port / credential_requirement / policy_steps / portTargetRef wiring)
-        implemented per PR#460. Physical tables (export_job / file_artifact / checksum_record /
-        manifest / signed_download_authorizations), physical_table_manifest_binding, SSOT
-        operation_key definitions, and executor handlers (record_export_job / compute_checksum /
-        record_file_artifact / write_manifest_record / authorize_signed_download) implemented per
-        PR#463. Artifact + checksum_record atomic write with fail-close enforced. Remaining
-        partial carry-over: UI Builder portTargetRef action wiring / preset,
-        evidence/runtime_event_log, and projection response. Object storage provider-specific
-        client not added.
+        implemented per PR#460. Physical tables, manifest_binding, SSOT operation_key definitions,
+        and DB function executor (topology.fs_* PostgreSQL functions via execute_db_function
+        operation_key) implemented per PR#463. Credential resolution pipeline
+        (load_encrypted_credential_payload / decrypt_for_runtime_use / inject_authorization_header)
+        seeded in policy_steps 3-4-6. reference_key-based credential vault resolution in place.
+        SSE broadcast on dispatch completion. DB projection test via draftPreviewResultToEmission.
+        FileStorageBundleStepHandler retains only compute_checksum. Remaining partial:
+        UI Builder portTargetRef wiring / preset, evidence/runtime_event_log, projection response.
+        Object storage provider-specific client not added.
+        external_integration_completion_gate: docs/design/runtime-bundle-file-storage-ssot.yaml#external_integration_completion_gate
       scope:
         - file_storage_access_and_response_port_consumer_definition
         - object_storage_credential_requirement_as_port_attachment

@@ -8,100 +8,43 @@ namespace Topolactor.Runtime.Tests;
 public class FileStorageBundleDispatchTests
 {
     [Fact]
-    public void FileStorageBundleStepHandler_SupportedOperationKeys_ContainsAllDomainKeys()
+    public void FileStorageBundleStepHandler_SupportedOperationKeys_OnlyContainsComputeChecksum()
     {
-        var handler = new FileStorageBundleStepHandler(new FakeFileStorageRepository());
-        Assert.Contains("record_export_job", handler.SupportedOperationKeys);
+        var handler = new FileStorageBundleStepHandler();
         Assert.Contains("compute_checksum", handler.SupportedOperationKeys);
-        Assert.Contains("record_file_artifact", handler.SupportedOperationKeys);
-        Assert.Contains("write_manifest_record", handler.SupportedOperationKeys);
-        Assert.Contains("authorize_signed_download", handler.SupportedOperationKeys);
+        Assert.DoesNotContain("record_export_job", handler.SupportedOperationKeys);
+        Assert.DoesNotContain("record_file_artifact", handler.SupportedOperationKeys);
+        Assert.DoesNotContain("write_manifest_record", handler.SupportedOperationKeys);
+        Assert.DoesNotContain("authorize_signed_download", handler.SupportedOperationKeys);
+        Assert.Single(handler.SupportedOperationKeys);
     }
 
     [Fact]
-    public void CoreAllowedOperationKeys_DoesNotContainFileStorageBundleKeys()
+    public void CoreAllowedOperationKeys_ContainsExecuteDbFunction()
+    {
+        Assert.Contains("execute_db_function", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
+    }
+
+    [Fact]
+    public void CoreAllowedOperationKeys_DoesNotContainFileStorageBundleSpecificKeys()
     {
         Assert.DoesNotContain("record_export_job", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
         Assert.DoesNotContain("record_file_artifact", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
-    }
-
-    private static ExternalPortPolicyStepExecutor BuildExecutorWithFileStorage(IFileStorageRepository repo) =>
-        new(bundleHandlers: [new FileStorageBundleStepHandler(repo)]);
-
-    [Fact]
-    public async Task ExecutePolicyAsync_WithFileStorageBundleHandler_ExecutesAllDomainSteps()
-    {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
-        var policy = BuildFileStoragePolicy(accessPort: true);
-        var context = new ExternalPortExecutionContext
-        {
-            RequestPayload = BuildPayload("job-001", "system", "2026-06", "pdf"),
-            PortRecord = BuildPortRecord()
-        };
-
-        context.HttpResponse = new ExternalPortHttpResponse(200, "test-export-response-body");
-        await executor.ExecutePolicyAsync(policy, context);
-
-        Assert.Contains("record_export_job", context.ExecutedOperationKeys);
-        Assert.Contains("compute_checksum", context.ExecutedOperationKeys);
-        Assert.Contains("record_file_artifact", context.ExecutedOperationKeys);
-        Assert.Contains("write_manifest_record", context.ExecutedOperationKeys);
-        Assert.Contains("authorize_signed_download", context.ExecutedOperationKeys);
-        Assert.NotNull(context.ExportJobId);
-        Assert.NotNull(context.ChecksumValue);
-        Assert.NotNull(context.FileArtifactId);
-        Assert.NotNull(context.AuthorizationKey);
-        Assert.NotNull(context.OutputProp);
-        Assert.StartsWith("auth-ref:", context.AuthorizationKey);
-        Assert.Contains("authorization_key", context.OutputProp);
-    }
-
-    [Fact]
-    public async Task ExecutePolicyAsync_WithoutBundleHandler_FileStoragePolicySteps_FailClose()
-    {
-        var executor = new ExternalPortPolicyStepExecutor();
-        var policy = BuildFileStoragePolicy(accessPort: true);
-        var context = new ExternalPortExecutionContext
-        {
-            RequestPayload = BuildPayload("job-002", "system", "2026-06", "json")
-        };
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => executor.ExecutePolicyAsync(policy, context));
-        Assert.Contains("EXTERNAL_PORT_POLICY_OPERATION_UNSUPPORTED", ex.Message);
-    }
-
-    [Fact]
-    public async Task RecordExportJob_UsesIdempotencyKeyFromPayload()
-    {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
-        var context = new ExternalPortExecutionContext
-        {
-            RequestPayload = BuildPayload("job-idem", "user1", "2026-06", "csv", idempotencyKey: "idem-key-123"),
-            PortRecord = BuildPortRecord()
-        };
-
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 6, "record_export_job", new Dictionary<string, string>(), true);
-        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
-        await executor.ExecuteAsync(step, context);
-
-        Assert.Equal("idem-key-123", repo.LastCommand?.IdempotencyKey);
+        Assert.DoesNotContain("write_manifest_record", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
+        Assert.DoesNotContain("authorize_signed_download", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
     }
 
     [Fact]
     public async Task ComputeChecksum_ProduceSha256PrefixedValue()
     {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
+        var executor = new ExternalPortPolicyStepExecutor(bundleHandlers: [new FileStorageBundleStepHandler()]);
         var context = new ExternalPortExecutionContext
         {
             ExportJobId = Guid.NewGuid(),
             HttpResponse = new ExternalPortHttpResponse(200, "test-response-body")
         };
 
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 7, "compute_checksum", new Dictionary<string, string>(), true);
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 9, "compute_checksum", new Dictionary<string, string>(), true);
         context.Policy = BuildPolicy("access_port", "file_storage_bundle");
         await executor.ExecuteAsync(step, context);
 
@@ -110,82 +53,15 @@ public class FileStorageBundleDispatchTests
     }
 
     [Fact]
-    public async Task RecordFileArtifact_UsesEnvVarReferenceNotPlaintextUrl()
-    {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
-        var portRecord = BuildPortRecord(referenceKey: "vault:ref:file_storage_credential");
-        var context = new ExternalPortExecutionContext
-        {
-            ExportJobId = Guid.NewGuid(),
-            ChecksumValue = "sha256:abc123",
-            PortRecord = portRecord,
-            RequestPayload = BuildPayload("job-003", "system", "2026-06", "pdf")
-        };
-
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 8, "record_file_artifact", new Dictionary<string, string>(), true);
-        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
-        await executor.ExecuteAsync(step, context);
-
-        Assert.NotNull(repo.LastArtifactCommand);
-        Assert.Equal("vault:ref:file_storage_credential", repo.LastArtifactCommand!.StorageRef);
-        Assert.DoesNotContain("http", repo.LastArtifactCommand.StorageRef, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("s3", repo.LastArtifactCommand.StorageRef, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task RecordFileArtifact_DoesNotGenerateStorageLocationFallback()
-    {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
-        var context = new ExternalPortExecutionContext
-        {
-            ExportJobId = Guid.NewGuid(),
-            ChecksumValue = "sha256:abc123",
-            PortRecord = BuildPortRecord(referenceKey: null),
-            RequestPayload = BuildPayload("job-005", "system", "2026-06", "pdf")
-        };
-
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 8, "record_file_artifact", new Dictionary<string, string>(), true);
-        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => executor.ExecuteAsync(step, context));
-        Assert.Contains("STORAGE_REF_REQUIRED_FROM_PORT_RECORD", ex.Message);
-    }
-
-    [Fact]
-    public async Task RecordFileArtifact_TreatsLocationAsOpaquePortCredentialReference()
-    {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
-        var portRecord = BuildPortRecord(referenceKey: "opaque-ref:some-arbitrary-identifier");
-        var context = new ExternalPortExecutionContext
-        {
-            ExportJobId = Guid.NewGuid(),
-            ChecksumValue = "sha256:abc123",
-            PortRecord = portRecord,
-            RequestPayload = BuildPayload("job-006", "system", "2026-06", "csv")
-        };
-
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 8, "record_file_artifact", new Dictionary<string, string>(), true);
-        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
-        await executor.ExecuteAsync(step, context);
-
-        Assert.NotNull(repo.LastArtifactCommand);
-        Assert.Equal("opaque-ref:some-arbitrary-identifier", repo.LastArtifactCommand!.StorageRef);
-    }
-
-    [Fact]
     public async Task ComputeChecksum_WithoutArtifactInput_FailsClose()
     {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
+        var executor = new ExternalPortPolicyStepExecutor(bundleHandlers: [new FileStorageBundleStepHandler()]);
         var context = new ExternalPortExecutionContext
         {
             ExportJobId = Guid.NewGuid()
         };
 
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 7, "compute_checksum", new Dictionary<string, string>(), true);
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 9, "compute_checksum", new Dictionary<string, string>(), true);
         context.Policy = BuildPolicy("access_port", "file_storage_bundle");
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => executor.ExecuteAsync(step, context));
@@ -195,8 +71,7 @@ public class FileStorageBundleDispatchTests
     [Fact]
     public async Task ComputeChecksum_DoesNotHashExportJobIdFallback()
     {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
+        var executor = new ExternalPortPolicyStepExecutor(bundleHandlers: [new FileStorageBundleStepHandler()]);
         var exportJobId = Guid.NewGuid();
         var context = new ExternalPortExecutionContext
         {
@@ -204,7 +79,7 @@ public class FileStorageBundleDispatchTests
             HttpResponse = null
         };
 
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 7, "compute_checksum", new Dictionary<string, string>(), true);
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 9, "compute_checksum", new Dictionary<string, string>(), true);
         context.Policy = BuildPolicy("access_port", "file_storage_bundle");
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => executor.ExecuteAsync(step, context));
@@ -213,46 +88,52 @@ public class FileStorageBundleDispatchTests
     }
 
     [Fact]
-    public async Task WriteManifestRecord_WithoutFileArtifactId_FailsClose()
+    public async Task ExecuteDbFunction_WithFakeRepository_SetsExportJobIdOnContext()
     {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
+        var fakeDb = new FakeDbFunctionRepository();
+        var executor = new ExternalPortPolicyStepExecutor(dbFunctionRepository: fakeDb);
         var context = new ExternalPortExecutionContext
         {
-            ExportJobId = Guid.NewGuid(),
-            ChecksumValue = "sha256:abc123",
-            FileArtifactId = null
+            RequestPayload = BuildPayload("job-001", "user1", "2026-06", "pdf"),
+            PortRecord = BuildPortRecord()
         };
 
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 9, "write_manifest_record", new Dictionary<string, string>(), true);
-        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => executor.ExecuteAsync(step, context));
-        Assert.Contains("FILE_ARTIFACT_ID_REQUIRED_FOR_MANIFEST", ex.Message);
-    }
-
-    [Fact]
-    public async Task AuthorizeSignedDownload_SetsAuthorizationKeyReferenceNotSignedUrl()
-    {
-        var repo = new FakeFileStorageRepository();
-        var executor = BuildExecutorWithFileStorage(repo);
-        var context = new ExternalPortExecutionContext
-        {
-            ExportJobId = Guid.NewGuid(),
-            FileArtifactId = Guid.NewGuid(),
-            RequestPayload = BuildPayload("job-004", "system", "2026-06", "pdf")
-        };
-
-        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "authorize_signed_download", new Dictionary<string, string>(), true);
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "execute_db_function",
+            new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job", ["output"] = "ExportJobId" }, true);
         context.Policy = BuildPolicy("access_port", "file_storage_bundle");
         await executor.ExecuteAsync(step, context);
 
-        Assert.NotNull(context.AuthorizationKey);
-        Assert.StartsWith("auth-ref:", context.AuthorizationKey);
-        Assert.DoesNotContain("https://", context.AuthorizationKey, StringComparison.Ordinal);
-        Assert.NotNull(context.OutputProp);
-        Assert.Contains("authorization_key", context.OutputProp);
-        Assert.DoesNotContain("signed_url", context.OutputProp, StringComparison.Ordinal);
+        Assert.Contains("execute_db_function", context.ExecutedOperationKeys);
+        Assert.Equal("topology.fs_record_export_job", fakeDb.LastFunctionName);
+    }
+
+    [Fact]
+    public async Task ExecuteDbFunction_WithoutRepository_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext();
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "execute_db_function",
+            new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job" }, true);
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("EXTERNAL_PORT_DB_FUNCTION_REPOSITORY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteDbFunction_WithoutFunctionName_FailsClose()
+    {
+        var fakeDb = new FakeDbFunctionRepository();
+        var executor = new ExternalPortPolicyStepExecutor(dbFunctionRepository: fakeDb);
+        var context = new ExternalPortExecutionContext();
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "execute_db_function",
+            new Dictionary<string, string>(), true);
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("EXTERNAL_PORT_DB_FUNCTION_NAME_MISSING", ex.Message);
     }
 
     [Fact]
@@ -277,6 +158,18 @@ public class FileStorageBundleDispatchTests
     }
 
     [Fact]
+    public void Source_FileStorageBundleStepHandler_DoesNotContainRemovedDomainMutations()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/runtime/FileStorageBundleStepHandler.cs"));
+        Assert.DoesNotContain("RecordExportJob", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("RecordFileArtifact", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("WriteManifestRecord", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AuthorizeSignedDownload", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("IFileStorageRepository", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("compute_checksum", source);
+    }
+
+    [Fact]
     public void FileStorageContracts_DoNotContainPlaintextCredential()
     {
         var contractSource = File.ReadAllText(FindRepositoryFile("backend/schema/FileStorageContracts.cs"));
@@ -287,21 +180,35 @@ public class FileStorageBundleDispatchTests
         Assert.DoesNotContain("https://", contractSource, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void NpgsqlExternalPortDbFunctionRepository_Source_DispatchesFsStarFunctions()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalPortDbFunctionRepository.cs"));
+        Assert.Contains("topology.fs_record_export_job", source);
+        Assert.Contains("topology.fs_record_file_artifact", source);
+        Assert.Contains("topology.fs_write_manifest_record", source);
+        Assert.Contains("topology.fs_authorize_signed_download", source);
+        Assert.Contains("IExternalPortDbFunctionRepository", source);
+        Assert.DoesNotContain("object_storage", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("provider_kind", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("plaintext", source, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ExternalPortPolicy BuildFileStoragePolicy(bool accessPort) =>
         new(Guid.NewGuid(), "file_storage_test_policy", accessPort ? "access_port" : "response_port", "file_storage_bundle",
         [
-            NewStep(6, "record_export_job"),
-            NewStep(7, "compute_checksum"),
-            NewStep(8, "record_file_artifact"),
-            NewStep(9, "write_manifest_record"),
-            NewStep(10, "authorize_signed_download")
+            NewStep(9, "compute_checksum"),
+            NewStep(10, "execute_db_function", new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job", ["output"] = "ExportJobId" }),
+            NewStep(11, "execute_db_function", new Dictionary<string, string> { ["function"] = "topology.fs_record_file_artifact", ["output"] = "FileArtifactId" }),
+            NewStep(12, "execute_db_function", new Dictionary<string, string> { ["function"] = "topology.fs_write_manifest_record", ["output"] = "ManifestId" }),
+            NewStep(13, "execute_db_function", new Dictionary<string, string> { ["function"] = "topology.fs_authorize_signed_download", ["output"] = "AuthorizationKey" })
         ], true);
 
     private static ExternalPortPolicy BuildPolicy(string portKind, string bundle) =>
         new(Guid.NewGuid(), "test_policy", portKind, bundle, Array.Empty<ExternalPortPolicyStep>(), true);
 
-    private static ExternalPortPolicyStep NewStep(int order, string operationKey) =>
-        new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, new Dictionary<string, string>(), true);
+    private static ExternalPortPolicyStep NewStep(int order, string operationKey, IReadOnlyDictionary<string, string>? config = null) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, config ?? new Dictionary<string, string>(), true);
 
     private static ExternalPortRecord BuildPortRecord(string? referenceKey = "vault:ref:file_storage_credential") =>
         new(Guid.NewGuid(), "access_port", "file_storage_bundle", "object_storage",
@@ -332,39 +239,29 @@ public class FileStorageBundleDispatchTests
         throw new FileNotFoundException(relativePath);
     }
 
-    private sealed class FakeFileStorageRepository : IFileStorageRepository
+    private sealed class FakeDbFunctionRepository : IExternalPortDbFunctionRepository
     {
-        private Guid _nextJobId = Guid.NewGuid();
-        private Guid _nextArtifactId = Guid.NewGuid();
-        private Guid _nextChecksumId = Guid.NewGuid();
-        private Guid _nextManifestId = Guid.NewGuid();
-        private Guid _nextAuthId = Guid.NewGuid();
+        public string? LastFunctionName { get; private set; }
+        public IReadOnlyDictionary<string, string>? LastStepConfig { get; private set; }
 
-        public RecordExportJobCommand? LastCommand { get; private set; }
-        public RecordFileArtifactCommand? LastArtifactCommand { get; private set; }
-
-        public Task<Guid> RecordExportJobAsync(RecordExportJobCommand command, CancellationToken ct = default)
+        public Task ExecuteAsync(
+            string functionName,
+            IReadOnlyDictionary<string, string> stepConfig,
+            ExternalPortExecutionContext context,
+            CancellationToken ct = default)
         {
-            LastCommand = command;
-            return Task.FromResult(_nextJobId);
+            LastFunctionName = functionName;
+            LastStepConfig = stepConfig;
+            if (functionName == "topology.fs_record_export_job")
+                context.ExportJobId = Guid.NewGuid();
+            else if (functionName == "topology.fs_record_file_artifact")
+                context.FileArtifactId = Guid.NewGuid();
+            else if (functionName == "topology.fs_authorize_signed_download")
+            {
+                context.AuthorizationKey = $"auth-ref:{Guid.NewGuid():N}";
+                context.OutputProp = $"{{\"authorization_key\":\"{context.AuthorizationKey}\"}}";
+            }
+            return Task.CompletedTask;
         }
-
-        public Task UpdateExportJobStatusAsync(Guid exportJobId, string status, string? failureCode = null, CancellationToken ct = default) =>
-            Task.CompletedTask;
-
-        public Task<FileChecksumRecord> RecordChecksumAsync(RecordChecksumCommand command, CancellationToken ct = default) =>
-            Task.FromResult(new FileChecksumRecord(_nextChecksumId, command.ExportJobId, command.FileArtifactId, command.Algorithm, command.ChecksumValue, command.VerifiedAt, command.VerificationStatus));
-
-        public Task<FileArtifactRecord> RecordFileArtifactAsync(RecordFileArtifactCommand command, CancellationToken ct = default)
-        {
-            LastArtifactCommand = command;
-            return Task.FromResult(new FileArtifactRecord(_nextArtifactId, command.ExportJobId, command.FileName, command.FileType, command.StorageRef, command.ByteSize, null));
-        }
-
-        public Task<ExportManifestRecord> WriteManifestRecordAsync(WriteManifestCommand command, CancellationToken ct = default) =>
-            Task.FromResult(new ExportManifestRecord(_nextManifestId, command.ExportJobId, command.ManifestVersion, command.GeneratedAt, command.GeneratedBy, command.Period, command.ExportFormat, command.Checksum, command.FileArtifactIds));
-
-        public Task<SignedDownloadAuthorizationRecord> AuthorizeSignedDownloadAsync(AuthorizeSignedDownloadCommand command, CancellationToken ct = default) =>
-            Task.FromResult(new SignedDownloadAuthorizationRecord(_nextAuthId, command.FileArtifactId, command.AuthorizedBy, command.AuthorizedAt, command.ExpiresAt, command.AuthorizationKey, "active"));
     }
 }

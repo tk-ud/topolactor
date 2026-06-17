@@ -2118,20 +2118,43 @@ VALUES
 ON CONFLICT (policy_id) DO NOTHING;
 
 -- Consumer bundle policy steps (operation_key values constrained to external-port SSOT allowed set)
+-- file_storage steps use ON CONFLICT DO UPDATE to allow re-seeding with updated credential pipeline (13 steps)
+DELETE FROM topology.external_port_policy_steps
+WHERE policy_id IN (
+    '00000000-0000-0000-0000-0000000000e4',
+    '00000000-0000-0000-0000-0000000000e5'
+);
+
 INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
 VALUES
-    -- file_storage_bundle access_port
-    ('00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-0000000000e4', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-0000000000e4', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000403', '00000000-0000-0000-0000-0000000000e4', 3, 'build_http_request',           '{}', true),
-    ('00000000-0000-0000-0000-000000000404', '00000000-0000-0000-0000-0000000000e4', 4, 'send_http',                    '{}', true),
-    ('00000000-0000-0000-0000-000000000405', '00000000-0000-0000-0000-0000000000e4', 5, 'capture_response',             '{}', true),
-    -- file_storage_bundle response_port
-    ('00000000-0000-0000-0000-000000000411', '00000000-0000-0000-0000-0000000000e5', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000412', '00000000-0000-0000-0000-0000000000e5', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000413', '00000000-0000-0000-0000-0000000000e5', 3, 'build_http_request',           '{}', true),
-    ('00000000-0000-0000-0000-000000000414', '00000000-0000-0000-0000-0000000000e5', 4, 'send_http',                    '{}', true),
-    ('00000000-0000-0000-0000-000000000415', '00000000-0000-0000-0000-0000000000e5', 5, 'capture_response',             '{}', true),
+    -- file_storage_bundle access_port (13-step credential pipeline + domain execute_db_function)
+    ('00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-0000000000e4',  1, 'resolve_port_record',              '{}', true),
+    ('00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-0000000000e4',  2, 'resolve_credential_reference',     '{}', true),
+    ('00000000-0000-0000-0000-000000000403', '00000000-0000-0000-0000-0000000000e4',  3, 'load_encrypted_credential_payload','{}', true),
+    ('00000000-0000-0000-0000-000000000404', '00000000-0000-0000-0000-0000000000e4',  4, 'decrypt_for_runtime_use',          '{}', true),
+    ('00000000-0000-0000-0000-000000000405', '00000000-0000-0000-0000-0000000000e4',  5, 'build_http_request',               '{}', true),
+    ('00000000-0000-0000-0000-0000000004a0', '00000000-0000-0000-0000-0000000000e4',  6, 'inject_authorization_header',      '{}', true),
+    ('00000000-0000-0000-0000-0000000004a1', '00000000-0000-0000-0000-0000000000e4',  7, 'send_http',                        '{}', true),
+    ('00000000-0000-0000-0000-0000000004a2', '00000000-0000-0000-0000-0000000000e4',  8, 'capture_response',                 '{}', true),
+    ('00000000-0000-0000-0000-000000000407', '00000000-0000-0000-0000-0000000000e4',  9, 'compute_checksum',                 '{}', true),
+    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 10, 'execute_db_function', '{"function":"topology.fs_record_export_job","output":"ExportJobId"}', true),
+    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 11, 'execute_db_function', '{"function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', true),
+    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 12, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
+    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 13, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
+    -- file_storage_bundle response_port (13-step credential pipeline + domain execute_db_function)
+    ('00000000-0000-0000-0000-000000000411', '00000000-0000-0000-0000-0000000000e5',  1, 'resolve_port_record',              '{}', true),
+    ('00000000-0000-0000-0000-000000000412', '00000000-0000-0000-0000-0000000000e5',  2, 'resolve_credential_reference',     '{}', true),
+    ('00000000-0000-0000-0000-000000000413', '00000000-0000-0000-0000-0000000000e5',  3, 'load_encrypted_credential_payload','{}', true),
+    ('00000000-0000-0000-0000-000000000414', '00000000-0000-0000-0000-0000000000e5',  4, 'decrypt_for_runtime_use',          '{}', true),
+    ('00000000-0000-0000-0000-000000000415', '00000000-0000-0000-0000-0000000000e5',  5, 'build_http_request',               '{}', true),
+    ('00000000-0000-0000-0000-0000000004b0', '00000000-0000-0000-0000-0000000000e5',  6, 'inject_authorization_header',      '{}', true),
+    ('00000000-0000-0000-0000-0000000004b1', '00000000-0000-0000-0000-0000000000e5',  7, 'send_http',                        '{}', true),
+    ('00000000-0000-0000-0000-0000000004b2', '00000000-0000-0000-0000-0000000000e5',  8, 'capture_response',                 '{}', true),
+    ('00000000-0000-0000-0000-000000000417', '00000000-0000-0000-0000-0000000000e5',  9, 'compute_checksum',                 '{}', true),
+    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 10, 'execute_db_function', '{"function":"topology.fs_record_export_job","output":"ExportJobId"}', true),
+    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 11, 'execute_db_function', '{"function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', true),
+    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 12, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
+    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 13, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
     -- email_bundle response_port
     ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', true),
     ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', true),
@@ -2170,22 +2193,5 @@ VALUES
     ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{}', true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
 
--- file_storage_bundle domain operation steps (6-10).
--- Steps 1-5 are HTTP communication (seeded above in consumer bundle binding).
--- Steps 6-10 are domain record operations executed post-HTTP:
---   record_export_job → compute_checksum → record_file_artifact → write_manifest_record → authorize_signed_download
-INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
-VALUES
-    -- file_storage_bundle access_port domain steps
-    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 6,  'record_export_job',        '{}', true),
-    ('00000000-0000-0000-0000-000000000407', '00000000-0000-0000-0000-0000000000e4', 7,  'compute_checksum',         '{}', true),
-    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 8,  'record_file_artifact',     '{}', true),
-    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 9,  'write_manifest_record',    '{}', true),
-    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 10, 'authorize_signed_download','{}', true),
-    -- file_storage_bundle response_port domain steps
-    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 6,  'record_export_job',        '{}', true),
-    ('00000000-0000-0000-0000-000000000417', '00000000-0000-0000-0000-0000000000e5', 7,  'compute_checksum',         '{}', true),
-    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 8,  'record_file_artifact',     '{}', true),
-    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 9,  'write_manifest_record',    '{}', true),
-    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 10, 'authorize_signed_download','{}', true)
-ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- file_storage_bundle domain operation steps are now included in the 13-step credential pipeline above.
+-- Steps 9-13 use execute_db_function operation_key via topology.fs_* PostgreSQL functions.

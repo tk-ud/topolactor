@@ -111,8 +111,9 @@ builder.Services.AddSingleton<IFileStorageRepository>(sp =>
     new NpgsqlFileStorageRepository(
         sp.GetRequiredService<ILogger<NpgsqlFileStorageRepository>>(),
         connectionString));
-builder.Services.AddSingleton<IExternalPortBundleStepHandler>(sp =>
-    new FileStorageBundleStepHandler(sp.GetRequiredService<IFileStorageRepository>()));
+builder.Services.AddSingleton<IExternalPortBundleStepHandler>(_ => new FileStorageBundleStepHandler());
+builder.Services.AddSingleton<IExternalPortDbFunctionRepository>(_ =>
+    new NpgsqlExternalPortDbFunctionRepository(connectionString));
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IExternalPortHttpClient>(sp =>
     new HttpExternalPortHttpClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ExternalPort")));
@@ -125,8 +126,14 @@ builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
         credentialReferenceResolver: sp.GetRequiredService<IExternalPortCredentialReferenceResolver>(),
         crypto: sp.GetRequiredService<IExternalCredentialCrypto>(),
         portResolver: sp.GetRequiredService<IExternalPortResolver>(),
-        bundleHandlers: sp.GetServices<IExternalPortBundleStepHandler>()));
-builder.Services.AddSingleton<ExternalPortDispatchRuntime>();
+        bundleHandlers: sp.GetServices<IExternalPortBundleStepHandler>(),
+        dbFunctionRepository: sp.GetRequiredService<IExternalPortDbFunctionRepository>()));
+builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
+    new ExternalPortDispatchRuntime(
+        sp.GetRequiredService<ILogger<ExternalPortDispatchRuntime>>(),
+        sp.GetRequiredService<IExternalPortPolicyRepository>(),
+        sp.GetRequiredService<IExternalPortPolicyStepExecutor>(),
+        sp.GetRequiredService<SseEventBroadcaster>()));
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>(sp =>

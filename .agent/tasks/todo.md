@@ -129,12 +129,18 @@ provider-specific client / runtime は追加しない。
 実装済み:
 - [x] export_job / file_artifact / checksum_record / manifest / signed_download_authorizations physical table 接続実装 (`db/topology_tables.sql`)
 - [x] physical table manifest binding (file_storage manifest / physical_table_manifest_bindings) (`db/seed_empty.sql`)
-- [x] ExternalPortPolicyStepExecutor に record_export_job / compute_checksum / record_file_artifact / write_manifest_record / authorize_signed_download handlers 追加 (fail-close, 原則 throw)
-- [x] checksum 生成: compute_checksum step は SHA-256 computation-only; record_file_artifact step が artifact + checksum_record を atomic write
-- [x] IFileStorageRepository + NpgsqlFileStorageRepository (production Npgsql 実装)
-- [x] operation_key_allowed_values を external-port-substrate-ssot.yaml に追加 (5 keys with meaning/boundary/prohibited)
-- [x] backend tests: FileStorageBundleDispatchTests (10 tests)
-- [x] frontend tests: fileStoragePortConsumer.test.ts (4 tests)
+- [x] IFileStorageRepository + NpgsqlFileStorageRepository (後方互換のため保持)
+- [x] operation_key_allowed_values を external-port-substrate-ssot.yaml に追加
+- [x] backend tests: FileStorageBundleDispatchTests
+- [x] external_integration_completion_gate を external-port-substrate-ssot.yaml / runtime-bundle-file-storage-ssot.yaml に明記
+
+completion gate 対応 (PR#463):
+- [x] Issue 0: SSOT/todo に external_integration_completion_gate を追記 (4軸 + credential resolution)
+- [x] Issue 2b: external_credential_vault に reference_key 列追加; LoadByReferenceKeyAsync 実装; ExternalPortCredentialReferenceResolver を reference_key 経由に修正
+- [x] Issue 2a: file_storage access_port / response_port policy_steps に load_encrypted_credential_payload (3) / decrypt_for_runtime_use (4) / inject_authorization_header (6) を追加; domain steps を 9-13 に再番号付け
+- [x] Issue 4: execute_db_function operation_key + IExternalPortDbFunctionRepository + topology.fs_* PostgreSQL functions 追加; FileStorageBundleStepHandler は compute_checksum のみ保持
+- [x] Issue 3: capture_response を MarkOnly から HttpResponse.Body → context.OutputProp に変更; ExternalPortDispatchRuntime が SseEventBroadcaster 経由で SSE に broadcast
+- [x] Issue 1: fileStoragePortConsumer.test.ts に draftPreviewResultToEmission 経由の DB projection test を追加
 
 残 todo:
 - [ ] UI Builder form preset / portTargetRef action wiring (export_job → access/response port connect)

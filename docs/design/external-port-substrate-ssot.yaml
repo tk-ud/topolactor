@@ -476,3 +476,54 @@ external_port_substrate_ssot:
     - docs/design/runtime-bundle-job-scheduler-ssot.yaml
     - docs/design/runtime-bundle-audit-approval-ssot.yaml
     - docs/design/runtime-bundle-export-sftp-ssot.yaml
+
+  external_integration_completion_gate:
+    note: >-
+      外部連携 Bundle の PR が merge 可能になるための完了ゲート。
+      4 軸 + credential resolution 基盤 の全てを満たす必要がある。
+      監査コメント上の後付け基準ではなく、SSOT として全外部連携 Bundle の completion gate とする。
+    required:
+      UI_db_projection:
+        rule: >-
+          UI は DB / seed / topology manifest から投影すること。
+          test-local 手書き emission を DB projection 接続済みとして扱わない。
+        check: DB seed / topology_manifest / physical_table_manifest_binding / projection repository 由来で UI emission を生成し、dispatchExternalPort runtimeInteraction が投影結果として出ること
+      dispatch_resolution:
+        rule: >-
+          dispatchExternalPort は port record / credential requirement を解決すること。
+          port record / credential vault / dispatch policy steps を通らない外部通信は Bundle 実装として成立しない。
+        check: port_target_ref → port record resolution → credential requirement / reference_key resolution → credential vault record → load / decrypt / inject → send_http / capture_response の通貫
+      credential_resolution_base:
+        rule: >-
+          credential resolution は外部連携の基盤。
+          credential_kind != none の場合、send_http 前に credential vault payload の load / decrypt / authorization injection を通すこと。
+        check: load_encrypted_credential_payload → decrypt_for_runtime_use → inject_authorization_header が policy steps に存在し、executor が実行すること
+      response_queue:
+        rule: >-
+          response / SSE は queue / projection response lane に乗ること。
+          capture_response の MarkOnly を response queued 扱いしない。
+          inline EndpointResponseDto を SSE / projection response 扱いしない。
+        check: dispatch response が既存 queue / SSE lane に積まれ、consumer 側が SSE / queued response として受け取れること
+      abstract_function_boundary:
+        rule: >-
+          backend の domain mutation は abstract function / DB-driven operation boundary を使うこと。
+          file_storage 専用 concrete mutation を追加しない。
+          例外は SQL Attention / CI Attention のみ。
+        check: record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download が data-defined / abstract function path で処理されること
+    exceptions:
+      - SQL_Attention
+      - CI_Attention
+    prohibited:
+      - test_local_handwritten_UI_emission_treated_as_DB_projection
+      - direct_backend_concrete_mutation_for_bundle_specific_records
+      - external_communication_without_credential_resolution
+      - capture_response_as_MarkOnly_treated_as_response_queued
+      - inline_EndpointResponseDto_treated_as_SSE_or_projection_response
+    applies_to_all_external_bundles:
+      - file_storage_bundle
+      - email_bundle
+      - stripe_bundle
+      - webhook_inbox_bundle
+      - job_scheduler_bundle
+      - audit_approval_bundle
+      - export_sftp_bundle

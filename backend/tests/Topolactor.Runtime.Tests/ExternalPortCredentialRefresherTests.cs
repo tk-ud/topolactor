@@ -374,13 +374,37 @@ public class ExternalPortSeedDrivenPolicyTests
     }
 
     [Fact]
-    public void CredentialReferenceResolver_Source_UsesProviderAndBundleNotReferenceKeyDirectly()
+    public void CredentialReferenceResolver_Source_UsesReferenceKeyViaLoadByReferenceKeyAsync()
     {
         var source = File.ReadAllText(FindRepositoryFile("backend/runtime/ExternalPortCredentialReferenceResolver.cs"));
-        Assert.Contains("LoadByProviderAndBundleAsync", source);
-        Assert.Contains("portRecord.ProviderKind", source);
-        Assert.Contains("portRecord.RequiredByBundle", source);
-        Assert.DoesNotContain("ReferenceKey", source);
+        Assert.Contains("LoadByReferenceKeyAsync", source);
+        Assert.Contains("portRecord.ReferenceKey", source);
+        Assert.DoesNotContain("LoadByProviderAndBundleAsync", source);
+        Assert.DoesNotContain("portRecord.ProviderKind", source);
+        Assert.DoesNotContain("portRecord.RequiredByBundle", source);
+    }
+
+    [Fact]
+    public void CredentialReferenceResolver_MissingReferenceKey_FailsClose()
+    {
+        var resolver = new ExternalPortCredentialReferenceResolver(new NullVaultRepository());
+        var portRecord = new ExternalPortRecord(
+            Guid.NewGuid(), "access_port", "file_storage_bundle",
+            "object_storage", "env:ENDPOINT", null, null, null, "external", null, Active: true);
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => resolver.ResolveCredentialReferenceAsync(portRecord).GetAwaiter().GetResult());
+        Assert.Contains("EXTERNAL_PORT_REFERENCE_KEY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public void NpgsqlCredentialVaultRepository_Source_ImplementsLoadByReferenceKey()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalCredentialVaultRepository.cs"));
+        Assert.Contains("LoadByReferenceKeyAsync", source);
+        Assert.Contains("reference_key = @referenceKey", source);
+        Assert.Contains("AND active = true", source);
+        Assert.DoesNotContain("switch (provider", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -470,5 +494,29 @@ public class ExternalPortSeedDrivenPolicyTests
             System.Text.Encoding.UTF8.GetBytes(plaintextPayload);
 
         public string ComputeTokenHash(string plaintextPayload) => $"sha256:{plaintextPayload.GetHashCode():x8}";
+    }
+
+    private sealed class NullVaultRepository : IExternalCredentialVaultRepository
+    {
+        public Task<ExternalCredentialVaultRecord?> LoadAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+
+        public Task<ExternalCredentialVaultRecord?> LoadByReferenceKeyAsync(string referenceKey, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+
+        public Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+
+        public Task<ExternalCredentialRefreshLease?> AcquireRefreshLeaseAsync(Guid credentialVaultId, string leaseOwner, TimeSpan leaseDuration, DateTimeOffset now, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialRefreshLease?>(null);
+
+        public Task WriteEncryptedCredentialPayloadAsync(Guid credentialVaultId, int expectedVersion, byte[] encryptedPayload, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task ReleaseRefreshLeaseAsync(ExternalCredentialRefreshLease lease, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task FailRefreshLeaseAsync(ExternalCredentialRefreshLease lease, string failureCode, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 }

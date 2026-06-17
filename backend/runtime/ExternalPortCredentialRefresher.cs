@@ -61,6 +61,8 @@ public interface IExternalCredentialVaultRepository
 
     Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default);
 
+    Task<ExternalCredentialVaultRecord?> LoadByReferenceKeyAsync(string referenceKey, CancellationToken ct = default);
+
     Task<ExternalCredentialRefreshLease?> AcquireRefreshLeaseAsync(
         Guid credentialVaultId,
         string leaseOwner,
@@ -338,6 +340,21 @@ public interface IFileStorageRepository
 }
 
 /// <summary>
+/// Generic abstract function boundary for DB-driven domain mutations via execute_db_function
+/// operation_key. Implementations call named PostgreSQL functions (e.g. topology.fs_*) using
+/// context-derived parameters. This is the data-driven path for all consumer bundle domain
+/// mutations that are not hard-runtime compute operations.
+/// </summary>
+public interface IExternalPortDbFunctionRepository
+{
+    Task ExecuteAsync(
+        string functionName,
+        IReadOnlyDictionary<string, string> stepConfig,
+        ExternalPortExecutionContext context,
+        CancellationToken ct = default);
+}
+
+/// <summary>
 /// Reusable extension point for consumer bundle-specific operation_key handlers.
 /// Each consumer bundle (file_storage, email, audit_approval, export_sftp, etc.) registers
 /// its own implementation. The generic ExternalPortPolicyStepExecutor stays free of
@@ -390,6 +407,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         "inject_authorization_header",
         "send_http",
         "capture_response",
+        "execute_db_function",
         "verify_signature_by_config",
         "enqueue_scheduler_event",
         "append_runtime_event_log",
@@ -410,6 +428,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IExternalPortCredentialReferenceResolver? credentialReferenceResolver = null,
         IExternalPortResolver? portResolver = null,
         IExternalCredentialCrypto? crypto = null,
+        IExternalPortDbFunctionRepository? dbFunctionRepository = null,
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null)
     {
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
@@ -515,7 +534,22 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 return Task.CompletedTask;
             },
             ["append_runtime_event_log"] = MarkOnly,
-            ["capture_response"] = MarkOnly,
+            ["capture_response"] = (step, context, ct) =>
+            {
+                if (context.HttpResponse is not null)
+                    context.OutputProp = context.HttpResponse.Body;
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["execute_db_function"] = async (step, context, ct) =>
+            {
+                if (dbFunctionRepository is null)
+                    throw new InvalidOperationException("EXTERNAL_PORT_DB_FUNCTION_REPOSITORY_MISSING");
+                if (!step.StepConfig.TryGetValue("function", out var functionName) || string.IsNullOrWhiteSpace(functionName))
+                    throw new InvalidOperationException("EXTERNAL_PORT_DB_FUNCTION_NAME_MISSING");
+                await dbFunctionRepository.ExecuteAsync(functionName, step.StepConfig, context, ct);
+                context.MarkExecuted(step.OperationKey);
+            },
             ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE"),
             ["load_encrypted_credential_payload"] = (step, context, ct) =>
             {

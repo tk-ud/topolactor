@@ -267,3 +267,53 @@ runtime_bundle_file_storage_ssot:
     policy: >-
       実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
       credential / bucket実体はこのSSOTに含めない。
+
+  external_integration_completion_gate:
+    gate_ssot_ref: docs/design/external-port-substrate-ssot.yaml#external_integration_completion_gate
+    note: >-
+      file_storage_bundle PR が merge 可能になるための完了ゲート。
+      external_port_substrate SSOT の共通 gate 4 軸 + credential resolution 基盤を全て満たすこと。
+    required:
+      UI_db_projection:
+        status: required
+        check: >-
+          DB seed (topology_manifest 093) / physical_table_manifest_binding / projection 由来で
+          dispatchExternalPort runtimeInteraction を生成し、frontend test が
+          draftPreviewResultToEmission / renderEmission 経由で検証すること。
+          手書き Emission を DB projection 接続済みとして扱わない。
+      dispatch_resolution:
+        status: required
+        check: >-
+          port_target_ref → LoadPortRecordByIdAsync → reference_key →
+          LoadByReferenceKeyAsync → credential vault →
+          load_encrypted_credential_payload → decrypt_for_runtime_use →
+          inject_authorization_header → send_http → capture_response の通貫。
+      credential_resolution_base:
+        status: required
+        check: >-
+          file_storage access_port / response_port policy_steps に
+          load_encrypted_credential_payload (step 3) /
+          decrypt_for_runtime_use (step 4) /
+          inject_authorization_header (step 6) が存在し executor が実行すること。
+          resolve_credential_reference は reference_key 経由で
+          LoadByReferenceKeyAsync を使うこと (provider_kind + required_by_bundle は不可)。
+      response_queue:
+        status: required
+        check: >-
+          ExternalPortDispatchRuntime が policy 完了後に SseEventBroadcaster.Broadcast を呼び、
+          dispatch 結果が SSE lane に載ること。
+          capture_response は MarkOnly ではなく HttpResponse.Body を context.OutputProp に格納すること。
+      abstract_function_boundary:
+        status: required
+        check: >-
+          record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download は
+          execute_db_function operation_key 経由で topology.fs_* PostgreSQL functions を呼ぶこと。
+          FileStorageBundleStepHandler は compute_checksum のみ保持する。
+          IExternalPortDbFunctionRepository が abstract function boundary として機能すること。
+    prohibited:
+      - test_local_handwritten_UI_emission_treated_as_DB_projection
+      - direct_FileStorageBundleStepHandler_concrete_mutation_for_non_checksum_steps
+      - external_communication_without_credential_resolution_via_reference_key
+      - capture_response_as_MarkOnly_treated_as_response_queued
+      - inline_EndpointResponseDto_treated_as_SSE_or_projection_response
+      - LoadByProviderAndBundleAsync_as_primary_credential_resolver

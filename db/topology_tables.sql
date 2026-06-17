@@ -368,11 +368,16 @@ CREATE TABLE IF NOT EXISTS topology.external_credential_vault (
     version                  INTEGER     NOT NULL DEFAULT 1 CHECK (version > 0),
     locked_until             TIMESTAMPTZ,
     active                   BOOLEAN     NOT NULL DEFAULT true,
+    reference_key            TEXT,
     created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_external_credential_vault_encrypted_payload_reference
         CHECK (encrypted_payload IS NULL OR encryption_key_reference IS NOT NULL)
 );
+
+-- Add reference_key column to existing tables (idempotent for re-runs)
+ALTER TABLE topology.external_credential_vault
+    ADD COLUMN IF NOT EXISTS reference_key TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_external_credential_vault_provider_bundle
     ON topology.external_credential_vault (provider_kind, required_by_bundle)
@@ -381,6 +386,10 @@ CREATE INDEX IF NOT EXISTS idx_external_credential_vault_provider_bundle
 CREATE INDEX IF NOT EXISTS idx_external_credential_vault_token_hash
     ON topology.external_credential_vault (token_hash)
     WHERE active = true AND token_hash IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_external_credential_vault_reference_key
+    ON topology.external_credential_vault (reference_key)
+    WHERE reference_key IS NOT NULL;
 
 COMMENT ON TABLE topology.external_credential_vault IS
     'DB guarded external credential vault for external_port_substrate port record attachments. '
@@ -636,3 +645,129 @@ COMMENT ON TABLE topology.signed_download_authorizations IS
     'reference identifier; actual signed URL value is managed by runtime secret store and is prohibited '
     'from this table.';
 COMMENT ON TABLE topology.external_port_policy_steps IS 'Ordered operation_key steps. operation_key values are constrained to external-port SSOT allowed values.';
+
+-- ---------------------------------------------------------------------------
+-- file_storage_bundle domain PostgreSQL functions.
+-- Called via execute_db_function operation_key from ExternalPortPolicyStepExecutor.
+-- These are abstract function boundary implementations; bundle-specific C# handler
+-- code (FileStorageBundleStepHandler) must NOT call these directly.
+-- storage_ref / authorization_key are opaque reference identifiers — never plaintext.
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION topology.fs_record_export_job(
+    p_idempotency_key    TEXT,
+    p_required_by_bundle TEXT,
+    p_port_id            UUID,
+    p_port_kind          TEXT,
+    p_requested_by       TEXT,
+    p_export_format      TEXT DEFAULT NULL,
+    p_period             TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    INSERT INTO topology.export_jobs (
+        idempotency_key, port_id, port_kind, requested_by,
+        export_format, period, status
+    ) VALUES (
+        p_idempotency_key, p_port_id, p_port_kind, p_requested_by,
+        p_export_format, p_period, 'in_progress'
+    )
+    ON CONFLICT (idempotency_key) DO UPDATE SET updated_at = now()
+    RETURNING export_job_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_record_export_job IS
+    'Records or idempotently upserts a file_storage export job. Called via execute_db_function policy step.';
+
+CREATE OR REPLACE FUNCTION topology.fs_record_file_artifact(
+    p_export_job_id   UUID,
+    p_file_name       TEXT,
+    p_file_type       TEXT,
+    p_storage_ref     TEXT,
+    p_checksum_value  TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_artifact_id UUID;
+    v_checksum_id UUID;
+BEGIN
+    INSERT INTO topology.file_artifacts (
+        export_job_id, file_name, file_type, storage_ref
+    ) VALUES (
+        p_export_job_id, p_file_name, p_file_type, p_storage_ref
+    )
+    RETURNING file_artifact_id INTO v_artifact_id;
+
+    INSERT INTO topology.file_checksum_records (
+        export_job_id, file_artifact_id, algorithm, checksum_value, verification_status
+    ) VALUES (
+        p_export_job_id, v_artifact_id, 'sha256', p_checksum_value, 'verified'
+    )
+    RETURNING checksum_record_id INTO v_checksum_id;
+
+    UPDATE topology.file_artifacts
+       SET checksum_record_id = v_checksum_id, updated_at = now()
+     WHERE file_artifact_id = v_artifact_id;
+
+    RETURN v_artifact_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_record_file_artifact IS
+    'Atomically inserts file_artifact and its checksum_record in a single transaction. Called via execute_db_function policy step.';
+
+CREATE OR REPLACE FUNCTION topology.fs_write_manifest_record(
+    p_export_job_id    UUID,
+    p_file_artifact_id UUID,
+    p_requested_by     TEXT DEFAULT 'system',
+    p_period           TEXT DEFAULT NULL,
+    p_export_format    TEXT DEFAULT NULL,
+    p_checksum_value   TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    INSERT INTO topology.export_manifests (
+        export_job_id, manifest_version, generated_by, period,
+        export_format, manifest_jsonb
+    ) VALUES (
+        p_export_job_id, '1.0', p_requested_by, p_period,
+        p_export_format,
+        jsonb_build_object(
+            'file_artifact_ids', jsonb_build_array(p_file_artifact_id::text),
+            'checksum', p_checksum_value
+        )
+    )
+    ON CONFLICT (export_job_id) DO UPDATE
+        SET manifest_jsonb = EXCLUDED.manifest_jsonb,
+            updated_at = now()
+    RETURNING manifest_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_write_manifest_record IS
+    'Writes or updates export package manifest record. Called via execute_db_function policy step.';
+
+CREATE OR REPLACE FUNCTION topology.fs_authorize_signed_download(
+    p_file_artifact_id UUID,
+    p_authorized_by    TEXT DEFAULT 'system'
+) RETURNS TEXT
+LANGUAGE plpgsql AS $$
+DECLARE v_key TEXT;
+BEGIN
+    v_key := 'auth-ref:' || replace(p_file_artifact_id::text, '-', '') || ':' || replace(gen_random_uuid()::text, '-', '');
+    INSERT INTO topology.signed_download_authorizations (
+        file_artifact_id, authorized_by, expires_at, authorization_key
+    ) VALUES (
+        p_file_artifact_id, p_authorized_by, now() + INTERVAL '1 hour', v_key
+    );
+    RETURN v_key;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_authorize_signed_download IS
+    'Creates a non-guessable authorization_key reference for signed download. authorization_key is opaque ref — not a signed URL. Called via execute_db_function policy step.';
