@@ -263,41 +263,6 @@ external_port_substrate_ssot:
       - update_token_hash
       - update_expires_at_and_version
       - release_refresh_lease
-      - record_export_job:
-          meaning: Records export job initiation metadata into topology.export_jobs using idempotency_key from payload.
-          boundary: Writes job metadata only; must not write file content, credential, bucket name, or plaintext URL.
-          prohibited:
-            - file_content_write
-            - plaintext_credential_in_payload
-            - provider_specific_runtime_call
-      - compute_checksum:
-          meaning: Computes SHA-256 hash from HTTP response body or export job reference. Stores result in execution context only.
-          boundary: Computation only; must not write to DB before file_artifact record exists.
-          prohibited:
-            - db_write_before_artifact_exists
-            - plaintext_storage_path_in_checksum
-            - provider_specific_hash_algorithm
-      - record_file_artifact:
-          meaning: Atomically writes file_artifact metadata and checksum_record into DB. Requires ChecksumValue to be present in context.
-          boundary: Writes artifact metadata and checksum record in a single transaction; storage_ref is env-var reference identifier only.
-          prohibited:
-            - write_without_checksum
-            - plaintext_storage_url_in_storage_ref
-            - provider_specific_storage_client
-      - write_manifest_record:
-          meaning: Writes export package manifest record into topology.export_manifests linking export_job_id and file_artifact_ids.
-          boundary: Requires export_job_id and at least one file_artifact_id from execution context.
-          prohibited:
-            - manifest_write_without_export_job_id
-            - plaintext_credential_in_manifest
-            - provider_specific_format_branching
-      - authorize_signed_download:
-          meaning: Creates a non-guessable authorization_key reference in topology.signed_download_authorizations. Does not generate or store actual signed URL.
-          boundary: authorization_key is opaque reference identifier; actual signed URL resolution is runtime secret store concern.
-          prohibited:
-            - storing_actual_signed_url
-            - plaintext_storage_credential_in_key
-            - signed_url_in_output_prop
     execution_rule: >-
       Runtime reads topology.external_port_policy_steps ordered by step_order and dispatches
       operation_key through a generic registry/dictionary. provider_kind and
@@ -307,6 +272,37 @@ external_port_substrate_ssot:
     physical_tables:
       - topology.external_port_policies
       - topology.external_port_policy_steps
+
+  consumer_bundle_step_handler_surface:
+    purpose: >-
+      Consumer bundle-specific operation_key handlers are NOT added to the generic executor class.
+      Each bundle registers a dedicated IExternalPortBundleStepHandler implementation.
+      The generic executor accepts an extensible collection of bundle handlers via constructor injection.
+      This keeps ExternalPortPolicyStepExecutor free of bundle-specific dependencies.
+    rule: >-
+      Bundle-specific operation_keys must be defined in the bundle's own SSOT, not in
+      external_port_substrate core operation_key_allowed_values.
+      Bundle handlers fail-close (throw) when required repository or context prerequisites
+      are missing; silent fallback is prohibited.
+    extension_contract:
+      interface: IExternalPortBundleStepHandler
+      required_members:
+        - SupportedOperationKeys (IReadOnlySet<string>)
+        - ExecuteAsync (ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken)
+    consumer_bundle_handlers:
+      file_storage_bundle:
+        handler_class: FileStorageBundleStepHandler
+        operation_keys:
+          - record_export_job
+          - compute_checksum
+          - record_file_artifact
+          - write_manifest_record
+          - authorize_signed_download
+        detail_ref: docs/design/runtime-bundle-file-storage-ssot.yaml#operation_key_surface
+    prohibited:
+      - adding_bundle_specific_repository_or_handler_directly_to_generic_executor
+      - bundle_specific_constructor_parameter_on_ExternalPortPolicyStepExecutor
+      - provider_specific_operation_key_in_core_allowed_values
 
   backend_boundary:
     owns:

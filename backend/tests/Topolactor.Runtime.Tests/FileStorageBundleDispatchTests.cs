@@ -8,20 +8,31 @@ namespace Topolactor.Runtime.Tests;
 public class FileStorageBundleDispatchTests
 {
     [Fact]
-    public void AllowedOperationKeys_ContainsFileStorageDomainKeys()
+    public void FileStorageBundleStepHandler_SupportedOperationKeys_ContainsAllDomainKeys()
     {
-        Assert.Contains("record_export_job", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
-        Assert.Contains("compute_checksum", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
-        Assert.Contains("record_file_artifact", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
-        Assert.Contains("write_manifest_record", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
-        Assert.Contains("authorize_signed_download", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
+        var handler = new FileStorageBundleStepHandler(new FakeFileStorageRepository());
+        Assert.Contains("record_export_job", handler.SupportedOperationKeys);
+        Assert.Contains("compute_checksum", handler.SupportedOperationKeys);
+        Assert.Contains("record_file_artifact", handler.SupportedOperationKeys);
+        Assert.Contains("write_manifest_record", handler.SupportedOperationKeys);
+        Assert.Contains("authorize_signed_download", handler.SupportedOperationKeys);
     }
 
     [Fact]
-    public async Task ExecutePolicyAsync_WithFileStorageRepository_ExecutesAllDomainSteps()
+    public void CoreAllowedOperationKeys_DoesNotContainFileStorageBundleKeys()
+    {
+        Assert.DoesNotContain("record_export_job", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
+        Assert.DoesNotContain("record_file_artifact", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
+    }
+
+    private static ExternalPortPolicyStepExecutor BuildExecutorWithFileStorage(IFileStorageRepository repo) =>
+        new(bundleHandlers: [new FileStorageBundleStepHandler(repo)]);
+
+    [Fact]
+    public async Task ExecutePolicyAsync_WithFileStorageBundleHandler_ExecutesAllDomainSteps()
     {
         var repo = new FakeFileStorageRepository();
-        var executor = new ExternalPortPolicyStepExecutor(fileStorageRepository: repo);
+        var executor = BuildExecutorWithFileStorage(repo);
         var policy = BuildFileStoragePolicy(accessPort: true);
         var context = new ExternalPortExecutionContext
         {
@@ -46,7 +57,7 @@ public class FileStorageBundleDispatchTests
     }
 
     [Fact]
-    public async Task ExecutePolicyAsync_WithoutFileStorageRepository_FileStoragePolicySteps_FailClose()
+    public async Task ExecutePolicyAsync_WithoutBundleHandler_FileStoragePolicySteps_FailClose()
     {
         var executor = new ExternalPortPolicyStepExecutor();
         var policy = BuildFileStoragePolicy(accessPort: true);
@@ -57,14 +68,14 @@ public class FileStorageBundleDispatchTests
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => executor.ExecutePolicyAsync(policy, context));
-        Assert.Contains("FILE_STORAGE_REPOSITORY_MISSING", ex.Message);
+        Assert.Contains("EXTERNAL_PORT_POLICY_OPERATION_UNSUPPORTED", ex.Message);
     }
 
     [Fact]
     public async Task RecordExportJob_UsesIdempotencyKeyFromPayload()
     {
         var repo = new FakeFileStorageRepository();
-        var executor = new ExternalPortPolicyStepExecutor(fileStorageRepository: repo);
+        var executor = BuildExecutorWithFileStorage(repo);
         var context = new ExternalPortExecutionContext
         {
             RequestPayload = BuildPayload("job-idem", "user1", "2026-06", "csv", idempotencyKey: "idem-key-123"),
@@ -82,7 +93,7 @@ public class FileStorageBundleDispatchTests
     public async Task ComputeChecksum_ProduceSha256PrefixedValue()
     {
         var repo = new FakeFileStorageRepository();
-        var executor = new ExternalPortPolicyStepExecutor(fileStorageRepository: repo);
+        var executor = BuildExecutorWithFileStorage(repo);
         var context = new ExternalPortExecutionContext
         {
             ExportJobId = Guid.NewGuid(),
@@ -101,7 +112,7 @@ public class FileStorageBundleDispatchTests
     public async Task RecordFileArtifact_UsesEnvVarReferenceNotPlaintextUrl()
     {
         var repo = new FakeFileStorageRepository();
-        var executor = new ExternalPortPolicyStepExecutor(fileStorageRepository: repo);
+        var executor = BuildExecutorWithFileStorage(repo);
         var portRecord = BuildPortRecord(referenceKey: "vault:ref:file_storage_credential");
         var context = new ExternalPortExecutionContext
         {
@@ -125,7 +136,7 @@ public class FileStorageBundleDispatchTests
     public async Task AuthorizeSignedDownload_SetsAuthorizationKeyReferenceNotSignedUrl()
     {
         var repo = new FakeFileStorageRepository();
-        var executor = new ExternalPortPolicyStepExecutor(fileStorageRepository: repo);
+        var executor = BuildExecutorWithFileStorage(repo);
         var context = new ExternalPortExecutionContext
         {
             ExportJobId = Guid.NewGuid(),
@@ -158,7 +169,7 @@ public class FileStorageBundleDispatchTests
     [Fact]
     public void Source_DoesNotContainProviderKindBranchingInFileStorageHandlers()
     {
-        var source = File.ReadAllText(FindRepositoryFile("backend/runtime/ExternalPortCredentialRefresher.cs"));
+        var source = File.ReadAllText(FindRepositoryFile("backend/runtime/FileStorageBundleStepHandler.cs"));
         Assert.DoesNotContain("object_storage", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ProviderKind ==", source, StringComparison.Ordinal);
         Assert.DoesNotContain("case \"object_storage\"", source, StringComparison.OrdinalIgnoreCase);
