@@ -329,6 +329,22 @@ for yaml in \
 done
 
 echo ""
+echo "=== secure_consumer_dispatch_lane_ref declared in each consumer bundle SSOT ==="
+
+for yaml in \
+  "docs/design/runtime-bundle-email-ssot.yaml" \
+  "docs/design/runtime-bundle-stripe-ssot.yaml" \
+  "docs/design/runtime-bundle-file-storage-ssot.yaml" \
+  "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
+  "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
+  "docs/design/runtime-bundle-audit-approval-ssot.yaml"; do
+  check_content "$yaml" "secure_consumer_dispatch_lane_ref"
+  check_content "$yaml" "docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane"
+  check_content "$yaml" "seed_binding_completion: pr460"
+done
+
+echo ""
 echo "=== ssot-map.yaml: external_port_substrate wiring present ==="
 
 check_content ".agent/docs/ssot-map.yaml" "external_port_substrate_ssot"

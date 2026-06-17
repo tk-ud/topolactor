@@ -6,7 +6,22 @@
 
 ## Status
 
-partial / minimal primitive skeleton; auth/external credential management topology projection implemented
+partial / seed binding implemented per PR#460; consumer bundle runtime execution (physical table / manifest / preset / evidence / checksum / projection) not yet connected.
+
+PR#460 完了済み:
+- access_port / response_port / hook_port records / policies / policy_steps の seed binding (全 7 consumer bundle)
+- credential_requirement (credential_kind: external / none) の port record 付属
+- UI Builder portTargetRef 配線前提 (port_target_ref lane)
+- auth/external credential management topology projection
+
+残作業 (各 bundle consumer todo で管理):
+- physical table (bundle-specific: email_draft / approval_request / export_job / webhook_intake_snapshot 等)
+- physical table manifest binding
+- UI Builder form preset / portTargetRef action wiring
+- runtime execution: portTargetRef → port record 解決 → generic operation_key policy steps
+- evidence / runtime_event_log
+- checksum / manifest (file / sftp 系)
+- projection response
 
 ## SSOT
 

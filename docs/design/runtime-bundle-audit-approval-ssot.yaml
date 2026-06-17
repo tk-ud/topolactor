@@ -160,6 +160,34 @@ runtime_bundle_audit_approval_ssot:
       CLI/MCP audit log読み取りはcli-model-context-protocols-port-ssotで定義済みの
       read/export範囲内でのみ許可する。
 
+  secure_consumer_dispatch_lane_ref:
+    lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
+    note: >-
+      このバンドルの本体は physical table manifest / approval evidence / notification evidence であり、
+      通知 provider-specific client ではない。
+      seed binding (response_port / notification credential_requirement / policy_steps) は PR#460 で完了済み。
+      consumer 実装は external_port_runtime → DB response_port record 解決 → generic operation_key policy steps
+      の既存レーンを使用する。notification provider 固有 runtime class / client を追加しない。
+      approval 権限は必ず UI/human explicit action 境界を通す。
+    seed_binding_completion: pr460
+    remaining_scope:
+      physical_table:
+        - approval_request schema
+        - approval_evidence schema
+        - notification_evidence schema
+      physical_table_manifest_binding:
+        - audit_approval manifest / screen_data_shape binding
+      ui_builder:
+        - form preset for approval action
+        - action wiring for portTargetRef dispatch
+      portTargetRef_action_wiring:
+        - approval → response_port 解決 → generic response_port connect
+      evidence_and_runtime_event_log:
+        - approval_requested / approval_reviewed / approval_granted / approval_rejected / audit_log_write_failure
+      projection_response:
+        - approval status projection
+        - audit evidence projection
+
   explicitly_out_of_scope:
     - cli_mcp_audit_log_system_redefinition
     - automated_approval_system_design
