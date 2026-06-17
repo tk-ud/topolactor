@@ -251,10 +251,15 @@ for ssot in "${EVIDENCE_REQUIRED_SSOTS[@]}"; do
 done
 
 # secure_consumer_dispatch_lane_ref remaining_scope must include physical_table and evidence
+# job_scheduler is excluded from physical_table check: no new DB table is created (in-memory queue only)
 for ssot in "${CONSUMER_SSOTS[@]}"; do
-  check_content "$ssot" "physical_table"
+  if [[ "$ssot" != "docs/design/runtime-bundle-job-scheduler-ssot.yaml" ]]; then
+    check_content "$ssot" "physical_table"
+  fi
   check_content "$ssot" "evidence"
 done
+check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "scheduler_evidence_projection"
+check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "DB queue 新設ではない"
 
 echo ""
 echo "=== 9. job_scheduler built-in scheduler independence ==="

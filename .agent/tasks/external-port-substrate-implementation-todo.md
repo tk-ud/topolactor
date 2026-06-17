@@ -11,14 +11,22 @@ partial / seed binding implemented per PR#460; consumer bundle runtime execution
 PR#460 完了済み:
 - access_port / response_port / hook_port records / policies / policy_steps の seed binding (全 7 consumer bundle)
 - credential_requirement (credential_kind: external / none) の port record 付属
-- UI Builder portTargetRef 配線前提 (port_target_ref lane)
+- UI Builder portTargetRef 配線前提 (client/UI consumer のみ: file_storage / email / audit_approval / export_sftp)
+- hook consumer (stripe / webhook_inbox) の hook_port seed binding
 - auth/external credential management topology projection
 
 残作業 (各 bundle consumer todo で管理):
 - physical table (bundle-specific: email_draft / approval_request / export_job / webhook_intake_snapshot 等)
 - physical table manifest binding
-- UI Builder form preset / portTargetRef action wiring
-- runtime execution: portTargetRef → port record 解決 → generic operation_key policy steps
+- client/UI consumer (file_storage / email / audit_approval / export_sftp):
+  - UI Builder form preset / portTargetRef action wiring
+  - runtime execution: portTargetRef → port record 解決 → generic operation_key policy steps
+- hook consumer (stripe / webhook_inbox):
+  - hook_port receive wiring / hook_path / route_key resolution / scheduler enqueue boundary
+  - runtime execution: hook_port_receive → port record 解決 → generic operation_key policy steps → scheduler_enqueue_event
+- scheduler consumer (job_scheduler):
+  - built-in RuntimeTimelineScheduler independence guard (port substrate 非依存)
+  - external scheduler hook intake のみ port substrate を使用する
 - evidence / runtime_event_log
 - checksum / manifest (file / sftp 系)
 - projection response
@@ -37,15 +45,15 @@ PR#460 完了済み:
 
 ## 問題点
 
-`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed / production DB-backed external port policy read repository / DB repository atomic encrypted credential payload update / consumer bundle seed binding (全 7 bundle) / secure_consumer_dispatch_lane named invariant は完了済み。
+`external_port_substrate` と 7 consumer bundles (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp) / credential_requirement substrate の SSOT 設計は確定済み。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed / production DB-backed external port policy read repository / DB repository atomic encrypted credential payload update / consumer bundle seed binding (全 7 bundle) / secure_consumer_dispatch_lane named invariant は完了済み。
 
 consumer dispatch path は `port_target_ref` lane のみ。PR#458/#459 で `canonical_binding_*` consumer branch は削除済みであり、consumer 実装で "canonical physical binding execution" を追加してはならない。`LoadPortRecordByCanonicalBindingAsync` は admin projection validation only であり、consumer dispatch path には使用しない。
 
-残作業は consumer bundle ごとの physical table / physical table manifest binding / UI Builder preset / portTargetRef action wiring / evidence / runtime_event_log / checksum (file/sftp 系) / projection response 接続のみ。
+残作業は consumer bundle ごとの physical table / physical table manifest binding / evidence / runtime_event_log / checksum (file/sftp 系) / projection response 接続のみ。UI Builder preset / portTargetRef action wiring は client/UI consumer (file_storage / email / audit_approval / export_sftp) のみ。hook consumer (stripe / webhook_inbox) は hook_port receive wiring / hook_path resolution / scheduler enqueue boundary を使用する。
 
 ## 目的
 
-外部連携 8 bundle を、standalone credential 管理 plane ではなく `external_port_substrate` 上の port record consumer として実装する。
+7 consumer bundles (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp) を、standalone credential 管理 plane ではなく `external_port_substrate` 上の port record consumer として実装する。credential_requirement は consumer bundle ではなく port record attachment substrate として扱う。
 
 ## 実装方針
 
@@ -192,10 +200,12 @@ Parent bundle: `external-port-substrate-implementation`
 - `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
 - `ExternalPortPolicyStepExecutor.ExecuteAsync`
 
-remaining_todo:
+implemented_notes:
 - DB-backed `IExternalPortPolicyRepository` production read implementation is implemented for active port records, active policies, and ordered active policy steps.
 - DB repository atomic encrypted credential payload update is implemented in the parent credential-vault bundle.
-- Admin setting projection, validate/preview/apply integration, and consumer bundle wiring remain out of scope for this partial increment.
+remaining_todo:
+- admin projection validate/preview/apply full integration remains out of scope for this increment
+- consumer bundle wiring is managed by each consumer bundle todo
 
 
 ## Bundle increment `auth-external-credential-management-topology-projection`
@@ -217,11 +227,13 @@ Parent bundle: `external-port-substrate-implementation`
 - Classify the `physical_binding` topology entry as a seed/projection marker; canonical physical binding execution through `screen_data_shape.tableRef` / `dbTableName` and `topology.wiring_physical_to_package` remains TODO.
 - Add `.agent/tests/check-auth-external-credential-projection.sh` guard for projection presence, Step 2.5 relation, secret marker exclusion, and forbidden UI Builder / route / panel escapes.
 
-remaining_todo:
+implemented_notes:
 - DB-backed `IExternalPortPolicyRepository` production read implementation is implemented for active port records, active policies, and ordered active policy steps.
 - DB repository atomic encrypted credential payload update is implemented in the parent credential-vault bundle.
 - Canonical physical binding execution is implemented by `external-port-canonical-physical-binding-execution`; this projection increment remains limited to fixed-form projection metadata.
-- Consumer bundle wiring remains out of scope for this increment.
+remaining_todo:
+- admin projection validate/preview/apply full integration remains out of scope or pending if still pending
+- consumer bundle wiring is managed by each consumer bundle todo
 
 
 ## Bundle increment `external-port-package-wiring-candidate-authoring-and-media-primitives`

@@ -11,7 +11,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `external-port-substrate-implementation` | external_port_substrate / external 8 bundle 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
+| `external-port-substrate-implementation` | external_port_substrate / 7 consumer bundles + credential_requirement substrate 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
@@ -20,7 +20,7 @@
 | `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
 | `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
-注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提が完了済み。残作業は physical table / manifest / preset / portTargetRef action wiring / evidence / checksum / projection 接続。provider-specific runtime / client は追加しない。
+注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (file_storage / email / audit_approval / export_sftp) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。
 
 ---
 
@@ -65,10 +65,10 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 **SSOT:** `docs/design/external-port-substrate-ssot.yaml`
 
 問題点:
-external_port_substrate と external 8 bundle の SSOT 境界は確定済み。残作業は設計確定ではなく、DB seed / record / projection 解決、generic access/response/hook connect/receive、各 consumer bundle 接続を実装すること。
+external_port_substrate と 7 consumer bundles / credential_requirement substrate の SSOT 境界は確定済み。残作業は設計確定ではなく、DB seed / record / projection 解決、generic access/response/hook connect/receive、各 consumer bundle 接続を実装すること。
 
 目的:
-SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各 runtime bundle SSOT に従って external_port_substrate と external 8 bundle の実装残を管理する。詳細作業は `.agent/tasks/external-port-substrate-implementation-todo.md` へ委譲する。
+SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各 runtime bundle SSOT に従って external_port_substrate と 7 consumer bundles / credential_requirement substrate の実装残を管理する。詳細作業は `.agent/tasks/external-port-substrate-implementation-todo.md` へ委譲する。
 
 実装方針:
 - [x] `external-port-substrate-seed-coding` bundle increment: external port physical tables / seed policy-step surface / generic resolver-executor boundary を partial 実装する
@@ -167,14 +167,14 @@ PR#460 完了済み: response_port (smtp) seed binding / credential_requirement 
 **Status:** partial
 **SSOT:** `docs/design/runtime-bundle-stripe-ssot.yaml`
 
-PR#460 完了済み: hook_port (stripe) seed binding / credential_requirement / policy_steps (verify_signature_by_config / enqueue_scheduler_event) / UI Builder portTargetRef 配線前提。
+PR#460 完了済み: hook_port (stripe) seed binding / credential_requirement / policy_steps (verify_signature_by_config / enqueue_scheduler_event)。hook consumer のため UI Builder portTargetRef 配線ではなく hook_port receive wiring を使用する。
 残作業は physical table / intake snapshot / verification evidence / projection 接続。Stripe provider-specific client / runtime は追加しない。
 既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
 残 todo:
 - [ ] webhook_intake_snapshot / verification_evidence / payment_state physical table 接続実装
 - [ ] physical table manifest binding (stripe manifest / screen_data_shape)
-- [ ] portTargetRef action wiring: hook_path → port record resolution → scheduler event dispatch
+- [ ] hook_port receive wiring: hook_path / route_key resolution → port record resolution → scheduler enqueue boundary
 - [ ] evidence / runtime_event_log: webhook_received / verification_success / verification_failure / payment_state_projected
 - [ ] projection response: payment state / verification evidence projection
 
@@ -189,14 +189,14 @@ PR#460 完了済み: hook_port (stripe) seed binding / credential_requirement / 
 **Status:** partial
 **SSOT:** `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
 
-PR#460 完了済み: hook_port (generic_webhook) seed binding / credential_requirement / policy_steps (verify_signature_by_config / enqueue_scheduler_event) / UI Builder portTargetRef 配線前提。
+PR#460 完了済み: hook_port (generic_webhook) seed binding / credential_requirement / policy_steps (verify_signature_by_config / enqueue_scheduler_event)。hook consumer のため UI Builder portTargetRef 配線ではなく hook_port receive wiring を使用する。
 残作業は physical table / intake snapshot / verification evidence / scheduler wiring 接続。webhook provider-specific client / runtime は追加しない。
 既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
 残 todo:
 - [ ] webhook_intake_snapshot / signature_verification_evidence physical table 接続実装
 - [ ] physical table manifest binding (webhook_inbox manifest / screen_data_shape)
-- [ ] portTargetRef action wiring: hook_port → scheduler 境界の受信経路
+- [ ] hook_port receive wiring: hook_path / route_key resolution → scheduler enqueue boundary (hook_port_receive → scheduler_enqueue_event → external_port_runtime)
 - [ ] evidence / runtime_event_log: webhook_received / signature_verification_success / signature_verification_failure / intake_snapshot_created / scheduler_enqueued
 - [ ] projection response: intake status / verification evidence projection
 

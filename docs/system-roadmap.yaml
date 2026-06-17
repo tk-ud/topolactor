@@ -625,7 +625,7 @@ system_roadmap_ssot:
       title: External port substrate shared foundation
       status: partial
       production_ready: false
-      public_summary: Shared substrate for the 8 external integration bundles. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement boundary definition within this substrate. DB guarded credential vault DDL, generic refresher primitive skeleton, fixed-form auth/external credential management projection manifest seed, DB-backed external port policy read repository, DB repository atomic encrypted credential payload update, Design Inspector dispatchExternalPort event-to-generic-external-port-runtime boundary wiring, all 7 consumer bundle seed bindings (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp), and secure_consumer_dispatch_lane named invariant are present. Consumer bundle runtime execution (physical table / manifest / preset / evidence / checksum / projection connection per bundle) and provider/KMS/client implementations remain incomplete or out of scope.
+      public_summary: Shared substrate for 7 consumer bundles (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp) + credential_requirement substrate. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement substrate boundary — not a standalone consumer bundle. DB guarded credential vault DDL, generic refresher primitive skeleton, fixed-form auth/external credential management projection manifest seed, DB-backed external port policy read repository, DB repository atomic encrypted credential payload update, Design Inspector dispatchExternalPort event-to-generic-external-port-runtime boundary wiring, all 7 consumer bundle seed bindings (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp), and secure_consumer_dispatch_lane named invariant are present. Consumer bundle runtime execution (physical table / manifest / preset / evidence / checksum / projection connection per bundle) and provider/KMS/client implementations remain incomplete or out of scope.
       scope:
         - external_access_ports_physical_table
         - external_response_ports_physical_table
@@ -663,7 +663,8 @@ system_roadmap_ssot:
       known_gap_ref:
         - external_port_access_response_hook_tables_not_connected_to_consumer_bundles
         - consumer_bundle_physical_table_and_manifest_binding_not_connected
-        - consumer_bundle_portTargetRef_action_wiring_not_connected
+        - client_ui_consumer_portTargetRef_action_wiring_not_connected
+        - hook_consumer_hook_port_receive_wiring_not_connected
         - consumer_bundle_evidence_and_runtime_event_log_not_connected
         - consumer_bundle_projection_response_not_connected
         - credential_admin_ui_panel_out_of_scope
@@ -698,7 +699,7 @@ system_roadmap_ssot:
       title: Stripe bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Stripe Bundle as port consumer of external_port_substrate. Seed binding (hook_port / stripe credential_requirement / policy_steps including verify_signature_by_config + enqueue_scheduler_event / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (webhook_intake_snapshot / verification_evidence / payment_state), manifest binding, portTargetRef action wiring, evidence/runtime_event_log, and projection response. Stripe provider-specific client not added.
+      public_summary: Stripe Bundle as port consumer of external_port_substrate. hook_port consumer (not UI/client consumer). Seed binding (hook_port / stripe credential_requirement / policy_steps including verify_signature_by_config + enqueue_scheduler_event) implemented per PR#460. Remaining work is physical table (webhook_intake_snapshot / verification_evidence / payment_state), manifest binding, hook_port receive wiring (hook_path / route_key resolution → scheduler enqueue boundary), evidence/runtime_event_log, and projection response. Stripe provider-specific client not added.
       scope:
         - stripe_hook_port_consumer_definition
         - stripe_credential_requirement_as_port_attachment
@@ -712,7 +713,7 @@ system_roadmap_ssot:
         - stripe_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
         - stripe_physical_table_and_manifest_binding_not_connected
-        - stripe_portTargetRef_action_wiring_not_connected
+        - stripe_hook_port_receive_wiring_not_connected
         - stripe_evidence_and_runtime_event_log_not_connected
         - stripe_payment_state_projection_not_connected
 
@@ -769,7 +770,7 @@ system_roadmap_ssot:
       title: Webhook Inbox bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Webhook Inbox Bundle as port consumer of external_port_substrate. Seed binding (hook_port / webhook signing key credential_requirement / policy_steps including verify_signature_by_config + enqueue_scheduler_event / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (webhook_intake_snapshot / signature_verification_evidence), manifest binding, portTargetRef action wiring, evidence/runtime_event_log, and projection response. Webhook provider-specific client not added.
+      public_summary: Webhook Inbox Bundle as port consumer of external_port_substrate. hook_port consumer (not UI/client consumer). Seed binding (hook_port / webhook signing key credential_requirement / policy_steps including verify_signature_by_config + enqueue_scheduler_event) implemented per PR#460. Remaining work is physical table (webhook_intake_snapshot / signature_verification_evidence), manifest binding, hook_port receive wiring (hook_path / route_key resolution → scheduler enqueue boundary), evidence/runtime_event_log, and projection response. Webhook provider-specific client not added.
       scope:
         - webhook_inbox_hook_port_consumer_definition
         - webhook_signing_key_credential_requirement_as_port_attachment
@@ -790,7 +791,7 @@ system_roadmap_ssot:
       title: Job/Scheduler bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Job/Scheduler Bundle as port consumer of external_port_substrate. Seed binding (access_port external_scheduler / hook_port built_in_scheduler credential_kind=none / policy_steps) implemented per PR#460. topolactor built-in scheduler (runtime_timeline_scheduler) does not depend on port substrate. Remaining work is job_queue physical table, cron trigger driver loop, evidence/runtime_event_log, and projection response. External scheduler provider-specific client not added.
+      public_summary: Job/Scheduler Bundle as port consumer of external_port_substrate. Seed binding (access_port external_scheduler / hook_port built_in_scheduler credential_kind=none / policy_steps) implemented per PR#460. topolactor built-in scheduler (runtime_timeline_scheduler) does not depend on port substrate; its in-memory queue is not changed. Remaining work is scheduler evidence / job status projection surface (DB queue 新設ではない), cron trigger driver loop, external scheduler hook intake wiring, evidence/runtime_event_log, and projection response. External scheduler provider-specific client not added.
       scope:
         - job_scheduler_access_and_hook_port_consumer_definition
         - scheduler_provider_credential_requirement_as_port_attachment
@@ -803,7 +804,7 @@ system_roadmap_ssot:
       closed_gap_ref:
         - job_scheduler_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - job_queue_schema_implementation_not_started
+        - scheduler_evidence_job_status_projection_surface_not_connected
         - cron_trigger_driver_loop_implementation_not_started
 
     product.audit_approval_port_consumer:

@@ -193,8 +193,8 @@ runtime_bundle_webhook_inbox_ssot:
         - signature_verification_evidence schema
       physical_table_manifest_binding:
         - webhook_inbox manifest / screen_data_shape binding
-      portTargetRef_action_wiring:
-        - hook_port → scheduler 境界の受信経路
+      hook_port_receive_wiring:
+        - hook_path / route_key resolution → port record resolution → scheduler enqueue boundary (hook_port_receive → scheduler_enqueue_event → external_port_runtime)
       evidence_and_runtime_event_log:
         - webhook_received / signature_verification_success / signature_verification_failure / intake_snapshot_created / scheduler_enqueued
       projection_response:
