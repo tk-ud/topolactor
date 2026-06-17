@@ -491,7 +491,7 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policy_steps (
     policy_step_id UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     policy_id      UUID        NOT NULL REFERENCES topology.external_port_policies (policy_id) ON DELETE CASCADE,
     step_order     INTEGER     NOT NULL CHECK (step_order > 0),
-    operation_key  TEXT        NOT NULL CHECK (operation_key IN ('resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload','decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http','capture_response','verify_signature_by_config','enqueue_scheduler_event','append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config','write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version','release_refresh_lease','record_export_job','compute_checksum','record_file_artifact','write_manifest_record','authorize_signed_download')),
+    operation_key  TEXT        NOT NULL CHECK (operation_key IN ('resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload','decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http','capture_response','execute_db_function','verify_signature_by_config','enqueue_scheduler_event','append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config','write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version','release_refresh_lease','compute_checksum')),
     step_config    JSONB       NOT NULL DEFAULT '{}'::jsonb,
     active         BOOLEAN     NOT NULL DEFAULT true,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -501,7 +501,12 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policy_steps (
 
 COMMENT ON TABLE topology.external_port_policies IS 'Seed-driven policy surface for external port generic primitive execution.';
 
--- Update operation_key CHECK constraint on existing databases to include file_storage domain keys.
+-- Update operation_key CHECK constraint to sync with SSOT operation_key_allowed_values.
+-- execute_db_function is the abstract function boundary for consumer bundle domain mutations.
+-- compute_checksum is a bundle-specific key handled by FileStorageBundleStepHandler.
+-- Old file_storage-specific direct operation_keys (record_export_job, record_file_artifact,
+-- write_manifest_record, authorize_signed_download) are no longer operation_keys; they are
+-- topology.fs_* PostgreSQL function names called via execute_db_function step_config.function.
 ALTER TABLE topology.external_port_policy_steps
     DROP CONSTRAINT IF EXISTS external_port_policy_steps_operation_key_check;
 
@@ -510,13 +515,11 @@ ALTER TABLE topology.external_port_policy_steps
     CHECK (operation_key IN (
         'resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload',
         'decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http',
-        'capture_response','verify_signature_by_config','enqueue_scheduler_event',
+        'capture_response','execute_db_function','verify_signature_by_config','enqueue_scheduler_event',
         'append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config',
         'write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version',
         'release_refresh_lease',
-        'record_export_job','compute_checksum','record_file_artifact',
-        'write_manifest_record','authorize_signed_download',
-        'execute_db_function'
+        'compute_checksum'
     ));
 
 -- ---------------------------------------------------------------------------
@@ -646,6 +649,33 @@ COMMENT ON TABLE topology.signed_download_authorizations IS
     'reference identifier; actual signed URL value is managed by runtime secret store and is prohibited '
     'from this table.';
 COMMENT ON TABLE topology.external_port_policy_steps IS 'Ordered operation_key steps. operation_key values are constrained to external-port SSOT allowed values.';
+
+-- ---------------------------------------------------------------------------
+-- Runtime event log.
+-- Evidence surface for append_runtime_event_log policy step operation.
+-- Records consumer bundle domain events (export_job_initiated, file_write_completed,
+-- checksum_verified, signed_url_generated, etc.) WITHOUT credential, signed URL,
+-- bucket name, or storage endpoint values.
+-- entity_id is an opaque reference identifier (UUID string or reference key).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.runtime_event_log (
+    event_log_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type         TEXT        NOT NULL,
+    entity_id          TEXT,
+    required_by_bundle TEXT,
+    logged_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_runtime_event_log_event_type
+    ON topology.runtime_event_log (event_type);
+
+CREATE INDEX IF NOT EXISTS idx_runtime_event_log_logged_at
+    ON topology.runtime_event_log (logged_at DESC);
+
+COMMENT ON TABLE topology.runtime_event_log IS
+    'Append-only runtime evidence log for external port consumer bundle domain events. '
+    'Prohibited: plaintext credential, signed URL, bucket name, storage endpoint, encrypted payload. '
+    'entity_id is opaque reference identifier only.';
 
 -- ---------------------------------------------------------------------------
 -- file_storage_bundle domain PostgreSQL functions.

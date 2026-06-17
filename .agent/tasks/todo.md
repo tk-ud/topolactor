@@ -142,9 +142,20 @@ completion gate 対応 (PR#463):
 - [x] Issue 3: capture_response を MarkOnly から HttpResponse.Body → context.OutputProp に変更; ExternalPortDispatchRuntime が SseEventBroadcaster 経由で SSE に broadcast
 - [x] Issue 1: fileStoragePortConsumer.test.ts に draftPreviewResultToEmission 経由の DB projection test を追加
 
+evidence / runtime_event_log 実装済み:
+- [x] topology.runtime_event_log テーブル追加 (db/topology_tables.sql)
+- [x] IExternalPortRuntimeEventLogRepository インターフェース追加 (backend/runtime/ExternalPortCredentialRefresher.cs)
+- [x] NpgsqlExternalPortRuntimeEventLogRepository 実装追加 (backend/repository/)
+- [x] append_runtime_event_log ハンドラを MarkOnly スタブから step_config 駆動の実装に変更 (event_type / entity_ref_key 解決)
+- [x] ResolveEntityId ヘルパー追加 (ExportJobId / FileArtifactId / ChecksumValue / AuthorizationKey コンテキスト解決)
+- [x] Program.cs に IExternalPortRuntimeEventLogRepository 登録 + ExternalPortPolicyStepExecutor へ注入
+- [x] e4/e5 seed pipeline を 13 ステップから 17 ステップへ更新 (4x append_runtime_event_log インターリーブ)
+- [x] FileStorageBundleDispatchTests に append_runtime_event_log テスト 5 件追加
+- [x] FileStoragePortConsumerLiveDbTests (DB projection 証明) 追加
+- [x] frontend Test 4 を unit test scope に明確化 (DB 証明は backend integration test)
+
 残 todo:
 - [ ] UI Builder form preset / portTargetRef action wiring (export_job → access/response port connect)
-- [ ] evidence / runtime_event_log: export_job_initiated / file_write_completed / checksum_verified / signed_url_generated
 - [ ] projection response: signed download authorization / file artifact projection
 
 対応資料:

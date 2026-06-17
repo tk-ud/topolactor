@@ -67,7 +67,8 @@ public class ExternalPortSeedDrivenPolicyTests
     [Fact]
     public async Task ExecutePolicyAsync_RunsPolicyStepsInOrder()
     {
-        var executor = new ExternalPortPolicyStepExecutor(portResolver: new StaticPortResolver());
+        var fakeLog = new FakeRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor(portResolver: new StaticPortResolver(), runtimeEventLogRepository: fakeLog);
         var policy = new ExternalPortPolicy(
             Guid.NewGuid(),
             "test_policy",
@@ -75,7 +76,7 @@ public class ExternalPortSeedDrivenPolicyTests
             "external-port-substrate-seed-coding",
             new[]
             {
-                NewStep(2, "append_runtime_event_log"),
+                NewStep(2, "append_runtime_event_log", new Dictionary<string, string> { ["event_type"] = "test_event" }),
                 NewStep(1, "resolve_port_record"),
                 NewStep(3, "capture_response")
             },
@@ -112,7 +113,8 @@ public class ExternalPortSeedDrivenPolicyTests
     [Fact]
     public async Task ExecutePolicyAsync_HookSeedOperations_VerifiesSignatureAndReachesSchedulerBoundary()
     {
-        var executor = new ExternalPortPolicyStepExecutor(portResolver: new StaticPortResolver(credentialKind: "none"));
+        var fakeLog = new FakeRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor(portResolver: new StaticPortResolver(credentialKind: "none"), runtimeEventLogRepository: fakeLog);
         var policy = new ExternalPortPolicy(
             Guid.NewGuid(),
             "hook_seed_policy",
@@ -124,7 +126,7 @@ public class ExternalPortSeedDrivenPolicyTests
                 NewStep(2, "resolve_credential_reference"),
                 NewStep(3, "verify_signature_by_config", new Dictionary<string, string> { ["expected_signature"] = "sig-ok" }),
                 NewStep(4, "enqueue_scheduler_event"),
-                NewStep(5, "append_runtime_event_log")
+                NewStep(5, "append_runtime_event_log", new Dictionary<string, string> { ["event_type"] = "scheduler_enqueued" })
             },
             Active: true);
         var context = new ExternalPortExecutionContext
@@ -494,6 +496,17 @@ public class ExternalPortSeedDrivenPolicyTests
             System.Text.Encoding.UTF8.GetBytes(plaintextPayload);
 
         public string ComputeTokenHash(string plaintextPayload) => $"sha256:{plaintextPayload.GetHashCode():x8}";
+    }
+
+    private sealed class FakeRuntimeEventLogRepository : IExternalPortRuntimeEventLogRepository
+    {
+        public string? LastEventType { get; private set; }
+
+        public Task AppendAsync(string eventType, string? entityId, string? requiredByBundle, CancellationToken ct = default)
+        {
+            LastEventType = eventType;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class NullVaultRepository : IExternalCredentialVaultRepository

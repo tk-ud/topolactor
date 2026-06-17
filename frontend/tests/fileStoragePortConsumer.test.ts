@@ -111,8 +111,12 @@ Deno.test("fileStoragePortConsumer: resolved payload enqueues backend command th
   schedulerTestOnly.resetCommandQueue();
 });
 
-Deno.test("fileStoragePortConsumer: dispatchExternalPort runtimeInteraction is produced from DB projection result", () => {
-  const dbProjectionResult: DraftPreviewResult = {
+// Unit test: proves draftPreviewResultToEmission correctly maps runtimeInteractions with
+// dispatchExternalPort through to renderEmission + parseEventBinding.
+// DB projection proof (that DB seed rows produce this structure) is in
+// backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs.
+Deno.test("fileStoragePortConsumer: draftPreviewResultToEmission preserves dispatchExternalPort portTargetRef through render pipeline", () => {
+  const previewResult: DraftPreviewResult = {
     success: true,
     layoutId: "layout-file-storage-projection",
     packageId: "00000000-0000-0000-0000-000000000001",
@@ -138,7 +142,7 @@ Deno.test("fileStoragePortConsumer: dispatchExternalPort runtimeInteraction is p
     }],
   };
 
-  const emission = draftPreviewResultToEmission(dbProjectionResult);
+  const emission = draftPreviewResultToEmission(previewResult);
   assertExists(emission);
   assertExists(emission.layoutNodes);
   assertEquals(emission.layoutNodes!.length, 1);
