@@ -669,7 +669,7 @@ system_roadmap_ssot:
     product.email_port_consumer:
       bundle_id: email-port-consumer
       title: Email bundle port consumer implementation
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: Email Bundle as port consumer of external_port_substrate. Defines response_port connection and credential_requirement as port record attachment. Email send remains UI/human approval triggered. credential standalone plane not created.
       scope:
@@ -688,7 +688,7 @@ system_roadmap_ssot:
     product.stripe_port_consumer:
       bundle_id: stripe-port-consumer
       title: Stripe bundle port consumer implementation
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: Stripe Bundle as port consumer of external_port_substrate. Defines hook_port connection and credential_requirement as port record attachment. Paid state confirmed only via verified webhook event. webhook_verification_required enforced.
       scope:
@@ -707,7 +707,7 @@ system_roadmap_ssot:
     product.file_storage_port_consumer:
       bundle_id: file-storage-port-consumer
       title: File/Storage bundle port consumer implementation
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: File/Storage Bundle as port consumer of external_port_substrate. Defines access_port and response_port connections for object storage. credential_requirement as port record attachment. object storage credential standalone plane not created.
       scope:
@@ -726,7 +726,7 @@ system_roadmap_ssot:
     product.export_sftp_port_consumer:
       bundle_id: export-sftp-port-consumer
       title: Export/SFTP bundle port consumer implementation
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: Export/SFTP Bundle as port consumer of external_port_substrate. Defines response_port connection for SFTP external transfer. credential_requirement as port record attachment. SFTP credential standalone plane not created.
       scope:
@@ -745,7 +745,7 @@ system_roadmap_ssot:
     product.webhook_inbox_port_consumer:
       bundle_id: webhook-inbox-port-consumer
       title: Webhook Inbox bundle port consumer implementation
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: Webhook Inbox Bundle as port consumer of external_port_substrate. Defines hook_port connection. webhook direct runtime execution without scheduler prohibited. credential_requirement as port record attachment.
       scope:
@@ -764,7 +764,7 @@ system_roadmap_ssot:
     product.job_scheduler_port_consumer:
       bundle_id: job-scheduler-port-consumer
       title: Job/Scheduler bundle port consumer implementation
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: Job/Scheduler Bundle as port consumer of external_port_substrate. Defines access_port and hook_port connections for external scheduler providers. credential_requirement as port record attachment. runtime_destination_selection owned by manifest_dispatcher not scheduler.
       scope:
@@ -783,7 +783,7 @@ system_roadmap_ssot:
     product.audit_approval_port_consumer:
       bundle_id: audit-approval-port-consumer
       title: Audit/Approval bundle port consumer implementation
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: Audit/Approval Bundle as port consumer of external_port_substrate. Defines response_port connection for approval notifications. credential_requirement as port record attachment. approval authority is UI/human explicit action only. CLI/MCP read/export boundary preserved.
       scope:
