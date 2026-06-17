@@ -65,7 +65,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 **SSOT:** `docs/design/runtime-orchestration-ssot.yaml`
 
 問題点:
-Issue#464 の Open Issue を canonical TODO carry-over に変換する。最新の監査軸は「投影側NG軸5項目＋抽象関数例外」と「admin側NG軸5項目」であり、古い4軸表現へ戻さない。小粒の UI/API 修正ではなく、`data_driven_projection_completion_gate` と `admin_authoring_completion_gate` を満たす横断 Bundle として収束させる。
+Issue#464 の Open Issue を canonical TODO carry-over に変換する。最新の監査軸は「投影側NG軸5項目＋抽象関数例外」と「admin側NG軸5項目」である。小粒の UI/API 修正ではなく、`data_driven_projection_completion_gate` と `admin_authoring_completion_gate` を満たす横断 Bundle として収束させる。
 
 目的:
 SSOT を再定義せず、`docs/framework-core.yaml` の `logicalDelete` を含む action vocabulary、`runtime-orchestration-ssot.yaml` の dispatch / SSE / abstract-function gate、`pipeline-continuity-ssot.yaml` の queue/projection lane、`admin-console-workflow-ssot.yaml` の admin authoring completion gate、`external-port-substrate-ssot.yaml` の credential substrate / secure consumer dispatch lane を実装・テストに通す。
