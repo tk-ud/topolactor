@@ -30,27 +30,20 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
     {
         try
         {
-            CanonicalPhysicalBindingInput? binding = TryReadCanonicalBinding(request.Payload, out var bindingInput) ? bindingInput : null;
             string rawRef;
             string portKind;
             Guid portId;
             string? routeKey;
             ExternalPortRecord? record;
 
-            if (binding is not null)
+            if (TryReadCanonicalBinding(request.Payload, out var binding))
             {
-                var canonicalBinding = binding.Value;
-                rawRef = $"canonical-physical-binding:{canonicalBinding.ManifestKey}:{canonicalBinding.TableRef}:{canonicalBinding.PortKind}:{canonicalBinding.PortId}";
-                portKind = canonicalBinding.PortKind;
-                portId = canonicalBinding.PortId;
-                routeKey = canonicalBinding.RouteKey;
+                rawRef = $"canonical-physical-binding:{binding.ManifestKey}:{binding.TableRef}:{binding.PortKind}:{binding.PortId}";
+                portKind = binding.PortKind;
+                portId = binding.PortId;
+                routeKey = binding.RouteKey;
                 record = await _repository.LoadPortRecordByCanonicalBindingAsync(
-                    canonicalBinding.ManifestKey,
-                    canonicalBinding.TableRef,
-                    canonicalBinding.PortKind,
-                    canonicalBinding.PortId,
-                    canonicalBinding.RouteKey,
-                    ct);
+                    binding.ManifestKey, binding.TableRef, binding.PortKind, binding.PortId, binding.RouteKey, ct);
             }
             else
             {
@@ -58,7 +51,6 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
                     return Fail("EXTERNAL_PORT_TARGET_REF_MISSING", "dispatchExternalPort payload must include port_target_ref/target_ref or canonical physical binding fields.");
                 if (!TryParsePortTargetRef(rawTargetRef!, out portKind, out portId, out routeKey))
                     return Fail("EXTERNAL_PORT_TARGET_REF_INVALID", "portTargetRef must use external-port:<portKind>:<portId>[:routeKey].");
-
                 rawRef = rawTargetRef!;
                 record = await _repository.LoadPortRecordByIdAsync(portKind, portId, routeKey, ct);
             }
@@ -142,27 +134,21 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
     {
         binding = default;
         var manifestKey = ReadStringProperty(payload, "canonical_binding_manifest_key");
-        var tableRef = ReadStringProperty(payload, "canonical_binding_table_ref") ?? ReadStringProperty(payload, "dbTableName");
-        var portKind = ReadStringProperty(payload, "canonical_binding_port_kind");
-        var portIdText = ReadStringProperty(payload, "canonical_binding_port_id");
+        var tableRef    = ReadStringProperty(payload, "canonical_binding_table_ref");
+        var portKind    = ReadStringProperty(payload, "canonical_binding_port_kind");
+        var portIdText  = ReadStringProperty(payload, "canonical_binding_port_id");
         if (string.IsNullOrWhiteSpace(manifestKey) && string.IsNullOrWhiteSpace(tableRef) &&
             string.IsNullOrWhiteSpace(portKind) && string.IsNullOrWhiteSpace(portIdText))
-        {
             return false;
-        }
 
         if (string.IsNullOrWhiteSpace(manifestKey) || string.IsNullOrWhiteSpace(tableRef) ||
             portKind is not ("access_port" or "response_port" or "hook_port") ||
             !Guid.TryParse(portIdText, out var portId))
-        {
             throw new InvalidOperationException("EXTERNAL_PORT_CANONICAL_BINDING_INVALID");
-        }
 
         var routeKey = ReadStringProperty(payload, "canonical_binding_route_key");
         if (portKind == "hook_port" && string.IsNullOrWhiteSpace(routeKey))
-        {
             throw new InvalidOperationException("EXTERNAL_PORT_CANONICAL_BINDING_INVALID");
-        }
 
         binding = new CanonicalPhysicalBindingInput(manifestKey, tableRef, portKind, portId, routeKey);
         return true;

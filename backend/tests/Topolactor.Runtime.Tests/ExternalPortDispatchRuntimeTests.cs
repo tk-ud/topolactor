@@ -18,9 +18,9 @@ public class ExternalPortDispatchRuntimeTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             canonical_binding_manifest_key = "auth.external.credential_management.projection",
-            canonical_binding_table_ref = "topology.external_response_ports",
-            canonical_binding_port_kind = "response_port",
-            canonical_binding_port_id = ResponsePortId.ToString()
+            canonical_binding_table_ref    = "topology.external_response_ports",
+            canonical_binding_port_kind    = "response_port",
+            canonical_binding_port_id      = ResponsePortId.ToString()
         });
         var request = new EndpointRequestDto("dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort", null, payload, null, "client");
 
@@ -28,6 +28,7 @@ public class ExternalPortDispatchRuntimeTests
 
         Assert.True(response.Success);
         Assert.True(repo.CanonicalBindingUsed);
+        Assert.Equal(ResponsePortId, repo.LastPortId);
     }
 
     [Fact]
@@ -114,9 +115,9 @@ public class ExternalPortDispatchRuntimeTests
         private readonly ExternalPortRecord? _record;
         private readonly ExternalPortPolicy? _policy;
         public Guid? LastPortId { get; private set; }
+        public bool CanonicalBindingUsed { get; private set; }
         public FakeRepo(ExternalPortRecord? record, ExternalPortPolicy? policy) { _record = record; _policy = policy; }
         public Task<ExternalPortRecord?> LoadPortRecordAsync(string requiredByBundle, string portKind, string? routeKey, CancellationToken ct = default) => Task.FromResult(_record);
-        public bool CanonicalBindingUsed { get; private set; }
         public Task<ExternalPortRecord?> LoadPortRecordByIdAsync(string portKind, Guid portId, string? routeKey, CancellationToken ct = default) { LastPortId = portId; return Task.FromResult(_record); }
         public Task<ExternalPortRecord?> LoadPortRecordByCanonicalBindingAsync(string manifestKey, string tableRef, string portKind, Guid portId, string? routeKey, CancellationToken ct = default) { CanonicalBindingUsed = true; LastPortId = portId; return Task.FromResult(_record); }
         public Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default) => Task.FromResult(_policy);
