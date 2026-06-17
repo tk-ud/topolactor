@@ -30,8 +30,7 @@ ssot = Path('docs/design/external-port-substrate-ssot.yaml').read_text()
 seed = Path('db/seed_empty.sql').read_text()
 allowed_block = ssot.split('operation_key_allowed_values:',1)[1].split('execution_rule:',1)[0]
 allowed = set(re.findall(r'^\s*-\s+([a-z_]+)\s*$', allowed_block, re.M))
-seed_ops = set(re.findall(r"'([a-z_]+)'", seed.split('external_port_policy_steps',1)[-1]))
-seed_ops = {op for op in seed_ops if op.endswith('_record') or op.endswith('_reference') or op.endswith('_request') or op.endswith('_http') or op.endswith('_response') or op.endswith('_config') or op.endswith('_event') or op.endswith('_log') or op == 'fail_close'}
+seed_ops = set(re.findall(r"\([^\n]*?,\s*'([a-z_]+)'\s*,\s*'\{", seed.split('external_port_policy_steps',1)[-1]))
 missing = seed_ops - allowed
 if missing:
     raise SystemExit(f'seed operation_key outside SSOT: {sorted(missing)}')
@@ -42,8 +41,7 @@ from pathlib import Path
 import re
 seed = Path('db/seed_empty.sql').read_text()
 runtime = Path('backend/runtime/ExternalPortCredentialRefresher.cs').read_text()
-seed_ops = set(re.findall(r"'([a-z_]+)'", seed.split('external_port_policy_steps',1)[-1]))
-seed_ops = {op for op in seed_ops if op.endswith('_record') or op.endswith('_reference') or op.endswith('_request') or op.endswith('_http') or op.endswith('_response') or op.endswith('_config') or op.endswith('_event') or op.endswith('_log') or op == 'fail_close'}
+seed_ops = set(re.findall(r"\([^\n]*?,\s*'([a-z_]+)'\s*,\s*'\{", seed.split('external_port_policy_steps',1)[-1]))
 registry = set(re.findall(r'\["([a-z_]+)"\]\s*=', runtime))
 missing = seed_ops - registry
 if missing:
@@ -78,3 +76,19 @@ fi
 rg -n "ExecutePolicyAsync_HookSeedOperations_VerifiesSignatureAndReachesSchedulerBoundary" backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs >/dev/null || fail "missing hook seeded policy scheduler-boundary test"
 
 echo "OK external port substrate seed coding guard"
+
+
+echo "=== canonical physical binding execution guard ==="
+for needle in \
+  "topology.external_access_ports" \
+  "topology.external_response_ports" \
+  "topology.external_hook_ports" \
+  "topology.external_port_policy_steps" \
+  "topology.external_credential_vault" \
+  "topology.external_credential_refresh_attempt"; do
+  rg -n "$needle" db/seed_empty.sql >/dev/null
+done
+rg -n "INSERT INTO topology.physical_tables" db/seed_empty.sql >/dev/null
+rg -n "INSERT INTO topology.wiring_physical_to_package" db/seed_empty.sql >/dev/null
+rg -n "runtime_resolves_tableRef_dbTableName_to_wiring_physical_to_package" db/seed_empty.sql >/dev/null
+rg -n "LoadPortRecordByCanonicalBindingAsync" backend/runtime backend/repository backend/tests >/dev/null

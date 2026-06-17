@@ -1861,14 +1861,60 @@ VALUES (
         '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"assign_screen_data_shape"}'::jsonb,
         '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
         '{"type":"fixed_form_projection","surface":"auth_external_credential_management","draft_edit_only":true,"validate_preview_apply_required":true,"ui_builder_authority":false,"physical_row_editor":false,"dedicated_credential_route":false,"consumer_bundle_connection":false,"secret_fields_forbidden":["plaintext_secret","secret","token","access_token","refresh_token","encrypted_payload"],"policy_step_editing":"template_selection_only"}'::jsonb,
-        '{"type":"physical_binding","mode":"seed_projection_marker_only","canonical_execution":"not_wired_tableRef_dbTableName_to_wiring_physical_to_package","tables":["topology.external_access_ports","topology.external_response_ports","topology.external_hook_ports","topology.external_port_policies"],"forbidden":"generic_physical_table_row_editor"}'::jsonb,
-        '{"type":"screen_data_shape","topologySystemName":"auth-external-credential-management-topology-projection","userFacingTopologyLabel":"Auth / external credential management","screenOperationKinds":["list","update"],"displayColumnMode":"selected","displayColumns":["external_port_context.port_kind","external_port_context.provider_kind","external_port_context.credential_kind","external_port_context.reference_key","external_port_context.required_by_bundle","external_port_context.consumer_bundle_binding","external_port_context.policy_template_key"],"logicalTables":[{"tableName":"external_port_context","columns":[{"name":"port_context_id","dataType":"uuid","nullable":false},{"name":"port_kind","dataType":"text","nullable":false},{"name":"provider_kind","dataType":"text","nullable":false},{"name":"credential_kind","dataType":"text","nullable":false},{"name":"reference_key","dataType":"text","nullable":true},{"name":"required_by_bundle","dataType":"text","nullable":false},{"name":"consumer_bundle_binding","dataType":"text","nullable":true},{"name":"policy_template_key","dataType":"text","nullable":false},{"name":"auth_user_id","dataType":"uuid","nullable":true}]},{"tableName":"policy_template_selection","columns":[{"name":"policy_template_key","dataType":"text","nullable":false},{"name":"port_kind","dataType":"text","nullable":false},{"name":"required_by_bundle","dataType":"text","nullable":false}]}],"relationIntents":[{"localTableRef":"external_port_context","joinTableRef":"auth.user","localKey":"auth_user_id","remoteKey":"id","remoteManifestId":"00000000-0000-0000-0000-000000000091"},{"localTableRef":"external_port_context","joinTableRef":"policy_template_selection","localKey":"policy_template_key","remoteKey":"policy_template_key"}],"operationEntityBindings":[{"operationKind":"list","entityTargetColumns":["port_kind","provider_kind","credential_kind","reference_key","required_by_bundle","consumer_bundle_binding","policy_template_key"]},{"operationKind":"update","entityTargetColumns":["credential_kind","reference_key","policy_template_key"]}],"initialDataRows":[{"values":{"port_kind":"access_port","provider_kind":"template-selected","credential_kind":"external","reference_key":"runtime-reference-key-only","required_by_bundle":"bundle-record-context","consumer_bundle_binding":"not-connected-in-this-bundle","policy_template_key":"external_access_port_generic_http"},"lineage":{"source":"seed_projection","bundle":"auth-external-credential-management-topology-projection"}},{"values":{"port_kind":"response_port","provider_kind":"template-selected","credential_kind":"external","reference_key":"runtime-reference-key-only","required_by_bundle":"bundle-record-context","consumer_bundle_binding":"not-connected-in-this-bundle","policy_template_key":"external_response_port_generic_http"},"lineage":{"source":"seed_projection","bundle":"auth-external-credential-management-topology-projection"}},{"values":{"port_kind":"hook_port","provider_kind":"template-selected","credential_kind":"external","reference_key":"runtime-reference-key-only","required_by_bundle":"bundle-record-context","consumer_bundle_binding":"not-connected-in-this-bundle","policy_template_key":"external_hook_port_scheduler_boundary"},"lineage":{"source":"seed_projection","bundle":"auth-external-credential-management-topology-projection"}}]}'::jsonb
+        '{"type":"physical_binding","mode":"seed_projection_marker_only","canonical_execution":"runtime_resolves_tableRef_dbTableName_to_wiring_physical_to_package","tables":["topology.external_access_ports","topology.external_response_ports","topology.external_hook_ports","topology.external_port_policies"],"forbidden":"generic_physical_table_row_editor"}'::jsonb,
+        '{"type":"screen_data_shape","topologySystemName":"auth-external-credential-management-topology-projection","userFacingTopologyLabel":"Auth / external credential management","tableRef":"topology.external_response_ports","dbTableName":"topology.external_response_ports","screenOperationKinds":["list","update"],"displayColumnMode":"selected","displayColumns":["external_port_context.port_kind","external_port_context.provider_kind","external_port_context.credential_kind","external_port_context.reference_key","external_port_context.required_by_bundle","external_port_context.consumer_bundle_binding","external_port_context.policy_template_key"],"logicalTables":[{"tableName":"external_port_context","columns":[{"name":"port_context_id","dataType":"uuid","nullable":false},{"name":"port_kind","dataType":"text","nullable":false},{"name":"provider_kind","dataType":"text","nullable":false},{"name":"credential_kind","dataType":"text","nullable":false},{"name":"reference_key","dataType":"text","nullable":true},{"name":"required_by_bundle","dataType":"text","nullable":false},{"name":"consumer_bundle_binding","dataType":"text","nullable":true},{"name":"policy_template_key","dataType":"text","nullable":false},{"name":"auth_user_id","dataType":"uuid","nullable":true}]},{"tableName":"policy_template_selection","columns":[{"name":"policy_template_key","dataType":"text","nullable":false},{"name":"port_kind","dataType":"text","nullable":false},{"name":"required_by_bundle","dataType":"text","nullable":false}]}],"relationIntents":[{"localTableRef":"external_port_context","joinTableRef":"auth.user","localKey":"auth_user_id","remoteKey":"id","remoteManifestId":"00000000-0000-0000-0000-000000000091"},{"localTableRef":"external_port_context","joinTableRef":"policy_template_selection","localKey":"policy_template_key","remoteKey":"policy_template_key"}],"operationEntityBindings":[{"operationKind":"list","entityTargetColumns":["port_kind","provider_kind","credential_kind","reference_key","required_by_bundle","consumer_bundle_binding","policy_template_key"]},{"operationKind":"update","entityTargetColumns":["credential_kind","reference_key","policy_template_key"]}],"initialDataRows":[{"values":{"port_kind":"access_port","provider_kind":"template-selected","credential_kind":"external","reference_key":"runtime-reference-key-only","required_by_bundle":"bundle-record-context","consumer_bundle_binding":"not-connected-in-this-bundle","policy_template_key":"external_access_port_generic_http"},"lineage":{"source":"seed_projection","bundle":"auth-external-credential-management-topology-projection"}},{"values":{"port_kind":"response_port","provider_kind":"template-selected","credential_kind":"external","reference_key":"runtime-reference-key-only","required_by_bundle":"bundle-record-context","consumer_bundle_binding":"not-connected-in-this-bundle","policy_template_key":"external_response_port_generic_http"},"lineage":{"source":"seed_projection","bundle":"auth-external-credential-management-topology-projection"}},{"values":{"port_kind":"hook_port","provider_kind":"template-selected","credential_kind":"external","reference_key":"runtime-reference-key-only","required_by_bundle":"bundle-record-context","consumer_bundle_binding":"not-connected-in-this-bundle","policy_template_key":"external_hook_port_scheduler_boundary"},"lineage":{"source":"seed_projection","bundle":"auth-external-credential-management-topology-projection"}}]}'::jsonb
     ]::jsonb[],
     'active'
 )
 ON CONFLICT (manifest_id) DO UPDATE
     SET topology = EXCLUDED.topology,
         status   = EXCLUDED.status;
+
+-- ---------------------------------------------------------------------------
+-- external_port_substrate canonical physical binding catalog/wiring seed.
+-- The fixed-form auth.external.credential_management.projection can be resolved
+-- at runtime through screen_data_shape.tableRef/dbTableName -> physical_tables ->
+-- wiring_physical_to_package -> external port physical tables. The topology
+-- physical_binding entry remains a marker, not execution authority.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
+VALUES
+    ('topology.external_access_ports', 'topology', 'external_port_substrate', true),
+    ('topology.external_response_ports', 'topology', 'external_port_substrate', true),
+    ('topology.external_hook_ports', 'topology', 'external_port_substrate', true),
+    ('topology.external_port_policies', 'topology', 'external_port_substrate', true),
+    ('topology.external_port_policy_steps', 'topology', 'external_port_substrate', true),
+    ('topology.external_credential_vault', 'topology', 'external_port_substrate', true),
+    ('topology.external_credential_refresh_attempt', 'topology', 'external_port_substrate', true)
+ON CONFLICT (table_ref) DO UPDATE
+    SET schema_name = EXCLUDED.schema_name,
+        category = EXCLUDED.category,
+        active = EXCLUDED.active;
+
+INSERT INTO topology.wiring_physical_to_package (physical_table_id, package_id, wiring_def, active)
+SELECT pt.physical_table_id,
+       '00000000-0000-0000-0000-000000000092'::uuid,
+       jsonb_build_object(
+           'source', 'external-port-canonical-physical-binding-execution',
+           'manifestKey', 'auth.external.credential_management.projection',
+           'table_ref', pt.table_ref,
+           'canonicalExecution', 'screen_data_shape.tableRef_dbTableName_to_external_port_physical_table'),
+       true
+FROM topology.physical_tables pt
+WHERE pt.table_ref IN (
+    'topology.external_access_ports',
+    'topology.external_response_ports',
+    'topology.external_hook_ports',
+    'topology.external_port_policies',
+    'topology.external_port_policy_steps',
+    'topology.external_credential_vault',
+    'topology.external_credential_refresh_attempt')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM topology.wiring_physical_to_package existing
+      WHERE existing.physical_table_id = pt.physical_table_id
+        AND existing.package_id = '00000000-0000-0000-0000-000000000092'::uuid
+        AND existing.active = true);
 
 -- ---------------------------------------------------------------------------
 -- external_port_substrate generic policy seed.

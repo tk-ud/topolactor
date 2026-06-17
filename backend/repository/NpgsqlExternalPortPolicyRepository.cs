@@ -105,6 +105,57 @@ public sealed class NpgsqlExternalPortPolicyRepository : IExternalPortPolicyRepo
         return record;
     }
 
+    public async Task<ExternalPortRecord?> LoadPortRecordByCanonicalBindingAsync(
+        string manifestKey,
+        string tableRef,
+        string portKind,
+        Guid portId,
+        string? routeKey,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(manifestKey))
+            throw new ArgumentException("manifestKey is required.", nameof(manifestKey));
+        if (string.IsNullOrWhiteSpace(tableRef))
+            throw new ArgumentException("tableRef is required.", nameof(tableRef));
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var bindingCmd = conn.CreateCommand();
+        bindingCmd.CommandText = """
+            SELECT 1
+            FROM manifest m
+            JOIN topology.physical_tables pt
+              ON pt.active = true
+             AND (pt.table_ref = @tableRef OR (pt.schema_name || '.' || pt.table_ref) = @tableRef)
+            JOIN topology.wiring_physical_to_package w
+              ON w.physical_table_id = pt.physical_table_id
+             AND w.package_id = m.manifest_id
+             AND w.active = true
+            WHERE m.status = 'active'
+              AND EXISTS (
+                  SELECT 1
+                  FROM unnest(m.topology) entry
+                  WHERE entry->>'type' = 'hub_grouping'
+                    AND entry->>'manifestKey' = @manifestKey
+              )
+              AND EXISTS (
+                  SELECT 1
+                  FROM unnest(m.topology) entry
+                  WHERE entry->>'type' = 'screen_data_shape'
+                    AND (entry->>'tableRef' = @tableRef OR entry->>'dbTableName' = @tableRef)
+              )
+            LIMIT 1
+            """;
+        bindingCmd.Parameters.AddWithValue("manifestKey", manifestKey);
+        bindingCmd.Parameters.AddWithValue("tableRef", tableRef);
+
+        if (await bindingCmd.ExecuteScalarAsync(ct) is null)
+            throw new InvalidOperationException("EXTERNAL_PORT_CANONICAL_BINDING_NOT_FOUND");
+
+        return await LoadPortRecordByIdAsync(portKind, portId, routeKey, ct);
+    }
+
     public async Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(portRecord);

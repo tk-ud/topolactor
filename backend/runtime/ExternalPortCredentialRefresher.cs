@@ -297,6 +297,14 @@ public interface IExternalPortPolicyRepository
         string? routeKey,
         CancellationToken ct = default);
 
+    Task<ExternalPortRecord?> LoadPortRecordByCanonicalBindingAsync(
+        string manifestKey,
+        string tableRef,
+        string portKind,
+        Guid portId,
+        string? routeKey,
+        CancellationToken ct = default);
+
     Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default);
 }
 

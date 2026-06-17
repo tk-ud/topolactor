@@ -21,7 +21,7 @@ need "validate_preview_apply_required\":true" "$SEED"
 need "ui_builder_authority\":false" "$SEED"
 need "physical_row_editor\":false" "$SEED"
 need "mode\":\"seed_projection_marker_only" "$SEED"
-need "canonical_execution\":\"not_wired_tableRef_dbTableName_to_wiring_physical_to_package" "$SEED"
+need "canonical_execution\":\"runtime_resolves_tableRef_dbTableName_to_wiring_physical_to_package" "$SEED"
 need "policy_step_editing\":\"template_selection_only" "$SEED"
 
 projection_block="$(sed -n '/auth\/external credential management topology projection/,/external_port_substrate generic policy seed/p' "$SEED")"
