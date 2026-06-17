@@ -72,7 +72,7 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 - [x] `external-port-substrate-seed-coding` bundle increment: external port physical tables / seed policy-step surface / generic resolver-executor boundary を partial 実装する
 - [x] `auth-external-credential-management-topology-projection` bundle increment: auth / external credential management を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する
 - [x] DB repository atomic encrypted credential update を実装する
-- [x] `external-port-canonical-physical-binding-execution` bundle increment: fixed-form projection から `screen_data_shape.tableRef` / `dbTableName` -> `topology.physical_tables` -> `topology.wiring_physical_to_package` -> external port physical tables までの runtime binding execution を実装する
+- [x] `external-port-canonical-physical-binding-execution` bundle increment: fixed-form projection から `screen_data_shape.tableRef` / `dbTableName` -> `topology.physical_table_manifest_bindings` -> external port physical tables までの runtime binding execution を実装する
 - [ ] `.agent/tasks/external-port-substrate-implementation-todo.md` の consumer bundle connection todo を進める
 
 対応資料:

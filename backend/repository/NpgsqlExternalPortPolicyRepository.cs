@@ -118,33 +118,36 @@ public sealed class NpgsqlExternalPortPolicyRepository : IExternalPortPolicyRepo
         if (string.IsNullOrWhiteSpace(tableRef))
             throw new ArgumentException("tableRef is required.", nameof(tableRef));
 
+        // Fail-close: tableRef must correspond exactly to portKind's canonical physical table.
+        var expectedTableRef = portKind switch
+        {
+            "access_port"   => "topology.external_access_ports",
+            "response_port" => "topology.external_response_ports",
+            "hook_port"     => "topology.external_hook_ports",
+            _ => throw new InvalidOperationException("EXTERNAL_PORT_KIND_UNSUPPORTED")
+        };
+        if (!string.Equals(tableRef, expectedTableRef, StringComparison.Ordinal))
+            throw new InvalidOperationException("EXTERNAL_PORT_CANONICAL_BINDING_TABLE_REF_PORT_KIND_MISMATCH");
+
+        if (portKind == "hook_port" && string.IsNullOrWhiteSpace(routeKey))
+            throw new InvalidOperationException("EXTERNAL_HOOK_PORT_ROUTE_KEY_REQUIRED");
+
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
         await using var bindingCmd = conn.CreateCommand();
         bindingCmd.CommandText = """
             SELECT 1
-            FROM manifest m
+            FROM hubs.topology_manifests tm
+            JOIN topology.physical_table_manifest_bindings pmb
+              ON pmb.topology_manifest_id = tm.topology_manifest_id
+             AND pmb.active = true
             JOIN topology.physical_tables pt
-              ON pt.active = true
-             AND (pt.table_ref = @tableRef OR (pt.schema_name || '.' || pt.table_ref) = @tableRef)
-            JOIN topology.wiring_physical_to_package w
-              ON w.physical_table_id = pt.physical_table_id
-             AND w.package_id = m.manifest_id
-             AND w.active = true
-            WHERE m.status = 'active'
-              AND EXISTS (
-                  SELECT 1
-                  FROM unnest(m.topology) entry
-                  WHERE entry->>'type' = 'hub_grouping'
-                    AND entry->>'manifestKey' = @manifestKey
-              )
-              AND EXISTS (
-                  SELECT 1
-                  FROM unnest(m.topology) entry
-                  WHERE entry->>'type' = 'screen_data_shape'
-                    AND (entry->>'tableRef' = @tableRef OR entry->>'dbTableName' = @tableRef)
-              )
+              ON pt.physical_table_id = pmb.physical_table_id
+             AND pt.active = true
+             AND pt.table_ref = @tableRef
+            WHERE tm.status = 'active'
+              AND tm.manifest_key = @manifestKey
             LIMIT 1
             """;
         bindingCmd.Parameters.AddWithValue("manifestKey", manifestKey);

@@ -86,9 +86,16 @@ for needle in \
   "topology.external_port_policy_steps" \
   "topology.external_credential_vault" \
   "topology.external_credential_refresh_attempt"; do
-  rg -n "$needle" db/seed_empty.sql >/dev/null
+  rg -n "$needle" db/seed_empty.sql >/dev/null || fail "missing $needle in seed"
 done
-rg -n "INSERT INTO topology.physical_tables" db/seed_empty.sql >/dev/null
-rg -n "INSERT INTO topology.wiring_physical_to_package" db/seed_empty.sql >/dev/null
-rg -n "runtime_resolves_tableRef_dbTableName_to_wiring_physical_to_package" db/seed_empty.sql >/dev/null
-rg -n "LoadPortRecordByCanonicalBindingAsync" backend/runtime backend/repository backend/tests >/dev/null
+rg -n "INSERT INTO topology.physical_tables" db/seed_empty.sql >/dev/null || fail "missing physical_tables seed insert"
+rg -n "INSERT INTO topology.physical_table_manifest_bindings" db/seed_empty.sql >/dev/null || fail "missing physical_table_manifest_bindings seed insert"
+rg -n "INSERT INTO hubs.topology_manifests" db/seed_empty.sql >/dev/null || fail "missing topology_manifests seed insert"
+rg -n "runtime_resolves_tableRef_to_physical_table_manifest_bindings" db/seed_empty.sql >/dev/null || fail "missing canonical_execution marker in seed"
+rg -n "canonical_port_bindings" db/seed_empty.sql >/dev/null || fail "missing canonical_port_bindings entry in seed"
+rg -n "LoadPortRecordByCanonicalBindingAsync" backend/runtime/ExternalPortCredentialRefresher.cs backend/repository/NpgsqlExternalPortPolicyRepository.cs >/dev/null || fail "missing LoadPortRecordByCanonicalBindingAsync implementation"
+rg -n "LoadPortRecordByCanonicalBindingAsync" backend/tests >/dev/null || fail "missing LoadPortRecordByCanonicalBindingAsync tests"
+rg -n "physical_table_manifest_bindings" backend/repository/NpgsqlExternalPortPolicyRepository.cs >/dev/null || fail "canonical binding SQL must use physical_table_manifest_bindings"
+rg -n "wiring_physical_to_package" backend/repository/NpgsqlExternalPortPolicyRepository.cs 2>/dev/null && fail "LoadPortRecordByCanonicalBindingAsync must not use wiring_physical_to_package" || true
+rg -n "EXTERNAL_PORT_CANONICAL_BINDING_TABLE_REF_PORT_KIND_MISMATCH" backend/repository/NpgsqlExternalPortPolicyRepository.cs >/dev/null || fail "missing tableRef/portKind fail-close guard"
+echo "OK canonical physical binding execution guard"
