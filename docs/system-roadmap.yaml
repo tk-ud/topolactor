@@ -722,7 +722,16 @@ system_roadmap_ssot:
       title: File/Storage bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: File/Storage Bundle as port consumer of external_port_substrate. Seed binding (access_port / response_port / credential_requirement / policy_steps / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (export_job / file_artifact / checksum_record / manifest), manifest binding, UI Builder preset, portTargetRef action wiring, checksum/manifest runtime, evidence/runtime_event_log, and projection response. Object storage provider-specific client not added.
+      public_summary: >-
+        File/Storage Bundle as port consumer of external_port_substrate. Seed binding
+        (access_port / response_port / credential_requirement / policy_steps / portTargetRef wiring)
+        implemented per PR#460. Physical tables (export_job / file_artifact / checksum_record /
+        manifest / signed_download_authorizations), physical_table_manifest_binding, SSOT
+        operation_key definitions, and executor handlers (record_export_job / compute_checksum /
+        record_file_artifact / write_manifest_record / authorize_signed_download) implemented per
+        PR#463. Artifact + checksum_record atomic write with fail-close enforced. Remaining partial
+        scope: UI Builder portTargetRef action wiring / preset, evidence/runtime_event_log, and
+        projection response. Object storage provider-specific client not added.
       scope:
         - file_storage_access_and_response_port_consumer_definition
         - object_storage_credential_requirement_as_port_attachment
@@ -734,10 +743,10 @@ system_roadmap_ssot:
         - .agent/tasks/todo.md#file-storage-port-consumer
       closed_gap_ref:
         - file_storage_seed_binding_and_credential_requirement_implemented_per_pr460
-      known_gap_ref:
         - file_storage_physical_table_and_manifest_binding_not_connected
-        - file_storage_portTargetRef_action_wiring_and_preset_not_connected
         - file_storage_checksum_and_manifest_runtime_not_connected
+      known_gap_ref:
+        - file_storage_portTargetRef_action_wiring_and_preset_not_connected
         - file_storage_evidence_and_runtime_event_log_not_connected
         - file_storage_projection_response_not_connected
 
