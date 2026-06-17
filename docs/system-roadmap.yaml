@@ -656,8 +656,9 @@ system_roadmap_ssot:
         - frontend/tests/externalPortDispatchRuntime.test.ts
         - .agent/tests/check-external-port-credential-vault-refresher.sh
         - .agent/tests/check-external-port-substrate-seed-coding.sh
-      known_gap_ref:
+      closed_gap_ref:
         - external_port_policy_read_repository_implemented_consumer_runtime_wiring_not_started
+      known_gap_ref:
         - external_port_access_response_hook_tables_not_connected_to_consumer_bundles
         - fixed_form_projection_manifest_seed_implemented_canonical_physical_binding_execution_not_wired
         - consumer_bundle_port_connection_implementation_not_started

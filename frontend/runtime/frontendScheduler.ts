@@ -411,7 +411,6 @@ export async function enqueueExternalPortDispatchCommand(
       layer: "external_port",
       action: "dispatchExternalPort",
       payload: {
-        target_ref: ref,
         port_target_ref: ref,
         dispatch_payload: spec.payload,
         ...(spec.outputProp ? { output_prop: spec.outputProp } : {}),

@@ -136,6 +136,32 @@ ON CONFLICT (manifest_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
+-- External port dispatch manifest — generic external_port runtime boundary.
+-- Design Inspector dispatchExternalPort reaches this route through normal
+-- manifest runtime_mapping, not a ManifestDispatcher hardcoded target branch.
+-- Provider-specific clients and canonical physical binding execution are not
+-- represented here; this maps only to the generic port-record/policy boundary.
+-- ---------------------------------------------------------------------------
+INSERT INTO manifest (
+    manifest_id,
+    relation_registry_id,
+    topology,
+    status
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000041',
+    NULL,
+    ARRAY[
+      '{"type":"dispatcher_mapping","role":"admin","target":"external_port","layer":"external_port","action":"dispatchExternalPort"}'::jsonb,
+      '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+      '{"type":"runtime_mapping","runtime_destination":"external_port_runtime"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
 -- Admin manifests — active runtime routes for admin target routes.
 --
 -- dispatcher_mapping entries for admin target explicitly require role=admin

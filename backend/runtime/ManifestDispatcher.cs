@@ -86,11 +86,6 @@ public class ManifestDispatcher
 
         var vector = _operationVectorResolver.Resolve(request);
 
-        if (string.Equals(request.Target, "external_port", StringComparison.Ordinal) &&
-            string.Equals(request.Action, "dispatchExternalPort", StringComparison.Ordinal))
-        {
-            return await DispatchToHandlerAsync("external_port_runtime", request, manifestId: null, ct);
-        }
 
         if (_manifestRepository is null)
         {
