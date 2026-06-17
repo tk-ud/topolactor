@@ -11,6 +11,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
+| `projection-admin-runtime-ssot-alignment` | Issue#464 投影/admin/runtime SSOT不整合収束 | not_started | 1 | `product.admin_topology_authoring` / `product.projection_and_output_lanes` / `product.core_runtime_route` / `product.external_port_substrate` | `docs/design/runtime-orchestration-ssot.yaml` |
 | `external-port-substrate-implementation` | external_port_substrate / 7 consumer bundles + credential_requirement substrate 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
@@ -53,6 +54,100 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 実装 bundle ではなく、統合 UX の手動受入 / hand-debug evidence gap。runtime dispatch loop、ProjectionShell SSE refresh、recommend child island、SQL Attention feedback projection、admin CSV/JSON import、admin authoring routes は実装済みとして扱い、未実装扱いに戻さない。
 
 - [ ] `product.dynamic_support_nocode_loop` の combined UX を、authoring guidance → SQL Attention feedback → M6 admin loop の通し手動受入 / hand-debug で確認する
+
+---
+
+## Bundle `projection-admin-runtime-ssot-alignment`
+
+**Status:** not_started
+**Issue:** https://github.com/tk-ud/topolactor/issues/464
+**Roadmap/status SSOT:** `product.admin_topology_authoring` / `product.projection_and_output_lanes` / `product.core_runtime_route` / `product.external_port_substrate`
+**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`
+
+問題点:
+Issue#464 の Open Issue を canonical TODO carry-over に変換する。投影 / admin authoring / runtime dispatch / SSE projection / abstract function boundary / external-port consumer wiring が、SSOT completion gate と実装の間で不整合になっている。小粒の UI/API 修正ではなく、`data_driven_projection_completion_gate` と `admin_authoring_completion_gate` を満たす横断 Bundle として収束させる。
+
+目的:
+SSOT を再定義せず、`docs/framework-core.yaml` の `logicalDelete` を含む action vocabulary、`runtime-orchestration-ssot.yaml` の dispatch / SSE / abstract-function gate、`pipeline-continuity-ssot.yaml` の queue/projection lane、`admin-console-workflow-ssot.yaml` の admin authoring completion gate、`external-port-substrate-ssot.yaml` の secure consumer dispatch lane を実装・テストに通す。
+
+実装方針:
+- [ ] admin Contents Step 3 の operation kind / screen_data_shape / manifest wiring candidate / UI Builder wiring candidate / runtime action mapping / tests に Delete/logicalDelete dispatch coverage を通す。
+- [ ] `wiringKind` / `targetSurface` / `target_ref` の未対応・未解決を `default` / `entity` / 生 action へ暗黙 fallback せず、runtime error projection または保存検証 fail-close として扱う。
+- [ ] `ProjectionHookTrigger.identity` の `manifest_id` / `table_id` / `table_registry_id` を ProjectionShell refresh request で保持し、`default / screen_list / Search` 固定再dispatchを禁止する。
+- [ ] UI Events の候補 (`select/input/focus/blur/setActiveKey` 等) と runtime 実行側を一致させ、trigger UI と target UI (`targetNodeId`) を独立概念として保存→投影→実行まで通す。実行不能候補は UI 候補から外す。
+- [ ] `RuntimeExecutor` と `TopologyFunctionBinder` / abstract function primitive registry の接続対象を分類し、対象 mutation は abstract function / DB-driven operation boundary を通す。例外は SSOT 根拠・理由・テストを明記する。
+- [ ] external port consumer の trigger UI / target UI / payloadFrom / outputProp / projection response は、既存 `external_port_runtime` と `secure_consumer_dispatch_lane` に流し、provider別・bundle別 runtime/client/admin panel を新設しない。consumer bundle 別の詳細残作業は既存 `*-port-consumer` TODO と `.agent/tasks/external-port-substrate-implementation-todo.md` を正本として扱う。
+
+対応資料:
+- `docs/framework-core.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/abstract-function-primitive-registry-ssot.yaml`
+- `docs/system-roadmap.yaml`
+- `.agent/tasks/external-port-substrate-implementation-todo.md`
+
+対象ファイル名:
+- `frontend/runtime/screenAuthoringIntent.ts`
+- `frontend/islands/ContentsScreenDesignPanel.tsx`
+- `frontend/api/adminApi.ts`
+- `backend/runtime/AdminRuntime.cs`
+- `frontend/runtime/renderEmission.ts`
+- `frontend/runtime/runtimeComponentFactory.ts`
+- `frontend/lib/packageWiringPicker.ts`
+- `frontend/lib/packageWiringOptions.ts`
+- `frontend/islands/ProjectionShell.tsx`
+- `frontend/runtime/sseReceiver.ts`
+- `frontend/runtime/frontendScheduler.ts`
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/scheduler/RuntimeTimelineScheduler.cs`
+- `frontend/islands/UiBuilderAdmin.tsx`
+- `frontend/runtime/visualLayoutUtils.ts`
+- `backend/runtime/RuntimeExecutor.cs`
+- `backend/runtime/TopologyFunctionBinder.cs`
+- `backend/Program.cs`
+- `backend/runtime/ExternalPortDispatchRuntime.cs`
+- `backend/runtime/ExternalPortCredentialRefresher.cs`
+
+対象関数名またはruntime境界名:
+- `ScreenOperationKind`
+- `SCREEN_OPERATION_OPTIONS`
+- `screenOperationToDispatcherAxes`
+- `dispatcherAxesToScreenOperationKind`
+- `buildAssignPayloadForStep`
+- `mapWiringKindToLayer`
+- `mapWiringKindToAction`
+- `buildRuntimeDispatchSpec`
+- `emitBoundEvent`
+- `DataUpdatePackageWiringAsync`
+- `createSseReceiver`
+- `onProjectionHookTrigger`
+- `queueClientCommand`
+- `ManifestDispatcher.DispatchAsync`
+- `ComponentEventWiring`
+- `COMPONENT_EVENT_TYPES`
+- `COMPONENT_ACTION_TYPES`
+- `normalizeAuthoredEventType`
+- `buildLocalUiStateEventBinding`
+- `RuntimeExecutor.ExecuteAsync`
+- `TopologyFunctionBinder.Bind`
+- `SemanticMapper.MapToRepositoryCommand`
+- `ScreenDataShapeQueryRuntime.TryExecuteAsync`
+- `buildExternalPortEventBinding`
+- `enqueueExternalPortDispatchCommand`
+- `ExternalPortDispatchRuntime.ExecuteAsync`
+- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
+
+受入条件:
+- [ ] Contents Step 3 の dispatch coverage に Delete/logicalDelete を含め、UI Builder wiring / runtime dispatch / tests まで通っている。
+- [ ] dispatch spec の未解決値は silent fallback せず fail-close / runtime error projection になる。
+- [ ] SSE projection refresh が identity を捨てず、対象 manifest / projection surface を保持して queue/dispatch に流れる。
+- [ ] UI Events の trigger UI と target UI が独立して authoring 可能で、保存→投影→実行まで一致している。
+- [ ] abstract function lane の対象/例外が SSOT 根拠付きで確定し、対象 mutation は `TopologyFunctionBinder` / `execute_db_function` / reusable substrate を通る。
+- [ ] external port consumer の trigger UI / target UI / projection response が consumer 単位で既存 generic lane に接続され、provider-specific runtime/client/admin panel を新設していない。
+- [ ] frontend direct DB write がない。
+- [ ] 関連 frontend/backend tests または `.agent/tests/*` が追加/更新されている。
 
 ---
 
