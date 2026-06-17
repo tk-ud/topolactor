@@ -37,7 +37,11 @@ PR#460 完了済み:
 
 ## 問題点
 
-`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。todo 側では設計確定作業として残っていたが、実際の未処理は実装作業。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed / production DB-backed external port policy read repository / DB repository atomic encrypted credential payload update は追加済みだが、consumer bundle wiring / canonical physical binding execution は未完了。
+`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed / production DB-backed external port policy read repository / DB repository atomic encrypted credential payload update / consumer bundle seed binding (全 7 bundle) / secure_consumer_dispatch_lane named invariant は完了済み。
+
+consumer dispatch path は `port_target_ref` lane のみ。PR#458/#459 で `canonical_binding_*` consumer branch は削除済みであり、consumer 実装で "canonical physical binding execution" を追加してはならない。`LoadPortRecordByCanonicalBindingAsync` は admin projection validation only であり、consumer dispatch path には使用しない。
+
+残作業は consumer bundle ごとの physical table / physical table manifest binding / UI Builder preset / portTargetRef action wiring / evidence / runtime_event_log / checksum (file/sftp 系) / projection response 接続のみ。
 
 ## 目的
 

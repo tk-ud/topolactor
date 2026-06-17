@@ -351,11 +351,24 @@ external_port_substrate_ssot:
       PR#460 以後の consumer bundle 実装が必ず通す既存レーンの named invariant。
       新設計ではなく、本 SSOT の security_boundary / dispatch_lane / credential_boundary の明確化。
       consumer bundle 実装者が誤読せずに参照できるよう、既存 SSOT の制約を named invariant として整理したもの。
+    trigger_entry:
+      note: >-
+        trigger_kind は runtime-orchestration SSOT の cron / hook / client に対応。
+        UI/client trigger が代表経路だが、hook trigger (stripe / webhook_inbox) や
+        scheduler/cron trigger (job_scheduler) も external_port_runtime 以降の共通レーンを通す。
+      kinds:
+        client_or_ui_trigger:
+          path: UI_Builder_portTargetRef_action_wiring → api_command_lane → ManifestDispatcher
+          applies_to: [file_storage, email, audit_approval]
+        hook_trigger:
+          path: hook_port_receive → scheduler_enqueue_event → external_port_runtime
+          applies_to: [stripe, webhook_inbox]
+        scheduler_or_cron_trigger:
+          path: built_in_or_external_scheduler → hook_or_access_port_receive → external_port_runtime
+          applies_to: [job_scheduler]
     lane:
-      - UI_trigger
-      - UI_Builder_action_wiring_and_portTargetRef
-      - api_command_lane
-      - ManifestDispatcher
+      - trigger_entry
+      - api_or_scheduler_or_dispatcher_lane
       - external_port_runtime
       - DB_port_record_resolution
       - credential_requirement_and_reference_key_resolution

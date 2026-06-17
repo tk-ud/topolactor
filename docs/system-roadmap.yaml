@@ -662,9 +662,10 @@ system_roadmap_ssot:
         - secure_consumer_dispatch_lane_named_invariant_added_to_ssot
       known_gap_ref:
         - external_port_access_response_hook_tables_not_connected_to_consumer_bundles
-        - fixed_form_projection_manifest_seed_implemented_canonical_physical_binding_execution_not_wired
-        - consumer_bundle_port_connection_implementation_not_started
-        - consumer_bundle_physical_table_and_manifest_and_preset_and_evidence_not_started
+        - consumer_bundle_physical_table_and_manifest_binding_not_connected
+        - consumer_bundle_portTargetRef_action_wiring_not_connected
+        - consumer_bundle_evidence_and_runtime_event_log_not_connected
+        - consumer_bundle_projection_response_not_connected
         - credential_admin_ui_panel_out_of_scope
         - kms_or_encryption_vendor_selection_out_of_scope
         - provider_specific_client_implementation_out_of_scope
@@ -687,8 +688,10 @@ system_roadmap_ssot:
       closed_gap_ref:
         - email_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - email_dispatch_service_implementation_not_started
-        - email_response_port_connection_implementation_not_started
+        - email_physical_table_and_manifest_binding_not_connected
+        - email_portTargetRef_action_wiring_and_preset_not_connected
+        - email_evidence_and_runtime_event_log_not_connected
+        - email_projection_response_not_connected
 
     product.stripe_port_consumer:
       bundle_id: stripe-port-consumer
@@ -708,8 +711,10 @@ system_roadmap_ssot:
       closed_gap_ref:
         - stripe_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - stripe_hook_port_receive_implementation_not_started
-        - payment_state_projection_schema_not_started
+        - stripe_physical_table_and_manifest_binding_not_connected
+        - stripe_portTargetRef_action_wiring_not_connected
+        - stripe_evidence_and_runtime_event_log_not_connected
+        - stripe_payment_state_projection_not_connected
 
     product.file_storage_port_consumer:
       bundle_id: file-storage-port-consumer
@@ -729,8 +734,11 @@ system_roadmap_ssot:
       closed_gap_ref:
         - file_storage_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - file_storage_access_response_port_connection_implementation_not_started
-        - export_job_schema_implementation_not_started
+        - file_storage_physical_table_and_manifest_binding_not_connected
+        - file_storage_portTargetRef_action_wiring_and_preset_not_connected
+        - file_storage_checksum_and_manifest_runtime_not_connected
+        - file_storage_evidence_and_runtime_event_log_not_connected
+        - file_storage_projection_response_not_connected
 
     product.export_sftp_port_consumer:
       bundle_id: export-sftp-port-consumer
@@ -750,8 +758,11 @@ system_roadmap_ssot:
       closed_gap_ref:
         - export_sftp_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - export_sftp_response_port_connection_implementation_not_started
-        - transfer_retry_policy_implementation_not_started
+        - export_sftp_physical_table_and_manifest_binding_not_connected
+        - export_sftp_checksum_and_manifest_verification_boundary_not_connected
+        - export_sftp_portTargetRef_action_wiring_not_connected
+        - export_sftp_evidence_and_runtime_event_log_not_connected
+        - export_sftp_projection_response_not_connected
 
     product.webhook_inbox_port_consumer:
       bundle_id: webhook-inbox-port-consumer
