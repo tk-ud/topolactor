@@ -20,6 +20,8 @@
 | `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
 | `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
+注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提が完了済み。残作業は physical table / manifest / preset / portTargetRef action wiring / evidence / checksum / projection 接続。provider-specific runtime / client は追加しない。
+
 ---
 
 ## Bundle `future-external-bundle-gate`
@@ -116,210 +118,163 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 
 ## Bundle `file-storage-port-consumer`
 
-**Status:** not_started
+**Status:** partial
 **SSOT:** `docs/design/runtime-bundle-file-storage-ssot.yaml`
 
-問題点:
-file_storage_bundle の credential（object storage access key / secret key）が standalone credential 管理 plane の対象として設計されていた。port substrate との接続実装が未着手。
+PR#460 完了済み: access_port / response_port seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
+残作業は physical table / manifest / checksum / evidence / projection 接続。provider-specific client / runtime は追加しない。
+既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
-目的:
-file_storage_bundle を external_port_substrate の access_port / response_port consumer として確立する。object storage credential は port record 付属の credential_requirement として管理し、standalone credential 管理 plane は作らない。
-
-実装方針:
-- [ ] file_storage_bundle の access_port / response_port consumer として seed / DB record / projection 接続を実装する
-- [ ] object storage credential_kind を external として port record に付属させる実装を追加する（standalone 管理 plane 不使用）
-- [ ] export_job → port record 解決 → generic access/response port connect の経路実装を追加する
+残 todo:
+- [ ] export_job / file_artifact / checksum_record / manifest physical table 接続実装
+- [ ] physical table manifest binding (file_storage manifest / screen_data_shape)
+- [ ] UI Builder form preset / portTargetRef action wiring (export_job → access/response port connect)
+- [ ] checksum 生成・検証の runtime 実装 (port substrate と独立)
+- [ ] evidence / runtime_event_log: export_job_initiated / file_write_completed / checksum_verified / signed_url_generated
+- [ ] projection response: signed download authorization / file artifact projection
 
 対応資料:
 - `docs/design/runtime-bundle-file-storage-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
-
-対象ファイル名:
-- `docs/design/runtime-bundle-file-storage-ssot.yaml`
-
-対象 surface 名:
-- `access_port`（object storage アクセス）
-- `response_port`（object storage 返送）
-- `credential_requirement`（object storage credential 付属要件）
 
 ---
 
 ## Bundle `email-port-consumer`
 
-**Status:** not_started
+**Status:** partial
 **SSOT:** `docs/design/runtime-bundle-email-ssot.yaml`
 
-問題点:
-email_bundle の SMTP credential が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての接続実装が未着手。
+PR#460 完了済み: response_port (smtp) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
+残作業は physical table / approval evidence / delivery evidence / projection 接続。SMTP provider-specific client / runtime は追加しない。
+既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
-目的:
-email_bundle を external_port_substrate の response_port（provider_kind: smtp）consumer として確立する。SMTP credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
-
-実装方針:
-- [ ] email_bundle の response_port（smtp）consumer として seed / DB record / projection 接続を実装する
-- [ ] SMTP credential_kind を external として port record に付属させる実装を追加する
-- [ ] UI approval → response_port 解決 → SMTP dispatch の経路実装を追加する
+残 todo:
+- [ ] email_draft / approval_record / delivery_evidence physical table 接続実装
+- [ ] physical table manifest binding (email manifest / screen_data_shape)
+- [ ] UI Builder form preset / portTargetRef action wiring (UI approval → response_port connect)
+- [ ] evidence / runtime_event_log: dispatch_initiated / send_success / send_failure / approval_recorded
+- [ ] projection response: delivery status / approval evidence projection
 
 対応資料:
 - `docs/design/runtime-bundle-email-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
-
-対象ファイル名:
-- `docs/design/runtime-bundle-email-ssot.yaml`
-
-対象 surface 名:
-- `response_port`（SMTP 送信 port）
-- `credential_requirement`（SMTP credential 付属要件）
 
 ---
 
 ## Bundle `stripe-port-consumer`
 
-**Status:** not_started
+**Status:** partial
 **SSOT:** `docs/design/runtime-bundle-stripe-ssot.yaml`
 
-問題点:
-stripe_bundle の webhook secret が standalone credential 管理 plane の対象として設計されていた。hook_port consumer としての接続実装が未着手。
+PR#460 完了済み: hook_port (stripe) seed binding / credential_requirement / policy_steps (verify_signature_by_config / enqueue_scheduler_event) / UI Builder portTargetRef 配線前提。
+残作業は physical table / intake snapshot / verification evidence / projection 接続。Stripe provider-specific client / runtime は追加しない。
+既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
-目的:
-stripe_bundle を external_port_substrate の hook_port（provider_kind: stripe）consumer として確立する。Stripe webhook secret は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
-
-実装方針:
-- [ ] stripe_bundle の hook_port（stripe）consumer として seed / DB record / projection 接続を実装する
-- [ ] Stripe webhook secret の credential_kind を external として hook_port に付属させる実装を追加する
-- [ ] hook_port → signature verification → payment state projection の経路実装を追加する
+残 todo:
+- [ ] webhook_intake_snapshot / verification_evidence / payment_state physical table 接続実装
+- [ ] physical table manifest binding (stripe manifest / screen_data_shape)
+- [ ] portTargetRef action wiring: hook_path → port record resolution → scheduler event dispatch
+- [ ] evidence / runtime_event_log: webhook_received / verification_success / verification_failure / payment_state_projected
+- [ ] projection response: payment state / verification evidence projection
 
 対応資料:
 - `docs/design/runtime-bundle-stripe-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
-
-対象ファイル名:
-- `docs/design/runtime-bundle-stripe-ssot.yaml`
-
-対象 surface 名:
-- `hook_port`（Stripe webhook 受信 port）
-- `credential_requirement`（Stripe webhook secret 付属要件）
 
 ---
 
 ## Bundle `webhook-inbox-port-consumer`
 
-**Status:** not_started
+**Status:** partial
 **SSOT:** `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
 
-問題点:
-webhook_inbox_bundle の webhook signing key が standalone credential 管理 plane の対象として設計されていた。hook_port consumer としての接続実装が未着手。
+PR#460 完了済み: hook_port (generic_webhook) seed binding / credential_requirement / policy_steps (verify_signature_by_config / enqueue_scheduler_event) / UI Builder portTargetRef 配線前提。
+残作業は physical table / intake snapshot / verification evidence / scheduler wiring 接続。webhook provider-specific client / runtime は追加しない。
+既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
-目的:
-webhook_inbox_bundle を external_port_substrate の hook_port consumer として確立する。webhook signing key は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
-
-実装方針:
-- [ ] webhook_inbox_bundle の hook_port consumer として seed / DB record / projection 接続を実装する
-- [ ] webhook signing key の credential_kind を external として hook_port に付属させる実装を追加する
-- [ ] hook_port → signature verification → scheduler 境界の実装を追加する
+残 todo:
+- [ ] webhook_intake_snapshot / signature_verification_evidence physical table 接続実装
+- [ ] physical table manifest binding (webhook_inbox manifest / screen_data_shape)
+- [ ] portTargetRef action wiring: hook_port → scheduler 境界の受信経路
+- [ ] evidence / runtime_event_log: webhook_received / signature_verification_success / signature_verification_failure / intake_snapshot_created / scheduler_enqueued
+- [ ] projection response: intake status / verification evidence projection
 
 対応資料:
 - `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
-
-対象ファイル名:
-- `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
-
-対象 surface 名:
-- `hook_port`（webhook 受信 port）
-- `credential_requirement`（webhook signing key 付属要件）
 
 ---
 
 ## Bundle `job-scheduler-port-consumer`
 
-**Status:** not_started
+**Status:** partial
 **SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
 
-問題点:
-job_scheduler_bundle の外部スケジューラー provider credential が standalone credential 管理 plane の対象として設計されていた。access_port / hook_port consumer としての接続実装が未着手。
+PR#460 完了済み: access_port (external_scheduler, credential_kind=none) / hook_port (built_in_scheduler, credential_kind=none) seed binding / policy_steps。
+topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に依存しない。
+残作業は job queue physical table / cron trigger wiring / evidence 接続。外部スケジューラー provider-specific client は追加しない。
+既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
-目的:
-job_scheduler_bundle を external_port_substrate の access_port / hook_port consumer として確立する。外部スケジューラー credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。topolactor 内蔵 scheduler 利用時は credential_kind: none。
-
-実装方針:
-- [ ] job_scheduler_bundle の access_port / hook_port consumer として seed / DB record / projection 接続を実装する
-- [ ] 外部スケジューラー credential_kind（external または none）の port record 付属実装を追加する
-- [ ] scheduler → manifest_dispatcher 境界が port substrate に依存しないことを確認する
+残 todo:
+- [ ] job_queue physical table 接続実装
+- [ ] cron trigger driver loop 実装 (built-in scheduler は port substrate に依存しないこと)
+- [ ] hook trigger intake wiring (外部スケジューラー hook のみ port substrate 使用)
+- [ ] evidence / runtime_event_log: trigger_received / scheduler_enqueued / execution_started / execution_completed / execution_failed
+- [ ] projection response: job status projection
+- [ ] built-in scheduler path が port substrate に依存しないことの test / guard 追加
 
 対応資料:
 - `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
 
-対象ファイル名:
-- `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
-
-対象 surface 名:
-- `access_port`（外部スケジューラーアクセス port）
-- `hook_port`（スケジューラー hook 受信 port）
-- `credential_requirement`（外部スケジューラー credential 付属要件）
-
 ---
 
 ## Bundle `audit-approval-port-consumer`
 
-**Status:** not_started
+**Status:** partial
 **SSOT:** `docs/design/runtime-bundle-audit-approval-ssot.yaml`
 
-問題点:
-audit_approval_bundle の承認通知 credential が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての接続実装が未着手。
+PR#460 完了済み: response_port (notification) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
+残作業は physical table / approval evidence / notification evidence / projection 接続。notification provider-specific client / runtime は追加しない。
+既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
-目的:
-audit_approval_bundle を external_port_substrate の response_port consumer として確立する。承認通知 credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
-
-実装方針:
-- [ ] audit_approval_bundle の response_port consumer として seed / DB record / projection 接続を実装する
-- [ ] 承認通知 credential_kind の port record 付属実装を追加する
-- [ ] approval → response_port 解決 → 通知送信の経路実装を追加する
+残 todo:
+- [ ] approval_request / approval_evidence / notification_evidence physical table 接続実装
+- [ ] physical table manifest binding (audit_approval manifest / screen_data_shape)
+- [ ] UI Builder form preset / portTargetRef action wiring (approval → response_port connect)
+- [ ] evidence / runtime_event_log: approval_requested / approval_reviewed / approval_granted / approval_rejected
+- [ ] projection response: approval status / audit evidence projection
 
 対応資料:
 - `docs/design/runtime-bundle-audit-approval-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
 
-対象ファイル名:
-- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
-
-対象 surface 名:
-- `response_port`（承認通知送信 port）
-- `credential_requirement`（承認通知 credential 付属要件）
-
 ---
 
 ## Bundle `export-sftp-port-consumer`
 
-**Status:** not_started
+**Status:** partial
 **SSOT:** `docs/design/runtime-bundle-export-sftp-ssot.yaml`
 
-問題点:
-export_sftp_bundle の SFTP credential（host / user / key）が standalone credential 管理 plane の対象として設計されていた。response_port consumer としての接続実装が未着手。file_storage_bundle との責務分担境界は SSOT に従い、実装時に崩さない。
+PR#460 完了済み: response_port (sftp) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
+残作業は physical table / manifest / checksum / SFTP transfer wiring 接続 (file-storage-port-consumer の完了後)。SFTP provider-specific client / runtime は追加しない。
+既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
-目的:
-export_sftp_bundle を external_port_substrate の response_port（provider_kind: sftp）consumer として確立する。SFTP credential は port record 付属の credential_requirement として管理し、standalone 管理 plane は作らない。
-
-実装方針:
-- [ ] export_sftp_bundle の response_port（sftp）consumer として seed / DB record / projection 接続を実装する
-- [ ] SFTP credential_kind を external として response_port に付属させる実装を追加する
-- [ ] export_job → port record 解決 → SFTP transfer の経路実装を追加する（file-storage-port-consumer の完了を前提）
-- [ ] 転送前後の checksum 検証境界を port substrate と独立して実装 / テストする
+残 todo:
+- [ ] sftp_transfer_log physical table 接続実装 (file_storage_bundle 依存)
+- [ ] physical table manifest binding (export_sftp manifest / screen_data_shape)
+- [ ] checksum 転送前後の検証境界実装 (port substrate と独立)
+- [ ] manifest 確認境界実装
+- [ ] portTargetRef action wiring: export_job → response_port 解決 → SFTP transfer
+- [ ] evidence / runtime_event_log: transfer_initiated / transfer_completed / transfer_failed / checksum_mismatch
+- [ ] projection response: transfer status projection
 
 対応資料:
 - `docs/design/runtime-bundle-export-sftp-ssot.yaml`
 - `docs/design/runtime-bundle-file-storage-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
-
-対象ファイル名:
-- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
-
-対象 surface 名:
-- `response_port`（SFTP 転送 port）
-- `credential_requirement`（SFTP credential 付属要件）

@@ -625,7 +625,7 @@ system_roadmap_ssot:
       title: External port substrate shared foundation
       status: partial
       production_ready: false
-      public_summary: Shared substrate for the 8 external integration bundles. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement boundary definition within this substrate. DB guarded credential vault DDL, generic refresher primitive skeleton, fixed-form auth/external credential management projection manifest seed, DB-backed external port policy read repository, DB repository atomic encrypted credential payload update, and Design Inspector dispatchExternalPort event-to-generic-external-port-runtime boundary wiring are present as partial implementation. Canonical physical binding execution beyond the seed/projection marker, consumer bundle-specific completion, and provider/KMS/client implementations remain incomplete or out of scope.
+      public_summary: Shared substrate for the 8 external integration bundles. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement boundary definition within this substrate. DB guarded credential vault DDL, generic refresher primitive skeleton, fixed-form auth/external credential management projection manifest seed, DB-backed external port policy read repository, DB repository atomic encrypted credential payload update, Design Inspector dispatchExternalPort event-to-generic-external-port-runtime boundary wiring, all 7 consumer bundle seed bindings (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp), and secure_consumer_dispatch_lane named invariant are present. Consumer bundle runtime execution (physical table / manifest / preset / evidence / checksum / projection connection per bundle) and provider/KMS/client implementations remain incomplete or out of scope.
       scope:
         - external_access_ports_physical_table
         - external_response_ports_physical_table
@@ -658,10 +658,14 @@ system_roadmap_ssot:
         - .agent/tests/check-external-port-substrate-seed-coding.sh
       closed_gap_ref:
         - external_port_policy_read_repository_implemented_consumer_runtime_wiring_not_started
+        - consumer_bundle_seed_binding_implemented_per_pr460_all_7_bundles
+        - secure_consumer_dispatch_lane_named_invariant_added_to_ssot
       known_gap_ref:
         - external_port_access_response_hook_tables_not_connected_to_consumer_bundles
-        - fixed_form_projection_manifest_seed_implemented_canonical_physical_binding_execution_not_wired
-        - consumer_bundle_port_connection_implementation_not_started
+        - consumer_bundle_physical_table_and_manifest_binding_not_connected
+        - consumer_bundle_portTargetRef_action_wiring_not_connected
+        - consumer_bundle_evidence_and_runtime_event_log_not_connected
+        - consumer_bundle_projection_response_not_connected
         - credential_admin_ui_panel_out_of_scope
         - kms_or_encryption_vendor_selection_out_of_scope
         - provider_specific_client_implementation_out_of_scope
@@ -671,7 +675,7 @@ system_roadmap_ssot:
       title: Email bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Email Bundle as port consumer of external_port_substrate. Defines response_port connection and credential_requirement as port record attachment. Email send remains UI/human approval triggered. credential standalone plane not created.
+      public_summary: Email Bundle as port consumer of external_port_substrate. Seed binding (response_port / smtp credential_requirement / policy_steps / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (email_draft / approval_record / delivery_evidence), manifest binding, UI Builder preset, portTargetRef action wiring, evidence/runtime_event_log, and projection response. SMTP provider-specific client not added.
       scope:
         - email_response_port_consumer_definition
         - smtp_credential_requirement_as_port_attachment
@@ -681,16 +685,20 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-email-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#email-port-consumer
+      closed_gap_ref:
+        - email_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - email_dispatch_service_implementation_not_started
-        - email_response_port_connection_implementation_not_started
+        - email_physical_table_and_manifest_binding_not_connected
+        - email_portTargetRef_action_wiring_and_preset_not_connected
+        - email_evidence_and_runtime_event_log_not_connected
+        - email_projection_response_not_connected
 
     product.stripe_port_consumer:
       bundle_id: stripe-port-consumer
       title: Stripe bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Stripe Bundle as port consumer of external_port_substrate. Defines hook_port connection and credential_requirement as port record attachment. Paid state confirmed only via verified webhook event. webhook_verification_required enforced.
+      public_summary: Stripe Bundle as port consumer of external_port_substrate. Seed binding (hook_port / stripe credential_requirement / policy_steps including verify_signature_by_config + enqueue_scheduler_event / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (webhook_intake_snapshot / verification_evidence / payment_state), manifest binding, portTargetRef action wiring, evidence/runtime_event_log, and projection response. Stripe provider-specific client not added.
       scope:
         - stripe_hook_port_consumer_definition
         - stripe_credential_requirement_as_port_attachment
@@ -700,16 +708,20 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-stripe-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#stripe-port-consumer
+      closed_gap_ref:
+        - stripe_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - stripe_hook_port_receive_implementation_not_started
-        - payment_state_projection_schema_not_started
+        - stripe_physical_table_and_manifest_binding_not_connected
+        - stripe_portTargetRef_action_wiring_not_connected
+        - stripe_evidence_and_runtime_event_log_not_connected
+        - stripe_payment_state_projection_not_connected
 
     product.file_storage_port_consumer:
       bundle_id: file-storage-port-consumer
       title: File/Storage bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: File/Storage Bundle as port consumer of external_port_substrate. Defines access_port and response_port connections for object storage. credential_requirement as port record attachment. object storage credential standalone plane not created.
+      public_summary: File/Storage Bundle as port consumer of external_port_substrate. Seed binding (access_port / response_port / credential_requirement / policy_steps / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (export_job / file_artifact / checksum_record / manifest), manifest binding, UI Builder preset, portTargetRef action wiring, checksum/manifest runtime, evidence/runtime_event_log, and projection response. Object storage provider-specific client not added.
       scope:
         - file_storage_access_and_response_port_consumer_definition
         - object_storage_credential_requirement_as_port_attachment
@@ -719,16 +731,21 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-file-storage-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#file-storage-port-consumer
+      closed_gap_ref:
+        - file_storage_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - file_storage_access_response_port_connection_implementation_not_started
-        - export_job_schema_implementation_not_started
+        - file_storage_physical_table_and_manifest_binding_not_connected
+        - file_storage_portTargetRef_action_wiring_and_preset_not_connected
+        - file_storage_checksum_and_manifest_runtime_not_connected
+        - file_storage_evidence_and_runtime_event_log_not_connected
+        - file_storage_projection_response_not_connected
 
     product.export_sftp_port_consumer:
       bundle_id: export-sftp-port-consumer
       title: Export/SFTP bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Export/SFTP Bundle as port consumer of external_port_substrate. Defines response_port connection for SFTP external transfer. credential_requirement as port record attachment. SFTP credential standalone plane not created.
+      public_summary: Export/SFTP Bundle as port consumer of external_port_substrate. Seed binding (response_port / sftp credential_requirement / policy_steps / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (sftp_transfer_log), manifest/checksum verification boundary, portTargetRef action wiring (after file-storage-port-consumer), evidence/runtime_event_log, and projection response. Depends on file-storage-port-consumer completion. SFTP provider-specific client not added.
       scope:
         - export_sftp_response_port_consumer_definition
         - sftp_credential_requirement_as_port_attachment
@@ -738,16 +755,21 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-export-sftp-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#export-sftp-port-consumer
+      closed_gap_ref:
+        - export_sftp_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - export_sftp_response_port_connection_implementation_not_started
-        - transfer_retry_policy_implementation_not_started
+        - export_sftp_physical_table_and_manifest_binding_not_connected
+        - export_sftp_checksum_and_manifest_verification_boundary_not_connected
+        - export_sftp_portTargetRef_action_wiring_not_connected
+        - export_sftp_evidence_and_runtime_event_log_not_connected
+        - export_sftp_projection_response_not_connected
 
     product.webhook_inbox_port_consumer:
       bundle_id: webhook-inbox-port-consumer
       title: Webhook Inbox bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Webhook Inbox Bundle as port consumer of external_port_substrate. Defines hook_port connection. webhook direct runtime execution without scheduler prohibited. credential_requirement as port record attachment.
+      public_summary: Webhook Inbox Bundle as port consumer of external_port_substrate. Seed binding (hook_port / webhook signing key credential_requirement / policy_steps including verify_signature_by_config + enqueue_scheduler_event / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (webhook_intake_snapshot / signature_verification_evidence), manifest binding, portTargetRef action wiring, evidence/runtime_event_log, and projection response. Webhook provider-specific client not added.
       scope:
         - webhook_inbox_hook_port_consumer_definition
         - webhook_signing_key_credential_requirement_as_port_attachment
@@ -757,6 +779,8 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#webhook-inbox-port-consumer
+      closed_gap_ref:
+        - webhook_inbox_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
         - webhook_intake_schema_implementation_not_started
         - scheduler_hook_trigger_wiring_implementation_not_started
@@ -766,7 +790,7 @@ system_roadmap_ssot:
       title: Job/Scheduler bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Job/Scheduler Bundle as port consumer of external_port_substrate. Defines access_port and hook_port connections for external scheduler providers. credential_requirement as port record attachment. runtime_destination_selection owned by manifest_dispatcher not scheduler.
+      public_summary: Job/Scheduler Bundle as port consumer of external_port_substrate. Seed binding (access_port external_scheduler / hook_port built_in_scheduler credential_kind=none / policy_steps) implemented per PR#460. topolactor built-in scheduler (runtime_timeline_scheduler) does not depend on port substrate. Remaining work is job_queue physical table, cron trigger driver loop, evidence/runtime_event_log, and projection response. External scheduler provider-specific client not added.
       scope:
         - job_scheduler_access_and_hook_port_consumer_definition
         - scheduler_provider_credential_requirement_as_port_attachment
@@ -776,6 +800,8 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-job-scheduler-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#job-scheduler-port-consumer
+      closed_gap_ref:
+        - job_scheduler_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
         - job_queue_schema_implementation_not_started
         - cron_trigger_driver_loop_implementation_not_started
@@ -785,7 +811,7 @@ system_roadmap_ssot:
       title: Audit/Approval bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Audit/Approval Bundle as port consumer of external_port_substrate. Defines response_port connection for approval notifications. credential_requirement as port record attachment. approval authority is UI/human explicit action only. CLI/MCP read/export boundary preserved.
+      public_summary: Audit/Approval Bundle as port consumer of external_port_substrate. Seed binding (response_port / notification credential_requirement / policy_steps / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (approval_request / approval_evidence / notification_evidence), manifest binding, UI Builder preset, portTargetRef action wiring, evidence/runtime_event_log, and projection response. Notification provider-specific client not added.
       scope:
         - audit_approval_response_port_consumer_definition
         - approval_notification_credential_requirement_as_port_attachment
@@ -795,6 +821,8 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-audit-approval-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#audit-approval-port-consumer
+      closed_gap_ref:
+        - audit_approval_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
         - approval_request_schema_implementation_not_started
         - approval_notification_implementation_not_started

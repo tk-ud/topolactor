@@ -346,6 +346,74 @@ external_port_substrate_ssot:
         dedicated credential runtime / admin UI / audit log / rotation service は作らない。
       detail_ref: docs/design/runtime-bundle-secret-credential-ssot.yaml
 
+  secure_consumer_dispatch_lane:
+    summary: >-
+      PR#460 以後の consumer bundle 実装が必ず通す既存レーンの named invariant。
+      新設計ではなく、本 SSOT の security_boundary / dispatch_lane / credential_boundary の明確化。
+      consumer bundle 実装者が誤読せずに参照できるよう、既存 SSOT の制約を named invariant として整理したもの。
+    trigger_entry:
+      note: >-
+        trigger_kind は runtime-orchestration SSOT の cron / hook / client に対応。
+        UI/client trigger が代表経路だが、hook trigger (stripe / webhook_inbox) や
+        scheduler/cron trigger (job_scheduler) も external_port_runtime 以降の共通レーンを通す。
+      kinds:
+        client_or_ui_trigger:
+          path: UI_Builder_portTargetRef_action_wiring → api_command_lane → ManifestDispatcher
+          applies_to: [file_storage, email, audit_approval]
+        hook_trigger:
+          path: hook_port_receive → scheduler_enqueue_event → external_port_runtime
+          applies_to: [stripe, webhook_inbox]
+        scheduler_or_cron_trigger:
+          path: built_in_or_external_scheduler → hook_or_access_port_receive → external_port_runtime
+          applies_to: [job_scheduler]
+    lane:
+      - trigger_entry
+      - api_or_scheduler_or_dispatcher_lane
+      - external_port_runtime
+      - DB_port_record_resolution
+      - credential_requirement_and_reference_key_resolution
+      - runtime_only_credential_materialization
+      - generic_operation_key_policy_steps
+      - response_and_evidence_and_runtime_event_log
+      - UI_projection
+    invariants:
+      port_connection_management:
+        rule: >-
+          seed / DB record / projection で port 接続を管理する。
+          provider 固有 backend hardcode で管理しない。
+      credential_management:
+        rule: >-
+          credential は port record context の credential_requirement / reference_key で扱う。
+          consumer bundle が credential 実値を直接読まない。
+      ui_credential_exclusion:
+        rule: >-
+          UI は credential plaintext / token / secret / endpoint 実値を持たない。
+          projection 側には credential 実値を流さない。
+      credential_materialization_boundary:
+        rule: >-
+          runtime 境界でのみ credential material を解決する。
+          consumer bundle / dispatcher / frontend は credential を materialization しない。
+      generic_operation_key_dispatch:
+        rule: >-
+          通信は provider_kind 分岐ではなく generic operation_key policy steps で行う。
+          provider_kind は DB data constraint であり、C# 制御フローの selector にしない。
+      provider_kind_is_data_only:
+        rule: >-
+          provider_kind / required_by_bundle は data constraint であり runtime handler selector ではない。
+          provider_kind で if/switch/case する C# コードを追加しない。
+      response_boundary:
+        rule: >-
+          response は evidence / runtime_event_log / projection boundary を通して UI に返す。
+          runtime から直接 credential や raw provider レスポンスを UI に流さない。
+    prohibited_at_consumer_bundle:
+      - provider_specific_runtime_implementation
+      - bundle_specific_runtime_implementation
+      - direct_credential_read_from_consumer
+      - portTargetRef_bypass_via_new_payload_lane
+      - frontend_credential_exposure
+      - dispatch_payload_containing_credential_or_vault_value
+      - new_runtime_or_client_class_for_provider
+
   prohibited:
     - SecretCredentialBundleRuntime
     - dedicated_credential_runtime

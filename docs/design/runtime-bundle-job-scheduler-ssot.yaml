@@ -166,6 +166,31 @@ runtime_bundle_job_scheduler_ssot:
       cron/hook/client trigger統合境界の詳細設計はこのSSOTが担う。
       runtime destination selection は manifest_dispatcher が所有する（変更なし）。
 
+  secure_consumer_dispatch_lane_ref:
+    lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
+    note: >-
+      topolactor 内蔵 scheduler は port substrate に依存しない。
+      外部スケジューラー provider との access_port / hook_port 接続のみが port substrate の consumer となる。
+      seed binding (built-in scheduler: credential_kind=none / 外部スケジューラー: access_port + hook_port) は PR#460 で完了済み。
+      残作業は job queue physical table / cron trigger wiring / evidence 接続であり、
+      外部スケジューラー provider-specific client を追加しない。
+      built-in scheduler 本体 (runtime_timeline_scheduler) は port substrate とは独立している。
+    seed_binding_completion: pr460
+    built_in_scheduler_independence:
+      rule: >-
+        topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に依存しない。
+        内蔵 scheduler path が port record を参照することは禁止。
+    remaining_scope:
+      physical_table:
+        - job_queue schema
+      portTargetRef_action_wiring:
+        - cron trigger driver loop 実装
+        - hook trigger intake wiring (built-in scheduler から port substrate への接続ではなく、外部 scheduler provider hook 受信)
+      evidence_and_runtime_event_log:
+        - trigger_received / scheduler_enqueued / execution_started / execution_completed / execution_failed
+      projection_response:
+        - job status projection
+
   explicitly_out_of_scope:
     - runtime_destination_selection
     - manifest_dispatcher_responsibility

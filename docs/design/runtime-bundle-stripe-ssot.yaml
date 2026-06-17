@@ -152,6 +152,32 @@ runtime_bundle_stripe_ssot:
       CLI/MCP portはpayment_approvalをout_of_scopeとして宣言している。
       このBundleはそのboundaryを尊重する。
 
+  secure_consumer_dispatch_lane_ref:
+    lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
+    note: >-
+      このバンドルの本体は verification evidence / intake snapshot / scheduler boundary であり、
+      Stripe provider-specific client ではない。
+      seed binding (hook_port / stripe credential_requirement / policy_steps) は PR#460 で完了済み。
+      policy_steps に verify_signature_by_config / enqueue_scheduler_event が含まれており、
+      Stripe 固有 client や provider 分岐は追加しない。
+      consumer 実装は external_port_runtime → DB hook_port record 解決 → generic operation_key policy steps
+      の既存レーンを使用する。
+    seed_binding_completion: pr460
+    remaining_scope:
+      physical_table:
+        - webhook_intake_snapshot schema
+        - verification_evidence schema
+        - payment_state schema
+      physical_table_manifest_binding:
+        - stripe manifest / screen_data_shape binding
+      portTargetRef_action_wiring:
+        - hook_path → port record resolution → scheduler event dispatch
+      evidence_and_runtime_event_log:
+        - webhook_received / verification_success / verification_failure / payment_state_projected
+      projection_response:
+        - payment state projection
+        - verification evidence projection
+
   explicitly_out_of_scope:
     - stripe_provider_credential_specification
     - payment_ui_html_design

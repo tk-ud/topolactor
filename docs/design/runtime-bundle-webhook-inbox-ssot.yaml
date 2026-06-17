@@ -176,6 +176,31 @@ runtime_bundle_webhook_inbox_ssot:
       scheduler → manifest_dispatcher → runtime_route 経由で処理する。
       runtime_destination_selectionはmanifest_dispatcherが所有する。
 
+  secure_consumer_dispatch_lane_ref:
+    lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
+    note: >-
+      このバンドルの本体は verification evidence / intake snapshot / scheduler boundary であり、
+      webhook provider-specific client ではない。
+      seed binding (hook_port / webhook signing key credential_requirement / policy_steps) は PR#460 で完了済み。
+      policy_steps に verify_signature_by_config / enqueue_scheduler_event が含まれており、
+      provider 固有 client や provider 分岐は追加しない。
+      consumer 実装は external_port_runtime → DB hook_port record 解決 → generic operation_key policy steps
+      の既存レーンを使用する。scheduler 境界は既存 runtime_timeline_scheduler を使用する。
+    seed_binding_completion: pr460
+    remaining_scope:
+      physical_table:
+        - webhook_intake_snapshot schema
+        - signature_verification_evidence schema
+      physical_table_manifest_binding:
+        - webhook_inbox manifest / screen_data_shape binding
+      portTargetRef_action_wiring:
+        - hook_port → scheduler 境界の受信経路
+      evidence_and_runtime_event_log:
+        - webhook_received / signature_verification_success / signature_verification_failure / intake_snapshot_created / scheduler_enqueued
+      projection_response:
+        - intake status projection
+        - verification evidence projection
+
   explicitly_out_of_scope:
     - webhook_provider_credential_specification
     - webhook_endpoint_routing_configuration

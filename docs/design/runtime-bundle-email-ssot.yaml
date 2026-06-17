@@ -152,6 +152,33 @@ runtime_bundle_email_ssot:
       CLI/MCP read/export portはemail sendをout_of_scopeとして宣言している。
       このBundleはそのboundaryを尊重し、CLI/MCP経由のemail send経路を提供しない。
 
+  secure_consumer_dispatch_lane_ref:
+    lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
+    note: >-
+      このバンドルの本体は physical table manifest / approval evidence / delivery evidence であり、
+      SMTP provider-specific client ではない。
+      seed binding (response_port / smtp credential_requirement / policy_steps) は PR#460 で完了済み。
+      consumer 実装は external_port_runtime → DB port record 解決 → generic operation_key policy steps
+      の既存レーンを使用する。SMTP provider 固有 runtime class / client を追加しない。
+    seed_binding_completion: pr460
+    remaining_scope:
+      physical_table:
+        - email_draft schema
+        - approval_record schema
+        - delivery_evidence schema
+      physical_table_manifest_binding:
+        - email manifest / screen_data_shape binding
+      ui_builder:
+        - form preset for email approval
+        - action wiring for portTargetRef dispatch
+      portTargetRef_action_wiring:
+        - UI approval → response_port 解決 → generic response_port connect
+      evidence_and_runtime_event_log:
+        - dispatch_initiated / send_success / send_failure / approval_recorded
+      projection_response:
+        - delivery status projection
+        - approval evidence projection
+
   explicitly_out_of_scope:
     - smtp_provider_credential_specification
     - smtp_provider_selection

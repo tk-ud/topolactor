@@ -295,12 +295,14 @@ check_content "$ROADMAP" "product.audit_approval_port_consumer"
 
 check_content "$ROADMAP" "external-port-substrate-implementation"
 check_content "$ROADMAP" "external_port_policy_read_repository_implemented_consumer_runtime_wiring_not_started"
-check_content "$ROADMAP" "fixed_form_projection_manifest_seed_implemented_canonical_physical_binding_execution_not_wired"
-check_content "$ROADMAP" "consumer_bundle_port_connection_implementation_not_started"
-check_content "$ROADMAP" "email_response_port_connection_implementation_not_started"
-check_content "$ROADMAP" "file_storage_access_response_port_connection_implementation_not_started"
-check_content "$ROADMAP" "export_sftp_response_port_connection_implementation_not_started"
-check_content "$ROADMAP" "stripe_hook_port_receive_implementation_not_started"
+check_content "$ROADMAP" "consumer_bundle_physical_table_and_manifest_binding_not_connected"
+check_content "$ROADMAP" "consumer_bundle_portTargetRef_action_wiring_not_connected"
+check_content "$ROADMAP" "email_physical_table_and_manifest_binding_not_connected"
+check_content "$ROADMAP" "file_storage_physical_table_and_manifest_binding_not_connected"
+check_content "$ROADMAP" "file_storage_checksum_and_manifest_runtime_not_connected"
+check_content "$ROADMAP" "export_sftp_physical_table_and_manifest_binding_not_connected"
+check_content "$ROADMAP" "export_sftp_checksum_and_manifest_verification_boundary_not_connected"
+check_content "$ROADMAP" "stripe_physical_table_and_manifest_binding_not_connected"
 check_absent "$ROADMAP" "external-port-substrate-design"
 check_absent "$ROADMAP" "physical_table_ddl_design_not_started"
 check_absent "$ROADMAP" "admin_role_port_write_ui_design_not_started"
@@ -326,6 +328,22 @@ for yaml in \
   check_absent "$yaml" "owner_status:"
   check_absent "$yaml" "core_bundle_status:"
   check_absent "$yaml" "future_implementation_requirements:"
+done
+
+echo ""
+echo "=== secure_consumer_dispatch_lane_ref declared in each consumer bundle SSOT ==="
+
+for yaml in \
+  "docs/design/runtime-bundle-email-ssot.yaml" \
+  "docs/design/runtime-bundle-stripe-ssot.yaml" \
+  "docs/design/runtime-bundle-file-storage-ssot.yaml" \
+  "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
+  "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
+  "docs/design/runtime-bundle-audit-approval-ssot.yaml"; do
+  check_content "$yaml" "secure_consumer_dispatch_lane_ref"
+  check_content "$yaml" "docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane"
+  check_content "$yaml" "seed_binding_completion: pr460"
 done
 
 echo ""

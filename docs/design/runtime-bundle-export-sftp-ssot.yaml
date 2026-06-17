@@ -199,6 +199,32 @@ runtime_bundle_export_sftp_ssot:
         - transfer_log
         - retry_on_failure
 
+  secure_consumer_dispatch_lane_ref:
+    lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
+    note: >-
+      このバンドルの本体は checksum / manifest / artifact の外部搬出であり、
+      SFTP provider-specific client ではない。
+      seed binding (response_port / sftp credential_requirement / policy_steps) は PR#460 で完了済み。
+      consumer 実装は external_port_runtime → DB response_port record 解決 → generic operation_key policy steps
+      の既存レーンを使用する。SFTP provider 固有 runtime class / client を追加しない。
+      checksum は port substrate とは独立して実装・テストする。
+      file_storage_bundle の完了を前提として実装する。
+    seed_binding_completion: pr460
+    remaining_scope:
+      physical_table:
+        - sftp_transfer_log schema (file_storage_bundle 依存)
+      physical_table_manifest_binding:
+        - export_sftp manifest / screen_data_shape binding
+      checksum_and_manifest:
+        - 転送前後の checksum 検証境界 (port substrate と独立)
+        - manifest 確認境界
+      portTargetRef_action_wiring:
+        - export_job → response_port 解決 → SFTP transfer (file-storage-port-consumer の完了後)
+      evidence_and_runtime_event_log:
+        - transfer_initiated / transfer_completed / transfer_failed / checksum_mismatch / retry_initiated
+      projection_response:
+        - transfer status projection
+
   explicitly_out_of_scope:
     - sftp_server_configuration
     - sftp_credential_specification

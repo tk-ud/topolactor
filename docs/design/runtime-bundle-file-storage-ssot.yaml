@@ -174,6 +174,37 @@ runtime_bundle_file_storage_ssot:
       このBundleはその許可経路を担うsurface。
       export_job外のdirect file streamは許可しない。
 
+  secure_consumer_dispatch_lane_ref:
+    lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
+    note: >-
+      このバンドルの本体は checksum / manifest / artifact / signed download authorization であり、
+      object storage provider-specific client ではない。
+      seed binding (access_port / response_port / credential_requirement / policy_steps) は PR#460 で完了済み。
+      consumer 実装は external_port_runtime → DB port record 解決 → generic operation_key policy steps
+      の既存レーンを使用する。provider 固有 runtime class / client を追加しない。
+    seed_binding_completion: pr460
+    remaining_scope:
+      physical_table:
+        - export_job schema
+        - file_artifact schema
+        - checksum_record schema
+        - manifest schema
+      physical_table_manifest_binding:
+        - file_storage manifest / screen_data_shape binding
+      ui_builder:
+        - form preset for export_job initiation
+        - action wiring for portTargetRef dispatch
+      portTargetRef_action_wiring:
+        - export_job trigger → port record resolution → generic access/response port connect
+      checksum_and_manifest:
+        - checksum generation and verification
+        - manifest generation for export package
+      evidence_and_runtime_event_log:
+        - export_job_initiated / file_write_completed / checksum_verified / signed_url_generated
+      projection_response:
+        - signed download authorization projection
+        - file artifact projection
+
   explicitly_out_of_scope:
     - object_storage_provider_selection
     - storage_provider_credential_specification

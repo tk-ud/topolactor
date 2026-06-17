@@ -6,7 +6,22 @@
 
 ## Status
 
-partial / minimal primitive skeleton; auth/external credential management topology projection implemented
+partial / seed binding implemented per PR#460; consumer bundle runtime execution (physical table / manifest / preset / evidence / checksum / projection) not yet connected.
+
+PR#460 完了済み:
+- access_port / response_port / hook_port records / policies / policy_steps の seed binding (全 7 consumer bundle)
+- credential_requirement (credential_kind: external / none) の port record 付属
+- UI Builder portTargetRef 配線前提 (port_target_ref lane)
+- auth/external credential management topology projection
+
+残作業 (各 bundle consumer todo で管理):
+- physical table (bundle-specific: email_draft / approval_request / export_job / webhook_intake_snapshot 等)
+- physical table manifest binding
+- UI Builder form preset / portTargetRef action wiring
+- runtime execution: portTargetRef → port record 解決 → generic operation_key policy steps
+- evidence / runtime_event_log
+- checksum / manifest (file / sftp 系)
+- projection response
 
 ## SSOT
 
@@ -22,7 +37,11 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 
 ## 問題点
 
-`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。todo 側では設計確定作業として残っていたが、実際の未処理は実装作業。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed / production DB-backed external port policy read repository / DB repository atomic encrypted credential payload update は追加済みだが、consumer bundle wiring / canonical physical binding execution は未完了。
+`external_port_substrate` と 8 bundle の SSOT 設計は確定済み。DB guarded credential vault DDL / generic refresher primitive skeleton / fixed-form auth-external credential management projection manifest seed / production DB-backed external port policy read repository / DB repository atomic encrypted credential payload update / consumer bundle seed binding (全 7 bundle) / secure_consumer_dispatch_lane named invariant は完了済み。
+
+consumer dispatch path は `port_target_ref` lane のみ。PR#458/#459 で `canonical_binding_*` consumer branch は削除済みであり、consumer 実装で "canonical physical binding execution" を追加してはならない。`LoadPortRecordByCanonicalBindingAsync` は admin projection validation only であり、consumer dispatch path には使用しない。
+
+残作業は consumer bundle ごとの physical table / physical table manifest binding / UI Builder preset / portTargetRef action wiring / evidence / runtime_event_log / checksum (file/sftp 系) / projection response 接続のみ。
 
 ## 目的
 
