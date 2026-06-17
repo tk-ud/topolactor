@@ -130,7 +130,16 @@ export type LayoutNode = {
    */
   propBindings?: Record<string, PropBinding> | null;
   /** Canonical runtime UI interactions. Legacy propsJson.eventWirings is fallback only. */
-  runtimeInteractions?: Array<{ trigger: string; actionType: string; targetNodeId?: string; statePath?: string; value?: unknown }> | null;
+  runtimeInteractions?: Array<{
+    trigger: string;
+    actionType: string;
+    targetNodeId?: string;
+    statePath?: string;
+    value?: unknown;
+    portTargetRef?: string;
+    payloadFrom?: Record<string, string>;
+    outputProp?: string;
+  }> | null;
   widthMode?: "auto" | "preset" | "custom";
   heightMode?: "auto" | "preset" | "custom";
   /** Persisted component_style_design snapshot for draft-preview / pre-publish projection. */

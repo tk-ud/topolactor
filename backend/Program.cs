@@ -106,6 +106,10 @@ builder.Services.AddSingleton<SystemOperationCiRuntime>();
 builder.Services.AddSingleton<ISystemCiDiagnosticRunner>(sp =>
     sp.GetRequiredService<SystemOperationCiRuntime>());
 builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
+builder.Services.AddSingleton<IExternalPortResolver, ExternalPortResolver>();
+builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
+    new ExternalPortPolicyStepExecutor(portResolver: sp.GetRequiredService<IExternalPortResolver>()));
+builder.Services.AddSingleton<ExternalPortDispatchRuntime>();
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>(sp =>
@@ -174,6 +178,7 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         ["admin_runtime"]               = sp.GetRequiredService<AdminRuntimeDispatchAdapter>(),
         ["sse_projection_runtime"]      = sp.GetRequiredService<SseProjectionRuntime>(),
         ["registry_attractor_runtime"]  = sp.GetRequiredService<RegistryAttractorDispatchRuntime>(),
+        ["external_port_runtime"]      = sp.GetRequiredService<ExternalPortDispatchRuntime>(),
     };
     return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),

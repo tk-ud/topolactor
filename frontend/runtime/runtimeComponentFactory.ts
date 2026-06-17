@@ -113,10 +113,12 @@ import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
   emitComponentOperationEvent,
   enqueueRuntimeComponentCommand,
+  enqueueExternalPortDispatchCommand,
   type NormalizedComponentEventType,
   type RuntimeDispatchSpec,
 } from "./frontendScheduler.ts";
 import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
+import { resolvePayloadFrom } from "./payloadFromResolver.ts";
 
 type RenderResult = { ok: true; node: VNode<any> } | {
   ok: false;
@@ -137,6 +139,11 @@ type EventBindingValue = {
     statePath: string;
     action: "set" | "toggle";
     value?: unknown;
+  };
+  externalPortDispatch?: {
+    portTargetRef: string;
+    payloadFrom: Record<string, string>;
+    outputProp?: string;
   };
 };
 
@@ -211,6 +218,30 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       }
     }
   }
+  const externalPortDispatchRaw = (value as Record<string, unknown>).externalPortDispatch;
+  let externalPortDispatch: EventBindingValue["externalPortDispatch"] | undefined;
+  if (externalPortDispatchRaw !== undefined) {
+    if (
+      typeof externalPortDispatchRaw !== "object" ||
+      externalPortDispatchRaw === null ||
+      Array.isArray(externalPortDispatchRaw)
+    ) return null;
+    const rawDispatch = externalPortDispatchRaw as Record<string, unknown>;
+    const portTargetRef = rawDispatch.portTargetRef;
+    const payloadFrom = rawDispatch.payloadFrom;
+    const outputProp = rawDispatch.outputProp;
+    if (typeof portTargetRef !== "string" || !portTargetRef.trim().startsWith("external-port:")) return null;
+    if (payloadFrom !== undefined) {
+      if (typeof payloadFrom !== "object" || payloadFrom === null || Array.isArray(payloadFrom)) return null;
+      if (!Object.values(payloadFrom).every((v) => typeof v === "string")) return null;
+    }
+    if (outputProp !== undefined && (typeof outputProp !== "string" || !outputProp.trim())) return null;
+    externalPortDispatch = {
+      portTargetRef: portTargetRef.trim(),
+      payloadFrom: (payloadFrom as Record<string, string> | undefined) ?? {},
+      outputProp: typeof outputProp === "string" ? outputProp.trim() : undefined,
+    };
+  }
   const localStateMutationRaw = (value as Record<string, unknown>).localStateMutation;
   let localStateMutation: EventBindingValue["localStateMutation"] | undefined;
   if (localStateMutationRaw !== undefined) {
@@ -240,6 +271,7 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     runtimeDispatch,
     routeNavigation,
     localStateMutation,
+    externalPortDispatch,
   };
 }
 
@@ -287,6 +319,23 @@ function emitBoundEvent(
   // Fire-and-forget: the FIFO queue in frontendScheduler handles ordering and error propagation.
   if (binding.runtimeDispatch) {
     void enqueueRuntimeComponentCommand(binding.runtimeDispatch);
+  }
+  // Lane 2 (external_port): Design Inspector-authored dispatchExternalPort.
+  // payloadFrom resolution is fail-close: unresolved refs return explicit error and no partial payload is sent.
+  if (binding.externalPortDispatch) {
+    const resolved = resolvePayloadFrom(
+      binding.externalPortDispatch.payloadFrom,
+      spec.payloadFromNodeValues ?? {},
+      payload,
+    );
+    if (!resolved.ok) {
+      return { ok: false, error: resolved.errors.join("; ") };
+    }
+    void enqueueExternalPortDispatchCommand({
+      portTargetRef: binding.externalPortDispatch.portTargetRef,
+      payload: resolved.payload,
+      outputProp: binding.externalPortDispatch.outputProp,
+    });
   }
   // Lane 2 (navigation): frontend-local route navigation — no backend dispatch.
   // route:<routeKey> must not reach ManifestDispatcher; navigation executes client-side only.

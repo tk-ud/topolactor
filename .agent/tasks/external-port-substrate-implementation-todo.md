@@ -224,5 +224,22 @@ Parent bundle: `external-port-credential-derived-authoring-wiring-and-media-prim
 
 not_implemented_in_this_increment:
 - Full Design Inspector component event / payloadFrom / output prop / credential / port binding authoring.
-- Event trigger binding execution and consumer bundle runtime execution wiring.
 - Canonical physical binding execution.
+
+
+## Bundle increment `external-port-dispatch-runtime-execution-wiring`
+
+Status: partial
+Parent bundle: `external-port-credential-derived-authoring-wiring-and-media-primitives`
+
+実装内容:
+- Wired Design Inspector-authored `runtimeInteractions[].actionType = dispatchExternalPort` into frontend runtime event binding.
+- Event dispatch resolves `payloadFrom` through `payloadFromResolver` and fails explicitly without partial payload dispatch when a source is unresolved.
+- Frontend dispatch uses the existing FIFO api command lane and forwards only `external-port:<portKind>:<portId>[:routeKey]` plus resolved payload to backend; no frontend direct external service call was added.
+- Added backend generic `external_port_runtime` dispatch boundary that parses `portTargetRef`, resolves an active DB external port record by id, loads active policy/ordered steps through `IExternalPortPolicyRepository`, executes only generic operation_key primitives, and fail-closes on malformed target ref / missing or inactive record / missing policy / invalid credential requirement.
+- Provider kind / required_by_bundle / credential_kind remain data on the resolved DB record; no provider-specific runtime handler or provider-kind branch was introduced.
+
+not_implemented_in_this_increment:
+- Canonical physical binding execution.
+- Provider-specific external clients (SMTP / Stripe / SFTP / object storage, etc.).
+- Consumer bundle-specific completed implementations beyond the generic port record consumer execution boundary.

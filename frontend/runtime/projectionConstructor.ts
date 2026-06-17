@@ -44,6 +44,7 @@ export type ComponentDataHub = {
     get(targetNodeId: string, statePath: string): unknown;
     set(targetNodeId: string, statePath: string, value: unknown): void;
   };
+  payloadFromNodeValues?: Record<string, unknown>;
 };
 
 type RuntimeTopologyComponentProps = JsonObject & {
