@@ -515,7 +515,8 @@ ALTER TABLE topology.external_port_policy_steps
         'write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version',
         'release_refresh_lease',
         'record_export_job','compute_checksum','record_file_artifact',
-        'write_manifest_record','authorize_signed_download'
+        'write_manifest_record','authorize_signed_download',
+        'execute_db_function'
     ));
 
 -- ---------------------------------------------------------------------------
