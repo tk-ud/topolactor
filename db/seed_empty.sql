@@ -2118,7 +2118,7 @@ VALUES
 ON CONFLICT (policy_id) DO NOTHING;
 
 -- Consumer bundle policy steps (operation_key values constrained to external-port SSOT allowed set)
--- file_storage steps use ON CONFLICT DO UPDATE to allow re-seeding with updated credential pipeline (13 steps)
+-- file_storage steps use DELETE+INSERT to allow re-seeding with updated credential pipeline (17 steps)
 DELETE FROM topology.external_port_policy_steps
 WHERE policy_id IN (
     '00000000-0000-0000-0000-0000000000e4',
@@ -2127,7 +2127,7 @@ WHERE policy_id IN (
 
 INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
 VALUES
-    -- file_storage_bundle access_port (13-step credential pipeline + domain execute_db_function)
+    -- file_storage_bundle access_port (17 steps: credential pipeline + compute_checksum + 4x execute_db_function interleaved with 4x append_runtime_event_log)
     ('00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-0000000000e4',  1, 'resolve_port_record',              '{}', true),
     ('00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-0000000000e4',  2, 'resolve_credential_reference',     '{}', true),
     ('00000000-0000-0000-0000-000000000403', '00000000-0000-0000-0000-0000000000e4',  3, 'load_encrypted_credential_payload','{}', true),
@@ -2137,11 +2137,15 @@ VALUES
     ('00000000-0000-0000-0000-0000000004a1', '00000000-0000-0000-0000-0000000000e4',  7, 'send_http',                        '{}', true),
     ('00000000-0000-0000-0000-0000000004a2', '00000000-0000-0000-0000-0000000000e4',  8, 'capture_response',                 '{}', true),
     ('00000000-0000-0000-0000-000000000407', '00000000-0000-0000-0000-0000000000e4',  9, 'compute_checksum',                 '{}', true),
-    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 10, 'execute_db_function', '{"function":"topology.fs_record_export_job","output":"ExportJobId"}', true),
-    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 11, 'execute_db_function', '{"function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', true),
-    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 12, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
-    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 13, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
-    -- file_storage_bundle response_port (13-step credential pipeline + domain execute_db_function)
+    ('00000000-0000-0000-0000-000000000490', '00000000-0000-0000-0000-0000000000e4', 10, 'append_runtime_event_log', '{"event_type":"checksum_verified","entity_ref_key":"ChecksumValue"}', true),
+    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 11, 'execute_db_function', '{"function":"topology.fs_record_export_job","output":"ExportJobId"}', true),
+    ('00000000-0000-0000-0000-000000000491', '00000000-0000-0000-0000-0000000000e4', 12, 'append_runtime_event_log', '{"event_type":"export_job_initiated","entity_ref_key":"ExportJobId"}', true),
+    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 13, 'execute_db_function', '{"function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', true),
+    ('00000000-0000-0000-0000-000000000492', '00000000-0000-0000-0000-0000000000e4', 14, 'append_runtime_event_log', '{"event_type":"file_write_completed","entity_ref_key":"FileArtifactId"}', true),
+    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 15, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
+    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 16, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
+    ('00000000-0000-0000-0000-000000000493', '00000000-0000-0000-0000-0000000000e4', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', true),
+    -- file_storage_bundle response_port (17 steps: credential pipeline + compute_checksum + 4x execute_db_function interleaved with 4x append_runtime_event_log)
     ('00000000-0000-0000-0000-000000000411', '00000000-0000-0000-0000-0000000000e5',  1, 'resolve_port_record',              '{}', true),
     ('00000000-0000-0000-0000-000000000412', '00000000-0000-0000-0000-0000000000e5',  2, 'resolve_credential_reference',     '{}', true),
     ('00000000-0000-0000-0000-000000000413', '00000000-0000-0000-0000-0000000000e5',  3, 'load_encrypted_credential_payload','{}', true),
@@ -2151,10 +2155,14 @@ VALUES
     ('00000000-0000-0000-0000-0000000004b1', '00000000-0000-0000-0000-0000000000e5',  7, 'send_http',                        '{}', true),
     ('00000000-0000-0000-0000-0000000004b2', '00000000-0000-0000-0000-0000000000e5',  8, 'capture_response',                 '{}', true),
     ('00000000-0000-0000-0000-000000000417', '00000000-0000-0000-0000-0000000000e5',  9, 'compute_checksum',                 '{}', true),
-    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 10, 'execute_db_function', '{"function":"topology.fs_record_export_job","output":"ExportJobId"}', true),
-    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 11, 'execute_db_function', '{"function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', true),
-    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 12, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
-    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 13, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
+    ('00000000-0000-0000-0000-000000000494', '00000000-0000-0000-0000-0000000000e5', 10, 'append_runtime_event_log', '{"event_type":"checksum_verified","entity_ref_key":"ChecksumValue"}', true),
+    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 11, 'execute_db_function', '{"function":"topology.fs_record_export_job","output":"ExportJobId"}', true),
+    ('00000000-0000-0000-0000-000000000495', '00000000-0000-0000-0000-0000000000e5', 12, 'append_runtime_event_log', '{"event_type":"export_job_initiated","entity_ref_key":"ExportJobId"}', true),
+    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 13, 'execute_db_function', '{"function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', true),
+    ('00000000-0000-0000-0000-000000000496', '00000000-0000-0000-0000-0000000000e5', 14, 'append_runtime_event_log', '{"event_type":"file_write_completed","entity_ref_key":"FileArtifactId"}', true),
+    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 15, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
+    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 16, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
+    ('00000000-0000-0000-0000-000000000497', '00000000-0000-0000-0000-0000000000e5', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', true),
     -- email_bundle response_port
     ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', true),
     ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', true),

@@ -355,6 +355,21 @@ public interface IExternalPortDbFunctionRepository
 }
 
 /// <summary>
+/// Abstract evidence boundary for the append_runtime_event_log policy step operation.
+/// Writes consumer bundle domain events to topology.runtime_event_log.
+/// Prohibited: plaintext credential, signed URL, bucket name, storage endpoint.
+/// entity_id must be an opaque reference identifier (UUID string or reference key only).
+/// </summary>
+public interface IExternalPortRuntimeEventLogRepository
+{
+    Task AppendAsync(
+        string eventType,
+        string? entityId,
+        string? requiredByBundle,
+        CancellationToken ct = default);
+}
+
+/// <summary>
 /// Reusable extension point for consumer bundle-specific operation_key handlers.
 /// Each consumer bundle (file_storage, email, audit_approval, export_sftp, etc.) registers
 /// its own implementation. The generic ExternalPortPolicyStepExecutor stays free of
@@ -429,7 +444,8 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IExternalPortResolver? portResolver = null,
         IExternalCredentialCrypto? crypto = null,
         IExternalPortDbFunctionRepository? dbFunctionRepository = null,
-        IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null)
+        IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null,
+        IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null)
     {
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
@@ -533,7 +549,18 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 context.MarkExecuted(step.OperationKey);
                 return Task.CompletedTask;
             },
-            ["append_runtime_event_log"] = MarkOnly,
+            ["append_runtime_event_log"] = async (step, context, ct) =>
+            {
+                if (runtimeEventLogRepository is not null &&
+                    step.StepConfig.TryGetValue("event_type", out var eventType) &&
+                    !string.IsNullOrWhiteSpace(eventType))
+                {
+                    var entityId = ResolveEntityId(step.StepConfig, context);
+                    var bundle = context.RequiredByBundle ?? context.PortRecord?.RequiredByBundle;
+                    await runtimeEventLogRepository.AppendAsync(eventType, entityId, bundle, ct);
+                }
+                context.MarkExecuted(step.OperationKey);
+            },
             ["capture_response"] = (step, context, ct) =>
             {
                 if (context.HttpResponse is not null)
@@ -645,6 +672,20 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
     {
         context.MarkExecuted(step.OperationKey);
         return Task.CompletedTask;
+    }
+
+    private static string? ResolveEntityId(IReadOnlyDictionary<string, string> stepConfig, ExternalPortExecutionContext context)
+    {
+        if (!stepConfig.TryGetValue("entity_ref_key", out var refKey) || string.IsNullOrWhiteSpace(refKey))
+            return null;
+        return refKey switch
+        {
+            "ExportJobId" => context.ExportJobId?.ToString(),
+            "FileArtifactId" => context.FileArtifactId?.ToString(),
+            "ChecksumValue" => context.ChecksumValue,
+            "AuthorizationKey" => context.AuthorizationKey,
+            _ => null
+        };
     }
 
     private static string? FirstNonBlank(params string?[] values) =>

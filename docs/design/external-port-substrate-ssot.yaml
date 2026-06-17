@@ -253,6 +253,7 @@ external_port_substrate_ssot:
       - inject_authorization_header
       - send_http
       - capture_response
+      - execute_db_function
       - verify_signature_by_config
       - enqueue_scheduler_event
       - append_runtime_event_log
@@ -263,6 +264,30 @@ external_port_substrate_ssot:
       - update_token_hash
       - update_expires_at_and_version
       - release_refresh_lease
+    operation_key_definitions:
+      execute_db_function:
+        meaning: >-
+          Calls a named PostgreSQL function registered under the topology schema.
+          Acts as the abstract function boundary for consumer bundle domain mutations
+          that are not hard-runtime compute operations (e.g., record_export_job,
+          record_file_artifact, write_manifest_record, authorize_signed_download).
+        boundary: >-
+          function_name must be prefixed "topology." and registered as a DB function.
+          Execution delegates to IExternalPortDbFunctionRepository.
+          Result context properties are stored per step_config "output" key.
+          Consumer bundle domain mutations that cannot be expressed as hard runtime
+          compute primitives (checksum, crypto) must use this path.
+        step_config_required:
+          function: fully_qualified_postgresql_function_name (topology.* prefix required)
+        step_config_optional:
+          output: context_property_name_to_store_result
+        abstract_function_relation: IExternalPortDbFunctionRepository
+        prohibited:
+          - direct_sql_outside_postgresql_function
+          - plaintext_credential_or_bucket_or_endpoint_in_function_params
+          - provider_kind_or_bundle_branching_in_function_selection
+          - function_name_without_topology_prefix
+          - adding_bundle_specific_concrete_mutation_to_FileStorageBundleStepHandler
     execution_rule: >-
       Runtime reads topology.external_port_policy_steps ordered by step_order and dispatches
       operation_key through a generic registry/dictionary. provider_kind and
@@ -293,11 +318,11 @@ external_port_substrate_ssot:
       file_storage_bundle:
         handler_class: FileStorageBundleStepHandler
         operation_keys:
-          - record_export_job
           - compute_checksum
-          - record_file_artifact
-          - write_manifest_record
-          - authorize_signed_download
+        note: >-
+          record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download
+          were moved to execute_db_function operation_key via topology.fs_* PostgreSQL functions (PR#463).
+          FileStorageBundleStepHandler retains only compute_checksum (hard-runtime SHA-256 computation).
         detail_ref: docs/design/runtime-bundle-file-storage-ssot.yaml#operation_key_surface
     prohibited:
       - adding_bundle_specific_repository_or_handler_directly_to_generic_executor

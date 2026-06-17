@@ -194,6 +194,116 @@ public class FileStorageBundleDispatchTests
         Assert.DoesNotContain("plaintext", source, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void CoreAllowedOperationKeys_ContainsAppendRuntimeEventLog()
+    {
+        Assert.Contains("append_runtime_event_log", ExternalPortPolicyStepExecutor.AllowedOperationKeys);
+    }
+
+    [Fact]
+    public async Task AppendRuntimeEventLog_WithEventTypeConfig_CallsRepository()
+    {
+        var fakeLog = new FakeRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: fakeLog);
+        var context = new ExternalPortExecutionContext
+        {
+            ChecksumValue = "sha256:abc123"
+        };
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "append_runtime_event_log",
+            new Dictionary<string, string>
+            {
+                ["event_type"] = "checksum_verified",
+                ["entity_ref_key"] = "ChecksumValue"
+            }, true);
+
+        await executor.ExecuteAsync(step, context);
+
+        Assert.Contains("append_runtime_event_log", context.ExecutedOperationKeys);
+        Assert.Equal("checksum_verified", fakeLog.LastEventType);
+        Assert.Equal("sha256:abc123", fakeLog.LastEntityId);
+    }
+
+    [Fact]
+    public async Task AppendRuntimeEventLog_WithExportJobIdRef_ResolvesFromContext()
+    {
+        var fakeLog = new FakeRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: fakeLog);
+        var exportJobId = Guid.NewGuid();
+        var context = new ExternalPortExecutionContext { ExportJobId = exportJobId };
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 12, "append_runtime_event_log",
+            new Dictionary<string, string>
+            {
+                ["event_type"] = "export_job_initiated",
+                ["entity_ref_key"] = "ExportJobId"
+            }, true);
+
+        await executor.ExecuteAsync(step, context);
+
+        Assert.Equal("export_job_initiated", fakeLog.LastEventType);
+        Assert.Equal(exportJobId.ToString(), fakeLog.LastEntityId);
+    }
+
+    [Fact]
+    public async Task AppendRuntimeEventLog_WithoutRepository_StillMarksExecuted()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext();
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "append_runtime_event_log",
+            new Dictionary<string, string> { ["event_type"] = "checksum_verified" }, true);
+
+        await executor.ExecuteAsync(step, context);
+
+        Assert.Contains("append_runtime_event_log", context.ExecutedOperationKeys);
+    }
+
+    [Fact]
+    public async Task AppendRuntimeEventLog_WithEmptyEventType_SkipsRepository()
+    {
+        var fakeLog = new FakeRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: fakeLog);
+        var context = new ExternalPortExecutionContext();
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "append_runtime_event_log",
+            new Dictionary<string, string> { ["event_type"] = "" }, true);
+
+        await executor.ExecuteAsync(step, context);
+
+        Assert.Null(fakeLog.LastEventType);
+        Assert.Contains("append_runtime_event_log", context.ExecutedOperationKeys);
+    }
+
+    [Fact]
+    public void NpgsqlExternalPortRuntimeEventLogRepository_Source_InsertsToRuntimeEventLog()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalPortRuntimeEventLogRepository.cs"));
+        Assert.Contains("topology.runtime_event_log", source);
+        Assert.Contains("IExternalPortRuntimeEventLogRepository", source);
+        Assert.Contains("event_type", source);
+        Assert.Contains("entity_id", source);
+        Assert.Contains("required_by_bundle", source);
+        Assert.DoesNotContain("plaintext", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("signed_url", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("bucket", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SeedSql_FileStoragePolicies_ContainAppendRuntimeEventLogSteps()
+    {
+        var seed = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        Assert.Contains("checksum_verified", seed);
+        Assert.Contains("export_job_initiated", seed);
+        Assert.Contains("file_write_completed", seed);
+        Assert.Contains("signed_url_generated", seed);
+        Assert.Contains("entity_ref_key", seed);
+    }
+
     private static ExternalPortPolicy BuildFileStoragePolicy(bool accessPort) =>
         new(Guid.NewGuid(), "file_storage_test_policy", accessPort ? "access_port" : "response_port", "file_storage_bundle",
         [
@@ -237,6 +347,21 @@ public class FileStorageBundleDispatchTests
             dir = dir.Parent;
         }
         throw new FileNotFoundException(relativePath);
+    }
+
+    private sealed class FakeRuntimeEventLogRepository : IExternalPortRuntimeEventLogRepository
+    {
+        public string? LastEventType { get; private set; }
+        public string? LastEntityId { get; private set; }
+        public string? LastBundle { get; private set; }
+
+        public Task AppendAsync(string eventType, string? entityId, string? requiredByBundle, CancellationToken ct = default)
+        {
+            LastEventType = eventType;
+            LastEntityId = entityId;
+            LastBundle = requiredByBundle;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeDbFunctionRepository : IExternalPortDbFunctionRepository
