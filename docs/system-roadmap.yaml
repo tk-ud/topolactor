@@ -729,9 +729,10 @@ system_roadmap_ssot:
         manifest / signed_download_authorizations), physical_table_manifest_binding, SSOT
         operation_key definitions, and executor handlers (record_export_job / compute_checksum /
         record_file_artifact / write_manifest_record / authorize_signed_download) implemented per
-        PR#463. Artifact + checksum_record atomic write with fail-close enforced. Remaining partial
-        scope: UI Builder portTargetRef action wiring / preset, evidence/runtime_event_log, and
-        projection response. Object storage provider-specific client not added.
+        PR#463. Artifact + checksum_record atomic write with fail-close enforced. Remaining
+        partial carry-over: UI Builder portTargetRef action wiring / preset,
+        evidence/runtime_event_log, and projection response. Object storage provider-specific
+        client not added.
       scope:
         - file_storage_access_and_response_port_consumer_definition
         - object_storage_credential_requirement_as_port_attachment
