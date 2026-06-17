@@ -11,7 +11,6 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `sql-attention-system-ci` | Issue#83 SQL Attention / Registry Continuity 運用CI | not_started | 1 | `product.dynamic_support_nocode_loop` / `product.core_runtime_route` | `docs/design/topology-recommendation-ci-runtime.md` |
 | `projection-admin-runtime-ssot-alignment` | Issue#464 投影/admin/runtime SSOT不整合収束 | not_started | 1 | `product.admin_topology_authoring` / `product.projection_and_output_lanes` / `product.core_runtime_route` / `product.external_port_substrate` | `docs/design/runtime-orchestration-ssot.yaml` |
 | `external-port-substrate-implementation` | external_port_substrate / 7 consumer bundles + credential_requirement substrate 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
@@ -58,98 +57,6 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ---
 
-## Bundle `sql-attention-system-ci`
-
-**Status:** not_started
-**Issue:** https://github.com/tk-ud/topolactor/issues/83
-**Roadmap/status SSOT:** `product.dynamic_support_nocode_loop` / `product.core_runtime_route`
-**SSOT:** `docs/design/topology-recommendation-ci-runtime.md`
-
-問題点:
-Issue#83 / Issue#464 の Issue search/comments で拾われる SQL Attention / CI Attention 論点を canonical TODO carry-over に変換する。Topology Vector Runtime / SQL Attention は registry / hub / relation / context_event / recommendation current / evidence_json をまたぐ意味連続性を持つが、運用中にその連続性を System Operation CI として継続検査する Bundle が `.agent/tasks/todo.md` に残っていなかった。これは投影/admin dispatch bundle ではなく、SQL Attention / Registry Continuity の運用CI Bundle として独立管理する。
-
-目的:
-runtime policy を `function_parameters` 由来の可変運用方針として扱い、System Operation CI は hardcode 可能なシステム不変条件検査として分離する。event-driven inspection と cron-triggered inspection により、append-only log / materialized current / evidence_json / registry vector continuity / hub attention continuity を検査し、silent fallback / LogError-only を許容せず、fail-close / ExplicitError / reportable diagnostics へ接続する。
-
-実装方針:
-- [ ] SQL Attention / Registry Continuity の System Operation CI 責務境界を SSOT に明記し、runtime policy / recommendation behavior / user-facing threshold と混同しない。
-- [ ] registry 作成・更新・promote、context_event append、hub attention current update、context_hub_feedback_event append、feedback weight update、topology edit log append 後の event-driven inspection を定義・実装する。
-- [ ] cron trigger 予定で registry 連続性探索、孤立 registry / 孤立 hub 検出、hub attention 断絶検査、current rebuildability、evidence_json integrity、append-only log と materialized current 整合、optional/future/implemented 状態ドリフトを検査する。
-- [ ] SQL Attention continuity は推薦精度ではなく、input event → context_event append → transition key evidence → hub attention current → evidence_json → recommendation/diagnostic result の意味連続性として検査する。
-- [ ] current を source of truth 化せず、append-only log から再構築可能であることを system CI の検査対象にする。
-- [ ] fail-close 対象と reportable GAP / TODO 対象を分け、診断結果を system operation CI result / admin operator diagnostics / `.agent/reports/` / 将来 GitHub Actions・cron job・background worker 接続へ流せる形にする。
-- [ ] 必要な backend system CI service / diagnostic result / tests / `.agent/tests/*` / workflow connection を Bundle 単位で追加する。
-
-対応資料:
-- `AGENTS.md`
-- `.agent/rules/rule.md`
-- `.agent/protocols/completion.md`
-- `.agent/protocols/reports-and-todos.md`
-- `.agent/tasks/todo.md`
-- `README.md`
-- `docs/design/context-route-recommendation.md`
-- `docs/design/context-route-recommendation.yaml`
-- `docs/design/topology-recommendation-ci-runtime.md`
-- `docs/registrar-admin-ui-specification.md`
-- `docs/framework-policy.yaml`
-- `docs/file-structure.yaml`
-- `.agent/reports/2026-05-19-ssot-implementation-drift-audit.md`
-- `.agent/reports/2026-05-19-claude-boundary-audit-reaudit.md`
-
-対象ファイル名:
-- `docs/design/topology-recommendation-ci-runtime.md`
-- `docs/design/context-route-recommendation.md`
-- `docs/design/context-route-recommendation.yaml`
-- `docs/framework-policy.yaml`
-- `backend/runtime/ContextRouteRecommendationResolver.cs`
-- `backend/runtime/TopologyVectorRuntime.cs`
-- `backend/repository/ContextRouteRepository.cs`
-- `backend/repository/NpgsqlContextRouteRepository.cs`
-- `backend/schema/*`
-- `db/context_route_tables.sql`
-- `db/topology_tables.sql`
-- `db/seed_empty.sql`
-- `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs`
-- `backend/tests/*`
-- `.agent/tests/check-runtime-semantics.sh`
-- `.agent/tests/check-structure.sh`
-- `.github/workflows/*`
-- `.agent/tasks/todo.md`
-- `.agent/reports/*`
-
-対象関数名またはruntime境界名:
-- `ContextRouteRecommendationResolver.ResolveAsync`
-- `AppendContextEventAsync`
-- `RunTopologyVectorRuntimeExtensionAsync`
-- `TopologyVectorRuntime.ValidateRegistryVectorAsync`
-- `TopologyVectorRuntime.ComputeSparseCosineSimilarity`
-- `FindRegistryVectorNeighborsAsync`
-- `LoadHubAttentionCurrentAsync`
-- `UpsertHubAttentionCurrentAsync`
-- `RecalculateHubAttentionRanksAsync`
-- `ApplyFeedbackWeightUpdateAsync`
-- `ExtractTransitionKeyEvidenceAsync`
-- `BuildTopologyMlpFeaturesAsync`
-- `RunSystemOperationCiAsync`
-- `InspectSqlAttentionContinuityAsync`
-- `InspectRegistryContinuityAsync`
-- `InspectHubAttentionContinuityAsync`
-- `InspectEvidenceIntegrityAsync`
-- `InspectCurrentRebuildabilityAsync`
-- `RunEventDrivenTopologyInspectionAsync`
-- `RunCronTopologyContinuityInspectionAsync`
-
-受入条件:
-- [ ] SQL Attention / Registry Continuity の System Operation CI が SSOT に定義されている。
-- [ ] System CI と runtime policy の境界が明確で、CI 検査ルールの hardcode が許可範囲として明記されている。
-- [ ] event-driven inspection と cron-triggered inspection の2系統が定義・実装されている。
-- [ ] registry continuity / hub attention continuity / evidence_json integrity / current rebuildability / append-only log vs materialized current 整合が検査されている。
-- [ ] current が source of truth 化していないことを検査できる。
-- [ ] silent fallback / LogError-only を許容せず、fail-close / ExplicitError / reportable diagnostic の扱いが区別されている。
-- [ ] 必要な backend tests / `.agent/tests/*` / workflow or cron connection が追加・更新され、PR サマリに pass/fail/not executed と残TODOが明記されている。
-
----
-
 ## Bundle `projection-admin-runtime-ssot-alignment`
 
 **Status:** not_started
@@ -158,18 +65,39 @@ runtime policy を `function_parameters` 由来の可変運用方針として扱
 **SSOT:** `docs/design/runtime-orchestration-ssot.yaml`
 
 問題点:
-Issue#464 の Open Issue を canonical TODO carry-over に変換する。投影 / admin authoring / runtime dispatch / SSE projection / abstract function boundary / external-port consumer wiring が、SSOT completion gate と実装の間で不整合になっている。小粒の UI/API 修正ではなく、`data_driven_projection_completion_gate` と `admin_authoring_completion_gate` を満たす横断 Bundle として収束させる。
+Issue#464 の Open Issue を canonical TODO carry-over に変換する。最新の監査軸は「投影側NG軸5項目＋抽象関数例外」と「admin側NG軸5項目」であり、古い4軸表現へ戻さない。小粒の UI/API 修正ではなく、`data_driven_projection_completion_gate` と `admin_authoring_completion_gate` を満たす横断 Bundle として収束させる。
 
 目的:
-SSOT を再定義せず、`docs/framework-core.yaml` の `logicalDelete` を含む action vocabulary、`runtime-orchestration-ssot.yaml` の dispatch / SSE / abstract-function gate、`pipeline-continuity-ssot.yaml` の queue/projection lane、`admin-console-workflow-ssot.yaml` の admin authoring completion gate、`external-port-substrate-ssot.yaml` の secure consumer dispatch lane を実装・テストに通す。
+SSOT を再定義せず、`docs/framework-core.yaml` の `logicalDelete` を含む action vocabulary、`runtime-orchestration-ssot.yaml` の dispatch / SSE / abstract-function gate、`pipeline-continuity-ssot.yaml` の queue/projection lane、`admin-console-workflow-ssot.yaml` の admin authoring completion gate、`external-port-substrate-ssot.yaml` の credential substrate / secure consumer dispatch lane を実装・テストに通す。
+
+最新NG軸:
+
+投影側NG軸:
+1. UIがDBからの投影じゃない
+2. 通信がdispatch解決されていない
+3. レスポンス,SSEがキューに乗らない
+4. backend処理が抽象関数を使用しない具体実装されている
+5. seed codingになっていない
+
+例外:
+- 抽象関数を使用できない特殊処理
+
+admin側NG軸:
+1. 全dispatchの設定不能（例 CRUD, Search, Aggregate 等）
+2. Contentsで設定された全dispatchのUI配線不能
+3. UI Eventsの設定不能（トリガUI指定と操作対象UI指定）
+4. クレデンシャル基盤からの外部連携になっていない
+5. 外部連携の配線が設定不能（トリガUI指定と操作対象UI指定）
 
 実装方針:
-- [ ] admin Contents Step 3 の operation kind / screen_data_shape / manifest wiring candidate / UI Builder wiring candidate / runtime action mapping / tests に Delete/logicalDelete dispatch coverage を通す。
-- [ ] `wiringKind` / `targetSurface` / `target_ref` の未対応・未解決を `default` / `entity` / 生 action へ暗黙 fallback せず、runtime error projection または保存検証 fail-close として扱う。
+- [ ] admin Contents Step 3 の operation kind / screen_data_shape / manifest wiring candidate / UI Builder wiring candidate / runtime action mapping / tests に CRUD / Search / Aggregate / Delete/logicalDelete 等の全dispatch coverage を通す。
+- [ ] `wiringKind` / `targetSurface` / `target_ref` の未対応・未解決を `default` / `entity` / 生 action へ暗黙 fallback せず、runtime error projection または保存検証 fail-close として扱い、通信が dispatch 解決されたことを証明する。
 - [ ] `ProjectionHookTrigger.identity` の `manifest_id` / `table_id` / `table_registry_id` を ProjectionShell refresh request で保持し、`default / screen_list / Search` 固定再dispatchを禁止する。
-- [ ] UI Events の候補 (`select/input/focus/blur/setActiveKey` 等) と runtime 実行側を一致させ、trigger UI と target UI (`targetNodeId`) を独立概念として保存→投影→実行まで通す。実行不能候補は UI 候補から外す。
-- [ ] `RuntimeExecutor` と `TopologyFunctionBinder` / abstract function primitive registry の接続対象を分類し、対象 mutation は abstract function / DB-driven operation boundary を通す。例外は SSOT 根拠・理由・テストを明記する。
-- [ ] external port consumer の trigger UI / target UI / payloadFrom / outputProp / projection response は、既存 `external_port_runtime` と `secure_consumer_dispatch_lane` に流し、provider別・bundle別 runtime/client/admin panel を新設しない。consumer bundle 別の詳細残作業は既存 `*-port-consumer` TODO と `.agent/tasks/external-port-substrate-implementation-todo.md` を正本として扱う。
+- [ ] response / SSE は inline response や broadcast 呼び出しだけで完了扱いにせず、queue / projection response lane に乗り、consumer側が受け取れることをテストする。
+- [ ] UI Events の候補 (`select/input/focus/blur/setActiveKey` 等) と runtime 実行側を一致させ、trigger UI と target UI (`targetNodeId`) を独立概念として保存→DB投影→実行まで通す。実行不能候補は UI 候補から外す。
+- [ ] `RuntimeExecutor` と `TopologyFunctionBinder` / abstract function primitive registry の接続対象を分類し、対象 mutation は abstract function / DB-driven operation boundary を通す。抽象関数を使用できない特殊処理だけを例外にし、SSOT根拠・理由・テストを明記する。
+- [ ] seed / DB CHECK constraint / SSOT allowed values / runtime registry / executor registry を一致させ、seed coding されていない値追加・test-local手書き投影・実装だけの値追加を禁止する。
+- [ ] external port consumer の trigger UI / target UI / payloadFrom / outputProp / projection response は、credential substrate 上の既存 `external_port_runtime` と `secure_consumer_dispatch_lane` に流し、provider別・bundle別 runtime/client/admin panel を新設しない。consumer bundle 別の詳細残作業は既存 `*-port-consumer` TODO と `.agent/tasks/external-port-substrate-implementation-todo.md` を正本として扱う。
 
 対応資料:
 - `docs/framework-core.yaml`
@@ -202,6 +130,8 @@ SSOT を再定義せず、`docs/framework-core.yaml` の `logicalDelete` を含�
 - `backend/Program.cs`
 - `backend/runtime/ExternalPortDispatchRuntime.cs`
 - `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `db/seed_empty.sql`
+- `db/topology_tables.sql`
 
 対象関数名またはruntime境界名:
 - `ScreenOperationKind`
@@ -233,12 +163,16 @@ SSOT を再定義せず、`docs/framework-core.yaml` の `logicalDelete` を含�
 - `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
 
 受入条件:
-- [ ] Contents Step 3 の dispatch coverage に Delete/logicalDelete を含め、UI Builder wiring / runtime dispatch / tests まで通っている。
+- [ ] UI が test-local hand-written `Emission` / `DraftPreviewResult` ではなく、DB seed / Contents / topology manifest / physical_table_manifest_binding / projection repository 由来の構造から投影されている。
+- [ ] Contents Step 3 の dispatch coverage に CRUD / Search / Aggregate / Delete/logicalDelete 等を含め、UI Builder wiring / runtime dispatch / tests まで通っている。
 - [ ] dispatch spec の未解決値は silent fallback せず fail-close / runtime error projection になる。
+- [ ] response / SSE が queue / projection response lane に乗り、consumer側受信まで証明されている。
 - [ ] SSE projection refresh が identity を捨てず、対象 manifest / projection surface を保持して queue/dispatch に流れる。
-- [ ] UI Events の trigger UI と target UI が独立して authoring 可能で、保存→投影→実行まで一致している。
+- [ ] UI Events の trigger UI と target UI が独立して authoring 可能で、保存→DB投影→実行まで一致している。
 - [ ] abstract function lane の対象/例外が SSOT 根拠付きで確定し、対象 mutation は `TopologyFunctionBinder` / `execute_db_function` / reusable substrate を通る。
-- [ ] external port consumer の trigger UI / target UI / projection response が consumer 単位で既存 generic lane に接続され、provider-specific runtime/client/admin panel を新設していない。
+- [ ] 抽象関数を使用できない特殊処理だけが例外として残り、理由・SSOT根拠・テストが明記されている。
+- [ ] seed / DB CHECK constraint / SSOT allowed values / runtime registry / executor registry が一致している。
+- [ ] external port consumer の trigger UI / target UI / projection response が credential substrate 上の既存 generic lane に接続され、provider-specific runtime/client/admin panel を新設していない。
 - [ ] frontend direct DB write がない。
 - [ ] 関連 frontend/backend tests または `.agent/tests/*` が追加/更新されている。
 
