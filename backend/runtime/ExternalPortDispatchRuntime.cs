@@ -30,12 +30,38 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
     {
         try
         {
-            if (!TryReadPortTargetRef(request.Payload, out var rawRef))
-                return Fail("EXTERNAL_PORT_TARGET_REF_MISSING", "dispatchExternalPort payload must include port_target_ref or target_ref.");
-            if (!TryParsePortTargetRef(rawRef!, out var portKind, out var portId, out var routeKey))
-                return Fail("EXTERNAL_PORT_TARGET_REF_INVALID", "portTargetRef must use external-port:<portKind>:<portId>[:routeKey].");
+            CanonicalPhysicalBindingInput? binding = TryReadCanonicalBinding(request.Payload, out var bindingInput) ? bindingInput : null;
+            string rawRef;
+            string portKind;
+            Guid portId;
+            string? routeKey;
+            ExternalPortRecord? record;
 
-            var record = await _repository.LoadPortRecordByIdAsync(portKind, portId, routeKey, ct);
+            if (binding is not null)
+            {
+                var canonicalBinding = binding.Value;
+                rawRef = $"canonical-physical-binding:{canonicalBinding.ManifestKey}:{canonicalBinding.TableRef}:{canonicalBinding.PortKind}:{canonicalBinding.PortId}";
+                portKind = canonicalBinding.PortKind;
+                portId = canonicalBinding.PortId;
+                routeKey = canonicalBinding.RouteKey;
+                record = await _repository.LoadPortRecordByCanonicalBindingAsync(
+                    canonicalBinding.ManifestKey,
+                    canonicalBinding.TableRef,
+                    canonicalBinding.PortKind,
+                    canonicalBinding.PortId,
+                    canonicalBinding.RouteKey,
+                    ct);
+            }
+            else
+            {
+                if (!TryReadPortTargetRef(request.Payload, out var rawTargetRef))
+                    return Fail("EXTERNAL_PORT_TARGET_REF_MISSING", "dispatchExternalPort payload must include port_target_ref/target_ref or canonical physical binding fields.");
+                if (!TryParsePortTargetRef(rawTargetRef!, out portKind, out portId, out routeKey))
+                    return Fail("EXTERNAL_PORT_TARGET_REF_INVALID", "portTargetRef must use external-port:<portKind>:<portId>[:routeKey].");
+
+                rawRef = rawTargetRef!;
+                record = await _repository.LoadPortRecordByIdAsync(portKind, portId, routeKey, ct);
+            }
             if (record is null)
                 return Fail("EXTERNAL_PORT_RECORD_MISSING", "No active external port record matched portTargetRef.");
 
@@ -111,6 +137,43 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
         if (portKind == "hook_port" && string.IsNullOrWhiteSpace(routeKey)) return false;
         return true;
     }
+
+    private static bool TryReadCanonicalBinding(JsonElement? payload, out CanonicalPhysicalBindingInput binding)
+    {
+        binding = default;
+        var manifestKey = ReadStringProperty(payload, "canonical_binding_manifest_key");
+        var tableRef = ReadStringProperty(payload, "canonical_binding_table_ref") ?? ReadStringProperty(payload, "dbTableName");
+        var portKind = ReadStringProperty(payload, "canonical_binding_port_kind");
+        var portIdText = ReadStringProperty(payload, "canonical_binding_port_id");
+        if (string.IsNullOrWhiteSpace(manifestKey) && string.IsNullOrWhiteSpace(tableRef) &&
+            string.IsNullOrWhiteSpace(portKind) && string.IsNullOrWhiteSpace(portIdText))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(manifestKey) || string.IsNullOrWhiteSpace(tableRef) ||
+            portKind is not ("access_port" or "response_port" or "hook_port") ||
+            !Guid.TryParse(portIdText, out var portId))
+        {
+            throw new InvalidOperationException("EXTERNAL_PORT_CANONICAL_BINDING_INVALID");
+        }
+
+        var routeKey = ReadStringProperty(payload, "canonical_binding_route_key");
+        if (portKind == "hook_port" && string.IsNullOrWhiteSpace(routeKey))
+        {
+            throw new InvalidOperationException("EXTERNAL_PORT_CANONICAL_BINDING_INVALID");
+        }
+
+        binding = new CanonicalPhysicalBindingInput(manifestKey, tableRef, portKind, portId, routeKey);
+        return true;
+    }
+
+    private readonly record struct CanonicalPhysicalBindingInput(
+        string ManifestKey,
+        string TableRef,
+        string PortKind,
+        Guid PortId,
+        string? RouteKey);
 
     private static string? ReadStringProperty(JsonElement? payload, string name)
     {

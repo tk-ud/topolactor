@@ -33,7 +33,7 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 - `topology.external_access_ports`, `topology.external_response_ports`, `topology.external_hook_ports` を実装する。
 - `topology.external_credential_vault` / `topology.external_credential_refresh_attempt` は minimal DDL 済み。DB repository atomic encrypted_payload + token_hash + expires_at/version update 実装も完了済み。
 - `IExternalPortPolicyRepository` の production Npgsql read substrate は実装済み。active port/policy を fail-close で読み、provider_kind は DB data として扱う。
-- `topology.physical_tables` catalog と external port tables の登録 / bootstrap / seed 整合を実装する。現状の `physical_binding` topology entry は seed/projection marker であり、canonical `screen_data_shape.tableRef` / `dbTableName` -> `topology.wiring_physical_to_package` binding execution は残作業として扱う。
+- [x] `topology.physical_tables` catalog と external port tables の登録 / bootstrap / seed 整合、および canonical `screen_data_shape.tableRef` / `dbTableName` -> `topology.wiring_physical_to_package` -> external port physical table の repository/runtime binding execution を実装する。`physical_binding` topology entry は引き続き seed/projection marker であり、実行 authority にはしない。
 - `credential_kind` (`auth` / `external` / `none`), `port_kind` (`access_port` / `response_port` / `hook_port`), `provider_kind`, `port_setting_projection`, `consumer_bundle_binding`, `credential_requirement` を DB seed / projection で解決できるようにする。
 - [x] admin 権限の projection 側管理画面で、port record context 内の credential_kind / provider_kind / reference_key / required_by_bundle / consumer_bundle_binding を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する。
 - backend は provider 別 hardcode ではなく、汎用 access_port connect / response_port connect / hook_port receive / port record resolution のみを持つ。
@@ -206,7 +206,7 @@ Parent bundle: `external-port-substrate-implementation`
 remaining_todo:
 - DB-backed `IExternalPortPolicyRepository` production read implementation is implemented for active port records, active policies, and ordered active policy steps.
 - DB repository atomic encrypted credential payload update is implemented in the parent credential-vault bundle.
-- Canonical physical binding execution remains out of scope for this increment.
+- Canonical physical binding execution is implemented by `external-port-canonical-physical-binding-execution`; this projection increment remains limited to fixed-form projection metadata.
 - Consumer bundle wiring remains out of scope for this increment.
 
 
@@ -243,3 +243,17 @@ not_implemented_in_this_increment:
 - Canonical physical binding execution.
 - Provider-specific external clients (SMTP / Stripe / SFTP / object storage, etc.).
 - Consumer bundle-specific completed implementations beyond the generic port record consumer execution boundary.
+
+## Bundle increment `external-port-canonical-physical-binding-execution`
+
+Status: implemented
+Parent bundle: `external-port-substrate-implementation`
+
+実装内容:
+- Registered external port substrate physical tables in `topology.physical_tables` and wired them to `auth.external.credential_management.projection` through `topology.wiring_physical_to_package`.
+- Updated the fixed-form projection screen_data_shape with canonical `tableRef` / `dbTableName` while keeping the `physical_binding` topology entry as a seed/projection marker only.
+- Added generic DB-backed canonical binding resolution through `IExternalPortPolicyRepository.LoadPortRecordByCanonicalBindingAsync`, validating active manifest key, screen_data_shape tableRef/dbTableName, active physical table, and active package wiring before loading the port record.
+- Extended `ExternalPortDispatchRuntime.ExecuteAsync` to accept canonical binding fields without provider-specific branching or dedicated credential UI/API.
+
+remaining_todo:
+- Consumer bundle wiring for file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp remains out of scope and not implemented.
