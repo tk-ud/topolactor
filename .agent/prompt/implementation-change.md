@@ -42,6 +42,11 @@ When adding or changing any route / island / frontend API / action handler / hel
 - existing substrate reused:
 - new substrate required:
 - explicit SSOT exception, if any:
+- ng_axis_gate_triggers (list triggered axes per gate, or "none"):
+  - data_driven_projection_completion_gate: (ui_db_projection / dispatch_resolution / response_or_sse_queue_projection / abstract_function_or_db_driven_operation_boundary / seed_or_data_defined_surface — list which apply)
+  - admin_authoring_completion_gate: (all_dispatch_kinds_configurable / contents_dispatch_ui_wiring_configurable / ui_events_trigger_and_target_configurable / external_integration_uses_credential_substrate / external_integration_trigger_and_target_wiring_configurable — list which apply)
+  - external_integration_completion_gate: (credential_resolution_base — triggered or not)
+- exception_declaration (if any gate axis exception applies — exception_name / reason / ssot_basis / why_abstract_function_impossible):
 ```
 
 Before implementation, check whether the requested behavior can be expressed by existing substrate:
@@ -56,6 +61,18 @@ Before implementation, check whether the requested behavior can be expressed by 
 - existing status transition helper or lifecycle pattern
 - existing enum/dictionary/select projection pattern
 
+For any change touching runtime / projection / admin / external integration surfaces, additionally verify completion gate axes before coding:
+
+- Identify which gate axes are triggered: `data_driven_projection_completion_gate`, `admin_authoring_completion_gate`, `external_integration_completion_gate`
+- For each triggered axis, confirm the pass condition is achievable with the planned approach before writing code
+- `ui_db_projection`: UI must be DB/seed/topology-manifest/projection-repository driven — test-local handwritten emission is not pass
+- `dispatch_resolution`: full path client_trigger → frontend_scheduler → api_client → backend_endpoint → manifest_dispatcher → dispatchable_runtime must be present — direct backend handler / dedicated frontend wrapper is not pass
+- `response_or_sse_queue_projection`: response must travel through existing queue/SSE/projection-response lane — returning EndpointResponseDto inline is not pass
+- `abstract_function_or_db_driven_operation_boundary`: backend mutation must use topology_function_binder / execute_db_function / abstract function pattern — concrete dedicated mutation is not pass
+- `seed_or_data_defined_surface`: surfaces expressible as seed/DB-defined must be seed/DB-defined — hardcoded frontend list / inline backend mapping is not pass
+- `ui_events_trigger_and_target_configurable`: trigger UI and targetNodeId are independent concepts — satisfying one does not satisfy the other
+- If bundle boundary is unclear: emit follow-up prompt or investigation item rather than adding a small TODO
+
 Reusable substrate must be preferred before adding one-off implementation. If existing substrate is insufficient, add a reusable abstraction suitable for future bundles rather than a narrow one-off implementation, unless an explicit SSOT exception exists. This applies to frontend API wrappers, action handlers, dispatch payload mappers, projection builders, form/table renderers, repository methods, audit writers, validation flows, status transition flows, and provider compatibility checkers.
 
 Use `docs/design/runtime-orchestration-ssot.yaml` boundaries before coding:
@@ -68,9 +85,12 @@ Forbidden for implementation agents:
 - Do not add UI that can be expressed by existing seed/entity/projection/action substrate as a dedicated route or island.
 - Do not add an action that can use the existing dispatch -> entity -> runtime circuit as a dedicated frontend API wrapper.
 - Do not add one-off helpers for behavior covered by existing repository / audit / validation / status transition patterns.
-- Do not create implementation-first shape and then add SSOT text to ratify it.
+- Do not create implementation-first shape and then add SSOT text to ratify it (deviation-ratification is not pass).
 - Do not confuse hardcode-allowed runtime ports with UI/action/mapping surfaces that must be seed/data-defined.
 - Do not proliferate narrow dedicated helpers that future bundles cannot reuse.
+- Do not hardcode in frontend or backend any surface that can be expressed as seed/DB-defined projection.
+- Do not wire UI Events trigger without independent targetNodeId wiring; do not wire targetNodeId without independent trigger wiring — they are separate concepts.
+- Do not add a small TODO when bundle boundary is unclear — use follow-up prompt or investigation item instead.
 
 ## output_shape
 scope, implementation delta, protocol decisions, foundation_ssot_read_judgment, todo_granularity_judgment, check results

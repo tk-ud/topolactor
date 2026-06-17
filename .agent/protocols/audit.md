@@ -76,6 +76,27 @@ Implementation-first shape must not pass by adding matching SSOT text after the 
 
 Gate 0 is blocking: a completeness judgment is invalid when this classification is omitted or when a dedicated implementation bypass is accepted without the checks above.
 
+### completion_gate_judgment (triggered when projection / admin / external integration surfaces touched)
+
+When a PR or diff touches any of the following surfaces, Gate 0 must additionally include explicit completion gate judgment. All applicable gate axes must be `pass` before `implemented` judgment is valid. An axis that is `partial` or `fail` blocks `implemented` judgment for that gate.
+
+**Trigger: `data_driven_projection_completion_gate`** (SSOT: `docs/design/runtime-orchestration-ssot.yaml`)
+- Triggered surfaces: DB-driven UI projection / frontend emission / component rendering / dispatch resolution / ManifestDispatcher / api_command_lane / response-SSE lane / projection response binding / backend mutation (abstract function, topology_function_binder, repository write) / seed or data-defined UI/action/mapping
+- Axes: `ui_db_projection`, `dispatch_resolution`, `response_or_sse_queue_projection`, `abstract_function_or_db_driven_operation_boundary`, `seed_or_data_defined_surface`
+- Each axis is `pass` only when the SSOT condition is fully satisfied, not merely when a surface exists
+
+**Trigger: `admin_authoring_completion_gate`** (SSOT: `docs/design/admin-console-workflow-ssot.yaml`)
+- Triggered surfaces: admin authoring pipeline (/admin/contents steps 1–3) / UI Builder wiring (PackageWiringEditor) / dispatch kind admin configuration (screen_operation_kinds) / UI Events runtimeInteractions trigger+targetNodeId / external integration portTargetRef wiring
+- Axes: `all_dispatch_kinds_configurable`, `contents_dispatch_ui_wiring_configurable`, `ui_events_trigger_and_target_configurable`, `external_integration_uses_credential_substrate`, `external_integration_trigger_and_target_wiring_configurable`
+- Note: `trigger UI` and `target UI` are independent concepts; satisfying one does not satisfy the other
+
+**Trigger: `external_integration_completion_gate`** (SSOT: `docs/design/external-port-substrate-ssot.yaml`)
+- Triggered surfaces: external port bundle consumer / portTargetRef action wiring / credential substrate / port record context / policy steps execution
+- Extends `data_driven_projection_completion_gate`: all axes of both gates must be `pass`
+- Additional axis: `credential_resolution_base`
+
+Completion gate judgment must be explicit per axis: `pass` / `partial` / `fail` + evidence. Omitting gate judgment when the surface is triggered is a blocking condition identical to omitting Gate 0 substrate classification. `partial` gate axis is allowed only when PR scope is explicitly scoped-progress (non-closing); closing PRs must satisfy all gate axes.
+
 ## evidence_based_classification
 
 For each implementation/status claim, auditor must classify by evidence only.
@@ -162,6 +183,24 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
   - reusable abstraction usage: pass/partial/fail + evidence
   - new route/island/frontend API necessity: pass/partial/fail + evidence
   - SSOT update classification: pass/partial/fail + `design-conformant` or `deviation-ratification`
+  - data_driven_projection_gate_judgment (when projection/dispatch/SSE/mutation surfaces touched):
+    - ui_db_projection: pass/partial/fail + evidence
+    - dispatch_resolution: pass/partial/fail + evidence
+    - response_or_sse_queue_projection: pass/partial/fail + evidence
+    - abstract_function_or_db_driven_operation_boundary: pass/partial/fail + evidence
+    - seed_or_data_defined_surface: pass/partial/fail + evidence
+  - admin_authoring_completion_gate_judgment (when admin/Contents/UIEvents/wiring surfaces touched):
+    - all_dispatch_kinds_configurable: pass/partial/fail + evidence
+    - contents_dispatch_ui_wiring_configurable: pass/partial/fail + evidence
+    - ui_events_trigger_and_target_configurable: pass/partial/fail + evidence
+    - external_integration_uses_credential_substrate: pass/partial/fail + evidence
+    - external_integration_trigger_and_target_wiring_configurable: pass/partial/fail + evidence
+  - external_integration_completion_gate_judgment (when external port bundle surfaces touched):
+    - UI_db_projection: pass/partial/fail + evidence
+    - dispatch_resolution: pass/partial/fail + evidence
+    - credential_resolution_base: pass/partial/fail + evidence
+    - response_queue: pass/partial/fail + evidence
+    - abstract_function_boundary: pass/partial/fail + evidence
 - problem
 - purpose
 - improvement_policy
@@ -251,6 +290,41 @@ Auditor must treat the following as **blocking** (not non-blocker carry-over):
 - draft editing blocked or gated by fragment state or authority gate
 - promotion judgment not exclusively owned by backend runtime boundary guard
 - audit evidence access without explicit auditability boundary (visibility ≠ unrestricted access)
+
+## repository_inspection_gate
+
+When the audit scope includes repository-wide inspection (repo実態確認 / roadmap-todo整合確認 / design gap discovery), apply the following gate before emitting TODO or follow-up items.
+
+### inspection_prerequisite
+
+- Read SSOT docs and implementation files to determine current state. Do NOT rely on roadmap or todo alone.
+- Determine whether the problem diagnosis is firm before converting to a TODO.
+- If the root cause is unclear or multiple hypotheses exist, emit a follow-up prompt or investigation item rather than a TODO.
+
+### bundle_unit_todo_gate
+
+Before adding a TODO to `.agent/tasks/todo.md`, all of the following must be present:
+
+```
+- 問題点: (concrete, not speculative)
+- 目的: (what the fix achieves)
+- 改善方針: (approach, not implementation atom)
+- 対応資料: (SSOT / docs references)
+- 対象ファイル名: (specific file paths)
+- 対象関数名: (specific function or runtime boundary names)
+```
+
+TODOs must be completion bundle units, not implementation atoms. A TODO that covers a single alias addition, adapter connection, single test case, or single emit call is an implementation atom and must NOT be added as a canonical TODO. Bundle the full surface or carry over as a follow-up prompt.
+
+### projection_admin_external_gate_inspection
+
+When inspecting repo reality for projection / admin / external integration surfaces:
+
+1. Check `data_driven_projection_completion_gate` axes against actual implementation files. If any axis is `partial` or `fail`, record the finding as a bundle-unit TODO only if the root cause is confirmed.
+2. Check `admin_authoring_completion_gate` axes for admin surfaces. Ambiguous findings (e.g., "dispatch may be missing") must be investigated before adding a TODO.
+3. Check `external_integration_completion_gate` axes for external port consumers. Confirmed gaps become bundle-unit TODOs referencing the applicable consumer bundle SSOT.
+
+Do NOT add a TODO until the SSOT says what "done" means and the implementation gap is confirmed. Speculative TODOs based on roadmap status alone are prohibited (roadmap and todo are not the authoritative source of implementation state).
 
 ## non_blocker_carry_over_rule
 - SSOT completion_condition と実装意味整合が成立している PR は、軽微な cleanup / coverage expansion / future integration test が残っていても Approve 可能。
