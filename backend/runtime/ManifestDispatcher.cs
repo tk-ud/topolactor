@@ -86,6 +86,7 @@ public class ManifestDispatcher
 
         var vector = _operationVectorResolver.Resolve(request);
 
+
         if (_manifestRepository is null)
         {
             // Dev bypass: no manifest repository configured.

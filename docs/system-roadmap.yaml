@@ -625,7 +625,7 @@ system_roadmap_ssot:
       title: External port substrate shared foundation
       status: partial
       production_ready: false
-      public_summary: Shared substrate for the 8 external integration bundles. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement boundary definition within this substrate. DB guarded credential vault DDL, generic refresher primitive skeleton, fixed-form auth/external credential management projection manifest seed, DB-backed external port policy read repository, and DB repository atomic encrypted credential payload update are present as partial implementation. Canonical physical binding execution beyond the seed/projection marker, consumer bundle wiring, and provider/KMS/client implementations remain incomplete or out of scope.
+      public_summary: Shared substrate for the 8 external integration bundles. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement boundary definition within this substrate. DB guarded credential vault DDL, generic refresher primitive skeleton, fixed-form auth/external credential management projection manifest seed, DB-backed external port policy read repository, DB repository atomic encrypted credential payload update, and Design Inspector dispatchExternalPort event-to-generic-external-port-runtime boundary wiring are present as partial implementation. Canonical physical binding execution beyond the seed/projection marker, consumer bundle-specific completion, and provider/KMS/client implementations remain incomplete or out of scope.
       scope:
         - external_access_ports_physical_table
         - external_response_ports_physical_table
@@ -637,6 +637,7 @@ system_roadmap_ssot:
         - credential_kind_taxonomy_auth_external_none
         - db_backed_external_port_policy_read_repository
         - db_repository_atomic_encrypted_payload_token_hash_version_update
+        - dispatch_external_port_event_to_generic_runtime_boundary
       detail_ref:
         - docs/design/external-port-substrate-ssot.yaml
         - docs/design/runtime-bundle-secret-credential-ssot.yaml
@@ -645,15 +646,19 @@ system_roadmap_ssot:
         - db/topology_tables.sql#topology.external_credential_vault
         - db/topology_tables.sql#topology.external_credential_refresh_attempt
         - backend/runtime/ExternalPortCredentialRefresher.cs
+        - backend/runtime/ExternalPortDispatchRuntime.cs
         - backend/repository/NpgsqlExternalCredentialVaultRepository.cs
         - backend/repository/NpgsqlExternalPortPolicyRepository.cs
         - backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/ExternalPortDispatchRuntimeTests.cs
         - backend/tests/Topolactor.Integration.Tests/ExternalCredentialVaultRepositoryLiveDbTests.cs
         - backend/tests/Topolactor.Integration.Tests/ExternalPortPolicyRepositoryLiveDbTests.cs
+        - frontend/tests/externalPortDispatchRuntime.test.ts
         - .agent/tests/check-external-port-credential-vault-refresher.sh
         - .agent/tests/check-external-port-substrate-seed-coding.sh
-      known_gap_ref:
+      closed_gap_ref:
         - external_port_policy_read_repository_implemented_consumer_runtime_wiring_not_started
+      known_gap_ref:
         - external_port_access_response_hook_tables_not_connected_to_consumer_bundles
         - fixed_form_projection_manifest_seed_implemented_canonical_physical_binding_execution_not_wired
         - consumer_bundle_port_connection_implementation_not_started

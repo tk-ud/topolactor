@@ -349,6 +349,12 @@ export type RuntimeDispatchSpec = {
   targetRef?: string;
 };
 
+export type ExternalPortDispatchSpec = {
+  portTargetRef: string;
+  payload: Record<string, unknown>;
+  outputProp?: string;
+};
+
 /**
  * Enqueues a runtime component command through the api_command_lane.
  * Called by emitBoundEvent when a binding carries runtimeDispatch.
@@ -377,6 +383,38 @@ export async function enqueueRuntimeComponentCommand(
       layer: spec.layer,
       action: spec.action,
       ...(Object.keys(payload).length > 0 ? { payload } : {}),
+    },
+    token,
+  );
+}
+
+/**
+ * Enqueues Design Inspector-authored dispatchExternalPort through the canonical
+ * api_command_lane. The frontend only forwards the DB-derived portTargetRef and
+ * resolved payload; it never calls external services directly.
+ */
+export async function enqueueExternalPortDispatchCommand(
+  spec: ExternalPortDispatchSpec,
+): Promise<ScheduledCommandResult> {
+  const ref = spec.portTargetRef.trim();
+  if (!ref.startsWith("external-port:")) {
+    return {
+      success: false,
+      errors: [{ code: "EXTERNAL_PORT_TARGET_REF_INVALID", message: "portTargetRef must start with external-port:" }],
+    };
+  }
+  const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? undefined;
+  return queueAdminClientCommand(
+    {
+      operationType: "dispatchExternalPort",
+      target: "external_port",
+      layer: "external_port",
+      action: "dispatchExternalPort",
+      payload: {
+        port_target_ref: ref,
+        dispatch_payload: spec.payload,
+        ...(spec.outputProp ? { output_prop: spec.outputProp } : {}),
+      },
     },
     token,
   );

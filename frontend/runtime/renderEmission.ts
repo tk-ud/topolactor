@@ -25,6 +25,8 @@ export type RenderEmissionOptions = {
   calcNodeValues?: Record<string, Record<string, unknown>>;
   /** Projection-local UI state store consumed by runtime UI interaction wiring. */
   localStateStore?: RuntimeLocalStateStore;
+  /** Snapshot for dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
+  payloadFromNodeValues?: Record<string, unknown>;
 };
 
 export type ComponentSpec = {
@@ -301,6 +303,31 @@ function buildLocalUiStateEventBinding(rawWirings: unknown): Record<string, unkn
   return binding;
 }
 
+function buildExternalPortEventBinding(rawWirings: unknown): Record<string, unknown> {
+  if (!Array.isArray(rawWirings)) return {};
+  const binding: Record<string, unknown> = {};
+  for (const raw of rawWirings) {
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
+    const wiring = raw as Record<string, unknown>;
+    const trigger = normalizeAuthoredEventType(wiring.trigger ?? wiring.eventType);
+    if (!trigger || wiring.actionType !== "dispatchExternalPort") continue;
+    const portTargetRef = typeof wiring.portTargetRef === "string" ? wiring.portTargetRef.trim() : "";
+    const payloadFromRaw = wiring.payloadFrom;
+    const payloadFrom = (typeof payloadFromRaw === "object" && payloadFromRaw !== null && !Array.isArray(payloadFromRaw))
+      ? Object.fromEntries(Object.entries(payloadFromRaw).filter(([, value]) => typeof value === "string")) as Record<string, string>
+      : {};
+    binding[trigger] = {
+      eventType: trigger,
+      externalPortDispatch: {
+        portTargetRef,
+        payloadFrom,
+        outputProp: typeof wiring.outputProp === "string" && wiring.outputProp.trim() ? wiring.outputProp.trim() : undefined,
+      },
+    };
+  }
+  return binding;
+}
+
 function applyLocalStateOverrides(
   props: Record<string, unknown>,
   nodeId: string | undefined,
@@ -566,8 +593,9 @@ export function renderEmission(
           : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
         const rawLocalInteractions = node.runtimeInteractions ?? propsWithDesign.eventWirings;
         const localStateEventBinding = previewMode ? {} : buildLocalUiStateEventBinding(rawLocalInteractions);
+        const externalPortEventBinding = previewMode ? {} : buildExternalPortEventBinding(node.runtimeInteractions);
         const componentEventBinding = { ...baseEventBinding };
-        for (const [trigger, localBinding] of Object.entries(localStateEventBinding)) {
+        for (const [trigger, localBinding] of Object.entries({ ...localStateEventBinding, ...externalPortEventBinding })) {
           const existing = typeof componentEventBinding[trigger] === "object" && componentEventBinding[trigger] !== null
             ? componentEventBinding[trigger] as Record<string, unknown>
             : {};
@@ -607,6 +635,7 @@ export function renderEmission(
           props: finalProps,
           eventBinding: componentEventBinding,
           localStateStore: options?.localStateStore,
+          payloadFromNodeValues: options?.payloadFromNodeValues,
           design: hubDesign,
         };
         const adapted = adaptComponentDataHub(hub);

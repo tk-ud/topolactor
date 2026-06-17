@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Topolactor.Runtime;
 
 /// <summary>
@@ -257,6 +259,10 @@ public sealed class ExternalPortExecutionContext
 
     public ExternalPortHttpResponse? HttpResponse { get; set; }
 
+    public JsonElement? RequestPayload { get; set; }
+
+    public string? OutputProp { get; set; }
+
     public IReadOnlyDictionary<string, string> SignatureConfig { get; set; } = new Dictionary<string, string>();
 
     public IReadOnlyDictionary<string, string> SignatureInput { get; set; } = new Dictionary<string, string>();
@@ -282,6 +288,12 @@ public interface IExternalPortPolicyRepository
     Task<ExternalPortRecord?> LoadPortRecordAsync(
         string requiredByBundle,
         string portKind,
+        string? routeKey,
+        CancellationToken ct = default);
+
+    Task<ExternalPortRecord?> LoadPortRecordByIdAsync(
+        string portKind,
+        Guid portId,
         string? routeKey,
         CancellationToken ct = default);
 

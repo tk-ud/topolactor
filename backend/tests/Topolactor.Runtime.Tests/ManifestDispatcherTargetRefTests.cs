@@ -18,13 +18,17 @@ public class ManifestDispatcherTargetRefTests
 {
     private static readonly Guid KnownManifestId = new("aaaaaaaa-bbbb-cccc-dddd-000000000001");
 
-    private static ManifestDispatcher BuildDispatcher(TrackingManifestRepository repo)
+    private static ManifestDispatcher BuildDispatcher(TrackingManifestRepository repo, IReadOnlyDictionary<string, IDispatchableRuntime>? extraHandlers = null)
     {
         var targetOverride = RuntimeExecutorTests.CreateTargetDispatchOverride();
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
             ["topology_transform_runtime"] = new StubSuccessRuntime(),
         };
+        if (extraHandlers is not null)
+        {
+            foreach (var pair in extraHandlers) handlers[pair.Key] = pair.Value;
+        }
         return new ManifestDispatcher(
             NullLogger<ManifestDispatcher>.Instance,
             handlers,
@@ -48,6 +52,40 @@ public class ManifestDispatcherTargetRefTests
         if (wiringKey is not null) dict["wiring_key"] = wiringKey;
         if (wiringId is not null) dict["wiring_id"] = wiringId;
         return JsonSerializer.SerializeToElement(dict);
+    }
+
+
+    [Fact]
+    public async Task DispatchAsync_ExternalPortAxes_UsesManifestRuntimeMappingWithoutHardcodedTargetBranch()
+    {
+        var repo = new TrackingManifestRepository(KnownManifestId, runtimeDestination: "external_port_runtime");
+        var externalHandler = new CapturingRuntime();
+        var dispatcher = BuildDispatcher(repo, new Dictionary<string, IDispatchableRuntime>
+        {
+            ["external_port_runtime"] = externalHandler,
+        });
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            port_target_ref = "external-port:response_port:00000000-0000-0000-0000-00000000abcd",
+            dispatch_payload = new { subject = "hello" }
+        });
+
+        var response = await dispatcher.DispatchAsync(new EndpointRequestDto(
+            "dispatchExternalPort",
+            "external_port",
+            "external_port",
+            "dispatchExternalPort",
+            IdOrHubId: null,
+            Payload: payload,
+            Context: null,
+            TriggerKind: "client",
+            Role: "admin"));
+
+        Assert.True(response.Success);
+        Assert.True(repo.ResolveAxesCalled, "external_port dispatch must use manifest axis resolution.");
+        Assert.False(repo.LoadByIdCalled, "external-port port_target_ref must not use manifest target_ref LoadById routing.");
+        Assert.True(externalHandler.Called);
+        Assert.Equal(KnownManifestId, externalHandler.ManifestId);
     }
 
     // ─── target_ref present: routes to LoadByIdAsync ─────────────────────────
@@ -178,19 +216,19 @@ public class ManifestDispatcherTargetRefTests
 
 // ─── Test doubles ─────────────────────────────────────────────────────────────
 
-internal sealed class TrackingManifestRepository(Guid? knownManifestId)
+internal sealed class TrackingManifestRepository(Guid? knownManifestId, string runtimeDestination = "topology_transform_runtime")
     : ManifestRepository(NullLogger<ManifestRepository>.Instance)
 {
     public bool LoadByIdCalled { get; private set; }
     public Guid LoadByIdCalledWith { get; private set; }
     public bool ResolveAxesCalled { get; private set; }
 
-    private static ManifestRecord MakeManifest(Guid id) => new(
+    private ManifestRecord MakeManifest(Guid id) => new(
         ManifestId: id,
         RelationRegistryId: null,
         Topology: JsonSerializer.SerializeToElement(new[]
         {
-            new { type = "runtime_mapping", runtime_destination = "topology_transform_runtime" },
+            new { type = "runtime_mapping", runtime_destination = runtimeDestination },
         }).EnumerateArray().ToArray(),
         Status: "active");
 
@@ -264,4 +302,21 @@ internal sealed class StubSuccessRuntime : IDispatchableRuntime
             Success: true,
             Emission: new Emission(null, null, null, [], null, [], null, null),
             Errors: []));
+}
+
+internal sealed class CapturingRuntime : IDispatchableRuntime
+{
+    public bool Called { get; private set; }
+    public Guid? ManifestId { get; private set; }
+
+    public Task<EndpointResponseDto> ExecuteAsync(
+        EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
+    {
+        Called = true;
+        ManifestId = manifestId;
+        return Task.FromResult(new EndpointResponseDto(
+            Success: true,
+            Emission: new Emission(null, null, null, [], null, [], null, null),
+            Errors: []));
+    }
 }

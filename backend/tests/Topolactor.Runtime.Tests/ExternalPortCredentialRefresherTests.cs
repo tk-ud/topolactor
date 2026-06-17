@@ -338,6 +338,9 @@ public class ExternalPortSeedDrivenPolicyTests
         public Task<ExternalPortRecord?> LoadPortRecordAsync(string requiredByBundle, string portKind, string? routeKey, CancellationToken ct = default) =>
             Task.FromResult<ExternalPortRecord?>(null);
 
+        public Task<ExternalPortRecord?> LoadPortRecordByIdAsync(string portKind, Guid portId, string? routeKey, CancellationToken ct = default) =>
+            Task.FromResult<ExternalPortRecord?>(null);
+
         public Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default) =>
             Task.FromResult<ExternalPortPolicy?>(null);
     }

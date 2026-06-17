@@ -251,6 +251,7 @@ runtime_orchestration_ssot:
       - registry_attractor_runtime
       - admin_runtime
       - sse_projection_runtime
+      - external_port_runtime
       - auth_runtime
     auth_command_lane:
       reference: docs/design/auth-db-session-credential-ssot.yaml
@@ -333,6 +334,7 @@ runtime_orchestration_ssot:
       - registry_attractor_runtime
       - admin_runtime
       - sse_projection_runtime
+      - external_port_runtime
     backend_to_frontend_bridge:
       lanes:
         - response
@@ -695,11 +697,12 @@ runtime_orchestration_ssot:
       admin_runtime: AdminRuntimeDispatchAdapter
       sse_projection_runtime: SseProjectionRuntime
       registry_attractor_runtime: RegistryAttractorDispatchRuntime
+      external_port_runtime: ExternalPortDispatchRuntime
     handler_registry_scope_note: >-
       handler_registry lists the handlers registered in the production handler dictionary.
-      All four backend_dispatchable_kinds that enter via ManifestDispatcher are registered:
-      topology_transform_runtime, admin_runtime, sse_projection_runtime, and
-      registry_attractor_runtime (RegistryAttractorDispatchRuntime, manifest-dispatched
+      All five backend_dispatchable_kinds that enter via ManifestDispatcher are registered:
+      topology_transform_runtime, admin_runtime, sse_projection_runtime,
+      external_port_runtime, and registry_attractor_runtime (RegistryAttractorDispatchRuntime, manifest-dispatched
       IDispatchableRuntime handler — distinct from the SqlAttentionScheduler BackgroundService
       cron route). The SQL Attention cron runtime (HubAttractorExplorationRuntime +
       SqlAttentionScheduler) is a BackgroundService that does not route through

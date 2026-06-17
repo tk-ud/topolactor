@@ -39,6 +39,8 @@ export type RuntimeComponentSpec = {
   searchCallback?: (componentId: string, query: string) => void;
   /** Projection-local UI state store used by runtime UI interactions (modal/drawer/dialog open state). */
   localStateStore?: RuntimeLocalStateStore;
+  /** Snapshot used by dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
+  payloadFromNodeValues?: Record<string, unknown>;
 };
 
 export type RuntimeLocalStateStore = {
@@ -185,6 +187,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       props: normalizeTopologyProps(hub.props),
       eventBinding: hub.eventBinding,
       localStateStore: hub.localStateStore,
+      payloadFromNodeValues: hub.payloadFromNodeValues,
       className,
       design,
     },
