@@ -121,7 +121,7 @@ job実行前のapprovalが必要な場合、approval確認はscheduler外部のU
 ## Future Implementation Requirements
 
 後段実装SSOTで設計する対象:
-- job_queue_schema_design
+- scheduler_evidence_job_status_projection_surface_design（DB queue 新設ではない。runtime_event_log / evidence / user-contextual job status projection の read source として設計する。RuntimeTimelineScheduler の in-memory queue は変更しない）
 - cron_trigger_driver_loop_design
 - hook_trigger_intake_design / client_trigger_intake_design
 - collision_control_implementation_design

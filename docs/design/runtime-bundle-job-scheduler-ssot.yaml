@@ -201,13 +201,17 @@ runtime_bundle_job_scheduler_ssot:
 
   implementation_boundary_requirements:
     items:
-      - job_queue_schema_design
+      - scheduler_evidence_job_status_projection_surface_design
       - cron_trigger_driver_loop_design
       - hook_trigger_intake_design
       - client_trigger_intake_design
       - collision_control_implementation_design
       - scheduler_overflow_policy_implementation
       - job_execution_log_schema_design
+    note: >-
+      scheduler_evidence_job_status_projection_surface_design は DB queue 新設ではない。
+      runtime_event_log / evidence / user-contextual job status projection の read source として設計する。
+      RuntimeTimelineScheduler の in-memory queue は変更しない。
     policy: >-
       実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
       runtime_orchestration_ssotのscheduler_contractとの整合を維持する。

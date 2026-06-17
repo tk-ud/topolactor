@@ -9,7 +9,7 @@ external_port_substrate_ssot:
       外部連携 Bundle 共通基盤 SSOT。
       access_port / response_port / hook_port / credential_requirement を
       物理テーブル + seed projection + admin role write policy で定義する。
-      external 系 8 Bundle の共通基盤として機能し、
+      7 consumer bundles (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp) + credential_requirement substrate の共通基盤として機能し、
       credential は独立した管理 plane にしない。
       credential 管理は行うが、admin 権限の projection 側管理画面で
       port record context 内に統合し、provider 別・bundle 別の

@@ -282,6 +282,33 @@ check_content "$ROADMAP" "job_scheduler_seed_binding_and_credential_requirement_
 check_content "$ROADMAP" "audit_approval_seed_binding_and_credential_requirement_implemented_per_pr460"
 
 echo ""
+echo "=== 11. Forbidden vocabulary guard (job_queue physical table / 8 Bundle 共通基盤 / external 系 8 Bundle) ==="
+
+SSOT_AND_TASK_FILES=(
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml"
+  "docs/design/runtime-bundle-job-scheduler-ssot.md"
+  "docs/design/external-port-substrate-ssot.yaml"
+  "docs/design/extended-runtime-bundle-registry-ssot.yaml"
+  ".agent/tasks/todo.md"
+  ".agent/tasks/external-port-substrate-implementation-todo.md"
+  "docs/system-roadmap.yaml"
+)
+
+FORBIDDEN_VOCAB=(
+  "job_queue_schema_design"
+  "job_queue physical table"
+  "job queue physical table"
+  "external 系 8 Bundle"
+  "8 Bundle 共通基盤"
+)
+
+for f in "${SSOT_AND_TASK_FILES[@]}"; do
+  for term in "${FORBIDDEN_VOCAB[@]}"; do
+    check_absent "$f" "$term"
+  done
+done
+
+echo ""
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== check-external-port-consumer-alignment.sh: all checks passed ==="
   exit 0
