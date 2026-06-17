@@ -6,7 +6,7 @@
 
 ## Status
 
-partial / seed binding implemented per PR#460; consumer bundle runtime execution (physical table / manifest / preset / evidence / checksum / projection) not yet connected.
+partial / seed binding implemented per PR#460; consumer bundle generic lane connection residue (physical table / manifest / preset seed / evidence / checksum / projection) not yet connected.
 
 PR#460 完了済み:
 - access_port / response_port / hook_port records / policies / policy_steps の seed binding (全 7 consumer bundle)
@@ -16,16 +16,17 @@ PR#460 完了済み:
 - auth/external credential management topology projection
 
 残作業 (各 bundle consumer todo で管理):
+注: consumer bundle の残作業は provider-specific runtime / client / handler 新設ではなく、既存 external_port_runtime / generic operation_key lane / UIBuilder preset ecosystem / CRUD preset seed（docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql 派生）を前提にした seed・wiring・projection・evidence 接続のみ。
 - physical table (bundle-specific: email_draft / approval_request / export_job / webhook_intake_snapshot 等)
 - physical table manifest binding
 - client/UI consumer (file_storage / email / audit_approval / export_sftp):
-  - UI Builder form preset / portTargetRef action wiring
-  - runtime execution: portTargetRef → port record 解決 → generic operation_key policy steps
+  - UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring
+  - generic lane 接続: portTargetRef → port record 解決 → generic operation_key policy steps
 - hook consumer (stripe / webhook_inbox):
-  - hook_port receive wiring / hook_path / route_key resolution / scheduler enqueue boundary
-  - runtime execution: hook_port_receive → port record 解決 → generic operation_key policy steps → scheduler_enqueue_event
+  - generic hook lane seed/wiring: hook_path / route_key resolution / scheduler enqueue boundary（Stripe / webhook 専用 handler/runtime 新設なし）
+  - generic lane 接続: hook_port_receive → port record 解決 → generic operation_key policy steps → scheduler_enqueue_event
 - scheduler consumer (job_scheduler):
-  - built-in RuntimeTimelineScheduler independence guard (port substrate 非依存)
+  - built-in RuntimeTimelineScheduler 本体・in-memory queue は変更しない（port substrate 非依存）; 残作業は guard/evidence/projection/外部 scheduler hook intake のみ
   - external scheduler hook intake のみ port substrate を使用する
 - evidence / runtime_event_log
 - checksum / manifest (file / sftp 系)
@@ -144,12 +145,12 @@ consumer dispatch path は `port_target_ref` lane のみ。PR#458/#459 で `cano
 ### audit_approval_bundle
 
 - [x] response_port (provider_kind: notification) binding を seed / DB record として追加した (credential_kind: external, reference_key: vault:ref:audit_approval_notification_credential).
-- [ ] approval → response_port 解決 → 通知送信の経路実装は未着手.
+- [ ] approval → response_port 解決 → generic response_port connect の evidence/projection 接続は未着手（provider-specific notification client 新設なし）.
 
 ### export_sftp_bundle
 
 - [x] response_port (provider_kind: sftp) binding を seed / DB record として追加した (credential_kind: external, reference_key: vault:ref:export_sftp_credential).
-- [ ] export_job → response_port 解決 → SFTP transfer の経路実装は未着手 (SFTP client hardcode は禁止; checksum 境界は port substrate と独立すること).
+- [ ] export_job → response_port 解決 → generic response_port connect の evidence/projection 接続は未着手（SFTP provider-specific client 新設なし; checksum 境界は port substrate と独立すること）.
 
 ### credential requirement substrate
 
