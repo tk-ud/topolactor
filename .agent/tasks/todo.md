@@ -11,6 +11,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
+| `sql-attention-system-ci` | Issue#83 SQL Attention / Registry Continuity 運用CI | not_started | 1 | `product.dynamic_support_nocode_loop` / `product.core_runtime_route` | `docs/design/topology-recommendation-ci-runtime.md` |
 | `projection-admin-runtime-ssot-alignment` | Issue#464 投影/admin/runtime SSOT不整合収束 | not_started | 1 | `product.admin_topology_authoring` / `product.projection_and_output_lanes` / `product.core_runtime_route` / `product.external_port_substrate` | `docs/design/runtime-orchestration-ssot.yaml` |
 | `external-port-substrate-implementation` | external_port_substrate / 7 consumer bundles + credential_requirement substrate 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
@@ -54,6 +55,98 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 実装 bundle ではなく、統合 UX の手動受入 / hand-debug evidence gap。runtime dispatch loop、ProjectionShell SSE refresh、recommend child island、SQL Attention feedback projection、admin CSV/JSON import、admin authoring routes は実装済みとして扱い、未実装扱いに戻さない。
 
 - [ ] `product.dynamic_support_nocode_loop` の combined UX を、authoring guidance → SQL Attention feedback → M6 admin loop の通し手動受入 / hand-debug で確認する
+
+---
+
+## Bundle `sql-attention-system-ci`
+
+**Status:** not_started
+**Issue:** https://github.com/tk-ud/topolactor/issues/83
+**Roadmap/status SSOT:** `product.dynamic_support_nocode_loop` / `product.core_runtime_route`
+**SSOT:** `docs/design/topology-recommendation-ci-runtime.md`
+
+問題点:
+Issue#83 / Issue#464 の Issue search/comments で拾われる SQL Attention / CI Attention 論点を canonical TODO carry-over に変換する。Topology Vector Runtime / SQL Attention は registry / hub / relation / context_event / recommendation current / evidence_json をまたぐ意味連続性を持つが、運用中にその連続性を System Operation CI として継続検査する Bundle が `.agent/tasks/todo.md` に残っていなかった。これは投影/admin dispatch bundle ではなく、SQL Attention / Registry Continuity の運用CI Bundle として独立管理する。
+
+目的:
+runtime policy を `function_parameters` 由来の可変運用方針として扱い、System Operation CI は hardcode 可能なシステム不変条件検査として分離する。event-driven inspection と cron-triggered inspection により、append-only log / materialized current / evidence_json / registry vector continuity / hub attention continuity を検査し、silent fallback / LogError-only を許容せず、fail-close / ExplicitError / reportable diagnostics へ接続する。
+
+実装方針:
+- [ ] SQL Attention / Registry Continuity の System Operation CI 責務境界を SSOT に明記し、runtime policy / recommendation behavior / user-facing threshold と混同しない。
+- [ ] registry 作成・更新・promote、context_event append、hub attention current update、context_hub_feedback_event append、feedback weight update、topology edit log append 後の event-driven inspection を定義・実装する。
+- [ ] cron trigger 予定で registry 連続性探索、孤立 registry / 孤立 hub 検出、hub attention 断絶検査、current rebuildability、evidence_json integrity、append-only log と materialized current 整合、optional/future/implemented 状態ドリフトを検査する。
+- [ ] SQL Attention continuity は推薦精度ではなく、input event → context_event append → transition key evidence → hub attention current → evidence_json → recommendation/diagnostic result の意味連続性として検査する。
+- [ ] current を source of truth 化せず、append-only log から再構築可能であることを system CI の検査対象にする。
+- [ ] fail-close 対象と reportable GAP / TODO 対象を分け、診断結果を system operation CI result / admin operator diagnostics / `.agent/reports/` / 将来 GitHub Actions・cron job・background worker 接続へ流せる形にする。
+- [ ] 必要な backend system CI service / diagnostic result / tests / `.agent/tests/*` / workflow connection を Bundle 単位で追加する。
+
+対応資料:
+- `AGENTS.md`
+- `.agent/rules/rule.md`
+- `.agent/protocols/completion.md`
+- `.agent/protocols/reports-and-todos.md`
+- `.agent/tasks/todo.md`
+- `README.md`
+- `docs/design/context-route-recommendation.md`
+- `docs/design/context-route-recommendation.yaml`
+- `docs/design/topology-recommendation-ci-runtime.md`
+- `docs/registrar-admin-ui-specification.md`
+- `docs/framework-policy.yaml`
+- `docs/file-structure.yaml`
+- `.agent/reports/2026-05-19-ssot-implementation-drift-audit.md`
+- `.agent/reports/2026-05-19-claude-boundary-audit-reaudit.md`
+
+対象ファイル名:
+- `docs/design/topology-recommendation-ci-runtime.md`
+- `docs/design/context-route-recommendation.md`
+- `docs/design/context-route-recommendation.yaml`
+- `docs/framework-policy.yaml`
+- `backend/runtime/ContextRouteRecommendationResolver.cs`
+- `backend/runtime/TopologyVectorRuntime.cs`
+- `backend/repository/ContextRouteRepository.cs`
+- `backend/repository/NpgsqlContextRouteRepository.cs`
+- `backend/schema/*`
+- `db/context_route_tables.sql`
+- `db/topology_tables.sql`
+- `db/seed_empty.sql`
+- `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs`
+- `backend/tests/*`
+- `.agent/tests/check-runtime-semantics.sh`
+- `.agent/tests/check-structure.sh`
+- `.github/workflows/*`
+- `.agent/tasks/todo.md`
+- `.agent/reports/*`
+
+対象関数名またはruntime境界名:
+- `ContextRouteRecommendationResolver.ResolveAsync`
+- `AppendContextEventAsync`
+- `RunTopologyVectorRuntimeExtensionAsync`
+- `TopologyVectorRuntime.ValidateRegistryVectorAsync`
+- `TopologyVectorRuntime.ComputeSparseCosineSimilarity`
+- `FindRegistryVectorNeighborsAsync`
+- `LoadHubAttentionCurrentAsync`
+- `UpsertHubAttentionCurrentAsync`
+- `RecalculateHubAttentionRanksAsync`
+- `ApplyFeedbackWeightUpdateAsync`
+- `ExtractTransitionKeyEvidenceAsync`
+- `BuildTopologyMlpFeaturesAsync`
+- `RunSystemOperationCiAsync`
+- `InspectSqlAttentionContinuityAsync`
+- `InspectRegistryContinuityAsync`
+- `InspectHubAttentionContinuityAsync`
+- `InspectEvidenceIntegrityAsync`
+- `InspectCurrentRebuildabilityAsync`
+- `RunEventDrivenTopologyInspectionAsync`
+- `RunCronTopologyContinuityInspectionAsync`
+
+受入条件:
+- [ ] SQL Attention / Registry Continuity の System Operation CI が SSOT に定義されている。
+- [ ] System CI と runtime policy の境界が明確で、CI 検査ルールの hardcode が許可範囲として明記されている。
+- [ ] event-driven inspection と cron-triggered inspection の2系統が定義・実装されている。
+- [ ] registry continuity / hub attention continuity / evidence_json integrity / current rebuildability / append-only log vs materialized current 整合が検査されている。
+- [ ] current が source of truth 化していないことを検査できる。
+- [ ] silent fallback / LogError-only を許容せず、fail-close / ExplicitError / reportable diagnostic の扱いが区別されている。
+- [ ] 必要な backend tests / `.agent/tests/*` / workflow or cron connection が追加・更新され、PR サマリに pass/fail/not executed と残TODOが明記されている。
 
 ---
 
