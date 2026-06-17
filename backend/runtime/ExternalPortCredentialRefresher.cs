@@ -1,4 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+
+using Topolactor.Schema;
 
 namespace Topolactor.Runtime;
 
@@ -269,6 +273,14 @@ public sealed class ExternalPortExecutionContext
 
     public bool SchedulerEventEnqueued { get; set; }
 
+    public Guid? ExportJobId { get; set; }
+
+    public string? ChecksumValue { get; set; }
+
+    public Guid? FileArtifactId { get; set; }
+
+    public string? AuthorizationKey { get; set; }
+
     public IReadOnlyList<string> ExecutedOperationKeys => _executedOperationKeys;
 
     public void MarkExecuted(string operationKey) => _executedOperationKeys.Add(operationKey);
@@ -311,6 +323,16 @@ public interface IExternalPortPolicyRepository
 public interface IExternalPortCredentialReferenceResolver
 {
     Task<ExternalCredentialVaultRecord?> ResolveCredentialReferenceAsync(ExternalPortRecord portRecord, CancellationToken ct = default);
+}
+
+public interface IFileStorageRepository
+{
+    Task<Guid> RecordExportJobAsync(RecordExportJobCommand command, CancellationToken ct = default);
+    Task UpdateExportJobStatusAsync(Guid exportJobId, string status, string? failureCode = null, CancellationToken ct = default);
+    Task<FileChecksumRecord> RecordChecksumAsync(RecordChecksumCommand command, CancellationToken ct = default);
+    Task<FileArtifactRecord> RecordFileArtifactAsync(RecordFileArtifactCommand command, CancellationToken ct = default);
+    Task<ExportManifestRecord> WriteManifestRecordAsync(WriteManifestCommand command, CancellationToken ct = default);
+    Task<SignedDownloadAuthorizationRecord> AuthorizeSignedDownloadAsync(AuthorizeSignedDownloadCommand command, CancellationToken ct = default);
 }
 
 public sealed class ExternalPortResolver : IExternalPortResolver
@@ -362,7 +384,12 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         "write_encrypted_credential_payload",
         "update_token_hash",
         "update_expires_at_and_version",
-        "release_refresh_lease"
+        "release_refresh_lease",
+        "record_export_job",
+        "compute_checksum",
+        "record_file_artifact",
+        "write_manifest_record",
+        "authorize_signed_download"
     };
 
     private readonly IReadOnlyDictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>> _registry;
@@ -370,7 +397,8 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
     public ExternalPortPolicyStepExecutor(
         IExternalPortHttpClient? httpClient = null,
         IExternalPortCredentialReferenceResolver? credentialReferenceResolver = null,
-        IExternalPortResolver? portResolver = null)
+        IExternalPortResolver? portResolver = null,
+        IFileStorageRepository? fileStorageRepository = null)
     {
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
         {
@@ -475,7 +503,137 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             },
             ["append_runtime_event_log"] = MarkOnly,
             ["capture_response"] = MarkOnly,
-            ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE")
+            ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE"),
+            ["record_export_job"] = async (step, context, ct) =>
+            {
+                if (fileStorageRepository is null)
+                {
+                    context.MarkExecuted(step.OperationKey);
+                    return;
+                }
+
+                var exportJobId = ExtractGuid(context.RequestPayload, "export_job_id") ?? Guid.NewGuid();
+                var idempotencyKey = ExtractString(context.RequestPayload, "idempotency_key") ?? exportJobId.ToString("N");
+                var portKind = context.PortRecord?.PortKind ?? context.PortKind ?? "access_port";
+                var requestedBy = ExtractString(context.RequestPayload, "requested_by") ?? "system";
+
+                var command = new RecordExportJobCommand(
+                    exportJobId,
+                    context.PortRecord?.PortId,
+                    portKind,
+                    requestedBy,
+                    DateTimeOffset.UtcNow,
+                    ExtractString(context.RequestPayload, "period"),
+                    ExtractString(context.RequestPayload, "target_scope"),
+                    ExtractString(context.RequestPayload, "export_format"),
+                    "in_progress",
+                    idempotencyKey);
+
+                context.ExportJobId = await fileStorageRepository.RecordExportJobAsync(command, ct);
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["compute_checksum"] = async (step, context, ct) =>
+            {
+                if (fileStorageRepository is null || context.ExportJobId is null)
+                {
+                    context.MarkExecuted(step.OperationKey);
+                    return;
+                }
+
+                var input = context.HttpResponse?.Body ?? context.ExportJobId.Value.ToString("N");
+                var checksumValue = ComputeSha256(input);
+                context.ChecksumValue = checksumValue;
+
+                await fileStorageRepository.RecordChecksumAsync(
+                    new RecordChecksumCommand(
+                        context.ExportJobId.Value,
+                        null,
+                        "sha256",
+                        checksumValue,
+                        DateTimeOffset.UtcNow,
+                        "verified"),
+                    ct);
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["record_file_artifact"] = async (step, context, ct) =>
+            {
+                if (fileStorageRepository is null || context.ExportJobId is null)
+                {
+                    context.MarkExecuted(step.OperationKey);
+                    return;
+                }
+
+                var fileName = ExtractString(context.RequestPayload, "file_name") ?? $"export_{context.ExportJobId:N}.dat";
+                var fileType = ExtractString(context.RequestPayload, "file_type") ?? "json";
+                // storage_ref is env-var reference identifier only, NOT plaintext storage URL/path
+                var storageRef = context.PortRecord?.ReferenceKey ?? "env:FILE_STORAGE_ENDPOINT_REF";
+
+                var artifact = await fileStorageRepository.RecordFileArtifactAsync(
+                    new RecordFileArtifactCommand(
+                        context.ExportJobId.Value,
+                        fileName,
+                        fileType,
+                        storageRef,
+                        null,
+                        context.ChecksumValue),
+                    ct);
+                context.FileArtifactId = artifact.FileArtifactId;
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["write_manifest_record"] = async (step, context, ct) =>
+            {
+                if (fileStorageRepository is null || context.ExportJobId is null)
+                {
+                    context.MarkExecuted(step.OperationKey);
+                    return;
+                }
+
+                var fileArtifactIds = context.FileArtifactId.HasValue
+                    ? new[] { context.FileArtifactId.Value }
+                    : Array.Empty<Guid>();
+
+                await fileStorageRepository.WriteManifestRecordAsync(
+                    new WriteManifestCommand(
+                        context.ExportJobId.Value,
+                        "1.0",
+                        DateTimeOffset.UtcNow,
+                        ExtractString(context.RequestPayload, "requested_by") ?? "system",
+                        ExtractString(context.RequestPayload, "period"),
+                        ExtractString(context.RequestPayload, "export_format"),
+                        context.ChecksumValue,
+                        fileArtifactIds),
+                    ct);
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["authorize_signed_download"] = async (step, context, ct) =>
+            {
+                if (fileStorageRepository is null || context.FileArtifactId is null)
+                {
+                    context.MarkExecuted(step.OperationKey);
+                    return;
+                }
+
+                // authorization_key is a non-guessable reference identifier, NOT the actual signed URL
+                var authorizationKey = $"auth-ref:{context.FileArtifactId:N}:{Guid.NewGuid():N}";
+                var authorizedBy = ExtractString(context.RequestPayload, "requested_by") ?? "system";
+
+                var authorization = await fileStorageRepository.AuthorizeSignedDownloadAsync(
+                    new AuthorizeSignedDownloadCommand(
+                        context.FileArtifactId.Value,
+                        authorizedBy,
+                        DateTimeOffset.UtcNow,
+                        DateTimeOffset.UtcNow.AddHours(1),
+                        authorizationKey),
+                    ct);
+                context.AuthorizationKey = authorization.AuthorizationKey;
+                // OutputProp carries authorization_key reference only; actual signed URL is runtime-secret-store concern
+                context.OutputProp = JsonSerializer.Serialize(new
+                {
+                    authorization_key = authorization.AuthorizationKey,
+                    expires_at = authorization.ExpiresAt
+                });
+                context.MarkExecuted(step.OperationKey);
+            }
         };
     }
 
@@ -535,4 +693,26 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
     private static string? ReadConfig(IReadOnlyDictionary<string, string> config, string key) =>
         config.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+
+    private static string? ExtractString(JsonElement? payload, string key)
+    {
+        if (payload is null) return null;
+        if (payload.Value.TryGetProperty("dispatch_payload", out var dp) && dp.TryGetProperty(key, out var v1) && v1.ValueKind == JsonValueKind.String)
+            return v1.GetString();
+        if (payload.Value.TryGetProperty(key, out var v2) && v2.ValueKind == JsonValueKind.String)
+            return v2.GetString();
+        return null;
+    }
+
+    private static Guid? ExtractGuid(JsonElement? payload, string key)
+    {
+        var str = ExtractString(payload, key);
+        return str is not null && Guid.TryParse(str, out var id) ? id : null;
+    }
+
+    private static string ComputeSha256(string input)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return $"sha256:{Convert.ToHexString(bytes).ToLowerInvariant()}";
+    }
 }

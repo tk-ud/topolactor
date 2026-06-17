@@ -1943,6 +1943,64 @@ ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
         updated_at         = now();
 
 -- ---------------------------------------------------------------------------
+-- file_storage_bundle physical table catalog.
+-- Registers the 5 domain metadata tables for export_job / file_artifact /
+-- checksum / manifest / signed download authorization.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
+VALUES
+    ('topology.export_jobs',                   'topology', 'file_storage_bundle', true),
+    ('topology.file_artifacts',                'topology', 'file_storage_bundle', true),
+    ('topology.file_checksum_records',         'topology', 'file_storage_bundle', true),
+    ('topology.export_manifests',              'topology', 'file_storage_bundle', true),
+    ('topology.signed_download_authorizations','topology', 'file_storage_bundle', true)
+ON CONFLICT (table_ref) DO UPDATE
+    SET schema_name = EXCLUDED.schema_name,
+        category    = EXCLUDED.category,
+        active      = EXCLUDED.active;
+
+-- Hub for file_storage bundle dispatch space.
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000000a2', '{"description":"file_storage_bundle","system":true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+-- topology_manifests for file_storage export_job dispatch boundary (manifest 093).
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+VALUES (
+    '00000000-0000-0000-0000-000000000093',
+    '00000000-0000-0000-0000-0000000000a2',
+    'file_storage.export_job.dispatch.projection',
+    'active',
+    '{"manifest_id":"00000000-0000-0000-0000-000000000093","source":"file-storage-bundle-export-job-dispatch"}'::jsonb
+)
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET manifest_key = EXCLUDED.manifest_key,
+        status       = EXCLUDED.status,
+        updated_at   = now();
+
+-- physical_table_manifest_bindings for file_storage domain tables.
+INSERT INTO topology.physical_table_manifest_bindings
+    (physical_table_id, topology_manifest_id, active, binding_evidence_json)
+SELECT pt.physical_table_id,
+       '00000000-0000-0000-0000-000000000093'::uuid,
+       true,
+       jsonb_build_object(
+           'bundle', 'file_storage_bundle',
+           'source', 'file-storage-bundle-export-job-dispatch',
+           'manifestKey', 'file_storage.export_job.dispatch.projection')
+FROM topology.physical_tables pt
+WHERE pt.table_ref IN (
+    'topology.export_jobs',
+    'topology.file_artifacts',
+    'topology.file_checksum_records',
+    'topology.export_manifests',
+    'topology.signed_download_authorizations')
+ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
+    SET active                = true,
+        binding_evidence_json = EXCLUDED.binding_evidence_json,
+        updated_at            = now();
+
+-- ---------------------------------------------------------------------------
 -- external_port_substrate generic policy seed.
 -- No provider credential plaintext is stored here; provider_kind remains data
 -- classification and runtime executes by operation_key registry dispatch.
@@ -2110,4 +2168,24 @@ VALUES
     ('00000000-0000-0000-0000-000000000471', '00000000-0000-0000-0000-0000000000eb', 1, 'resolve_port_record',          '{}', true),
     ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-0000000000eb', 2, 'resolve_credential_reference', '{}', true),
     ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{}', true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+
+-- file_storage_bundle domain operation steps (6-10).
+-- Steps 1-5 are HTTP communication (seeded above in consumer bundle binding).
+-- Steps 6-10 are domain record operations executed post-HTTP:
+--   record_export_job → compute_checksum → record_file_artifact → write_manifest_record → authorize_signed_download
+INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
+VALUES
+    -- file_storage_bundle access_port domain steps
+    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 6,  'record_export_job',        '{}', true),
+    ('00000000-0000-0000-0000-000000000407', '00000000-0000-0000-0000-0000000000e4', 7,  'compute_checksum',         '{}', true),
+    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 8,  'record_file_artifact',     '{}', true),
+    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 9,  'write_manifest_record',    '{}', true),
+    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 10, 'authorize_signed_download','{}', true),
+    -- file_storage_bundle response_port domain steps
+    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 6,  'record_export_job',        '{}', true),
+    ('00000000-0000-0000-0000-000000000417', '00000000-0000-0000-0000-0000000000e5', 7,  'compute_checksum',         '{}', true),
+    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 8,  'record_file_artifact',     '{}', true),
+    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 9,  'write_manifest_record',    '{}', true),
+    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 10, 'authorize_signed_download','{}', true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;

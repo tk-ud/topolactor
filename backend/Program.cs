@@ -107,8 +107,14 @@ builder.Services.AddSingleton<ISystemCiDiagnosticRunner>(sp =>
     sp.GetRequiredService<SystemOperationCiRuntime>());
 builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
 builder.Services.AddSingleton<IExternalPortResolver, ExternalPortResolver>();
+builder.Services.AddSingleton<IFileStorageRepository>(sp =>
+    new NpgsqlFileStorageRepository(
+        sp.GetRequiredService<ILogger<NpgsqlFileStorageRepository>>(),
+        connectionString));
 builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
-    new ExternalPortPolicyStepExecutor(portResolver: sp.GetRequiredService<IExternalPortResolver>()));
+    new ExternalPortPolicyStepExecutor(
+        portResolver: sp.GetRequiredService<IExternalPortResolver>(),
+        fileStorageRepository: sp.GetRequiredService<IFileStorageRepository>()));
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>();
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
