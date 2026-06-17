@@ -172,7 +172,7 @@ runtime_bundle_job_scheduler_ssot:
       topolactor 内蔵 scheduler は port substrate に依存しない。
       外部スケジューラー provider との access_port / hook_port 接続のみが port substrate の consumer となる。
       seed binding (built-in scheduler: credential_kind=none / 外部スケジューラー: access_port + hook_port) は PR#460 で完了済み。
-      残作業は job queue physical table / cron trigger wiring / evidence 接続であり、
+      残作業は scheduler evidence / job status projection surface / cron trigger wiring 接続であり (DB queue 新設ではない。runtime queue authority は既存 RuntimeTimelineScheduler)、
       外部スケジューラー provider-specific client を追加しない。
       built-in scheduler 本体 (runtime_timeline_scheduler) は port substrate とは独立している。
     seed_binding_completion: pr460
@@ -181,11 +181,11 @@ runtime_bundle_job_scheduler_ssot:
         topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に依存しない。
         内蔵 scheduler path が port record を参照することは禁止。
     remaining_scope:
-      physical_table:
-        - job_queue schema
-      portTargetRef_action_wiring:
-        - cron trigger driver loop 実装
-        - hook trigger intake wiring (built-in scheduler から port substrate への接続ではなく、外部 scheduler provider hook 受信)
+      scheduler_evidence_projection:
+        - scheduler evidence / job status projection surface (DB queue 新設ではない; runtime queue authority は既存 RuntimeTimelineScheduler)
+      cron_hook_trigger_wiring:
+        - cron trigger driver loop 実装 (built-in scheduler は port substrate に依存しない)
+        - external scheduler hook intake wiring のみ port substrate を使用する (built-in scheduler から port substrate への接続は禁止)
       evidence_and_runtime_event_log:
         - trigger_received / scheduler_enqueued / execution_started / execution_completed / execution_failed
       projection_response:
@@ -201,13 +201,17 @@ runtime_bundle_job_scheduler_ssot:
 
   implementation_boundary_requirements:
     items:
-      - job_queue_schema_design
+      - scheduler_evidence_job_status_projection_surface_design
       - cron_trigger_driver_loop_design
       - hook_trigger_intake_design
       - client_trigger_intake_design
       - collision_control_implementation_design
       - scheduler_overflow_policy_implementation
       - job_execution_log_schema_design
+    note: >-
+      scheduler_evidence_job_status_projection_surface_design は DB queue 新設ではない。
+      runtime_event_log / evidence / user-contextual job status projection の read source として設計する。
+      RuntimeTimelineScheduler の in-memory queue は変更しない。
     policy: >-
       実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
       runtime_orchestration_ssotのscheduler_contractとの整合を維持する。

@@ -173,7 +173,7 @@ extended_runtime_bundle_registry_ssot:
         description: >-
           外部連携 Bundle 共通基盤。access_port / response_port / hook_port /
           credential_requirement を physical table + seed projection +
-          admin role write policy で定義する。8 Bundle 共通基盤。
+          admin role write policy で定義する。7 consumer bundles + credential_requirement substrate common foundation。secret_credential_bundle は standalone bundle ではなく credential_requirement substrate に再分類済み。
         trigger_kind: admin_role_port_record_write_via_validate_preview_apply
         requires_separate_ssot: true
         owner: external-port-substrate-ssot

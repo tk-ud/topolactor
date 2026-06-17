@@ -170,8 +170,8 @@ runtime_bundle_stripe_ssot:
         - payment_state schema
       physical_table_manifest_binding:
         - stripe manifest / screen_data_shape binding
-      portTargetRef_action_wiring:
-        - hook_path → port record resolution → scheduler event dispatch
+      hook_port_receive_wiring:
+        - hook_path / route_key resolution → port record resolution → scheduler enqueue boundary (hook_port_receive → scheduler_enqueue_event → external_port_runtime)
       evidence_and_runtime_event_log:
         - webhook_received / verification_success / verification_failure / payment_state_projected
       projection_response:
