@@ -98,6 +98,7 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 ### job_scheduler_bundle
 
 - [x] access_port (provider_kind: external_scheduler, credential_kind: none) binding を seed / DB record として追加した (built-in scheduler path は port substrate に依存しない).
+- [x] hook_port (provider_kind: built_in_scheduler, credential_kind: none, route_key: job_scheduler) binding を seed / DB record として追加した。policy steps: resolve_port_record → enqueue_scheduler_event → append_runtime_event_log (credential_kind=none のため resolve_credential_reference スキップ).
 - [ ] built-in scheduler path が port substrate に依存しないことの test / guard は未着手.
 
 ### audit_approval_bundle
@@ -109,11 +110,6 @@ partial / minimal primitive skeleton; auth/external credential management topolo
 
 - [x] response_port (provider_kind: sftp) binding を seed / DB record として追加した (credential_kind: external, reference_key: vault:ref:export_sftp_credential).
 - [ ] export_job → response_port 解決 → SFTP transfer の経路実装は未着手 (SFTP client hardcode は禁止; checksum 境界は port substrate と独立すること).
-
-### credential requirement substrate
-
-- standalone bundle として実装しない。
-- `credential_requirement` seed / projection / port record attachment として扱う。
 
 ### credential requirement substrate
 

@@ -90,6 +90,38 @@ for bundle in file_storage_bundle email_bundle stripe_bundle webhook_inbox_bundl
   rg -n "'${bundle}'" db/seed_empty.sql >/dev/null || fail "consumer bundle seed binding missing: ${bundle}"
 done
 
+# Guard: per-bundle required port_kind rows must be present in seed.
+python3 - <<'PY'
+from pathlib import Path
+import re
+seed = Path('db/seed_empty.sql').read_text()
+required = {
+    'file_storage_bundle':   ['access_port', 'response_port'],
+    'email_bundle':          ['response_port'],
+    'stripe_bundle':         ['hook_port'],
+    'webhook_inbox_bundle':  ['hook_port'],
+    'job_scheduler_bundle':  ['access_port', 'hook_port'],
+    'audit_approval_bundle': ['response_port'],
+    'export_sftp_bundle':    ['response_port'],
+}
+tables = {
+    'access_port':  'external_access_ports',
+    'response_port': 'external_response_ports',
+    'hook_port':    'external_hook_ports',
+}
+errors = []
+for bundle, port_kinds in required.items():
+    for pk in port_kinds:
+        table = tables[pk]
+        block_match = re.search(
+            rf"INSERT INTO topology\.{re.escape(table)}[^;]*?'{re.escape(bundle)}'[^;]*?;",
+            seed, re.S)
+        if not block_match:
+            errors.append(f'{bundle} missing {pk} row in topology.{table}')
+if errors:
+    raise SystemExit('consumer bundle port_kind guard failed:\n' + '\n'.join(errors))
+PY
+
 # Guard: consumer bundle seed rows must not contain plaintext credential values.
 if rg -n "vault:[^:r]|sk_live_|AKIA[0-9A-Z]{16}|secret_access_key|smtp_password|sftp_password" db/seed_empty.sql; then
   fail "plaintext credential value found in consumer bundle seed rows"

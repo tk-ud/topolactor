@@ -2024,6 +2024,13 @@ VALUES
     ('00000000-0000-0000-0000-000000000f06', 'job_scheduler_bundle', 'external_scheduler', 'env:JOB_SCHEDULER_ENDPOINT_REF', 'none', NULL, true)
 ON CONFLICT (access_port_id) DO NOTHING;
 
+-- job_scheduler_bundle: built-in scheduler hook_port (receives internal scheduler callbacks; credential_kind = none)
+INSERT INTO topology.external_hook_ports
+    (hook_port_id, required_by_bundle, provider_kind, hook_path, header_key, route_key, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f09', 'job_scheduler_bundle', 'built_in_scheduler', '/hooks/job_scheduler', 'x-scheduler-signature', 'job_scheduler', 'none', NULL, true)
+ON CONFLICT (hook_port_id) DO NOTHING;
+
 -- audit_approval_bundle: notification response_port
 INSERT INTO topology.external_response_ports
     (response_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
@@ -2047,6 +2054,7 @@ VALUES
     ('00000000-0000-0000-0000-0000000000e7', 'stripe_hook_port_scheduler_boundary',   'hook_port',     'stripe_bundle',         true),
     ('00000000-0000-0000-0000-0000000000e8', 'webhook_inbox_hook_port_scheduler',     'hook_port',     'webhook_inbox_bundle',  true),
     ('00000000-0000-0000-0000-0000000000e9', 'job_scheduler_access_port_generic',     'access_port',   'job_scheduler_bundle',  true),
+    ('00000000-0000-0000-0000-0000000000ec', 'job_scheduler_hook_port_enqueue',       'hook_port',     'job_scheduler_bundle',  true),
     ('00000000-0000-0000-0000-0000000000ea', 'audit_approval_response_port_generic',  'response_port', 'audit_approval_bundle', true),
     ('00000000-0000-0000-0000-0000000000eb', 'export_sftp_response_port_generic',     'response_port', 'export_sftp_bundle',    true)
 ON CONFLICT (policy_id) DO NOTHING;
@@ -2088,6 +2096,10 @@ VALUES
     ('00000000-0000-0000-0000-000000000451', '00000000-0000-0000-0000-0000000000e9', 1, 'resolve_port_record',          '{}', true),
     ('00000000-0000-0000-0000-000000000452', '00000000-0000-0000-0000-0000000000e9', 2, 'resolve_credential_reference', '{}', true),
     ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e9', 3, 'append_runtime_event_log',     '{}', true),
+    -- job_scheduler_bundle hook_port (credential_kind = none; resolve_credential_reference skipped)
+    ('00000000-0000-0000-0000-000000000481', '00000000-0000-0000-0000-0000000000ec', 1, 'resolve_port_record',          '{}', true),
+    ('00000000-0000-0000-0000-000000000482', '00000000-0000-0000-0000-0000000000ec', 2, 'enqueue_scheduler_event',      '{}', true),
+    ('00000000-0000-0000-0000-000000000483', '00000000-0000-0000-0000-0000000000ec', 3, 'append_runtime_event_log',     '{}', true),
     -- audit_approval_bundle response_port
     ('00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-0000000000ea', 1, 'resolve_port_record',          '{}', true),
     ('00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-0000000000ea', 2, 'resolve_credential_reference', '{}', true),
