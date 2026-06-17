@@ -20,7 +20,7 @@
 | `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
 | `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
-注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (file_storage / email / audit_approval / export_sftp) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。
+注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (file_storage / email / audit_approval / export_sftp) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
 ---
 
@@ -76,7 +76,7 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 - [x] DB repository atomic encrypted credential update を実装する
 - [x] `external-port-canonical-physical-binding-execution` bundle increment: physical table catalog / manifest binding seed / `LoadPortRecordByCanonicalBindingAsync` (admin projection validation only) を実装した。PR#458/#459 で追加された `canonical_binding_*` consumer dispatch branch は post-merge cleanup で削除済み。consumer path は `port_target_ref` lane のみ。
 - [x] consumer bundle seed binding: file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp の port records / policies / policy_steps を seed で追加した (runtime新設なし、port_target_ref lane 既存利用)。
-- [ ] consumer bundle 経路実装 (export_job → port record → generic connect 等) は各 bundle consumer todo で管理する。
+- [ ] consumer bundle の既存 generic lane への接続整理 (export_job → port record 解決 → generic connect 等) は各 bundle consumer todo で管理する。
 
 対応資料:
 - `docs/design/external-port-substrate-ssot.yaml`
@@ -155,8 +155,9 @@ evidence / runtime_event_log 実装済み:
 - [x] frontend Test 4 を unit test scope に明確化 (DB 証明は backend integration test)
 
 残 todo:
-- [ ] UI Builder form preset / portTargetRef action wiring (export_job → access/response port connect)
+- [ ] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring (export_job → access/response port connect)
 - [ ] projection response: signed download authorization / file artifact projection
+- [ ] record ↔ file_artifact attachment binding surface: topology.record_file_attachment_bindings 追加 / topology.physical_tables・seed manifest・physical_table_manifest_bindings 登録 / bind・list・unbind は execute_db_function 経由 topology.fs_* DB function 実装（standalone attachments table 新設なし・既存 file_artifacts を artifact 正本として維持; signed URL / storage path / credential は DB / SSOT / seed / projection / runtime_event_log に出さない）
 
 対応資料:
 - `docs/design/runtime-bundle-file-storage-ssot.yaml`
@@ -177,7 +178,7 @@ PR#460 完了済み: response_port (smtp) seed binding / credential_requirement 
 残 todo:
 - [ ] email_draft / approval_record / delivery_evidence physical table 接続実装
 - [ ] physical table manifest binding (email manifest / screen_data_shape)
-- [ ] UI Builder form preset / portTargetRef action wiring (UI approval → response_port connect)
+- [ ] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring (UI approval → response_port connect)
 - [ ] evidence / runtime_event_log: dispatch_initiated / send_success / send_failure / approval_recorded
 - [ ] projection response: delivery status / approval evidence projection
 
@@ -199,7 +200,7 @@ PR#460 完了済み: hook_port (stripe) seed binding / credential_requirement / 
 残 todo:
 - [ ] webhook_intake_snapshot / verification_evidence / payment_state physical table 接続実装
 - [ ] physical table manifest binding (stripe manifest / screen_data_shape)
-- [ ] hook_port receive wiring: hook_path / route_key resolution → port record resolution → scheduler enqueue boundary
+- [ ] generic hook lane seed/wiring: hook_path / route_key resolution → port record resolution → scheduler enqueue boundary（Stripe 専用 handler/runtime 新設なし）
 - [ ] evidence / runtime_event_log: webhook_received / verification_success / verification_failure / payment_state_projected
 - [ ] projection response: payment state / verification evidence projection
 
@@ -221,7 +222,7 @@ PR#460 完了済み: hook_port (generic_webhook) seed binding / credential_requi
 残 todo:
 - [ ] webhook_intake_snapshot / signature_verification_evidence physical table 接続実装
 - [ ] physical table manifest binding (webhook_inbox manifest / screen_data_shape)
-- [ ] hook_port receive wiring: hook_path / route_key resolution → scheduler enqueue boundary (hook_port_receive → scheduler_enqueue_event → external_port_runtime)
+- [ ] generic hook lane seed/wiring: hook_path / route_key resolution → scheduler enqueue boundary（webhook 専用 handler/runtime 新設なし; hook_port_receive → scheduler_enqueue_event → external_port_runtime）
 - [ ] evidence / runtime_event_log: webhook_received / signature_verification_success / signature_verification_failure / intake_snapshot_created / scheduler_enqueued
 - [ ] projection response: intake status / verification evidence projection
 
@@ -244,7 +245,7 @@ topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に�
 
 残 todo:
 - [ ] scheduler evidence / job status projection surface 接続実装 (DB queue 新設ではない。runtime queue authority は既存 RuntimeTimelineScheduler)
-- [ ] cron trigger driver loop 実装 (built-in scheduler は port substrate に依存しないこと)
+- [ ] cron trigger boundary 接続整理・evidence/projection 接続 (RuntimeTimelineScheduler 本体・in-memory queue は変更しない; built-in scheduler は port substrate に依存しないこと)
 - [ ] hook trigger intake wiring (外部スケジューラー hook のみ port substrate 使用)
 - [ ] evidence / runtime_event_log: trigger_received / scheduler_enqueued / execution_started / execution_completed / execution_failed
 - [ ] projection response: job status projection
@@ -269,7 +270,7 @@ PR#460 完了済み: response_port (notification) seed binding / credential_requ
 残 todo:
 - [ ] approval_request / approval_evidence / notification_evidence physical table 接続実装
 - [ ] physical table manifest binding (audit_approval manifest / screen_data_shape)
-- [ ] UI Builder form preset / portTargetRef action wiring (approval → response_port connect)
+- [ ] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring (approval → response_port connect)
 - [ ] evidence / runtime_event_log: approval_requested / approval_reviewed / approval_granted / approval_rejected
 - [ ] projection response: approval status / audit evidence projection
 
@@ -294,7 +295,7 @@ PR#460 完了済み: response_port (sftp) seed binding / credential_requirement 
 - [ ] physical table manifest binding (export_sftp manifest / screen_data_shape)
 - [ ] checksum 転送前後の検証境界実装 (port substrate と独立)
 - [ ] manifest 確認境界実装
-- [ ] portTargetRef action wiring: export_job → response_port 解決 → SFTP transfer
+- [ ] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring: export_job → response_port 解決 → generic response_port connect（SFTP provider-specific client 新設なし）/ evidence projection
 - [ ] evidence / runtime_event_log: transfer_initiated / transfer_completed / transfer_failed / checksum_mismatch
 - [ ] projection response: transfer status projection
 
