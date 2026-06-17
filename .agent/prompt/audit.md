@@ -60,6 +60,9 @@ Worktype is `audit`, including any of:
   - reusable abstraction usage:
   - new route/island/frontend API necessity:
   - SSOT update classification:
+  - data_driven_projection_gate_judgment (when projection/dispatch/SSE/mutation surfaces touched):
+  - admin_authoring_completion_gate_judgment (when admin/Contents/UIEvents/wiring surfaces touched):
+  - external_integration_completion_gate_judgment (when external port bundle surfaces touched):
 - problem
 - purpose
 - improvement_policy
