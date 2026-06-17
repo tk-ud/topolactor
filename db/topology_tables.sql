@@ -560,6 +560,7 @@ CREATE TABLE IF NOT EXISTS topology.file_artifacts (
                                    CHECK (file_type IN ('pdf', 'csv', 'json', 'zip', 'receipt_image', 'manifest_json')),
     storage_ref        TEXT        NOT NULL,
     byte_size          BIGINT,
+    checksum_value     TEXT        NOT NULL,
     checksum_record_id UUID,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -575,7 +576,7 @@ COMMENT ON TABLE topology.file_artifacts IS
 CREATE TABLE IF NOT EXISTS topology.file_checksum_records (
     checksum_record_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     export_job_id       UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
-    file_artifact_id    UUID,
+    file_artifact_id    UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
     algorithm           TEXT        NOT NULL DEFAULT 'sha256',
     checksum_value      TEXT        NOT NULL,
     verified_at         TIMESTAMPTZ NOT NULL DEFAULT now(),

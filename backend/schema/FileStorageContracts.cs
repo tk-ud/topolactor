@@ -28,7 +28,7 @@ public sealed record FileArtifactRecord(
 public sealed record FileChecksumRecord(
     Guid ChecksumRecordId,
     Guid ExportJobId,
-    Guid? FileArtifactId,
+    Guid FileArtifactId,
     string Algorithm,
     string ChecksumValue,
     DateTimeOffset VerifiedAt,
@@ -68,7 +68,7 @@ public sealed record RecordExportJobCommand(
 
 public sealed record RecordChecksumCommand(
     Guid ExportJobId,
-    Guid? FileArtifactId,
+    Guid FileArtifactId,
     string Algorithm,
     string ChecksumValue,
     DateTimeOffset VerifiedAt,
@@ -80,7 +80,7 @@ public sealed record RecordFileArtifactCommand(
     string FileType,
     string StorageRef,
     long? ByteSize,
-    string? ChecksumValue);
+    string ChecksumValue);
 
 public sealed record WriteManifestCommand(
     Guid ExportJobId,

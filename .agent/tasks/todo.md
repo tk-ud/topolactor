@@ -122,14 +122,22 @@ SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各
 **SSOT:** `docs/design/runtime-bundle-file-storage-ssot.yaml`
 
 PR#460 完了済み: access_port / response_port seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
-残作業は physical table / manifest / checksum / evidence / projection 接続。provider-specific client / runtime は追加しない。
+PR#463 で実装済み: physical table / manifest binding / checksum coupling / operation_key executor handlers / backend+frontend tests。
+provider-specific client / runtime は追加しない。
 既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
+実装済み:
+- [x] export_job / file_artifact / checksum_record / manifest / signed_download_authorizations physical table 接続実装 (`db/topology_tables.sql`)
+- [x] physical table manifest binding (file_storage manifest / physical_table_manifest_bindings) (`db/seed_empty.sql`)
+- [x] ExternalPortPolicyStepExecutor に record_export_job / compute_checksum / record_file_artifact / write_manifest_record / authorize_signed_download handlers 追加 (fail-close, 原則 throw)
+- [x] checksum 生成: compute_checksum step は SHA-256 computation-only; record_file_artifact step が artifact + checksum_record を atomic write
+- [x] IFileStorageRepository + NpgsqlFileStorageRepository (production Npgsql 実装)
+- [x] operation_key_allowed_values を external-port-substrate-ssot.yaml に追加 (5 keys with meaning/boundary/prohibited)
+- [x] backend tests: FileStorageBundleDispatchTests (10 tests)
+- [x] frontend tests: fileStoragePortConsumer.test.ts (4 tests)
+
 残 todo:
-- [ ] export_job / file_artifact / checksum_record / manifest physical table 接続実装
-- [ ] physical table manifest binding (file_storage manifest / screen_data_shape)
 - [ ] UI Builder form preset / portTargetRef action wiring (export_job → access/response port connect)
-- [ ] checksum 生成・検証の runtime 実装 (port substrate と独立)
 - [ ] evidence / runtime_event_log: export_job_initiated / file_write_completed / checksum_verified / signed_url_generated
 - [ ] projection response: signed download authorization / file artifact projection
 

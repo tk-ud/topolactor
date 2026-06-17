@@ -91,7 +91,7 @@ public sealed class NpgsqlFileStorageRepository : IFileStorageRepository
             """;
 
         cmd.Parameters.AddWithValue("export_job_id", command.ExportJobId);
-        cmd.Parameters.AddWithValue("file_artifact_id", command.FileArtifactId.HasValue ? (object)command.FileArtifactId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("file_artifact_id", command.FileArtifactId);
         cmd.Parameters.AddWithValue("algorithm", command.Algorithm);
         cmd.Parameters.AddWithValue("checksum_value", command.ChecksumValue);
         cmd.Parameters.AddWithValue("verified_at", command.VerifiedAt);
@@ -102,7 +102,7 @@ public sealed class NpgsqlFileStorageRepository : IFileStorageRepository
         return new FileChecksumRecord(
             reader.GetGuid(0),
             reader.GetGuid(1),
-            reader.IsDBNull(2) ? null : reader.GetGuid(2),
+            reader.GetGuid(2),
             reader.GetString(3),
             reader.GetString(4),
             reader.GetFieldValue<DateTimeOffset>(5),
@@ -113,32 +113,68 @@ public sealed class NpgsqlFileStorageRepository : IFileStorageRepository
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
 
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
+        await using var artifactCmd = conn.CreateCommand();
+        artifactCmd.Transaction = tx;
+        artifactCmd.CommandText = """
             INSERT INTO topology.file_artifacts
-                (export_job_id, file_name, file_type, storage_ref, byte_size)
+                (export_job_id, file_name, file_type, storage_ref, byte_size, checksum_value)
             VALUES
-                (@export_job_id, @file_name, @file_type, @storage_ref, @byte_size)
+                (@export_job_id, @file_name, @file_type, @storage_ref, @byte_size, @checksum_value)
             RETURNING file_artifact_id, export_job_id, file_name, file_type, storage_ref, byte_size, checksum_record_id
             """;
 
-        cmd.Parameters.AddWithValue("export_job_id", command.ExportJobId);
-        cmd.Parameters.AddWithValue("file_name", command.FileName);
-        cmd.Parameters.AddWithValue("file_type", command.FileType);
-        cmd.Parameters.AddWithValue("storage_ref", command.StorageRef);
-        cmd.Parameters.AddWithValue("byte_size", command.ByteSize.HasValue ? (object)command.ByteSize.Value : DBNull.Value);
+        artifactCmd.Parameters.AddWithValue("export_job_id", command.ExportJobId);
+        artifactCmd.Parameters.AddWithValue("file_name", command.FileName);
+        artifactCmd.Parameters.AddWithValue("file_type", command.FileType);
+        artifactCmd.Parameters.AddWithValue("storage_ref", command.StorageRef);
+        artifactCmd.Parameters.AddWithValue("byte_size", command.ByteSize.HasValue ? (object)command.ByteSize.Value : DBNull.Value);
+        artifactCmd.Parameters.AddWithValue("checksum_value", command.ChecksumValue);
 
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
-        return new FileArtifactRecord(
-            reader.GetGuid(0),
-            reader.GetGuid(1),
-            reader.GetString(2),
-            reader.GetString(3),
-            reader.GetString(4),
-            reader.IsDBNull(5) ? null : reader.GetInt64(5),
-            reader.IsDBNull(6) ? null : reader.GetGuid(6));
+        Guid fileArtifactId;
+        long? byteSize;
+        Guid? checksumRecordId;
+        string fileName, fileType, storageRef;
+
+        await using (var artifactReader = await artifactCmd.ExecuteReaderAsync(ct))
+        {
+            await artifactReader.ReadAsync(ct);
+            fileArtifactId = artifactReader.GetGuid(0);
+            _ = artifactReader.GetGuid(1);
+            fileName = artifactReader.GetString(2);
+            fileType = artifactReader.GetString(3);
+            storageRef = artifactReader.GetString(4);
+            byteSize = artifactReader.IsDBNull(5) ? null : artifactReader.GetInt64(5);
+            checksumRecordId = artifactReader.IsDBNull(6) ? null : artifactReader.GetGuid(6);
+        }
+
+        await using var checksumCmd = conn.CreateCommand();
+        checksumCmd.Transaction = tx;
+        checksumCmd.CommandText = """
+            INSERT INTO topology.file_checksum_records
+                (export_job_id, file_artifact_id, algorithm, checksum_value, verified_at, verification_status)
+            VALUES
+                (@export_job_id, @file_artifact_id, 'sha256', @checksum_value, now(), 'verified')
+            RETURNING checksum_record_id
+            """;
+
+        checksumCmd.Parameters.AddWithValue("export_job_id", command.ExportJobId);
+        checksumCmd.Parameters.AddWithValue("file_artifact_id", fileArtifactId);
+        checksumCmd.Parameters.AddWithValue("checksum_value", command.ChecksumValue);
+
+        var checksumRecordIdNew = (Guid)(await checksumCmd.ExecuteScalarAsync(ct))!;
+
+        await using var updateCmd = conn.CreateCommand();
+        updateCmd.Transaction = tx;
+        updateCmd.CommandText = "UPDATE topology.file_artifacts SET checksum_record_id = @cid WHERE file_artifact_id = @aid";
+        updateCmd.Parameters.AddWithValue("cid", checksumRecordIdNew);
+        updateCmd.Parameters.AddWithValue("aid", fileArtifactId);
+        await updateCmd.ExecuteNonQueryAsync(ct);
+
+        await tx.CommitAsync(ct);
+
+        return new FileArtifactRecord(fileArtifactId, command.ExportJobId, fileName, fileType, storageRef, byteSize, checksumRecordIdNew);
     }
 
     public async Task<ExportManifestRecord> WriteManifestRecordAsync(WriteManifestCommand command, CancellationToken ct = default)

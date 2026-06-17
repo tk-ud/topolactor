@@ -507,10 +507,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             ["record_export_job"] = async (step, context, ct) =>
             {
                 if (fileStorageRepository is null)
-                {
-                    context.MarkExecuted(step.OperationKey);
-                    return;
-                }
+                    throw new InvalidOperationException("FILE_STORAGE_REPOSITORY_MISSING");
 
                 var exportJobId = ExtractGuid(context.RequestPayload, "export_job_id") ?? Guid.NewGuid();
                 var idempotencyKey = ExtractString(context.RequestPayload, "idempotency_key") ?? exportJobId.ToString("N");
@@ -532,36 +529,24 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 context.ExportJobId = await fileStorageRepository.RecordExportJobAsync(command, ct);
                 context.MarkExecuted(step.OperationKey);
             },
-            ["compute_checksum"] = async (step, context, ct) =>
+            ["compute_checksum"] = (step, context, ct) =>
             {
-                if (fileStorageRepository is null || context.ExportJobId is null)
-                {
-                    context.MarkExecuted(step.OperationKey);
-                    return;
-                }
+                if (context.ExportJobId is null)
+                    throw new InvalidOperationException("EXPORT_JOB_ID_REQUIRED");
 
                 var input = context.HttpResponse?.Body ?? context.ExportJobId.Value.ToString("N");
-                var checksumValue = ComputeSha256(input);
-                context.ChecksumValue = checksumValue;
-
-                await fileStorageRepository.RecordChecksumAsync(
-                    new RecordChecksumCommand(
-                        context.ExportJobId.Value,
-                        null,
-                        "sha256",
-                        checksumValue,
-                        DateTimeOffset.UtcNow,
-                        "verified"),
-                    ct);
+                context.ChecksumValue = ComputeSha256(input);
                 context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
             },
             ["record_file_artifact"] = async (step, context, ct) =>
             {
-                if (fileStorageRepository is null || context.ExportJobId is null)
-                {
-                    context.MarkExecuted(step.OperationKey);
-                    return;
-                }
+                if (fileStorageRepository is null)
+                    throw new InvalidOperationException("FILE_STORAGE_REPOSITORY_MISSING");
+                if (context.ExportJobId is null)
+                    throw new InvalidOperationException("EXPORT_JOB_ID_REQUIRED");
+                if (context.ChecksumValue is null)
+                    throw new InvalidOperationException("CHECKSUM_VALUE_REQUIRED");
 
                 var fileName = ExtractString(context.RequestPayload, "file_name") ?? $"export_{context.ExportJobId:N}.dat";
                 var fileType = ExtractString(context.RequestPayload, "file_type") ?? "json";
@@ -582,11 +567,10 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             },
             ["write_manifest_record"] = async (step, context, ct) =>
             {
-                if (fileStorageRepository is null || context.ExportJobId is null)
-                {
-                    context.MarkExecuted(step.OperationKey);
-                    return;
-                }
+                if (fileStorageRepository is null)
+                    throw new InvalidOperationException("FILE_STORAGE_REPOSITORY_MISSING");
+                if (context.ExportJobId is null)
+                    throw new InvalidOperationException("EXPORT_JOB_ID_REQUIRED");
 
                 var fileArtifactIds = context.FileArtifactId.HasValue
                     ? new[] { context.FileArtifactId.Value }
@@ -607,11 +591,10 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             },
             ["authorize_signed_download"] = async (step, context, ct) =>
             {
-                if (fileStorageRepository is null || context.FileArtifactId is null)
-                {
-                    context.MarkExecuted(step.OperationKey);
-                    return;
-                }
+                if (fileStorageRepository is null)
+                    throw new InvalidOperationException("FILE_STORAGE_REPOSITORY_MISSING");
+                if (context.FileArtifactId is null)
+                    throw new InvalidOperationException("FILE_ARTIFACT_ID_REQUIRED");
 
                 // authorization_key is a non-guessable reference identifier, NOT the actual signed URL
                 var authorizationKey = $"auth-ref:{context.FileArtifactId:N}:{Guid.NewGuid():N}";

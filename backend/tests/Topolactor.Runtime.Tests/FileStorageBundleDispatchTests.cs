@@ -46,7 +46,7 @@ public class FileStorageBundleDispatchTests
     }
 
     [Fact]
-    public async Task ExecutePolicyAsync_WithoutFileStorageRepository_SkipsDomainStepsGracefully()
+    public async Task ExecutePolicyAsync_WithoutFileStorageRepository_FileStoragePolicySteps_FailClose()
     {
         var executor = new ExternalPortPolicyStepExecutor();
         var policy = BuildFileStoragePolicy(accessPort: true);
@@ -55,11 +55,9 @@ public class FileStorageBundleDispatchTests
             RequestPayload = BuildPayload("job-002", "system", "2026-06", "json")
         };
 
-        await executor.ExecutePolicyAsync(policy, context);
-
-        Assert.Contains("record_export_job", context.ExecutedOperationKeys);
-        Assert.Null(context.ExportJobId);
-        Assert.Null(context.ChecksumValue);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecutePolicyAsync(policy, context));
+        Assert.Contains("FILE_STORAGE_REPOSITORY_MISSING", ex.Message);
     }
 
     [Fact]
