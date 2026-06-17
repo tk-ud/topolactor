@@ -214,11 +214,11 @@ PR#460 完了済み: hook_port (generic_webhook) seed binding / credential_requi
 
 PR#460 完了済み: access_port (external_scheduler, credential_kind=none) / hook_port (built_in_scheduler, credential_kind=none) seed binding / policy_steps。
 topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に依存しない。
-残作業は job queue physical table / cron trigger wiring / evidence 接続。外部スケジューラー provider-specific client は追加しない。
+残作業は scheduler evidence / job status projection surface / cron trigger wiring 接続。runtime_timeline_scheduler の in-memory queue は変更しない。外部スケジューラー provider-specific client は追加しない。
 既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
 残 todo:
-- [ ] job_queue physical table 接続実装
+- [ ] scheduler evidence / job status projection surface 接続実装 (DB queue 新設ではない。runtime queue authority は既存 RuntimeTimelineScheduler)
 - [ ] cron trigger driver loop 実装 (built-in scheduler は port substrate に依存しないこと)
 - [ ] hook trigger intake wiring (外部スケジューラー hook のみ port substrate 使用)
 - [ ] evidence / runtime_event_log: trigger_received / scheduler_enqueued / execution_started / execution_completed / execution_failed
