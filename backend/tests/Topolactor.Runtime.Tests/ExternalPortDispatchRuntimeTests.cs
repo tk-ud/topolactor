@@ -84,7 +84,7 @@ public class ExternalPortDispatchRuntimeTests
         new(id, "response_port", "test_bundle", "smtp", "https://example.invalid", null, null, null, credentialKind, referenceKey, true);
 
     private static ExternalPortPolicy NewPolicy() =>
-        new(Guid.NewGuid(), "test_policy", "response_port", "test_bundle", [NewStep(1, "append_runtime_event_log")], true);
+        new(Guid.NewGuid(), "test_policy", "response_port", "test_bundle", [NewStep(1, "capture_response")], true);
 
     private static ExternalPortPolicyStep NewStep(int order, string operationKey) =>
         new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, new Dictionary<string, string>(), true);

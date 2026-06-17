@@ -551,14 +551,21 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             },
             ["append_runtime_event_log"] = async (step, context, ct) =>
             {
-                if (runtimeEventLogRepository is not null &&
-                    step.StepConfig.TryGetValue("event_type", out var eventType) &&
-                    !string.IsNullOrWhiteSpace(eventType))
+                if (runtimeEventLogRepository is null)
+                    throw new InvalidOperationException("EXTERNAL_PORT_RUNTIME_EVENT_LOG_REPOSITORY_MISSING");
+                if (!step.StepConfig.TryGetValue("event_type", out var eventType) || string.IsNullOrWhiteSpace(eventType))
+                    throw new InvalidOperationException("EXTERNAL_PORT_RUNTIME_EVENT_LOG_EVENT_TYPE_MISSING");
+
+                string? entityId = null;
+                if (step.StepConfig.TryGetValue("entity_ref_key", out var refKey) && !string.IsNullOrWhiteSpace(refKey))
                 {
-                    var entityId = ResolveEntityId(step.StepConfig, context);
-                    var bundle = context.RequiredByBundle ?? context.PortRecord?.RequiredByBundle;
-                    await runtimeEventLogRepository.AppendAsync(eventType, entityId, bundle, ct);
+                    entityId = ResolveEntityId(step.StepConfig, context);
+                    if (entityId is null)
+                        throw new InvalidOperationException("EXTERNAL_PORT_RUNTIME_EVENT_LOG_ENTITY_REF_KEY_UNRESOLVABLE");
                 }
+
+                var bundle = context.RequiredByBundle ?? context.PortRecord?.RequiredByBundle;
+                await runtimeEventLogRepository.AppendAsync(eventType, entityId, bundle, ct);
                 context.MarkExecuted(step.OperationKey);
             },
             ["capture_response"] = (step, context, ct) =>

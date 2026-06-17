@@ -248,7 +248,7 @@ public class FileStorageBundleDispatchTests
     }
 
     [Fact]
-    public async Task AppendRuntimeEventLog_WithoutRepository_StillMarksExecuted()
+    public async Task AppendRuntimeEventLog_WithoutRepository_FailsClose()
     {
         var executor = new ExternalPortPolicyStepExecutor();
         var context = new ExternalPortExecutionContext();
@@ -257,13 +257,13 @@ public class FileStorageBundleDispatchTests
         var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "append_runtime_event_log",
             new Dictionary<string, string> { ["event_type"] = "checksum_verified" }, true);
 
-        await executor.ExecuteAsync(step, context);
-
-        Assert.Contains("append_runtime_event_log", context.ExecutedOperationKeys);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("EXTERNAL_PORT_RUNTIME_EVENT_LOG_REPOSITORY_MISSING", ex.Message);
     }
 
     [Fact]
-    public async Task AppendRuntimeEventLog_WithEmptyEventType_SkipsRepository()
+    public async Task AppendRuntimeEventLog_WithEmptyEventType_FailsClose()
     {
         var fakeLog = new FakeRuntimeEventLogRepository();
         var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: fakeLog);
@@ -273,10 +273,49 @@ public class FileStorageBundleDispatchTests
         var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "append_runtime_event_log",
             new Dictionary<string, string> { ["event_type"] = "" }, true);
 
-        await executor.ExecuteAsync(step, context);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("EXTERNAL_PORT_RUNTIME_EVENT_LOG_EVENT_TYPE_MISSING", ex.Message);
+    }
 
-        Assert.Null(fakeLog.LastEventType);
-        Assert.Contains("append_runtime_event_log", context.ExecutedOperationKeys);
+    [Fact]
+    public async Task AppendRuntimeEventLog_WithUnknownEntityRefKey_FailsClose()
+    {
+        var fakeLog = new FakeRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: fakeLog);
+        var context = new ExternalPortExecutionContext();
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "append_runtime_event_log",
+            new Dictionary<string, string>
+            {
+                ["event_type"] = "checksum_verified",
+                ["entity_ref_key"] = "UnknownKey"
+            }, true);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("EXTERNAL_PORT_RUNTIME_EVENT_LOG_ENTITY_REF_KEY_UNRESOLVABLE", ex.Message);
+    }
+
+    [Fact]
+    public async Task AppendRuntimeEventLog_WithKnownEntityRefKeyButNullContext_FailsClose()
+    {
+        var fakeLog = new FakeRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: fakeLog);
+        var context = new ExternalPortExecutionContext { ChecksumValue = null };
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 10, "append_runtime_event_log",
+            new Dictionary<string, string>
+            {
+                ["event_type"] = "checksum_verified",
+                ["entity_ref_key"] = "ChecksumValue"
+            }, true);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("EXTERNAL_PORT_RUNTIME_EVENT_LOG_ENTITY_REF_KEY_UNRESOLVABLE", ex.Message);
     }
 
     [Fact]
