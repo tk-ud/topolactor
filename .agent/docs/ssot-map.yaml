@@ -830,6 +830,56 @@ mapping:
       - docs/framework-core.yaml
     protocols: []
 
+  - work_type: data_driven_projection_completion_gate
+    change_surfaces:
+      - DB-driven UI projection
+      - frontend emission from DB/seed/topology-manifest/projection-repository
+      - component rendering from DB projection
+      - dispatch resolution (ManifestDispatcher axes: role/target/layer/action)
+      - api_command_lane
+      - manifest_dispatcher routing
+      - response-SSE lane
+      - projection response binding
+      - backend mutation (abstract function / topology_function_binder / execute_db_function / repository write)
+      - seed or data-defined UI/action/mapping surface
+      - hardcoded frontend component list (NG)
+      - hardcoded backend mapping (NG)
+      - dedicated frontend API wrapper bypassing ManifestDispatcher (NG)
+      - direct backend handler bypassing ManifestDispatcher (NG)
+      - inline EndpointResponseDto without queue/SSE/projection-response lane (NG)
+      - concrete backend mutation without abstract function boundary (NG)
+    required_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    supporting_docs:
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+    protocols:
+      - .agent/protocols/audit.md
+      - .agent/protocols/implementation-change.md
+
+  - work_type: admin_authoring_completion_gate
+    change_surfaces:
+      - admin authoring pipeline (/admin/contents steps 1-3)
+      - UI Builder wiring (PackageWiringEditor)
+      - dispatch kind admin configuration (screen_operation_kinds)
+      - all dispatch kinds configurable (CRUD/Search/Aggregate)
+      - Contents dispatch UI wiring (portTargetRef action wiring via Contents)
+      - UI Events runtimeInteractions trigger wiring
+      - UI Events runtimeInteractions targetNodeId wiring
+      - external integration portTargetRef wiring
+      - credential substrate for external integration (admin side)
+      - trigger UI specification (トリガUI指定)
+      - target UI specification (操作対象UI指定)
+    required_docs:
+      - docs/design/admin-console-workflow-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/external-port-substrate-ssot.yaml
+    protocols:
+      - .agent/protocols/audit.md
+      - .agent/protocols/implementation-change.md
+
   - work_type: ui_builder_preset_ecosystem
     change_surfaces:
       - UIBuilder preset ecosystem

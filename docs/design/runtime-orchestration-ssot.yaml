@@ -838,3 +838,93 @@ runtime_orchestration_ssot:
       - topology_transform_runtime
       - topology_function_binder
       - response_or_db_notify_or_registry_attractor
+
+  data_driven_projection_completion_gate:
+    note: >-
+      topolactor 全体の projection / runtime / dispatch / backend mutation に対する completion gate。
+      external_integration_completion_gate (docs/design/external-port-substrate-ssot.yaml) の
+      super-gate として機能し、projection / admin / runtime / pipeline 実装全体の
+      監査・実装前チェック・点検の判定軸とする。
+      「UIがある」「APIを叩ける」「EndpointResponseDtoを返す」「backendに専用処理を追加した」
+      「手書きUIを追加した」だけでは pass にならない。各軸の意味定義を厳密に維持すること。
+    required:
+      ui_db_projection:
+        rule: >-
+          UI は DB / seed / topology manifest / projection repository 由来で投影されること。
+          test-local 手書き emission を DB projection 済みとして扱わない。
+        pass_condition: >-
+          DB seed / topology_manifest / physical_table_manifest_binding / projection repository 由来で
+          UI emission が生成され、frontend が projection surface として消費すること。
+        fail_if: >-
+          test-local 手書き emission / hardcoded component list / frontend-only mock data を
+          DB projection 接続済みとして扱う。
+      dispatch_resolution:
+        rule: >-
+          通信は dispatch 解決を通ること。
+          direct API / direct backend handler / dedicated frontend wrapper による迂回を pass 扱いしない。
+        pass_condition: >-
+          client_trigger → frontend_scheduler → api_client → backend_endpoint → backend_scheduler →
+          manifest_dispatcher (axes: role / target / layer / action) → dispatchable_runtime の
+          通貫が確認できること。
+        fail_if: >-
+          ManifestDispatcher を迂回する dedicated route / island / frontend API wrapper /
+          direct backend handler 呼び出しで通信を解決している。
+      response_or_sse_queue_projection:
+        rule: >-
+          response / SSE は queue / projection response lane に乗ること。
+          inline response を queue / SSE / projection response と扱わない。
+        pass_condition: >-
+          dispatch response が既存 queue / SSE lane に積まれ、
+          frontend が projection_event_lane / client_command_lane response として受け取ること。
+        fail_if: >-
+          capture_response を MarkOnly として queue 扱いする。
+          inline EndpointResponseDto を SSE / projection response 扱いする。
+      abstract_function_or_db_driven_operation_boundary:
+        rule: >-
+          backend mutation は abstract function / DB-driven operation boundary /
+          reusable substrate を使うこと。
+          既存抽象で表現できる処理を専用 concrete implementation として追加しない。
+        pass_condition: >-
+          mutation が topology_function_binder / execute_db_function (topology.* prefix) /
+          既存 abstract function shape / reusable substrate を通ること。
+        fail_if: >-
+          既存 abstract function / DB-driven operation boundary で表現できる処理に対して、
+          bundle 固有 / operation 固有の concrete implementation を backend に追加する。
+      seed_or_data_defined_surface:
+        rule: >-
+          UI schema / form-table projection / action buttons / action wiring /
+          dispatch payload mapping / admin surface registration / entity operation binding /
+          projection constructor mapping / function parameters / runtime mapping は
+          seed / data-defined を優先すること。
+        pass_condition: >-
+          manifest DB record / seed SQL / topology manifest / DB-driven mapping として表現されており、
+          frontend は projection surface として消費していること。
+        fail_if: >-
+          seed / data-defined surface で表現すべき UI schema / action / wiring / mapping を
+          frontend または backend に hardcode する。
+    exceptions:
+      rule: >-
+        以下の例外は明示承認される。ただし例外名・理由・SSOT根拠・なぜ抽象関数化できないかを
+        明示することが必須。例外の後付け正当化（implementation-first shape の ratification）は禁止。
+      allowed:
+        - SQL_Attention
+        - CI_Attention
+      exception_declaration_required:
+        - exception_name
+        - reason
+        - ssot_basis
+        - why_abstract_function_impossible
+    prohibited:
+      - test_local_handwritten_UI_emission_treated_as_DB_projection
+      - direct_backend_concrete_mutation_bypassing_abstract_function
+      - dispatch_bypass_via_dedicated_route_or_island_or_frontend_api_wrapper
+      - inline_EndpointResponseDto_treated_as_queue_or_sse_or_projection_response
+      - seed_or_data_defined_surface_hardcoded_in_frontend_or_backend
+      - exception_without_explicit_declaration
+      - implementation_first_shape_ssot_ratification
+    super_gate_for:
+      - external_integration_completion_gate
+      - admin_authoring_completion_gate
+    references:
+      external_integration_completion_gate: docs/design/external-port-substrate-ssot.yaml
+      admin_authoring_completion_gate: docs/design/admin-console-workflow-ssot.yaml

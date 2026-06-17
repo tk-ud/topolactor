@@ -505,8 +505,18 @@ external_port_substrate_ssot:
   external_integration_completion_gate:
     note: >-
       外部連携 Bundle の PR が merge 可能になるための完了ゲート。
+      data_driven_projection_completion_gate (docs/design/runtime-orchestration-ssot.yaml) の
+      全軸を継承しつつ credential_resolution_base 軸を追加したものである。
+      外部連携 Bundle では両 gate (super-gate + 本 gate) の全軸を満たす必要がある。
       4 軸 + credential resolution 基盤 の全てを満たす必要がある。
       監査コメント上の後付け基準ではなく、SSOT として全外部連携 Bundle の completion gate とする。
+    super_gate_ref:
+      gate: data_driven_projection_completion_gate
+      ssot: docs/design/runtime-orchestration-ssot.yaml
+      note: >-
+        外部連携 Bundle の UI_db_projection / dispatch_resolution / response_queue /
+        abstract_function_boundary / seed_or_data_defined_surface 各軸は
+        super-gate の同名軸と同義。credential_resolution_base は外部連携固有の追加軸。
     required:
       UI_db_projection:
         rule: >-

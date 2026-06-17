@@ -1329,3 +1329,85 @@ admin_console_workflow_ssot:
     prohibited:
       - enabling promote before validation execution
       - treating unresolved topology.physical_tables table_ref mismatch as a silent no-op
+
+  admin_authoring_completion_gate:
+    note: >-
+      admin authoring の PR / 実装が merge 可能になるための completion gate。
+      「設定画面がある」「Contentsで作れる」「dispatchが一部動く」だけでは pass にならない。
+      5 軸全てを満たす必要がある。
+      本 gate は data_driven_projection_completion_gate (docs/design/runtime-orchestration-ssot.yaml)
+      の admin domain 特化版であり、super-gate の全軸も前提とする。
+    required:
+      all_dispatch_kinds_configurable:
+        rule: >-
+          CRUD / Search / Aggregate 等、topolactor が扱う dispatch 種別が admin 側で設定可能であること。
+          固定の一部操作だけ実装されている状態を completion と扱わない。
+        pass_condition: >-
+          admin/contents authoring pipeline (steps 1–3) で CRUD / Search / Aggregate 等の
+          dispatch kind が screen_operation_kinds として設定・保存・manifest dispatcher に登録可能であること。
+        fail_if: >-
+          特定 dispatch kind のみ hardcode 実装されており、
+          他の dispatch kind が admin 側で設定できない状態。
+      contents_dispatch_ui_wiring_configurable:
+        rule: >-
+          Contents で設定された全 dispatch が UI Builder / runtime UI projection /
+          component wiring に配線可能であること。
+          Contents 定義と UI 配線が分断されている状態を pass としない。
+        pass_condition: >-
+          screen_data_shape (screenReadQueryWiring / operationEntityBindings) が
+          UI Builder PackageWiringEditor で manifest target_ref として選択可能であり、
+          runtime dispatch への配線が UI Builder authoring 側で完結すること。
+        fail_if: >-
+          Contents で定義された dispatch が UI Builder の配線候補に現れない。
+          Contents と UI Builder の wiring 候補が分断されている。
+      ui_events_trigger_and_target_configurable:
+        rule: >-
+          UI Events は「トリガUI指定」と「操作対象UI指定」を設定できること。
+          単なる click handler や単一 target_ref だけで、この 2 軸を満たした扱いにしない。
+          「トリガUI指定」と「操作対象UI指定」は別概念として保持すること。
+        pass_condition: >-
+          runtimeInteractions の trigger (click / change / submit 等 = トリガUI指定) と
+          targetNodeId (= 操作対象UI指定) が UI Builder authoring 側で独立して
+          設定・保存可能であること。2 軸が独立概念として authoring 面に現れること。
+        fail_if: >-
+          trigger 設定だけあって targetNodeId 設定がない。
+          targetNodeId だけあって trigger 設定がない。
+          両者を「click があれば OK」「target_ref があれば OK」として同一視する。
+      external_integration_uses_credential_substrate:
+        rule: >-
+          外部連携は credential 基盤 / external-port-substrate /
+          credential_requirement / port record context を通ること。
+          provider 固有の credential UI / handler / runtime / standalone credential plane を作らない。
+        pass_condition: >-
+          外部連携が external-port-substrate-ssot.yaml の port record context 内で
+          credential_requirement / reference_key として管理されており、
+          admin 画面は port record context 内で credential 設定を行うこと。
+        fail_if: >-
+          provider 固有の credential UI / standalone credential admin panel が作られている。
+          port record context を経由しない credential 管理が実装されている。
+      external_integration_trigger_and_target_wiring_configurable:
+        rule: >-
+          外部連携の配線でも「トリガUI指定」と「操作対象UI指定」を設定できること。
+          dispatchExternalPort 等が手書き固定配線になっている状態を completion と扱わない。
+        pass_condition: >-
+          runtimeInteractions.dispatchExternalPort の trigger (トリガUI指定) と
+          portTargetRef / payloadFrom / outputProp (操作対象UI指定) が
+          UI Builder authoring 側で DB-derived candidates から独立して設定可能であること。
+        fail_if: >-
+          dispatchExternalPort の portTargetRef が UI Builder 外で手書き固定配線されている。
+          trigger 設定と操作対象 portTargetRef 設定が独立して authoring できない。
+    super_gate_ref:
+      gate: data_driven_projection_completion_gate
+      ssot: docs/design/runtime-orchestration-ssot.yaml
+      note: >-
+        admin 側 NG 軸 1–5 は、data_driven_projection_completion_gate の
+        seed_or_data_defined_surface / dispatch_resolution / ui_db_projection を
+        admin domain に特化した軸である。super-gate の全軸も満たす必要がある。
+    prohibited:
+      - settings_ui_without_dispatch_kind_coverage
+      - contents_dispatch_definition_not_reachable_in_ui_builder_wiring
+      - ui_events_trigger_without_independent_target_specification
+      - ui_events_target_without_independent_trigger_specification
+      - provider_specific_credential_ui_outside_port_record_context
+      - external_integration_fixed_wiring_without_authoring_configurable_trigger_and_target
+      - treating_trigger_ui_and_target_ui_as_same_concept
