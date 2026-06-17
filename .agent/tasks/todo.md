@@ -157,6 +157,7 @@ evidence / runtime_event_log 実装済み:
 残 todo:
 - [ ] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring (export_job → access/response port connect)
 - [ ] projection response: signed download authorization / file artifact projection
+- [ ] record ↔ file_artifact attachment binding surface: topology.record_file_attachment_bindings 追加 / topology.physical_tables・seed manifest・physical_table_manifest_bindings 登録 / bind・list・unbind は execute_db_function 経由 topology.fs_* DB function 実装（standalone attachments table 新設なし・既存 file_artifacts を artifact 正本として維持; signed URL / storage path / credential は DB / SSOT / seed / projection / runtime_event_log に出さない）
 
 対応資料:
 - `docs/design/runtime-bundle-file-storage-ssot.yaml`
