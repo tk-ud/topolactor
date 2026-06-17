@@ -113,8 +113,17 @@ builder.Services.AddSingleton<IFileStorageRepository>(sp =>
         connectionString));
 builder.Services.AddSingleton<IExternalPortBundleStepHandler>(sp =>
     new FileStorageBundleStepHandler(sp.GetRequiredService<IFileStorageRepository>()));
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<IExternalPortHttpClient>(sp =>
+    new HttpExternalPortHttpClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ExternalPort")));
+builder.Services.AddSingleton<IExternalPortCredentialReferenceResolver>(sp =>
+    new ExternalPortCredentialReferenceResolver(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
+builder.Services.AddSingleton<IExternalCredentialCrypto, AesExternalCredentialCrypto>();
 builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
     new ExternalPortPolicyStepExecutor(
+        httpClient: sp.GetRequiredService<IExternalPortHttpClient>(),
+        credentialReferenceResolver: sp.GetRequiredService<IExternalPortCredentialReferenceResolver>(),
+        crypto: sp.GetRequiredService<IExternalCredentialCrypto>(),
         portResolver: sp.GetRequiredService<IExternalPortResolver>(),
         bundleHandlers: sp.GetServices<IExternalPortBundleStepHandler>()));
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>();

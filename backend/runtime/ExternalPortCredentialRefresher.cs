@@ -59,6 +59,8 @@ public interface IExternalCredentialVaultRepository
 {
     Task<ExternalCredentialVaultRecord?> LoadAsync(Guid credentialVaultId, CancellationToken ct = default);
 
+    Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default);
+
     Task<ExternalCredentialRefreshLease?> AcquireRefreshLeaseAsync(
         Guid credentialVaultId,
         string leaseOwner,
@@ -271,6 +273,8 @@ public sealed class ExternalPortExecutionContext
 
     public bool SchedulerEventEnqueued { get; set; }
 
+    public string? DecryptedCredentialPayload { get; set; }
+
     public Guid? ExportJobId { get; set; }
 
     public string? ChecksumValue { get; set; }
@@ -405,6 +409,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IExternalPortHttpClient? httpClient = null,
         IExternalPortCredentialReferenceResolver? credentialReferenceResolver = null,
         IExternalPortResolver? portResolver = null,
+        IExternalCredentialCrypto? crypto = null,
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null)
     {
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
@@ -512,6 +517,44 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             ["append_runtime_event_log"] = MarkOnly,
             ["capture_response"] = MarkOnly,
             ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE"),
+            ["load_encrypted_credential_payload"] = (step, context, ct) =>
+            {
+                if (context.CredentialVaultRecord?.EncryptedPayload is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_PAYLOAD_MISSING");
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["decrypt_for_runtime_use"] = (step, context, ct) =>
+            {
+                if (crypto is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_CRYPTO_MISSING");
+                if (context.CredentialVaultRecord is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
+                ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential(context.CredentialVaultRecord);
+                context.DecryptedCredentialPayload = crypto.DecryptForRuntimeUse(
+                    context.CredentialVaultRecord.EncryptedPayload!,
+                    context.CredentialVaultRecord.EncryptionKeyReference!);
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["inject_authorization_header"] = (step, context, ct) =>
+            {
+                if (context.DecryptedCredentialPayload is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_DECRYPTED_PAYLOAD_MISSING");
+                if (context.HttpRequest is null)
+                    throw new InvalidOperationException("EXTERNAL_HTTP_REQUEST_MISSING");
+                var headerKey = FirstNonBlank(
+                    ReadConfig(step.StepConfig, "header_key"),
+                    context.PortRecord?.HeaderKey,
+                    "Authorization");
+                var headers = new Dictionary<string, string>(context.HttpRequest.Headers, StringComparer.OrdinalIgnoreCase)
+                {
+                    [headerKey!] = context.DecryptedCredentialPayload
+                };
+                context.HttpRequest = context.HttpRequest with { Headers = headers };
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
         };
     }
 
