@@ -40,6 +40,7 @@ public class FileStorageBundleDispatchTests
             PortRecord = BuildPortRecord()
         };
 
+        context.HttpResponse = new ExternalPortHttpResponse(200, "test-export-response-body");
         await executor.ExecutePolicyAsync(policy, context);
 
         Assert.Contains("record_export_job", context.ExecutedOperationKeys);
@@ -130,6 +131,104 @@ public class FileStorageBundleDispatchTests
         Assert.Equal("vault:ref:file_storage_credential", repo.LastArtifactCommand!.StorageRef);
         Assert.DoesNotContain("http", repo.LastArtifactCommand.StorageRef, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("s3", repo.LastArtifactCommand.StorageRef, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RecordFileArtifact_DoesNotGenerateStorageLocationFallback()
+    {
+        var repo = new FakeFileStorageRepository();
+        var executor = BuildExecutorWithFileStorage(repo);
+        var context = new ExternalPortExecutionContext
+        {
+            ExportJobId = Guid.NewGuid(),
+            ChecksumValue = "sha256:abc123",
+            PortRecord = BuildPortRecord(referenceKey: null),
+            RequestPayload = BuildPayload("job-005", "system", "2026-06", "pdf")
+        };
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 8, "record_file_artifact", new Dictionary<string, string>(), true);
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("STORAGE_REF_REQUIRED_FROM_PORT_RECORD", ex.Message);
+    }
+
+    [Fact]
+    public async Task RecordFileArtifact_TreatsLocationAsOpaquePortCredentialReference()
+    {
+        var repo = new FakeFileStorageRepository();
+        var executor = BuildExecutorWithFileStorage(repo);
+        var portRecord = BuildPortRecord(referenceKey: "opaque-ref:some-arbitrary-identifier");
+        var context = new ExternalPortExecutionContext
+        {
+            ExportJobId = Guid.NewGuid(),
+            ChecksumValue = "sha256:abc123",
+            PortRecord = portRecord,
+            RequestPayload = BuildPayload("job-006", "system", "2026-06", "csv")
+        };
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 8, "record_file_artifact", new Dictionary<string, string>(), true);
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+        await executor.ExecuteAsync(step, context);
+
+        Assert.NotNull(repo.LastArtifactCommand);
+        Assert.Equal("opaque-ref:some-arbitrary-identifier", repo.LastArtifactCommand!.StorageRef);
+    }
+
+    [Fact]
+    public async Task ComputeChecksum_WithoutArtifactInput_FailsClose()
+    {
+        var repo = new FakeFileStorageRepository();
+        var executor = BuildExecutorWithFileStorage(repo);
+        var context = new ExternalPortExecutionContext
+        {
+            ExportJobId = Guid.NewGuid()
+        };
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 7, "compute_checksum", new Dictionary<string, string>(), true);
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("CHECKSUM_INPUT_REQUIRED", ex.Message);
+    }
+
+    [Fact]
+    public async Task ComputeChecksum_DoesNotHashExportJobIdFallback()
+    {
+        var repo = new FakeFileStorageRepository();
+        var executor = BuildExecutorWithFileStorage(repo);
+        var exportJobId = Guid.NewGuid();
+        var context = new ExternalPortExecutionContext
+        {
+            ExportJobId = exportJobId,
+            HttpResponse = null
+        };
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 7, "compute_checksum", new Dictionary<string, string>(), true);
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("CHECKSUM_INPUT_REQUIRED", ex.Message);
+        Assert.Null(context.ChecksumValue);
+    }
+
+    [Fact]
+    public async Task WriteManifestRecord_WithoutFileArtifactId_FailsClose()
+    {
+        var repo = new FakeFileStorageRepository();
+        var executor = BuildExecutorWithFileStorage(repo);
+        var context = new ExternalPortExecutionContext
+        {
+            ExportJobId = Guid.NewGuid(),
+            ChecksumValue = "sha256:abc123",
+            FileArtifactId = null
+        };
+
+        var step = new ExternalPortPolicyStep(Guid.NewGuid(), Guid.NewGuid(), 9, "write_manifest_record", new Dictionary<string, string>(), true);
+        context.Policy = BuildPolicy("access_port", "file_storage_bundle");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(step, context));
+        Assert.Contains("FILE_ARTIFACT_ID_REQUIRED_FOR_MANIFEST", ex.Message);
     }
 
     [Fact]

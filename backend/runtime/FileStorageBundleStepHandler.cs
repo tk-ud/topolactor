@@ -68,10 +68,10 @@ public sealed class FileStorageBundleStepHandler : IExternalPortBundleStepHandle
 
     private static Task ComputeChecksumAsync(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct)
     {
-        if (context.ExportJobId is null)
-            throw new InvalidOperationException("EXPORT_JOB_ID_REQUIRED");
+        var input = context.HttpResponse?.Body;
+        if (string.IsNullOrEmpty(input))
+            throw new InvalidOperationException("CHECKSUM_INPUT_REQUIRED");
 
-        var input = context.HttpResponse?.Body ?? context.ExportJobId.Value.ToString("N");
         context.ChecksumValue = ComputeSha256(input);
         context.MarkExecuted(step.OperationKey);
         return Task.CompletedTask;
@@ -86,8 +86,9 @@ public sealed class FileStorageBundleStepHandler : IExternalPortBundleStepHandle
 
         var fileName = ExtractString(context.RequestPayload, "file_name") ?? $"export_{context.ExportJobId:N}.dat";
         var fileType = ExtractString(context.RequestPayload, "file_type") ?? "json";
-        // storage_ref is env-var reference identifier only, NOT plaintext storage URL/path
-        var storageRef = context.PortRecord?.ReferenceKey ?? "env:FILE_STORAGE_ENDPOINT_REF";
+        // storage_ref is opaque credential reference from port record; file_storage bundle must not decide storage location
+        var storageRef = context.PortRecord?.ReferenceKey
+            ?? throw new InvalidOperationException("STORAGE_REF_REQUIRED_FROM_PORT_RECORD");
 
         var artifact = await _repository.RecordFileArtifactAsync(
             new RecordFileArtifactCommand(
@@ -106,10 +107,12 @@ public sealed class FileStorageBundleStepHandler : IExternalPortBundleStepHandle
     {
         if (context.ExportJobId is null)
             throw new InvalidOperationException("EXPORT_JOB_ID_REQUIRED");
+        if (context.FileArtifactId is null)
+            throw new InvalidOperationException("FILE_ARTIFACT_ID_REQUIRED_FOR_MANIFEST");
+        if (context.ChecksumValue is null)
+            throw new InvalidOperationException("CHECKSUM_VALUE_REQUIRED_FOR_MANIFEST");
 
-        var fileArtifactIds = context.FileArtifactId.HasValue
-            ? new[] { context.FileArtifactId.Value }
-            : Array.Empty<Guid>();
+        var fileArtifactIds = new[] { context.FileArtifactId.Value };
 
         await _repository.WriteManifestRecordAsync(
             new WriteManifestCommand(
