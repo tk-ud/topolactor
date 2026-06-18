@@ -7,7 +7,8 @@ cli_model_context_protocols_port_ssot:
   purpose:
     summary: >-
       CLI Model Context Protocols Port は、Topolactorの業務データを
-      AI / shell / CLI から安全に検索・集計・搬出するための read/export port surface である。
+      AI / shell / CLI から安全に検索・集計・搬出し、外部AIの構造化候補を
+      業務オブジェクト割当候補として取り込むための read/export/import-candidate port surface である。
     non_goals:
       - ui_browser_automation
       - direct_db_connection
@@ -15,11 +16,22 @@ cli_model_context_protocols_port_ssot:
       - delete_operation
       - payment_approval
       - email_send
+      - external_ai_structured_output_as_ssot
+      - ai_cli_mcp_direct_db_mutation
 
   core_invariant:
     description: >-
       以下の責務境界は不変条件とする。
-      CLI / AI / MCP は read/export のみ。UI / Human は approve / commit / mutate のみ。
+      CLI / AI / MCP は read/export と draft/candidate 作成のみ。UI / Human は approve / commit / mutate のみ。
+    canonical_read_export_lane: >-
+      MCP/CLI client -> MCP API port -> user auth/authz -> cli_reader_port scope resolution ->
+      credential/capability requirement resolution -> ManifestDispatcher/runtime dispatch ->
+      Data Reader/authorized read model -> physical DB read/export job/audit log -> CLI/MCP response.
+    canonical_structured_input_lane: >-
+      External AI structured output -> MCP API port -> user auth/authz -> import_candidate scope resolution ->
+      credential/capability requirement resolution -> ManifestDispatcher/runtime dispatch -> business object assignment ->
+      draft_operation/commit_candidate creation -> preview diff -> user approval -> canonical commit dispatch ->
+      DB commit -> audit/runtime_event_log.
     cli_ai_mcp_operations:
       - read
       - search
@@ -29,6 +41,10 @@ cli_model_context_protocols_port_ssot:
       - export
       - stream_file
       - create_export_job
+      - import_structured_output
+      - assign_business_object_candidate
+      - create_draft_operation
+      - create_commit_candidate
     ui_human_operations:
       - approve
       - commit
@@ -42,6 +58,15 @@ cli_model_context_protocols_port_ssot:
         email send は後段の別設計で扱う。
         将来、UI catalog / backend dispatch / runtime の別SSOTまたは別設計で扱う。
         現時点では CLI/MCP から email send を実行しない。
+    dispatch_and_approval_boundary:
+      - user_authentication_is_entry_gate_before_dispatch_reader_assignment_or_db_operation
+      - context_api_data_reader_and_business_object_assignment_must_enter_manifest_dispatcher
+      - ai_mcp_cli_generated_operation_is_never_authoritative
+      - ai_mcp_cli_may_create_draft_operation_or_commit_candidate_only
+      - external_ai_structured_output_is_input_evidence_not_ssot
+      - commit_candidate_requires_preview_diff_evidence_confidence_and_unresolved_fields
+      - db_commit_requires_user_approval_then_canonical_commit_dispatch
+      - approval_execution_is_ui_human_only
 
   admin_ui_configuration:
     description: >-
@@ -50,12 +75,16 @@ cli_model_context_protocols_port_ssot:
       admin/contents は「どの業務コンテンツを、どの粒度で、AI/shell/CLIに読ませるか」を設定する入口。
     port_config_fields:
       - cli_reader_port_enabled
+      - import_candidate_port_enabled
       - allowed_roles
       - allowed_users
       - allowed_tables
       - allowed_columns
       - allowed_filters
       - allowed_periods
+      - allowed_business_objects
+      - allowed_assignment_targets
+      - required_evidence_fields
       - aggregation_windows
       - export_formats
       - file_stream_enabled
@@ -68,6 +97,7 @@ cli_model_context_protocols_port_ssot:
     description: >-
       API は認証・認可・スコープ制御・有効期限・形式・監査ログを担う。
       CLI / MCP は Context API / Data Reader のみを経由し、DBを直接読まない。
+      Context API / Data Reader / import candidate assignment は必ず ManifestDispatcher/runtime dispatch 解決後に実行する。
     responsibilities:
       - authentication
       - authorization
@@ -77,19 +107,34 @@ cli_model_context_protocols_port_ssot:
       - table_scope
       - column_scope
       - row_scope
+      - import_candidate_scope
+      - business_object_assignment_scope
+      - dispatch_scope_resolution
+      - credential_capability_requirement_resolution
       - deadline_and_expires_at
       - export_format
       - file_stream_permission
       - export_job_id_and_idempotency_key_handling
+      - draft_operation_id_and_idempotency_key_handling
+      - commit_candidate_id_and_idempotency_key_handling
       - audit_log_write
     prohibited:
       - cli_mcp_direct_db_connection
       - cli_mcp_direct_sql_execution
+      - core_api_direct_call
+      - unauthenticated_cli_mcp_access
+      - dispatch_bypass
+      - dedicated_backend_handler_or_route_bypassing_dispatch
+      - ai_cli_mcp_direct_db_mutation
+      - ai_cli_mcp_approval_execution
+      - commit_candidate_db_update_bypassing_canonical_dispatch
 
   data_reader_responsibility:
     description: >-
       Data Reader は、SSOTからCLI/MCP用の安全なread modelを生成する責務を持つ。
+      Data Reader は dispatch 解決済みの authorized request のみ受け付ける。
     required_responsibilities:
+      - dispatch_resolved_request_acceptance
       - query_validation
       - search_result_shaping
       - aggregation
@@ -102,6 +147,24 @@ cli_model_context_protocols_port_ssot:
       - manifest_generation
       - checksum_generation
       - source_record_ids_capture
+
+  structured_input_import:
+    description: >-
+      外部AIの構造化出力は Topolactor の正本ではなく、業務オブジェクト割当候補を作るための evidence/input として扱う。
+      AI/MCP/CLI は draft_operation / commit_candidate まで作成できるが、DB commit は実行できない。
+    required_fields:
+      - source_transcript_ref
+      - root_utterance
+      - structured_output_payload
+      - confidence
+      - unresolved_fields
+      - assigned_business_object_candidate
+      - preview_diff
+    prohibited:
+      - treating_external_ai_structured_output_as_ssot
+      - auto_confirming_unresolved_fields
+      - db_update_without_user_approval
+      - approval_api_execution_by_ai_mcp_cli
 
   file_stream:
     description: >-
@@ -165,18 +228,27 @@ cli_model_context_protocols_port_ssot:
       - create_export_job
       - download_export_file
       - get_export_status
+      - import_structured_output
+      - assign_business_object_candidate
+      - create_draft_operation
+      - create_commit_candidate
+      - get_preview_diff
     resources:
       - "topolactor://monthly/{period}/context.json"
       - "topolactor://exports/{export_job_id}/manifest.json"
       - "topolactor://exports/{export_job_id}/file"
+      - "topolactor://draft-operations/{draft_operation_id}/preview-diff.json"
+      - "topolactor://commit-candidates/{commit_candidate_id}/evidence.json"
     design_note: >-
       MCP surface は UI操作の自動化ではなく、AI/shell/CLIがTopolactorの
       業務トポロジを安全に読むための read/export port surface である。
+      外部AI構造化出力の取り込みも正本化ではなく draft/candidate 作成に限定する。
 
   explicitly_out_of_scope:
     operations:
       - db_direct_connection
       - direct_sql_execution
+      - core_api_direct_call
       - record_commit
       - delete_operation
       - payment_approval
@@ -184,6 +256,14 @@ cli_model_context_protocols_port_ssot:
       - browser_ui_automation
       - unauthorized_bulk_export
       - permission_bypass
+      - dispatch_bypass
+      - dedicated_backend_handler_or_route_bypassing_dispatch
+      - ai_cli_mcp_direct_db_mutation
+      - approval_api_execution_by_ai_mcp_cli
+      - credential_read_export
+      - external_ai_structured_output_as_ssot
+      - auto_confirming_unresolved_fields
+      - commit_candidate_db_update_bypassing_canonical_dispatch
     email_send_note: >-
       email send は後段の別設計とし、本SSOTではout of scopeとする。
       Email send は将来、UI catalog / backend dispatch / runtime の
@@ -192,7 +272,7 @@ cli_model_context_protocols_port_ssot:
   audit_log:
     description: >-
       すべてのCLI/MCP accessを監査ログへ記録する。
-      audit logは read/export 履歴を後から追跡できる設計とする。
+      audit logは read/export/import-candidate 履歴を後から追跡できる設計とする。
     required_fields:
       - user_id
       - role
@@ -205,6 +285,12 @@ cli_model_context_protocols_port_ssot:
       - target_scope
       - result_count
       - export_job_id
+      - draft_operation_id
+      - commit_candidate_id
+      - source_transcript_ref
+      - root_utterance
+      - confidence
+      - unresolved_fields
       - executed_at
       - ip_address
       - user_agent
@@ -213,10 +299,19 @@ cli_model_context_protocols_port_ssot:
     - docs/design/runtime-orchestration-ssot.yaml
     - docs/design/admin-console-workflow-ssot.yaml
     - docs/design/db-schema.yaml
+    - docs/design/external-port-substrate-ssot.yaml
+    - docs/design/runtime-bundle-audit-approval-ssot.yaml
+
+  related_ssot_boundary:
+    external_port_substrate: >-
+      external_port_substrate は外部連携の出入口と credential substrate を扱う関連SSOTである。
+      CLI/MCP Port は AI/CLI 安全 read/export/import-candidate 出入口であり、同一Bundleへ混同しない。
 
   change_surface:
     - cli_model_context_protocols_port
     - mcp_read_export_port
+    - mcp_import_candidate_port
     - data_reader_boundary
+    - business_object_assignment_candidate_boundary
     - export_job_manifest
     - admin_cli_reader_port_config
