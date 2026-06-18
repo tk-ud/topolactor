@@ -15,8 +15,8 @@ Deno.test("projection auth boundary: ProjectionShell passes Bearer token to all 
   assert(src.includes("queueClientCommand("), "projection must use queueClientCommand for dispatch");
   // Initial dispatch passes currentToken (post-refresh resolved token)
   assert(src.includes("currentToken"), "initial dispatch must pass resolved token to queueClientCommand");
-  // SSE refresh dispatch reads token from sessionStorage
-  assert(src.includes("demo_jwt_token"), "SSE refresh dispatch must read token from sessionStorage");
+  // SSE refresh dispatch uses ref-backed token from state (not stale sessionStorage)
+  assert(src.includes("projectionTokenRef"), "SSE refresh dispatch must use ref-backed token from state");
 });
 
 Deno.test("projection auth boundary: refresh failure on token invalidity clears carrier, realm mismatch does not", async () => {
