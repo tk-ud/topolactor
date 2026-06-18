@@ -932,14 +932,22 @@ runtime_orchestration_ssot:
         CI_Attention:
           exception_name: CI_Attention
           reason: >-
-            SystemOperationCiScheduler is a BackgroundService cron route that triggers
-            SystemOperationCiRuntime diagnostic checks. It does not originate from a client
-            request and cannot route through ManifestDispatcher.
+            SystemOperationCiScheduler is a BackgroundService that triggers
+            SystemOperationCiRuntime diagnostic checks via two backend-internal
+            routes: (1) a cron loop and (2) a signal consumer
+            (RunAttractorSignalConsumerAsync) that receives registry_attractor_update
+            signals from OutputLaneRouter.RebuildSignalChannel. Neither route
+            originates from a client request and neither can route through
+            ManifestDispatcher.
           ssot_basis: docs/design/runtime-orchestration-ssot.yaml handler_registry_scope_note
           why_abstract_function_impossible: >-
             Cron-triggered CI diagnostic inspection has no client-side dispatch vector;
             it is initiated by the runtime scheduler itself.
-          applies_to: SystemOperationCiScheduler_BackgroundService_cron_route_only
+            Signal-consumer-triggered inspection is driven by internal attractor rebuild
+            signals, not by a client or frontend request.
+          applies_to:
+            - SystemOperationCiScheduler_BackgroundService_cron_trigger
+            - SystemOperationCiScheduler_BackgroundService_signal_consumer_trigger_via_registry_attractor_update
           not_applies_to: >-
             ci_attention:refresh_fragments and system_ci:inspect which route through
             AdminRuntime dispatch pipeline as canonical admin operations.
