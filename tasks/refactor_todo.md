@@ -570,7 +570,7 @@ Align required tests/checks and completion language after implementation bundles
 ### Acceptance conditions
 
 - [ ] Required checks are documented per changed lane.
-- [ ] Every absorption target follows abstract function fix → seed addition → seed test → concrete function deletion.
+- [ ] Global order is enforced: SSOT fix and abstract function primitive generation first, then steps 2–4 loop per target Bundle, then final refactor todo deletion.
 - [ ] Runtime with DB update asserts DB state or projection source changed.
 - [ ] Runtime returning to frontend asserts SSE/refetch/final state where applicable.
 - [ ] No TODO/roadmap status is advanced without implementation and test evidence.
