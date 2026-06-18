@@ -6,6 +6,7 @@ import type { UserOperation } from "./resolveOperationVector.ts";
 export type NormalizedComponentEventType =
   | "click"
   | "change"
+  | "input"
   | "select"
   | "toggle"
   | "expand"

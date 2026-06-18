@@ -54,6 +54,84 @@ function dataOpen(spec: unknown): unknown {
   return props?.open;
 }
 
+Deno.test("runtime-ui-interaction-wiring scenario: input trigger + setActiveKey routes through layout_patch → emission → renderEmission → runtimeComponentFactory → localStateStore", () => {
+  const tabsNodeId = "node-tabs-setActiveKey";
+  const tabsNode: VisualNodePayload = {
+    nodeId: tabsNodeId,
+    nodeKind: "catalog_component",
+    componentKey: "tabs.disclosure",
+    componentKind: "disclosure/tabs",
+    componentId: "comp-tabs-setActiveKey",
+    slotKey: "main",
+    orderIndex: 0,
+    parentNodeId: null,
+    isDraftOnly: false,
+    gridCol: 1,
+    gridRow: 1,
+    x: 0,
+    y: 0,
+    width: 320,
+    height: 200,
+    propsJson: JSON.stringify({ data: { items: ["Tab A", "Tab B"] } }),
+    runtimeInteractions: [
+      {
+        trigger: "input",
+        actionType: "setActiveKey",
+        targetNodeId: tabsNodeId,
+        value: "tab_b",
+      },
+    ],
+  };
+
+  // Step 1: buildVisualLayoutPatchJson — canvas authoring serialization (stored in layout_patch_json DB column)
+  const patchJson = buildVisualLayoutPatchJson([tabsNode]);
+
+  // Step 2: parseVisualLayoutPatchJson — DB projection round-trip (backend serves as LayoutNode in emission)
+  const parsedPatch = parseVisualLayoutPatchJson(patchJson, [
+    { componentKey: "tabs.disclosure", componentKind: "disclosure/tabs", isDraftOnly: false },
+  ]);
+  assert(parsedPatch.ok, "layout patch must parse after DB round-trip");
+
+  // Step 3: draftPreviewResultToEmission — models backend emission construction from layout_patch_json
+  const emission = draftPreviewResultToEmission({
+    success: true,
+    layoutId: "layout-setActiveKey-input",
+    packageId: "pkg-setActiveKey-input",
+    layoutNodes: parsedPatch.value.nodes.map((node) => ({
+      nodeId: node.nodeId,
+      nodeKind: node.nodeKind,
+      componentKey: node.componentKey,
+      componentKind: node.componentKind,
+      componentId: node.componentId,
+      parentNodeId: node.parentNodeId,
+      slotKey: node.slotKey ?? undefined,
+      orderIndex: node.orderIndex,
+      width: node.width,
+      height: node.height,
+      propsJson: node.propsJson,
+      runtimeInteractions: node.runtimeInteractions,
+    })),
+  });
+  assert(emission, "emission must be constructed from layout patch nodes");
+
+  // Step 4: renderEmission → runtimeComponentFactory builds runtimeSpec with localStateMutation
+  const localStateStore = new TestLocalStateStore();
+  const specs = renderEmission(emission, defaultComponentRegistry, { localStateStore });
+  const tabsSpec = specs.find((spec) => spec.nodeId === tabsNodeId);
+  assert(tabsSpec?.runtimeSpec, "tabs runtimeSpec must exist after renderEmission");
+  assert(tabsSpec.runtimeSpec.eventBinding.input, "tabs must have input trigger binding from runtimeInteractions");
+  const inputBinding = tabsSpec.runtimeSpec.eventBinding.input as Record<string, unknown>;
+  assert(
+    !inputBinding.runtimeDispatch,
+    "setActiveKey must not be backend runtimeDispatch — it is local state only",
+  );
+
+  // Step 5: emitBoundEvent fires input event → localStateStore.set(targetNodeId, "activeKey", value) called
+  const result = __testOnly.emitBoundEvent(tabsSpec.runtimeSpec, "input", {});
+  assert(result.ok, "input event must execute setActiveKey local state mutation without error");
+  assertEquals(localStateStore.get(tabsNodeId, "activeKey"), "tab_b");
+});
+
 Deno.test("runtime-ui-interaction-wiring scenario: canonical runtimeInteractions button click opens and modal close closes via layout patch → emission → renderEmission", () => {
   const modalNodeId = "node-modal-target";
   const buttonNode: VisualNodePayload = {

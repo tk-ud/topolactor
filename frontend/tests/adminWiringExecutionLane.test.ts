@@ -29,6 +29,12 @@ Deno.test("mapWiringKindToLayer: create/update/delete → entity", () => {
   assertEquals(mapWiringKindToLayer("delete"), "entity");
 });
 
+Deno.test("mapWiringKindToLayer: unknown wiringKind returns null (fail-close)", () => {
+  assertEquals(mapWiringKindToLayer("unknown_kind"), null);
+  assertEquals(mapWiringKindToLayer(""), null);
+  assertEquals(mapWiringKindToLayer("custom_action"), null);
+});
+
 // ─── mapWiringKindToAction ────────────────────────────────────────────────────
 
 Deno.test("mapWiringKindToAction: search/aggregate → Search", () => {
@@ -40,6 +46,21 @@ Deno.test("mapWiringKindToAction: create/update/delete map correctly", () => {
   assertEquals(mapWiringKindToAction("create"), "Create");
   assertEquals(mapWiringKindToAction("update"), "diffUpdate");
   assertEquals(mapWiringKindToAction("delete"), "logicalDelete");
+});
+
+Deno.test("mapWiringKindToAction: unknown wiringKind returns null (fail-close, not raw passthrough)", () => {
+  assertEquals(mapWiringKindToAction("unknown_kind"), null);
+  assertEquals(mapWiringKindToAction(""), null);
+  assertEquals(mapWiringKindToAction("custom_mutation"), null);
+});
+
+Deno.test("buildRuntimeDispatchSpec: unknown wiringKind returns null (fail-close)", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "unknown_kind",
+    targetSurface: "screen",
+  });
+  assertEquals(spec, null, "unknown wiringKind must not silently fall back to entity/raw action");
 });
 
 // ─── buildRuntimeDispatchSpec ─────────────────────────────────────────────────
@@ -90,14 +111,12 @@ Deno.test("buildRuntimeDispatchSpec: create wiring defaults to entity layer", ()
   assertEquals(spec!.target, "default");
 });
 
-Deno.test("buildRuntimeDispatchSpec: absent targetSurface defaults to 'default'", () => {
+Deno.test("buildRuntimeDispatchSpec: absent targetSurface returns null (fail-close, no 'default' fallback)", () => {
   const spec = buildRuntimeDispatchSpec({
     orderIndex: 0,
     wiringKind: "search",
   });
-  assertExists(spec);
-  assertEquals(spec!.target, "default");
-  assertEquals(spec!.layer, "screen_list");
+  assertEquals(spec, null);
 });
 
 Deno.test("buildRuntimeDispatchSpec: targetRef forwarded when present", () => {
@@ -128,10 +147,11 @@ Deno.test("buildRuntimeDispatchSpec: targetRef absent when node has no targetRef
   assertEquals(spec!.targetRef, undefined);
 });
 
-Deno.test("buildRuntimeDispatchSpec: null targetRef coerced to undefined", () => {
+Deno.test("buildRuntimeDispatchSpec: null targetRef coerced to undefined when targetSurface present", () => {
   const spec = buildRuntimeDispatchSpec({
     orderIndex: 0,
     wiringKind: "search",
+    targetSurface: "screen",
     targetRef: null,
   });
   assertExists(spec);
@@ -799,4 +819,94 @@ Deno.test("renderEmission: node with invalid stateJson returns error spec not si
   assertEquals(specs.length, 1);
   assertEquals(specs[0].componentType, "error");
   assertStringIncludes(JSON.stringify(specs[0].def), "LAYOUT_NODE_STATE_JSON_INVALID");
+});
+
+// ─── buildRuntimeDispatchSpec: fail-close on absent targetSurface ─────────────
+
+Deno.test("buildRuntimeDispatchSpec: wiringKind set + empty targetSurface returns null (fail-close)", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "search",
+    targetSurface: "",
+  });
+  assertEquals(spec, null, "empty targetSurface must not silently fall back to 'default'");
+});
+
+Deno.test("buildRuntimeDispatchSpec: wiringKind set + whitespace targetSurface returns null", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "create",
+    targetSurface: "   ",
+  });
+  assertEquals(spec, null, "whitespace targetSurface must not silently fall back to 'default'");
+});
+
+// ─── runtimeInteractions: input trigger + setActiveKey actionType ─────────────
+
+Deno.test("renderEmission: runtimeInteractions with input trigger and setActiveKey builds localStateMutation", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-input-setactivekey-001",
+    layoutNodes: [
+      {
+        nodeId: "node-tabs",
+        nodeKind: "catalog_component",
+        componentId: "comp-tabs-001",
+        componentKind: "disclosure/tabs",
+        componentKey: "tabs.main",
+        orderIndex: 0,
+        runtimeInteractions: [
+          {
+            trigger: "input",
+            actionType: "setActiveKey",
+            targetNodeId: "tabs_content_node",
+            value: "tab_1",
+          },
+        ],
+      },
+    ],
+  };
+  const specs = renderEmission(emission, emptyRegistry, { localStateStore: { get: () => undefined, set: () => {} } });
+  assertEquals(specs.length, 1);
+  assertExists(specs[0].runtimeSpec, "runtimeSpec must be present");
+  const inputBinding = specs[0].runtimeSpec!.eventBinding["input"] as Record<string, unknown> | undefined;
+  assertExists(inputBinding, "input trigger binding must be present");
+  const mutation = inputBinding.localStateMutation as Record<string, unknown> | undefined;
+  assertExists(mutation, "localStateMutation must be present for setActiveKey");
+  assertEquals(mutation.targetNodeId, "tabs_content_node");
+  assertEquals(mutation.statePath, "activeKey");
+  assertEquals(mutation.action, "set");
+  assertEquals(mutation.value, "tab_1");
+});
+
+Deno.test("renderEmission: runtimeInteractions with onInput trigger normalizes to input", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-oninput-001",
+    layoutNodes: [
+      {
+        nodeId: "node-onInput",
+        nodeKind: "catalog_component",
+        componentId: "comp-oninput-001",
+        componentKind: "disclosure/tabs",
+        componentKey: "tabs.main",
+        orderIndex: 0,
+        runtimeInteractions: [
+          {
+            trigger: "onInput",
+            actionType: "setActiveKey",
+            targetNodeId: "tabs_content_node",
+            value: "tab_2",
+          },
+        ],
+      },
+    ],
+  };
+  const specs = renderEmission(emission, emptyRegistry, { localStateStore: { get: () => undefined, set: () => {} } });
+  assertEquals(specs.length, 1);
+  assertExists(specs[0].runtimeSpec);
+  const inputBinding = specs[0].runtimeSpec!.eventBinding["input"] as Record<string, unknown> | undefined;
+  assertExists(inputBinding, "onInput must normalize to input binding key");
+  const mutation = inputBinding.localStateMutation as Record<string, unknown>;
+  assertEquals(mutation.statePath, "activeKey");
 });

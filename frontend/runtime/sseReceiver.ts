@@ -83,6 +83,12 @@ export type SseReceiverOptions = {
   /** URL to connect to. Defaults to /api/sse. */
   url?: string;
   /**
+   * Access token for the SSE endpoint (used in the access_token query parameter).
+   * When absent, falls back to sessionStorage demo_jwt_token.
+   * Prefer passing a ref-backed token here to avoid sessionStorage reads after mount.
+   */
+  token?: string;
+  /**
    * Called when a projection event is received.
    * The trigger carries structured identity extracted from the event payload.
    * This is the hook_trigger path feeding the frontend scheduler.
@@ -128,7 +134,7 @@ export function createSseReceiver(options: SseReceiverOptions): SseReceiver {
   function connect(): void {
     if (source !== null) return;
 
-    const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? null;
+    const token = options.token ?? globalThis.sessionStorage?.getItem("demo_jwt_token") ?? null;
     if (!token) {
       options.onError?.({ kind: "connection_error", event: new Event("AUTH_TOKEN_MISSING") });
       return;

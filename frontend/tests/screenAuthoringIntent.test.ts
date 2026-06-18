@@ -1,4 +1,7 @@
-import { assertEquals, assertNotEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertNotEquals,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   buildDraftInputFromScreenIntent,
   dispatcherAxesToScreenOperationKind,
@@ -9,7 +12,9 @@ import {
 const MANIFEST_A = "11111111-1111-1111-1111-111111111101";
 
 Deno.test("screenOperationToDispatcherAxes: search uses manifest-scoped target and layer", () => {
-  const axes = screenOperationToDispatcherAxes("search", { manifestKey: "orders" });
+  const axes = screenOperationToDispatcherAxes("search", {
+    manifestKey: "orders",
+  });
   assertEquals(axes.role, "admin");
   assertEquals(axes.target, "orders");
   assertEquals(axes.layer, "screen_entity");
@@ -17,24 +22,56 @@ Deno.test("screenOperationToDispatcherAxes: search uses manifest-scoped target a
   assertEquals(axes.runtimeDestination, "topology_transform_runtime");
 });
 
-Deno.test("screenOperationToDispatcherAxes: list and detail differ by layer for same manifestKey", () => {
-  const list = screenOperationToDispatcherAxes("list", { manifestKey: "orders" });
-  const detail = screenOperationToDispatcherAxes("detail", { manifestKey: "orders" });
+Deno.test("screenOperationToDispatcherAxes: list and detail use Search action and differ by layer", () => {
+  const list = screenOperationToDispatcherAxes("list", {
+    manifestKey: "orders",
+  });
+  const detail = screenOperationToDispatcherAxes("detail", {
+    manifestKey: "orders",
+  });
   assertEquals(list.target, detail.target);
+  assertEquals(list.action, "Search");
+  assertEquals(detail.action, "Search");
   assertNotEquals(list.layer, detail.layer);
 });
 
 Deno.test("screenOperationToDispatcherAxes: two list screens use distinct targets", () => {
-  const a = screenOperationToDispatcherAxes("list", { manifestKey: "screen_a" });
-  const b = screenOperationToDispatcherAxes("list", { manifestKey: "screen_b" });
+  const a = screenOperationToDispatcherAxes("list", {
+    manifestKey: "screen_a",
+  });
+  const b = screenOperationToDispatcherAxes("list", {
+    manifestKey: "screen_b",
+  });
   assertNotEquals(a.target, b.target);
   assertEquals(a.layer, "screen_list");
   assertEquals(b.layer, "screen_list");
 });
 
-Deno.test("dispatcherAxesToScreenOperationKind round-trips screen_list search", () => {
-  const axes = screenOperationToDispatcherAxes("search", { manifestKey: "x" });
-  assertEquals(dispatcherAxesToScreenOperationKind(axes), "search");
+Deno.test("dispatcherAxesToScreenOperationKind round-trips Search by screen layer", () => {
+  assertEquals(
+    dispatcherAxesToScreenOperationKind(
+      screenOperationToDispatcherAxes("list", { manifestKey: "x" }),
+    ),
+    "list",
+  );
+  assertEquals(
+    dispatcherAxesToScreenOperationKind(
+      screenOperationToDispatcherAxes("search", { manifestKey: "x" }),
+    ),
+    "search",
+  );
+  assertEquals(
+    dispatcherAxesToScreenOperationKind(
+      screenOperationToDispatcherAxes("detail", { manifestKey: "x" }),
+    ),
+    "detail",
+  );
+  assertEquals(
+    dispatcherAxesToScreenOperationKind(
+      screenOperationToDispatcherAxes("aggregation_view", { manifestKey: "x" }),
+    ),
+    "aggregation_view",
+  );
 });
 
 Deno.test("buildDraftInputFromScreenIntent: includes screenOperationKind", () => {
@@ -50,4 +87,52 @@ Deno.test("buildDraftInputFromScreenIntent: includes screenOperationKind", () =>
 Deno.test("screenOperationLabel returns Japanese labels", () => {
   assertEquals(screenOperationLabel("list"), "一覧");
   assertEquals(screenOperationLabel("aggregation_view"), "集計ビュー");
+});
+
+Deno.test("screenOperationToDispatcherAxes: update uses SSOT diffUpdate action", () => {
+  const axes = screenOperationToDispatcherAxes("update", {
+    manifestKey: "orders",
+  });
+  assertEquals(axes.layer, "screen_entity");
+  assertEquals(axes.action, "diffUpdate");
+  assertEquals(dispatcherAxesToScreenOperationKind(axes), "update");
+});
+
+Deno.test("screenOperationToDispatcherAxes: aggregation_view uses Search action", () => {
+  const axes = screenOperationToDispatcherAxes("aggregation_view", {
+    manifestKey: "orders",
+  });
+  assertEquals(axes.layer, "screen_aggregation");
+  assertEquals(axes.action, "Search");
+});
+
+Deno.test("screenOperationToDispatcherAxes: logicalDelete maps to screen_entity / logicalDelete action", () => {
+  const axes = screenOperationToDispatcherAxes("logicalDelete", {
+    manifestKey: "orders",
+  });
+  assertEquals(axes.layer, "screen_entity");
+  assertEquals(axes.action, "logicalDelete");
+  assertEquals(axes.role, "admin");
+  assertEquals(axes.target, "orders");
+  assertEquals(axes.runtimeDestination, "topology_transform_runtime");
+});
+
+Deno.test("screenOperationToDispatcherAxes: delete maps to screen_entity / logicalDelete action", () => {
+  const axes = screenOperationToDispatcherAxes("delete", {
+    manifestKey: "orders",
+  });
+  assertEquals(axes.layer, "screen_entity");
+  assertEquals(axes.action, "logicalDelete");
+});
+
+Deno.test("dispatcherAxesToScreenOperationKind: logicalDelete action round-trips", () => {
+  const axes = screenOperationToDispatcherAxes("logicalDelete", {
+    manifestKey: "x",
+  });
+  assertEquals(dispatcherAxesToScreenOperationKind(axes), "logicalDelete");
+});
+
+Deno.test("screenOperationLabel: logicalDelete and delete have Japanese labels", () => {
+  assertEquals(screenOperationLabel("logicalDelete"), "論理削除");
+  assertEquals(screenOperationLabel("delete"), "削除");
 });

@@ -156,6 +156,7 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
   const valid: NormalizedComponentEventType[] = [
     "click",
     "change",
+    "input",
     "select",
     "toggle",
     "expand",

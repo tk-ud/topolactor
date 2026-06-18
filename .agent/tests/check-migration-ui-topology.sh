@@ -283,7 +283,7 @@ VALUES ('cccccccc-0000-0000-0000-000000000001', 'sim_layout', 'stack')
 ON CONFLICT (layout_key) DO NOTHING;
 
 INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface)
-VALUES ('dddddddd-0000-0000-0000-000000000001', 'sim_wiring', 'bind', 'sim')
+VALUES ('dddddddd-0000-0000-0000-000000000001', 'sim_wiring', 'bind', 'route')
 ON CONFLICT (wiring_key) DO NOTHING;
 
 DO $$

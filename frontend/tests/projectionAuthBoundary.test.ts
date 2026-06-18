@@ -15,8 +15,23 @@ Deno.test("projection auth boundary: ProjectionShell passes Bearer token to all 
   assert(src.includes("queueClientCommand("), "projection must use queueClientCommand for dispatch");
   // Initial dispatch passes currentToken (post-refresh resolved token)
   assert(src.includes("currentToken"), "initial dispatch must pass resolved token to queueClientCommand");
-  // SSE refresh dispatch reads token from sessionStorage
-  assert(src.includes("demo_jwt_token"), "SSE refresh dispatch must read token from sessionStorage");
+  // SSE refresh dispatch uses ref-backed token from state (not stale sessionStorage)
+  assert(src.includes("projectionTokenRef"), "SSE refresh dispatch must use ref-backed token from state");
+});
+
+Deno.test("projection auth boundary: SSE refresh uses sse_projection_lane bridge (enqueueProjectionHookTrigger)", async () => {
+  const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
+  assert(src.includes("enqueueProjectionHookTrigger"), "SSE refresh must route through enqueueProjectionHookTrigger (sse_projection_lane bridge)");
+  assert(src.includes("createProjectionRuntime"), "SSE refresh must instantiate projectionRuntime as the projection_runtime lane node");
+  assert(src.includes("createSseDispatcherWithProjectionRuntime"), "SSE refresh must connect projectionRuntime via createSseDispatcherWithProjectionRuntime");
+});
+
+Deno.test("projection auth boundary: SSE refresh preserves all three identity fields without discard", async () => {
+  const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
+  assert(src.includes("manifest_id"), "SSE refresh must preserve manifestId in target override");
+  assert(src.includes("table_id"), "SSE refresh must preserve tableId in identity payload");
+  assert(src.includes("table_registry_id"), "SSE refresh must preserve tableRegistryId in identity payload");
+  assert(src.includes("identityPayload"), "identity payload must be built for all non-absent identity fields");
 });
 
 Deno.test("projection auth boundary: refresh failure on token invalidity clears carrier, realm mismatch does not", async () => {
@@ -39,6 +54,16 @@ Deno.test("projection auth boundary: LoginManifestPanel session probe accepts an
   const src = await Deno.readTextFile(new URL("../islands/LoginManifestPanel.tsx", import.meta.url));
   assert(!src.includes('probeSessionToken(t, "user")'), "session probe must not be user-realm fixed");
   assert(src.includes("probeSessionToken(t)"), "session probe must accept any valid JWT realm");
+});
+
+Deno.test("projection admin runtime ssot: projectionDefinition absence is fail-close — no shell_default frontend fallback", async () => {
+  const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
+  assert(!src.includes("shell_default"), "projectionDefinition must have no frontend-fixed fallback (shell_default is forbidden)");
+  assert(!src.includes("constructorKey:"), "no hardcoded constructorKey fallback allowed in ProjectionShell — projectionDefinition is manifest-response data-defined");
+  // Fail-close: projectionRuntime must only receive a definition when emission provides one (manifest-response surface).
+  // When absent, projectionRuntime.definitionMissingPolicy=error emits PROJECTION_RUNTIME_DEFINITION_MISSING on SSE events.
+  assert(src.includes("if (nextEmission.projectionDefinition)"), "projectionDefinition must be conditionally set — absent = explicit fail-close, not filled by frontend");
+  assert(!src.includes("projectionDefinition ??"), "projectionDefinition must not use nullish coalescing fallback in ProjectionShell");
 });
 
 Deno.test("admin projection boundary: middleware and client gate require admin realm probe", async () => {
