@@ -10,6 +10,13 @@ purpose: >
   - function categories that map to UI primitive categories
   - Issue #89 layout builder function vocabulary
   - no-code / DB-driven UI topology operation builder
+  - backend-wide execute_abstract_function primitive taxonomy and manifest/runtime boundary vocabulary
+
+  This SSOT owns:
+  - abstract function primitive names and categories
+  - execute_abstract_function as the backend-wide function substrate contract
+  - authority/input/output/projection/fail-close vocabulary for primitive manifests
+  - the rule that backend function bodies should be expressed as abstract function primitives when possible
 
   This SSOT does NOT own:
   - execution engine implementation
@@ -24,6 +31,7 @@ purpose: >
   - SQL Attention functions are observation-only and do not mutate registry
   - Calculation functions produce preview results; apply requires explicit confirm
   - External lookup functions produce candidates; canonical write requires confirm
+  - Backend abstract function steps must fail closed when authority, input binding, projection, or secret policy is missing
 
 # =============================================================================
 # Mutation boundary types (referenced by function entries)
@@ -666,6 +674,111 @@ category_g_basic_calculation_operators:
       output_kind: preview_only
       mutation_boundary: readonly
 
+# =============================================================================
+# Backend Abstract Function Runtime Substrate Vocabulary
+# =============================================================================
+
+backend_abstract_function_runtime_substrate:
+  execute_abstract_function:
+    role: backend_wide_function_substrate_contract
+    purpose: >
+      Express backend function bodies as manifest-defined primitive steps when possible,
+      while keeping the execution engine, DB schema, and runtime dispatch implementation
+      in their owning SSOT or implementation surfaces.
+    migration_rule:
+      - existing_concrete_functions_remain_until_seeded_abstract_function_paths_are_tested
+      - concrete_function_bodies_are_deleted_or_marked_compatibility_fallback_only_after_seed_tests_pass
+    not:
+      - provider_specific_runtime_handler
+      - bundle_specific_backend_handler
+      - frontend_authored_operation_body
+      - raw_sql_surface
+      - secret_projection_surface
+  primitive_categories:
+    authority:
+      primitives:
+        - validate_authority
+      owns:
+        - table_authority_check
+        - column_authority_check
+        - output_shape_authority_check
+        - policy_binding_check
+      fail_close_status:
+        - missing_authority
+        - invalid_authority
+    input_binding:
+      primitives:
+        - bind_input
+      owns:
+        - payload_value_binding
+        - context_value_binding
+        - prior_step_result_binding
+      fail_close_status:
+        - missing_input
+        - invalid_input_binding
+    db_operation:
+      primitives:
+        - db_query
+        - db_mutation
+        - call_postgres_function
+      owns:
+        - manifest_authorized_read
+        - manifest_authorized_write
+        - opaque_postgres_function_adapter_when_justified
+      prohibited:
+        - frontend_raw_sql
+        - payload_derived_table_authority
+        - csharp_function_name_switch_as_growth_surface
+    attention_and_recommendation:
+      primitives:
+        - sql_attention
+        - recommendation_attention
+        - phase_attention_adapter
+      owns:
+        - candidate_source
+        - evidence_append
+        - score
+        - rank
+        - projection
+      prohibited:
+        - route_state_auto_mutation
+        - canonical_topology_auto_mutation
+        - phase_attention_internals_inside_manifest_steps
+    credential:
+      primitives:
+        - credential_reference_resolve
+        - credential_materialize
+      owns:
+        - runtime_only_secret_resolution
+        - encrypted_payload_materialization_boundary
+      prohibited:
+        - plaintext_seed
+        - plaintext_projection
+        - plaintext_runtime_event_log
+    external_and_event:
+      primitives:
+        - http_request
+        - scheduler_enqueue
+        - event_log
+      owns:
+        - generic_http_adapter_call
+        - queue_enqueue
+        - append_only_event_record
+      prohibited:
+        - provider_specific_runtime_branch
+        - hidden_retry_or_silent_fallback
+    projection_and_failure:
+      primitives:
+        - projection
+        - fail_close
+      owns:
+        - output_shape_projection
+        - secret_deny_projection
+        - explicit_failure_status
+      fail_close_status:
+        - invalid_projection
+        - secret_projection_denied
+        - unsupported_primitive
 
 # =============================================================================
 # Summary
@@ -691,3 +804,4 @@ registry_summary:
   lower_surfaces:
     - frontend runtime abstract functions (hardcoded shapes per runtime-orchestration-ssot.yaml)
     - backend topology function interface (runtime-orchestration-ssot.yaml abstract_function_contract)
+    - backend execute_abstract_function primitive executor (runtime-orchestration-ssot.yaml dispatch boundary)
