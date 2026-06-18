@@ -203,7 +203,7 @@ public sealed class NpgsqlExternalPortPolicyRepository : IExternalPortPolicyRepo
         await using (var stepCmd = conn.CreateCommand())
         {
             stepCmd.CommandText = """
-                SELECT policy_step_id, policy_id, step_order, operation_key, step_config, active
+                SELECT policy_step_id, policy_id, step_order, operation_key, CASE WHEN abstract_function_key IS NULL THEN step_config ELSE jsonb_set(step_config, '{abstract_function_key}', to_jsonb(abstract_function_key), true) END AS step_config, active
                 FROM topology.external_port_policy_steps
                 WHERE active = true
                   AND policy_id = @policyId

@@ -487,12 +487,82 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policies (
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+
+-- ---------------------------------------------------------------------------
+-- Abstract function manifest substrate.
+-- Manifest rows are the authority for execute_abstract_function runtime lane,
+-- primitive ordering, input bindings, projection allow/deny metadata, and
+-- policy binding. Payloads may provide scalar values only; table/column/output
+-- authority must be expressed here or by physical table binding seed authority.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.abstract_function_manifests (
+    abstract_function_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    function_key         TEXT NOT NULL UNIQUE,
+    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime')),
+    authority_scope      TEXT NOT NULL,
+    output_shape         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    projection_deny_keys TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
+    active              BOOLEAN NOT NULL DEFAULT true,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.abstract_function_steps (
+    abstract_function_step_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    abstract_function_id      UUID NOT NULL REFERENCES topology.abstract_function_manifests (abstract_function_id) ON DELETE CASCADE,
+    step_order                INTEGER NOT NULL CHECK (step_order > 0),
+    primitive_key             TEXT NOT NULL,
+    step_config               JSONB NOT NULL DEFAULT '{}'::jsonb,
+    result_context_key        TEXT,
+    active                    BOOLEAN NOT NULL DEFAULT true,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (abstract_function_id, step_order)
+);
+
+CREATE TABLE IF NOT EXISTS topology.abstract_function_input_bindings (
+    input_binding_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    abstract_function_step_id UUID NOT NULL REFERENCES topology.abstract_function_steps (abstract_function_step_id) ON DELETE CASCADE,
+    input_key                 TEXT NOT NULL,
+    binding_source            TEXT NOT NULL CHECK (binding_source IN ('payload','result_context','constant','external_context','manifest_authority','physical_table_binding','route_context')),
+    binding_path              TEXT NOT NULL,
+    required                  BOOLEAN NOT NULL DEFAULT true,
+    secret                    BOOLEAN NOT NULL DEFAULT false,
+    active                    BOOLEAN NOT NULL DEFAULT true,
+    created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (abstract_function_step_id, input_key)
+);
+
+CREATE TABLE IF NOT EXISTS topology.abstract_function_authority_bindings (
+    authority_binding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    abstract_function_id UUID NOT NULL REFERENCES topology.abstract_function_manifests (abstract_function_id) ON DELETE CASCADE,
+    authority_kind       TEXT NOT NULL CHECK (authority_kind IN ('table','column','join','output','policy')),
+    authority_ref        TEXT NOT NULL,
+    active               BOOLEAN NOT NULL DEFAULT true,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (abstract_function_id, authority_kind, authority_ref)
+);
+
+CREATE INDEX IF NOT EXISTS idx_abstract_function_steps_manifest
+    ON topology.abstract_function_steps (abstract_function_id, step_order) WHERE active = true;
+
+CREATE INDEX IF NOT EXISTS idx_abstract_function_bindings_step
+    ON topology.abstract_function_input_bindings (abstract_function_step_id) WHERE active = true;
+
+COMMENT ON TABLE topology.abstract_function_manifests IS 'Manifest authority for backend execute_abstract_function. Frontend payloads do not provide table, column, join, output, or secret projection authority.';
+COMMENT ON TABLE topology.abstract_function_steps IS 'Ordered generic primitive steps for execute_abstract_function; primitive_key is data and must resolve through the backend generic primitive registry.';
+COMMENT ON TABLE topology.abstract_function_input_bindings IS 'Typed input binding from payload/context/result/manifest/physical binding authority. Raw SQL and payload-derived table authority are prohibited.';
+COMMENT ON TABLE topology.abstract_function_authority_bindings IS 'Table/column/join/output/policy authority for abstract functions. Used to fail-close missing or invalid authority.';
+
 CREATE TABLE IF NOT EXISTS topology.external_port_policy_steps (
     policy_step_id UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     policy_id      UUID        NOT NULL REFERENCES topology.external_port_policies (policy_id) ON DELETE CASCADE,
     step_order     INTEGER     NOT NULL CHECK (step_order > 0),
-    operation_key  TEXT        NOT NULL CHECK (operation_key IN ('resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload','decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http','capture_response','execute_db_function','verify_signature_by_config','enqueue_scheduler_event','append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config','write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version','release_refresh_lease','compute_checksum')),
+    operation_key  TEXT        NOT NULL CHECK (operation_key IN ('resolve_port_record','resolve_credential_reference','load_encrypted_credential_payload','decrypt_for_runtime_use','build_http_request','inject_authorization_header','send_http','capture_response','execute_db_function','verify_signature_by_config','enqueue_scheduler_event','append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config','write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version','release_refresh_lease','compute_checksum','execute_abstract_function')),
     step_config    JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    abstract_function_key TEXT REFERENCES topology.abstract_function_manifests (function_key),
     active         BOOLEAN     NOT NULL DEFAULT true,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -519,7 +589,7 @@ ALTER TABLE topology.external_port_policy_steps
         'append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config',
         'write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version',
         'release_refresh_lease',
-        'compute_checksum'
+        'compute_checksum','execute_abstract_function'
     ));
 
 -- ---------------------------------------------------------------------------

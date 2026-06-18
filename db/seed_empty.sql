@@ -2035,23 +2035,23 @@ VALUES
     ('00000000-0000-0000-0000-0000000000e3', 'external_hook_port_scheduler_boundary', 'hook_port', 'external-port-substrate-seed-coding', true)
 ON CONFLICT (policy_id) DO NOTHING;
 
-INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
+INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
 VALUES
-    ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-0000000000e1', 1, 'resolve_port_record', '{}', true),
-    ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-0000000000e1', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-0000000000e1', 3, 'build_http_request', '{}', true),
-    ('00000000-0000-0000-0000-000000000104', '00000000-0000-0000-0000-0000000000e1', 4, 'send_http', '{}', true),
-    ('00000000-0000-0000-0000-000000000105', '00000000-0000-0000-0000-0000000000e1', 5, 'capture_response', '{}', true),
-    ('00000000-0000-0000-0000-000000000201', '00000000-0000-0000-0000-0000000000e2', 1, 'resolve_port_record', '{}', true),
-    ('00000000-0000-0000-0000-000000000202', '00000000-0000-0000-0000-0000000000e2', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000203', '00000000-0000-0000-0000-0000000000e2', 3, 'build_http_request', '{}', true),
-    ('00000000-0000-0000-0000-000000000204', '00000000-0000-0000-0000-0000000000e2', 4, 'send_http', '{}', true),
-    ('00000000-0000-0000-0000-000000000205', '00000000-0000-0000-0000-0000000000e2', 5, 'capture_response', '{}', true),
-    ('00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-0000000000e3', 1, 'resolve_port_record', '{}', true),
-    ('00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-0000000000e3', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000303', '00000000-0000-0000-0000-0000000000e3', 3, 'verify_signature_by_config', '{}', true),
-    ('00000000-0000-0000-0000-000000000304', '00000000-0000-0000-0000-0000000000e3', 4, 'enqueue_scheduler_event', '{}', true),
-    ('00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-0000000000e3', 5, 'append_runtime_event_log', '{}', true)
+    ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-0000000000e1', 1, 'resolve_port_record', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-0000000000e1', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-0000000000e1', 3, 'build_http_request', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000104', '00000000-0000-0000-0000-0000000000e1', 4, 'send_http', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000105', '00000000-0000-0000-0000-0000000000e1', 5, 'capture_response', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000201', '00000000-0000-0000-0000-0000000000e2', 1, 'resolve_port_record', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000202', '00000000-0000-0000-0000-0000000000e2', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000203', '00000000-0000-0000-0000-0000000000e2', 3, 'build_http_request', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000204', '00000000-0000-0000-0000-0000000000e2', 4, 'send_http', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000205', '00000000-0000-0000-0000-0000000000e2', 5, 'capture_response', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-0000000000e3', 1, 'resolve_port_record', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-0000000000e3', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000303', '00000000-0000-0000-0000-0000000000e3', 3, 'verify_signature_by_config', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000304', '00000000-0000-0000-0000-0000000000e3', 4, 'enqueue_scheduler_event', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-0000000000e3', 5, 'append_runtime_event_log', '{}', NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
 
 
@@ -2146,6 +2146,69 @@ VALUES
     ('00000000-0000-0000-0000-0000000000eb', 'export_sftp_response_port_generic',     'response_port', 'export_sftp_bundle',    true)
 ON CONFLICT (policy_id) DO NOTHING;
 
+
+-- ---------------------------------------------------------------------------
+-- Abstract function manifests for file-storage migration seed path.
+-- These rows express the DB mutation authority and projection deny rules before
+-- concrete execute_db_function compatibility steps are removed.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.abstract_function_manifests
+    (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af01', 'file_storage.record_export_job', 'external_port_runtime', 'file_storage_bundle', '{"result":"ExportJobId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
+    ('00000000-0000-0000-0000-00000000af02', 'file_storage.record_file_artifact', 'external_port_runtime', 'file_storage_bundle', '{"result":"FileArtifactId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
+    ('00000000-0000-0000-0000-00000000af03', 'file_storage.write_manifest_record', 'external_port_runtime', 'file_storage_bundle', '{"result":"ManifestId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
+    ('00000000-0000-0000-0000-00000000af04', 'file_storage.authorize_signed_download', 'external_port_runtime', 'file_storage_bundle', '{"result":"AuthorizationKey"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true)
+ON CONFLICT (abstract_function_id) DO NOTHING;
+
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf01', '00000000-0000-0000-0000-00000000af01', 1, 'call_postgres_function', '{"function":"topology.fs_record_export_job","arguments":["idempotency_key","required_by_bundle","port_id","port_kind","requested_by","export_format","period"]}', 'ExportJobId', true),
+    ('00000000-0000-0000-0000-00000000bf02', '00000000-0000-0000-0000-00000000af02', 1, 'call_postgres_function', '{"function":"topology.fs_record_file_artifact","arguments":["export_job_id","file_name","file_type","storage_ref","checksum_value"]}', 'FileArtifactId', true),
+    ('00000000-0000-0000-0000-00000000bf03', '00000000-0000-0000-0000-00000000af03', 1, 'call_postgres_function', '{"function":"topology.fs_write_manifest_record","arguments":["export_job_id","file_artifact_id","requested_by","period","export_format","checksum_value"]}', 'ManifestId', true),
+    ('00000000-0000-0000-0000-00000000bf04', '00000000-0000-0000-0000-00000000af04', 1, 'call_postgres_function', '{"function":"topology.fs_authorize_signed_download","arguments":["file_artifact_id","requested_by"]}', 'AuthorizationKey', true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000c001', '00000000-0000-0000-0000-00000000bf01', 'idempotency_key', 'payload', 'idempotency_key', true, false, true),
+    ('00000000-0000-0000-0000-00000000c002', '00000000-0000-0000-0000-00000000bf01', 'required_by_bundle', 'external_context', 'required_by_bundle', true, false, true),
+    ('00000000-0000-0000-0000-00000000c003', '00000000-0000-0000-0000-00000000bf01', 'port_id', 'external_context', 'port_id', false, false, true),
+    ('00000000-0000-0000-0000-00000000c004', '00000000-0000-0000-0000-00000000bf01', 'port_kind', 'external_context', 'port_kind', true, false, true),
+    ('00000000-0000-0000-0000-00000000c005', '00000000-0000-0000-0000-00000000bf01', 'requested_by', 'payload', 'requested_by', true, false, true),
+    ('00000000-0000-0000-0000-00000000c006', '00000000-0000-0000-0000-00000000bf01', 'export_format', 'payload', 'export_format', false, false, true),
+    ('00000000-0000-0000-0000-00000000c007', '00000000-0000-0000-0000-00000000bf01', 'period', 'payload', 'period', false, false, true),
+    ('00000000-0000-0000-0000-00000000c008', '00000000-0000-0000-0000-00000000bf02', 'export_job_id', 'external_context', 'export_job_id', true, false, true),
+    ('00000000-0000-0000-0000-00000000c009', '00000000-0000-0000-0000-00000000bf02', 'file_name', 'payload', 'file_name', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00a', '00000000-0000-0000-0000-00000000bf02', 'file_type', 'payload', 'file_type', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00b', '00000000-0000-0000-0000-00000000bf02', 'storage_ref', 'external_context', 'storage_ref', true, true, true),
+    ('00000000-0000-0000-0000-00000000c00c', '00000000-0000-0000-0000-00000000bf02', 'checksum_value', 'external_context', 'checksum_value', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00d', '00000000-0000-0000-0000-00000000bf03', 'export_job_id', 'external_context', 'export_job_id', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00e', '00000000-0000-0000-0000-00000000bf03', 'file_artifact_id', 'external_context', 'file_artifact_id', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00f', '00000000-0000-0000-0000-00000000bf03', 'requested_by', 'payload', 'requested_by', true, false, true),
+    ('00000000-0000-0000-0000-00000000c010', '00000000-0000-0000-0000-00000000bf03', 'period', 'payload', 'period', false, false, true),
+    ('00000000-0000-0000-0000-00000000c011', '00000000-0000-0000-0000-00000000bf03', 'export_format', 'payload', 'export_format', false, false, true),
+    ('00000000-0000-0000-0000-00000000c012', '00000000-0000-0000-0000-00000000bf03', 'checksum_value', 'external_context', 'checksum_value', false, false, true),
+    ('00000000-0000-0000-0000-00000000c013', '00000000-0000-0000-0000-00000000bf04', 'file_artifact_id', 'external_context', 'file_artifact_id', true, false, true),
+    ('00000000-0000-0000-0000-00000000c014', '00000000-0000-0000-0000-00000000bf04', 'requested_by', 'payload', 'requested_by', true, false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
+
+INSERT INTO topology.abstract_function_authority_bindings
+    (abstract_function_id, authority_kind, authority_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af01', 'policy', 'file_storage_access_port_generic', true),
+    ('00000000-0000-0000-0000-00000000af02', 'policy', 'file_storage_access_port_generic', true),
+    ('00000000-0000-0000-0000-00000000af03', 'policy', 'file_storage_access_port_generic', true),
+    ('00000000-0000-0000-0000-00000000af04', 'policy', 'file_storage_access_port_generic', true),
+    ('00000000-0000-0000-0000-00000000af01', 'table', 'topology.export_jobs', true),
+    ('00000000-0000-0000-0000-00000000af02', 'table', 'topology.file_artifacts', true),
+    ('00000000-0000-0000-0000-00000000af03', 'table', 'topology.export_manifests', true),
+    ('00000000-0000-0000-0000-00000000af04', 'table', 'topology.signed_download_authorizations', true)
+ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
 -- Consumer bundle policy steps (operation_key values constrained to external-port SSOT allowed set)
 -- file_storage steps use DELETE+INSERT to allow re-seeding with updated credential pipeline (17 steps)
 DELETE FROM topology.external_port_policy_steps
@@ -2157,90 +2220,90 @@ WHERE policy_id IN (
     '00000000-0000-0000-0000-0000000000ef'
 );
 
-INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
+INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
 VALUES
     -- file_storage_bundle access_port (17 steps: credential pipeline + compute_checksum + 4x execute_db_function interleaved with 4x append_runtime_event_log)
-    ('00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-0000000000e4',  1, 'resolve_port_record',              '{}', true),
-    ('00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-0000000000e4',  2, 'resolve_credential_reference',     '{}', true),
-    ('00000000-0000-0000-0000-000000000403', '00000000-0000-0000-0000-0000000000e4',  3, 'load_encrypted_credential_payload','{}', true),
-    ('00000000-0000-0000-0000-000000000404', '00000000-0000-0000-0000-0000000000e4',  4, 'decrypt_for_runtime_use',          '{}', true),
-    ('00000000-0000-0000-0000-000000000405', '00000000-0000-0000-0000-0000000000e4',  5, 'build_http_request',               '{}', true),
-    ('00000000-0000-0000-0000-0000000004a0', '00000000-0000-0000-0000-0000000000e4',  6, 'inject_authorization_header',      '{}', true),
-    ('00000000-0000-0000-0000-0000000004a1', '00000000-0000-0000-0000-0000000000e4',  7, 'send_http',                        '{}', true),
-    ('00000000-0000-0000-0000-0000000004a2', '00000000-0000-0000-0000-0000000000e4',  8, 'capture_response',                 '{}', true),
-    ('00000000-0000-0000-0000-000000000407', '00000000-0000-0000-0000-0000000000e4',  9, 'compute_checksum',                 '{}', true),
-    ('00000000-0000-0000-0000-000000000490', '00000000-0000-0000-0000-0000000000e4', 10, 'append_runtime_event_log', '{"event_type":"checksum_verified","entity_ref_key":"ChecksumValue"}', true),
-    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 11, 'execute_db_function', '{"function":"topology.fs_record_export_job","output":"ExportJobId"}', true),
-    ('00000000-0000-0000-0000-000000000491', '00000000-0000-0000-0000-0000000000e4', 12, 'append_runtime_event_log', '{"event_type":"export_job_initiated","entity_ref_key":"ExportJobId"}', true),
-    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 13, 'execute_db_function', '{"function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', true),
-    ('00000000-0000-0000-0000-000000000492', '00000000-0000-0000-0000-0000000000e4', 14, 'append_runtime_event_log', '{"event_type":"file_write_completed","entity_ref_key":"FileArtifactId"}', true),
-    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 15, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
-    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 16, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
-    ('00000000-0000-0000-0000-000000000493', '00000000-0000-0000-0000-0000000000e4', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', true),
+    ('00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-0000000000e4',  1, 'resolve_port_record',              '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-0000000000e4',  2, 'resolve_credential_reference',     '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000403', '00000000-0000-0000-0000-0000000000e4',  3, 'load_encrypted_credential_payload','{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000404', '00000000-0000-0000-0000-0000000000e4',  4, 'decrypt_for_runtime_use',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000405', '00000000-0000-0000-0000-0000000000e4',  5, 'build_http_request',               '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004a0', '00000000-0000-0000-0000-0000000000e4',  6, 'inject_authorization_header',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004a1', '00000000-0000-0000-0000-0000000000e4',  7, 'send_http',                        '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004a2', '00000000-0000-0000-0000-0000000000e4',  8, 'capture_response',                 '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000407', '00000000-0000-0000-0000-0000000000e4',  9, 'compute_checksum',                 '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000490', '00000000-0000-0000-0000-0000000000e4', 10, 'append_runtime_event_log', '{"event_type":"checksum_verified","entity_ref_key":"ChecksumValue"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 11, 'execute_abstract_function', '{}', 'file_storage.record_export_job', true),
+    ('00000000-0000-0000-0000-000000000491', '00000000-0000-0000-0000-0000000000e4', 12, 'append_runtime_event_log', '{"event_type":"export_job_initiated","entity_ref_key":"ExportJobId"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 13, 'execute_abstract_function', '{}', 'file_storage.record_file_artifact', true),
+    ('00000000-0000-0000-0000-000000000492', '00000000-0000-0000-0000-0000000000e4', 14, 'append_runtime_event_log', '{"event_type":"file_write_completed","entity_ref_key":"FileArtifactId"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 15, 'execute_abstract_function', '{}', 'file_storage.write_manifest_record', true),
+    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 16, 'execute_abstract_function', '{}', 'file_storage.authorize_signed_download', true),
+    ('00000000-0000-0000-0000-000000000493', '00000000-0000-0000-0000-0000000000e4', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', NULL, true),
     -- file_storage_bundle response_port (17 steps: credential pipeline + compute_checksum + 4x execute_db_function interleaved with 4x append_runtime_event_log)
-    ('00000000-0000-0000-0000-000000000411', '00000000-0000-0000-0000-0000000000e5',  1, 'resolve_port_record',              '{}', true),
-    ('00000000-0000-0000-0000-000000000412', '00000000-0000-0000-0000-0000000000e5',  2, 'resolve_credential_reference',     '{}', true),
-    ('00000000-0000-0000-0000-000000000413', '00000000-0000-0000-0000-0000000000e5',  3, 'load_encrypted_credential_payload','{}', true),
-    ('00000000-0000-0000-0000-000000000414', '00000000-0000-0000-0000-0000000000e5',  4, 'decrypt_for_runtime_use',          '{}', true),
-    ('00000000-0000-0000-0000-000000000415', '00000000-0000-0000-0000-0000000000e5',  5, 'build_http_request',               '{}', true),
-    ('00000000-0000-0000-0000-0000000004b0', '00000000-0000-0000-0000-0000000000e5',  6, 'inject_authorization_header',      '{}', true),
-    ('00000000-0000-0000-0000-0000000004b1', '00000000-0000-0000-0000-0000000000e5',  7, 'send_http',                        '{}', true),
-    ('00000000-0000-0000-0000-0000000004b2', '00000000-0000-0000-0000-0000000000e5',  8, 'capture_response',                 '{}', true),
-    ('00000000-0000-0000-0000-000000000417', '00000000-0000-0000-0000-0000000000e5',  9, 'compute_checksum',                 '{}', true),
-    ('00000000-0000-0000-0000-000000000494', '00000000-0000-0000-0000-0000000000e5', 10, 'append_runtime_event_log', '{"event_type":"checksum_verified","entity_ref_key":"ChecksumValue"}', true),
-    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 11, 'execute_db_function', '{"function":"topology.fs_record_export_job","output":"ExportJobId"}', true),
-    ('00000000-0000-0000-0000-000000000495', '00000000-0000-0000-0000-0000000000e5', 12, 'append_runtime_event_log', '{"event_type":"export_job_initiated","entity_ref_key":"ExportJobId"}', true),
-    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 13, 'execute_db_function', '{"function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', true),
-    ('00000000-0000-0000-0000-000000000496', '00000000-0000-0000-0000-0000000000e5', 14, 'append_runtime_event_log', '{"event_type":"file_write_completed","entity_ref_key":"FileArtifactId"}', true),
-    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 15, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
-    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 16, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
-    ('00000000-0000-0000-0000-000000000497', '00000000-0000-0000-0000-0000000000e5', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', true),
+    ('00000000-0000-0000-0000-000000000411', '00000000-0000-0000-0000-0000000000e5',  1, 'resolve_port_record',              '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000412', '00000000-0000-0000-0000-0000000000e5',  2, 'resolve_credential_reference',     '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000413', '00000000-0000-0000-0000-0000000000e5',  3, 'load_encrypted_credential_payload','{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000414', '00000000-0000-0000-0000-0000000000e5',  4, 'decrypt_for_runtime_use',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000415', '00000000-0000-0000-0000-0000000000e5',  5, 'build_http_request',               '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004b0', '00000000-0000-0000-0000-0000000000e5',  6, 'inject_authorization_header',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004b1', '00000000-0000-0000-0000-0000000000e5',  7, 'send_http',                        '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004b2', '00000000-0000-0000-0000-0000000000e5',  8, 'capture_response',                 '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000417', '00000000-0000-0000-0000-0000000000e5',  9, 'compute_checksum',                 '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000494', '00000000-0000-0000-0000-0000000000e5', 10, 'append_runtime_event_log', '{"event_type":"checksum_verified","entity_ref_key":"ChecksumValue"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 11, 'execute_abstract_function', '{}', 'file_storage.record_export_job', true),
+    ('00000000-0000-0000-0000-000000000495', '00000000-0000-0000-0000-0000000000e5', 12, 'append_runtime_event_log', '{"event_type":"export_job_initiated","entity_ref_key":"ExportJobId"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 13, 'execute_abstract_function', '{}', 'file_storage.record_file_artifact', true),
+    ('00000000-0000-0000-0000-000000000496', '00000000-0000-0000-0000-0000000000e5', 14, 'append_runtime_event_log', '{"event_type":"file_write_completed","entity_ref_key":"FileArtifactId"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 15, 'execute_abstract_function', '{}', 'file_storage.write_manifest_record', true),
+    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 16, 'execute_abstract_function', '{}', 'file_storage.authorize_signed_download', true),
+    ('00000000-0000-0000-0000-000000000497', '00000000-0000-0000-0000-0000000000e5', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', NULL, true),
     -- file_storage attachment response_port policies (credential pipeline + execute_db_function; no attachment credential plane)
-    ('00000000-0000-0000-0000-0000000004c1', '00000000-0000-0000-0000-0000000000ed', 1, 'resolve_port_record', '{}', true),
-    ('00000000-0000-0000-0000-0000000004c2', '00000000-0000-0000-0000-0000000000ed', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-0000000004c3', '00000000-0000-0000-0000-0000000000ed', 3, 'execute_db_function', '{"function":"topology.fs_bind_record_file_attachment","output":"AttachmentBindingId"}', true),
-    ('00000000-0000-0000-0000-0000000004d1', '00000000-0000-0000-0000-0000000000ee', 1, 'resolve_port_record', '{}', true),
-    ('00000000-0000-0000-0000-0000000004d2', '00000000-0000-0000-0000-0000000000ee', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-0000000004d3', '00000000-0000-0000-0000-0000000000ee', 3, 'execute_db_function', '{"function":"topology.fs_list_record_file_attachments","output":"AttachmentsJson"}', true),
-    ('00000000-0000-0000-0000-0000000004e1', '00000000-0000-0000-0000-0000000000ef', 1, 'resolve_port_record', '{}', true),
-    ('00000000-0000-0000-0000-0000000004e2', '00000000-0000-0000-0000-0000000000ef', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-0000000004e3', '00000000-0000-0000-0000-0000000000ef', 3, 'execute_db_function', '{"function":"topology.fs_unbind_record_file_attachment","output":"RemovedCount"}', true),
+    ('00000000-0000-0000-0000-0000000004c1', '00000000-0000-0000-0000-0000000000ed', 1, 'resolve_port_record', '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004c2', '00000000-0000-0000-0000-0000000000ed', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004c3', '00000000-0000-0000-0000-0000000000ed', 3, 'execute_db_function', '{"function":"topology.fs_bind_record_file_attachment","output":"AttachmentBindingId"}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004d1', '00000000-0000-0000-0000-0000000000ee', 1, 'resolve_port_record', '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004d2', '00000000-0000-0000-0000-0000000000ee', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004d3', '00000000-0000-0000-0000-0000000000ee', 3, 'execute_db_function', '{"function":"topology.fs_list_record_file_attachments","output":"AttachmentsJson"}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004e1', '00000000-0000-0000-0000-0000000000ef', 1, 'resolve_port_record', '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004e2', '00000000-0000-0000-0000-0000000000ef', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004e3', '00000000-0000-0000-0000-0000000000ef', 3, 'execute_db_function', '{"function":"topology.fs_unbind_record_file_attachment","output":"RemovedCount"}', NULL, true),
     -- email_bundle response_port
-    ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000423', '00000000-0000-0000-0000-0000000000e6', 3, 'build_http_request',           '{}', true),
-    ('00000000-0000-0000-0000-000000000424', '00000000-0000-0000-0000-0000000000e6', 4, 'send_http',                    '{}', true),
-    ('00000000-0000-0000-0000-000000000425', '00000000-0000-0000-0000-0000000000e6', 5, 'append_runtime_event_log',     '{}', true),
+    ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000423', '00000000-0000-0000-0000-0000000000e6', 3, 'build_http_request',           '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000424', '00000000-0000-0000-0000-0000000000e6', 4, 'send_http',                    '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000425', '00000000-0000-0000-0000-0000000000e6', 5, 'append_runtime_event_log',     '{}', NULL, true),
     -- stripe_bundle hook_port
-    ('00000000-0000-0000-0000-000000000431', '00000000-0000-0000-0000-0000000000e7', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000432', '00000000-0000-0000-0000-0000000000e7', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000433', '00000000-0000-0000-0000-0000000000e7', 3, 'verify_signature_by_config',   '{}', true),
-    ('00000000-0000-0000-0000-000000000434', '00000000-0000-0000-0000-0000000000e7', 4, 'enqueue_scheduler_event',      '{}', true),
-    ('00000000-0000-0000-0000-000000000435', '00000000-0000-0000-0000-0000000000e7', 5, 'append_runtime_event_log',     '{}', true),
+    ('00000000-0000-0000-0000-000000000431', '00000000-0000-0000-0000-0000000000e7', 1, 'resolve_port_record',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000432', '00000000-0000-0000-0000-0000000000e7', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000433', '00000000-0000-0000-0000-0000000000e7', 3, 'verify_signature_by_config',   '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000434', '00000000-0000-0000-0000-0000000000e7', 4, 'enqueue_scheduler_event',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000435', '00000000-0000-0000-0000-0000000000e7', 5, 'append_runtime_event_log',     '{}', NULL, true),
     -- webhook_inbox_bundle hook_port
-    ('00000000-0000-0000-0000-000000000441', '00000000-0000-0000-0000-0000000000e8', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000442', '00000000-0000-0000-0000-0000000000e8', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000443', '00000000-0000-0000-0000-0000000000e8', 3, 'verify_signature_by_config',   '{}', true),
-    ('00000000-0000-0000-0000-000000000444', '00000000-0000-0000-0000-0000000000e8', 4, 'enqueue_scheduler_event',      '{}', true),
-    ('00000000-0000-0000-0000-000000000445', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',     '{}', true),
+    ('00000000-0000-0000-0000-000000000441', '00000000-0000-0000-0000-0000000000e8', 1, 'resolve_port_record',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000442', '00000000-0000-0000-0000-0000000000e8', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000443', '00000000-0000-0000-0000-0000000000e8', 3, 'verify_signature_by_config',   '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000444', '00000000-0000-0000-0000-0000000000e8', 4, 'enqueue_scheduler_event',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000445', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',     '{}', NULL, true),
     -- job_scheduler_bundle access_port
-    ('00000000-0000-0000-0000-000000000451', '00000000-0000-0000-0000-0000000000e9', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000452', '00000000-0000-0000-0000-0000000000e9', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e9', 3, 'append_runtime_event_log',     '{}', true),
+    ('00000000-0000-0000-0000-000000000451', '00000000-0000-0000-0000-0000000000e9', 1, 'resolve_port_record',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000452', '00000000-0000-0000-0000-0000000000e9', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e9', 3, 'append_runtime_event_log',     '{}', NULL, true),
     -- job_scheduler_bundle hook_port (credential_kind = none; resolve_credential_reference skipped)
-    ('00000000-0000-0000-0000-000000000481', '00000000-0000-0000-0000-0000000000ec', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000482', '00000000-0000-0000-0000-0000000000ec', 2, 'enqueue_scheduler_event',      '{}', true),
-    ('00000000-0000-0000-0000-000000000483', '00000000-0000-0000-0000-0000000000ec', 3, 'append_runtime_event_log',     '{}', true),
+    ('00000000-0000-0000-0000-000000000481', '00000000-0000-0000-0000-0000000000ec', 1, 'resolve_port_record',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000482', '00000000-0000-0000-0000-0000000000ec', 2, 'enqueue_scheduler_event',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000483', '00000000-0000-0000-0000-0000000000ec', 3, 'append_runtime_event_log',     '{}', NULL, true),
     -- audit_approval_bundle response_port
-    ('00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-0000000000ea', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-0000000000ea', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000463', '00000000-0000-0000-0000-0000000000ea', 3, 'build_http_request',           '{}', true),
-    ('00000000-0000-0000-0000-000000000464', '00000000-0000-0000-0000-0000000000ea', 4, 'send_http',                    '{}', true),
-    ('00000000-0000-0000-0000-000000000465', '00000000-0000-0000-0000-0000000000ea', 5, 'append_runtime_event_log',     '{}', true),
+    ('00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-0000000000ea', 1, 'resolve_port_record',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-0000000000ea', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000463', '00000000-0000-0000-0000-0000000000ea', 3, 'build_http_request',           '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000464', '00000000-0000-0000-0000-0000000000ea', 4, 'send_http',                    '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000465', '00000000-0000-0000-0000-0000000000ea', 5, 'append_runtime_event_log',     '{}', NULL, true),
     -- export_sftp_bundle response_port
-    ('00000000-0000-0000-0000-000000000471', '00000000-0000-0000-0000-0000000000eb', 1, 'resolve_port_record',          '{}', true),
-    ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-0000000000eb', 2, 'resolve_credential_reference', '{}', true),
-    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{}', true)
+    ('00000000-0000-0000-0000-000000000471', '00000000-0000-0000-0000-0000000000eb', 1, 'resolve_port_record',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-0000000000eb', 2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{}', NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
 
 -- file_storage_bundle domain operation steps are now included in the 13-step credential pipeline above.
