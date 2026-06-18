@@ -8,7 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
-| `sql-ci-attention-defect-followup` | SQL Attention / CI Attention 不良指摘フォローアップ | not_started | 1 | `product.sql_attention_feedback` / `product.ci_contract` | `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml` |
+| `sql-ci-attention-runtime-lane-alignment` | SQL Attention / CI Attention runtime lane alignment 修正 | not_started | 1 | `product.sql_attention_feedback` / `product.ci_contract` | `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -26,28 +26,30 @@
 
 ---
 
-## Bundle `sql-ci-attention-defect-followup`
+## Bundle `sql-ci-attention-runtime-lane-alignment`
 
 **Status:** not_started
 **Roadmap/status SSOT:** `product.sql_attention_feedback` / `product.ci_contract`
 **SSOT:** `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml`
 
 問題点:
-Open Issue / Issue コメントで SQL Attention / CI Attention 周辺に不良指摘がある。SQL Attention / CI Attention には一部 manifest-dispatchable / AdminRuntime 経路がある一方で、production cron / diagnostic / read projection 経路に RuntimeTimelineScheduler / ManifestDispatcher / response・SSE・projection lane を通らない直通経路が混在している。既存の completion bundle や external port consumer bundle へ混ぜると、SQL Attention の append-only evidence / child projection 境界と CI Attention の read-only guidance / backend promotion gate 境界の不具合対応が atom TODO として埋もれる。SSOT は再定義せず、既存契約に対する実装・テスト整合のフォローアップ Bundle として分離して扱う。
+横断 NG 軸（canonical runtime lane 迂回、直通 BackgroundService / direct read endpoint / diagnostic logging 経路の混在、response・SSE・projection lane の責務混同）が SQL Attention / CI Attention surface にも残り得る。SQL Attention は `SqlAttentionScheduler` cron 直通 route、`registry_attractor_runtime` manifest-dispatch route、`logs.current` candidate marking、`logs.attention` append-only evidence write、read-only topology projection GET の責務分界が実装・テスト上で揃いきっていない。CI Attention は `SystemOperationCiScheduler` structured logging only の read-only diagnostic surface、`AdminRuntime.ExecuteDataAsync` / `ci_attention:refresh_fragments`、guidance fragment current/history、backend promotion/apply gate の境界が混同される余地がある。
 
 目的:
-SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.hub_relations -> logs.attention -> child projection` の観測・推薦 evidence line を明示失敗で維持し、cron route / registry_attractor_runtime dispatch route / read-only topology projection GET の境界差分を証明または統合する。CI Attention は guidance fragment を read-only evidence として扱い、draft editing を塞がず、backend promotion/apply gate だけが active blocking fragment を fail-close で消費する境界を維持し、cron diagnostic result が fragment / SSE / projection lane へ通貫するかを証明する。
+SSOT を再定義せず、SQL Attention と CI Attention の runtime lane を修正 Bundle として揃える。SQL Attention は cron / manifest-dispatch / logs.current marking / logs.attention append-only evidence / read-only projection GET を、それぞれの正しい runtime boundary と failure behavior に合わせる。CI Attention は read-only diagnostic surface、guidance fragment refresh/current/history、backend promotion/apply gate を別境界として扱い、必要な接続または残 gap を実装修正・テスト修正の境界として明確化する。
 
 改善方針:
-- [ ] Open Issue / Issue コメントの不良指摘を SQL Attention と CI Attention に分類し、既存 Bundle へ混ぜずこの Bundle の scope として扱う。
-- [ ] SQL Attention は `logs.hub_current` や oldest-row fallback を exploration authority に戻さず、manifest-scoped `hubs.hub_relations` resolution と append-only `logs.attention` lineage の不整合だけを修正対象にする。
-- [ ] `SqlAttentionScheduler` BackgroundService 直通 cron と `registry_attractor_runtime` manifest dispatch 経路の関係を整理し、RuntimeTimelineScheduler / ManifestDispatcher / response・SSE・projection lane を通らない production route が残る場合は明示的な runtime boundary 例外または統合 TODO として証明する。
-- [ ] SQL Attention topology projection GET は read-only direct endpoint であり `/dispatch` pipeline ではないため、read projection boundary / auth / explicit failure / frontend projection-only 性質を dispatch route と混同せずに検査する。
-- [ ] SQL Attention frontend/API は projection 表示・取得に限定し、frontend 側で topology judgment / SQL Attention judgment / persistence judgment を追加しない。
-- [ ] CI Attention は frontend lock authority / draft editing gate / apply validation authority として扱わず、promotion/apply fail-close は backend runtime boundary に限定する。
-- [ ] `SystemOperationCiScheduler` が `SystemOperationCiRuntime` を直呼びして structured logging のみで終わる経路と、`ci_attention:refresh_fragments` AdminRuntime 経路の関係を整理し、cron diagnostic result が fragment / SSE / projection lane へ流れる通貫経路を証明または実装する。
+- [ ] SQL Attention: `SqlAttentionScheduler` BackgroundService cron 直通 route が canonical user dispatch route を偽装しないように、cron trigger / runtime execution / append-only evidence write の責務を明示し、必要なら runtime lane への接続点または境界例外を実装・テストで固定する。
+- [ ] SQL Attention: `registry_attractor_runtime` manifest-dispatch route と cron route の責務を分離または接続し、`RuntimeTimelineScheduler` / `ManifestDispatcher` / response・SSE・projection lane を通る処理と通らない処理を実装上で混同しない。
+- [ ] SQL Attention: `logs.current` candidate marking は rebuildable watch/candidate surface として扱い、`logs.attention` append-only SQLAT / phaseAT evidence write と同一責務に潰さない。
+- [ ] SQL Attention: `logs.attention` write は append-only evidence boundary とし、topology / registry / manifest / hub_relation mutation、Draft creation、adoption を自動実行しないことを実装・テストで維持する。
+- [ ] SQL Attention: read-only topology projection GET は direct read projection endpoint として扱い、`/dispatch` pipeline 通過済みの response lane と誤認しない auth / explicit failure / projection-only contract を実装・テストで揃える。
+- [ ] CI Attention: `SystemOperationCiScheduler` structured logging only 経路は read-only diagnostic surface として扱い、guidance fragment refresh や promotion gate と同一 lane にしない。
+- [ ] CI Attention: `AdminRuntime.ExecuteDataAsync` / `ci_attention:refresh_fragments` は guidance fragment current/history の refresh boundary として扱い、read-only diagnostic result の自動 fragment 化を前提にしない。
+- [ ] CI Attention: guidance fragment current/history persistence と SSE/projection 表示は read-only guidance evidence として揃え、frontend lock authority / draft editing gate / apply validation authority を持たせない。
+- [ ] CI Attention: backend promotion/apply gate は active blocking fragment を fail-close で消費する backend runtime boundary として維持し、dismissed fragment や frontend projection を promotion unlock authority にしない。
 - [ ] Repository / SQL / runtime の missing policy, no-hit, malformed payload, persistence failure は silent fallback ではなく structured explicit failure として扱う。
-- [ ] SSOT 再定義・Issue 本文/コメント/PR本文編集・既存 Bundle への混入を行わず、必要な実装修正とテスト追加は後続 PR でこの Bundle 単位に閉じる。
+- [ ] SSOT 再定義・Issue 本文/コメント/PR本文編集・既存 Bundle への混入を行わず、lane alignment の実装修正とテスト追加は後続 PR でこの Bundle 単位に閉じる。
 
 対応資料:
 - `docs/system-roadmap.yaml`
@@ -57,6 +59,8 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 - `docs/design/pipeline-continuity-ssot.yaml`
 - `docs/design/sql-attention-logs-ssot.md`
 - `docs/design/ci-contract-ssot.yaml`
+- `docs/design/system-ci-admin-runtime-callable-surface.yaml`
+- `docs/design/topology-recommendation-ci-runtime.md`
 
 対象ファイル名:
 - `frontend/api/sqlAttentionProjection.ts`
@@ -64,6 +68,10 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 - `frontend/components/SqlAttentionProjectionPanel.tsx`
 - `frontend/routes/api/sql-attention/topology-projection.ts`
 - `backend/scheduler/SqlAttentionScheduler.cs`
+- `backend/runtime/RegistryAttractorDispatchRuntime.cs`
+- `backend/runtime/OutputLaneRouter.cs`
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/scheduler/RuntimeTimelineScheduler.cs`
 - `backend/repository/SqlAttentionLogsRepository.cs`
 - `backend/repository/NpgsqlSqlAttentionLogsRepository.cs`
 - `backend/schema/SqlAttentionContracts.cs`
@@ -74,12 +82,12 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 - `backend/repository/NpgsqlCiAttentionGuidanceRepository.cs`
 - `backend/runtime/SystemOperationCiRuntime.cs`
 - `backend/scheduler/SystemOperationCiScheduler.cs`
-- `backend/runtime/RegistryAttractorDispatchRuntime.cs`
-- `backend/runtime/OutputLaneRouter.cs`
+- `backend/runtime/AdminRuntime.cs`
 - `backend/Program.cs`
+- `frontend/runtime/sseReceiver.ts`
+- `frontend/tests/ciAttentionGuidanceProjection.test.ts`
 - `backend/tests/Topolactor.Runtime.Tests/SystemOperationCiSchedulerTests.cs`
 - `backend/tests/Topolactor.Runtime.Tests/RegistryAttractorDispatchRuntimeTests.cs`
-- `frontend/tests/ciAttentionGuidanceProjection.test.ts`
 - `backend/tests/Topolactor.Runtime.Tests/CiAttentionPromotionGateTests.cs`
 
 対象関数名またはruntime境界名:
@@ -88,6 +96,10 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 - `SqlAttentionProjectionPanel`
 - `frontend/routes/api/sql-attention/topology-projection.ts` `GET` handler
 - `SqlAttentionScheduler.RunOnceAsync`
+- `RegistryAttractorDispatchRuntime.ExecuteAsync`
+- `OutputLaneRouter.RebuildSignalChannel`
+- `ManifestDispatcher.DispatchAsync`
+- `RuntimeTimelineScheduler` route boundary
 - `SqlAttentionLogsRepository.LoadWatchCandidatesAsync`
 - `SqlAttentionLogsRepository.ResolveRelatedTopologyManifestsAsync`
 - `SqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync`
@@ -101,18 +113,9 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 - `logs.generate_attention_phase_vector`
 - `logs.refresh_hub_current`
 - `logs.refresh_logs_current_watch`
-- `CiAttentionGuidanceRepository.UpsertCurrentAppendHistoryAsync`
-- `CiAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync`
-- `NpgsqlCiAttentionGuidanceRepository.UpsertCurrentAppendHistoryAsync`
-- `NpgsqlCiAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync`
 - `SystemOperationCiScheduler.ExecuteAsync`
 - `SystemOperationCiScheduler.RunInspectionsAsync`
 - `SystemOperationCiScheduler.RunAttractorSignalConsumerAsync`
-- `RegistryAttractorDispatchRuntime.ExecuteAsync`
-- `OutputLaneRouter.RebuildSignalChannel`
-- `ManifestDispatcher.DispatchAsync`
-- `RuntimeTimelineScheduler` route boundary
-- `AdminRuntime.ExecuteDataAsync` / `ci_attention:refresh_fragments` route boundary
 - `SystemOperationCiRuntime.InspectAsync`
 - `SystemOperationCiRuntime.InspectHubAttentionAfterUpdate`
 - `SystemOperationCiRuntime.InspectEvidenceIntegrity`
@@ -120,21 +123,30 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 - `SystemOperationCiRuntime.InspectHubAttentionContinuityAsync`
 - `SystemOperationCiRuntime.InspectCurrentRebuildabilityAsync`
 - `SystemOperationCiRuntime.InspectRegistryContinuityAsync`
-- SQL Attention append-only evidence boundary
-- SQL Attention child projection display boundary
-- CI Attention read-only guidance fragment boundary
+- `AdminRuntime.ExecuteDataAsync` / `ci_attention:refresh_fragments` route boundary
+- `CiAttentionGuidanceRepository.UpsertCurrentAppendHistoryAsync`
+- `CiAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync`
+- `NpgsqlCiAttentionGuidanceRepository.UpsertCurrentAppendHistoryAsync`
+- `NpgsqlCiAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync`
+- SQL Attention cron trigger boundary
+- SQL Attention manifest-dispatch route boundary
+- SQL Attention `logs.current` candidate marking boundary
+- SQL Attention append-only `logs.attention` evidence boundary
+- SQL Attention read-only topology projection boundary
+- CI Attention read-only diagnostic surface boundary
+- CI Attention guidance fragment current/history boundary
 - CI Attention backend promotion/apply fail-close gate boundary
 
 受入条件:
-- [ ] SQL Attention の no-hit / missing policy / malformed lineage / persistence failure が silent fallback にならず、明示的な failure or empty-no-hit boundary として確認できる。
+- [ ] SQL Attention cron trigger、`registry_attractor_runtime` manifest-dispatch route、`logs.current` candidate marking、`logs.attention` append-only evidence write、read-only topology projection GET の責務分界が SSOT に沿って実装・テストで固定されている。
+- [ ] `SqlAttentionScheduler` BackgroundService 直通 route が canonical user dispatch route として扱われず、必要な runtime lane 接続または明示的な background-maintenance 境界として実装されている。
 - [ ] `logs.current` trigger から `logs.attention` SQLAT / phaseAT evidence までの lineage が `hub_relation_id` / `topology_manifest_id` / `hub_id` を保持し、`logs.hub_current` support cache や oldest-row fallback を authority にしていない。
-- [ ] SQL Attention cron route と `registry_attractor_runtime` manifest dispatch route の接続または分離理由がテストで確認され、BackgroundService 直通が canonical runtime route を偽装していない。
-- [ ] SQL Attention topology projection GET が read-only direct projection endpoint として明示され、`/dispatch` pipeline 通過済みであるかのような受入条件・テストになっていない。
-- [ ] SQL Attention frontend/API は child projection 表示・取得に限定され、topology mutation / registry mutation / manifest mutation / SQL Attention judgment を行わない。
-- [ ] CI Attention scheduler diagnostic result が structured logging のみで止まる場合はその残 gap が明示され、fragment / SSE / projection lane へ通貫する場合は backend/frontend dispatch → scheduler → manifest → runtime → fragment/SSE/projection の証明がある。
+- [ ] SQL Attention topology projection GET が read-only direct projection endpoint として実装され、`/dispatch` response lane と混同されず、frontend は topology mutation / registry mutation / manifest mutation / SQL Attention judgment を行わない。
+- [ ] CI Attention の `SystemOperationCiScheduler` read-only diagnostic surface、`ci_attention:refresh_fragments` guidance fragment refresh、guidance current/history persistence、backend promotion/apply gate が別境界として実装・テストで区別されている。
+- [ ] CI Attention diagnostic result を自動的に fragment / SSE / projection lane へ流す前提を置かず、必要な接続または残 gap は read-only diagnostic surface と guidance fragment boundary のどちらに属するか明記されている。
 - [ ] CI Attention fragment は read-only guidance として projection され、draft editing を塞がず、dismissed fragment を promotion unlock authority として扱わない。
 - [ ] active blocking fragment は backend runtime の promotion/apply gate で fail-close され、frontend または test expectation が promotion authority を再定義しない。
-- [ ] 対象 backend/frontend tests または `.agent/tests/*` が不良指摘の再発防止を検査し、SSOT から語彙・境界を読む。
+- [ ] 対象 backend/frontend tests または `.agent/tests/*` が runtime lane alignment の再発防止を検査し、SSOT から語彙・境界を読む。
 - [ ] 既存 Bundle へ混ぜず、SSOT 再定義・Issue 本文/コメント/PR本文編集を行っていない。
 
 ---
