@@ -36,7 +36,10 @@ export type ScreenAxisContext = {
   manifestId?: string | null;
 };
 
-export const SCREEN_OPERATION_OPTIONS: { kind: ScreenOperationKind; label: string }[] = [
+export const SCREEN_OPERATION_OPTIONS: {
+  kind: ScreenOperationKind;
+  label: string;
+}[] = [
   { kind: "list", label: "一覧" },
   { kind: "search", label: "検索" },
   { kind: "detail", label: "詳細" },
@@ -80,17 +83,17 @@ export function screenOperationToDispatcherAxes(
 
   switch (kind) {
     case "list":
-      return { ...base, layer: "screen_list", action: "Read" };
+      return { ...base, layer: "screen_list", action: "Search" };
     case "search":
       return { ...base, layer: "screen_entity", action: "Search" };
     case "detail":
-      return { ...base, layer: "screen_detail", action: "Read" };
+      return { ...base, layer: "screen_detail", action: "Search" };
     case "create":
       return { ...base, layer: "screen_entity", action: "Create" };
     case "update":
-      return { ...base, layer: "screen_entity", action: "Update" };
+      return { ...base, layer: "screen_entity", action: "diffUpdate" };
     case "aggregation_view":
-      return { ...base, layer: "screen_aggregation", action: "Read" };
+      return { ...base, layer: "screen_aggregation", action: "Search" };
     case "logicalDelete":
       return { ...base, layer: "screen_entity", action: "logicalDelete" };
     case "delete":
@@ -111,12 +114,12 @@ export function dispatcherAxesToScreenOperationKind(axes: {
   const action = axes.action ?? "";
 
   if (layer === "screen_aggregation") return "aggregation_view";
+  if (layer === "screen_detail") return "detail";
+  if (layer === "screen_list") return "list";
   if (action === "logicalDelete") return "logicalDelete";
   if (action === "Search") return "search";
   if (action === "Create") return "create";
-  if (action === "Update") return "update";
-  if (layer === "screen_detail") return "detail";
-  if (layer === "screen_list") return "list";
+  if (action === "diffUpdate") return "update";
   // Unknown axes — return "list" only as a safe UI display fallback (not a dispatch fallback).
   return "list";
 }
@@ -129,7 +132,9 @@ export function primaryOperationKind(draft: {
 }
 
 /** Step 1: empty manifest shell with default list axes until step 3 assigns kinds. */
-export function buildStep1DraftInput(manifestId?: string | null): AdminManifestDraftInput {
+export function buildStep1DraftInput(
+  manifestId?: string | null,
+): AdminManifestDraftInput {
   return buildDraftInputFromScreenIntent({
     operationKind: "list",
     manifestId,
@@ -195,5 +200,6 @@ export function displayScreenTitle(
   manifestId: string,
   operationKind: ScreenOperationKind,
 ): string {
-  return getStoredScreenLabel(manifestId) ?? `${screenOperationLabel(operationKind)} (${manifestId.slice(0, 8)}…)`;
+  return getStoredScreenLabel(manifestId) ??
+    `${screenOperationLabel(operationKind)} (${manifestId.slice(0, 8)}…)`;
 }
