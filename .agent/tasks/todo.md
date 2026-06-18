@@ -8,6 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
+| `sql-ci-attention-defect-followup` | SQL Attention / CI Attention 不良指摘フォローアップ | not_started | 1 | `product.sql_attention_feedback` / `product.ci_contract` | `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -22,6 +23,99 @@
 | `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (file_storage / email / audit_approval / export_sftp) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
+
+---
+
+## Bundle `sql-ci-attention-defect-followup`
+
+**Status:** not_started
+**Roadmap/status SSOT:** `product.sql_attention_feedback` / `product.ci_contract`
+**SSOT:** `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml`
+
+問題点:
+Open Issue / Issue コメントで SQL Attention / CI Attention 周辺に不良指摘がある。既存の completion bundle や external port consumer bundle へ混ぜると、SQL Attention の append-only evidence / child projection 境界と CI Attention の read-only guidance / backend promotion gate 境界の不具合対応が atom TODO として埋もれる。SSOT は再定義せず、既存契約に対する実装・テスト整合のフォローアップ Bundle として分離して扱う。
+
+目的:
+SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.hub_relations -> logs.attention -> child projection` の観測・推薦 evidence line を明示失敗で維持し、frontend projection が topology / SQL Attention judgment を持たないことを確認する。CI Attention は guidance fragment を read-only evidence として扱い、draft editing を塞がず、backend promotion/apply gate だけが active blocking fragment を fail-close で消費する境界を維持する。
+
+改善方針:
+- [ ] Open Issue / Issue コメントの不良指摘を SQL Attention と CI Attention に分類し、既存 Bundle へ混ぜずこの Bundle の scope として扱う。
+- [ ] SQL Attention は `logs.hub_current` や oldest-row fallback を exploration authority に戻さず、manifest-scoped `hubs.hub_relations` resolution と append-only `logs.attention` lineage の不整合だけを修正対象にする。
+- [ ] SQL Attention frontend/API は projection 表示・取得に限定し、frontend 側で topology judgment / SQL Attention judgment / persistence judgment を追加しない。
+- [ ] CI Attention は frontend lock authority / draft editing gate / apply validation authority として扱わず、promotion/apply fail-close は backend runtime boundary に限定する。
+- [ ] Repository / SQL / runtime の missing policy, no-hit, malformed payload, persistence failure は silent fallback ではなく structured explicit failure として扱う。
+- [ ] SSOT 再定義・Issue 本文/コメント/PR本文編集・既存 Bundle への混入を行わず、必要な実装修正とテスト追加は後続 PR でこの Bundle 単位に閉じる。
+
+対応資料:
+- `docs/system-roadmap.yaml`
+- `docs/framework-core.yaml`
+- `docs/framework-policy.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/sql-attention-logs-ssot.md`
+- `docs/design/ci-contract-ssot.yaml`
+
+対象ファイル名:
+- `frontend/api/sqlAttentionProjection.ts`
+- `frontend/components/SqlAttentionProjectionBlock.tsx`
+- `frontend/components/SqlAttentionProjectionPanel.tsx`
+- `frontend/routes/api/sql-attention/topology-projection.ts`
+- `backend/scheduler/SqlAttentionScheduler.cs`
+- `backend/repository/SqlAttentionLogsRepository.cs`
+- `backend/repository/NpgsqlSqlAttentionLogsRepository.cs`
+- `backend/schema/SqlAttentionContracts.cs`
+- `db/sql_attention_logs_tables.sql`
+- `db/ci_attention_guidance_tables.sql`
+- `backend/schema/CiAttentionGuidanceContracts.cs`
+- `backend/repository/CiAttentionGuidanceRepository.cs`
+- `backend/repository/NpgsqlCiAttentionGuidanceRepository.cs`
+- `backend/runtime/SystemOperationCiRuntime.cs`
+- `frontend/tests/ciAttentionGuidanceProjection.test.ts`
+- `backend/tests/Topolactor.Runtime.Tests/CiAttentionPromotionGateTests.cs`
+
+対象関数名またはruntime境界名:
+- `fetchSqlAttentionProjection`
+- `SqlAttentionProjectionBlock`
+- `SqlAttentionProjectionPanel`
+- `frontend/routes/api/sql-attention/topology-projection.ts` `GET` handler
+- `SqlAttentionScheduler.RunOnceAsync`
+- `SqlAttentionLogsRepository.LoadWatchCandidatesAsync`
+- `SqlAttentionLogsRepository.ResolveRelatedTopologyManifestsAsync`
+- `SqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync`
+- `SqlAttentionLogsRepository.AppendAttentionGenerationAsync`
+- `NpgsqlSqlAttentionLogsRepository.LoadWatchCandidatesAsync`
+- `NpgsqlSqlAttentionLogsRepository.ResolveRelatedTopologyManifestsAsync`
+- `NpgsqlSqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync`
+- `NpgsqlSqlAttentionLogsRepository.AppendAttentionGenerationAsync`
+- `logs.resolve_sql_attention_watch_policy`
+- `logs.resolve_related_topology_manifests`
+- `logs.generate_attention_phase_vector`
+- `logs.refresh_hub_current`
+- `logs.refresh_logs_current_watch`
+- `CiAttentionGuidanceRepository.UpsertCurrentAppendHistoryAsync`
+- `CiAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync`
+- `NpgsqlCiAttentionGuidanceRepository.UpsertCurrentAppendHistoryAsync`
+- `NpgsqlCiAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync`
+- `SystemOperationCiRuntime.InspectAsync`
+- `SystemOperationCiRuntime.InspectHubAttentionAfterUpdate`
+- `SystemOperationCiRuntime.InspectEvidenceIntegrity`
+- `SystemOperationCiRuntime.InspectFeedbackEvents`
+- `SystemOperationCiRuntime.InspectHubAttentionContinuityAsync`
+- `SystemOperationCiRuntime.InspectCurrentRebuildabilityAsync`
+- `SystemOperationCiRuntime.InspectRegistryContinuityAsync`
+- SQL Attention append-only evidence boundary
+- SQL Attention child projection display boundary
+- CI Attention read-only guidance fragment boundary
+- CI Attention backend promotion/apply fail-close gate boundary
+
+受入条件:
+- [ ] SQL Attention の no-hit / missing policy / malformed lineage / persistence failure が silent fallback にならず、明示的な failure or empty-no-hit boundary として確認できる。
+- [ ] `logs.current` trigger から `logs.attention` SQLAT / phaseAT evidence までの lineage が `hub_relation_id` / `topology_manifest_id` / `hub_id` を保持し、`logs.hub_current` support cache や oldest-row fallback を authority にしていない。
+- [ ] SQL Attention frontend/API は child projection 表示・取得に限定され、topology mutation / registry mutation / manifest mutation / SQL Attention judgment を行わない。
+- [ ] CI Attention fragment は read-only guidance として projection され、draft editing を塞がず、dismissed fragment を promotion unlock authority として扱わない。
+- [ ] active blocking fragment は backend runtime の promotion/apply gate で fail-close され、frontend または test expectation が promotion authority を再定義しない。
+- [ ] 対象 backend/frontend tests または `.agent/tests/*` が不良指摘の再発防止を検査し、SSOT から語彙・境界を読む。
+- [ ] 既存 Bundle へ混ぜず、SSOT 再定義・Issue 本文/コメント/PR本文編集を行っていない。
 
 ---
 
