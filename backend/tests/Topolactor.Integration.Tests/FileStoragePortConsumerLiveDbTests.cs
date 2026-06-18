@@ -186,6 +186,46 @@ public class FileStoragePortConsumerLiveDbTests
     }
 
     [Fact]
+    public async Task SeededAbstractFunctions_LoadAuthorityBindings_AndEnforceFailClose()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var manifestRepo = new NpgsqlAbstractFunctionManifestRepository(cs);
+
+        var manifest = await manifestRepo.LoadAsync("file_storage.record_export_job");
+        Assert.NotNull(manifest);
+
+        var authorityBindings = manifest.AuthorityBindings;
+        Assert.NotNull(authorityBindings);
+        Assert.NotEmpty(authorityBindings);
+
+        var activeBindings = authorityBindings.Where(b => b.Active).ToList();
+        Assert.NotEmpty(activeBindings);
+        Assert.Contains(activeBindings, b => b.AuthorityKind == "policy" && b.AuthorityRef == "file_storage_access_port_generic");
+        Assert.Contains(activeBindings, b => b.AuthorityKind == "table" && b.AuthorityRef == "topology.export_jobs");
+
+        // Verify executor fail-closes when no authority bindings
+        var noAuthorityManifest = new AbstractFunctionManifest(
+            manifest.AbstractFunctionId, manifest.FunctionKey, manifest.RuntimeLane, manifest.AuthorityScope,
+            manifest.Steps, manifest.DeniedProjectionKeys, manifest.Active,
+            Array.Empty<AbstractFunctionAuthorityBinding>());
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifest(noAuthorityManifest),
+            Array.Empty<IAbstractFunctionPrimitiveAdapter>());
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => executor.ExecuteAsync(manifest.FunctionKey, new AbstractFunctionExecutionContext("file_storage_bundle")));
+        Assert.Equal(AbstractFunctionFailCloseStatus.MissingAuthority, ex.Status);
+    }
+
+    private sealed class StaticManifest : IAbstractFunctionManifestRepository
+    {
+        private readonly AbstractFunctionManifest _manifest;
+        public StaticManifest(AbstractFunctionManifest manifest) => _manifest = manifest;
+        public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) => Task.FromResult<AbstractFunctionManifest?>(_manifest);
+    }
+
+    [Fact]
     public async Task RuntimeEventLogRepository_AppendAsync_WritesToDb()
     {
         var cs = GetConnectionString();

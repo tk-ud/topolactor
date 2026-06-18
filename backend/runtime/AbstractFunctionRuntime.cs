@@ -21,11 +21,13 @@ public sealed class AbstractFunctionFailCloseException : InvalidOperationExcepti
     public string Status { get; }
 }
 
-public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active);
+public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active, IReadOnlyList<AbstractFunctionAuthorityBinding>? AuthorityBindings = null);
 
 public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active);
 
 public sealed record AbstractFunctionInputBinding(string InputKey, string BindingSource, string BindingPath, bool Required, bool Secret);
+
+public sealed record AbstractFunctionAuthorityBinding(string AuthorityKind, string AuthorityRef, bool Active);
 
 public sealed class AbstractFunctionExecutionContext
 {
@@ -44,6 +46,9 @@ public sealed class AbstractFunctionExecutionContext
     public ExternalPortExecutionContext? ExternalPortContext { get; }
     public IReadOnlyDictionary<string, object?> ResultContext => _resultContext;
     public IReadOnlyList<string> ExecutedPrimitiveKeys => _executedPrimitiveKeys;
+    public IReadOnlyList<AbstractFunctionAuthorityBinding> AuthorityBindings { get; private set; } = Array.Empty<AbstractFunctionAuthorityBinding>();
+
+    internal void SetAuthorityBindings(IReadOnlyList<AbstractFunctionAuthorityBinding> bindings) => AuthorityBindings = bindings;
 
     public object? ResolveBinding(AbstractFunctionInputBinding binding)
     {
@@ -147,6 +152,15 @@ public sealed class AbstractFunctionExecutor
         if (!string.Equals(manifest.RuntimeLane, "external_port_runtime", StringComparison.Ordinal)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RUNTIME_LANE_INVALID");
         if (!string.Equals(manifest.AuthorityScope, context.AuthorityScope, StringComparison.Ordinal)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_AUTHORITY_SCOPE_INVALID");
 
+        var activeAuthority = (manifest.AuthorityBindings ?? Array.Empty<AbstractFunctionAuthorityBinding>())
+            .Where(static b => b.Active).ToList();
+        if (activeAuthority.Count == 0)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_AUTHORITY_BINDINGS_MISSING");
+        if (!activeAuthority.Any(static b => string.Equals(b.AuthorityKind, "policy", StringComparison.Ordinal)))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_POLICY_AUTHORITY_MISSING");
+
+        context.SetAuthorityBindings(activeAuthority);
+
         var deniedProjectionKeys = new HashSet<string>(manifest.DeniedProjectionKeys, StringComparer.OrdinalIgnoreCase);
         foreach (var denied in SecretProjectionDenyKeys) deniedProjectionKeys.Add(denied);
 
@@ -191,6 +205,9 @@ public sealed class CallPostgresFunctionPrimitiveAdapter : IAbstractFunctionPrim
     {
         if (!step.StepConfig.TryGetValue("function", out var functionName) || string.IsNullOrWhiteSpace(functionName) || !AllowedFunctionName.IsMatch(functionName))
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_POSTGRES_FUNCTION_INVALID");
+
+        if (!context.AuthorityBindings.Any(static b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal)))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_TABLE_AUTHORITY_MISSING");
 
         var argumentKeys = ReadArgumentKeys(step);
         await using var conn = new NpgsqlConnection(_connectionString);
