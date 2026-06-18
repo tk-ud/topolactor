@@ -264,6 +264,63 @@ public class FileStoragePortConsumerLiveDbTests
     }
 
     [Fact]
+    public async Task SeededAttachmentPolicies_UseExecuteAbstractFunction_NotExecuteDbFunction()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var repo = new NpgsqlExternalPortPolicyRepository(NullLogger<NpgsqlExternalPortPolicyRepository>.Instance, cs);
+
+        // policy_id ed = file_storage_attachment_bind
+        await using var conn = new Npgsql.NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT operation_key, abstract_function_key
+            FROM topology.external_port_policy_steps
+            WHERE policy_id = '00000000-0000-0000-0000-0000000000ed'
+              AND step_order = 3
+            """;
+        await using var reader = await cmd.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync(), "Expected step 3 of attachment bind policy");
+        Assert.Equal("execute_abstract_function", reader.GetString(0));
+        Assert.Equal("file_storage.bind_record_file_attachment", reader.GetString(1));
+    }
+
+    [Fact]
+    public async Task SeededAttachmentManifests_LoadAndEnforceAuthority()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var manifestRepo = new NpgsqlAbstractFunctionManifestRepository(cs);
+
+        var bindManifest = await manifestRepo.LoadAsync("file_storage.bind_record_file_attachment");
+        Assert.NotNull(bindManifest);
+        Assert.Equal("external_port_runtime", bindManifest.RuntimeLane);
+        Assert.Equal("file_storage_attachment_bind", bindManifest.AuthorityScope);
+        Assert.NotNull(bindManifest.AuthorityBindings);
+        Assert.Contains(bindManifest.AuthorityBindings, b => b.AuthorityKind == "policy" && b.AuthorityRef == "file_storage_attachment_bind" && b.Active);
+        Assert.Contains(bindManifest.AuthorityBindings, b => b.AuthorityKind == "table" && b.AuthorityRef == "topology.record_file_attachments" && b.Active);
+
+        // Verify step_config binding for record_table_ref
+        var callStep = bindManifest.Steps.Single(s => s.PrimitiveKey == "call_postgres_function");
+        Assert.True(callStep.StepConfig.TryGetValue("record_table_ref", out var tableRef));
+        Assert.Equal("topology.export_jobs", tableRef);
+
+        // Verify record_table_ref binding source is step_config (not payload)
+        var tableRefBinding = callStep.InputBindings.Single(b => b.InputKey == "record_table_ref");
+        Assert.Equal("step_config", tableRefBinding.BindingSource);
+
+        // Fail-close: wrong authority scope must be rejected
+        var executor = new AbstractFunctionExecutor(manifestRepo, Array.Empty<IAbstractFunctionPrimitiveAdapter>());
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => executor.ExecuteAsync("file_storage.bind_record_file_attachment",
+                new AbstractFunctionExecutionContext("wrong_scope")));
+        Assert.Equal(AbstractFunctionFailCloseStatus.InvalidAuthority, ex.Status);
+    }
+
+    [Fact]
     public async Task AttachmentFsFunctions_BindListUnbind_ExecuteAgainstDb()
     {
         var cs = GetConnectionString();

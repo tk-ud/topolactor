@@ -2158,7 +2158,12 @@ VALUES
     ('00000000-0000-0000-0000-00000000af01', 'file_storage.record_export_job', 'external_port_runtime', 'file_storage_bundle', '{"result":"ExportJobId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
     ('00000000-0000-0000-0000-00000000af02', 'file_storage.record_file_artifact', 'external_port_runtime', 'file_storage_bundle', '{"result":"FileArtifactId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
     ('00000000-0000-0000-0000-00000000af03', 'file_storage.write_manifest_record', 'external_port_runtime', 'file_storage_bundle', '{"result":"ManifestId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
-    ('00000000-0000-0000-0000-00000000af04', 'file_storage.authorize_signed_download', 'external_port_runtime', 'file_storage_bundle', '{"result":"AuthorizationKey"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true)
+    ('00000000-0000-0000-0000-00000000af04', 'file_storage.authorize_signed_download', 'external_port_runtime', 'file_storage_bundle', '{"result":"AuthorizationKey"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
+    -- Attachment operations: authority_scope matches required_by_bundle of attachment port records.
+    -- record_table_ref is manifest-authority (step_config), not payload-derived.
+    ('00000000-0000-0000-0000-00000000af05', 'file_storage.bind_record_file_attachment',   'external_port_runtime', 'file_storage_attachment_bind',   '{"step1_result":"AttachmentBindingId","step2_result":"OutputProp"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
+    ('00000000-0000-0000-0000-00000000af06', 'file_storage.list_record_file_attachments',  'external_port_runtime', 'file_storage_attachment_list',   '{"result":"OutputProp"}',                                           ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
+    ('00000000-0000-0000-0000-00000000af07', 'file_storage.unbind_record_file_attachment', 'external_port_runtime', 'file_storage_attachment_unbind', '{"step1_result":"RemovedCount","step2_result":"OutputProp"}',        ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true)
 ON CONFLICT (abstract_function_id) DO NOTHING;
 
 INSERT INTO topology.abstract_function_steps
@@ -2167,7 +2172,15 @@ VALUES
     ('00000000-0000-0000-0000-00000000bf01', '00000000-0000-0000-0000-00000000af01', 1, 'call_postgres_function', '{"function":"topology.fs_record_export_job","required_table_authority":"topology.export_jobs","arguments":["idempotency_key","required_by_bundle","port_id","port_kind","requested_by","export_format","period"]}', 'ExportJobId', true),
     ('00000000-0000-0000-0000-00000000bf02', '00000000-0000-0000-0000-00000000af02', 1, 'call_postgres_function', '{"function":"topology.fs_record_file_artifact","required_table_authority":"topology.file_artifacts","arguments":["export_job_id","file_name","file_type","storage_ref","checksum_value"]}', 'FileArtifactId', true),
     ('00000000-0000-0000-0000-00000000bf03', '00000000-0000-0000-0000-00000000af03', 1, 'call_postgres_function', '{"function":"topology.fs_write_manifest_record","required_table_authority":"topology.export_manifests","arguments":["export_job_id","file_artifact_id","requested_by","period","export_format","checksum_value"]}', 'ManifestId', true),
-    ('00000000-0000-0000-0000-00000000bf04', '00000000-0000-0000-0000-00000000af04', 1, 'call_postgres_function', '{"function":"topology.fs_authorize_signed_download","required_table_authority":"topology.signed_download_authorizations","arguments":["file_artifact_id","requested_by"]}', 'AuthorizationKey', true)
+    ('00000000-0000-0000-0000-00000000bf04', '00000000-0000-0000-0000-00000000af04', 1, 'call_postgres_function', '{"function":"topology.fs_authorize_signed_download","required_table_authority":"topology.signed_download_authorizations","arguments":["file_artifact_id","requested_by"]}', 'AuthorizationKey', true),
+    -- bind: step 1 calls postgres function (record_table_ref from step_config), step 2 projects result to OutputProp
+    ('00000000-0000-0000-0000-00000000bf05', '00000000-0000-0000-0000-00000000af05', 1, 'call_postgres_function', '{"function":"topology.fs_bind_record_file_attachment","required_table_authority":"topology.record_file_attachments","record_table_ref":"topology.export_jobs","arguments":["record_table_ref","record_id","file_artifact_id","relation_kind","created_by"]}', 'AttachmentBindingId', true),
+    ('00000000-0000-0000-0000-00000000bf06', '00000000-0000-0000-0000-00000000af05', 2, 'projection',             '{}',                                                                                                                                                                                                                                                  'OutputProp',          true),
+    -- list: single step; postgres function returns JSONB stored directly as OutputProp
+    ('00000000-0000-0000-0000-00000000bf07', '00000000-0000-0000-0000-00000000af06', 1, 'call_postgres_function', '{"function":"topology.fs_list_record_file_attachments","required_table_authority":"topology.record_file_attachments","record_table_ref":"topology.export_jobs","arguments":["record_table_ref","record_id"]}',                                        'OutputProp',          true),
+    -- unbind: step 1 calls postgres function, step 2 projects result to OutputProp
+    ('00000000-0000-0000-0000-00000000bf08', '00000000-0000-0000-0000-00000000af07', 1, 'call_postgres_function', '{"function":"topology.fs_unbind_record_file_attachment","required_table_authority":"topology.record_file_attachments","record_table_ref":"topology.export_jobs","arguments":["record_table_ref","record_id","file_artifact_id","relation_kind"]}',   'RemovedCount',        true),
+    ('00000000-0000-0000-0000-00000000bf09', '00000000-0000-0000-0000-00000000af07', 2, 'projection',             '{}',                                                                                                                                                                                                                                                  'OutputProp',          true)
 ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
 
 
@@ -2192,21 +2205,46 @@ VALUES
     ('00000000-0000-0000-0000-00000000c010', '00000000-0000-0000-0000-00000000bf03', 'period', 'payload', 'period', false, false, true),
     ('00000000-0000-0000-0000-00000000c011', '00000000-0000-0000-0000-00000000bf03', 'export_format', 'payload', 'export_format', false, false, true),
     ('00000000-0000-0000-0000-00000000c012', '00000000-0000-0000-0000-00000000bf03', 'checksum_value', 'external_context', 'checksum_value', false, false, true),
-    ('00000000-0000-0000-0000-00000000c013', '00000000-0000-0000-0000-00000000bf04', 'file_artifact_id', 'external_context', 'file_artifact_id', true, false, true),
-    ('00000000-0000-0000-0000-00000000c014', '00000000-0000-0000-0000-00000000bf04', 'requested_by', 'payload', 'requested_by', true, false, true)
+    ('00000000-0000-0000-0000-00000000c013', '00000000-0000-0000-0000-00000000bf04', 'file_artifact_id', 'external_context', 'file_artifact_id', true,  false, true),
+    ('00000000-0000-0000-0000-00000000c014', '00000000-0000-0000-0000-00000000bf04', 'requested_by',    'payload',           'requested_by',    true,  false, true),
+    -- bind step 1 (bf05): record_table_ref from step_config (manifest-authority, not payload)
+    ('00000000-0000-0000-0000-00000000c015', '00000000-0000-0000-0000-00000000bf05', 'record_table_ref', 'step_config', 'record_table_ref', true,  false, true),
+    ('00000000-0000-0000-0000-00000000c016', '00000000-0000-0000-0000-00000000bf05', 'record_id',        'payload',     'record_id',        true,  false, true),
+    ('00000000-0000-0000-0000-00000000c017', '00000000-0000-0000-0000-00000000bf05', 'file_artifact_id', 'payload',     'file_artifact_id', true,  false, true),
+    ('00000000-0000-0000-0000-00000000c018', '00000000-0000-0000-0000-00000000bf05', 'relation_kind',    'constant',    'attachment',       false, false, true),
+    ('00000000-0000-0000-0000-00000000c019', '00000000-0000-0000-0000-00000000bf05', 'created_by',       'payload',     'requested_by',     false, false, true),
+    -- bind step 2 (bf06): projection reads AttachmentBindingId from result_context → OutputProp
+    ('00000000-0000-0000-0000-00000000c01a', '00000000-0000-0000-0000-00000000bf06', 'attachment_binding_id', 'result_context', 'AttachmentBindingId', true, false, true),
+    -- list step 1 (bf07): record_table_ref from step_config
+    ('00000000-0000-0000-0000-00000000c01b', '00000000-0000-0000-0000-00000000bf07', 'record_table_ref', 'step_config', 'record_table_ref', true, false, true),
+    ('00000000-0000-0000-0000-00000000c01c', '00000000-0000-0000-0000-00000000bf07', 'record_id',        'payload',     'record_id',        true, false, true),
+    -- unbind step 1 (bf08): record_table_ref from step_config
+    ('00000000-0000-0000-0000-00000000c01d', '00000000-0000-0000-0000-00000000bf08', 'record_table_ref', 'step_config', 'record_table_ref', true,  false, true),
+    ('00000000-0000-0000-0000-00000000c01e', '00000000-0000-0000-0000-00000000bf08', 'record_id',        'payload',     'record_id',        true,  false, true),
+    ('00000000-0000-0000-0000-00000000c01f', '00000000-0000-0000-0000-00000000bf08', 'file_artifact_id', 'payload',     'file_artifact_id', true,  false, true),
+    ('00000000-0000-0000-0000-00000000c020', '00000000-0000-0000-0000-00000000bf08', 'relation_kind',    'constant',    'attachment',       false, false, true),
+    -- unbind step 2 (bf09): projection reads RemovedCount from result_context → OutputProp
+    ('00000000-0000-0000-0000-00000000c021', '00000000-0000-0000-0000-00000000bf09', 'removed_count', 'result_context', 'RemovedCount', true, false, true)
 ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
 
 INSERT INTO topology.abstract_function_authority_bindings
     (abstract_function_id, authority_kind, authority_ref, active)
 VALUES
-    ('00000000-0000-0000-0000-00000000af01', 'policy', 'file_storage_access_port_generic', true),
-    ('00000000-0000-0000-0000-00000000af02', 'policy', 'file_storage_access_port_generic', true),
-    ('00000000-0000-0000-0000-00000000af03', 'policy', 'file_storage_access_port_generic', true),
-    ('00000000-0000-0000-0000-00000000af04', 'policy', 'file_storage_access_port_generic', true),
-    ('00000000-0000-0000-0000-00000000af01', 'table', 'topology.export_jobs', true),
-    ('00000000-0000-0000-0000-00000000af02', 'table', 'topology.file_artifacts', true),
-    ('00000000-0000-0000-0000-00000000af03', 'table', 'topology.export_manifests', true),
-    ('00000000-0000-0000-0000-00000000af04', 'table', 'topology.signed_download_authorizations', true)
+    ('00000000-0000-0000-0000-00000000af01', 'policy', 'file_storage_access_port_generic',  true),
+    ('00000000-0000-0000-0000-00000000af02', 'policy', 'file_storage_access_port_generic',  true),
+    ('00000000-0000-0000-0000-00000000af03', 'policy', 'file_storage_access_port_generic',  true),
+    ('00000000-0000-0000-0000-00000000af04', 'policy', 'file_storage_access_port_generic',  true),
+    ('00000000-0000-0000-0000-00000000af01', 'table',  'topology.export_jobs',              true),
+    ('00000000-0000-0000-0000-00000000af02', 'table',  'topology.file_artifacts',           true),
+    ('00000000-0000-0000-0000-00000000af03', 'table',  'topology.export_manifests',         true),
+    ('00000000-0000-0000-0000-00000000af04', 'table',  'topology.signed_download_authorizations', true),
+    -- Attachment manifests: authority_scope and policy_key match the attachment port required_by_bundle
+    ('00000000-0000-0000-0000-00000000af05', 'policy', 'file_storage_attachment_bind',   true),
+    ('00000000-0000-0000-0000-00000000af05', 'table',  'topology.record_file_attachments', true),
+    ('00000000-0000-0000-0000-00000000af06', 'policy', 'file_storage_attachment_list',   true),
+    ('00000000-0000-0000-0000-00000000af06', 'table',  'topology.record_file_attachments', true),
+    ('00000000-0000-0000-0000-00000000af07', 'policy', 'file_storage_attachment_unbind', true),
+    ('00000000-0000-0000-0000-00000000af07', 'table',  'topology.record_file_attachments', true)
 ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
 
 -- Consumer bundle policy steps (operation_key values constrained to external-port SSOT allowed set)
@@ -2258,16 +2296,16 @@ VALUES
     ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 15, 'execute_abstract_function', '{}', 'file_storage.write_manifest_record', true),
     ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 16, 'execute_abstract_function', '{}', 'file_storage.authorize_signed_download', true),
     ('00000000-0000-0000-0000-000000000497', '00000000-0000-0000-0000-0000000000e5', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', NULL, true),
-    -- file_storage attachment response_port policies (credential pipeline + execute_db_function; no attachment credential plane)
-    ('00000000-0000-0000-0000-0000000004c1', '00000000-0000-0000-0000-0000000000ed', 1, 'resolve_port_record', '{}', NULL, true),
+    -- file_storage attachment response_port policies: execute_abstract_function with manifest-authority record_table_ref
+    ('00000000-0000-0000-0000-0000000004c1', '00000000-0000-0000-0000-0000000000ed', 1, 'resolve_port_record',       '{}', NULL, true),
     ('00000000-0000-0000-0000-0000000004c2', '00000000-0000-0000-0000-0000000000ed', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-0000000004c3', '00000000-0000-0000-0000-0000000000ed', 3, 'execute_db_function', '{"function":"topology.fs_bind_record_file_attachment","output":"AttachmentBindingId"}', NULL, true),
-    ('00000000-0000-0000-0000-0000000004d1', '00000000-0000-0000-0000-0000000000ee', 1, 'resolve_port_record', '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004c3', '00000000-0000-0000-0000-0000000000ed', 3, 'execute_abstract_function', '{}', 'file_storage.bind_record_file_attachment',   true),
+    ('00000000-0000-0000-0000-0000000004d1', '00000000-0000-0000-0000-0000000000ee', 1, 'resolve_port_record',       '{}', NULL, true),
     ('00000000-0000-0000-0000-0000000004d2', '00000000-0000-0000-0000-0000000000ee', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-0000000004d3', '00000000-0000-0000-0000-0000000000ee', 3, 'execute_db_function', '{"function":"topology.fs_list_record_file_attachments","output":"AttachmentsJson"}', NULL, true),
-    ('00000000-0000-0000-0000-0000000004e1', '00000000-0000-0000-0000-0000000000ef', 1, 'resolve_port_record', '{}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004d3', '00000000-0000-0000-0000-0000000000ee', 3, 'execute_abstract_function', '{}', 'file_storage.list_record_file_attachments',  true),
+    ('00000000-0000-0000-0000-0000000004e1', '00000000-0000-0000-0000-0000000000ef', 1, 'resolve_port_record',       '{}', NULL, true),
     ('00000000-0000-0000-0000-0000000004e2', '00000000-0000-0000-0000-0000000000ef', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-0000000004e3', '00000000-0000-0000-0000-0000000000ef', 3, 'execute_db_function', '{"function":"topology.fs_unbind_record_file_attachment","output":"RemovedCount"}', NULL, true),
+    ('00000000-0000-0000-0000-0000000004e3', '00000000-0000-0000-0000-0000000000ef', 3, 'execute_abstract_function', '{}', 'file_storage.unbind_record_file_attachment', true),
     -- email_bundle response_port
     ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', NULL, true),
@@ -2306,5 +2344,7 @@ VALUES
     ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{}', NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
 
--- file_storage_bundle domain operation steps are now included in the 13-step credential pipeline above.
--- Steps 9-13 use execute_db_function operation_key via topology.fs_* PostgreSQL functions.
+-- file_storage_bundle domain operation steps use execute_abstract_function (manifest-authority).
+-- All 7 fs_* operations (record_export_job, record_file_artifact, write_manifest_record, authorize_signed_download,
+-- bind/list/unbind_record_file_attachment) are expressed through abstract function manifests af01-af07.
+-- record_table_ref for attachment operations comes from step_config (manifest-authority), not from payload.

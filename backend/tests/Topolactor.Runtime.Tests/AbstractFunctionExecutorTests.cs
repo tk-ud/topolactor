@@ -266,6 +266,82 @@ public class AbstractFunctionExecutorTests
     }
 
     [Fact]
+    public async Task ResolveBinding_StepConfig_ReadsFromManifestStepConfig()
+    {
+        var stepConfig = new Dictionary<string, string> { ["record_table_ref"] = "topology.export_jobs", ["function"] = "topology.fs_bind" };
+        var manifest = new AbstractFunctionManifest(Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope", new[]
+        {
+            Step(1, "echo",
+                new[] { new AbstractFunctionInputBinding("source", "step_config", "record_table_ref", true, false) },
+                "echoed",
+                stepConfig)
+        }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.export_jobs", true) });
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+
+        var result = await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope"));
+
+        Assert.Equal("topology.export_jobs", result.ResultContext["echoed"]);
+    }
+
+    [Fact]
+    public async Task ResolveBinding_StepConfig_DoesNotReadFromPayload()
+    {
+        // payload has a different record_table_ref; step_config should win
+        using var doc = JsonDocument.Parse("{\"record_table_ref\":\"public.malicious_table\"}");
+        var stepConfig = new Dictionary<string, string> { ["record_table_ref"] = "topology.export_jobs" };
+        var manifest = new AbstractFunctionManifest(Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope", new[]
+        {
+            Step(1, "echo",
+                new[] { new AbstractFunctionInputBinding("source", "step_config", "record_table_ref", true, false) },
+                "echoed",
+                stepConfig)
+        }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.export_jobs", true) });
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+
+        var result = await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope", doc.RootElement));
+
+        // Must be the manifest step_config value, NOT the payload value
+        Assert.Equal("topology.export_jobs", result.ResultContext["echoed"]);
+        Assert.NotEqual("public.malicious_table", result.ResultContext["echoed"]);
+    }
+
+    [Fact]
+    public async Task ApplyResultToExternalContext_OutputProp_SetsExternalContextOutputProp()
+    {
+        var externalCtx = new ExternalPortExecutionContext { RequiredByBundle = "test_scope" };
+        var manifest = new AbstractFunctionManifest(Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope", new[]
+        {
+            Step(1, "projection",
+                new[] { new AbstractFunctionInputBinding("attachment_binding_id", "constant", "some-guid-value", false, false) },
+                "OutputProp")
+        }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.test", true) });
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new ProjectionPrimitiveAdapter() });
+
+        await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope", null, externalCtx));
+
+        Assert.NotNull(externalCtx.OutputProp);
+        Assert.Contains("attachment_binding_id", externalCtx.OutputProp);
+        Assert.Contains("some-guid-value", externalCtx.OutputProp);
+    }
+
+    [Fact]
+    public async Task ApplyResultToExternalContext_OutputPropString_SetsDirectly()
+    {
+        var externalCtx = new ExternalPortExecutionContext { RequiredByBundle = "test_scope" };
+        var manifest = new AbstractFunctionManifest(Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope", new[]
+        {
+            Step(1, "echo",
+                new[] { new AbstractFunctionInputBinding("source", "constant", "[{\"id\":\"1\"}]", false, false) },
+                "OutputProp")
+        }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.test", true) });
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+
+        await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope", null, externalCtx));
+
+        Assert.Equal("[{\"id\":\"1\"}]", externalCtx.OutputProp);
+    }
+
+    [Fact]
     public void RuntimeExecutor_DoesNotReferenceProviderOrBundleBranches()
     {
         var source = File.ReadAllText(Path.Combine("..", "..", "..", "..", "..", "runtime", "AbstractFunctionRuntime.cs"));

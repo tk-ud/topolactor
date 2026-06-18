@@ -50,12 +50,18 @@ public sealed class AbstractFunctionExecutionContext
 
     internal void SetAuthorityBindings(IReadOnlyList<AbstractFunctionAuthorityBinding> bindings) => AuthorityBindings = bindings;
 
-    public object? ResolveBinding(AbstractFunctionInputBinding binding)
+    public object? ResolveBinding(AbstractFunctionInputBinding binding, IReadOnlyDictionary<string, string>? stepConfig = null)
     {
         if (binding.BindingSource == "payload") return ResolveJsonPath(RequestPayload, binding.BindingPath);
         if (binding.BindingSource == "result_context") return _resultContext.TryGetValue(binding.BindingPath, out var value) ? value : null;
         if (binding.BindingSource == "constant") return binding.BindingPath;
         if (binding.BindingSource == "external_context") return ResolveExternalContext(binding.BindingPath);
+        if (binding.BindingSource == "step_config")
+        {
+            if (stepConfig is null)
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, "ABSTRACT_FUNCTION_STEP_CONFIG_NOT_AVAILABLE");
+            return stepConfig.TryGetValue(binding.BindingPath, out var configValue) ? configValue : null;
+        }
         throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_INPUT_BINDING_SOURCE_UNSUPPORTED: {binding.BindingSource}");
     }
 
@@ -82,6 +88,9 @@ public sealed class AbstractFunctionExecutionContext
                 break;
             case "AuthorizationKey" when value is string authorizationKey:
                 ExternalPortContext.AuthorizationKey = authorizationKey;
+                break;
+            case "OutputProp":
+                ExternalPortContext.OutputProp = value is string s ? s : JsonSerializer.Serialize(value);
                 break;
         }
     }
@@ -192,7 +201,7 @@ public sealed class AbstractFunctionExecutor
             foreach (var binding in step.InputBindings)
             {
                 if (string.Equals(step.PrimitiveKey, "projection", StringComparison.Ordinal) && (binding.Secret || deniedProjectionKeys.Contains(binding.InputKey))) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.SecretProjectionDenied, "ABSTRACT_FUNCTION_SECRET_PROJECTION_DENIED");
-                var value = context.ResolveBinding(binding);
+                var value = context.ResolveBinding(binding, step.StepConfig);
                 if (binding.Required && value is null) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, $"ABSTRACT_FUNCTION_INPUT_MISSING: {binding.InputKey}");
                 inputs[binding.InputKey] = value;
             }
