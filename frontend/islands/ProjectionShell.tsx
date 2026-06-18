@@ -7,7 +7,8 @@ import type { UserOperation } from "../runtime/resolveOperationVector.ts";
 import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { createSseReceiver, type ProjectionHookTrigger, type SseReceiver } from "../runtime/sseReceiver.ts";
-import { createSseDispatcher } from "../runtime/sseDispatcher.ts";
+import { createSseDispatcherWithProjectionRuntime } from "../runtime/sseDispatcher.ts";
+import { createProjectionRuntime } from "../runtime/projectionRuntime.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
@@ -16,13 +17,13 @@ import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
  * Production application projection shell.
  * Dispatches default:entity:search on mount and renders the emission
  * using layout-aware renderEmission(). Subscribes to SSE projection events
- * via the sse_projection_lane:
- *   sseReceiver → enqueueProjectionHookTrigger → sseDispatcher → projection handler
+ * via the full sse_projection_lane per runtime-orchestration-ssot.yaml:
+ *   sseReceiver → enqueueProjectionHookTrigger → sseDispatcher → projectionRuntime → onProjectionUpdate
  *
- * Identity preservation: all three identity fields from ProjectionHookTrigger
- * (manifestId, tableId, tableRegistryId) are extracted from the SSE event payload
- * and forwarded in the re-dispatch request as target (manifestId) and payload
- * (table_id, table_registry_id). No field is silently discarded.
+ * Identity preservation: all three identity fields from the SSE payload
+ * (manifest_id, table_id, table_registry_id) are forwarded by projectionRuntime
+ * to the onProjectionUpdate handler, which re-dispatches via queueClientCommand
+ * with identity-preserving axes. No field is silently discarded.
  */
 export default function ProjectionShell(): JSX.Element {
   const [loading, setLoading] = useState(true);
@@ -136,17 +137,24 @@ export default function ProjectionShell(): JSX.Element {
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry));
       setLoading(false);
 
-      // sse_projection_lane wiring:
-      //   sseReceiver.onProjectionHookTrigger → enqueueProjectionHookTrigger → sseDispatcher → handler
+      // sse_projection_lane wiring per runtime-orchestration-ssot.yaml:
+      //   sseReceiver → enqueueProjectionHookTrigger → sseDispatcher → projectionRuntime → onProjectionUpdate
       //
-      // The dispatcher decouples SSE event routing from the dispatch call.
-      // The "projection" handler below preserves all three identity fields from the SSE payload:
-      //   manifest_id → target override (routes to specific manifest)
-      //   table_id    → forwarded in payload (identity for backend row routing)
-      //   table_registry_id → forwarded in payload (registry identity)
-      const dispatcher = createSseDispatcher({ unhandledEventPolicy: "log" });
+      // projectionRuntime is the projection_runtime node in the SSOT lane.
+      // It processes the SSE event payload and fires onProjectionUpdate with all three
+      // identity fields preserved: manifest_id, table_id, table_registry_id.
+      // The onProjectionUpdate handler re-fetches the full layout emission via queueClientCommand,
+      // forwarding identity fields (manifest_id → target, table_id / table_registry_id → payload).
+      const projectionRuntime = createProjectionRuntime();
+      projectionRuntime.setProjectionDefinition(
+        nextEmission.projectionDefinition ?? {
+          constructorKey: "shell_default",
+          packageIds: [],
+          outputKind: "ui_projection",
+        },
+      );
 
-      dispatcher.register("projection", (rawData: string) => {
+      projectionRuntime.onProjectionUpdate((_uiProjection, payload) => {
         const gen = ++refreshGenRef.current;
         (async () => {
           try {
@@ -157,26 +165,14 @@ export default function ProjectionShell(): JSX.Element {
             const storedAxes = initialDispatchAxesRef.current;
             if (!storedAxes) return;
 
-            // Parse SSE event payload — extract all three identity fields without discard.
-            // Parse failure falls through: identity fields remain undefined, storedAxes used as-is.
-            let manifestId: string | undefined;
-            let tableId: string | undefined;
-            let tableRegistryId: string | undefined;
-            try {
-              const parsed = JSON.parse(rawData) as Record<string, unknown>;
-              manifestId = typeof parsed.manifest_id === "string" ? parsed.manifest_id : undefined;
-              tableId = typeof parsed.table_id === "string" ? parsed.table_id : undefined;
-              tableRegistryId = typeof parsed.table_registry_id === "string" ? parsed.table_registry_id : undefined;
-            } catch { /* proceed with storedAxes identity — parse error is not a dispatch error */ }
-
-            // Forward all non-absent identity fields.
+            // Forward all non-absent identity fields from SSE payload without discard.
             const identityPayload: Record<string, unknown> = {};
-            if (tableId) identityPayload.table_id = tableId;
-            if (tableRegistryId) identityPayload.table_registry_id = tableRegistryId;
+            if (payload.table_id) identityPayload.table_id = payload.table_id;
+            if (payload.table_registry_id) identityPayload.table_registry_id = payload.table_registry_id;
 
             const axes: UserOperation = {
               ...storedAxes,
-              ...(manifestId ? { target: manifestId } : {}),
+              ...(payload.manifest_id ? { target: payload.manifest_id } : {}),
               ...(Object.keys(identityPayload).length > 0 ? { payload: identityPayload } : {}),
             };
 
@@ -193,10 +189,12 @@ export default function ProjectionShell(): JSX.Element {
         })();
       });
 
+      const dispatcher = createSseDispatcherWithProjectionRuntime(projectionRuntime, { unhandledEventPolicy: "log" });
+
       const receiver = createSseReceiver({
         token: projectionTokenRef.current,
         onProjectionHookTrigger: (trigger: ProjectionHookTrigger) => {
-          // sse_projection_lane bridge — routes through sseDispatcher, not direct dispatch.
+          // sse_projection_lane bridge — routes through projectionRuntime, not direct dispatch.
           enqueueProjectionHookTrigger(trigger, dispatcher);
         },
         onError: (state) => {

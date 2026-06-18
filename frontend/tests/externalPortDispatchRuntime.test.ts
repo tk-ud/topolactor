@@ -121,3 +121,25 @@ Deno.test("external port generic lane: no provider-specific external port panel 
     );
   }
 });
+
+// ─── external port boundary scope: runtime handler / credential execution is backend-only ──────
+
+Deno.test("external port boundary scope: frontend has no credential executor — runtime handler is backend-only", async () => {
+  // Frontend boundary is: DB-derived external-port: targetRef → generic dispatch lane → backend.
+  // Frontend does NOT execute credentials, call external services, or own the runtime handler.
+  // Runtime handler / credential execution is owned by the backend ExternalPortPolicyStepExecutor.
+  const src = await Deno.readTextFile(new URL("../runtime/frontendScheduler.ts", import.meta.url));
+  assert(!src.includes("CredentialExecut"), "frontend scheduler must not contain credential execution logic");
+  assert(!src.includes("ExternalPortPolicy"), "frontend scheduler must not reference ExternalPortPolicyStepExecutor");
+  assert(src.includes('target: "external_port"'), "frontend passes to generic external_port target — backend owns execution");
+});
+
+Deno.test("external port boundary scope: renderEmission forwards DB-derived portTargetRef unchanged to generic dispatch binding", async () => {
+  // Frontend receives portTargetRef from DB-derived emission.layoutNodes[].runtimeInteractions[].portTargetRef.
+  // It builds an externalPortDispatch binding and passes portTargetRef unchanged to enqueueExternalPortDispatchCommand.
+  // Provider identity lives in the portTargetRef string — no provider-specific dispatch routing in frontend.
+  const src = await Deno.readTextFile(new URL("../runtime/renderEmission.ts", import.meta.url));
+  assert(src.includes("externalPortDispatch"), "renderEmission must build externalPortDispatch binding from runtimeInteractions");
+  assert(src.includes("portTargetRef"), "renderEmission must forward DB-derived portTargetRef unchanged");
+  assert(!src.includes("CredentialExecut"), "renderEmission must not contain credential execution");
+});

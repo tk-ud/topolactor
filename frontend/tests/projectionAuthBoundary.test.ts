@@ -22,8 +22,8 @@ Deno.test("projection auth boundary: ProjectionShell passes Bearer token to all 
 Deno.test("projection auth boundary: SSE refresh uses sse_projection_lane bridge (enqueueProjectionHookTrigger)", async () => {
   const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
   assert(src.includes("enqueueProjectionHookTrigger"), "SSE refresh must route through enqueueProjectionHookTrigger (sse_projection_lane bridge)");
-  assert(src.includes("createSseDispatcher"), "SSE refresh must use sseDispatcher for event routing isolation");
-  assert(src.includes('dispatcher.register("projection"'), "projection events must be registered on the dispatcher");
+  assert(src.includes("createProjectionRuntime"), "SSE refresh must instantiate projectionRuntime as the projection_runtime lane node");
+  assert(src.includes("createSseDispatcherWithProjectionRuntime"), "SSE refresh must connect projectionRuntime via createSseDispatcherWithProjectionRuntime");
 });
 
 Deno.test("projection auth boundary: SSE refresh preserves all three identity fields without discard", async () => {
