@@ -114,6 +114,13 @@ builder.Services.AddSingleton<IFileStorageRepository>(sp =>
 builder.Services.AddSingleton<IExternalPortBundleStepHandler>(_ => new FileStorageBundleStepHandler());
 builder.Services.AddSingleton<IExternalPortDbFunctionRepository>(_ =>
     new NpgsqlExternalPortDbFunctionRepository(connectionString));
+builder.Services.AddSingleton<IAbstractFunctionManifestRepository>(_ =>
+    new NpgsqlAbstractFunctionManifestRepository(connectionString));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(_ =>
+    new CallPostgresFunctionPrimitiveAdapter(connectionString));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, ProjectionPrimitiveAdapter>();
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, FailClosePrimitiveAdapter>();
+builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
 builder.Services.AddHttpClient();
@@ -130,7 +137,7 @@ builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
         portResolver: sp.GetRequiredService<IExternalPortResolver>(),
         bundleHandlers: sp.GetServices<IExternalPortBundleStepHandler>(),
         dbFunctionRepository: sp.GetRequiredService<IExternalPortDbFunctionRepository>(),
-        abstractFunctionExecutor: null,
+        abstractFunctionExecutor: sp.GetRequiredService<AbstractFunctionExecutor>(),
         runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
     new ExternalPortDispatchRuntime(

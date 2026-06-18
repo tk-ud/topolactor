@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Npgsql;
 
 namespace Topolactor.Runtime;
 
@@ -30,14 +32,16 @@ public sealed class AbstractFunctionExecutionContext
     private readonly Dictionary<string, object?> _resultContext = new(StringComparer.Ordinal);
     private readonly List<string> _executedPrimitiveKeys = new();
 
-    public AbstractFunctionExecutionContext(string authorityScope, JsonElement? requestPayload = null)
+    public AbstractFunctionExecutionContext(string authorityScope, JsonElement? requestPayload = null, ExternalPortExecutionContext? externalPortContext = null)
     {
         AuthorityScope = authorityScope;
         RequestPayload = requestPayload;
+        ExternalPortContext = externalPortContext;
     }
 
     public string AuthorityScope { get; }
     public JsonElement? RequestPayload { get; }
+    public ExternalPortExecutionContext? ExternalPortContext { get; }
     public IReadOnlyDictionary<string, object?> ResultContext => _resultContext;
     public IReadOnlyList<string> ExecutedPrimitiveKeys => _executedPrimitiveKeys;
 
@@ -46,6 +50,7 @@ public sealed class AbstractFunctionExecutionContext
         if (binding.BindingSource == "payload") return ResolveJsonPath(RequestPayload, binding.BindingPath);
         if (binding.BindingSource == "result_context") return _resultContext.TryGetValue(binding.BindingPath, out var value) ? value : null;
         if (binding.BindingSource == "constant") return binding.BindingPath;
+        if (binding.BindingSource == "external_context") return ResolveExternalContext(binding.BindingPath);
         throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_INPUT_BINDING_SOURCE_UNSUPPORTED: {binding.BindingSource}");
     }
 
@@ -55,6 +60,38 @@ public sealed class AbstractFunctionExecutionContext
     }
 
     public void MarkExecuted(string primitiveKey) => _executedPrimitiveKeys.Add(primitiveKey);
+
+    public void ApplyResultToExternalContext(string? key, object? value)
+    {
+        if (ExternalPortContext is null || string.IsNullOrWhiteSpace(key) || value is null) return;
+        switch (key)
+        {
+            case "ExportJobId" when value is Guid exportJobId:
+                ExternalPortContext.ExportJobId = exportJobId;
+                break;
+            case "FileArtifactId" when value is Guid fileArtifactId:
+                ExternalPortContext.FileArtifactId = fileArtifactId;
+                break;
+            case "ChecksumValue" when value is string checksum:
+                ExternalPortContext.ChecksumValue = checksum;
+                break;
+            case "AuthorizationKey" when value is string authorizationKey:
+                ExternalPortContext.AuthorizationKey = authorizationKey;
+                break;
+        }
+    }
+
+    private object? ResolveExternalContext(string key) => key switch
+    {
+        "port_id" => ExternalPortContext?.PortRecord?.PortId,
+        "port_kind" => ExternalPortContext?.PortRecord?.PortKind ?? ExternalPortContext?.PortKind,
+        "required_by_bundle" => ExternalPortContext?.RequiredByBundle ?? ExternalPortContext?.Policy?.RequiredByBundle,
+        "storage_ref" => ExternalPortContext?.PortRecord?.ReferenceKey,
+        "export_job_id" => ExternalPortContext?.ExportJobId,
+        "file_artifact_id" => ExternalPortContext?.FileArtifactId,
+        "checksum_value" => ExternalPortContext?.ChecksumValue,
+        _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_EXTERNAL_CONTEXT_BINDING_UNSUPPORTED: {key}")
+    };
 
     private static object? ResolveJsonPath(JsonElement? payload, string key)
     {
@@ -126,6 +163,7 @@ public sealed class AbstractFunctionExecutor
             }
             var result = await primitive.ExecuteAsync(step, inputs, context, ct);
             context.StoreResult(step.ResultContextKey, result);
+            context.ApplyResultToExternalContext(step.ResultContextKey, result);
             context.MarkExecuted(step.PrimitiveKey);
         }
         return context;
@@ -136,4 +174,62 @@ public sealed class ProjectionPrimitiveAdapter : IAbstractFunctionPrimitiveAdapt
 {
     public string PrimitiveKey => "projection";
     public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default) => Task.FromResult<object?>(inputs.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, StringComparer.Ordinal));
+}
+
+
+public sealed class CallPostgresFunctionPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private static readonly Regex AllowedFunctionName = new(@"^topology\.[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private readonly string _connectionString;
+
+    public CallPostgresFunctionPrimitiveAdapter(string connectionString) =>
+        _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+
+    public string PrimitiveKey => "call_postgres_function";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!step.StepConfig.TryGetValue("function", out var functionName) || string.IsNullOrWhiteSpace(functionName) || !AllowedFunctionName.IsMatch(functionName))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_POSTGRES_FUNCTION_INVALID");
+
+        var argumentKeys = ReadArgumentKeys(step);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT {functionName}({string.Join(", ", argumentKeys.Select((_, index) => $"@p{index}"))})";
+
+        for (var index = 0; index < argumentKeys.Count; index++)
+        {
+            if (!inputs.TryGetValue(argumentKeys[index], out var value))
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, $"ABSTRACT_FUNCTION_POSTGRES_ARGUMENT_MISSING: {argumentKeys[index]}");
+            cmd.Parameters.AddWithValue($"p{index}", value ?? DBNull.Value);
+        }
+
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is DBNull ? null : result;
+    }
+
+    private static IReadOnlyList<string> ReadArgumentKeys(AbstractFunctionStep step)
+    {
+        if (!step.StepConfig.TryGetValue("arguments", out var json) || string.IsNullOrWhiteSpace(json))
+            return step.InputBindings.Select(static binding => binding.InputKey).ToArray();
+
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, "ABSTRACT_FUNCTION_POSTGRES_ARGUMENTS_INVALID");
+        return doc.RootElement.EnumerateArray().Select(static item => item.GetString() ?? string.Empty).Where(static item => item.Length > 0).ToArray();
+    }
+}
+
+public sealed class FailClosePrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    public string PrimitiveKey => "fail_close";
+
+    public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        var status = step.StepConfig.TryGetValue("status", out var configuredStatus) && !string.IsNullOrWhiteSpace(configuredStatus)
+            ? configuredStatus
+            : AbstractFunctionFailCloseStatus.InvalidAuthority;
+        throw new AbstractFunctionFailCloseException(status, "ABSTRACT_FUNCTION_FAIL_CLOSE_PRIMITIVE");
+    }
 }

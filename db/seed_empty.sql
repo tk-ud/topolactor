@@ -2164,11 +2164,37 @@ ON CONFLICT (abstract_function_id) DO NOTHING;
 INSERT INTO topology.abstract_function_steps
     (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
 VALUES
-    ('00000000-0000-0000-0000-00000000bf01', '00000000-0000-0000-0000-00000000af01', 1, 'call_postgres_function', '{"function":"topology.fs_record_export_job"}', 'ExportJobId', true),
-    ('00000000-0000-0000-0000-00000000bf02', '00000000-0000-0000-0000-00000000af02', 1, 'call_postgres_function', '{"function":"topology.fs_record_file_artifact"}', 'FileArtifactId', true),
-    ('00000000-0000-0000-0000-00000000bf03', '00000000-0000-0000-0000-00000000af03', 1, 'call_postgres_function', '{"function":"topology.fs_write_manifest_record"}', 'ManifestId', true),
-    ('00000000-0000-0000-0000-00000000bf04', '00000000-0000-0000-0000-00000000af04', 1, 'call_postgres_function', '{"function":"topology.fs_authorize_signed_download"}', 'AuthorizationKey', true)
+    ('00000000-0000-0000-0000-00000000bf01', '00000000-0000-0000-0000-00000000af01', 1, 'call_postgres_function', '{"function":"topology.fs_record_export_job","arguments":["idempotency_key","required_by_bundle","port_id","port_kind","requested_by","export_format","period"]}', 'ExportJobId', true),
+    ('00000000-0000-0000-0000-00000000bf02', '00000000-0000-0000-0000-00000000af02', 1, 'call_postgres_function', '{"function":"topology.fs_record_file_artifact","arguments":["export_job_id","file_name","file_type","storage_ref","checksum_value"]}', 'FileArtifactId', true),
+    ('00000000-0000-0000-0000-00000000bf03', '00000000-0000-0000-0000-00000000af03', 1, 'call_postgres_function', '{"function":"topology.fs_write_manifest_record","arguments":["export_job_id","file_artifact_id","requested_by","period","export_format","checksum_value"]}', 'ManifestId', true),
+    ('00000000-0000-0000-0000-00000000bf04', '00000000-0000-0000-0000-00000000af04', 1, 'call_postgres_function', '{"function":"topology.fs_authorize_signed_download","arguments":["file_artifact_id","requested_by"]}', 'AuthorizationKey', true)
 ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000c001', '00000000-0000-0000-0000-00000000bf01', 'idempotency_key', 'payload', 'idempotency_key', true, false, true),
+    ('00000000-0000-0000-0000-00000000c002', '00000000-0000-0000-0000-00000000bf01', 'required_by_bundle', 'external_context', 'required_by_bundle', true, false, true),
+    ('00000000-0000-0000-0000-00000000c003', '00000000-0000-0000-0000-00000000bf01', 'port_id', 'external_context', 'port_id', false, false, true),
+    ('00000000-0000-0000-0000-00000000c004', '00000000-0000-0000-0000-00000000bf01', 'port_kind', 'external_context', 'port_kind', true, false, true),
+    ('00000000-0000-0000-0000-00000000c005', '00000000-0000-0000-0000-00000000bf01', 'requested_by', 'payload', 'requested_by', true, false, true),
+    ('00000000-0000-0000-0000-00000000c006', '00000000-0000-0000-0000-00000000bf01', 'export_format', 'payload', 'export_format', false, false, true),
+    ('00000000-0000-0000-0000-00000000c007', '00000000-0000-0000-0000-00000000bf01', 'period', 'payload', 'period', false, false, true),
+    ('00000000-0000-0000-0000-00000000c008', '00000000-0000-0000-0000-00000000bf02', 'export_job_id', 'external_context', 'export_job_id', true, false, true),
+    ('00000000-0000-0000-0000-00000000c009', '00000000-0000-0000-0000-00000000bf02', 'file_name', 'payload', 'file_name', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00a', '00000000-0000-0000-0000-00000000bf02', 'file_type', 'payload', 'file_type', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00b', '00000000-0000-0000-0000-00000000bf02', 'storage_ref', 'external_context', 'storage_ref', true, true, true),
+    ('00000000-0000-0000-0000-00000000c00c', '00000000-0000-0000-0000-00000000bf02', 'checksum_value', 'external_context', 'checksum_value', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00d', '00000000-0000-0000-0000-00000000bf03', 'export_job_id', 'external_context', 'export_job_id', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00e', '00000000-0000-0000-0000-00000000bf03', 'file_artifact_id', 'external_context', 'file_artifact_id', true, false, true),
+    ('00000000-0000-0000-0000-00000000c00f', '00000000-0000-0000-0000-00000000bf03', 'requested_by', 'payload', 'requested_by', true, false, true),
+    ('00000000-0000-0000-0000-00000000c010', '00000000-0000-0000-0000-00000000bf03', 'period', 'payload', 'period', false, false, true),
+    ('00000000-0000-0000-0000-00000000c011', '00000000-0000-0000-0000-00000000bf03', 'export_format', 'payload', 'export_format', false, false, true),
+    ('00000000-0000-0000-0000-00000000c012', '00000000-0000-0000-0000-00000000bf03', 'checksum_value', 'external_context', 'checksum_value', false, false, true),
+    ('00000000-0000-0000-0000-00000000c013', '00000000-0000-0000-0000-00000000bf04', 'file_artifact_id', 'external_context', 'file_artifact_id', true, false, true),
+    ('00000000-0000-0000-0000-00000000c014', '00000000-0000-0000-0000-00000000bf04', 'requested_by', 'payload', 'requested_by', true, false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
 
 INSERT INTO topology.abstract_function_authority_bindings
     (abstract_function_id, authority_kind, authority_ref, active)
@@ -2207,12 +2233,12 @@ VALUES
     ('00000000-0000-0000-0000-0000000004a2', '00000000-0000-0000-0000-0000000000e4',  8, 'capture_response',                 '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000407', '00000000-0000-0000-0000-0000000000e4',  9, 'compute_checksum',                 '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000490', '00000000-0000-0000-0000-0000000000e4', 10, 'append_runtime_event_log', '{"event_type":"checksum_verified","entity_ref_key":"ChecksumValue"}', NULL, true),
-    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 11, 'execute_abstract_function', '{"compatibility_function":"topology.fs_record_export_job","output":"ExportJobId"}', 'file_storage.record_export_job', true),
+    ('00000000-0000-0000-0000-000000000406', '00000000-0000-0000-0000-0000000000e4', 11, 'execute_abstract_function', '{}', 'file_storage.record_export_job', true),
     ('00000000-0000-0000-0000-000000000491', '00000000-0000-0000-0000-0000000000e4', 12, 'append_runtime_event_log', '{"event_type":"export_job_initiated","entity_ref_key":"ExportJobId"}', NULL, true),
-    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 13, 'execute_abstract_function', '{"compatibility_function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', 'file_storage.record_file_artifact', true),
+    ('00000000-0000-0000-0000-000000000408', '00000000-0000-0000-0000-0000000000e4', 13, 'execute_abstract_function', '{}', 'file_storage.record_file_artifact', true),
     ('00000000-0000-0000-0000-000000000492', '00000000-0000-0000-0000-0000000000e4', 14, 'append_runtime_event_log', '{"event_type":"file_write_completed","entity_ref_key":"FileArtifactId"}', NULL, true),
-    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 15, 'execute_abstract_function', '{"compatibility_function":"topology.fs_write_manifest_record","output":"ManifestId"}', 'file_storage.write_manifest_record', true),
-    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 16, 'execute_abstract_function', '{"compatibility_function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', 'file_storage.authorize_signed_download', true),
+    ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 15, 'execute_abstract_function', '{}', 'file_storage.write_manifest_record', true),
+    ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 16, 'execute_abstract_function', '{}', 'file_storage.authorize_signed_download', true),
     ('00000000-0000-0000-0000-000000000493', '00000000-0000-0000-0000-0000000000e4', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', NULL, true),
     -- file_storage_bundle response_port (17 steps: credential pipeline + compute_checksum + 4x execute_db_function interleaved with 4x append_runtime_event_log)
     ('00000000-0000-0000-0000-000000000411', '00000000-0000-0000-0000-0000000000e5',  1, 'resolve_port_record',              '{}', NULL, true),
@@ -2225,12 +2251,12 @@ VALUES
     ('00000000-0000-0000-0000-0000000004b2', '00000000-0000-0000-0000-0000000000e5',  8, 'capture_response',                 '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000417', '00000000-0000-0000-0000-0000000000e5',  9, 'compute_checksum',                 '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000494', '00000000-0000-0000-0000-0000000000e5', 10, 'append_runtime_event_log', '{"event_type":"checksum_verified","entity_ref_key":"ChecksumValue"}', NULL, true),
-    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 11, 'execute_abstract_function', '{"compatibility_function":"topology.fs_record_export_job","output":"ExportJobId"}', 'file_storage.record_export_job', true),
+    ('00000000-0000-0000-0000-000000000416', '00000000-0000-0000-0000-0000000000e5', 11, 'execute_abstract_function', '{}', 'file_storage.record_export_job', true),
     ('00000000-0000-0000-0000-000000000495', '00000000-0000-0000-0000-0000000000e5', 12, 'append_runtime_event_log', '{"event_type":"export_job_initiated","entity_ref_key":"ExportJobId"}', NULL, true),
-    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 13, 'execute_abstract_function', '{"compatibility_function":"topology.fs_record_file_artifact","output":"FileArtifactId"}', 'file_storage.record_file_artifact', true),
+    ('00000000-0000-0000-0000-000000000418', '00000000-0000-0000-0000-0000000000e5', 13, 'execute_abstract_function', '{}', 'file_storage.record_file_artifact', true),
     ('00000000-0000-0000-0000-000000000496', '00000000-0000-0000-0000-0000000000e5', 14, 'append_runtime_event_log', '{"event_type":"file_write_completed","entity_ref_key":"FileArtifactId"}', NULL, true),
-    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 15, 'execute_abstract_function', '{"compatibility_function":"topology.fs_write_manifest_record","output":"ManifestId"}', 'file_storage.write_manifest_record', true),
-    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 16, 'execute_abstract_function', '{"compatibility_function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', 'file_storage.authorize_signed_download', true),
+    ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 15, 'execute_abstract_function', '{}', 'file_storage.write_manifest_record', true),
+    ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 16, 'execute_abstract_function', '{}', 'file_storage.authorize_signed_download', true),
     ('00000000-0000-0000-0000-000000000497', '00000000-0000-0000-0000-0000000000e5', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', NULL, true),
     -- file_storage attachment response_port policies (credential pipeline + execute_db_function; no attachment credential plane)
     ('00000000-0000-0000-0000-0000000004c1', '00000000-0000-0000-0000-0000000000ed', 1, 'resolve_port_record', '{}', NULL, true),

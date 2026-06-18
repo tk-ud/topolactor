@@ -1,7 +1,7 @@
 # Refactor Todo: Abstract Function Runtime Substrate
 
 Target repo: `github.com/tk-ud/topolactor`
-Status: `partial_implementation_done`
+Status: `partial_compatibility_fallback`
 Maintenance class: `abstract_function_refactor_maintenance`
 Queue role: refactor maintenance note for abstract function substrate work; not a product roadmap/status TODO and not canonical `.agent/tasks/todo.md` completion-status management.
 Source judgment: audit carry-over from abstract-function / SQL Attention / recommendation / credential / execute_db_function review.
@@ -55,7 +55,7 @@ Completed:
 Still open after this update:
 
 - SQL Attention / recommendation and credential hardening Bundles remain partial/not_started and must not be marked implemented.
-- File-storage concrete deletion is not complete; `execute_abstract_function` seed steps use explicit `compatibility_function` fallback to the existing `topology.fs_*` calls until live seed path tests pass.
+- File-storage concrete deletion is not complete; `execute_abstract_function` now has DB manifest loading and a `call_postgres_function` primitive path, but existing `topology.fs_*` PostgreSQL functions remain the call target until concrete deletion is proven safe.
 - Attachment bind/list/unbind remain on `execute_db_function` compatibility path pending manifest authority for record-table binding.
 
 ## Audit conclusion
@@ -107,9 +107,9 @@ Absorption policy:
 
 | Bundle ID | Status | Purpose |
 |---|---|---|
-| `abstract-function-runtime-substrate-ssot` | implemented | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
-| `abstract-function-manifest-schema` | partial_implementation_done | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
-| `backend-abstract-function-executor` | partial_implementation_done | Implement runtime executor for abstract function manifests and primitive registry |
+| `abstract-function-runtime-substrate-ssot` | partial_compatibility_fallback | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
+| `abstract-function-manifest-schema` | partial_compatibility_fallback | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
+| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry |
 | `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
 | `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
 | `file-storage-db-function-to-abstract-function-migration` | partial_compatibility_fallback | Absorb file-storage DB functions by migration order and remove payload-derived table authority |
@@ -132,7 +132,7 @@ Status: `partial_ssot_done`
 
 - [x] Safely align `docs/design/runtime-orchestration-ssot.yaml` with the abstract-function substrate without unrelated full-file line loss.
 - [x] Generate initial implementation primitive adapters (`AbstractFunctionExecutor` + projection/test adapter surface).
-- [x] Add DB schema/seed/test coverage before any concrete function deletion; concrete deletion remains blocked by compatibility fallback for legacy `topology.fs_*` calls.
+- [x] Add DB schema/seed/test coverage before any concrete function deletion; concrete deletion remains blocked because legacy `topology.fs_*` PostgreSQL functions are still the manifest `call_postgres_function` target.
 
 ### Problem
 
@@ -206,13 +206,13 @@ Create a DB-backed manifest/schema surface for abstract function definitions, pr
 
 ### Improvement plan
 
-- [ ] Define abstract function manifest tables.
-- [ ] Define primitive step table with ordered execution.
-- [ ] Define input binding table that maps payload/context/result values to typed primitive inputs.
-- [ ] Define table/column/output authority tables.
-- [ ] Define secret-deny projection metadata.
-- [ ] Define relation from external port policy steps to abstract function manifest key.
-- [ ] Define bootstrap seed examples without raw SQL or frontend-authored table/column authority.
+- [x] Define abstract function manifest tables.
+- [x] Define primitive step table with ordered execution.
+- [x] Define input binding table that maps payload/context/result values to typed primitive inputs.
+- [x] Define table/column/output authority table surface.
+- [x] Define secret-deny projection metadata.
+- [x] Define relation from external port policy steps to abstract function manifest key.
+- [x] Define bootstrap seed examples without raw SQL or frontend-authored table/column authority.
 
 ### Materials
 
@@ -274,13 +274,13 @@ Implement a backend `execute_abstract_function` executor that reads abstract fun
 
 ### Improvement plan
 
-- [ ] Add backend records/contracts for abstract function manifest, step, binding, authority, and output shape.
-- [ ] Add repository read surface for active abstract function manifests.
-- [ ] Add primitive registry with no provider-specific or bundle-specific branching.
-- [ ] Support result context binding between primitive steps.
-- [ ] Support explicit fail-close statuses for missing authority, missing input, missing credential, invalid projection, unsupported primitive.
-- [ ] Route external port `execute_abstract_function` through existing `external_port_runtime` lane without new API route.
-- [ ] Keep concrete compute adapters for checksum, crypto, HTTP client, DB connection, and Phase Attention engine.
+- [x] Add backend records/contracts for abstract function manifest, step, binding, authority, and output shape.
+- [x] Add repository read surface for active abstract function manifests.
+- [x] Add primitive registry with no provider-specific or bundle-specific branching.
+- [x] Support result context binding between primitive steps.
+- [x] Support explicit fail-close statuses for missing authority, missing input, invalid projection, and unsupported primitive; credential-specific hardening remains in its Bundle.
+- [x] Route external port `execute_abstract_function` through existing `external_port_runtime` lane without new API route.
+- [x] Keep concrete compute adapters for checksum, crypto, HTTP client, DB connection, and Phase Attention engine; only `call_postgres_function` is implemented in this Bundle slice.
 
 ### Materials
 
@@ -312,12 +312,12 @@ Implement a backend `execute_abstract_function` executor that reads abstract fun
 
 ### Acceptance conditions
 
-- [ ] Backend abstract function executor exists and is registered through DI.
-- [ ] Primitive registry is generic and data-driven.
-- [ ] Provider/bundle-specific branching does not enter the generic executor.
-- [ ] Existing external port policy execution can call abstract function manifests.
-- [ ] Failure paths are explicit and covered by tests.
-- [ ] Tests prove no silent fallback and no frontend judgment authority.
+- [x] Backend abstract function executor exists and is registered through DI.
+- [x] Primitive registry is generic and data-driven for implemented primitives.
+- [x] Provider/bundle-specific branching does not enter the generic executor.
+- [x] Existing external port policy execution can call abstract function manifests.
+- [x] Failure paths are explicit and covered by tests for the substrate statuses in this slice.
+- [x] Tests prove no silent fallback for `execute_abstract_function` executor wiring and no frontend judgment authority in this slice.
 
 ---
 

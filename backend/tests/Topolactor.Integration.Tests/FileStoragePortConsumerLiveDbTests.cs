@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Topolactor.Repository;
+using Topolactor.Runtime;
 using Xunit;
 
 namespace Topolactor.Integration.Tests;
@@ -64,8 +65,9 @@ public class FileStoragePortConsumerLiveDbTests
         Assert.Equal("ChecksumValue", step10.StepConfig["entity_ref_key"]);
 
         var step11 = steps[10];
-        Assert.Equal("execute_db_function", step11.OperationKey);
-        Assert.Equal("topology.fs_record_export_job", step11.StepConfig["function"]);
+        Assert.Equal("execute_abstract_function", step11.OperationKey);
+        Assert.Equal("file_storage.record_export_job", step11.StepConfig["abstract_function_key"]);
+        Assert.False(step11.StepConfig.ContainsKey("compatibility_function"));
 
         var step12 = steps[11];
         Assert.Equal("append_runtime_event_log", step12.OperationKey);
@@ -73,8 +75,9 @@ public class FileStoragePortConsumerLiveDbTests
         Assert.Equal("ExportJobId", step12.StepConfig["entity_ref_key"]);
 
         var step13 = steps[12];
-        Assert.Equal("execute_db_function", step13.OperationKey);
-        Assert.Equal("topology.fs_record_file_artifact", step13.StepConfig["function"]);
+        Assert.Equal("execute_abstract_function", step13.OperationKey);
+        Assert.Equal("file_storage.record_file_artifact", step13.StepConfig["abstract_function_key"]);
+        Assert.False(step13.StepConfig.ContainsKey("compatibility_function"));
 
         var step14 = steps[13];
         Assert.Equal("append_runtime_event_log", step14.OperationKey);
@@ -82,8 +85,9 @@ public class FileStoragePortConsumerLiveDbTests
         Assert.Equal("FileArtifactId", step14.StepConfig["entity_ref_key"]);
 
         var step16 = steps[15];
-        Assert.Equal("execute_db_function", step16.OperationKey);
-        Assert.Equal("topology.fs_authorize_signed_download", step16.StepConfig["function"]);
+        Assert.Equal("execute_abstract_function", step16.OperationKey);
+        Assert.Equal("file_storage.authorize_signed_download", step16.StepConfig["abstract_function_key"]);
+        Assert.False(step16.StepConfig.ContainsKey("compatibility_function"));
 
         var step17 = steps[16];
         Assert.Equal("append_runtime_event_log", step17.OperationKey);
@@ -118,6 +122,67 @@ public class FileStoragePortConsumerLiveDbTests
         Assert.Contains("export_job_initiated", eventTypes);
         Assert.Contains("file_write_completed", eventTypes);
         Assert.Contains("signed_url_generated", eventTypes);
+    }
+
+
+
+    [Fact]
+    public async Task SeededFileStorageAbstractFunctions_LoadAndExecuteThroughManifestRepository()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var policyRepo = new NpgsqlExternalPortPolicyRepository(NullLogger<NpgsqlExternalPortPolicyRepository>.Instance, cs);
+        var manifestRepo = new NpgsqlAbstractFunctionManifestRepository(cs);
+        var executor = new AbstractFunctionExecutor(manifestRepo, new IAbstractFunctionPrimitiveAdapter[]
+        {
+            new CallPostgresFunctionPrimitiveAdapter(cs),
+            new ProjectionPrimitiveAdapter(),
+            new FailClosePrimitiveAdapter()
+        });
+
+        var port = await policyRepo.LoadPortRecordAsync("file_storage_bundle", "access_port", null);
+        Assert.NotNull(port);
+        var policy = await policyRepo.LoadPolicyAsync(port);
+        Assert.NotNull(policy);
+
+        var step = policy.PolicySteps.Single(s => s.StepOrder == 11);
+        Assert.Equal("execute_abstract_function", step.OperationKey);
+        Assert.Equal("file_storage.record_export_job", step.StepConfig["abstract_function_key"]);
+
+        var manifest = await manifestRepo.LoadAsync(step.StepConfig["abstract_function_key"]);
+        Assert.NotNull(manifest);
+        Assert.Equal("external_port_runtime", manifest.RuntimeLane);
+        Assert.Equal("file_storage_bundle", manifest.AuthorityScope);
+        Assert.Equal("call_postgres_function", manifest.Steps.Single().PrimitiveKey);
+
+        var suffix = Guid.NewGuid().ToString("N");
+        using var payload = System.Text.Json.JsonDocument.Parse($$"""
+            {
+              "idempotency_key": "abstract-{{suffix}}",
+              "requested_by": "integration-test",
+              "export_format": "json",
+              "period": "2026-06",
+              "file_name": "abstract-{{suffix}}.json",
+              "file_type": "json"
+            }
+            """);
+        var context = new ExternalPortExecutionContext
+        {
+            RequiredByBundle = "file_storage_bundle",
+            PortKind = "access_port",
+            PortRecord = port,
+            RequestPayload = payload.RootElement,
+            ChecksumValue = $"sha256:{suffix}"
+        };
+
+        await executor.ExecuteAsync("file_storage.record_export_job", new AbstractFunctionExecutionContext("file_storage_bundle", payload.RootElement, context));
+        Assert.NotNull(context.ExportJobId);
+        await executor.ExecuteAsync("file_storage.record_file_artifact", new AbstractFunctionExecutionContext("file_storage_bundle", payload.RootElement, context));
+        Assert.NotNull(context.FileArtifactId);
+        await executor.ExecuteAsync("file_storage.write_manifest_record", new AbstractFunctionExecutionContext("file_storage_bundle", payload.RootElement, context));
+        await executor.ExecuteAsync("file_storage.authorize_signed_download", new AbstractFunctionExecutionContext("file_storage_bundle", payload.RootElement, context));
+        Assert.StartsWith("auth-ref:", context.AuthorizationKey);
     }
 
     [Fact]
