@@ -50,6 +50,7 @@ const REQUIRED_ADMIN_DISPATCH_AXES: string[] = [
   "system_ci:list_targets",
   "system_ci:inspect",
   "ci_attention:refresh_fragments",
+  "sql_attention:list_projection",
   "admin_csv_json_import:upload_preview",
   "admin_csv_json_import:apply",
   "admin_csv_json_import:list_manifests",

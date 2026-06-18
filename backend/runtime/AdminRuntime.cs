@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Topolactor.Repository;
 using Topolactor.Scheduler;
 using Topolactor.Schema;
@@ -39,6 +40,12 @@ public partial class AdminRuntime
         "topology_transform_runtime",
         "admin_runtime",
         "sse_projection_runtime",
+    };
+
+    private static readonly JsonSerializerOptions _camelCaseSnakeEnumOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
     };
 
     public AdminRuntime(
@@ -441,7 +448,7 @@ public partial class AdminRuntime
         try
         {
             var result = await _sqlAttentionTopologyProjectionRuntime.ProjectAsync(sourceSetId, ct);
-            return (JsonSerializer.SerializeToElement(result), null);
+            return (JsonSerializer.SerializeToElement(result, _camelCaseSnakeEnumOptions), null);
         }
         catch (Exception ex)
         {

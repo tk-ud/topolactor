@@ -75,10 +75,9 @@ public class AdminRuntimeSqlAttentionProjectionTests
 
         Assert.Null(error);
         Assert.NotNull(data);
-        // Status serialized as integer enum value (default JsonSerializer options in AdminRuntime).
-        // TopologyProjectionStatus.MissingPolicy = 2.
-        var statusValue = data!.Value.GetProperty("Status").GetInt32();
-        Assert.Equal((int)TopologyProjectionStatus.MissingPolicy, statusValue);
+        // Status serialized as snake_case string via _camelCaseSnakeEnumOptions.
+        var statusValue = data!.Value.GetProperty("status").GetString();
+        Assert.Equal("missing_policy", statusValue);
     }
 
     [Fact]
