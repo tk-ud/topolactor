@@ -1,7 +1,7 @@
 # Refactor Todo: Abstract Function Runtime Substrate
 
 Target repo: `github.com/tk-ud/topolactor`
-Status: `not_started`
+Status: `partial_compatibility_fallback`
 Maintenance class: `abstract_function_refactor_maintenance`
 Queue role: refactor maintenance note for abstract function substrate work; not a product roadmap/status TODO and not canonical `.agent/tasks/todo.md` completion-status management.
 Source judgment: audit carry-over from abstract-function / SQL Attention / recommendation / credential / execute_db_function review.
@@ -18,21 +18,45 @@ Source judgment: audit carry-over from abstract-function / SQL Attention / recom
 
 ## Mandatory migration order
 
-Every absorption slice must follow this order. Do not delete existing concrete functions first.
+The refactor must follow this global order. Do not delete existing concrete functions first.
 
-1. **Abstract function fix**
-   - Define or extend the abstract function primitive/manifest/runtime boundary first.
-   - Add the generic primitive adapter only when the operation cannot be represented by existing primitives.
+1. **SSOT fix and abstract function primitive generation**
+   - Extend the existing SSOT documents first. Do not create a separate abstract-function runtime SSOT unless the user explicitly reopens SSOT ownership.
+   - Define or extend `execute_abstract_function`, primitive taxonomy, manifest/runtime boundary, authority/input/output/projection rules, and fail-close vocabulary.
+   - Generate the abstract function primitive set and generic primitive adapters needed by the target absorption Bundles.
    - Keep concrete legacy functions in place during this step.
-2. **Add seed for absorption target**
+2. **Extend seed for the target Bundle**
    - Add seed/manifest rows that express the target concrete behavior through abstract function steps.
-   - Payload values may provide values only; table/column/join/projection/secret authority must come from SSOT/manifest/seed authority, not frontend payload.
-3. **Seed test**
-   - Add tests that prove the seed path executes the absorbed behavior, fails closed, and preserves projection/secret/route boundaries.
+   - Payload values may provide values only; table/column/join/projection/secret authority must come from existing SSOT/manifest/seed authority, not frontend payload.
+   - This step is performed per target Bundle.
+3. **Run tests against the target Bundle seed**
+   - Add or update tests that prove the seed path executes the absorbed behavior, fails closed, and preserves projection/secret/route boundaries.
    - The seed path must be tested before any legacy concrete function removal.
-4. **Delete existing concrete functions**
+   - This step is performed per target Bundle.
+4. **Delete existing concrete functions for the target Bundle**
    - Remove or shrink the old concrete C# methods/switch cases/runtime islands only after seed tests pass.
    - If deletion cannot be completed, leave the legacy path explicitly marked as compatibility fallback and keep the Bundle partial.
+   - This step is performed per target Bundle.
+5. **Delete this refactor todo**
+   - Delete `tasks/refactor_todo.md` only after all target Bundles have completed steps 2–4 and completion checks prove the refactor is no longer a carry-over maintenance note.
+
+Steps 2–4 are a per-Bundle loop. Complete them for each target Bundle before final todo deletion.
+
+## Completed maintenance in PR #477
+
+Status judgment: `partial_ssot_done`. This is SSOT/todo maintenance only. It is not implementation completion evidence and does not authorize deleting concrete functions.
+
+Completed:
+
+- `tasks/refactor_todo.md` migration order now requires SSOT fix / abstract primitive generation before per-Bundle seed → seed test → concrete deletion.
+- `docs/design/abstract-function-primitive-registry-ssot.yaml` now owns backend-wide `execute_abstract_function` substrate vocabulary, primitive categories, migration guardrails, and fail-close vocabulary.
+- `docs/framework-policy.yaml` now defines `framework_policy.abstract_function_substrate_policy`, including provider/bundle-specific handler prohibitions, frontend/raw SQL prohibitions, payload-derived authority prohibition, plaintext projection prohibition, migration order, and Bundle loop rule.
+
+Still open after this update:
+
+- SQL Attention / recommendation and credential hardening Bundles remain partial/not_started and must not be marked implemented.
+- File-storage concrete deletion is not complete; `execute_abstract_function` now has DB manifest loading and a `call_postgres_function` primitive path, but existing `topology.fs_*` PostgreSQL functions remain the call target until concrete deletion is proven safe.
+- Attachment bind/list/unbind remain on `execute_db_function` compatibility path pending manifest authority for record-table binding.
 
 ## Audit conclusion
 
@@ -83,19 +107,44 @@ Absorption policy:
 
 | Bundle ID | Status | Purpose |
 |---|---|---|
-| `abstract-function-runtime-substrate-ssot` | not_started | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
-| `abstract-function-manifest-schema` | not_started | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
-| `backend-abstract-function-executor` | not_started | Implement runtime executor for abstract function manifests and primitive registry |
+| `abstract-function-runtime-substrate-ssot` | ssot_contract_complete | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
+| `abstract-function-manifest-schema` | ssot_contract_complete | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
+| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (authority enforcement: partial_done — bindings loaded and fail-close enforced; file-storage concrete deletion remains blocked) |
 | `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
 | `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
-| `file-storage-db-function-to-abstract-function-migration` | not_started | Absorb file-storage DB functions by migration order and remove payload-derived table authority |
+| `file-storage-db-function-to-abstract-function-migration` | partial_compatibility_fallback | Absorb file-storage DB functions by migration order and remove payload-derived table authority |
 | `completion-gate-and-test-alignment` | not_started | Align tests/checks/status after Bundle migration |
 
 ---
 
 ## Bundle `abstract-function-runtime-substrate-ssot`
 
-Status: `not_started`
+Status: `ssot_contract_complete`
+
+Note: SSOT contract is complete. This is not implementation-absorption completion. Concrete function deletion, file-storage migration, SQL Attention / recommendation, and credential hardening remain as separate Bundles.
+
+### Completed in PR #477
+
+- [x] Extended `docs/design/abstract-function-primitive-registry-ssot.yaml` with backend-wide `execute_abstract_function` substrate vocabulary.
+- [x] Defined primitive categories for authority, input binding, DB operation, attention/recommendation, credential, external/event, projection/failure.
+- [x] Added fail-close vocabulary for missing/invalid authority, missing/invalid input binding, invalid projection, secret projection denial, and unsupported primitives.
+- [x] Added `framework_policy.abstract_function_substrate_policy` with authority, secret, frontend/raw SQL, provider/bundle handler, silent fallback, migration order, and Bundle loop rules.
+
+### Completed in PR #478 / PR #479
+
+- [x] Safely align `docs/design/runtime-orchestration-ssot.yaml` with the abstract-function substrate without unrelated full-file line loss.
+- [x] Generate initial implementation primitive adapters (`AbstractFunctionExecutor` + projection/test adapter surface).
+- [x] Add DB schema/seed/test coverage before any concrete function deletion; concrete deletion remains blocked because legacy `topology.fs_*` PostgreSQL functions are still the manifest `call_postgres_function` target.
+
+### SSOT contract basis
+
+The following SSOT surfaces together establish the runtime substrate contract:
+
+- `docs/design/abstract-function-primitive-registry-ssot.yaml` `backend_abstract_function_runtime_substrate`: owns `execute_abstract_function` vocabulary, primitive taxonomy (authority / input_binding / db_operation / attention_and_recommendation / credential / external_and_event / projection_and_failure), and fail-close status set.
+- `docs/framework-policy.yaml` `abstract_function_substrate_policy`: owns provider/bundle-specific handler prohibition, frontend raw SQL / recommendation / credential judgment prohibition, payload-derived authority prohibition, migration order, and Bundle loop rule.
+- `docs/design/runtime-orchestration-ssot.yaml` `abstract_function_or_db_driven_operation_boundary`: owns `execute_abstract_function` runtime contract, fail-close invariant (missing_authority / invalid_authority / missing_input / invalid_input_binding / invalid_projection / secret_projection_denied / unsupported_primitive), and projection deny list (credential / signed_url / bucket / endpoint / storage_path / raw_storage_ref / plaintext_payload).
+
+Concrete deletion is a separate per-Bundle loop step and is NOT part of this SSOT contract.
 
 ### Problem
 
@@ -107,12 +156,12 @@ Define `execute_abstract_function` as the backend-wide substrate that absorbs ba
 
 ### Improvement plan
 
-- [ ] Define `execute_abstract_function` scope and non-scope.
-- [ ] Define primitive categories: authority, input binding, DB operation, PostgreSQL function call, SQL Attention, recommendation, credential, HTTP, scheduler, event log, projection, fail-close.
-- [ ] Define Phase Attention boundary as `phase_attention_adapter`, not as in-VM semantic/ID-space exploration logic.
-- [ ] Define frontend boundary: request/render/candidate/preview surface only.
-- [ ] Define secret-deny projection rule for credential, signed URL, bucket, endpoint, storage path, and plaintext payload.
-- [ ] Define migration relation to existing `execute_db_function` and external port policy steps.
+- [x] Define `execute_abstract_function` scope and non-scope in existing SSOT/policy surfaces.
+- [x] Define primitive categories: authority, input binding, DB operation, PostgreSQL function call, SQL Attention, recommendation, credential, HTTP, scheduler, event log, projection, fail-close.
+- [x] Define Phase Attention boundary as `phase_attention_adapter`, not as in-VM semantic/ID-space exploration logic.
+- [x] Define frontend boundary: request/render/candidate/preview surface only.
+- [x] Define secret-deny projection rule for credential, signed URL, bucket, endpoint, storage path, and plaintext payload.
+- [x] Define migration relation to existing `execute_db_function` and external port policy steps at policy/vocabulary level.
 
 ### Materials
 
@@ -132,7 +181,7 @@ Define `execute_abstract_function` as the backend-wide substrate that absorbs ba
 - `docs/design/abstract-function-primitive-registry-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
 - `docs/framework-policy.yaml`
-- Prefer existing SSOT extension first. Create `docs/design/abstract-function-runtime-substrate-ssot.yaml` only after confirming the existing SSOT ownership is insufficient.
+- Extend existing SSOT documents first. Do not create `docs/design/abstract-function-runtime-substrate-ssot.yaml`; splitting runtime substrate ownership would break SSOT.
 
 ### Target surfaces / functions
 
@@ -147,17 +196,31 @@ Define `execute_abstract_function` as the backend-wide substrate that absorbs ba
 
 ### Acceptance conditions
 
-- [ ] SSOT states that backend function bodies should be expressed as abstract function primitives when possible.
-- [ ] `execute_db_operation` is not treated as the top-level target; it is a DB primitive under `execute_abstract_function`.
-- [ ] Phase Attention internals remain outside the abstract function VM.
-- [ ] SQL Attention and recommendation are explicitly candidate/evidence/projection primitives and must not auto-mutate route or canonical topology state.
-- [ ] Credential secret materialization is runtime-only and prohibited from projection/log/seed/SSOT output.
+- [x] SSOT states that backend function bodies should be expressed as abstract function primitives when possible.
+- [x] `execute_db_operation` is not treated as the top-level target; it is a DB primitive under `execute_abstract_function`.
+- [x] Phase Attention internals remain outside the abstract function VM.
+- [x] SQL Attention and recommendation are explicitly candidate/evidence/projection primitives and must not auto-mutate route or canonical topology state.
+- [x] Credential secret materialization is runtime-only and prohibited from projection/log/seed/SSOT output.
 
 ---
 
 ## Bundle `abstract-function-manifest-schema`
 
-Status: `not_started`
+Status: `ssot_contract_complete`
+
+Note: Manifest / schema SSOT contract is complete. This is not implementation-absorption completion. The seed path for file-storage concrete deletion, attachment bind/list/unbind migration, and per-Bundle seed test gate remain as separate open work.
+
+### Completed in PR #478
+
+- [x] Defined `topology.abstract_function_manifests`: manifest authority for `execute_abstract_function` runtime lane, authority scope, `output_shape`, `projection_deny_keys`, and `active` flag.
+- [x] Defined `topology.abstract_function_steps`: ordered generic primitive step list; `primitive_key` resolves through backend generic registry only.
+- [x] Defined `topology.abstract_function_input_bindings`: typed input binding from payload/context/result/manifest/physical table binding/route context; raw SQL and payload-derived table authority prohibited.
+- [x] Defined `topology.abstract_function_authority_bindings`: table/column/join/output/policy authority surface; used for fail-close on missing or invalid authority.
+- [x] Added `external_port_policy_steps.abstract_function_key TEXT REFERENCES topology.abstract_function_manifests(function_key)`: policy steps can now call abstract functions by key.
+- [x] Added `execute_abstract_function` as a valid `operation_key` in `topology.external_port_policy_steps` CHECK constraint.
+- [x] Added bootstrap seed rows for `abstract_function_manifests`, `abstract_function_steps`, `abstract_function_input_bindings`, and `abstract_function_authority_bindings` in `db/seed_empty.sql`.
+- [x] Documented all four manifest tables in `docs/design/db-schema.yaml` under `abstract_function_manifest` category.
+- [x] Added `execute_abstract_function` to `external-port-substrate-ssot.yaml` `operation_key_allowed_values` and documented `abstract_function_key` policy step surface (minimal SSOT gap closure).
 
 ### Problem
 
@@ -169,13 +232,13 @@ Create a DB-backed manifest/schema surface for abstract function definitions, pr
 
 ### Improvement plan
 
-- [ ] Define abstract function manifest tables.
-- [ ] Define primitive step table with ordered execution.
-- [ ] Define input binding table that maps payload/context/result values to typed primitive inputs.
-- [ ] Define table/column/output authority tables.
-- [ ] Define secret-deny projection metadata.
-- [ ] Define relation from external port policy steps to abstract function manifest key.
-- [ ] Define bootstrap seed examples without raw SQL or frontend-authored table/column authority.
+- [x] Define abstract function manifest tables.
+- [x] Define primitive step table with ordered execution.
+- [x] Define input binding table that maps payload/context/result values to typed primitive inputs.
+- [x] Define table/column/output authority table surface.
+- [x] Define secret-deny projection metadata.
+- [x] Define relation from external port policy steps to abstract function manifest key.
+- [x] Define bootstrap seed examples without raw SQL or frontend-authored table/column authority.
 
 ### Materials
 
@@ -191,7 +254,7 @@ Create a DB-backed manifest/schema surface for abstract function definitions, pr
 - `db/topology_tables.sql`
 - `db/seed_empty.sql`
 - `docs/design/db-schema.yaml`
-- `docs/design/abstract-function-runtime-substrate-ssot.yaml` only if the SSOT ownership check in the previous Bundle chooses a new SSOT.
+- No new abstract-function runtime SSOT file; manifest/schema ownership must be linked back to existing SSOT documents.
 
 ### Proposed DB surfaces
 
@@ -207,11 +270,11 @@ topology.abstract_function_policy_bindings
 
 ### Acceptance conditions
 
-- [ ] No raw SQL is accepted from frontend payload, seed payload, or operation payload.
-- [ ] Table/column/join/output authority comes from manifest/physical table binding, not frontend payload.
-- [ ] `external_port_policy_steps` can call an abstract function by key instead of carrying the full operation body.
-- [ ] Secret-bearing fields are deny-listed fail-close.
-- [ ] Migration path preserves existing external port policy-step lane.
+- [x] No raw SQL is accepted from frontend payload, seed payload, or operation payload. (`abstract_function_manifests` comment and `abstract_function_input_bindings` comment prohibit raw SQL; `db-schema.yaml` authority rules enforce this.)
+- [x] Table/column/join/output authority comes from manifest/physical table binding, not frontend payload. (`abstract_function_authority_bindings` is the authority surface; `db-schema.yaml` states `frontend_payload_is_not_table_column_join_output_authority`.)
+- [x] `external_port_policy_steps` can call an abstract function by key instead of carrying the full operation body. (`abstract_function_key TEXT REFERENCES topology.abstract_function_manifests(function_key)` column added in PR #478; `execute_abstract_function` is a valid `operation_key`.)
+- [x] Secret-bearing fields are deny-listed fail-close. (`projection_deny_keys` column in `abstract_function_manifests`; `db-schema.yaml` states `secret_projection_denied_for_credential_signed_url_bucket_endpoint_storage_path_raw_storage_refs`.)
+- [x] Migration path preserves existing external port policy-step lane. (`execute_db_function` operation_key and `NpgsqlExternalPortDbFunctionRepository` compatibility path remain active; no legacy step removed.)
 
 ---
 
@@ -237,13 +300,13 @@ Implement a backend `execute_abstract_function` executor that reads abstract fun
 
 ### Improvement plan
 
-- [ ] Add backend records/contracts for abstract function manifest, step, binding, authority, and output shape.
-- [ ] Add repository read surface for active abstract function manifests.
-- [ ] Add primitive registry with no provider-specific or bundle-specific branching.
-- [ ] Support result context binding between primitive steps.
-- [ ] Support explicit fail-close statuses for missing authority, missing input, missing credential, invalid projection, unsupported primitive.
-- [ ] Route external port `execute_abstract_function` through existing `external_port_runtime` lane without new API route.
-- [ ] Keep concrete compute adapters for checksum, crypto, HTTP client, DB connection, and Phase Attention engine.
+- [x] Add backend records/contracts for abstract function manifest, step, binding, authority, and output shape.
+- [x] Add repository read surface for active abstract function manifests.
+- [x] Add primitive registry with no provider-specific or bundle-specific branching.
+- [x] Support result context binding between primitive steps.
+- [x] Support explicit fail-close statuses for missing authority, missing input, invalid projection, and unsupported primitive; credential-specific hardening remains in its Bundle.
+- [x] Route external port `execute_abstract_function` through existing `external_port_runtime` lane without new API route.
+- [x] Keep concrete compute adapters for checksum, crypto, HTTP client, DB connection, and Phase Attention engine; only `call_postgres_function` is implemented in this Bundle slice.
 
 ### Materials
 
@@ -275,12 +338,28 @@ Implement a backend `execute_abstract_function` executor that reads abstract fun
 
 ### Acceptance conditions
 
-- [ ] Backend abstract function executor exists and is registered through DI.
-- [ ] Primitive registry is generic and data-driven.
-- [ ] Provider/bundle-specific branching does not enter the generic executor.
-- [ ] Existing external port policy execution can call abstract function manifests.
-- [ ] Failure paths are explicit and covered by tests.
-- [ ] Tests prove no silent fallback and no frontend judgment authority.
+- [x] Backend abstract function executor exists and is registered through DI.
+- [x] Primitive registry is generic and data-driven for implemented primitives.
+- [x] Provider/bundle-specific branching does not enter the generic executor.
+- [x] Existing external port policy execution can call abstract function manifests.
+- [x] Failure paths are explicit and covered by tests for the substrate statuses in this slice.
+- [x] Tests prove no silent fallback for `execute_abstract_function` executor wiring and no frontend judgment authority in this slice.
+
+### Bundle `abstract_function_authority_bindings_runtime_enforcement` (PR #479)
+
+Completed in PR #479:
+
+- [x] `NpgsqlAbstractFunctionManifestRepository` loads `topology.abstract_function_authority_bindings` (active only).
+- [x] `AbstractFunctionManifest` carries `AuthorityBindings: IReadOnlyList<AbstractFunctionAuthorityBinding>`.
+- [x] `AbstractFunctionExecutor.ExecuteAsync` fail-closes on missing authority bindings (`MissingAuthority`) and missing policy binding (`MissingAuthority`) before any step execution.
+- [x] `AbstractFunctionExecutionContext` exposes authority bindings to primitive adapters via `SetAuthorityBindings` (internal, set by executor).
+- [x] `CallPostgresFunctionPrimitiveAdapter` fail-closes on missing table authority binding (`MissingAuthority`).
+- [x] Unit tests cover: no bindings, no policy binding, inactive-only bindings, valid binding pass, no table authority.
+- [x] Live DB integration test (`SeededAbstractFunctions_LoadAuthorityBindings_AndEnforceFailClose`) proves seeded authority bindings are loaded and executor fail-closes on empty bindings.
+
+Still open after PR #479:
+- file-storage concrete deletion remains blocked (abstract function seed path is now authority-enforced, but `NpgsqlExternalPortDbFunctionRepository` compatibility path not yet deleted).
+- SQL Attention / recommendation and credential hardening Bundles remain not_started.
 
 ---
 
@@ -562,7 +641,7 @@ Align required tests/checks and completion language after implementation bundles
 ### Acceptance conditions
 
 - [ ] Required checks are documented per changed lane.
-- [ ] Every absorption target follows abstract function fix → seed addition → seed test → concrete function deletion.
+- [ ] Global order is enforced: SSOT fix and abstract function primitive generation first, then steps 2–4 loop per target Bundle, then final refactor todo deletion.
 - [ ] Runtime with DB update asserts DB state or projection source changed.
 - [ ] Runtime returning to frontend asserts SSE/refetch/final state where applicable.
 - [ ] No TODO/roadmap status is advanced without implementation and test evidence.

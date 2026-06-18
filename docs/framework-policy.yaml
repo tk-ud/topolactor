@@ -104,6 +104,44 @@ framework_policy:
         - docs/design/*
       ci_attention_contract: docs/design/ci-contract-ssot.yaml
 
+  abstract_function_substrate_policy:
+    role: backend_wide_abstract_function_authority_policy
+    ssot_sources:
+      primitive_vocabulary: docs/design/abstract-function-primitive-registry-ssot.yaml
+      runtime_orchestration: docs/design/runtime-orchestration-ssot.yaml
+    boundary:
+      - execute_abstract_function_is_manifest_driven_backend_substrate
+      - backend_function_bodies_should_be_expressed_as_abstract_primitives_when_possible
+      - frontend_payload_may_supply_values_only_not_authority
+      - table_column_join_output_authority_must_come_from_ssot_manifest_or_seed
+      - secret_materialization_is_runtime_only
+      - projection_must_deny_secret_bearing_fields_fail_close
+    prohibited:
+      - provider_specific_runtime_handler
+      - bundle_specific_runtime_handler
+      - dedicated_credential_plane_outside_existing_credential_reference_boundary
+      - frontend_sql_attention_judgment
+      - frontend_recommendation_judgment
+      - frontend_or_payload_authored_raw_sql
+      - payload_derived_table_authority
+      - plaintext_secret_projection
+      - silent_fallback_to_legacy_concrete_function
+    fail_close_status:
+      - missing_authority
+      - invalid_authority
+      - missing_input
+      - invalid_input_binding
+      - invalid_projection
+      - secret_projection_denied
+      - unsupported_primitive
+    migration_order:
+      - ssot_fix_and_abstract_function_primitive_generation
+      - extend_seed_for_target_bundle
+      - run_tests_against_target_bundle_seed
+      - delete_existing_concrete_functions_for_target_bundle
+      - delete_refactor_todo_after_all_target_bundles_complete
+    bundle_loop_rule: steps_2_to_4_repeat_per_target_bundle
+
   topolactor_space_boundary_policy:
     registry: definition_and_configuration
     topology: semantic_space

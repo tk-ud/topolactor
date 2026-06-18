@@ -73,10 +73,40 @@ db_schema:
     - context_route
     - ui_topology
     - manifest
+    - abstract_function_manifest
     - auth_identity_session
     - enum_dictionary
 
   tables:
+
+    abstract_function_manifests:
+      category: abstract_function_manifest
+      source_file: db/topology_tables.sql
+      role: execute_abstract_function manifest authority for runtime lane, authority scope, output shape, and projection deny keys
+      authority_rules:
+        - frontend_payload_is_not_table_column_join_output_authority
+        - raw_sql_payload_is_prohibited
+        - runtime_lane_must_be_external_port_runtime
+        - secret_projection_denied_for_credential_signed_url_bucket_endpoint_storage_path_raw_storage_refs
+    abstract_function_steps:
+      category: abstract_function_manifest
+      source_file: db/topology_tables.sql
+      role: ordered generic primitive step list for execute_abstract_function
+      authority_rules:
+        - primitive_key_resolves_through_backend_generic_registry
+        - provider_specific_handler_and_bundle_specific_handler_are_prohibited
+    abstract_function_input_bindings:
+      category: abstract_function_manifest
+      source_file: db/topology_tables.sql
+      role: typed input binding from payload, result_context, constants, manifest authority, physical table binding, or route context
+      authority_rules:
+        - payload_values_may_bind_values_only
+        - table_column_join_output_authority_must_come_from_manifest_or_physical_binding
+    abstract_function_authority_bindings:
+      category: abstract_function_manifest
+      source_file: db/topology_tables.sql
+      role: table, column, join, output, and policy authority surface for fail-close checks
+
     context_transition_stats:
       schema: public
       transition_kind: operation

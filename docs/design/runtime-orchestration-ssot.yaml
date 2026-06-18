@@ -881,15 +881,38 @@ runtime_orchestration_ssot:
           inline EndpointResponseDto を SSE / projection response 扱いする。
       abstract_function_or_db_driven_operation_boundary:
         rule: >-
-          backend mutation は abstract function / DB-driven operation boundary /
-          reusable substrate を使うこと。
+          backend mutation は execute_abstract_function / DB-driven operation boundary /
+          reusable substrate を使うこと。execute_abstract_function は backend-wide substrate
+          であり、runtime boundary / dispatcher lane / manifest authority を backend が検証する。
           既存抽象で表現できる処理を専用 concrete implementation として追加しない。
         pass_condition: >-
-          mutation が topology_function_binder / execute_db_function (topology.* prefix) /
-          既存 abstract function shape / reusable substrate を通ること。
+          mutation が external_port_runtime lane 上の execute_abstract_function manifest、
+          topology_function_binder / call_postgres_function primitive / 既存 reusable substrate を通ること。
+          table / column / join / output authority は abstract function manifest、physical table binding、
+          または seed authority 由来であり、frontend payload / operation payload / seed payload の raw SQL は authority にならない。
         fail_if: >-
           既存 abstract function / DB-driven operation boundary で表現できる処理に対して、
           bundle 固有 / operation 固有の concrete implementation を backend に追加する。
+          execute_abstract_function 用 dedicated route、frontend wrapper、frontend SQL judgment、
+          recommendation judgment、payload-derived table authority、silent fallback を追加する。
+        fail_close_invariant:
+          statuses:
+            - missing_authority
+            - invalid_authority
+            - missing_input
+            - invalid_input_binding
+            - invalid_projection
+            - secret_projection_denied
+            - unsupported_primitive
+          projection_deny:
+            - credential
+            - signed_url
+            - bucket
+            - endpoint
+            - storage_path
+            - raw_storage_ref
+            - plaintext_payload
+          frontend_boundary: request_render_candidate_preview_only_not_authority
       seed_or_data_defined_surface:
         rule: >-
           UI schema / form-table projection / action buttons / action wiring /
