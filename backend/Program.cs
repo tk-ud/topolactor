@@ -157,6 +157,7 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<EnumDictionaryRepository>(),
         sp.GetRequiredService<AuthMasterRepository>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
+        sp.GetRequiredService<SqlAttentionTopologyProjectionRuntime>(),
         sp.GetRequiredService<MockPresetRepository>(),
         sp.GetRequiredService<TeamMarkdownRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
@@ -501,34 +502,6 @@ app.MapGet("/auth/session", (HttpContext ctx, JwtGuard jwtGuard) =>
     return Results.Json(new SessionResponseDto(
         true, subject, role, jwtGuard.TryGetRealm(token), jwtGuard.TryGetAudience(token), []));
 });
-
-// GET /sse — SSE projection lane (JWT-guarded runtime-adjacent surface).
-// Streams projection events from DbNotifyListener via SseEventBroadcaster.
-// Guarded to keep reader authorization boundary explicit for runtime/admin projections.
-app.MapGet("/sql-attention/topology-projection", async (
-    HttpContext ctx,
-    string? sourceSetId,
-    SqlAttentionTopologyProjectionRuntime projectionRuntime,
-    JwtGuard jwtGuard) =>
-{
-    var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
-    if (authErrors.Count > 0)
-        return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
-
-    if (string.IsNullOrWhiteSpace(sourceSetId))
-    {
-        return Results.Json(new
-        {
-            success = false,
-            errors = new[] { new ValidationError("SOURCE_SET_ID_REQUIRED", "Query parameter 'sourceSetId' is required.") }
-        }, statusCode: 400);
-    }
-
-    var result = await projectionRuntime.ProjectAsync(sourceSetId.Trim(), ctx.RequestAborted);
-    return Results.Json(new { success = true, result });
-});
-
 
 // ─── Draft Preview surface endpoints (/draft-preview/*) ──────────────────────
 // Read-only surface for the /demo draft preview UI.

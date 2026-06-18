@@ -914,6 +914,35 @@ runtime_orchestration_ssot:
         - reason
         - ssot_basis
         - why_abstract_function_impossible
+      exception_scope:
+        SQL_Attention:
+          exception_name: SQL_Attention
+          reason: >-
+            SqlAttentionScheduler is a BackgroundService cron route that triggers
+            HubAttractorExplorationRuntime directly. It does not originate from a client
+            or frontend request and cannot route through ManifestDispatcher.
+          ssot_basis: docs/design/runtime-orchestration-ssot.yaml handler_registry_scope_note
+          why_abstract_function_impossible: >-
+            Cron-triggered background evidence generation has no client-side dispatch vector
+            or manifest resolution axis; it is initiated by the runtime scheduler itself.
+          applies_to: SqlAttentionScheduler_BackgroundService_cron_route_only
+          not_applies_to: >-
+            frontend_originated_sql_attention_projection_requests.
+            Those must route through admin_dispatch_pipeline (sql_attention:list_projection).
+        CI_Attention:
+          exception_name: CI_Attention
+          reason: >-
+            SystemOperationCiScheduler is a BackgroundService cron route that triggers
+            SystemOperationCiRuntime diagnostic checks. It does not originate from a client
+            request and cannot route through ManifestDispatcher.
+          ssot_basis: docs/design/runtime-orchestration-ssot.yaml handler_registry_scope_note
+          why_abstract_function_impossible: >-
+            Cron-triggered CI diagnostic inspection has no client-side dispatch vector;
+            it is initiated by the runtime scheduler itself.
+          applies_to: SystemOperationCiScheduler_BackgroundService_cron_route_only
+          not_applies_to: >-
+            ci_attention:refresh_fragments and system_ci:inspect which route through
+            AdminRuntime dispatch pipeline as canonical admin operations.
     prohibited:
       - test_local_handwritten_UI_emission_treated_as_DB_projection
       - direct_backend_concrete_mutation_bypassing_abstract_function
