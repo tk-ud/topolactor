@@ -423,6 +423,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         "send_http",
         "capture_response",
         "execute_db_function",
+        "execute_abstract_function",
         "verify_signature_by_config",
         "enqueue_scheduler_event",
         "append_runtime_event_log",
@@ -444,6 +445,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IExternalPortResolver? portResolver = null,
         IExternalCredentialCrypto? crypto = null,
         IExternalPortDbFunctionRepository? dbFunctionRepository = null,
+        AbstractFunctionExecutor? abstractFunctionExecutor = null,
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null,
         IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null)
     {
@@ -582,6 +584,24 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 if (!step.StepConfig.TryGetValue("function", out var functionName) || string.IsNullOrWhiteSpace(functionName))
                     throw new InvalidOperationException("EXTERNAL_PORT_DB_FUNCTION_NAME_MISSING");
                 await dbFunctionRepository.ExecuteAsync(functionName, step.StepConfig, context, ct);
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["execute_abstract_function"] = async (step, context, ct) =>
+            {
+                if (!step.StepConfig.TryGetValue("abstract_function_key", out var functionKey) || string.IsNullOrWhiteSpace(functionKey))
+                    throw new InvalidOperationException("EXTERNAL_PORT_ABSTRACT_FUNCTION_KEY_MISSING");
+                if (abstractFunctionExecutor is not null)
+                {
+                    await abstractFunctionExecutor.ExecuteAsync(functionKey, new AbstractFunctionExecutionContext(context.RequiredByBundle ?? context.Policy?.RequiredByBundle ?? string.Empty, context.RequestPayload), ct);
+                }
+                else
+                {
+                    if (dbFunctionRepository is null)
+                        throw new InvalidOperationException("EXTERNAL_PORT_DB_FUNCTION_REPOSITORY_MISSING");
+                    if (!step.StepConfig.TryGetValue("compatibility_function", out var functionName) || string.IsNullOrWhiteSpace(functionName))
+                        throw new InvalidOperationException("EXTERNAL_PORT_ABSTRACT_FUNCTION_COMPATIBILITY_FUNCTION_MISSING");
+                    await dbFunctionRepository.ExecuteAsync(functionName, step.StepConfig, context, ct);
+                }
                 context.MarkExecuted(step.OperationKey);
             },
             ["fail_close"] = (step, context, ct) => throw new InvalidOperationException("EXTERNAL_PORT_POLICY_FAIL_CLOSE"),

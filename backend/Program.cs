@@ -130,6 +130,7 @@ builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
         portResolver: sp.GetRequiredService<IExternalPortResolver>(),
         bundleHandlers: sp.GetServices<IExternalPortBundleStepHandler>(),
         dbFunctionRepository: sp.GetRequiredService<IExternalPortDbFunctionRepository>(),
+        abstractFunctionExecutor: null,
         runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
     new ExternalPortDispatchRuntime(
