@@ -140,7 +140,7 @@ Define `execute_abstract_function` as the backend-wide substrate that absorbs ba
 - `docs/design/abstract-function-primitive-registry-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
 - `docs/framework-policy.yaml`
-- Prefer existing SSOT extension first. Create `docs/design/abstract-function-runtime-substrate-ssot.yaml` only after confirming the existing SSOT ownership is insufficient.
+- Extend existing SSOT documents first. Do not create `docs/design/abstract-function-runtime-substrate-ssot.yaml`; splitting runtime substrate ownership would break SSOT.
 
 ### Target surfaces / functions
 
