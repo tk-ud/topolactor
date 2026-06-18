@@ -9,6 +9,9 @@ import type { DraftPreviewResult } from "../api/draftPreview.ts";
 
 const FILE_STORAGE_ACCESS_PORT_ID = "00000000-0000-0000-0000-000000000f01";
 const FILE_STORAGE_RESPONSE_PORT_ID = "00000000-0000-0000-0000-000000000f02";
+const FILE_STORAGE_ATTACHMENT_BIND_PORT_ID = "00000000-0000-0000-0000-000000000f0a";
+const FILE_STORAGE_ATTACHMENT_LIST_PORT_ID = "00000000-0000-0000-0000-000000000f0b";
+const FILE_STORAGE_ATTACHMENT_UNBIND_PORT_ID = "00000000-0000-0000-0000-000000000f0c";
 
 Deno.test("fileStoragePortConsumer: dispatchExternalPort builds access_port event binding", () => {
   const emission: Emission = {
@@ -189,4 +192,20 @@ Deno.test("fileStoragePortConsumer: missing payloadFrom node fails explicitly wi
   assertEquals(schedulerTestOnly.getCommandQueueLength(), 0);
   globalThis.fetch = originalFetch;
   schedulerTestOnly.resetCommandQueue();
+});
+
+Deno.test("fileStoragePortConsumer: attachment CRUD preset seed uses portTargetRef wiring and omits secret projections", async () => {
+  const seed = await Deno.readTextFile(new URL("../../db/file_attachment_crud_preset_seed.sql", import.meta.url));
+  assertStringIncludes(seed, "file_attachment_crud.v1");
+  assertStringIncludes(seed, "derivedFrom");
+  assertStringIncludes(seed, "physical_search_crud_aggregate.v1");
+  assertStringIncludes(seed, `external-port:response_port:${FILE_STORAGE_ATTACHMENT_BIND_PORT_ID}`);
+  assertStringIncludes(seed, `external-port:response_port:${FILE_STORAGE_ATTACHMENT_LIST_PORT_ID}`);
+  assertStringIncludes(seed, `external-port:response_port:${FILE_STORAGE_ATTACHMENT_UNBIND_PORT_ID}`);
+  assertStringIncludes(seed, "topology.fs_bind_record_file_attachment");
+  assertStringIncludes(seed, "topology.fs_list_record_file_attachments");
+  assertStringIncludes(seed, "topology.fs_unbind_record_file_attachment");
+  assertStringIncludes(seed, "credentialPlane");
+  assertStringIncludes(seed, "external_port_substrate reference_key resolution only");
+  assertStringIncludes(seed, "forbiddenProjectionFields");
 });

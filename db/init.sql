@@ -66,6 +66,9 @@
 \echo '[init.sql] applying physical_search_crud_aggregate_preset_seed.sql'
 \i /db/physical_search_crud_aggregate_preset_seed.sql
 
+\echo '[init.sql] applying file_attachment_crud_preset_seed.sql'
+\i /db/file_attachment_crud_preset_seed.sql
+
 \echo '[init.sql] applying physical_details_inline_editor_md_generator_preset_seed.sql'
 \i /db/physical_details_inline_editor_md_generator_preset_seed.sql
 
