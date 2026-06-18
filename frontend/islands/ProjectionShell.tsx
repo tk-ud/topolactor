@@ -146,13 +146,12 @@ export default function ProjectionShell(): JSX.Element {
       // The onProjectionUpdate handler re-fetches the full layout emission via queueClientCommand,
       // forwarding identity fields (manifest_id → target, table_id / table_registry_id → payload).
       const projectionRuntime = createProjectionRuntime();
-      projectionRuntime.setProjectionDefinition(
-        nextEmission.projectionDefinition ?? {
-          constructorKey: "shell_default",
-          packageIds: [],
-          outputKind: "ui_projection",
-        },
-      );
+      // projectionDefinition is a manifest-response data-defined surface (projection_constructor_mapping).
+      // No frontend fallback — if absent, projectionRuntime emits PROJECTION_RUNTIME_DEFINITION_MISSING
+      // on SSE events (definitionMissingPolicy:"error" default is the explicit fail-close).
+      if (nextEmission.projectionDefinition) {
+        projectionRuntime.setProjectionDefinition(nextEmission.projectionDefinition);
+      }
 
       projectionRuntime.onProjectionUpdate((_uiProjection, payload) => {
         const gen = ++refreshGenRef.current;

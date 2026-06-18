@@ -56,6 +56,16 @@ Deno.test("projection auth boundary: LoginManifestPanel session probe accepts an
   assert(src.includes("probeSessionToken(t)"), "session probe must accept any valid JWT realm");
 });
 
+Deno.test("projection admin runtime ssot: projectionDefinition absence is fail-close — no shell_default frontend fallback", async () => {
+  const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
+  assert(!src.includes("shell_default"), "projectionDefinition must have no frontend-fixed fallback (shell_default is forbidden)");
+  assert(!src.includes("constructorKey:"), "no hardcoded constructorKey fallback allowed in ProjectionShell — projectionDefinition is manifest-response data-defined");
+  // Fail-close: projectionRuntime must only receive a definition when emission provides one (manifest-response surface).
+  // When absent, projectionRuntime.definitionMissingPolicy=error emits PROJECTION_RUNTIME_DEFINITION_MISSING on SSE events.
+  assert(src.includes("if (nextEmission.projectionDefinition)"), "projectionDefinition must be conditionally set — absent = explicit fail-close, not filled by frontend");
+  assert(!src.includes("projectionDefinition ??"), "projectionDefinition must not use nullish coalescing fallback in ProjectionShell");
+});
+
 Deno.test("admin projection boundary: middleware and client gate require admin realm probe", async () => {
   const middleware = await Deno.readTextFile(new URL("../routes/admin/_middleware.ts", import.meta.url));
   const gate = await Deno.readTextFile(new URL("../islands/AdminAuthGate.tsx", import.meta.url));
