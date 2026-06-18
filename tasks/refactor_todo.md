@@ -18,21 +18,29 @@ Source judgment: audit carry-over from abstract-function / SQL Attention / recom
 
 ## Mandatory migration order
 
-Every absorption slice must follow this order. Do not delete existing concrete functions first.
+The refactor must follow this global order. Do not delete existing concrete functions first.
 
-1. **Abstract function fix**
-   - Define or extend the abstract function primitive/manifest/runtime boundary first.
-   - Add the generic primitive adapter only when the operation cannot be represented by existing primitives.
+1. **SSOT fix and abstract function primitive generation**
+   - Extend the existing SSOT documents first. Do not create a separate abstract-function runtime SSOT unless the user explicitly reopens SSOT ownership.
+   - Define or extend `execute_abstract_function`, primitive taxonomy, manifest/runtime boundary, authority/input/output/projection rules, and fail-close vocabulary.
+   - Generate the abstract function primitive set and generic primitive adapters needed by the target absorption Bundles.
    - Keep concrete legacy functions in place during this step.
-2. **Add seed for absorption target**
+2. **Extend seed for the target Bundle**
    - Add seed/manifest rows that express the target concrete behavior through abstract function steps.
-   - Payload values may provide values only; table/column/join/projection/secret authority must come from SSOT/manifest/seed authority, not frontend payload.
-3. **Seed test**
-   - Add tests that prove the seed path executes the absorbed behavior, fails closed, and preserves projection/secret/route boundaries.
+   - Payload values may provide values only; table/column/join/projection/secret authority must come from existing SSOT/manifest/seed authority, not frontend payload.
+   - This step is performed per target Bundle.
+3. **Run tests against the target Bundle seed**
+   - Add or update tests that prove the seed path executes the absorbed behavior, fails closed, and preserves projection/secret/route boundaries.
    - The seed path must be tested before any legacy concrete function removal.
-4. **Delete existing concrete functions**
+   - This step is performed per target Bundle.
+4. **Delete existing concrete functions for the target Bundle**
    - Remove or shrink the old concrete C# methods/switch cases/runtime islands only after seed tests pass.
    - If deletion cannot be completed, leave the legacy path explicitly marked as compatibility fallback and keep the Bundle partial.
+   - This step is performed per target Bundle.
+5. **Delete this refactor todo**
+   - Delete `tasks/refactor_todo.md` only after all target Bundles have completed steps 2–4 and completion checks prove the refactor is no longer a carry-over maintenance note.
+
+Steps 2–4 are a per-Bundle loop. Complete them for each target Bundle before final todo deletion.
 
 ## Audit conclusion
 
