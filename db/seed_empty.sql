@@ -596,6 +596,27 @@ ON CONFLICT (manifest_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
+-- sql_attention dispatch manifest (ID 80)
+-- Required by AdminRuntime sql_attention:list_projection switch case.
+-- Frontend-originated projection must route through admin dispatch pipeline;
+-- direct GET bypass route is prohibited (NG5 dispatch_resolution violation).
+-- ---------------------------------------------------------------------------
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES
+    (
+        '00000000-0000-0000-0000-000000000080',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"sql_attention","action":"list_projection"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    )
+ON CONFLICT (manifest_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
 -- hub_navigation dispatch manifests (IDs 77-7b)
 -- Registered for hub_navigation layer: list_manifests / get_hub_relations /
 -- create / update / deprecate.

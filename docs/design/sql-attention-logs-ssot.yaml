@@ -184,12 +184,17 @@ recommendation_pressure_lane_boundary:
     parent_island: main_projection_island
     child_island: recommend_navigation_child_island
     block: sql_attention_projection_block
-    receives: lane_recommend_projection_spec_or_dedicated_api_result
+    receives: admin_dispatch_pipeline_response_via_sql_attention:list_projection
     frontend_responsibility: render_only
     source_resolution:
       source_set_id_required_for_fetch: true
       unresolved_source_set_id_status: explicit_unavailable
       fixed_frontend_fallback_source_set_id: prohibited
+    fetch_route_constraint:
+      frontend_originated_projection_request: admin_dispatch_pipeline
+      canonical_dispatch_layer: sql_attention
+      canonical_dispatch_action: list_projection
+      prohibited: direct_get_bypass_route_for_frontend_originated_projection
     prohibited_mixing:
       - injecting_next_hub_projection_candidate_into_ui_pressure
       - injecting_next_hub_projection_candidate_into_state_pressure

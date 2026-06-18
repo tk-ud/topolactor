@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Topolactor.Repository;
 using Topolactor.Scheduler;
 using Topolactor.Schema;
@@ -30,6 +31,7 @@ public partial class AdminRuntime
     private readonly EnumDictionaryRepository? _enumDictionaryRepository;
     private readonly AuthMasterRepository? _authMasterRepository;
     private readonly SqlAttentionLogsRepository? _sqlAttentionLogsRepository;
+    private readonly SqlAttentionTopologyProjectionRuntime? _sqlAttentionTopologyProjectionRuntime;
     private readonly MockPresetRepository? _mockPresetRepository;
     private readonly TeamMarkdownRepository? _teamMarkdownRepository;
 
@@ -38,6 +40,12 @@ public partial class AdminRuntime
         "topology_transform_runtime",
         "admin_runtime",
         "sse_projection_runtime",
+    };
+
+    private static readonly JsonSerializerOptions _camelCaseSnakeEnumOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
     };
 
     public AdminRuntime(
@@ -57,6 +65,7 @@ public partial class AdminRuntime
         EnumDictionaryRepository? enumDictionaryRepository = null,
         AuthMasterRepository? authMasterRepository = null,
         SqlAttentionLogsRepository? sqlAttentionLogsRepository = null,
+        SqlAttentionTopologyProjectionRuntime? sqlAttentionTopologyProjectionRuntime = null,
         MockPresetRepository? mockPresetRepository = null,
         TeamMarkdownRepository? teamMarkdownRepository = null)
     {
@@ -76,6 +85,7 @@ public partial class AdminRuntime
         _enumDictionaryRepository = enumDictionaryRepository;
         _authMasterRepository = authMasterRepository;
         _sqlAttentionLogsRepository = sqlAttentionLogsRepository;
+        _sqlAttentionTopologyProjectionRuntime = sqlAttentionTopologyProjectionRuntime;
         _mockPresetRepository = mockPresetRepository;
         _teamMarkdownRepository = teamMarkdownRepository;
     }
@@ -246,6 +256,7 @@ public partial class AdminRuntime
             "system_ci:list_targets"                    => await DataSystemCiListTargetsAsync(ct),
             "system_ci:inspect"                         => await DataSystemCiInspectAsync(vector, ct),
             "ci_attention:refresh_fragments"            => await DataCiAttentionRefreshFragmentsAsync(vector, ct),
+            "sql_attention:list_projection"             => await DataSqlAttentionListProjectionAsync(vector, ct),
             "admin_csv_json_import:upload_preview"      => await DataImportUploadPreviewAsync(vector, ct),
             "admin_csv_json_import:apply"               => await DataImportApplyAsync(vector, ct),
             "admin_csv_json_import:list_manifests"      => await DataImportListManifestsAsync(ct),
@@ -419,6 +430,31 @@ public partial class AdminRuntime
         {
             _logger.LogError(ex, "AdminRuntime.DataSystemCiInspectAsync failed for target={Target}", target);
             return (null, new ValidationError("SYSTEM_CI_DIAGNOSTIC_FAILED", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataSqlAttentionListProjectionAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_sqlAttentionTopologyProjectionRuntime is null)
+            return (null, new ValidationError("SQL_ATTENTION_PROJECTION_RUNTIME_NOT_AVAILABLE",
+                "SqlAttentionTopologyProjectionRuntime is not registered"));
+        if (vector.Payload is null ||
+            !vector.Payload.Value.TryGetProperty("sourceSetId", out var sourceSetIdEl) ||
+            string.IsNullOrWhiteSpace(sourceSetIdEl.GetString()))
+            return (null, new ValidationError("SQL_ATTENTION_SOURCE_SET_ID_REQUIRED",
+                "payload.sourceSetId is required for sql_attention:list_projection"));
+        var sourceSetId = sourceSetIdEl.GetString()!.Trim();
+        try
+        {
+            var result = await _sqlAttentionTopologyProjectionRuntime.ProjectAsync(sourceSetId, ct);
+            return (JsonSerializer.SerializeToElement(result, _camelCaseSnakeEnumOptions), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "AdminRuntime.DataSqlAttentionListProjectionAsync failed for sourceSetId={SourceSetId}", sourceSetId);
+            return (null, new ValidationError("SQL_ATTENTION_PROJECTION_RUNTIME_FAILED", ex.Message));
         }
     }
 
