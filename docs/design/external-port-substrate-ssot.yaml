@@ -275,9 +275,10 @@ external_port_substrate_ssot:
         and operation payload do not supply table/column/join/output authority; that
         authority comes from topology.abstract_function_authority_bindings.
       authority_rules:
-        - abstract_function_key_must_reference_an_active_manifest_row
-        - missing_or_inactive_manifest_is_missing_authority_fail_close
-        - payload_provides_values_only_not_table_column_join_output_authority
+      - abstract_function_key_must_reference_an_active_manifest_row
+      - missing_manifest_is_missing_authority_fail_close
+      - inactive_manifest_is_invalid_authority_fail_close
+      - payload_provides_values_only_not_table_column_join_output_authority
     operation_key_definitions:
       execute_abstract_function:
         meaning: >-
