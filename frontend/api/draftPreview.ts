@@ -46,6 +46,7 @@ export type DraftPreviewLayoutNode = {
   design?: DraftPreviewNodeDesign | null;
   propsJson?: string | null;
   stateJson?: string | null;
+  propBindings?: Record<string, { source: string; transform?: string; keyPath?: string; labelPath?: string; valuePath?: string; childrenPath?: string }> | null;
   runtimeInteractions?: Array<{ trigger: string; actionType: string; targetNodeId?: string; statePath?: string; value?: unknown; portTargetRef?: string; payloadFrom?: Record<string, string>; outputProp?: string }> | null;
   /** @deprecated legacy field — prefer nodeId + layoutClassRefs */
   layoutPatchJson?: string;
@@ -65,6 +66,7 @@ export type DraftPreviewResult = {
   manifestId?: string;
   manifestStatus?: string;
   topologySystemName?: string;
+  data?: Record<string, unknown>;
   initialDataRows?: DraftPreviewInitialDataRow[];
   errors?: Array<{ code?: string; message?: string }>;
 };

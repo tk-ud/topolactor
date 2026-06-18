@@ -15,8 +15,8 @@ namespace Topolactor.Integration.Tests;
 [Trait("Category", "RequiresDatabase")]
 public class FileStoragePortConsumerLiveDbTests
 {
-    private const string AccessPortId  = "00000000-0000-0000-0000-0000000000e4";
-    private const string ResponsePortId = "00000000-0000-0000-0000-0000000000e5";
+    private const string AccessPortId  = "00000000-0000-0000-0000-000000000f01";
+    private const string ResponsePortId = "00000000-0000-0000-0000-000000000f02";
 
     [Fact]
     public async Task SeededFileStorageAccessPort_ProjectsPortRecordFromDb()
@@ -158,6 +158,61 @@ public class FileStoragePortConsumerLiveDbTests
         await del.ExecuteNonQueryAsync();
     }
 
+    [Fact]
+    public async Task AttachmentFsFunctions_BindListUnbind_ExecuteAgainstDb()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var recordTableRef = "public.test_attachment_record";
+        var recordId = $"record-{suffix}";
+        var exportJobId = await ScalarAsync<Guid>(conn,
+            "SELECT topology.fs_record_export_job(@idempotency, 'file_storage_bundle', NULL, 'response_port', 'integration-test', 'json', NULL)",
+            ("idempotency", $"attachment-{suffix}"));
+        var fileArtifactId = await ScalarAsync<Guid>(conn,
+            "SELECT topology.fs_record_file_artifact(@export_job_id, @file_name, 'json', 'vault:ref:file_storage_credential', @checksum)",
+            ("export_job_id", exportJobId),
+            ("file_name", $"attachment-{suffix}.json"),
+            ("checksum", $"sha256:{suffix}"));
+
+        var bindingId = await ScalarAsync<Guid>(conn,
+            "SELECT topology.fs_bind_record_file_attachment(@record_table_ref, @record_id, @file_artifact_id, 'attachment', 'integration-test', @metadata::jsonb)",
+            ("record_table_ref", recordTableRef),
+            ("record_id", recordId),
+            ("file_artifact_id", fileArtifactId),
+            ("metadata", "{\"source\":\"integration\"}"));
+
+        var listJson = await ScalarAsync<string>(conn,
+            "SELECT topology.fs_list_record_file_attachments(@record_table_ref, @record_id)::text",
+            ("record_table_ref", recordTableRef),
+            ("record_id", recordId));
+
+        Assert.Contains(bindingId.ToString(), listJson, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(fileArtifactId.ToString(), listJson, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"attachment-{suffix}.json", listJson);
+        Assert.DoesNotContain("storage_ref", listJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("authorization_key", listJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("signed_url", listJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("vault:ref:file_storage_credential", listJson, StringComparison.OrdinalIgnoreCase);
+
+        var removed = await ScalarAsync<int>(conn,
+            "SELECT topology.fs_unbind_record_file_attachment(@record_table_ref, @record_id, @file_artifact_id, 'attachment')",
+            ("record_table_ref", recordTableRef),
+            ("record_id", recordId),
+            ("file_artifact_id", fileArtifactId));
+        Assert.Equal(1, removed);
+
+        var afterUnbind = await ScalarAsync<string>(conn,
+            "SELECT topology.fs_list_record_file_attachments(@record_table_ref, @record_id)::text",
+            ("record_table_ref", recordTableRef),
+            ("record_id", recordId));
+        Assert.Equal("[]", afterUnbind);
+    }
+
     private static string? GetConnectionString()
     {
         var cs = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
@@ -169,5 +224,15 @@ public class FileStoragePortConsumerLiveDbTests
             return null;
         }
         return cs;
+    }
+
+    private static async Task<T> ScalarAsync<T>(NpgsqlConnection conn, string sql, params (string Name, object? Value)[] args)
+    {
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        foreach (var (name, value) in args)
+            cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+        var result = await cmd.ExecuteScalarAsync();
+        Assert.NotNull(result);
+        return (T)result;
     }
 }

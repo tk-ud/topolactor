@@ -28,6 +28,7 @@ export function draftPreviewResultToEmission(
     layoutClassRefs: node.layoutClassRefs,
     propsJson: node.propsJson,
     stateJson: node.stateJson,
+    propBindings: node.propBindings,
     runtimeInteractions: node.runtimeInteractions,
     componentDesign: node.design
       ? {
@@ -42,11 +43,16 @@ export function draftPreviewResultToEmission(
   }));
 
   const firstRow = result.initialDataRows?.[0];
+  const projectedData = result.data && Object.keys(result.data).length > 0
+    ? result.data
+    : firstRow && Object.keys(firstRow).length > 0
+    ? firstRow
+    : undefined;
 
   return {
     layoutId: result.layoutId,
     packageId: result.packageId,
     layoutNodes,
-    data: firstRow && Object.keys(firstRow).length > 0 ? firstRow : undefined,
+    data: projectedData,
   };
 }

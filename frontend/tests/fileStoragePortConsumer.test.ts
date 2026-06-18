@@ -209,3 +209,44 @@ Deno.test("fileStoragePortConsumer: attachment CRUD preset seed uses portTargetR
   assertStringIncludes(seed, "external_port_substrate reference_key resolution only");
   assertStringIncludes(seed, "forbiddenProjectionFields");
 });
+
+Deno.test("fileStoragePortConsumer: attachment list result projects through draft preview emission into card list props", () => {
+  const previewResult: DraftPreviewResult = {
+    success: true,
+    layoutId: "layout-file-attachment-list",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    data: {
+      fileAttachmentListResult: {
+        attachments: [{
+          attachment_binding_id: "bind-1",
+          file_artifact_id: "artifact-1",
+          file_name: "receipt.json",
+          file_type: "json",
+          checksum_value: "sha256:test",
+        }],
+      },
+    },
+    layoutNodes: [{
+      nodeId: "file_attach_results",
+      nodeKind: "catalog_component",
+      componentId: "file_attach_results",
+      componentKey: "card_list.primitive",
+      componentKind: "display/card_list",
+      orderIndex: 0,
+      propsJson: JSON.stringify({ emptyText: "No attached files." }),
+      propBindings: {
+        items: { source: "emission.data.fileAttachmentListResult.attachments" },
+      },
+    }],
+  };
+
+  const emission = draftPreviewResultToEmission(previewResult);
+  assertExists(emission);
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  assertExists(specs[0].runtimeSpec);
+  const props = specs[0].runtimeSpec!.props as Record<string, unknown>;
+  const items = props.items as Array<Record<string, unknown>>;
+  assertEquals(items.length, 1);
+  assertEquals(items[0].file_name, "receipt.json");
+  assertEquals(items[0].file_artifact_id, "artifact-1");
+});
