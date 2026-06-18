@@ -2,7 +2,8 @@
 
 Target repo: `github.com/tk-ud/topolactor`
 Status: `not_started`
-Worktype: `todo_maintenance`
+Maintenance class: `abstract_function_refactor_maintenance`
+Queue role: refactor maintenance note for abstract function substrate work; not a product roadmap/status TODO and not canonical `.agent/tasks/todo.md` completion-status management.
 Source judgment: audit carry-over from abstract-function / SQL Attention / recommendation / credential / execute_db_function review.
 
 ## Operating rules
@@ -12,7 +13,26 @@ Source judgment: audit carry-over from abstract-function / SQL Attention / recom
 - Do not split this into small implementation atoms such as one helper, one route, one UI component, or one backend method.
 - Do not add provider-specific runtime handlers, bundle-specific one-off backend handlers, dedicated credential planes, or frontend SQL/recommendation judgment.
 - Direct implementation should be Bundle-scoped. If scope must shrink, preserve the Bundle boundary and explicitly mark unimplemented acceptance conditions.
+- Roadmap bundle / known_gap_ref / product completion_condition linkage is intentionally omitted here. Add it only if this note is later promoted into `.agent/tasks/todo.md` or roadmap/status maintenance.
 - `docs/system-roadmap.yaml` and `.agent/tasks/todo.md` are status/reference surfaces, not implementation proof. Verify actual code and tests before changing completion status.
+
+## Mandatory migration order
+
+Every absorption slice must follow this order. Do not delete existing concrete functions first.
+
+1. **Abstract function fix**
+   - Define or extend the abstract function primitive/manifest/runtime boundary first.
+   - Add the generic primitive adapter only when the operation cannot be represented by existing primitives.
+   - Keep concrete legacy functions in place during this step.
+2. **Add seed for absorption target**
+   - Add seed/manifest rows that express the target concrete behavior through abstract function steps.
+   - Payload values may provide values only; table/column/join/projection/secret authority must come from SSOT/manifest/seed authority, not frontend payload.
+3. **Seed test**
+   - Add tests that prove the seed path executes the absorbed behavior, fails closed, and preserves projection/secret/route boundaries.
+   - The seed path must be tested before any legacy concrete function removal.
+4. **Delete existing concrete functions**
+   - Remove or shrink the old concrete C# methods/switch cases/runtime islands only after seed tests pass.
+   - If deletion cannot be completed, leave the legacy path explicitly marked as compatibility fallback and keep the Bundle partial.
 
 ## Audit conclusion
 
@@ -66,9 +86,9 @@ Absorption policy:
 | `abstract-function-runtime-substrate-ssot` | not_started | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
 | `abstract-function-manifest-schema` | not_started | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
 | `backend-abstract-function-executor` | not_started | Implement runtime executor for abstract function manifests and primitive registry |
-| `sql-recommendation-primitive-migration` | not_started | Move SQL Attention and recommendation execution into abstract primitives |
-| `credential-primitive-hardening` | not_started | Harden credential primitive flow while preserving runtime-only secret materialization |
-| `file-storage-db-function-to-abstract-function-migration` | not_started | Replace file-storage `functionName switch` and payload-derived table authority |
+| `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
+| `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
+| `file-storage-db-function-to-abstract-function-migration` | not_started | Absorb file-storage DB functions by migration order and remove payload-derived table authority |
 | `completion-gate-and-test-alignment` | not_started | Align tests/checks/status after Bundle migration |
 
 ---
@@ -112,7 +132,7 @@ Define `execute_abstract_function` as the backend-wide substrate that absorbs ba
 - `docs/design/abstract-function-primitive-registry-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
 - `docs/framework-policy.yaml`
-- Optional new SSOT if needed: `docs/design/abstract-function-runtime-substrate-ssot.yaml`
+- Prefer existing SSOT extension first. Create `docs/design/abstract-function-runtime-substrate-ssot.yaml` only after confirming the existing SSOT ownership is insufficient.
 
 ### Target surfaces / functions
 
@@ -171,7 +191,7 @@ Create a DB-backed manifest/schema surface for abstract function definitions, pr
 - `db/topology_tables.sql`
 - `db/seed_empty.sql`
 - `docs/design/db-schema.yaml`
-- `docs/design/abstract-function-runtime-substrate-ssot.yaml` if created
+- `docs/design/abstract-function-runtime-substrate-ssot.yaml` only if the SSOT ownership check in the previous Bundle chooses a new SSOT.
 
 ### Proposed DB surfaces
 
@@ -276,6 +296,21 @@ SQL Attention and recommendation are conceptually candidate/evidence/ranking pri
 
 Move SQL Attention and recommendation execution into abstract function primitives while keeping route mutation explicit and user-driven.
 
+### Migration steps
+
+1. **Abstract function fix**
+   - Define `sql_attention` and `recommendation_attention` as primitive boundaries.
+   - Define `phase_attention_adapter` as the only allowed Phase Attention bridge.
+2. **Add seed for absorption target**
+   - Add seed/manifest rows for SQL Attention projection/evidence and context-route recommendation candidate generation.
+   - Seed must express lane separation and route non-mutation.
+3. **Seed test**
+   - Add tests proving SQL Attention/recommendation seed paths produce candidates/evidence without mutating route/topology state.
+   - Tests must cover no silent fallback, lane separation, append ordering, and projection/evidence boundaries.
+4. **Delete existing concrete functions**
+   - Remove/shrink dedicated resolver/runtime branches only after seed tests pass.
+   - Keep Phase Attention internals as adapter code, not abstract function steps.
+
 ### Improvement plan
 
 - [ ] Define `sql_attention` primitive as relational observation, evidence append, ranking, and projection.
@@ -283,6 +318,7 @@ Move SQL Attention and recommendation execution into abstract function primitive
 - [ ] Preserve lane separation: `ui_pressure`, `state_pressure`, `sql_attention_projection`.
 - [ ] Preserve prohibition on auto-overwriting route state or canonical topology state.
 - [ ] Migrate `ContextRouteRecommendationResolver` algorithm into primitive composition or isolate it behind a primitive adapter.
+- [ ] Migrate SQL Attention scheduler/repository/projection runtime behavior into primitive composition or isolate it behind a primitive adapter.
 - [ ] Keep Phase Attention internals behind `phase_attention_adapter` only.
 
 ### Materials
@@ -293,11 +329,29 @@ Move SQL Attention and recommendation execution into abstract function primitive
 - `docs/design/context-route-recommendation.md`
 - `docs/design/runtime-orchestration-ssot.yaml`
 - `backend/runtime/ContextRouteRecommendationResolver.cs`
+- `backend/runtime/SqlAttentionEvidencePromotionRuntime.cs`
+- `backend/runtime/SqlAttentionPhaseVectorRuntime.cs`
+- `backend/runtime/SqlAttentionTopologyProjectionRuntime.cs`
+- `backend/scheduler/SqlAttentionScheduler.cs`
+- `backend/repository/SqlAttentionLogsRepository.cs`
+- `backend/repository/NpgsqlSqlAttentionLogsRepository.cs`
 - `backend/schema/SqlAttentionContracts.cs`
 - `backend/schema/ContextRouteContracts.cs`
+- `backend/schema/RecommendationPressureLanes.cs`
 - `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/SqlAttentionPhaseGenerationLineTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs`
+- `frontend/api/sqlAttentionProjection.ts`
 - `frontend/components/RecommendNavigationIsland.tsx`
 - `frontend/components/SqlAttentionProjectionBlock.tsx`
+- `frontend/components/SqlAttentionProjectionPanel.tsx`
+- `frontend/tests/sqlAttentionProjectionApi.test.ts`
+- `frontend/tests/sqlAttentionProjectionPanel.test.ts`
+- `frontend/tests/recommendNavigationIsland.test.ts`
+- `frontend/tests/recommendationPressureLaneGuard.test.ts`
+- `.agent/tests/check-sql-attention-ssot.sh`
 
 ### Target functions / classes
 
@@ -307,7 +361,15 @@ Move SQL Attention and recommendation execution into abstract function primitive
 - `ContextRouteRecommendationResolver.ResolveNextEnumItemsAsync`
 - `ContextNeighborSearch.FindNearestPrefixes`
 - `ContextVectorBuilder.BuildMultiHotVector`
-- SQL Attention projection/runtime functions currently responsible for list/projection
+- `SqlAttentionScheduler`
+- `SqlAttentionLogsRepository`
+- `NpgsqlSqlAttentionLogsRepository`
+- `SqlAttentionEvidencePromotionRuntime`
+- `SqlAttentionPhaseVectorRuntime`
+- `SqlAttentionTopologyProjectionRuntime`
+- `sqlAttentionProjection` frontend API boundary
+- `SqlAttentionProjectionBlock`
+- `SqlAttentionProjectionPanel`
 
 ### Acceptance conditions
 
@@ -315,7 +377,9 @@ Move SQL Attention and recommendation execution into abstract function primitive
 - [ ] Recommendation produces ranked candidates but does not mutate route state automatically.
 - [ ] `ui_pressure`, `state_pressure`, and `sql_attention_projection` cannot mix lanes.
 - [ ] Missing policy and insufficient history remain explicit statuses.
-- [ ] Tests cover candidate ranking, no silent fallback, lane separation, and append ordering.
+- [ ] SQL Attention scheduler/repository/projection behavior is either expressed through primitives or explicitly isolated as primitive adapters.
+- [ ] Tests cover candidate ranking, no silent fallback, lane separation, append ordering, and SQL Attention projection/evidence boundaries.
+- [ ] Existing concrete resolver/runtime branches are deleted or marked compatibility fallback only after seed tests pass.
 
 ---
 
@@ -330,6 +394,19 @@ Credential flow already has generic primitives, but refresh request/response han
 ### Purpose
 
 Preserve credential flow as abstract function primitives while keeping actual secret materialization in runtime-only adapters.
+
+### Migration steps
+
+1. **Abstract function fix**
+   - Define credential reference, encrypted payload load, runtime decrypt, request build, HTTP send, response parse, encrypted write, hash/version/expiry update, and lease release as primitive steps.
+2. **Add seed for absorption target**
+   - Add seed/manifest rows for credential refresh and external port credential injection flows.
+   - Seed must keep provider_kind as data and must not introduce provider-specific runtime branching.
+3. **Seed test**
+   - Add tests for seed-driven credential flow, invalid/missing token response, stale version, missing crypto, and plaintext projection attempts.
+4. **Delete existing concrete functions**
+   - Remove/shrink concrete credential refresh parsing/request logic only after seed tests pass.
+   - Keep crypto and HTTP clients as runtime-only adapters.
 
 ### Improvement plan
 
@@ -369,6 +446,7 @@ Preserve credential flow as abstract function primitives while keeping actual se
 - [ ] Refresh token rotation updates encrypted payload/hash/expires/version atomically.
 - [ ] Token hash is computed by crypto adapter, not placeholder response-length logic.
 - [ ] Tests prove fail-close on invalid credential, missing crypto, stale version, invalid response, and plaintext projection attempts.
+- [ ] Existing concrete request/parse logic is deleted or marked compatibility fallback only after seed tests pass.
 
 ---
 
@@ -383,6 +461,21 @@ Status: `not_started`
 ### Purpose
 
 Move file-storage DB operations into abstract function manifests and primitives, leaving only hard-runtime compute and opaque PostgreSQL function calls as adapters.
+
+### Migration steps
+
+1. **Abstract function fix**
+   - Add/extend DB query, DB mutation, PostgreSQL function call, input binding, output projection, and authority primitives.
+   - Keep `compute_checksum` as hard-runtime primitive.
+2. **Add seed for absorption target**
+   - Add abstract function seed/manifest rows for export job, file artifact, manifest record, signed download authorization, and attachment bind/list/unbind.
+   - Seed must resolve table authority through manifest/physical table binding/current route context, not payload `record_table_ref`.
+3. **Seed test**
+   - Add tests proving the seed path performs DB mutations/projections and denies secret-bearing output.
+   - Add tests proving payload-provided table authority is ignored or rejected fail-close.
+4. **Delete existing concrete functions**
+   - Remove/shrink `NpgsqlExternalPortDbFunctionRepository` function switch and per-function extraction methods only after seed tests pass.
+   - Keep opaque PostgreSQL calls only as `call_postgres_function` primitive adapters when still justified.
 
 ### Improvement plan
 
@@ -429,6 +522,7 @@ Move file-storage DB operations into abstract function manifests and primitives,
 - [ ] `NpgsqlExternalPortDbFunctionRepository` no longer grows per-bundle/per-function switch cases for simple DB operations.
 - [ ] `compute_checksum` remains the only file-storage hard-runtime compute handler unless SSOT explicitly authorizes more.
 - [ ] Tests prove DB state/projection result and deny-list secret projection behavior.
+- [ ] Existing concrete file-storage DB function methods are deleted or marked compatibility fallback only after seed tests pass.
 
 ---
 
@@ -448,17 +542,18 @@ Align required tests/checks and completion language after implementation bundles
 
 - [ ] Add or update SSOT vocabulary checks for new primitive keys and manifest tables.
 - [ ] Add backend runtime tests for primitive execution order, result context binding, fail-close, and no provider/bundle branching.
+- [ ] Add seed tests for every absorption target before concrete function deletion.
 - [ ] Add integration tests for representative DB mutation returning to projection/refetch/SSE where applicable.
 - [ ] Add recommendation tests for lane separation and explicit status.
 - [ ] Add credential tests for secret non-projection and refresh hardening.
-- [ ] Update `.agent/tasks/todo.md` and `docs/system-roadmap.yaml` only after actual code/tests prove status changes.
+- [ ] Update `.agent/tasks/todo.md` and `docs/system-roadmap.yaml` only if this refactor maintenance note is intentionally promoted into canonical TODO/roadmap maintenance after code/tests prove status changes.
 
 ### Materials
 
 - `.agent/tests/check-worktype-routing.sh`
 - `.agent/tests/check-completion-judgment.sh`
 - `.agent/tests/check-structure.sh`
-- `.agent/tests/check-system-roadmap.sh` if roadmap changes
+- `.agent/tests/check-system-roadmap.sh` only if roadmap changes
 - `backend/tests/Topolactor.Runtime.Tests/*`
 - `backend/tests/Topolactor.Integration.Tests/*`
 - `frontend/tests/*`
@@ -467,6 +562,7 @@ Align required tests/checks and completion language after implementation bundles
 ### Acceptance conditions
 
 - [ ] Required checks are documented per changed lane.
+- [ ] Every absorption target follows abstract function fix → seed addition → seed test → concrete function deletion.
 - [ ] Runtime with DB update asserts DB state or projection source changed.
 - [ ] Runtime returning to frontend asserts SSE/refetch/final state where applicable.
 - [ ] No TODO/roadmap status is advanced without implementation and test evidence.
@@ -480,6 +576,7 @@ Align required tests/checks and completion language after implementation bundles
 - Credential refresh parsing must not retain placeholder hash/expiry behavior when treated as production substrate.
 - SQL Attention / recommendation must never auto-overwrite fixed route or canonical topology state.
 - Phase Attention internals must not be reimplemented as normal abstract function steps.
+- Existing concrete functions must not be deleted before the abstract function seed path has passing tests.
 
 ## Non-goals
 
@@ -487,4 +584,4 @@ Align required tests/checks and completion language after implementation bundles
 - Do not introduce provider-specific SMTP/SFTP/Stripe/object-storage runtime handlers.
 - Do not create a standalone credential admin plane or credential runtime.
 - Do not move Phase Attention semantic/ID-space exploration internals into abstract function manifest steps.
-- Do not treat this file as completion evidence. It is a refactor carry-over todo only.
+- Do not treat this file as completion evidence. It is a refactor carry-over maintenance note only.
