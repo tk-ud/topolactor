@@ -199,7 +199,7 @@ Create a DB-backed manifest/schema surface for abstract function definitions, pr
 - `db/topology_tables.sql`
 - `db/seed_empty.sql`
 - `docs/design/db-schema.yaml`
-- `docs/design/abstract-function-runtime-substrate-ssot.yaml` only if the SSOT ownership check in the previous Bundle chooses a new SSOT.
+- No new abstract-function runtime SSOT file; manifest/schema ownership must be linked back to existing SSOT documents.
 
 ### Proposed DB surfaces
 
