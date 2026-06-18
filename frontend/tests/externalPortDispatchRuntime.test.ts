@@ -1,4 +1,4 @@
-import { assertEquals, assertExists, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertExists, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { __testOnly as factoryTestOnly } from "../runtime/runtimeComponentFactory.ts";
@@ -84,4 +84,40 @@ Deno.test("dispatchExternalPort resolved payload enqueues backend command throug
   assertEquals(schedulerTestOnly.isCommandQueueRunning(), true);
   globalThis.fetch = originalFetch;
   schedulerTestOnly.resetCommandQueue();
+});
+
+// ─── external port generic lane: no provider-specific dispatch ────────────────
+
+Deno.test("external port generic lane: enqueueExternalPortDispatchCommand uses target=external_port (not provider-specific)", async () => {
+  const src = await Deno.readTextFile(new URL("../runtime/frontendScheduler.ts", import.meta.url));
+  assert(src.includes('target: "external_port"'), "enqueueExternalPortDispatchCommand must use generic target=external_port");
+  assert(src.includes('layer: "external_port"'), "enqueueExternalPortDispatchCommand must use generic layer=external_port");
+  assert(src.includes('action: "dispatchExternalPort"'), "enqueueExternalPortDispatchCommand must use generic action=dispatchExternalPort");
+});
+
+Deno.test("external port generic lane: portTargetRef requires external-port: prefix (no provider-specific routing)", async () => {
+  const src = await Deno.readTextFile(new URL("../runtime/frontendScheduler.ts", import.meta.url));
+  assert(src.includes('startsWith("external-port:")'), "portTargetRef must start with external-port: prefix — provider identity lives in portTargetRef, not in separate dispatch lanes");
+  assert(!src.includes('target: "file_storage"'), "must not route to provider-specific file_storage target");
+  assert(!src.includes('target: "email_port"'), "must not route to provider-specific email_port target");
+  assert(!src.includes('target: "stripe_port"'), "must not route to provider-specific stripe_port target");
+});
+
+Deno.test("external port generic lane: no provider-specific external port panel islands exist", async () => {
+  const islandsDir = new URL("../islands/", import.meta.url);
+  for await (const entry of Deno.readDir(islandsDir)) {
+    const name = entry.name.toLowerCase();
+    assert(
+      !(name.includes("filestorage") && name.includes("port")),
+      `provider-specific file storage port panel must not exist: ${entry.name}`,
+    );
+    assert(
+      !(name.includes("email") && name.includes("port")),
+      `provider-specific email port panel must not exist: ${entry.name}`,
+    );
+    assert(
+      !(name.includes("stripe") && name.includes("port")),
+      `provider-specific stripe port panel must not exist: ${entry.name}`,
+    );
+  }
 });

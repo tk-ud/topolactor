@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { probeSessionToken, refreshProjectionSession } from "../api/authApi.ts";
 import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
-import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
+import { enqueueProjectionHookTrigger, queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import type { UserOperation } from "../runtime/resolveOperationVector.ts";
 import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { createSseReceiver, type ProjectionHookTrigger, type SseReceiver } from "../runtime/sseReceiver.ts";
+import { createSseDispatcher } from "../runtime/sseDispatcher.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
@@ -15,7 +16,13 @@ import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
  * Production application projection shell.
  * Dispatches default:entity:search on mount and renders the emission
  * using layout-aware renderEmission(). Subscribes to SSE projection events
- * to refresh the DOM tree when the backend emits a projection event.
+ * via the sse_projection_lane:
+ *   sseReceiver → enqueueProjectionHookTrigger → sseDispatcher → projection handler
+ *
+ * Identity preservation: all three identity fields from ProjectionHookTrigger
+ * (manifestId, tableId, tableRegistryId) are extracted from the SSE event payload
+ * and forwarded in the re-dispatch request as target (manifestId) and payload
+ * (table_id, table_registry_id). No field is silently discarded.
  */
 export default function ProjectionShell(): JSX.Element {
   const [loading, setLoading] = useState(true);
@@ -129,33 +136,68 @@ export default function ProjectionShell(): JSX.Element {
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry));
       setLoading(false);
 
-      const receiver = createSseReceiver({
-        onProjectionHookTrigger: (trigger: ProjectionHookTrigger) => {
-          const gen = ++refreshGenRef.current;
-          (async () => {
+      // sse_projection_lane wiring:
+      //   sseReceiver.onProjectionHookTrigger → enqueueProjectionHookTrigger → sseDispatcher → handler
+      //
+      // The dispatcher decouples SSE event routing from the dispatch call.
+      // The "projection" handler below preserves all three identity fields from the SSE payload:
+      //   manifest_id → target override (routes to specific manifest)
+      //   table_id    → forwarded in payload (identity for backend row routing)
+      //   table_registry_id → forwarded in payload (registry identity)
+      const dispatcher = createSseDispatcher({ unhandledEventPolicy: "log" });
+
+      dispatcher.register("projection", (rawData: string) => {
+        const gen = ++refreshGenRef.current;
+        (async () => {
+          try {
+            if (gen !== refreshGenRef.current || !mounted) return;
+            // Use projectionTokenRef (ref-backed) — closed-over state is stale in [] effect.
+            const refreshToken = projectionTokenRef.current;
+            if (!refreshToken) return;
+            const storedAxes = initialDispatchAxesRef.current;
+            if (!storedAxes) return;
+
+            // Parse SSE event payload — extract all three identity fields without discard.
+            // Parse failure falls through: identity fields remain undefined, storedAxes used as-is.
+            let manifestId: string | undefined;
+            let tableId: string | undefined;
+            let tableRegistryId: string | undefined;
             try {
-              if (gen !== refreshGenRef.current || !mounted) return;
-              // Use projectionTokenRef (ref-backed) — closed-over state is stale in [] effect.
-              const refreshToken = projectionTokenRef.current;
-              if (!refreshToken) return;
-              // Preserve identity from SSE trigger when available; fall back to stored initial axes.
-              const storedAxes = initialDispatchAxesRef.current;
-              if (!storedAxes) return;
-              const manifestId = trigger.identity?.manifestId;
-              const axes: UserOperation = manifestId
-                ? { ...storedAxes, target: manifestId }
-                : storedAxes;
-              const result = await queueClientCommand(axes, refreshToken);
-              if (!result.success || gen !== refreshGenRef.current || !mounted) return;
-              const updated = result.emission;
-              if (!updated) return;
-              setEmission(updated);
-              setSpecs(renderEmission(updated, defaultComponentRegistry));
-            } catch (err) {
-              if (gen !== refreshGenRef.current || !mounted) return;
-              console.error("[ProjectionShell] SSE_PROJECTION_REFRESH_ERROR:", err);
-            }
-          })();
+              const parsed = JSON.parse(rawData) as Record<string, unknown>;
+              manifestId = typeof parsed.manifest_id === "string" ? parsed.manifest_id : undefined;
+              tableId = typeof parsed.table_id === "string" ? parsed.table_id : undefined;
+              tableRegistryId = typeof parsed.table_registry_id === "string" ? parsed.table_registry_id : undefined;
+            } catch { /* proceed with storedAxes identity — parse error is not a dispatch error */ }
+
+            // Forward all non-absent identity fields.
+            const identityPayload: Record<string, unknown> = {};
+            if (tableId) identityPayload.table_id = tableId;
+            if (tableRegistryId) identityPayload.table_registry_id = tableRegistryId;
+
+            const axes: UserOperation = {
+              ...storedAxes,
+              ...(manifestId ? { target: manifestId } : {}),
+              ...(Object.keys(identityPayload).length > 0 ? { payload: identityPayload } : {}),
+            };
+
+            const result = await queueClientCommand(axes, refreshToken);
+            if (!result.success || gen !== refreshGenRef.current || !mounted) return;
+            const updated = result.emission;
+            if (!updated) return;
+            setEmission(updated);
+            setSpecs(renderEmission(updated, defaultComponentRegistry));
+          } catch (err) {
+            if (gen !== refreshGenRef.current || !mounted) return;
+            console.error("[ProjectionShell] SSE_PROJECTION_REFRESH_ERROR:", err);
+          }
+        })();
+      });
+
+      const receiver = createSseReceiver({
+        token: projectionTokenRef.current,
+        onProjectionHookTrigger: (trigger: ProjectionHookTrigger) => {
+          // sse_projection_lane bridge — routes through sseDispatcher, not direct dispatch.
+          enqueueProjectionHookTrigger(trigger, dispatcher);
         },
         onError: (state) => {
           console.error("[ProjectionShell] SSE connection error:", state);

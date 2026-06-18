@@ -94,6 +94,9 @@ CREATE TABLE IF NOT EXISTS topology.components_layout_design (
     CONSTRAINT ck_components_layout_design_status CHECK (status IN ('active', 'inactive', 'deprecated'))
 );
 
+-- target_surface allowed values mirror PACKAGE_WIRING_TARGET_SURFACES in frontend/lib/packageWiringOptions.ts.
+-- wiring_kind is component-category-driven (open-ended); dispatch routing kind is stored in
+-- layout_patch_json.nodes[].wiringKind (JSONB) and enforced at runtime via mapWiringKindToLayer/Action.
 CREATE TABLE IF NOT EXISTS topology.ui_wiring_registry (
     wiring_id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     wiring_key          TEXT        NOT NULL UNIQUE,
@@ -104,7 +107,8 @@ CREATE TABLE IF NOT EXISTS topology.ui_wiring_registry (
     status              TEXT        NOT NULL DEFAULT 'active',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT ck_ui_wiring_registry_status CHECK (status IN ('active', 'inactive', 'deprecated'))
+    CONSTRAINT ck_ui_wiring_registry_status CHECK (status IN ('active', 'inactive', 'deprecated')),
+    CONSTRAINT ck_ui_wiring_registry_target_surface CHECK (target_surface IN ('route', 'ui', 'manifest', 'external_port'))
 );
 
 CREATE TABLE IF NOT EXISTS topology.ui_topology_tensor (

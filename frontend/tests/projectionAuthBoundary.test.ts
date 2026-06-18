@@ -19,6 +19,21 @@ Deno.test("projection auth boundary: ProjectionShell passes Bearer token to all 
   assert(src.includes("projectionTokenRef"), "SSE refresh dispatch must use ref-backed token from state");
 });
 
+Deno.test("projection auth boundary: SSE refresh uses sse_projection_lane bridge (enqueueProjectionHookTrigger)", async () => {
+  const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
+  assert(src.includes("enqueueProjectionHookTrigger"), "SSE refresh must route through enqueueProjectionHookTrigger (sse_projection_lane bridge)");
+  assert(src.includes("createSseDispatcher"), "SSE refresh must use sseDispatcher for event routing isolation");
+  assert(src.includes('dispatcher.register("projection"'), "projection events must be registered on the dispatcher");
+});
+
+Deno.test("projection auth boundary: SSE refresh preserves all three identity fields without discard", async () => {
+  const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
+  assert(src.includes("manifest_id"), "SSE refresh must preserve manifestId in target override");
+  assert(src.includes("table_id"), "SSE refresh must preserve tableId in identity payload");
+  assert(src.includes("table_registry_id"), "SSE refresh must preserve tableRegistryId in identity payload");
+  assert(src.includes("identityPayload"), "identity payload must be built for all non-absent identity fields");
+});
+
 Deno.test("projection auth boundary: refresh failure on token invalidity clears carrier, realm mismatch does not", async () => {
   const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
   assert(src.includes("AUTH_REFRESH_TOKEN_INVALID"), "token invalidity codes must be checked before clearing");
