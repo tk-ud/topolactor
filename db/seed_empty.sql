@@ -2164,10 +2164,10 @@ ON CONFLICT (abstract_function_id) DO NOTHING;
 INSERT INTO topology.abstract_function_steps
     (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
 VALUES
-    ('00000000-0000-0000-0000-00000000bf01', '00000000-0000-0000-0000-00000000af01', 1, 'call_postgres_function', '{"function":"topology.fs_record_export_job","arguments":["idempotency_key","required_by_bundle","port_id","port_kind","requested_by","export_format","period"]}', 'ExportJobId', true),
-    ('00000000-0000-0000-0000-00000000bf02', '00000000-0000-0000-0000-00000000af02', 1, 'call_postgres_function', '{"function":"topology.fs_record_file_artifact","arguments":["export_job_id","file_name","file_type","storage_ref","checksum_value"]}', 'FileArtifactId', true),
-    ('00000000-0000-0000-0000-00000000bf03', '00000000-0000-0000-0000-00000000af03', 1, 'call_postgres_function', '{"function":"topology.fs_write_manifest_record","arguments":["export_job_id","file_artifact_id","requested_by","period","export_format","checksum_value"]}', 'ManifestId', true),
-    ('00000000-0000-0000-0000-00000000bf04', '00000000-0000-0000-0000-00000000af04', 1, 'call_postgres_function', '{"function":"topology.fs_authorize_signed_download","arguments":["file_artifact_id","requested_by"]}', 'AuthorizationKey', true)
+    ('00000000-0000-0000-0000-00000000bf01', '00000000-0000-0000-0000-00000000af01', 1, 'call_postgres_function', '{"function":"topology.fs_record_export_job","required_table_authority":"topology.export_jobs","arguments":["idempotency_key","required_by_bundle","port_id","port_kind","requested_by","export_format","period"]}', 'ExportJobId', true),
+    ('00000000-0000-0000-0000-00000000bf02', '00000000-0000-0000-0000-00000000af02', 1, 'call_postgres_function', '{"function":"topology.fs_record_file_artifact","required_table_authority":"topology.file_artifacts","arguments":["export_job_id","file_name","file_type","storage_ref","checksum_value"]}', 'FileArtifactId', true),
+    ('00000000-0000-0000-0000-00000000bf03', '00000000-0000-0000-0000-00000000af03', 1, 'call_postgres_function', '{"function":"topology.fs_write_manifest_record","required_table_authority":"topology.export_manifests","arguments":["export_job_id","file_artifact_id","requested_by","period","export_format","checksum_value"]}', 'ManifestId', true),
+    ('00000000-0000-0000-0000-00000000bf04', '00000000-0000-0000-0000-00000000af04', 1, 'call_postgres_function', '{"function":"topology.fs_authorize_signed_download","required_table_authority":"topology.signed_download_authorizations","arguments":["file_artifact_id","requested_by"]}', 'AuthorizationKey', true)
 ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
 
 

@@ -216,19 +216,6 @@ public sealed class CallPostgresFunctionPrimitiveAdapter : IAbstractFunctionPrim
 {
     private static readonly Regex AllowedFunctionName = new(@"^topology\.[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    // Canonical function→required table authority mapping (SSOT: db/topology_tables.sql / db/seed_empty.sql).
-    // Functions not in this map require at least one active table binding (open-ended fallback).
-    private static readonly IReadOnlyDictionary<string, string> FunctionTableAuthority = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["topology.fs_record_export_job"]           = "topology.export_jobs",
-        ["topology.fs_record_file_artifact"]        = "topology.file_artifacts",
-        ["topology.fs_write_manifest_record"]       = "topology.export_manifests",
-        ["topology.fs_authorize_signed_download"]   = "topology.signed_download_authorizations",
-        ["topology.fs_bind_record_file_attachment"] = "topology.record_file_attachment_bindings",
-        ["topology.fs_list_record_file_attachments"] = "topology.record_file_attachment_bindings",
-        ["topology.fs_unbind_record_file_attachment"] = "topology.record_file_attachment_bindings",
-    };
-
     private readonly string _connectionString;
 
     public CallPostgresFunctionPrimitiveAdapter(string connectionString) =>
@@ -241,15 +228,11 @@ public sealed class CallPostgresFunctionPrimitiveAdapter : IAbstractFunctionPrim
         if (!step.StepConfig.TryGetValue("function", out var functionName) || string.IsNullOrWhiteSpace(functionName) || !AllowedFunctionName.IsMatch(functionName))
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_POSTGRES_FUNCTION_INVALID");
 
-        if (FunctionTableAuthority.TryGetValue(functionName, out var requiredTable))
-        {
-            if (!context.AuthorityBindings.Any(b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal) && string.Equals(b.AuthorityRef, requiredTable, StringComparison.Ordinal)))
-                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, $"ABSTRACT_FUNCTION_TABLE_AUTHORITY_INVALID: required={requiredTable}");
-        }
-        else if (!context.AuthorityBindings.Any(static b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal)))
-        {
-            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_TABLE_AUTHORITY_MISSING");
-        }
+        if (!step.StepConfig.TryGetValue("required_table_authority", out var requiredTable) || string.IsNullOrWhiteSpace(requiredTable))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_TABLE_AUTHORITY_MISSING_FROM_STEP_CONFIG");
+
+        if (!context.AuthorityBindings.Any(b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal) && string.Equals(b.AuthorityRef, requiredTable, StringComparison.Ordinal)))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, $"ABSTRACT_FUNCTION_TABLE_AUTHORITY_INVALID: required={requiredTable}");
 
         var argumentKeys = ReadArgumentKeys(step);
         await using var conn = new NpgsqlConnection(_connectionString);

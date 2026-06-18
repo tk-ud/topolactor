@@ -119,7 +119,7 @@ public class AbstractFunctionExecutorTests
                     Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope",
                     new[] { Step(1, "call_postgres_function",
                         new[] { new AbstractFunctionInputBinding("x", "constant", "1", false, false) }, null,
-                        new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job" }) },
+                        new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job", ["required_table_authority"] = "topology.export_jobs" }) },
                     Array.Empty<string>(), true, bindings);
                 context = new AbstractFunctionExecutionContext("test_scope");
                 var executor = new AbstractFunctionExecutor(
@@ -184,7 +184,7 @@ public class AbstractFunctionExecutorTests
             Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope",
             new[] { Step(1, "stub_postgres_function",
                 new[] { new AbstractFunctionInputBinding("x", "constant", "1", false, false) }, null,
-                new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job" }) },
+                new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job", ["required_table_authority"] = "topology.export_jobs" }) },
             Array.Empty<string>(), true, new[] { policyBinding, tableBinding });
         var executor = new AbstractFunctionExecutor(
             new StaticManifestRepository(manifest),
@@ -193,6 +193,27 @@ public class AbstractFunctionExecutorTests
         var result = await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope"));
         Assert.Equal(new[] { "stub_postgres_function" }, result.ExecutedPrimitiveKeys);
         Assert.Contains(result.AuthorityBindings, b => b.AuthorityKind == "table" && b.AuthorityRef == "topology.export_jobs");
+    }
+
+    [Fact]
+    public async Task CallPostgresFunctionAdapter_MissingRequiredTableAuthority_FailsInvalidAuthority()
+    {
+        // Step has no required_table_authority in step_config — must fail regardless of what table bindings are present
+        var policyBinding = new AbstractFunctionAuthorityBinding("policy", "some_policy", true);
+        var tableBinding = new AbstractFunctionAuthorityBinding("table", "topology.some_arbitrary_table", true);
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope",
+            new[] { Step(1, "call_postgres_function",
+                new[] { new AbstractFunctionInputBinding("x", "constant", "1", false, false) }, null,
+                new Dictionary<string, string> { ["function"] = "topology.some_unknown_function" }) },
+            Array.Empty<string>(), true, new[] { policyBinding, tableBinding });
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new CallPostgresFunctionPrimitiveAdapter("Host=localhost;Database=test;Username=test;Password=test") });
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope")));
+        Assert.Equal(AbstractFunctionFailCloseStatus.InvalidAuthority, ex.Status);
     }
 
     [Fact]
