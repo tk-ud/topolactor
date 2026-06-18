@@ -254,6 +254,7 @@ external_port_substrate_ssot:
       - send_http
       - capture_response
       - execute_db_function
+      - execute_abstract_function
       - verify_signature_by_config
       - enqueue_scheduler_event
       - append_runtime_event_log
@@ -264,7 +265,49 @@ external_port_substrate_ssot:
       - update_token_hash
       - update_expires_at_and_version
       - release_refresh_lease
+      - compute_checksum
+    abstract_function_key_surface:
+      purpose: >-
+        topology.external_port_policy_steps.abstract_function_key is a TEXT column
+        referencing topology.abstract_function_manifests(function_key). When
+        operation_key = 'execute_abstract_function', the executor resolves the manifest
+        by this key and dispatches generic primitive steps. frontend payload, seed payload,
+        and operation payload do not supply table/column/join/output authority; that
+        authority comes from topology.abstract_function_authority_bindings.
+      authority_rules:
+        - abstract_function_key_must_reference_an_active_manifest_row
+        - missing_or_inactive_manifest_is_missing_authority_fail_close
+        - payload_provides_values_only_not_table_column_join_output_authority
     operation_key_definitions:
+      execute_abstract_function:
+        meaning: >-
+          Resolves abstract_function_key to a topology.abstract_function_manifests row
+          and dispatches generic primitive steps (validate_authority, bind_input,
+          db_query, db_mutation, call_postgres_function, http_request, event_log,
+          projection, fail_close, etc.) through the backend abstract function executor.
+          This is the manifest-driven successor path for consumer bundle domain mutations
+          that were previously expressed as execute_db_function steps.
+        boundary: >-
+          abstract_function_key must reference an active manifest row.
+          Table/column/join/output authority comes from topology.abstract_function_authority_bindings,
+          not from frontend payload or operation payload.
+          Executor fail-closes on missing authority bindings, missing policy binding,
+          missing input, invalid projection, and unsupported primitive.
+        step_config: no additional step_config required; manifest row carries authority, steps, and bindings
+        fail_close_statuses:
+          - missing_authority
+          - invalid_authority
+          - missing_input
+          - invalid_input_binding
+          - invalid_projection
+          - secret_projection_denied
+          - unsupported_primitive
+        prohibited:
+          - frontend_payload_or_seed_payload_as_table_column_join_output_authority
+          - raw_sql_in_payload_or_step_config
+          - provider_specific_or_bundle_specific_primitive_branching
+          - silent_fallback_to_execute_db_function_path
+        ssot_ref: docs/design/abstract-function-primitive-registry-ssot.yaml#backend_abstract_function_runtime_substrate
       execute_db_function:
         meaning: >-
           Calls a named PostgreSQL function registered under the topology schema.
