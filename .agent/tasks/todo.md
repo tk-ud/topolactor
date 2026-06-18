@@ -8,7 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
-| `sql-ci-attention-runtime-lane-alignment` | SQL Attention / CI Attention runtime lane alignment 修正 | not_started | 1 | `product.sql_attention_feedback` / `product.ci_contract` | `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml` |
+| `sql-ci-attention-runtime-lane-alignment` | SQL Attention / CI Attention runtime lane alignment 修正 | not_started | 1 | - | `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -29,7 +29,6 @@
 ## Bundle `sql-ci-attention-runtime-lane-alignment`
 
 **Status:** not_started
-**Roadmap/status SSOT:** `product.sql_attention_feedback` / `product.ci_contract`
 **SSOT:** `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml`
 
 問題点:
@@ -52,7 +51,6 @@ SSOT を再定義せず、SQL Attention と CI Attention の runtime lane を修
 - [ ] SSOT 再定義・Issue 本文/コメント/PR本文編集・既存 Bundle への混入を行わず、lane alignment の実装修正とテスト追加は後続 PR でこの Bundle 単位に閉じる。
 
 対応資料:
-- `docs/system-roadmap.yaml`
 - `docs/framework-core.yaml`
 - `docs/framework-policy.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
