@@ -30,6 +30,9 @@ public sealed class NpgsqlExternalPortDbFunctionRepository : IExternalPortDbFunc
             "topology.fs_record_file_artifact" => ExecuteRecordFileArtifactAsync(stepConfig, context, ct),
             "topology.fs_write_manifest_record" => ExecuteWriteManifestRecordAsync(stepConfig, context, ct),
             "topology.fs_authorize_signed_download" => ExecuteAuthorizeSignedDownloadAsync(stepConfig, context, ct),
+            "topology.fs_bind_record_file_attachment" => ExecuteBindRecordFileAttachmentAsync(stepConfig, context, ct),
+            "topology.fs_list_record_file_attachments" => ExecuteListRecordFileAttachmentsAsync(stepConfig, context, ct),
+            "topology.fs_unbind_record_file_attachment" => ExecuteUnbindRecordFileAttachmentAsync(stepConfig, context, ct),
             _ => throw new InvalidOperationException($"EXTERNAL_PORT_DB_FUNCTION_UNKNOWN: {functionName}")
         };
 
@@ -150,6 +153,101 @@ public sealed class NpgsqlExternalPortDbFunctionRepository : IExternalPortDbFunc
         }
     }
 
+    private async Task ExecuteBindRecordFileAttachmentAsync(
+        IReadOnlyDictionary<string, string> stepConfig,
+        ExternalPortExecutionContext context,
+        CancellationToken ct)
+    {
+        var recordTableRef = ExtractString(context.RequestPayload, "record_table_ref")
+            ?? ExtractString(context.RequestPayload, "recordTableRef")
+            ?? throw new InvalidOperationException("RECORD_TABLE_REF_REQUIRED");
+        var recordId = ExtractString(context.RequestPayload, "record_id")
+            ?? ExtractString(context.RequestPayload, "recordId")
+            ?? throw new InvalidOperationException("RECORD_ID_REQUIRED");
+        var fileArtifactId = ExtractGuid(context.RequestPayload, "file_artifact_id")
+            ?? ExtractGuid(context.RequestPayload, "fileArtifactId")
+            ?? context.FileArtifactId
+            ?? throw new InvalidOperationException("FILE_ARTIFACT_ID_REQUIRED");
+        var relationKind = ExtractString(context.RequestPayload, "relation_kind")
+            ?? ExtractString(context.RequestPayload, "relationKind")
+            ?? "attachment";
+        var createdBy = ExtractString(context.RequestPayload, "requested_by")
+            ?? ExtractString(context.RequestPayload, "created_by")
+            ?? "system";
+        var metadataJson = ExtractRawJson(context.RequestPayload, "metadata")
+            ?? ExtractRawJson(context.RequestPayload, "metadata_jsonb")
+            ?? "{}";
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT topology.fs_bind_record_file_attachment(@p_record_table_ref, @p_record_id, @p_file_artifact_id, @p_relation_kind, @p_created_by, @p_metadata_jsonb::jsonb)";
+        cmd.Parameters.AddWithValue("p_record_table_ref", recordTableRef);
+        cmd.Parameters.AddWithValue("p_record_id", recordId);
+        cmd.Parameters.AddWithValue("p_file_artifact_id", fileArtifactId);
+        cmd.Parameters.AddWithValue("p_relation_kind", relationKind);
+        cmd.Parameters.AddWithValue("p_created_by", createdBy);
+        cmd.Parameters.AddWithValue("p_metadata_jsonb", metadataJson);
+
+        var result = await cmd.ExecuteScalarAsync(ct);
+        if (result is Guid attachmentBindingId)
+            context.OutputProp = JsonSerializer.Serialize(new { attachment_binding_id = attachmentBindingId });
+    }
+
+    private async Task ExecuteListRecordFileAttachmentsAsync(
+        IReadOnlyDictionary<string, string> stepConfig,
+        ExternalPortExecutionContext context,
+        CancellationToken ct)
+    {
+        var recordTableRef = ExtractString(context.RequestPayload, "record_table_ref")
+            ?? ExtractString(context.RequestPayload, "recordTableRef")
+            ?? throw new InvalidOperationException("RECORD_TABLE_REF_REQUIRED");
+        var recordId = ExtractString(context.RequestPayload, "record_id")
+            ?? ExtractString(context.RequestPayload, "recordId")
+            ?? throw new InvalidOperationException("RECORD_ID_REQUIRED");
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT topology.fs_list_record_file_attachments(@p_record_table_ref, @p_record_id)";
+        cmd.Parameters.AddWithValue("p_record_table_ref", recordTableRef);
+        cmd.Parameters.AddWithValue("p_record_id", recordId);
+
+        var result = await cmd.ExecuteScalarAsync(ct);
+        context.OutputProp = result?.ToString() ?? "[]";
+    }
+
+    private async Task ExecuteUnbindRecordFileAttachmentAsync(
+        IReadOnlyDictionary<string, string> stepConfig,
+        ExternalPortExecutionContext context,
+        CancellationToken ct)
+    {
+        var recordTableRef = ExtractString(context.RequestPayload, "record_table_ref")
+            ?? ExtractString(context.RequestPayload, "recordTableRef")
+            ?? throw new InvalidOperationException("RECORD_TABLE_REF_REQUIRED");
+        var recordId = ExtractString(context.RequestPayload, "record_id")
+            ?? ExtractString(context.RequestPayload, "recordId")
+            ?? throw new InvalidOperationException("RECORD_ID_REQUIRED");
+        var fileArtifactId = ExtractGuid(context.RequestPayload, "file_artifact_id")
+            ?? ExtractGuid(context.RequestPayload, "fileArtifactId")
+            ?? throw new InvalidOperationException("FILE_ARTIFACT_ID_REQUIRED");
+        var relationKind = ExtractString(context.RequestPayload, "relation_kind")
+            ?? ExtractString(context.RequestPayload, "relationKind")
+            ?? "attachment";
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT topology.fs_unbind_record_file_attachment(@p_record_table_ref, @p_record_id, @p_file_artifact_id, @p_relation_kind)";
+        cmd.Parameters.AddWithValue("p_record_table_ref", recordTableRef);
+        cmd.Parameters.AddWithValue("p_record_id", recordId);
+        cmd.Parameters.AddWithValue("p_file_artifact_id", fileArtifactId);
+        cmd.Parameters.AddWithValue("p_relation_kind", relationKind);
+
+        var result = await cmd.ExecuteScalarAsync(ct);
+        context.OutputProp = JsonSerializer.Serialize(new { removed_count = Convert.ToInt32(result) });
+    }
+
     private static string? ExtractString(JsonElement? payload, string key)
     {
         if (payload is null) return null;
@@ -157,6 +255,22 @@ public sealed class NpgsqlExternalPortDbFunctionRepository : IExternalPortDbFunc
             return v1.GetString();
         if (payload.Value.TryGetProperty(key, out var v2) && v2.ValueKind == JsonValueKind.String)
             return v2.GetString();
+        return null;
+    }
+
+    private static Guid? ExtractGuid(JsonElement? payload, string key)
+    {
+        var value = ExtractString(payload, key);
+        return Guid.TryParse(value, out var guid) ? guid : null;
+    }
+
+    private static string? ExtractRawJson(JsonElement? payload, string key)
+    {
+        if (payload is null) return null;
+        if (payload.Value.TryGetProperty("dispatch_payload", out var dp) && dp.TryGetProperty(key, out var v1))
+            return v1.GetRawText();
+        if (payload.Value.TryGetProperty(key, out var v2))
+            return v2.GetRawText();
         return null;
     }
 }

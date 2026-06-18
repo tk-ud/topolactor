@@ -1965,8 +1965,8 @@ ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
 
 -- ---------------------------------------------------------------------------
 -- file_storage_bundle physical table catalog.
--- Registers the 5 domain metadata tables for export_job / file_artifact /
--- checksum / manifest / signed download authorization.
+-- Registers the domain metadata tables for export_job / file_artifact /
+-- checksum / manifest / signed download authorization / record attachment binding.
 -- ---------------------------------------------------------------------------
 INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
 VALUES
@@ -1974,7 +1974,8 @@ VALUES
     ('topology.file_artifacts',                'topology', 'file_storage_bundle', true),
     ('topology.file_checksum_records',         'topology', 'file_storage_bundle', true),
     ('topology.export_manifests',              'topology', 'file_storage_bundle', true),
-    ('topology.signed_download_authorizations','topology', 'file_storage_bundle', true)
+    ('topology.signed_download_authorizations','topology', 'file_storage_bundle', true),
+    ('topology.record_file_attachment_bindings','topology', 'file_storage_bundle', true)
 ON CONFLICT (table_ref) DO UPDATE
     SET schema_name = EXCLUDED.schema_name,
         category    = EXCLUDED.category,
@@ -1992,7 +1993,7 @@ VALUES (
     '00000000-0000-0000-0000-0000000000a2',
     'file_storage.export_job.dispatch.projection',
     'active',
-    '{"manifest_id":"00000000-0000-0000-0000-000000000093","source":"file-storage-bundle-export-job-dispatch"}'::jsonb
+    '{"manifest_id":"00000000-0000-0000-0000-000000000093","source":"file-storage-bundle-export-job-dispatch","attachmentSurface":{"tableRef":"topology.record_file_attachment_bindings","artifactAuthority":"topology.file_artifacts","credentialPlane":"external_port_substrate_reference_key_only","operations":["topology.fs_bind_record_file_attachment","topology.fs_list_record_file_attachments","topology.fs_unbind_record_file_attachment"],"forbiddenProjectionFields":["storage_ref","authorization_key","signed_url","credential","bucket","endpoint"]},"screen_data_shape":{"type":"screen_data_shape","topologySystemName":"file-storage-attachment-manifest-seed","userFacingTopologyLabel":"File attachments","tableRef":"topology.record_file_attachment_bindings","dbTableName":"topology.record_file_attachment_bindings","displayColumnMode":"selected","displayColumns":["record_file_attachment_bindings.record_table_ref","record_file_attachment_bindings.record_id","file_artifacts.file_name","file_artifacts.file_type","file_artifacts.byte_size","file_artifacts.checksum_value","record_file_attachment_bindings.relation_kind","record_file_attachment_bindings.created_at"],"logicalTables":[{"tableName":"record_file_attachment_bindings","columns":[{"name":"attachment_binding_id","dataType":"uuid","nullable":false},{"name":"record_table_ref","dataType":"text","nullable":false},{"name":"record_id","dataType":"text","nullable":false},{"name":"file_artifact_id","dataType":"uuid","nullable":false},{"name":"relation_kind","dataType":"text","nullable":false},{"name":"created_at","dataType":"timestamptz","nullable":false}]},{"tableName":"file_artifacts","columns":[{"name":"file_artifact_id","dataType":"uuid","nullable":false},{"name":"file_name","dataType":"text","nullable":false},{"name":"file_type","dataType":"text","nullable":false},{"name":"byte_size","dataType":"bigint","nullable":true},{"name":"checksum_value","dataType":"text","nullable":false}]}],"relationIntents":[{"localTableRef":"record_file_attachment_bindings","joinTableRef":"file_artifacts","localKey":"file_artifact_id","remoteKey":"file_artifact_id"}],"operationEntityBindings":[{"operationKind":"bind_attachment","function":"topology.fs_bind_record_file_attachment","entityTargetColumns":["record_table_ref","record_id","file_artifact_id","relation_kind"]},{"operationKind":"list_attachments","function":"topology.fs_list_record_file_attachments","entityTargetColumns":["record_table_ref","record_id"]},{"operationKind":"unbind_attachment","function":"topology.fs_unbind_record_file_attachment","entityTargetColumns":["record_table_ref","record_id","file_artifact_id","relation_kind"]}]}}'::jsonb
 )
 ON CONFLICT (topology_manifest_id) DO UPDATE
     SET manifest_key = EXCLUDED.manifest_key,
@@ -2015,7 +2016,8 @@ WHERE pt.table_ref IN (
     'topology.file_artifacts',
     'topology.file_checksum_records',
     'topology.export_manifests',
-    'topology.signed_download_authorizations')
+    'topology.signed_download_authorizations',
+    'topology.record_file_attachment_bindings')
 ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
     SET active                = true,
         binding_evidence_json = EXCLUDED.binding_evidence_json,
@@ -2072,7 +2074,10 @@ ON CONFLICT (access_port_id) DO NOTHING;
 INSERT INTO topology.external_response_ports
     (response_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
 VALUES
-    ('00000000-0000-0000-0000-000000000f02', 'file_storage_bundle', 'object_storage', 'env:FILE_STORAGE_ENDPOINT_REF', 'external', 'vault:ref:file_storage_credential', true)
+    ('00000000-0000-0000-0000-000000000f02', 'file_storage_bundle', 'object_storage', 'env:FILE_STORAGE_ENDPOINT_REF', 'external', 'vault:ref:file_storage_credential', true),
+    ('00000000-0000-0000-0000-000000000f0a', 'file_storage_attachment_bind', 'object_storage', 'env:FILE_STORAGE_ENDPOINT_REF', 'external', 'vault:ref:file_storage_credential', true),
+    ('00000000-0000-0000-0000-000000000f0b', 'file_storage_attachment_list', 'object_storage', 'env:FILE_STORAGE_ENDPOINT_REF', 'external', 'vault:ref:file_storage_credential', true),
+    ('00000000-0000-0000-0000-000000000f0c', 'file_storage_attachment_unbind', 'object_storage', 'env:FILE_STORAGE_ENDPOINT_REF', 'external', 'vault:ref:file_storage_credential', true)
 ON CONFLICT (response_port_id) DO NOTHING;
 
 -- email_bundle: smtp response_port
@@ -2129,6 +2134,9 @@ INSERT INTO topology.external_port_policies (policy_id, policy_key, port_kind, r
 VALUES
     ('00000000-0000-0000-0000-0000000000e4', 'file_storage_access_port_generic',     'access_port',   'file_storage_bundle',   true),
     ('00000000-0000-0000-0000-0000000000e5', 'file_storage_response_port_generic',    'response_port', 'file_storage_bundle',   true),
+    ('00000000-0000-0000-0000-0000000000ed', 'file_storage_attachment_bind',         'response_port', 'file_storage_attachment_bind',   true),
+    ('00000000-0000-0000-0000-0000000000ee', 'file_storage_attachment_list',         'response_port', 'file_storage_attachment_list',   true),
+    ('00000000-0000-0000-0000-0000000000ef', 'file_storage_attachment_unbind',       'response_port', 'file_storage_attachment_unbind', true),
     ('00000000-0000-0000-0000-0000000000e6', 'email_response_port_generic',           'response_port', 'email_bundle',          true),
     ('00000000-0000-0000-0000-0000000000e7', 'stripe_hook_port_scheduler_boundary',   'hook_port',     'stripe_bundle',         true),
     ('00000000-0000-0000-0000-0000000000e8', 'webhook_inbox_hook_port_scheduler',     'hook_port',     'webhook_inbox_bundle',  true),
@@ -2143,7 +2151,10 @@ ON CONFLICT (policy_id) DO NOTHING;
 DELETE FROM topology.external_port_policy_steps
 WHERE policy_id IN (
     '00000000-0000-0000-0000-0000000000e4',
-    '00000000-0000-0000-0000-0000000000e5'
+    '00000000-0000-0000-0000-0000000000e5',
+    '00000000-0000-0000-0000-0000000000ed',
+    '00000000-0000-0000-0000-0000000000ee',
+    '00000000-0000-0000-0000-0000000000ef'
 );
 
 INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, active)
@@ -2184,6 +2195,16 @@ VALUES
     ('00000000-0000-0000-0000-000000000419', '00000000-0000-0000-0000-0000000000e5', 15, 'execute_db_function', '{"function":"topology.fs_write_manifest_record","output":"ManifestId"}', true),
     ('00000000-0000-0000-0000-000000000420', '00000000-0000-0000-0000-0000000000e5', 16, 'execute_db_function', '{"function":"topology.fs_authorize_signed_download","output":"AuthorizationKey"}', true),
     ('00000000-0000-0000-0000-000000000497', '00000000-0000-0000-0000-0000000000e5', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', true),
+    -- file_storage attachment response_port policies (credential pipeline + execute_db_function; no attachment credential plane)
+    ('00000000-0000-0000-0000-0000000004c1', '00000000-0000-0000-0000-0000000000ed', 1, 'resolve_port_record', '{}', true),
+    ('00000000-0000-0000-0000-0000000004c2', '00000000-0000-0000-0000-0000000000ed', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-0000000004c3', '00000000-0000-0000-0000-0000000000ed', 3, 'execute_db_function', '{"function":"topology.fs_bind_record_file_attachment","output":"AttachmentBindingId"}', true),
+    ('00000000-0000-0000-0000-0000000004d1', '00000000-0000-0000-0000-0000000000ee', 1, 'resolve_port_record', '{}', true),
+    ('00000000-0000-0000-0000-0000000004d2', '00000000-0000-0000-0000-0000000000ee', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-0000000004d3', '00000000-0000-0000-0000-0000000000ee', 3, 'execute_db_function', '{"function":"topology.fs_list_record_file_attachments","output":"AttachmentsJson"}', true),
+    ('00000000-0000-0000-0000-0000000004e1', '00000000-0000-0000-0000-0000000000ef', 1, 'resolve_port_record', '{}', true),
+    ('00000000-0000-0000-0000-0000000004e2', '00000000-0000-0000-0000-0000000000ef', 2, 'resolve_credential_reference', '{}', true),
+    ('00000000-0000-0000-0000-0000000004e3', '00000000-0000-0000-0000-0000000000ef', 3, 'execute_db_function', '{"function":"topology.fs_unbind_record_file_attachment","output":"RemovedCount"}', true),
     -- email_bundle response_port
     ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', true),
     ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', true),

@@ -648,6 +648,29 @@ COMMENT ON TABLE topology.signed_download_authorizations IS
     'Signed download authorization records for file_storage_bundle. authorization_key is a non-guessable '
     'reference identifier; actual signed URL value is managed by runtime secret store and is prohibited '
     'from this table.';
+
+CREATE TABLE IF NOT EXISTS topology.record_file_attachment_bindings (
+    attachment_binding_id UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    record_table_ref      TEXT        NOT NULL,
+    record_id             TEXT        NOT NULL,
+    file_artifact_id      UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
+    relation_kind         TEXT        NOT NULL DEFAULT 'attachment',
+    metadata_jsonb        JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_by           TEXT        NOT NULL DEFAULT 'system',
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (record_table_ref, record_id, file_artifact_id, relation_kind)
+);
+
+CREATE INDEX IF NOT EXISTS idx_record_file_attachment_record
+    ON topology.record_file_attachment_bindings (record_table_ref, record_id);
+
+CREATE INDEX IF NOT EXISTS idx_record_file_attachment_artifact
+    ON topology.record_file_attachment_bindings (file_artifact_id);
+
+COMMENT ON TABLE topology.record_file_attachment_bindings IS
+    'Binding surface that attaches arbitrary records to existing file_artifacts. '
+    'This is not a standalone attachment artifact store and contains no credential, storage path, bucket, endpoint, or signed URL values.';
 COMMENT ON TABLE topology.external_port_policy_steps IS 'Ordered operation_key steps. operation_key values are constrained to external-port SSOT allowed values.';
 
 -- ---------------------------------------------------------------------------
@@ -726,9 +749,9 @@ DECLARE
     v_checksum_id UUID;
 BEGIN
     INSERT INTO topology.file_artifacts (
-        export_job_id, file_name, file_type, storage_ref
+        export_job_id, file_name, file_type, storage_ref, checksum_value
     ) VALUES (
-        p_export_job_id, p_file_name, p_file_type, p_storage_ref
+        p_export_job_id, p_file_name, p_file_type, p_storage_ref, p_checksum_value
     )
     RETURNING file_artifact_id INTO v_artifact_id;
 
@@ -802,3 +825,89 @@ $$;
 
 COMMENT ON FUNCTION topology.fs_authorize_signed_download IS
     'Creates a non-guessable authorization_key reference for signed download. authorization_key is opaque ref — not a signed URL. Called via execute_db_function policy step.';
+
+CREATE OR REPLACE FUNCTION topology.fs_bind_record_file_attachment(
+    p_record_table_ref TEXT,
+    p_record_id        TEXT,
+    p_file_artifact_id UUID,
+    p_relation_kind    TEXT DEFAULT 'attachment',
+    p_created_by       TEXT DEFAULT 'system',
+    p_metadata_jsonb   JSONB DEFAULT '{}'::jsonb
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    IF p_record_table_ref IS NULL OR btrim(p_record_table_ref) = '' THEN
+        RAISE EXCEPTION 'RECORD_TABLE_REF_REQUIRED';
+    END IF;
+    IF p_record_id IS NULL OR btrim(p_record_id) = '' THEN
+        RAISE EXCEPTION 'RECORD_ID_REQUIRED';
+    END IF;
+
+    INSERT INTO topology.record_file_attachment_bindings (
+        record_table_ref, record_id, file_artifact_id, relation_kind, created_by, metadata_jsonb
+    ) VALUES (
+        p_record_table_ref, p_record_id, p_file_artifact_id, COALESCE(NULLIF(p_relation_kind, ''), 'attachment'), p_created_by, COALESCE(p_metadata_jsonb, '{}'::jsonb)
+    )
+    ON CONFLICT (record_table_ref, record_id, file_artifact_id, relation_kind)
+    DO UPDATE SET metadata_jsonb = EXCLUDED.metadata_jsonb, updated_at = now()
+    RETURNING attachment_binding_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_bind_record_file_attachment IS
+    'Binds an arbitrary record reference to an existing file_artifact through execute_db_function; does not create a credential or signed URL projection.';
+
+CREATE OR REPLACE FUNCTION topology.fs_list_record_file_attachments(
+    p_record_table_ref TEXT,
+    p_record_id        TEXT
+) RETURNS JSONB
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN (
+        SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'attachment_binding_id', b.attachment_binding_id,
+            'record_table_ref', b.record_table_ref,
+            'record_id', b.record_id,
+            'file_artifact_id', b.file_artifact_id,
+            'file_name', a.file_name,
+            'file_type', a.file_type,
+            'byte_size', a.byte_size,
+            'checksum_value', a.checksum_value,
+            'relation_kind', b.relation_kind,
+            'metadata', b.metadata_jsonb,
+            'created_at', b.created_at
+        ) ORDER BY b.created_at DESC), '[]'::jsonb)
+        FROM topology.record_file_attachment_bindings b
+        JOIN topology.file_artifacts a ON a.file_artifact_id = b.file_artifact_id
+        WHERE b.record_table_ref = p_record_table_ref
+          AND b.record_id = p_record_id
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_list_record_file_attachments IS
+    'Lists attachment metadata for a record. Projection intentionally excludes storage_ref, authorization_key, signed URLs, and credentials.';
+
+CREATE OR REPLACE FUNCTION topology.fs_unbind_record_file_attachment(
+    p_record_table_ref TEXT,
+    p_record_id        TEXT,
+    p_file_artifact_id UUID,
+    p_relation_kind    TEXT DEFAULT 'attachment'
+) RETURNS INTEGER
+LANGUAGE plpgsql AS $$
+DECLARE v_count INTEGER;
+BEGIN
+    DELETE FROM topology.record_file_attachment_bindings
+    WHERE record_table_ref = p_record_table_ref
+      AND record_id = p_record_id
+      AND file_artifact_id = p_file_artifact_id
+      AND relation_kind = COALESCE(NULLIF(p_relation_kind, ''), 'attachment');
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.fs_unbind_record_file_attachment IS
+    'Removes a record-to-file_artifact binding through execute_db_function.';

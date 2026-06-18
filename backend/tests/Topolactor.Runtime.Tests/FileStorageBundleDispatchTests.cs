@@ -188,6 +188,9 @@ public class FileStorageBundleDispatchTests
         Assert.Contains("topology.fs_record_file_artifact", source);
         Assert.Contains("topology.fs_write_manifest_record", source);
         Assert.Contains("topology.fs_authorize_signed_download", source);
+        Assert.Contains("topology.fs_bind_record_file_attachment", source);
+        Assert.Contains("topology.fs_list_record_file_attachments", source);
+        Assert.Contains("topology.fs_unbind_record_file_attachment", source);
         Assert.Contains("IExternalPortDbFunctionRepository", source);
         Assert.DoesNotContain("object_storage", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("provider_kind", source, StringComparison.OrdinalIgnoreCase);
