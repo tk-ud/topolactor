@@ -1,7 +1,7 @@
 # Refactor Todo: Abstract Function Runtime Substrate
 
 Target repo: `github.com/tk-ud/topolactor`
-Status: `not_started`
+Status: `partial_ssot_done`
 Maintenance class: `abstract_function_refactor_maintenance`
 Queue role: refactor maintenance note for abstract function substrate work; not a product roadmap/status TODO and not canonical `.agent/tasks/todo.md` completion-status management.
 Source judgment: audit carry-over from abstract-function / SQL Attention / recommendation / credential / execute_db_function review.
@@ -41,6 +41,22 @@ The refactor must follow this global order. Do not delete existing concrete func
    - Delete `tasks/refactor_todo.md` only after all target Bundles have completed steps 2–4 and completion checks prove the refactor is no longer a carry-over maintenance note.
 
 Steps 2–4 are a per-Bundle loop. Complete them for each target Bundle before final todo deletion.
+
+## Completed maintenance in PR #477
+
+Status judgment: `partial_ssot_done`. This is SSOT/todo maintenance only. It is not implementation completion evidence and does not authorize deleting concrete functions.
+
+Completed:
+
+- `tasks/refactor_todo.md` migration order now requires SSOT fix / abstract primitive generation before per-Bundle seed → seed test → concrete deletion.
+- `docs/design/abstract-function-primitive-registry-ssot.yaml` now owns backend-wide `execute_abstract_function` substrate vocabulary, primitive categories, migration guardrails, and fail-close vocabulary.
+- `docs/framework-policy.yaml` now defines `framework_policy.abstract_function_substrate_policy`, including provider/bundle-specific handler prohibitions, frontend/raw SQL prohibitions, payload-derived authority prohibition, plaintext projection prohibition, migration order, and Bundle loop rule.
+
+Still open:
+
+- `docs/design/runtime-orchestration-ssot.yaml` was inspected but not changed in PR #477 because the available connector only supports full-file replacement and prior attempts risked unrelated line loss. Runtime-orchestration alignment remains required through a safer local git patch or another verified minimal-diff path.
+- No DB schema, seed, backend executor, runtime implementation, or test changes have been made.
+- Steps 2–4 of the mandatory migration order remain not started for every target Bundle.
 
 ## Audit conclusion
 
@@ -91,7 +107,7 @@ Absorption policy:
 
 | Bundle ID | Status | Purpose |
 |---|---|---|
-| `abstract-function-runtime-substrate-ssot` | not_started | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
+| `abstract-function-runtime-substrate-ssot` | partial_ssot_done | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
 | `abstract-function-manifest-schema` | not_started | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
 | `backend-abstract-function-executor` | not_started | Implement runtime executor for abstract function manifests and primitive registry |
 | `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
@@ -103,7 +119,20 @@ Absorption policy:
 
 ## Bundle `abstract-function-runtime-substrate-ssot`
 
-Status: `not_started`
+Status: `partial_ssot_done`
+
+### Completed in PR #477
+
+- [x] Extended `docs/design/abstract-function-primitive-registry-ssot.yaml` with backend-wide `execute_abstract_function` substrate vocabulary.
+- [x] Defined primitive categories for authority, input binding, DB operation, attention/recommendation, credential, external/event, projection/failure.
+- [x] Added fail-close vocabulary for missing/invalid authority, missing/invalid input binding, invalid projection, secret projection denial, and unsupported primitives.
+- [x] Added `framework_policy.abstract_function_substrate_policy` with authority, secret, frontend/raw SQL, provider/bundle handler, silent fallback, migration order, and Bundle loop rules.
+
+### Still open after PR #477
+
+- [ ] Safely align `docs/design/runtime-orchestration-ssot.yaml` with the abstract-function substrate without unrelated full-file line loss.
+- [ ] Generate implementation primitive adapters.
+- [ ] Add DB schema/seed/test coverage before any concrete function deletion.
 
 ### Problem
 
@@ -115,12 +144,12 @@ Define `execute_abstract_function` as the backend-wide substrate that absorbs ba
 
 ### Improvement plan
 
-- [ ] Define `execute_abstract_function` scope and non-scope.
-- [ ] Define primitive categories: authority, input binding, DB operation, PostgreSQL function call, SQL Attention, recommendation, credential, HTTP, scheduler, event log, projection, fail-close.
-- [ ] Define Phase Attention boundary as `phase_attention_adapter`, not as in-VM semantic/ID-space exploration logic.
+- [x] Define `execute_abstract_function` scope and non-scope in existing SSOT/policy surfaces.
+- [x] Define primitive categories: authority, input binding, DB operation, PostgreSQL function call, SQL Attention, recommendation, credential, HTTP, scheduler, event log, projection, fail-close.
+- [x] Define Phase Attention boundary as `phase_attention_adapter`, not as in-VM semantic/ID-space exploration logic.
 - [ ] Define frontend boundary: request/render/candidate/preview surface only.
 - [ ] Define secret-deny projection rule for credential, signed URL, bucket, endpoint, storage path, and plaintext payload.
-- [ ] Define migration relation to existing `execute_db_function` and external port policy steps.
+- [x] Define migration relation to existing `execute_db_function` and external port policy steps at policy/vocabulary level.
 
 ### Materials
 
@@ -155,10 +184,10 @@ Define `execute_abstract_function` as the backend-wide substrate that absorbs ba
 
 ### Acceptance conditions
 
-- [ ] SSOT states that backend function bodies should be expressed as abstract function primitives when possible.
-- [ ] `execute_db_operation` is not treated as the top-level target; it is a DB primitive under `execute_abstract_function`.
-- [ ] Phase Attention internals remain outside the abstract function VM.
-- [ ] SQL Attention and recommendation are explicitly candidate/evidence/projection primitives and must not auto-mutate route or canonical topology state.
+- [x] SSOT states that backend function bodies should be expressed as abstract function primitives when possible.
+- [x] `execute_db_operation` is not treated as the top-level target; it is a DB primitive under `execute_abstract_function`.
+- [x] Phase Attention internals remain outside the abstract function VM.
+- [x] SQL Attention and recommendation are explicitly candidate/evidence/projection primitives and must not auto-mutate route or canonical topology state.
 - [ ] Credential secret materialization is runtime-only and prohibited from projection/log/seed/SSOT output.
 
 ---
