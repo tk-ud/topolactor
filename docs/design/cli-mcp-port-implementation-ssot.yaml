@@ -8,7 +8,7 @@ cli_mcp_port_implementation_ssot:
     summary: >-
       CLI/MCP Port implementation SSOT。
       Data Reader / Context API / export job DB schema / MCP tool-resource wiring /
-      audit log persistence の実装境界を固定する。
+      audit log persistence / external structured output candidate import の実装境界を固定する。
       cli-model-context-protocols-port-ssot.yaml が定義する設計境界を、実装単位に分解したSSOT。
     design_parent: docs/design/cli-model-context-protocols-port-ssot.yaml
     non_goals:
@@ -21,6 +21,8 @@ cli_mcp_port_implementation_ssot:
       - email_send
       - credential_read_export
       - approval_execution_by_cli_mcp
+      - ai_mcp_cli_db_commit
+      - external_ai_output_as_ssot
       - implementation_code_addition_in_this_ssot
 
   authority_boundary:
@@ -33,9 +35,23 @@ cli_mcp_port_implementation_ssot:
       - export
       - stream_file
       - create_export_job
+      - import_structured_output
+      - assign_business_object_candidate
+      - create_draft_operation
+      - create_commit_candidate
+    cli_mcp_system_controlled_db_operations:
+      - create_export_job
+      - audit_log_write
+      - runtime_event_log_write
+      - draft_operation_record_write
+      - commit_candidate_record_write
     cli_mcp_prohibited_operations:
       - direct_db_connection
       - direct_sql_execution
+      - core_api_direct_call
+      - dispatch_bypass
+      - unauthenticated_cli_mcp_access
+      - ai_direct_db_mutation
       - record_commit
       - delete_operation
       - payment_approval
@@ -45,6 +61,10 @@ cli_mcp_port_implementation_ssot:
       - permission_bypass
       - credential_read_export
       - cli_mcp_approval_trigger
+      - cli_mcp_approval_execution
+      - ai_mcp_cli_db_commit
+      - arbitrary_db_mutation
+      - external_ai_output_as_ssot
     ui_human_only_operations:
       - approve
       - commit
@@ -53,18 +73,77 @@ cli_mcp_port_implementation_ssot:
       - final_register
       - payment_approval
     authority_note: >-
-      CLI / AI / MCP は read/export port のみ。UI / Human は approve / commit / mutate のみ。
+      CLI / AI / MCP は read/export port と draft/candidate creation のみ。
+      UI / Human は approve / commit / mutate のみ。
       この分離は cli-model-context-protocols-port-ssot.yaml の core_invariant に基づき、
       本SSOTで実装単位として固定する。
 
+  dispatch_secured_lane:
+    description: >-
+      CLI/MCP access は MCP API port entrypoint から入り、認証・scope・capability 解決後に
+      ManifestDispatcher / runtime dispatch を必ず通る。Core API 直叩き、dedicated route、
+      dedicated backend handler、direct API wrapper による dispatch bypass は実装不可。
+    canonical_read_export_lane:
+      - MCP / CLI client
+      - MCP API port
+      - user authentication / authorization
+      - cli_reader_port scope resolution
+      - credential / capability requirement resolution
+      - ManifestDispatcher / runtime dispatch resolution
+      - Data Reader / authorized read model
+      - physical DB data read / export job creation / audit log write
+      - CLI / MCP response
+    canonical_structured_input_lane:
+      - external_ai_structured_output
+      - MCP API port
+      - user authentication / authorization
+      - cli_reader_port / import_candidate scope resolution
+      - credential / capability requirement resolution
+      - ManifestDispatcher / runtime dispatch resolution
+      - business_object_assignment
+      - draft_operation / commit_candidate creation
+      - preview_diff
+      - user_approval
+      - canonical_commit_dispatch
+      - DB commit
+      - audit_log / runtime_event_log
+    invariants:
+      - user_authentication_is_entry_gate_before_dispatch_reader_assignment_or_db_operation
+      - context_api_must_not_execute_without_dispatch_resolution
+      - data_reader_must_accept_dispatch_resolved_request_only
+      - business_object_assignment_must_accept_dispatch_resolved_scope_only
+      - credential_capability_requirement_resolution_is_not_plaintext_credential_exposure
+      - create_export_job_and_audit_log_write_are_system_controlled_operations
+      - draft_operation_and_commit_candidate_write_are_system_controlled_candidate_operations
+      - db_commit_requires_user_approval_then_canonical_commit_dispatch
+    prohibited:
+      - core_api_direct_call
+      - unauthenticated_cli_mcp_access
+      - dispatch_unresolved_data_reader_execution
+      - dispatch_unresolved_context_api_execution
+      - dispatch_unresolved_business_object_assignment
+      - dispatch_bypass_via_dedicated_backend_handler
+      - dispatch_bypass_via_dedicated_route
+      - dispatch_bypass_via_direct_api_wrapper
+      - direct_db_connection
+      - direct_sql_execution
+      - ai_direct_db_mutation
+      - cli_mcp_direct_db_commit
+
   implementation_scope:
     in_scope:
+      - mcp_api_port_entrypoint_boundary
+      - dispatch_secured_read_export_lane_boundary
+      - dispatch_secured_structured_input_candidate_lane_boundary
       - data_reader_implementation_boundary
       - context_api_implementation_boundary
       - export_job_db_schema_definition
+      - draft_operation_candidate_schema_boundary
+      - commit_candidate_schema_boundary
       - mcp_tool_wiring_specification
       - mcp_resource_wiring_specification
       - audit_log_persistence_boundary
+      - runtime_event_log_persistence_boundary
       - file_stream_authorized_path
     out_of_scope:
       - approval_execution
@@ -76,12 +155,16 @@ cli_mcp_port_implementation_ssot:
       - ui_automation
       - direct_db_connection
       - direct_sql_execution
+      - arbitrary_db_mutation
 
   data_reader_contract:
     description: >-
       Data Reader は SSOT / manifest / registry / schema から CLI/MCP 用の安全な read model を生成する。
-      DB を直接読む抜け道ではない。Context API / authorized read model 経由に限定する。
+      DB を直接読む抜け道ではない。MCP API port / Context API / ManifestDispatcher 解決済みの
+      authorized read model 経由に限定する。
     responsibilities:
+      - dispatch_resolved_request_acceptance
+      - authorized_read_model_generation
       - query_validation
       - search_result_shaping
       - aggregation
@@ -96,6 +179,8 @@ cli_mcp_port_implementation_ssot:
       - source_record_ids_capture
     invariants:
       - data_reader_must_not_bypass_context_api
+      - data_reader_must_not_bypass_manifest_dispatcher
+      - data_reader_accepts_dispatch_resolved_authorized_read_model_only
       - data_reader_must_not_direct_db_connection
       - data_reader_must_not_direct_sql_execution
       - query_must_pass_context_api_validation_before_reader_execution
@@ -103,35 +188,52 @@ cli_mcp_port_implementation_ssot:
     prohibited:
       - direct_db_connection
       - direct_sql_execution
+      - dispatch_unresolved_reader_execution
       - bypassing_context_api_authorization
       - exporting_without_audit_log
       - exporting_without_manifest
+      - scope_outside_table_column_period_row_read
 
   context_api_contract:
     description: >-
       Context API は認証・認可・scope制御を所有する。
-      CLI / MCP は Context API のみを経由してデータにアクセスする。
+      CLI / MCP は MCP API port entrypoint から Context API に入り、
+      ManifestDispatcher / runtime dispatch 解決済み request として Data Reader または
+      business object assignment へ進む。
     responsibilities:
       - authentication
       - authorization
       - user_role_scope
       - port_enabled
+      - cli_reader_port_scope_resolution
+      - import_candidate_scope_resolution
+      - credential_capability_requirement_resolution
+      - manifest_dispatcher_runtime_dispatch_resolution
       - allowed_table_scope
       - allowed_column_scope
       - allowed_row_scope
       - allowed_period_scope
+      - allowed_business_object_scope
+      - allowed_assignment_target_scope
       - export_format_validation
       - file_stream_permission
       - export_job_idempotency
+      - draft_operation_idempotency
+      - commit_candidate_idempotency
       - audit_log_write
+      - runtime_event_log_write
     scope_control_fields:
       - cli_reader_port_enabled
+      - import_candidate_port_enabled
       - allowed_roles
       - allowed_users
       - allowed_tables
       - allowed_columns
       - allowed_filters
       - allowed_periods
+      - allowed_business_objects
+      - allowed_assignment_targets
+      - required_evidence_fields
       - aggregation_windows
       - export_formats
       - file_stream_enabled
@@ -142,19 +244,77 @@ cli_mcp_port_implementation_ssot:
     invariants:
       - context_api_owns_all_access_control
       - no_cli_mcp_access_outside_context_api
+      - context_api_must_enter_manifest_dispatcher_before_reader_or_assignment
       - port_must_be_enabled_before_access
       - expired_port_must_fail_close
       - audit_log_must_be_written_on_every_access
+      - audit_log_write_failure_must_fail_close
     prohibited:
       - cli_mcp_direct_db_connection
       - cli_mcp_direct_sql_execution
+      - core_api_direct_call
+      - dispatch_bypass
       - implicit_access_grant
       - silent_scope_bypass
+      - unauthenticated_cli_mcp_access
+
+  structured_input_candidate_contract:
+    description: >-
+      External AI structured output / meeting transcript は business object assignment の input/evidence であり、
+      Topolactor の SSOT ではない。AI/MCP/CLI は draft_operation / commit_candidate まで作成できる。
+      DB commit は user approval 後の canonical commit dispatch のみ。
+    input_evidence:
+      - external_ai_structured_output
+      - meeting_transcript_evidence
+      - root_utterance
+      - source_transcript_ref
+      - confidence
+      - unresolved_fields
+      - source_tool_or_client
+    allowed_outputs:
+      - business_object_assignment
+      - draft_operation
+      - commit_candidate
+      - preview_diff
+    commit_candidate_required_fields:
+      - commit_candidate_id
+      - draft_operation_id
+      - assigned_business_object
+      - assignment_target_scope
+      - preview_diff
+      - evidence_refs
+      - root_utterance
+      - source_transcript_ref
+      - confidence
+      - unresolved_fields
+      - created_by
+      - created_at
+      - approval_status
+    invariants:
+      - external_ai_structured_output_is_evidence_input_not_ssot
+      - ai_mcp_cli_generated_operation_is_never_authoritative
+      - ai_mcp_cli_may_create_draft_operation_or_commit_candidate_only
+      - business_object_assignment_requires_dispatch_resolved_scope
+      - commit_candidate_requires_preview_diff_evidence_confidence_and_unresolved_fields
+      - unresolved_fields_must_not_be_forced_to_confirmed_values
+      - user_approval_must_precede_db_mutation
+      - approval_execution_is_ui_human_only
+      - db_commit_requires_canonical_commit_dispatch_after_user_approval
+    prohibited:
+      - treating_external_ai_structured_output_as_ssot
+      - ai_mcp_cli_db_commit_beyond_draft
+      - db_update_without_user_approval
+      - automatic_assignment_without_root_utterance_source_transcript_or_confidence
+      - forcing_unresolved_fields_into_confirmed_commit_candidate_values
+      - approval_api_execution_by_ai_mcp_cli
+      - commit_candidate_db_update_bypassing_canonical_dispatch
 
   export_job_schema_contract:
     description: >-
       export job は CLI/MCP の搬出操作を必ず記録する永続境界。
       approval 実行は CLI/MCP ではなく UI/Human 側。Audit/Approval Bundle との境界を明記する。
+      create_export_job は system-controlled operation として許可するが、
+      approval / commit / delete / arbitrary mutation は禁止する。
     required_fields:
       - export_job_id
       - port_id
@@ -195,6 +355,7 @@ cli_mcp_port_implementation_ssot:
       - export_without_idempotency_key
       - export_without_audit_log
       - export_without_manifest
+      - arbitrary_db_mutation
 
   file_stream_contract:
     description: >-
@@ -227,49 +388,82 @@ cli_mcp_port_implementation_ssot:
   mcp_tool_contract:
     description: >-
       MCP surface は UI automation ではない。
-      Topolactorの業務トポロジを安全に読むための read/export port surface であることを明記する。
+      Topolactorの業務トポロジを安全に読むための read/export/import-candidate port surface である。
+      MCP tool endpoint は Core API 直叩きではなく MCP API port entrypoint から dispatch 解決へ入る。
     tools:
       - name: get_monthly_context
         role: 月次コンテキスト取得
         auth: context_api_required
+        dispatch: required
         audit: required
       - name: search_records
         role: レコード検索
         auth: context_api_required
+        dispatch: required
         audit: required
       - name: aggregate_records
         role: 集計
         auth: context_api_required
+        dispatch: required
         audit: required
       - name: validate_export
         role: export前バリデーション
         auth: context_api_required
+        dispatch: required
         audit: required
       - name: create_export_job
         role: 搬出ジョブ作成
         auth: context_api_required
+        dispatch: required
         audit: required
         idempotency: idempotency_key_required
       - name: download_export_file
         role: ファイルダウンロード
         auth: export_job_authorized_only
+        dispatch: required
         audit: required
       - name: get_export_status
         role: ジョブステータス確認
         auth: context_api_required
+        dispatch: required
         audit: required
+      - name: import_structured_output
+        role: 外部AI構造化結果の evidence/input 受け取り
+        auth: context_api_required
+        dispatch: required
+        audit: required
+        output_limit: draft_operation_or_commit_candidate_only
+      - name: assign_business_object_candidate
+        role: 業務オブジェクト候補割当
+        auth: context_api_required
+        dispatch: required
+        audit: required
+        output_limit: business_object_assignment_only
+      - name: create_draft_operation
+        role: draft operation 作成
+        auth: context_api_required
+        dispatch: required
+        audit: required
+        output_limit: draft_operation_only
+      - name: create_commit_candidate
+        role: commit candidate 作成
+        auth: context_api_required
+        dispatch: required
+        audit: required
+        output_limit: commit_candidate_only
     invariants:
       - all_mcp_tools_require_context_api_authentication
+      - all_mcp_tools_require_manifest_dispatcher_resolution
       - all_mcp_tools_require_audit_log
-      - mcp_tools_are_read_export_only
+      - mcp_tools_are_read_export_or_draft_candidate_only
       - mcp_tools_must_not_trigger_approval
       - mcp_tools_must_not_commit_records
       - mcp_tools_must_not_delete_records
 
   mcp_resource_contract:
     description: >-
-      MCP resources は authorized read model として定義する。
-      直接DBアクセスは禁止。Context API / Data Reader 経由のみ。
+      MCP resources は authorized read model / candidate evidence model として定義する。
+      直接DBアクセスは禁止。Context API / Data Reader / dispatch resolved candidate boundary 経由のみ。
     resources:
       - uri_template: "topolactor://monthly/{period}/context.json"
         role: 月次コンテキスト読み取り
@@ -284,15 +478,23 @@ cli_mcp_port_implementation_ssot:
         auth: export_job_authorized_only
         audit: required
         reference: file_stream_contract
+      - uri_template: "topolactor://drafts/{draft_operation_id}/preview-diff.json"
+        role: draft operation preview diff 読み取り
+        auth: context_api_required
+        audit: required
+      - uri_template: "topolactor://commit-candidates/{commit_candidate_id}/evidence.json"
+        role: commit candidate evidence 読み取り
+        auth: context_api_required
+        audit: required
     invariants:
       - all_resources_require_context_api_or_export_job_authorization
       - all_resource_access_must_be_audit_logged
-      - resource_access_must_not_bypass_data_reader
+      - resource_access_must_not_bypass_data_reader_or_candidate_boundary
 
   audit_log_contract:
     description: >-
       すべての CLI/MCP access を監査ログへ記録する。
-      audit log は read/export 履歴を後から追跡できる永続境界。
+      audit log は read/export/import-candidate 履歴を後から追跡できる永続境界。
       audit log write は Context API が所有する。
     required_fields:
       - user_id
@@ -306,6 +508,11 @@ cli_mcp_port_implementation_ssot:
       - target_scope
       - result_count
       - export_job_id
+      - draft_operation_id
+      - commit_candidate_id
+      - source_transcript_ref
+      - confidence
+      - unresolved_fields
       - executed_at
       - ip_address
       - user_agent
@@ -314,41 +521,59 @@ cli_mcp_port_implementation_ssot:
       - audit_log_write_failure_must_fail_close
       - audit_log_must_not_contain_credential_plaintext
       - audit_log_must_not_contain_query_plaintext_with_sensitive_data
+      - audit_log_must_preserve_candidate_evidence_references
     prohibited:
       - silent_audit_log_skip
       - credential_in_audit_log
+      - candidate_creation_without_audit_log
 
   approval_boundary:
     description: >-
       approval は CLI/MCP の許可操作ではない。
       Audit/Approval Bundle 経由の UI/Human explicit action のみ。
     policy: >-
-      CLI/MCP は export_job を作成・参照・ファイル取得するまで。
-      approval_required=true の export_job に対して approval を実行することは
+      CLI/MCP は export_job を作成・参照・ファイル取得し、structured input では
+      draft_operation / commit_candidate を作成するまで。
+      approval_required=true の export_job や commit_candidate に対して approval を実行することは
       CLI/MCP ポートの対象外。approval は UI/Human 境界。
     reference: docs/design/runtime-bundle-audit-approval-ssot.yaml
     prohibited:
       - cli_mcp_approval_trigger
+      - cli_mcp_approval_execution
       - ai_autonomous_approval
       - implicit_approval
+      - approval_api_execution_by_ai_mcp_cli
 
   secret_credential_boundary:
     location: runtime_secret_store_not_in_public_ssot
     description: >-
       credential 実体は CLI/MCP から読ませない。
       Secret/Credential Bundle が管理する。
+      credential / capability requirement resolution は port / scope / capability 解決のための
+      基盤境界であり、plaintext credential exposure ではない。
     policy: >-
-      CLI/MCP read/export port は credential read/export を out_of_scope として扱う。
+      CLI/MCP read/export/import-candidate port は credential read/export を out_of_scope として扱う。
       Secret/Credential Bundle が credential 実体を管理し、CLI/MCP への経路を提供しない。
     reference: docs/design/runtime-bundle-secret-credential-ssot.yaml
     prohibited:
       - cli_mcp_credential_read
       - cli_mcp_credential_export
       - credential_in_read_model_response
+      - credential_in_candidate_response
 
   prohibited_operations:
     - direct_db_connection
     - direct_sql_execution
+    - core_api_direct_call
+    - dispatch_bypass
+    - dispatch_bypass_via_dedicated_backend_handler
+    - dispatch_bypass_via_dedicated_route
+    - dispatch_bypass_via_direct_api_wrapper
+    - unauthenticated_cli_mcp_access
+    - dispatch_unresolved_data_reader_execution
+    - dispatch_unresolved_context_api_execution
+    - dispatch_unresolved_business_object_assignment
+    - ai_direct_db_mutation
     - record_commit
     - delete_operation
     - payment_approval
@@ -358,12 +583,24 @@ cli_mcp_port_implementation_ssot:
     - permission_bypass
     - credential_read_export
     - cli_mcp_approval_trigger
+    - cli_mcp_approval_execution
     - silent_audit_log_skip
+    - arbitrary_db_mutation
+    - treating_external_ai_structured_output_as_ssot
+    - ai_mcp_cli_db_commit_beyond_draft
+    - db_update_without_user_approval
+    - automatic_assignment_without_root_utterance_source_transcript_or_confidence
+    - forcing_unresolved_fields_into_confirmed_commit_candidate_values
+    - approval_api_execution_by_ai_mcp_cli
+    - commit_candidate_db_update_bypassing_canonical_dispatch
 
   failure_policy:
     on_auth_failure:
       - fail_close_with_explicit_error
       - do_not_silently_fallback
+    on_dispatch_resolution_failure:
+      - reject_request_explicitly
+      - record_to_audit_log
     on_scope_violation:
       - reject_request_explicitly
       - record_to_audit_log
@@ -372,6 +609,12 @@ cli_mcp_port_implementation_ssot:
       - do_not_silently_skip_audit_record
     on_export_job_failure:
       - expose_failure_explicitly
+      - record_to_audit_log
+    on_commit_candidate_evidence_missing:
+      - reject_candidate_explicitly
+      - record_to_audit_log
+    on_unresolved_field_handling_failure:
+      - keep_unresolved_fields_uncommitted
       - record_to_audit_log
     on_checksum_failure:
       - reject_file_explicitly
@@ -385,6 +628,12 @@ cli_mcp_port_implementation_ssot:
       policy: >-
         同一 idempotency_key に対する export_job 作成は冪等に扱う。
         既存 job がある場合は新規作成せず既存 job_id を返す。
+    draft_operation:
+      policy: >-
+        同一 source_transcript_ref / evidence hash / idempotency_key に対する draft_operation 作成は冪等に扱う。
+    commit_candidate:
+      policy: >-
+        同一 draft_operation_id / evidence hash / idempotency_key に対する commit_candidate 作成は冪等に扱う。
     file_stream:
       policy: >-
         同一 export_job_id に対するファイル取得は冪等。
@@ -394,8 +643,9 @@ cli_mcp_port_implementation_ssot:
     ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
     relationship: >-
       cli-model-context-protocols-port-ssot.yaml は設計境界を定義する親SSOT。
-      本SSOTはその実装単位を Data Reader / Context API / export job DB schema /
-      MCP tool-resource wiring / audit log persistence に分解して固定する。
+      本SSOTはその実装単位を MCP API port / Context API / ManifestDispatcher resolution /
+      Data Reader / business object assignment / draft_operation / commit_candidate /
+      export job DB schema / MCP tool-resource wiring / audit log persistence に分解して固定する。
     policy: >-
       両SSOT の境界は矛盾しない。
       本SSOTの変更は親SSOTの core_invariant を超えない。
@@ -421,7 +671,8 @@ cli_mcp_port_implementation_ssot:
     ssot_path: docs/design/runtime-bundle-audit-approval-ssot.yaml
     boundary: >-
       approval は Audit/Approval Bundle 経由の UI/Human explicit action のみ。
-      CLI/MCP は create_export_job まで。approval 実行は UI/Human 境界。
+      CLI/MCP は create_export_job / draft_operation / commit_candidate 作成まで。
+      approval 実行は UI/Human 境界。
       CLI/MCP audit log は本SSOTで定義した audit_log_contract の範囲内のみ。
       Audit/Approval Bundle の CLI/MCP read/export boundary violation 禁止条件と整合する。
 
@@ -432,19 +683,36 @@ cli_mcp_port_implementation_ssot:
       Secret/Credential Bundle が credential 管理を担い、CLI/MCP への経路を提供しない。
       本SSOTの secret_credential_boundary は Secret/Credential Bundle の境界と矛盾しない。
 
+  relation_to_external_port_substrate:
+    ssot_path: docs/design/external-port-substrate-ssot.yaml
+    boundary: >-
+      external_port は外部連携の出入口であり、CLI/MCP port は AI/CLI の安全な
+      read/export/import-candidate 出入口である。credential / capability requirement の語彙は整合するが、
+      同一 Bundle として扱わない。
+
   implementation_boundary_requirements:
     items:
+      - mcp_api_port_entrypoint_implementation
+      - dispatch_secured_read_export_lane_implementation
+      - dispatch_secured_structured_input_candidate_lane_implementation
       - data_reader_service_implementation
       - context_api_service_implementation
+      - business_object_assignment_boundary_implementation
+      - draft_operation_candidate_schema_migration
+      - commit_candidate_schema_migration
+      - preview_diff_generation_boundary
+      - evidence_reference_preservation_boundary
       - export_job_table_schema_migration
       - export_job_idempotency_key_index
       - mcp_tool_endpoint_wiring
       - mcp_resource_endpoint_wiring
       - audit_log_table_schema_migration
+      - runtime_event_log_table_schema_migration
       - file_stream_authorized_path_implementation
       - approval_required_status_machine_integration
+      - canonical_commit_dispatch_after_user_approval
     policy: >-
       実装はこのSSOTの境界定義に基づいて行う。
-      CLI/MCP が read/export port を超えないことを実装前に確認する。
+      CLI/MCP が read/export/import-candidate port を超えないことを実装前に確認する。
       approval / commit / delete / payment / email / credential read が
       out_of_scope として閉じていることを各実装で維持する。
