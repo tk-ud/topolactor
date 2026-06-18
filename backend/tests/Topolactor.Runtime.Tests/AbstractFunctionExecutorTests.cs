@@ -96,29 +96,88 @@ public class AbstractFunctionExecutorTests
         }
     }
 
-    [Fact]
-    public async Task CallPostgresFunctionAdapter_WithoutTableAuthority_FailsClose()
+    [Theory]
+    [InlineData("wrong_table")]
+    [InlineData("wrong_policy_key")]
+    [InlineData("wrong_output_key")]
+    public async Task ExecuteAsync_AuthorityEnforcement_RejectsInvalidAuthority(string scenario)
     {
-        var policyOnly = new AbstractFunctionAuthorityBinding("policy", "some_policy", true);
-        var manifest = new AbstractFunctionManifest(
-            Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope",
-            new[] { Step(1, "call_postgres_function",
-                new[] { new AbstractFunctionInputBinding("x", "constant", "1", false, false) }, null,
-                new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job" }) },
-            Array.Empty<string>(), true, new[] { policyOnly });
-        // Use the real adapter with a dummy connection string — table authority check fires before DB access
-        var executor = new AbstractFunctionExecutor(
-            new StaticManifestRepository(manifest),
-            new IAbstractFunctionPrimitiveAdapter[] { new CallPostgresFunctionPrimitiveAdapter("Host=localhost;Database=test;Username=test;Password=test") });
+        AbstractFunctionManifest manifest;
+        AbstractFunctionExecutionContext context;
 
-        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
-            () => executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope")));
-        Assert.Equal(AbstractFunctionFailCloseStatus.MissingAuthority, ex.Status);
+        switch (scenario)
+        {
+            case "wrong_table":
+            {
+                // fs_record_export_job requires topology.export_jobs — providing topology.file_artifacts is invalid
+                var bindings = new AbstractFunctionAuthorityBinding[]
+                {
+                    new("policy", "some_policy", true),
+                    new("table", "topology.file_artifacts", true) // wrong table for this function
+                };
+                manifest = new AbstractFunctionManifest(
+                    Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope",
+                    new[] { Step(1, "call_postgres_function",
+                        new[] { new AbstractFunctionInputBinding("x", "constant", "1", false, false) }, null,
+                        new Dictionary<string, string> { ["function"] = "topology.fs_record_export_job" }) },
+                    Array.Empty<string>(), true, bindings);
+                context = new AbstractFunctionExecutionContext("test_scope");
+                var executor = new AbstractFunctionExecutor(
+                    new StaticManifestRepository(manifest),
+                    new IAbstractFunctionPrimitiveAdapter[] { new CallPostgresFunctionPrimitiveAdapter("Host=localhost;Database=test;Username=test;Password=test") });
+                var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+                    () => executor.ExecuteAsync("test.function", context));
+                Assert.Equal(AbstractFunctionFailCloseStatus.InvalidAuthority, ex.Status);
+                return;
+            }
+            case "wrong_policy_key":
+            {
+                // ExternalPortContext.Policy.PolicyKey = "correct_policy" but manifest has "other_policy"
+                var bindings = new AbstractFunctionAuthorityBinding[]
+                {
+                    new("policy", "other_policy", true),
+                    new("table", "topology.export_jobs", true)
+                };
+                manifest = new AbstractFunctionManifest(
+                    Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope",
+                    new[] { Step(1, "echo", new[] { new AbstractFunctionInputBinding("x", "constant", "ok", false, false) }, null) },
+                    Array.Empty<string>(), true, bindings);
+                var policy = new ExternalPortPolicy(Guid.NewGuid(), "correct_policy", "access_port", "test_scope", Array.Empty<ExternalPortPolicyStep>(), true);
+                var externalCtx = new ExternalPortExecutionContext { RequiredByBundle = "test_scope", Policy = policy };
+                context = new AbstractFunctionExecutionContext("test_scope", null, externalCtx);
+                var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+                var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+                    () => executor.ExecuteAsync("test.function", context));
+                Assert.Equal(AbstractFunctionFailCloseStatus.InvalidAuthority, ex.Status);
+                return;
+            }
+            case "wrong_output_key":
+            {
+                // output_shape declares "ExportJobId" but step has ResultContextKey="WrongKey"
+                var bindings = new AbstractFunctionAuthorityBinding[]
+                {
+                    new("policy", "some_policy", true),
+                    new("table", "topology.export_jobs", true)
+                };
+                var outputShape = new Dictionary<string, string> { ["result"] = "ExportJobId" };
+                manifest = new AbstractFunctionManifest(
+                    Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope",
+                    new[] { Step(1, "echo", new[] { new AbstractFunctionInputBinding("x", "constant", "ok", false, false) }, "WrongKey") },
+                    Array.Empty<string>(), true, bindings, outputShape);
+                context = new AbstractFunctionExecutionContext("test_scope");
+                var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+                var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+                    () => executor.ExecuteAsync("test.function", context));
+                Assert.Equal(AbstractFunctionFailCloseStatus.InvalidAuthority, ex.Status);
+                return;
+            }
+        }
     }
 
     [Fact]
-    public async Task CallPostgresFunctionAdapter_WithTableAuthority_Executes()
+    public async Task CallPostgresFunctionAdapter_CorrectTableAuthority_Executes()
     {
+        // fs_record_export_job → requires topology.export_jobs — providing it passes
         var policyBinding = new AbstractFunctionAuthorityBinding("policy", "some_policy", true);
         var tableBinding = new AbstractFunctionAuthorityBinding("table", "topology.export_jobs", true);
         var manifest = new AbstractFunctionManifest(
@@ -133,7 +192,26 @@ public class AbstractFunctionExecutorTests
 
         var result = await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope"));
         Assert.Equal(new[] { "stub_postgres_function" }, result.ExecutedPrimitiveKeys);
-        Assert.Contains(result.AuthorityBindings, b => b.AuthorityKind == "table");
+        Assert.Contains(result.AuthorityBindings, b => b.AuthorityKind == "table" && b.AuthorityRef == "topology.export_jobs");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ValidOutputShape_PassesWhenKeyMatches()
+    {
+        var bindings = new AbstractFunctionAuthorityBinding[]
+        {
+            new("policy", "some_policy", true),
+            new("table", "topology.export_jobs", true)
+        };
+        var outputShape = new Dictionary<string, string> { ["result"] = "ExportJobId" };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope",
+            new[] { Step(1, "echo", new[] { new AbstractFunctionInputBinding("x", "constant", "ok", false, false) }, "ExportJobId") },
+            Array.Empty<string>(), true, bindings, outputShape);
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+
+        var result = await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope"));
+        Assert.Equal(new[] { "echo" }, result.ExecutedPrimitiveKeys);
     }
 
     [Fact]

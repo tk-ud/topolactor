@@ -21,7 +21,7 @@ public sealed class AbstractFunctionFailCloseException : InvalidOperationExcepti
     public string Status { get; }
 }
 
-public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active, IReadOnlyList<AbstractFunctionAuthorityBinding>? AuthorityBindings = null);
+public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active, IReadOnlyList<AbstractFunctionAuthorityBinding>? AuthorityBindings = null, IReadOnlyDictionary<string, string>? OutputShape = null);
 
 public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active);
 
@@ -156,8 +156,29 @@ public sealed class AbstractFunctionExecutor
             .Where(static b => b.Active).ToList();
         if (activeAuthority.Count == 0)
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_AUTHORITY_BINDINGS_MISSING");
-        if (!activeAuthority.Any(static b => string.Equals(b.AuthorityKind, "policy", StringComparison.Ordinal)))
-            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_POLICY_AUTHORITY_MISSING");
+
+        var policyKey = context.ExternalPortContext?.Policy?.PolicyKey;
+        if (policyKey is not null)
+        {
+            if (!activeAuthority.Any(b => string.Equals(b.AuthorityKind, "policy", StringComparison.Ordinal) && string.Equals(b.AuthorityRef, policyKey, StringComparison.Ordinal)))
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, $"ABSTRACT_FUNCTION_POLICY_AUTHORITY_INVALID: {policyKey}");
+        }
+        else
+        {
+            if (!activeAuthority.Any(static b => string.Equals(b.AuthorityKind, "policy", StringComparison.Ordinal)))
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_POLICY_AUTHORITY_MISSING");
+        }
+
+        var outputShape = manifest.OutputShape;
+        if (outputShape is not null && outputShape.Count > 0)
+        {
+            var allowedOutputKeys = new HashSet<string>(outputShape.Values, StringComparer.Ordinal);
+            foreach (var step in manifest.Steps.Where(static s => s.Active && s.ResultContextKey is not null))
+            {
+                if (!allowedOutputKeys.Contains(step.ResultContextKey!))
+                    throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, $"ABSTRACT_FUNCTION_OUTPUT_KEY_UNAUTHORIZED: {step.ResultContextKey}");
+            }
+        }
 
         context.SetAuthorityBindings(activeAuthority);
 
@@ -194,6 +215,20 @@ public sealed class ProjectionPrimitiveAdapter : IAbstractFunctionPrimitiveAdapt
 public sealed class CallPostgresFunctionPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
 {
     private static readonly Regex AllowedFunctionName = new(@"^topology\.[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    // Canonical function→required table authority mapping (SSOT: db/topology_tables.sql / db/seed_empty.sql).
+    // Functions not in this map require at least one active table binding (open-ended fallback).
+    private static readonly IReadOnlyDictionary<string, string> FunctionTableAuthority = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["topology.fs_record_export_job"]           = "topology.export_jobs",
+        ["topology.fs_record_file_artifact"]        = "topology.file_artifacts",
+        ["topology.fs_write_manifest_record"]       = "topology.export_manifests",
+        ["topology.fs_authorize_signed_download"]   = "topology.signed_download_authorizations",
+        ["topology.fs_bind_record_file_attachment"] = "topology.record_file_attachment_bindings",
+        ["topology.fs_list_record_file_attachments"] = "topology.record_file_attachment_bindings",
+        ["topology.fs_unbind_record_file_attachment"] = "topology.record_file_attachment_bindings",
+    };
+
     private readonly string _connectionString;
 
     public CallPostgresFunctionPrimitiveAdapter(string connectionString) =>
@@ -206,8 +241,15 @@ public sealed class CallPostgresFunctionPrimitiveAdapter : IAbstractFunctionPrim
         if (!step.StepConfig.TryGetValue("function", out var functionName) || string.IsNullOrWhiteSpace(functionName) || !AllowedFunctionName.IsMatch(functionName))
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_POSTGRES_FUNCTION_INVALID");
 
-        if (!context.AuthorityBindings.Any(static b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal)))
+        if (FunctionTableAuthority.TryGetValue(functionName, out var requiredTable))
+        {
+            if (!context.AuthorityBindings.Any(b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal) && string.Equals(b.AuthorityRef, requiredTable, StringComparison.Ordinal)))
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, $"ABSTRACT_FUNCTION_TABLE_AUTHORITY_INVALID: required={requiredTable}");
+        }
+        else if (!context.AuthorityBindings.Any(static b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal)))
+        {
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_TABLE_AUTHORITY_MISSING");
+        }
 
         var argumentKeys = ReadArgumentKeys(step);
         await using var conn = new NpgsqlConnection(_connectionString);
