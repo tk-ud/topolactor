@@ -33,16 +33,19 @@
 **SSOT:** `docs/design/sql-attention-logs-ssot.md` / `docs/design/ci-contract-ssot.yaml`
 
 問題点:
-Open Issue / Issue コメントで SQL Attention / CI Attention 周辺に不良指摘がある。既存の completion bundle や external port consumer bundle へ混ぜると、SQL Attention の append-only evidence / child projection 境界と CI Attention の read-only guidance / backend promotion gate 境界の不具合対応が atom TODO として埋もれる。SSOT は再定義せず、既存契約に対する実装・テスト整合のフォローアップ Bundle として分離して扱う。
+Open Issue / Issue コメントで SQL Attention / CI Attention 周辺に不良指摘がある。SQL Attention / CI Attention には一部 manifest-dispatchable / AdminRuntime 経路がある一方で、production cron / diagnostic / read projection 経路に RuntimeTimelineScheduler / ManifestDispatcher / response・SSE・projection lane を通らない直通経路が混在している。既存の completion bundle や external port consumer bundle へ混ぜると、SQL Attention の append-only evidence / child projection 境界と CI Attention の read-only guidance / backend promotion gate 境界の不具合対応が atom TODO として埋もれる。SSOT は再定義せず、既存契約に対する実装・テスト整合のフォローアップ Bundle として分離して扱う。
 
 目的:
-SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.hub_relations -> logs.attention -> child projection` の観測・推薦 evidence line を明示失敗で維持し、frontend projection が topology / SQL Attention judgment を持たないことを確認する。CI Attention は guidance fragment を read-only evidence として扱い、draft editing を塞がず、backend promotion/apply gate だけが active blocking fragment を fail-close で消費する境界を維持する。
+SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.hub_relations -> logs.attention -> child projection` の観測・推薦 evidence line を明示失敗で維持し、cron route / registry_attractor_runtime dispatch route / read-only topology projection GET の境界差分を証明または統合する。CI Attention は guidance fragment を read-only evidence として扱い、draft editing を塞がず、backend promotion/apply gate だけが active blocking fragment を fail-close で消費する境界を維持し、cron diagnostic result が fragment / SSE / projection lane へ通貫するかを証明する。
 
 改善方針:
 - [ ] Open Issue / Issue コメントの不良指摘を SQL Attention と CI Attention に分類し、既存 Bundle へ混ぜずこの Bundle の scope として扱う。
 - [ ] SQL Attention は `logs.hub_current` や oldest-row fallback を exploration authority に戻さず、manifest-scoped `hubs.hub_relations` resolution と append-only `logs.attention` lineage の不整合だけを修正対象にする。
+- [ ] `SqlAttentionScheduler` BackgroundService 直通 cron と `registry_attractor_runtime` manifest dispatch 経路の関係を整理し、RuntimeTimelineScheduler / ManifestDispatcher / response・SSE・projection lane を通らない production route が残る場合は明示的な runtime boundary 例外または統合 TODO として証明する。
+- [ ] SQL Attention topology projection GET は read-only direct endpoint であり `/dispatch` pipeline ではないため、read projection boundary / auth / explicit failure / frontend projection-only 性質を dispatch route と混同せずに検査する。
 - [ ] SQL Attention frontend/API は projection 表示・取得に限定し、frontend 側で topology judgment / SQL Attention judgment / persistence judgment を追加しない。
 - [ ] CI Attention は frontend lock authority / draft editing gate / apply validation authority として扱わず、promotion/apply fail-close は backend runtime boundary に限定する。
+- [ ] `SystemOperationCiScheduler` が `SystemOperationCiRuntime` を直呼びして structured logging のみで終わる経路と、`ci_attention:refresh_fragments` AdminRuntime 経路の関係を整理し、cron diagnostic result が fragment / SSE / projection lane へ流れる通貫経路を証明または実装する。
 - [ ] Repository / SQL / runtime の missing policy, no-hit, malformed payload, persistence failure は silent fallback ではなく structured explicit failure として扱う。
 - [ ] SSOT 再定義・Issue 本文/コメント/PR本文編集・既存 Bundle への混入を行わず、必要な実装修正とテスト追加は後続 PR でこの Bundle 単位に閉じる。
 
@@ -70,6 +73,12 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 - `backend/repository/CiAttentionGuidanceRepository.cs`
 - `backend/repository/NpgsqlCiAttentionGuidanceRepository.cs`
 - `backend/runtime/SystemOperationCiRuntime.cs`
+- `backend/scheduler/SystemOperationCiScheduler.cs`
+- `backend/runtime/RegistryAttractorDispatchRuntime.cs`
+- `backend/runtime/OutputLaneRouter.cs`
+- `backend/Program.cs`
+- `backend/tests/Topolactor.Runtime.Tests/SystemOperationCiSchedulerTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/RegistryAttractorDispatchRuntimeTests.cs`
 - `frontend/tests/ciAttentionGuidanceProjection.test.ts`
 - `backend/tests/Topolactor.Runtime.Tests/CiAttentionPromotionGateTests.cs`
 
@@ -96,6 +105,14 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 - `CiAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync`
 - `NpgsqlCiAttentionGuidanceRepository.UpsertCurrentAppendHistoryAsync`
 - `NpgsqlCiAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync`
+- `SystemOperationCiScheduler.ExecuteAsync`
+- `SystemOperationCiScheduler.RunInspectionsAsync`
+- `SystemOperationCiScheduler.RunAttractorSignalConsumerAsync`
+- `RegistryAttractorDispatchRuntime.ExecuteAsync`
+- `OutputLaneRouter.RebuildSignalChannel`
+- `ManifestDispatcher.DispatchAsync`
+- `RuntimeTimelineScheduler` route boundary
+- `AdminRuntime.ExecuteDataAsync` / `ci_attention:refresh_fragments` route boundary
 - `SystemOperationCiRuntime.InspectAsync`
 - `SystemOperationCiRuntime.InspectHubAttentionAfterUpdate`
 - `SystemOperationCiRuntime.InspectEvidenceIntegrity`
@@ -111,7 +128,10 @@ SQL Attention は `logs.diff -> logs.current -> topology_manifest_id[] -> hubs.h
 受入条件:
 - [ ] SQL Attention の no-hit / missing policy / malformed lineage / persistence failure が silent fallback にならず、明示的な failure or empty-no-hit boundary として確認できる。
 - [ ] `logs.current` trigger から `logs.attention` SQLAT / phaseAT evidence までの lineage が `hub_relation_id` / `topology_manifest_id` / `hub_id` を保持し、`logs.hub_current` support cache や oldest-row fallback を authority にしていない。
+- [ ] SQL Attention cron route と `registry_attractor_runtime` manifest dispatch route の接続または分離理由がテストで確認され、BackgroundService 直通が canonical runtime route を偽装していない。
+- [ ] SQL Attention topology projection GET が read-only direct projection endpoint として明示され、`/dispatch` pipeline 通過済みであるかのような受入条件・テストになっていない。
 - [ ] SQL Attention frontend/API は child projection 表示・取得に限定され、topology mutation / registry mutation / manifest mutation / SQL Attention judgment を行わない。
+- [ ] CI Attention scheduler diagnostic result が structured logging のみで止まる場合はその残 gap が明示され、fragment / SSE / projection lane へ通貫する場合は backend/frontend dispatch → scheduler → manifest → runtime → fragment/SSE/projection の証明がある。
 - [ ] CI Attention fragment は read-only guidance として projection され、draft editing を塞がず、dismissed fragment を promotion unlock authority として扱わない。
 - [ ] active blocking fragment は backend runtime の promotion/apply gate で fail-close され、frontend または test expectation が promotion authority を再定義しない。
 - [ ] 対象 backend/frontend tests または `.agent/tests/*` が不良指摘の再発防止を検査し、SSOT から語彙・境界を読む。
