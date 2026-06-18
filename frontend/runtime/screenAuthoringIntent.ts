@@ -12,7 +12,9 @@ export type ScreenOperationKind =
   | "detail"
   | "create"
   | "update"
-  | "aggregation_view";
+  | "aggregation_view"
+  | "logicalDelete"
+  | "delete";
 
 export type DispatcherAxes = {
   role: string;
@@ -41,6 +43,8 @@ export const SCREEN_OPERATION_OPTIONS: { kind: ScreenOperationKind; label: strin
   { kind: "create", label: "登録" },
   { kind: "update", label: "更新" },
   { kind: "aggregation_view", label: "集計ビュー" },
+  { kind: "logicalDelete", label: "論理削除" },
+  { kind: "delete", label: "削除" },
 ];
 
 function sanitizeTarget(raw: string): string {
@@ -87,6 +91,10 @@ export function screenOperationToDispatcherAxes(
       return { ...base, layer: "screen_entity", action: "Update" };
     case "aggregation_view":
       return { ...base, layer: "screen_aggregation", action: "Read" };
+    case "logicalDelete":
+      return { ...base, layer: "screen_entity", action: "logicalDelete" };
+    case "delete":
+      return { ...base, layer: "screen_entity", action: "logicalDelete" };
   }
 }
 
@@ -103,11 +111,13 @@ export function dispatcherAxesToScreenOperationKind(axes: {
   const action = axes.action ?? "";
 
   if (layer === "screen_aggregation") return "aggregation_view";
+  if (action === "logicalDelete") return "logicalDelete";
   if (action === "Search") return "search";
   if (action === "Create") return "create";
   if (action === "Update") return "update";
   if (layer === "screen_detail") return "detail";
   if (layer === "screen_list") return "list";
+  // Unknown axes — return "list" only as a safe UI display fallback (not a dispatch fallback).
   return "list";
 }
 

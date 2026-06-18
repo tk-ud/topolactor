@@ -51,3 +51,28 @@ Deno.test("screenOperationLabel returns Japanese labels", () => {
   assertEquals(screenOperationLabel("list"), "一覧");
   assertEquals(screenOperationLabel("aggregation_view"), "集計ビュー");
 });
+
+Deno.test("screenOperationToDispatcherAxes: logicalDelete maps to screen_entity / logicalDelete action", () => {
+  const axes = screenOperationToDispatcherAxes("logicalDelete", { manifestKey: "orders" });
+  assertEquals(axes.layer, "screen_entity");
+  assertEquals(axes.action, "logicalDelete");
+  assertEquals(axes.role, "admin");
+  assertEquals(axes.target, "orders");
+  assertEquals(axes.runtimeDestination, "topology_transform_runtime");
+});
+
+Deno.test("screenOperationToDispatcherAxes: delete maps to screen_entity / logicalDelete action", () => {
+  const axes = screenOperationToDispatcherAxes("delete", { manifestKey: "orders" });
+  assertEquals(axes.layer, "screen_entity");
+  assertEquals(axes.action, "logicalDelete");
+});
+
+Deno.test("dispatcherAxesToScreenOperationKind: logicalDelete action round-trips", () => {
+  const axes = screenOperationToDispatcherAxes("logicalDelete", { manifestKey: "x" });
+  assertEquals(dispatcherAxesToScreenOperationKind(axes), "logicalDelete");
+});
+
+Deno.test("screenOperationLabel: logicalDelete and delete have Japanese labels", () => {
+  assertEquals(screenOperationLabel("logicalDelete"), "論理削除");
+  assertEquals(screenOperationLabel("delete"), "削除");
+});

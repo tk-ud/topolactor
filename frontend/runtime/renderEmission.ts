@@ -113,18 +113,21 @@ export function mapWiringKindToAction(wiringKind: string): string {
  * Builds a RuntimeDispatchSpec from a layout node's wiring metadata.
  * Returns null when no wiringKind is set (no wiring configured → log lane only).
  * Returns null for navigation wiringKind — navigation is frontend-local, not backend dispatch.
- * target = targetSurface || "default"; layer derived from wiringKind.
+ * targetSurface must be present and non-empty when wiringKind is set — absent targetSurface is a
+ * wiring misconfiguration and must not silently fall back to "default".
+ * Callers that receive null render an error node.
  */
 export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispatchSpec | null {
   const wiringKind = node.wiringKind;
   if (!wiringKind) return null;
   if (isNavigationWiringKind(wiringKind)) return null;
+  const targetSurface = node.targetSurface && node.targetSurface.trim();
+  if (!targetSurface) return null;
   const action = mapWiringKindToAction(wiringKind);
   const layer = mapWiringKindToLayer(wiringKind);
-  const target = (node.targetSurface && node.targetSurface.trim()) ? node.targetSurface.trim() : "default";
   return {
     operationType: action,
-    target,
+    target: targetSurface,
     layer,
     action,
     wiringKey: (node.wiringKey && node.wiringKey.trim()) ? node.wiringKey.trim() : undefined,
@@ -242,11 +245,19 @@ function normalizeAuthoredEventType(value: unknown): string | null {
     click: "click",
     onChange: "change",
     change: "change",
+    onInput: "input",
+    input: "input",
     onSubmit: "submit",
     submit: "submit",
     onOpen: "toggle",
     onClose: "toggle",
     toggle: "toggle",
+    onFocus: "focus",
+    focus: "focus",
+    onBlur: "blur",
+    blur: "blur",
+    onSelect: "select",
+    select: "select",
   };
   return map[trimmed] ?? null;
 }
@@ -263,6 +274,7 @@ function buildLocalUiStateEventBinding(rawWirings: unknown): Record<string, unkn
     if (!trigger || !targetNodeId || !actionType) continue;
     let action: "set" | "toggle";
     let value: unknown;
+    let defaultStatePath = "open";
     switch (actionType) {
       case "openModal":
       case "openDrawer":
@@ -285,12 +297,17 @@ function buildLocalUiStateEventBinding(rawWirings: unknown): Record<string, unkn
         action = "set";
         value = wiring.value;
         break;
+      case "setActiveKey":
+        action = "set";
+        value = wiring.value;
+        defaultStatePath = "activeKey";
+        break;
       default:
         continue;
     }
     const statePath = typeof wiring.statePath === "string" && wiring.statePath.trim()
       ? wiring.statePath.trim()
-      : "open";
+      : defaultStatePath;
     const previous = typeof binding[trigger] === "object" && binding[trigger] !== null
       ? binding[trigger] as Record<string, unknown>
       : { eventType: trigger };

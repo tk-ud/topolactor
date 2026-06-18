@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import { probeSessionToken, refreshProjectionSession } from "../api/authApi.ts";
 import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
+import type { UserOperation } from "../runtime/resolveOperationVector.ts";
 import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { createSseReceiver, type ProjectionHookTrigger, type SseReceiver } from "../runtime/sseReceiver.ts";
@@ -28,6 +29,15 @@ export default function ProjectionShell(): JSX.Element {
   const refreshGenRef = useRef(0);
   // Holds the SSE receiver so unmount cleanup can disconnect it.
   const sseReceiverRef = useRef<SseReceiver | null>(null);
+  // Stores the initial dispatch axes for SSE identity-preserving refresh.
+  // SSE triggers must re-dispatch using the same axes as the initial load, not hardcoded defaults.
+  const initialDispatchAxesRef = useRef<UserOperation | null>(null);
+  // Ref-backed projection token for SSE closure access — state updates don't update closed-over values.
+  const projectionTokenRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    projectionTokenRef.current = projectionToken;
+  }, [projectionToken]);
 
   useEffect(() => {
     startComponentEventRuntime();
@@ -55,6 +65,7 @@ export default function ProjectionShell(): JSX.Element {
       }
 
       setProjectionToken(token);
+      projectionTokenRef.current = token;
 
       // Detect realm from token and call matching refresh endpoint.
       const refreshResult = await refreshProjectionSession(token);
@@ -86,16 +97,19 @@ export default function ProjectionShell(): JSX.Element {
       if (refreshResult.token) {
         persistSessionToken(refreshResult.token);
         setProjectionToken(refreshResult.token);
+        projectionTokenRef.current = refreshResult.token;
       }
 
       const currentToken = refreshResult.token ?? token;
 
-      const dispatchResult = await queueClientCommand({
+      const initialAxes: UserOperation = {
         operationType: "Search",
         target: "default",
         layer: "screen_list",
         action: "Search",
-      }, currentToken);
+      };
+      initialDispatchAxesRef.current = initialAxes;
+      const dispatchResult = await queueClientCommand(initialAxes, currentToken);
 
       if (!mounted) return;
 
@@ -116,18 +130,22 @@ export default function ProjectionShell(): JSX.Element {
       setLoading(false);
 
       const receiver = createSseReceiver({
-        onProjectionHookTrigger: (_trigger: ProjectionHookTrigger) => {
+        onProjectionHookTrigger: (trigger: ProjectionHookTrigger) => {
           const gen = ++refreshGenRef.current;
           (async () => {
             try {
               if (gen !== refreshGenRef.current || !mounted) return;
-              const sseToken = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? undefined;
-              const result = await queueClientCommand({
-                operationType: "Search",
-                target: "default",
-                layer: "screen_list",
-                action: "Search",
-              }, sseToken);
+              // Use projectionTokenRef (ref-backed) — closed-over state is stale in [] effect.
+              const refreshToken = projectionTokenRef.current;
+              if (!refreshToken) return;
+              // Preserve identity from SSE trigger when available; fall back to stored initial axes.
+              const storedAxes = initialDispatchAxesRef.current;
+              if (!storedAxes) return;
+              const manifestId = trigger.identity?.manifestId;
+              const axes: UserOperation = manifestId
+                ? { ...storedAxes, target: manifestId }
+                : storedAxes;
+              const result = await queueClientCommand(axes, refreshToken);
               if (!result.success || gen !== refreshGenRef.current || !mounted) return;
               const updated = result.emission;
               if (!updated) return;
