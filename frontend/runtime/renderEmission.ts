@@ -87,25 +87,28 @@ export function isNavigationWiringKind(wiringKind: string): boolean {
  * search → screen_list (ScreenDataShapeQueryRuntime), aggregate → screen_aggregation,
  * CRUD kinds → entity (RuntimeExecutor CRUD path).
  * navigation is excluded — it is frontend-local and must not enter this mapping.
+ * Returns null for unknown wiringKind — callers must treat null as a misconfiguration and not fall back.
  */
-export function mapWiringKindToLayer(wiringKind: string): string {
+export function mapWiringKindToLayer(wiringKind: string): string | null {
   if (wiringKind === "search") return "screen_list";
   if (wiringKind === "aggregate") return "screen_aggregation";
-  return "entity";
+  if (wiringKind === "create" || wiringKind === "update" || wiringKind === "delete") return "entity";
+  return null;
 }
 
 /**
  * Maps wiring_kind to the canonical action string for backend dispatch.
  * Mirrors the backend MapWiringKindToDispatchAction mapping.
+ * Returns null for unknown wiringKind — callers must not pass raw unknown values as actions.
  */
-export function mapWiringKindToAction(wiringKind: string): string {
+export function mapWiringKindToAction(wiringKind: string): string | null {
   switch (wiringKind) {
     case "search": return "Search";
     case "aggregate": return "Search";
     case "create": return "Create";
     case "update": return "diffUpdate";
     case "delete": return "logicalDelete";
-    default: return wiringKind;
+    default: return null;
   }
 }
 
@@ -124,7 +127,9 @@ export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispa
   const targetSurface = node.targetSurface && node.targetSurface.trim();
   if (!targetSurface) return null;
   const action = mapWiringKindToAction(wiringKind);
+  if (!action) return null;
   const layer = mapWiringKindToLayer(wiringKind);
+  if (!layer) return null;
   return {
     operationType: action,
     target: targetSurface,

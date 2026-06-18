@@ -29,6 +29,12 @@ Deno.test("mapWiringKindToLayer: create/update/delete → entity", () => {
   assertEquals(mapWiringKindToLayer("delete"), "entity");
 });
 
+Deno.test("mapWiringKindToLayer: unknown wiringKind returns null (fail-close)", () => {
+  assertEquals(mapWiringKindToLayer("unknown_kind"), null);
+  assertEquals(mapWiringKindToLayer(""), null);
+  assertEquals(mapWiringKindToLayer("custom_action"), null);
+});
+
 // ─── mapWiringKindToAction ────────────────────────────────────────────────────
 
 Deno.test("mapWiringKindToAction: search/aggregate → Search", () => {
@@ -40,6 +46,21 @@ Deno.test("mapWiringKindToAction: create/update/delete map correctly", () => {
   assertEquals(mapWiringKindToAction("create"), "Create");
   assertEquals(mapWiringKindToAction("update"), "diffUpdate");
   assertEquals(mapWiringKindToAction("delete"), "logicalDelete");
+});
+
+Deno.test("mapWiringKindToAction: unknown wiringKind returns null (fail-close, not raw passthrough)", () => {
+  assertEquals(mapWiringKindToAction("unknown_kind"), null);
+  assertEquals(mapWiringKindToAction(""), null);
+  assertEquals(mapWiringKindToAction("custom_mutation"), null);
+});
+
+Deno.test("buildRuntimeDispatchSpec: unknown wiringKind returns null (fail-close)", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "unknown_kind",
+    targetSurface: "screen",
+  });
+  assertEquals(spec, null, "unknown wiringKind must not silently fall back to entity/raw action");
 });
 
 // ─── buildRuntimeDispatchSpec ─────────────────────────────────────────────────

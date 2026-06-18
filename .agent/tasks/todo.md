@@ -8,6 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
+| `projection-admin-runtime-ssot-alignment` | Issue#464 投影/admin/runtime SSOT不整合収束 | partial | 1 | `product.admin_topology_authoring` / `product.projection_and_output_lanes` / `product.core_runtime_route` / `product.external_port_substrate` | `docs/design/runtime-orchestration-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -22,6 +23,31 @@
 | `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (file_storage / email / audit_approval / export_sftp) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
+
+---
+
+## Bundle `projection-admin-runtime-ssot-alignment`
+
+**Status:** partial
+**Issue:** https://github.com/tk-ud/topolactor/issues/464
+**Roadmap/status SSOT:** `product.admin_topology_authoring` / `product.projection_and_output_lanes` / `product.core_runtime_route` / `product.external_port_substrate`
+**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`
+
+完了済み (PR#472):
+- [x] `ScreenOperationKind` に `logicalDelete` / `delete` を追加 (`screenAuthoringIntent.ts`)
+- [x] `mapWiringKindToLayer` / `mapWiringKindToAction` の unknown wiringKind を fail-close (null 返却)
+- [x] `buildRuntimeDispatchSpec` の `targetSurface` 空 fallback を fail-close
+- [x] `NormalizedComponentEventType` に `"input"` を追加 (`frontendScheduler.ts`)
+- [x] `normalizeAuthoredEventType` に `input/onInput` / `focus/onFocus` / `blur/onBlur` / `select/onSelect` を追加
+- [x] `buildLocalUiStateEventBinding` に `setActiveKey` actionType を追加 (`statePath: "activeKey"`)
+- [x] `ProjectionShell` SSE refresh: `projectionTokenRef` ref-backed token / `initialDispatchAxesRef` で初回 axes を保持 / `trigger.identity.manifestId` を target に差し替え
+
+未達 (残作業):
+- [ ] SSE identity lane: `tableId` / `tableRegistryId` の保持。`queueClientCommand()` 再実行ではなく `enqueueProjectionHookTrigger → sseDispatcher → projectionRuntime` lane への接続証明
+- [ ] UI Events: trigger UI / target UI の独立 authoring、保存→DB投影→runtime実行の証明 (`UiBuilderAdmin.tsx` / layout_patch validate/apply / seed / DB projection)
+- [ ] seed / DB CHECK / SSOT allowed values / runtime registry / executor registry の整合証明
+- [ ] `RuntimeExecutor` / `TopologyFunctionBinder` / abstract function primitive registry の対象/例外分類と backend tests
+- [ ] external port consumer の trigger UI / target UI / projection response generic lane 接続証明
 
 ---
 
