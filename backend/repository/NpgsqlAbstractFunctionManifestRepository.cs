@@ -21,11 +21,12 @@ public sealed class NpgsqlAbstractFunctionManifestRepository : IAbstractFunction
         string authorityScope;
         bool active;
         IReadOnlyList<string> deniedProjectionKeys;
+        IReadOnlyDictionary<string, string> outputShape;
 
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
-                SELECT abstract_function_id, runtime_lane, authority_scope, projection_deny_keys, active
+                SELECT abstract_function_id, runtime_lane, authority_scope, projection_deny_keys, output_shape, active
                 FROM topology.abstract_function_manifests
                 WHERE function_key = @functionKey
                 """;
@@ -39,9 +40,11 @@ public sealed class NpgsqlAbstractFunctionManifestRepository : IAbstractFunction
             runtimeLane = reader.GetString(reader.GetOrdinal("runtime_lane"));
             authorityScope = reader.GetString(reader.GetOrdinal("authority_scope"));
             deniedProjectionKeys = reader.GetFieldValue<string[]>(reader.GetOrdinal("projection_deny_keys"));
+            outputShape = ParseJsonObject(reader.GetString(reader.GetOrdinal("output_shape")));
             active = reader.GetBoolean(reader.GetOrdinal("active"));
         }
 
+        var authorityBindings = await LoadAuthorityBindingsAsync(conn, manifestId, ct);
         var bindingsByStep = await LoadBindingsAsync(conn, manifestId, ct);
         var steps = new List<AbstractFunctionStep>();
         await using (var cmd = conn.CreateCommand())
@@ -69,7 +72,33 @@ public sealed class NpgsqlAbstractFunctionManifestRepository : IAbstractFunction
             }
         }
 
-        return new AbstractFunctionManifest(manifestId, functionKey, runtimeLane, authorityScope, steps, deniedProjectionKeys, active);
+        return new AbstractFunctionManifest(manifestId, functionKey, runtimeLane, authorityScope, steps, deniedProjectionKeys, active, authorityBindings, outputShape);
+    }
+
+    private static async Task<IReadOnlyList<AbstractFunctionAuthorityBinding>> LoadAuthorityBindingsAsync(
+        NpgsqlConnection conn,
+        Guid manifestId,
+        CancellationToken ct)
+    {
+        var result = new List<AbstractFunctionAuthorityBinding>();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT authority_kind, authority_ref, active
+            FROM topology.abstract_function_authority_bindings
+            WHERE abstract_function_id = @manifestId
+            ORDER BY authority_kind ASC, authority_ref ASC
+            """;
+        cmd.Parameters.AddWithValue("manifestId", manifestId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            result.Add(new AbstractFunctionAuthorityBinding(
+                reader.GetString(reader.GetOrdinal("authority_kind")),
+                reader.GetString(reader.GetOrdinal("authority_ref")),
+                reader.GetBoolean(reader.GetOrdinal("active"))));
+        }
+        return result;
     }
 
     private static async Task<IReadOnlyDictionary<Guid, IReadOnlyList<AbstractFunctionInputBinding>>> LoadBindingsAsync(

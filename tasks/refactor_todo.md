@@ -109,7 +109,7 @@ Absorption policy:
 |---|---|---|
 | `abstract-function-runtime-substrate-ssot` | partial_compatibility_fallback | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
 | `abstract-function-manifest-schema` | partial_compatibility_fallback | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
-| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry |
+| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (authority enforcement: partial_done — bindings loaded and fail-close enforced; file-storage concrete deletion remains blocked) |
 | `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
 | `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
 | `file-storage-db-function-to-abstract-function-migration` | partial_compatibility_fallback | Absorb file-storage DB functions by migration order and remove payload-derived table authority |
@@ -318,6 +318,22 @@ Implement a backend `execute_abstract_function` executor that reads abstract fun
 - [x] Existing external port policy execution can call abstract function manifests.
 - [x] Failure paths are explicit and covered by tests for the substrate statuses in this slice.
 - [x] Tests prove no silent fallback for `execute_abstract_function` executor wiring and no frontend judgment authority in this slice.
+
+### Bundle `abstract_function_authority_bindings_runtime_enforcement` (PR #479)
+
+Completed in PR #479:
+
+- [x] `NpgsqlAbstractFunctionManifestRepository` loads `topology.abstract_function_authority_bindings` (active only).
+- [x] `AbstractFunctionManifest` carries `AuthorityBindings: IReadOnlyList<AbstractFunctionAuthorityBinding>`.
+- [x] `AbstractFunctionExecutor.ExecuteAsync` fail-closes on missing authority bindings (`MissingAuthority`) and missing policy binding (`MissingAuthority`) before any step execution.
+- [x] `AbstractFunctionExecutionContext` exposes authority bindings to primitive adapters via `SetAuthorityBindings` (internal, set by executor).
+- [x] `CallPostgresFunctionPrimitiveAdapter` fail-closes on missing table authority binding (`MissingAuthority`).
+- [x] Unit tests cover: no bindings, no policy binding, inactive-only bindings, valid binding pass, no table authority.
+- [x] Live DB integration test (`SeededAbstractFunctions_LoadAuthorityBindings_AndEnforceFailClose`) proves seeded authority bindings are loaded and executor fail-closes on empty bindings.
+
+Still open after PR #479:
+- file-storage concrete deletion remains blocked (abstract function seed path is now authority-enforced, but `NpgsqlExternalPortDbFunctionRepository` compatibility path not yet deleted).
+- SQL Attention / recommendation and credential hardening Bundles remain not_started.
 
 ---
 
