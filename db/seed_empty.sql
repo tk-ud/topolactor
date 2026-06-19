@@ -2054,6 +2054,26 @@ VALUES
     ('00000000-0000-0000-0000-000000000305', '00000000-0000-0000-0000-0000000000e3', 5, 'append_runtime_event_log', '{}', NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
 
+-- credential_vault_generic_refresh: seed policy proving credential refresh primitive sequence.
+-- provider_kind is data only. No provider-specific runtime branching. Plaintext never stored in seed.
+-- Sequence: load payload → decrypt → acquire lease → request token → hash → expiry → write → release.
+INSERT INTO topology.external_port_policies (policy_id, policy_key, port_kind, required_by_bundle, active)
+VALUES
+    ('00000000-0000-0000-0000-0000000000f0', 'credential_vault_generic_refresh', 'access_port', 'external-port-substrate-seed-coding', true)
+ON CONFLICT (policy_id) DO NOTHING;
+
+INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000601', '00000000-0000-0000-0000-0000000000f0', 1, 'load_encrypted_credential_payload', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000602', '00000000-0000-0000-0000-0000000000f0', 2, 'decrypt_for_runtime_use',           '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000603', '00000000-0000-0000-0000-0000000000f0', 3, 'acquire_refresh_lease',             '{"lease_duration_seconds":"300","lease_owner":"credential_primitive"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000604', '00000000-0000-0000-0000-0000000000f0', 4, 'request_token_by_config',           '{"endpoint":"env:TOKEN_REFRESH_ENDPOINT_REF","method":"POST"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000605', '00000000-0000-0000-0000-0000000000f0', 5, 'update_token_hash',                 '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000606', '00000000-0000-0000-0000-0000000000f0', 6, 'update_expires_at_and_version',     '{"default_expires_in_seconds":"3600"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000607', '00000000-0000-0000-0000-0000000000f0', 7, 'write_encrypted_credential_payload','{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000608', '00000000-0000-0000-0000-0000000000f0', 8, 'release_refresh_lease',             '{}', NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+
 
 -- ---------------------------------------------------------------------------
 -- Consumer bundle seed binding.

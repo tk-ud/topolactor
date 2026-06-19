@@ -95,30 +95,67 @@ user_facing_helper_manual_ssot:
     description: >-
       将来作成するヘルパー・マニュアルのカテゴリ候補。
       実装しない。方針として整理する。
+      各カテゴリには policy_focus を付与して user_promise / safety_boundary / onboarding_policy の
+      どの方針として位置づけるかを明記する。
+    policy_focus_definitions:
+      onboarding_policy: >-
+        ユーザーが Topolactor を使い始めるための導線・機能説明。
+        「できること」の説明が中心。
+      safety_boundary: >-
+        AI/CLI/MCP がしないこと・人間承認が必要な操作の説明。
+        「してはいけないこと」「境界」の説明が中心。
+      user_promise: >-
+        Topolactor がユーザーに約束する操作範囲の説明。
+        「安心して使える根拠」の説明が中心。
     categories:
       getting_started:
         id: getting_started
         title: はじめての業務アプリ作成
         audience: non_technical_business_user
         classification: planned
+        policy_focus:
+          - onboarding_policy
+        policy_note: >-
+          ユーザーが最初に何ができるかを理解するための入口。
+          技術用語なしで「業務アプリを作る」体験を説明する。
 
       basic_surfaces:
         id: basic_surfaces
         title: フォーム・一覧・PDF・CSVの基本
         audience: non_technical_business_user
         classification: planned
+        policy_focus:
+          - onboarding_policy
+        policy_note: >-
+          基本操作面（フォーム/一覧/PDF/CSV）の説明。
+          「何が使えるか」の onboarding_policy カテゴリ。
 
       monthly_automation:
         id: monthly_automation
         title: 月次処理を自動化する
         audience: business_user_or_admin
         classification: planned
+        policy_focus:
+          - onboarding_policy
+          - user_promise
+        policy_note: >-
+          月次処理の自動化が「できること」の説明（onboarding）。
+          同時に「AI が自律的に処理するのではなく、ユーザーが設定した範囲で動く」という
+          user_promise を含む。
 
       desktop_ai_analysis:
         id: desktop_ai_analysis
         title: Desktop AIで業務データを分析する
         audience: business_user_or_power_user
         classification: planned
+        policy_focus:
+          - user_promise
+          - safety_boundary
+        policy_note: >-
+          AI で何ができるか（user_promise）と何をしないか（safety_boundary）を
+          セットで説明する必要があるカテゴリ。
+          Desktop AI が「データを読む・集計する」範囲に留まり、
+          「変更・削除・送信」を自律実行しないことを plain business language で説明する。
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
 
@@ -127,6 +164,13 @@ user_facing_helper_manual_ssot:
         title: CLI / MCP Reader Port を使う
         audience: technical_user_or_integrator
         classification: planned
+        policy_focus:
+          - user_promise
+          - safety_boundary
+        policy_note: >-
+          CLI/MCP Reader Port が「読む・集計する・搬出する」に限定されていることの説明。
+          DB 直接操作・commit・delete・email send・payment approval の禁止境界を
+          technical user 向けに明示する。
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
 
@@ -135,6 +179,11 @@ user_facing_helper_manual_ssot:
         title: CSV / PDF / ZIP を出力する
         audience: business_user_or_admin
         classification: planned
+        policy_focus:
+          - user_promise
+        policy_note: >-
+          「搬出処理」が何を出力できて何を出力できないかの user_promise。
+          認可されたスコープのみ搬出できること・credential 実値は含まれないことを説明する。
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
 
@@ -143,6 +192,13 @@ user_facing_helper_manual_ssot:
         title: Email送信はUIで承認する
         audience: business_user
         classification: planned
+        policy_focus:
+          - safety_boundary
+          - user_promise
+        policy_note: >-
+          AI/CLI/MCP が自律的に email を送信しないことの safety_boundary。
+          UI 上の人間承認後にのみ送信される user_promise。
+          「自動送信されることはない」という安心感の説明が中心。
         safety_note: >-
           Email send は UI 上の人間承認に閉じる。
           AI/CLI/MCP から自動送信しない。
@@ -154,6 +210,13 @@ user_facing_helper_manual_ssot:
         title: Stripe決済はWebhookで確定する
         audience: admin_or_integrator
         classification: planned
+        policy_focus:
+          - safety_boundary
+          - user_promise
+        policy_note: >-
+          Stripe paid state が webhook 検証後にのみ確定するという safety_boundary。
+          AI/CLI/MCP・UI callback 単体では支払い確定しないという user_promise。
+          「自動確定されることはない」という安心感の説明が中心。
         safety_note: >-
           Stripe paid state は webhook 検証後に確定する。
           AI/CLI/MCP から直接確定しない。
@@ -165,6 +228,12 @@ user_facing_helper_manual_ssot:
         title: "管理者向け: 権限・搬出・監査設定"
         audience: admin
         classification: planned
+        policy_focus:
+          - onboarding_policy
+          - safety_boundary
+        policy_note: >-
+          管理者が権限・搬出スコープ・監査ログを設定する onboarding_policy。
+          同時に「設定済みスコープ外には出力されない」という safety_boundary を含む。
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
           - docs/design/admin-console-workflow-ssot.yaml
@@ -174,11 +243,85 @@ user_facing_helper_manual_ssot:
         title: 外部Bundle連携の考え方
         audience: admin_or_integrator
         classification: planned
+        policy_focus:
+          - safety_boundary
+          - user_promise
+        policy_note: >-
+          外部サービス（Notion/Sheets/Slack 等）が Topolactor の runtime SSOT ではなく、
+          intake/preview/apply 境界を通じてのみ扱われるという safety_boundary。
+          外部サービスの設定が自動的に Topolactor の正本データになることはないという user_promise。
         note: >-
           Notion / Sheets / Slack 等は人間編集・intake surface として扱う。
           Topolactorのruntime SSOTではない。
         related_ssot:
           - docs/design/extended-runtime-bundle-registry-ssot.yaml
+
+  desktop_ai_cli_mcp_writing_guideline:
+    description: >-
+      Desktop AI / CLI / MCP Reader 向けの説明文を書く際の方針。
+      plain business language と approval boundary の説明に特化したライティングルール。
+    audience_profiles:
+      desktop_ai_user:
+        description: Desktop AI（Claude Desktop 等）を業務で使うビジネスユーザー
+        language_level: non_technical
+        key_concern: "AI に何をさせてよいか / AI が勝手に何かしないか"
+      cli_user:
+        description: CLI ツールで業務データを取得・分析するテクニカルユーザー
+        language_level: technical
+        key_concern: "何のデータが読めるか / 何が書き換わるか"
+      mcp_reader_user:
+        description: MCP プロトコル経由でデータを読む連携担当者・開発者
+        language_level: technical
+        key_concern: "認可スコープ / read/export の範囲 / 書き込み禁止範囲"
+    writing_rules:
+      use_plain_business_language:
+        rule: >-
+          内部システム用語（topology / manifest / attractor / ssot / runtime 等）を
+          ユーザー向け説明に使わない。
+        examples:
+          ng: "topology を参照して manifest_dispatcher が処理します"
+          ok: "業務アプリの設定にしたがって処理されます"
+      lead_with_what_ai_can_do:
+        rule: >-
+          できることを先に説明し、できないことは「〜はしません」と明確に添える。
+          「できません」「禁止」という語より「〜はしません」「〜は人間が確認します」を使う。
+        examples:
+          ng: "AI は email send を実行することが禁止されています"
+          ok: "メール送信は、UIで人間が確認してから行います。AIが自動で送信することはありません"
+      approval_boundary_explanation:
+        rule: >-
+          「人間の確認が必要な操作」を明示するときは、以下のフォーマットで説明する:
+          「〈操作〉は、UI上で〈誰が〉確認してから実行されます。AI/CLIが自動実行することはありません。」
+        template: "{action}は、UI上で{approver}が確認してから実行されます。AI/CLIが自動実行することはありません。"
+        applies_to:
+          - email_send
+          - payment_approval
+          - record_delete
+          - final_register
+          - bulk_export_beyond_approved_scope
+      scope_boundary_explanation:
+        rule: >-
+          「読める範囲・出力できる範囲」を説明するときは、
+          「設定された許可範囲内で読み取ります」「スコープ外には出力されません」を使う。
+          credential 実値・secret・internal system path は含まれないことも明記する。
+        examples:
+          ng: "CLI reader port が permission scope を解決して Data Reader を呼び出します"
+          ok: "許可された業務データの範囲内で読み取り・集計を行います。認証情報や内部システムの設定値は含まれません"
+      avoid_technical_jargon_in_non_technical_docs:
+        rule: >-
+          non_technical ユーザー向けカテゴリ（getting_started / basic_surfaces / monthly_automation /
+          email_approval_guide / desktop_ai_analysis）ではシステム専門用語を避ける。
+          technical ユーザー向けカテゴリ（cli_mcp_reader / admin_permission_export_audit /
+          stripe_payment_guide / external_bundle_guide）では port / scope / credential_kind 等を
+          使用可能だが、必ず plain business language での補足を添える。
+      safety_first_for_approval_categories:
+        rule: >-
+          safety_boundary 分類カテゴリでは「何をしないか」を最初に伝えた後、
+          「どうすれば実行できるか（UI 承認フロー）」を説明する。
+          「禁止されている」ではなく「人間が確認する設計」と表現する。
+        examples:
+          ng: "AI からのメール送信は禁止です"
+          ok: "メール送信は人間が UI 上で確認する設計になっています。AI が自動でメールを送ることはありません"
 
   safety_boundary:
     description: >-

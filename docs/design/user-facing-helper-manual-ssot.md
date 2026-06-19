@@ -82,20 +82,25 @@ user-facing helper / manual は **runtime authority を持たない**。
 
 ## Helper / Manual Category Candidates
 
-実装しない。将来作成するカテゴリの方針として整理する。
+実装しない。将来作成するカテゴリの policy 方針として整理する。
 
-| カテゴリ | 対象ユーザー | 関連 SSOT |
-|----------|-------------|-----------|
-| はじめての業務アプリ作成 | 非技術ユーザー | — |
-| フォーム・一覧・PDF・CSVの基本 | 非技術ユーザー | — |
-| 月次処理を自動化する | 業務担当者・管理者 | — |
-| Desktop AIで業務データを分析する | 業務担当者 | CLI MCP Port SSOT |
-| CLI / MCP Reader Port を使う | 技術ユーザー | CLI MCP Port SSOT |
-| CSV / PDF / ZIP を出力する | 業務担当者・管理者 | CLI MCP Port SSOT |
-| Email送信はUIで承認する | 業務担当者 | Extended Bundle Registry |
-| Stripe決済はWebhookで確定する | 管理者・連携担当 | Extended Bundle Registry |
-| 管理者向け: 権限・搬出・監査設定 | 管理者 | CLI MCP Port SSOT, Admin Console SSOT |
-| 外部Bundle連携の考え方 | 管理者・連携担当 | Extended Bundle Registry |
+各カテゴリには `policy_focus` 分類を付与する:
+- **onboarding_policy**: 「できること」の導線・機能説明
+- **safety_boundary**: 「してはいけないこと」・人間承認が必要な操作の説明
+- **user_promise**: Topolactor がユーザーに約束する操作範囲の説明
+
+| カテゴリ | 対象ユーザー | policy_focus | 関連 SSOT |
+|----------|-------------|--------------|-----------|
+| はじめての業務アプリ作成 | 非技術ユーザー | onboarding_policy | — |
+| フォーム・一覧・PDF・CSVの基本 | 非技術ユーザー | onboarding_policy | — |
+| 月次処理を自動化する | 業務担当者・管理者 | onboarding_policy, user_promise | — |
+| Desktop AIで業務データを分析する | 業務担当者 | user_promise, safety_boundary | CLI MCP Port SSOT |
+| CLI / MCP Reader Port を使う | 技術ユーザー | user_promise, safety_boundary | CLI MCP Port SSOT |
+| CSV / PDF / ZIP を出力する | 業務担当者・管理者 | user_promise | CLI MCP Port SSOT |
+| Email送信はUIで承認する | 業務担当者 | safety_boundary, user_promise | Extended Bundle Registry |
+| Stripe決済はWebhookで確定する | 管理者・連携担当 | safety_boundary, user_promise | Extended Bundle Registry |
+| 管理者向け: 権限・搬出・監査設定 | 管理者 | onboarding_policy, safety_boundary | CLI MCP Port SSOT, Admin Console SSOT |
+| 外部Bundle連携の考え方 | 管理者・連携担当 | safety_boundary, user_promise | Extended Bundle Registry |
 
 ---
 
@@ -135,6 +140,75 @@ user-facing helper / manual は **runtime authority を持たない**。
 | Stripe runtime 実装 |
 | 文言ライティングの大量追加 |
 | README 全面改稿 |
+
+---
+
+## Desktop AI / CLI / MCP Reader 向け説明ガイドライン
+
+Desktop AI・CLI ユーザー・MCP Reader 向けの説明文を書く際の方針。
+
+### 対象読者プロファイル
+
+| 読者タイプ | 技術レベル | 主な関心事 |
+|-----------|-----------|-----------|
+| Desktop AI ユーザー | 非技術 | AI に何をさせてよいか / AI が勝手に何かしないか |
+| CLI ユーザー | 技術 | 何のデータが読めるか / 何が書き換わるか |
+| MCP Reader ユーザー | 技術 | 認可スコープ / read/export の範囲 / 書き込み禁止範囲 |
+
+### ライティングルール
+
+#### 1. Plain Business Language を使う
+
+内部システム用語（topology / manifest / attractor / ssot / runtime 等）をユーザー向け説明に使わない。
+
+| 内部用語 | ユーザー向け表現 |
+|----------|-----------------|
+| topology | 業務アプリの構造 |
+| manifest | 業務コンテンツ設定 |
+| export_job | 搬出処理 |
+| cli_reader_port | AI/CLI へのデータ読み取り窓口 |
+| runtime_orchestration | 処理の実行フロー |
+
+#### 2. 「できること」を先に書く
+
+> NG: "AI は email send を実行することが禁止されています"  
+> OK: "メール送信は、UIで人間が確認してから行います。AIが自動で送信することはありません"
+
+できることを先に説明し、できないことは「〜はしません」「〜は人間が確認します」と明確に添える。
+
+#### 3. 承認境界の説明フォーマット
+
+人間の確認が必要な操作を説明するときは、以下のフォーマットで書く:
+
+> **「〈操作〉は、UI上で〈承認者〉が確認してから実行されます。AI/CLIが自動実行することはありません。」**
+
+| 操作 | 承認境界の説明例 |
+|------|----------------|
+| email_send | メール送信は、UI上で担当者が確認してから実行されます。AIが自動で送信することはありません |
+| payment_approval | 請求確定は、UI上で担当者が承認してから行われます。AIが自動確定することはありません |
+| record_delete | 削除は、UI上で担当者が実行します。AIが自動で削除することはありません |
+| final_register | 最終登録は、UI上で担当者が確認してから行われます |
+
+#### 4. スコープ境界の説明フォーマット
+
+「読める範囲・出力できる範囲」を説明するときは、「設定された許可範囲内で読み取ります」「スコープ外には出力されません」を使う。
+
+> NG: "CLI reader port が permission scope を解決して Data Reader を呼び出します"  
+> OK: "許可された業務データの範囲内で読み取り・集計を行います。認証情報や内部システムの設定値は含まれません"
+
+#### 5. 技術レベル別の使い分け
+
+| 対象カテゴリ | 技術用語 | 必須補足 |
+|-------------|---------|---------|
+| 非技術ユーザー向け | 使わない | — |
+| 技術ユーザー向け | port / scope / credential_kind 等を使用可 | 必ず plain business language での補足を添える |
+
+#### 6. safety_boundary カテゴリの書き方
+
+safety_boundary 分類カテゴリでは「何をしないか」を最初に伝えた後、「どうすれば実行できるか（UI 承認フロー）」を説明する。
+
+> NG: "AI からのメール送信は禁止です"  
+> OK: "メール送信は人間が UI 上で確認する設計になっています。AI が自動でメールを送ることはありません"
 
 ---
 

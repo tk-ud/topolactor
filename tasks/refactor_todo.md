@@ -111,7 +111,7 @@ Absorption policy:
 | `abstract-function-manifest-schema` | ssot_contract_complete | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
 | `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete as representative absorption case; SQL Attention / recommendation / credential hardening remain not_started) |
 | `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
-| `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
+| `credential-primitive-hardening` | implemented | Absorb credential flow by migration order while preserving runtime-only secret materialization |
 | `projection-manifest-primitive-migration` | investigation_needed | Move remaining projection constructor / runtime event / screen operation derivation mapping into projection manifest or projection primitives while preserving pure render/test-only exceptions |
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives |
 | `cli-mcp-read-export-port-substrate` | not_started | Implement CLI/MCP read/export/import-candidate port through dispatch-secured port and abstract function primitives rather than dedicated tool handlers |
@@ -469,7 +469,7 @@ Move SQL Attention and recommendation execution into abstract function primitive
 
 ## Bundle `credential-primitive-hardening`
 
-Status: `not_started`
+Status: `implemented`
 
 ### Problem
 
@@ -492,14 +492,14 @@ Preserve credential flow as abstract function primitives while keeping actual se
    - Remove/shrink concrete credential refresh parsing/request logic only after seed tests pass.
    - Keep crypto and HTTP clients as runtime-only adapters.
 
-### Improvement plan
+### Completed
 
-- [ ] Keep `credential_requirement` as port record attachment, not standalone credential plane.
-- [ ] Keep plaintext out of DB, UI, seed, SSOT, projection, audit log, and runtime event log.
-- [ ] Harden `BuildTokenRefreshRequest` with manifest/policy-defined request shape.
-- [ ] Harden `ParseTokenRefreshResult` to use crypto hash adapter, expiry parsing, rotated payload policy, and explicit provider config without provider-specific C# branching.
-- [ ] Preserve lease/version/expiry guards.
-- [ ] Add tests for missing/invalid token response, stale version, plaintext projection prohibition, and provider branch prohibition.
+- [x] Keep `credential_requirement` as port record attachment, not standalone credential plane. (No standalone credential plane added; ExternalCredentialVaultRecord is a port attachment.)
+- [x] Keep plaintext out of DB, UI, seed, SSOT, projection, audit log, and runtime event log. (write_encrypted_credential_payload clears DecryptedCredentialPayload; seed uses env: references only.)
+- [x] Harden `BuildTokenRefreshRequest` with manifest/policy-defined request shape. (Marked as compatibility fallback; seed-driven path uses request_token_by_config step with endpoint from step_config.)
+- [x] Harden `ParseTokenRefreshResult` to use crypto hash adapter, expiry parsing, rotated payload policy, and explicit provider config without provider-specific C# branching. (Uses _crypto.ComputeTokenHash; ParseExpiresAt parses default_expires_in_seconds config or expires_in JSON; fails closed on missing expiry; no provider switch.)
+- [x] Preserve lease/version/expiry guards. (acquire_refresh_lease → write_encrypted_credential_payload uses RefreshLease.Version as expectedVersion; update_expires_at_and_version sets PendingExpiresAt before write.)
+- [x] Add tests for missing/invalid token response, stale version, plaintext projection prohibition, and provider branch prohibition. (CredentialPrimitiveHardeningTests: 35 tests.)
 
 ### Materials
 
@@ -524,13 +524,13 @@ Preserve credential flow as abstract function primitives while keeping actual se
 
 ### Acceptance conditions
 
-- [ ] Credential primitive flow is manifest/policy-driven and provider_kind remains data.
-- [ ] No provider-specific runtime handler or provider switch is added.
-- [ ] Decrypted payload exists only inside runtime context and never enters projection/log/seed/SSOT.
-- [ ] Refresh token rotation updates encrypted payload/hash/expires/version atomically.
-- [ ] Token hash is computed by crypto adapter, not placeholder response-length logic.
-- [ ] Tests prove fail-close on invalid credential, missing crypto, stale version, invalid response, and plaintext projection attempts.
-- [ ] Existing concrete request/parse logic is deleted or marked compatibility fallback only after seed tests pass.
+- [x] Credential primitive flow is manifest/policy-driven and provider_kind remains data. (credential_vault_generic_refresh seed policy with 8 generic operation_key steps; provider_kind is record data, no C# branching.)
+- [x] No provider-specific runtime handler or provider switch is added. (All 6 new registry entries are generic; no provider switch exists.)
+- [x] Decrypted payload exists only inside runtime context and never enters projection/log/seed/SSOT. (write_encrypted_credential_payload clears DecryptedCredentialPayload after writing; OutputProp not set in refresh flow; seed has no plaintext credential values.)
+- [x] Refresh token rotation updates encrypted payload/hash/expires/version atomically. (write_encrypted_credential_payload uses RefreshLease.Version as expectedVersion for atomic DB write via WriteEncryptedCredentialPayloadAsync AND version = @expectedVersion guard.)
+- [x] Token hash is computed by crypto adapter, not placeholder response-length logic. (ParseTokenRefreshResult uses _crypto.ComputeTokenHash(response.Body); update_token_hash step uses _crypto.ComputeTokenHash(context.HttpResponse.Body); placeholder $"sha256:{response.Body.Length}" removed.)
+- [x] Tests prove fail-close on invalid credential, missing crypto, stale version, invalid response, and plaintext projection attempts. (CredentialPrimitiveHardeningTests: 35 tests covering all fail-close paths, full policy flow, and plaintext projection prohibition.)
+- [x] Existing concrete request/parse logic is deleted or marked compatibility fallback only after seed tests pass. (BuildTokenRefreshRequest and ParseTokenRefreshResult marked as "Compatibility fallback" with XML doc comments after seed tests pass at 942/942.)
 
 ---
 

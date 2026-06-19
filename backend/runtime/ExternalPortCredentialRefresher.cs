@@ -285,6 +285,12 @@ public sealed class ExternalPortExecutionContext
 
     public string? AuthorizationKey { get; set; }
 
+    public ExternalCredentialRefreshLease? RefreshLease { get; set; }
+
+    public string? PendingTokenHash { get; set; }
+
+    public DateTimeOffset? PendingExpiresAt { get; set; }
+
     public IReadOnlyList<string> ExecutedOperationKeys => _executedOperationKeys;
 
     public void MarkExecuted(string operationKey) => _executedOperationKeys.Add(operationKey);
@@ -438,6 +444,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
     private readonly IReadOnlyDictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>> _registry;
     private readonly IReadOnlyList<IExternalPortBundleStepHandler> _bundleHandlers;
+    private readonly IExternalCredentialCrypto? _crypto;
 
     public ExternalPortPolicyStepExecutor(
         IExternalPortHttpClient? httpClient = null,
@@ -447,8 +454,10 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IExternalPortDbFunctionRepository? dbFunctionRepository = null,
         AbstractFunctionExecutor? abstractFunctionExecutor = null,
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null,
-        IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null)
+        IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null,
+        IExternalCredentialVaultRepository? credentialVaultRepository = null)
     {
+        _crypto = crypto;
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
         {
@@ -641,6 +650,100 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 context.MarkExecuted(step.OperationKey);
                 return Task.CompletedTask;
             },
+            ["acquire_refresh_lease"] = async (step, context, ct) =>
+            {
+                if (credentialVaultRepository is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING");
+                if (context.CredentialVaultRecord is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
+                var leaseDurationSeconds = step.StepConfig.TryGetValue("lease_duration_seconds", out var durStr)
+                    && int.TryParse(durStr, out var dur) ? dur : 300;
+                var leaseOwner = ReadConfig(step.StepConfig, "lease_owner") ?? "credential_primitive";
+                context.RefreshLease = await credentialVaultRepository.AcquireRefreshLeaseAsync(
+                    context.CredentialVaultRecord.CredentialVaultId,
+                    leaseOwner,
+                    TimeSpan.FromSeconds(leaseDurationSeconds),
+                    DateTimeOffset.UtcNow,
+                    ct)
+                    ?? throw new InvalidOperationException("EXTERNAL_CREDENTIAL_REFRESH_LEASE_UNAVAILABLE");
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["request_token_by_config"] = async (step, context, ct) =>
+            {
+                if (httpClient is null)
+                    throw new InvalidOperationException("EXTERNAL_HTTP_REQUEST_MISSING");
+                if (context.DecryptedCredentialPayload is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_DECRYPTED_PAYLOAD_MISSING");
+                if (!step.StepConfig.TryGetValue("endpoint", out var endpoint) || string.IsNullOrWhiteSpace(endpoint))
+                    throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_ENDPOINT_MISSING");
+                var method = step.StepConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Post;
+                var tokenRequest = new ExternalPortHttpRequest(
+                    new Uri(endpoint, UriKind.RelativeOrAbsolute), method,
+                    new Dictionary<string, string>(), context.DecryptedCredentialPayload);
+                var response = await httpClient.SendAsync(tokenRequest, ct);
+                if (response.StatusCode < 200 || response.StatusCode >= 300)
+                    throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_HTTP_FAILED");
+                context.HttpResponse = response;
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["update_token_hash"] = (step, context, ct) =>
+            {
+                if (_crypto is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_CRYPTO_MISSING");
+                if (context.HttpResponse is null)
+                    throw new InvalidOperationException("EXTERNAL_HTTP_RESPONSE_MISSING");
+                context.PendingTokenHash = _crypto.ComputeTokenHash(context.HttpResponse.Body);
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["update_expires_at_and_version"] = (step, context, ct) =>
+            {
+                if (context.HttpResponse is null)
+                    throw new InvalidOperationException("EXTERNAL_HTTP_RESPONSE_MISSING");
+                if (context.CredentialVaultRecord is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
+                context.PendingExpiresAt = ParseExpiresAt(step.StepConfig, context.HttpResponse, context.CredentialVaultRecord.ExpiresAt);
+                context.MarkExecuted(step.OperationKey);
+                return Task.CompletedTask;
+            },
+            ["write_encrypted_credential_payload"] = async (step, context, ct) =>
+            {
+                if (_crypto is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_CRYPTO_MISSING");
+                if (credentialVaultRepository is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING");
+                if (context.CredentialVaultRecord is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
+                if (context.HttpResponse is null)
+                    throw new InvalidOperationException("EXTERNAL_HTTP_RESPONSE_MISSING");
+                if (context.RefreshLease is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_REFRESH_LEASE_MISSING");
+                if (context.PendingTokenHash is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_TOKEN_HASH_MISSING");
+                if (context.PendingExpiresAt is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_EXPIRES_AT_MISSING");
+                ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential(context.CredentialVaultRecord);
+                var encrypted = _crypto.EncryptForVaultStorage(
+                    context.HttpResponse.Body, context.CredentialVaultRecord.EncryptionKeyReference!);
+                await credentialVaultRepository.WriteEncryptedCredentialPayloadAsync(
+                    context.CredentialVaultRecord.CredentialVaultId,
+                    context.RefreshLease.Version,
+                    encrypted,
+                    context.PendingTokenHash,
+                    context.PendingExpiresAt.Value,
+                    ct);
+                context.DecryptedCredentialPayload = null;
+                context.MarkExecuted(step.OperationKey);
+            },
+            ["release_refresh_lease"] = async (step, context, ct) =>
+            {
+                if (credentialVaultRepository is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING");
+                if (context.RefreshLease is null)
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_REFRESH_LEASE_MISSING");
+                await credentialVaultRepository.ReleaseRefreshLeaseAsync(context.RefreshLease, ct);
+                context.MarkExecuted(step.OperationKey);
+            },
         };
     }
 
@@ -670,6 +773,10 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         throw new InvalidOperationException("EXTERNAL_PORT_POLICY_OPERATION_UNSUPPORTED");
     }
 
+    /// <summary>
+    /// Compatibility fallback used by ExternalTokenRefresher.RefreshIfNeededAsync direct path.
+    /// Prefer seed-driven credential refresh via policy steps (credential_vault_generic_refresh policy).
+    /// </summary>
     public ExternalPortHttpRequest BuildTokenRefreshRequest(ExternalTokenRefreshRequest request)
     {
         if (!request.RequestConfig.TryGetValue("endpoint", out var endpoint) || string.IsNullOrWhiteSpace(endpoint))
@@ -681,16 +788,37 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         return new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), method, new Dictionary<string, string>(), request.RuntimeSecretPayload);
     }
 
+    /// <summary>
+    /// Compatibility fallback used by ExternalTokenRefresher.RefreshIfNeededAsync direct path.
+    /// Prefer seed-driven credential refresh via policy steps (credential_vault_generic_refresh policy).
+    /// Token hash uses crypto adapter; expiry requires default_expires_in_seconds config or expires_in in response JSON.
+    /// </summary>
     public ExternalTokenRefreshResult ParseTokenRefreshResult(ExternalTokenRefreshRequest request, ExternalPortHttpResponse response)
     {
         if (response.StatusCode < 200 || response.StatusCode >= 300)
-        {
             throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_HTTP_FAILED");
-        }
-
-        var hash = request.RequestConfig.TryGetValue("token_hash", out var tokenHash) ? tokenHash : $"sha256:{response.Body.Length}";
-        var expiresAt = request.CurrentExpiresAt?.AddHours(1) ?? DateTimeOffset.UtcNow.AddHours(1);
+        if (_crypto is null)
+            throw new InvalidOperationException("EXTERNAL_CREDENTIAL_CRYPTO_MISSING");
+        var hash = _crypto.ComputeTokenHash(response.Body);
+        var expiresAt = ParseExpiresAt(request.RequestConfig, response, request.CurrentExpiresAt);
         return new ExternalTokenRefreshResult(response.Body, hash, expiresAt, PayloadRotated: true);
+    }
+
+    private static DateTimeOffset ParseExpiresAt(
+        IReadOnlyDictionary<string, string> config,
+        ExternalPortHttpResponse response,
+        DateTimeOffset? currentExpiresAt)
+    {
+        if (config.TryGetValue("default_expires_in_seconds", out var secsStr) && int.TryParse(secsStr, out var secs))
+            return DateTimeOffset.UtcNow.AddSeconds(secs);
+        try
+        {
+            using var doc = JsonDocument.Parse(response.Body);
+            if (doc.RootElement.TryGetProperty("expires_in", out var el) && el.TryGetInt32(out var expiresIn))
+                return DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+        }
+        catch { }
+        throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_EXPIRY_MISSING");
     }
 
     private static Task MarkOnly(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct)

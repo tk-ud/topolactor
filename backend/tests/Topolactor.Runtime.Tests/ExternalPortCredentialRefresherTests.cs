@@ -533,3 +533,660 @@ public class ExternalPortSeedDrivenPolicyTests
             Task.CompletedTask;
     }
 }
+
+public class CredentialPrimitiveHardeningTests
+{
+    // ── ParseTokenRefreshResult ───────────────────────────────────────────────
+
+    [Fact]
+    public void ParseTokenRefreshResult_WithoutCrypto_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var request = NewRequest();
+        var response = new ExternalPortHttpResponse(200, "new-token-body");
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            executor.ParseTokenRefreshResult(request, response));
+        Assert.Equal("EXTERNAL_CREDENTIAL_CRYPTO_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public void ParseTokenRefreshResult_NonSuccessResponse_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor(crypto: new FakeCrypto("x"));
+        var request = NewRequest();
+        var response = new ExternalPortHttpResponse(401, "unauthorized");
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            executor.ParseTokenRefreshResult(request, response));
+        Assert.Equal("EXTERNAL_TOKEN_REFRESH_HTTP_FAILED", ex.Message);
+    }
+
+    [Fact]
+    public void ParseTokenRefreshResult_MissingExpiry_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor(crypto: new FakeCrypto("x"));
+        var request = NewRequest(config: new Dictionary<string, string>());
+        var response = new ExternalPortHttpResponse(200, "{}");
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            executor.ParseTokenRefreshResult(request, response));
+        Assert.Equal("EXTERNAL_TOKEN_REFRESH_EXPIRY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public void ParseTokenRefreshResult_WithDefaultExpiresInConfig_UsesConfigExpiry()
+    {
+        var executor = new ExternalPortPolicyStepExecutor(crypto: new FakeCrypto("x"));
+        var before = DateTimeOffset.UtcNow;
+        var request = NewRequest(config: new Dictionary<string, string> { ["default_expires_in_seconds"] = "7200" });
+        var response = new ExternalPortHttpResponse(200, "new-token");
+
+        var result = executor.ParseTokenRefreshResult(request, response);
+
+        Assert.True(result.ExpiresAt >= before.AddSeconds(7200 - 2));
+        Assert.True(result.ExpiresAt <= before.AddSeconds(7200 + 2));
+        Assert.True(result.PayloadRotated);
+    }
+
+    [Fact]
+    public void ParseTokenRefreshResult_WithJsonResponseExpiresIn_UsesResponseExpiry()
+    {
+        var executor = new ExternalPortPolicyStepExecutor(crypto: new FakeCrypto("x"));
+        var before = DateTimeOffset.UtcNow;
+        var request = NewRequest(config: new Dictionary<string, string>());
+        var response = new ExternalPortHttpResponse(200, """{"access_token":"tok","expires_in":1800}""");
+
+        var result = executor.ParseTokenRefreshResult(request, response);
+
+        Assert.True(result.ExpiresAt >= before.AddSeconds(1800 - 2));
+        Assert.True(result.ExpiresAt <= before.AddSeconds(1800 + 2));
+    }
+
+    [Fact]
+    public void ParseTokenRefreshResult_ComputesHashViaCryptoAdapter_NotLengthPlaceholder()
+    {
+        var crypto = new FakeCrypto("x");
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto);
+        var request = NewRequest(config: new Dictionary<string, string> { ["default_expires_in_seconds"] = "3600" });
+        var response = new ExternalPortHttpResponse(200, "my-new-token");
+
+        var result = executor.ParseTokenRefreshResult(request, response);
+
+        var expectedHash = crypto.ComputeTokenHash("my-new-token");
+        Assert.Equal(expectedHash, result.TokenHash);
+        Assert.DoesNotContain("Length", result.TokenHash, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(".Length", result.TokenHash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── acquire_refresh_lease ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AcquireRefreshLease_WithoutRepository_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = NewVaultRecord()
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "acquire_refresh_lease"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task AcquireRefreshLease_WithoutVaultRecord_FailsClose()
+    {
+        var repo = new FakeVaultRepository { LeaseToReturn = NewLease() };
+        var executor = new ExternalPortPolicyStepExecutor(credentialVaultRepository: repo);
+        var context = new ExternalPortExecutionContext();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "acquire_refresh_lease"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task AcquireRefreshLease_LeaseUnavailable_FailsClose()
+    {
+        var repo = new FakeVaultRepository { LeaseToReturn = null };
+        var executor = new ExternalPortPolicyStepExecutor(credentialVaultRepository: repo);
+        var context = new ExternalPortExecutionContext { CredentialVaultRecord = NewVaultRecord() };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "acquire_refresh_lease"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_REFRESH_LEASE_UNAVAILABLE", ex.Message);
+    }
+
+    [Fact]
+    public async Task AcquireRefreshLease_SetsRefreshLeaseOnContext()
+    {
+        var lease = NewLease();
+        var repo = new FakeVaultRepository { LeaseToReturn = lease };
+        var executor = new ExternalPortPolicyStepExecutor(credentialVaultRepository: repo);
+        var context = new ExternalPortExecutionContext { CredentialVaultRecord = NewVaultRecord() };
+
+        await executor.ExecuteAsync(NewStep(1, "acquire_refresh_lease"), context);
+
+        Assert.Same(lease, context.RefreshLease);
+        Assert.Contains("acquire_refresh_lease", context.ExecutedOperationKeys);
+    }
+
+    // ── request_token_by_config ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task RequestTokenByConfig_WithoutHttpClient_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            DecryptedCredentialPayload = "old-token"
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token" }), context));
+        Assert.Equal("EXTERNAL_HTTP_REQUEST_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task RequestTokenByConfig_WithoutDecryptedPayload_FailsClose()
+    {
+        var http = new FakeHttpClient(200, "{}");
+        var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
+        var context = new ExternalPortExecutionContext();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token" }), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_DECRYPTED_PAYLOAD_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task RequestTokenByConfig_MissingEndpoint_FailsClose()
+    {
+        var http = new FakeHttpClient(200, "{}");
+        var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
+        var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "request_token_by_config"), context));
+        Assert.Equal("EXTERNAL_TOKEN_REFRESH_ENDPOINT_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task RequestTokenByConfig_NonSuccessResponse_FailsClose()
+    {
+        var http = new FakeHttpClient(401, "unauthorized");
+        var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
+        var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token" }), context));
+        Assert.Equal("EXTERNAL_TOKEN_REFRESH_HTTP_FAILED", ex.Message);
+    }
+
+    [Fact]
+    public async Task RequestTokenByConfig_SetsHttpResponseOnContext()
+    {
+        var http = new FakeHttpClient(200, "new-access-token");
+        var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
+        var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
+
+        await executor.ExecuteAsync(NewStep(1, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token" }), context);
+
+        Assert.NotNull(context.HttpResponse);
+        Assert.Equal(200, context.HttpResponse.StatusCode);
+        Assert.Equal("new-access-token", context.HttpResponse.Body);
+        Assert.Contains("request_token_by_config", context.ExecutedOperationKeys);
+    }
+
+    // ── update_token_hash ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateTokenHash_WithoutCrypto_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            HttpResponse = new ExternalPortHttpResponse(200, "new-token")
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "update_token_hash"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_CRYPTO_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateTokenHash_WithoutHttpResponse_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor(crypto: new FakeCrypto("x"));
+        var context = new ExternalPortExecutionContext();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "update_token_hash"), context));
+        Assert.Equal("EXTERNAL_HTTP_RESPONSE_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateTokenHash_ComputesHashViaCryptoAdapter()
+    {
+        var crypto = new FakeCrypto("x");
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto);
+        var context = new ExternalPortExecutionContext
+        {
+            HttpResponse = new ExternalPortHttpResponse(200, "new-token-body")
+        };
+
+        await executor.ExecuteAsync(NewStep(1, "update_token_hash"), context);
+
+        Assert.Equal(crypto.ComputeTokenHash("new-token-body"), context.PendingTokenHash);
+        Assert.Contains("update_token_hash", context.ExecutedOperationKeys);
+    }
+
+    // ── update_expires_at_and_version ─────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateExpiresAtAndVersion_WithoutHttpResponse_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = NewVaultRecord()
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "update_expires_at_and_version"), context));
+        Assert.Equal("EXTERNAL_HTTP_RESPONSE_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateExpiresAtAndVersion_MissingExpiry_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            HttpResponse = new ExternalPortHttpResponse(200, "{}"),
+            CredentialVaultRecord = NewVaultRecord()
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "update_expires_at_and_version"), context));
+        Assert.Equal("EXTERNAL_TOKEN_REFRESH_EXPIRY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateExpiresAtAndVersion_FromConfig_SetsExpiry()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var before = DateTimeOffset.UtcNow;
+        var context = new ExternalPortExecutionContext
+        {
+            HttpResponse = new ExternalPortHttpResponse(200, "{}"),
+            CredentialVaultRecord = NewVaultRecord()
+        };
+
+        await executor.ExecuteAsync(
+            NewStep(1, "update_expires_at_and_version", new Dictionary<string, string> { ["default_expires_in_seconds"] = "3600" }),
+            context);
+
+        Assert.NotNull(context.PendingExpiresAt);
+        Assert.True(context.PendingExpiresAt!.Value >= before.AddSeconds(3600 - 2));
+        Assert.Contains("update_expires_at_and_version", context.ExecutedOperationKeys);
+    }
+
+    [Fact]
+    public async Task UpdateExpiresAtAndVersion_FromResponseJson_SetsExpiry()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var before = DateTimeOffset.UtcNow;
+        var context = new ExternalPortExecutionContext
+        {
+            HttpResponse = new ExternalPortHttpResponse(200, """{"access_token":"tok","expires_in":900}"""),
+            CredentialVaultRecord = NewVaultRecord()
+        };
+
+        await executor.ExecuteAsync(NewStep(1, "update_expires_at_and_version"), context);
+
+        Assert.NotNull(context.PendingExpiresAt);
+        Assert.True(context.PendingExpiresAt!.Value >= before.AddSeconds(900 - 2));
+    }
+
+    // ── write_encrypted_credential_payload ────────────────────────────────────
+
+    [Fact]
+    public async Task WriteEncryptedCredentialPayload_WithoutCrypto_FailsClose()
+    {
+        var repo = new FakeVaultRepository();
+        var executor = new ExternalPortPolicyStepExecutor(credentialVaultRepository: repo);
+        var context = FullRefreshContext(lease: NewLease());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "write_encrypted_credential_payload"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_CRYPTO_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task WriteEncryptedCredentialPayload_WithoutRepository_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor(crypto: new FakeCrypto("x"));
+        var context = FullRefreshContext(lease: NewLease());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "write_encrypted_credential_payload"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task WriteEncryptedCredentialPayload_WithoutLease_FailsClose()
+    {
+        var crypto = new FakeCrypto("x");
+        var repo = new FakeVaultRepository();
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto, credentialVaultRepository: repo);
+        var context = FullRefreshContext(lease: null);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "write_encrypted_credential_payload"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_REFRESH_LEASE_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task WriteEncryptedCredentialPayload_WithoutTokenHash_FailsClose()
+    {
+        var crypto = new FakeCrypto("x");
+        var repo = new FakeVaultRepository();
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto, credentialVaultRepository: repo);
+        var context = FullRefreshContext(lease: NewLease(), pendingTokenHash: null);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "write_encrypted_credential_payload"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_TOKEN_HASH_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task WriteEncryptedCredentialPayload_WithoutExpiresAt_FailsClose()
+    {
+        var crypto = new FakeCrypto("x");
+        var repo = new FakeVaultRepository();
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto, credentialVaultRepository: repo);
+        var context = new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = NewVaultRecord(),
+            HttpResponse = new ExternalPortHttpResponse(200, "new-token-body"),
+            RefreshLease = NewLease(),
+            PendingTokenHash = "sha256:abc",
+            PendingExpiresAt = null
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "write_encrypted_credential_payload"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_EXPIRES_AT_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task WriteEncryptedCredentialPayload_FullFlow_WritesAtomicallyAndClearsPlaintext()
+    {
+        var crypto = new FakeCrypto("x");
+        var repo = new FakeVaultRepository();
+        var vaultRecord = NewVaultRecord(version: 3);
+        var lease = NewLease(version: 3);
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto, credentialVaultRepository: repo);
+        var expiresAt = DateTimeOffset.UtcNow.AddHours(1);
+        var context = FullRefreshContext(lease: lease, vaultRecord: vaultRecord,
+            pendingTokenHash: "sha256:abc123", pendingExpiresAt: expiresAt);
+        context.DecryptedCredentialPayload = "old-decrypted-token";
+
+        await executor.ExecuteAsync(NewStep(1, "write_encrypted_credential_payload"), context);
+
+        Assert.Equal(vaultRecord.CredentialVaultId, repo.LastWriteCredentialVaultId);
+        Assert.Equal(3, repo.LastWriteExpectedVersion);
+        Assert.Equal("sha256:abc123", repo.LastWriteTokenHash);
+        Assert.Equal(expiresAt, repo.LastWriteExpiresAt);
+        Assert.Null(context.DecryptedCredentialPayload);
+        Assert.Contains("write_encrypted_credential_payload", context.ExecutedOperationKeys);
+    }
+
+    // ── release_refresh_lease ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ReleaseRefreshLease_WithoutRepository_FailsClose()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext { RefreshLease = NewLease() };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "release_refresh_lease"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReleaseRefreshLease_WithoutLease_FailsClose()
+    {
+        var repo = new FakeVaultRepository();
+        var executor = new ExternalPortPolicyStepExecutor(credentialVaultRepository: repo);
+        var context = new ExternalPortExecutionContext();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NewStep(1, "release_refresh_lease"), context));
+        Assert.Equal("EXTERNAL_CREDENTIAL_REFRESH_LEASE_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReleaseRefreshLease_ReleasesLease()
+    {
+        var repo = new FakeVaultRepository();
+        var executor = new ExternalPortPolicyStepExecutor(credentialVaultRepository: repo);
+        var context = new ExternalPortExecutionContext { RefreshLease = NewLease() };
+
+        await executor.ExecuteAsync(NewStep(1, "release_refresh_lease"), context);
+
+        Assert.True(repo.LeaseReleased);
+        Assert.Contains("release_refresh_lease", context.ExecutedOperationKeys);
+    }
+
+    // ── full policy flow ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CredentialRefreshPolicy_ExecutesAllStepsInOrder()
+    {
+        var lease = NewLease(version: 1);
+        var repo = new FakeVaultRepository { LeaseToReturn = lease };
+        var crypto = new FakeCrypto("old-plaintext-token");
+        var http = new FakeHttpClient(200, """{"access_token":"new-tok","expires_in":3600}""");
+        var vaultRecord = NewVaultRecord(version: 1);
+
+        var executor = new ExternalPortPolicyStepExecutor(
+            crypto: crypto,
+            httpClient: http,
+            credentialVaultRepository: repo);
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(), "credential_vault_generic_refresh", "access_port",
+            "external-port-substrate-seed-coding",
+            new[]
+            {
+                NewStep(1, "load_encrypted_credential_payload"),
+                NewStep(2, "decrypt_for_runtime_use"),
+                NewStep(3, "acquire_refresh_lease", new Dictionary<string, string> { ["lease_duration_seconds"] = "300" }),
+                NewStep(4, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token" }),
+                NewStep(5, "update_token_hash"),
+                NewStep(6, "update_expires_at_and_version"),
+                NewStep(7, "write_encrypted_credential_payload"),
+                NewStep(8, "release_refresh_lease"),
+            },
+            Active: true);
+        var context = new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = vaultRecord
+        };
+
+        await executor.ExecutePolicyAsync(policy, context);
+
+        Assert.Equal(
+            new[]
+            {
+                "load_encrypted_credential_payload",
+                "decrypt_for_runtime_use",
+                "acquire_refresh_lease",
+                "request_token_by_config",
+                "update_token_hash",
+                "update_expires_at_and_version",
+                "write_encrypted_credential_payload",
+                "release_refresh_lease",
+            },
+            context.ExecutedOperationKeys);
+        Assert.Null(context.DecryptedCredentialPayload);
+        Assert.True(repo.LeaseReleased);
+        Assert.NotNull(repo.LastWriteTokenHash);
+        Assert.NotNull(repo.LastWriteExpiresAt);
+    }
+
+    // ── plaintext projection prohibition ─────────────────────────────────────
+
+    [Fact]
+    public async Task WriteEncryptedCredentialPayload_ClearsDecryptedPayload_PreventingPlaintextProjection()
+    {
+        var crypto = new FakeCrypto("x");
+        var repo = new FakeVaultRepository();
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto, credentialVaultRepository: repo);
+        var context = FullRefreshContext(lease: NewLease());
+        context.DecryptedCredentialPayload = "sensitive-plaintext-must-not-project";
+
+        await executor.ExecuteAsync(NewStep(1, "write_encrypted_credential_payload"), context);
+
+        Assert.Null(context.DecryptedCredentialPayload);
+        Assert.Null(context.OutputProp);
+    }
+
+    // ── seed proof ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void CredentialVaultGenericRefreshPolicy_SeedContainsAllOperationKeysWithoutPlaintext()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+
+        Assert.Contains("credential_vault_generic_refresh", source);
+        Assert.Contains("acquire_refresh_lease", source);
+        Assert.Contains("request_token_by_config", source);
+        Assert.Contains("update_token_hash", source);
+        Assert.Contains("update_expires_at_and_version", source);
+        Assert.Contains("write_encrypted_credential_payload", source);
+        Assert.Contains("release_refresh_lease", source);
+        Assert.Contains("default_expires_in_seconds", source);
+        Assert.Contains("env:TOKEN_REFRESH_ENDPOINT_REF", source);
+        Assert.DoesNotContain("api_key =", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("client_secret =", source, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("raw_token", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Program_RegistersCredentialVaultRepositoryOnPolicyStepExecutor()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/Program.cs"));
+        Assert.Contains("credentialVaultRepository:", source);
+        Assert.Contains("IExternalCredentialVaultRepository", source);
+    }
+
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static ExternalPortPolicyStep NewStep(int order, string operationKey, IReadOnlyDictionary<string, string>? config = null) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, config ?? new Dictionary<string, string>(), Active: true);
+
+    private static ExternalTokenRefreshRequest NewRequest(IReadOnlyDictionary<string, string>? config = null) =>
+        new(Guid.NewGuid(), "generic-oauth", "oauth_refresh_token",
+            config ?? new Dictionary<string, string> { ["default_expires_in_seconds"] = "3600" },
+            "old-secret", DateTimeOffset.UtcNow.AddMinutes(5), 1);
+
+    private static ExternalCredentialVaultRecord NewVaultRecord(int version = 1) =>
+        new(Guid.NewGuid(), "generic-oauth", "external-port-substrate-seed-coding",
+            "oauth_refresh_token", "sha256:old-hash",
+            new byte[] { 1, 2, 3 }, "env:KEY",
+            DateTimeOffset.UtcNow.AddMinutes(10), 300, version, null, true);
+
+    private static ExternalCredentialRefreshLease NewLease(int version = 1) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), "credential_primitive",
+            DateTimeOffset.UtcNow.AddMinutes(5), version);
+
+    private static ExternalPortExecutionContext FullRefreshContext(
+        ExternalCredentialRefreshLease? lease,
+        ExternalCredentialVaultRecord? vaultRecord = null,
+        string? pendingTokenHash = "sha256:abc",
+        DateTimeOffset? pendingExpiresAt = null)
+    {
+        return new ExternalPortExecutionContext
+        {
+            CredentialVaultRecord = vaultRecord ?? NewVaultRecord(),
+            HttpResponse = new ExternalPortHttpResponse(200, "new-token-body"),
+            RefreshLease = lease,
+            PendingTokenHash = pendingTokenHash,
+            PendingExpiresAt = pendingExpiresAt ?? DateTimeOffset.UtcNow.AddHours(1),
+        };
+    }
+
+    private static string FindRepositoryFile(string relativePath)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+        throw new FileNotFoundException($"Could not find {relativePath} from {AppContext.BaseDirectory}.");
+    }
+
+    private sealed class FakeCrypto : IExternalCredentialCrypto
+    {
+        private readonly string _plaintext;
+        public FakeCrypto(string plaintext) => _plaintext = plaintext;
+        public string DecryptForRuntimeUse(byte[] encryptedPayload, string encryptionKeyReference) => _plaintext;
+        public byte[] EncryptForVaultStorage(string plaintextPayload, string encryptionKeyReference) =>
+            System.Text.Encoding.UTF8.GetBytes(plaintextPayload);
+        public string ComputeTokenHash(string plaintextPayload) => $"sha256:{plaintextPayload.GetHashCode():x8}";
+    }
+
+    private sealed class FakeVaultRepository : IExternalCredentialVaultRepository
+    {
+        public ExternalCredentialRefreshLease? LeaseToReturn { get; set; }
+        public Guid? LastWriteCredentialVaultId { get; private set; }
+        public int? LastWriteExpectedVersion { get; private set; }
+        public string? LastWriteTokenHash { get; private set; }
+        public DateTimeOffset? LastWriteExpiresAt { get; private set; }
+        public bool LeaseReleased { get; private set; }
+
+        public Task<ExternalCredentialVaultRecord?> LoadAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+        public Task<ExternalCredentialVaultRecord?> LoadByReferenceKeyAsync(string referenceKey, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+        public Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+
+        public Task<ExternalCredentialRefreshLease?> AcquireRefreshLeaseAsync(Guid credentialVaultId, string leaseOwner, TimeSpan leaseDuration, DateTimeOffset now, CancellationToken ct = default) =>
+            Task.FromResult(LeaseToReturn);
+
+        public Task WriteEncryptedCredentialPayloadAsync(Guid credentialVaultId, int expectedVersion, byte[] encryptedPayload, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default)
+        {
+            LastWriteCredentialVaultId = credentialVaultId;
+            LastWriteExpectedVersion = expectedVersion;
+            LastWriteTokenHash = tokenHash;
+            LastWriteExpiresAt = expiresAt;
+            return Task.CompletedTask;
+        }
+
+        public Task ReleaseRefreshLeaseAsync(ExternalCredentialRefreshLease lease, CancellationToken ct = default)
+        {
+            LeaseReleased = true;
+            return Task.CompletedTask;
+        }
+
+        public Task FailRefreshLeaseAsync(ExternalCredentialRefreshLease lease, string failureCode, CancellationToken ct = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class FakeHttpClient : IExternalPortHttpClient
+    {
+        private readonly ExternalPortHttpResponse _response;
+        public FakeHttpClient(int statusCode, string body) => _response = new(statusCode, body);
+        public Task<ExternalPortHttpResponse> SendAsync(ExternalPortHttpRequest request, CancellationToken ct = default) =>
+            Task.FromResult(_response);
+    }
+}

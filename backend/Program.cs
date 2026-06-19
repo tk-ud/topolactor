@@ -137,7 +137,8 @@ builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
         bundleHandlers: sp.GetServices<IExternalPortBundleStepHandler>(),
         dbFunctionRepository: sp.GetRequiredService<IExternalPortDbFunctionRepository>(),
         abstractFunctionExecutor: sp.GetRequiredService<AbstractFunctionExecutor>(),
-        runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
+        runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>(),
+        credentialVaultRepository: sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
     new ExternalPortDispatchRuntime(
         sp.GetRequiredService<ILogger<ExternalPortDispatchRuntime>>(),
