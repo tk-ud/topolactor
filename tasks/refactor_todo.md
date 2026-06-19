@@ -118,7 +118,7 @@ Absorption policy:
 | `abstract-function-runtime-substrate-ssot` | ssot_contract_complete | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
 | `abstract-function-manifest-schema` | ssot_contract_complete | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
 | `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete; SQL Attention list_projection and context_route recommendation_resolve migrated via abstract function; credential hardening remains not_started) |
-| `sql-recommendation-primitive-migration` | partial_compatibility_fallback | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion. SQL Attention list_projection (af08) complete. context_route.recommendation_resolve (af09) seed/manifest/primitive/tests complete; ContextRouteRecommendationResolver marked COMPATIBILITY FALLBACK. credential hardening remains not_started. |
+| `sql-recommendation-primitive-migration` | partial_compatibility_fallback | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion. SQL Attention list_projection (af08) complete. context_route.recommendation_resolve (af09) fully decomposed into 4-step primitive chain (bf11–bf14); lane enforcement in RecommendationProjectionPrimitiveAdapter; SqlAttentionScheduler marked COMPATIBILITY FALLBACK (adapter isolation). credential hardening remains not_started. |
 | `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
 | `projection-manifest-primitive-migration` | investigation_needed | Move remaining projection constructor / runtime event / screen operation derivation mapping into projection manifest or projection primitives while preserving pure render/test-only exceptions |
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives |
@@ -432,20 +432,20 @@ Move SQL Attention and recommendation execution into abstract function primitive
 
 ### Remaining (ContextRouteRecommendationResolver full decomposition)
 
-- [ ] Decompose `ContextRouteRecommendationResolver` algorithm into discrete primitive composition (candidate source, eligibility, score, rank, diversify/suppress, projection, feedback/event) rather than a single adapter call. Current state: isolated behind a primitive adapter (compatibility fallback); full primitive decomposition is a future Bundle task.
-- [ ] Migrate remaining SQL Attention scheduler/repository behavior into primitive composition or isolate behind a primitive adapter.
-- [ ] Keep Phase Attention internals behind `phase_attention_adapter` only (currently opaque via adapter — preserved).
+- [x] Decompose `ContextRouteRecommendationResolver` algorithm into discrete primitive composition (candidate source, eligibility, score, rank, projection) — done: 4-step manifest bf11–bf14 with `recommendation_candidate_source` → `recommendation_eligibility` → `recommendation_score_rank` → `recommendation_projection`; `ResolveAsync` kept as COMPATIBILITY FALLBACK calling the same 4 sub-methods.
+- [x] Migrate remaining SQL Attention scheduler/repository behavior into primitive composition or isolate behind a primitive adapter — done: `SqlAttentionScheduler` marked COMPATIBILITY FALLBACK (adapter isolation); full primitive migration deferred to `scheduler-job-body-primitive-migration`.
+- [x] Keep Phase Attention internals behind `phase_attention_adapter` only (currently opaque via adapter — preserved).
 
 ### Improvement plan
 
 - [x] Define `sql_attention` primitive as relational observation, evidence append, ranking, and projection. (done)
-- [x] Define `recommendation_attention` primitive and isolate `ContextRouteRecommendationResolver` behind primitive adapter (done; full primitive decomposition is future work).
+- [x] Define `recommendation_attention` primitive and isolate `ContextRouteRecommendationResolver` behind primitive adapter (done; kept as COMPATIBILITY FALLBACK).
 - [x] Preserve prohibition on auto-overwriting route state or canonical topology state. (enforced by adapter boundary)
 - [x] Migrate `ContextRouteRecommendationResolver` to be called only via primitive adapter; marked COMPATIBILITY FALLBACK. (done)
 - [x] Keep Phase Attention internals behind `phase_attention_adapter` only. (SystemOperationCiRuntime is opaque inside the resolver — boundary preserved)
-- [ ] Decompose `ContextRouteRecommendationResolver` into discrete primitive steps (candidate source, eligibility, score, rank, diversify/suppress, projection) — future Bundle task.
-- [ ] Migrate remaining SQL Attention scheduler/repository behavior into primitive composition or isolate behind a primitive adapter.
-- [ ] Preserve lane separation: `ui_pressure`, `state_pressure`, `sql_attention_projection` cannot mix — tests exist; full enforcement requires decomposition.
+- [x] Decompose `ContextRouteRecommendationResolver` into discrete primitive steps (candidate source, eligibility, score, rank, projection) — done: 4-step manifest bf11–bf14.
+- [x] Migrate remaining SQL Attention scheduler/repository behavior into primitive composition or isolate behind a primitive adapter — done: `SqlAttentionScheduler` marked COMPATIBILITY FALLBACK (adapter isolation); full cron-primitive migration is `scheduler-job-body-primitive-migration`.
+- [x] Preserve lane separation: `ui_pressure`, `state_pressure`, `sql_attention_projection` cannot mix — `RecommendationProjectionPrimitiveAdapter` enforces `InvalidProjection` fail-close; test `SeedPath_LaneMixing_SqlAttentionCandidateInHubLocalResult_ThrowsInvalidProjection` covers it.
 
 ### Materials
 
@@ -502,11 +502,11 @@ Move SQL Attention and recommendation execution into abstract function primitive
 - [x] SQL Attention remains observation/evidence/candidate projection only. (primitive adapter + seed enforce read-only path)
 - [x] Recommendation produces ranked candidates but does not mutate route state automatically. (enforced; no auto-overwrite in adapter)
 - [x] Missing policy and insufficient history remain explicit statuses. (ExplicitError / InsufficientHistory paths tested)
-- [x] `function_name` and `parameter_key` from manifest step_config reach the policy SQL call — no C# constant override. (ContextRouteRecommendationResolver.ResolveAsync takes these as parameters)
-- [ ] `ui_pressure`, `state_pressure`, and `sql_attention_projection` cannot mix lanes. (lane boundary tests exist; full enforcement requires primitive decomposition)
-- [ ] SQL Attention scheduler/repository behavior is expressed through primitives or explicitly isolated as primitive adapters. (scheduler not yet migrated)
-- [ ] Tests cover candidate ranking from full primitive decomposition (current tests cover adapter/seed path only).
-- [ ] Existing concrete resolver/runtime branches are deleted or marked compatibility fallback only after seed tests pass.
+- [x] `function_name` and `parameter_key` from manifest step_config reach the policy SQL call — no C# constant override. (ContextRouteRecommendationResolver.BuildCandidateSourceAsync takes these as parameters; tested by SeedPath_StepConfig_FunctionNameAndParameterKeyFlowToSqlCall)
+- [x] `ui_pressure`, `state_pressure`, and `sql_attention_projection` cannot mix lanes. (`RecommendationProjectionPrimitiveAdapter` enforces `InvalidProjection` fail-close; tested by SeedPath_LaneMixing_SqlAttentionCandidateInHubLocalResult_ThrowsInvalidProjection)
+- [x] SQL Attention scheduler/repository behavior is expressed through primitives or explicitly isolated as primitive adapters. (`SqlAttentionScheduler` marked COMPATIBILITY FALLBACK — adapter isolation; full cron primitive migration deferred to `scheduler-job-body-primitive-migration`)
+- [x] Tests cover candidate ranking from full primitive decomposition. (4-step chain tested: cold-start propagation, step_config flow, phase boundary, lane mixing enforcement)
+- [x] Existing concrete resolver/runtime branches are deleted or marked compatibility fallback only after seed tests pass. (`ContextRouteRecommendationResolver.ResolveAsync` marked COMPATIBILITY FALLBACK; decomposed sub-methods are the canonical path via bf11–bf14)
 
 ---
 

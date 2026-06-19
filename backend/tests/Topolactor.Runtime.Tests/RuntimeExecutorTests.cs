@@ -48,7 +48,14 @@ public class RuntimeExecutorTests
             new IAbstractFunctionPrimitiveAdapter[]
             {
                 new RecommendationAttentionPrimitiveAdapter(
-                    NullLogger<RecommendationAttentionPrimitiveAdapter>.Instance, resolver)
+                    NullLogger<RecommendationAttentionPrimitiveAdapter>.Instance, resolver), // COMPATIBILITY FALLBACK
+                new RecommendationCandidateSourcePrimitiveAdapter(
+                    NullLogger<RecommendationCandidateSourcePrimitiveAdapter>.Instance, resolver),
+                new RecommendationEligibilityPrimitiveAdapter(
+                    NullLogger<RecommendationEligibilityPrimitiveAdapter>.Instance, resolver),
+                new RecommendationScoreRankPrimitiveAdapter(
+                    NullLogger<RecommendationScoreRankPrimitiveAdapter>.Instance, resolver),
+                new RecommendationProjectionPrimitiveAdapter()
             });
 
         return new RuntimeExecutor(

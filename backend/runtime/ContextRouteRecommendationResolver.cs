@@ -7,24 +7,21 @@ using Topolactor.Schema;
 namespace Topolactor.Runtime;
 
 /// <summary>
-/// COMPATIBILITY FALLBACK — not the canonical dispatch target for context route recommendation.
-/// Canonical path: seed/manifest af09 → AbstractFunctionExecutor → recommendation_attention primitive
-///   → RecommendationAttentionPrimitiveAdapter → this class (adapter call only).
+/// COMPATIBILITY FALLBACK — ResolveAsync delegates to the 4 decomposed sub-phase methods.
+/// Canonical path (af09 manifest):
+///   recommendation_candidate_source → recommendation_eligibility →
+///   recommendation_score_rank → recommendation_projection
 ///
-/// Resolves context route recommendations: next operations and next token candidates
-/// derived from nearest historical context prefix search + transition statistics.
+/// Each phase is a separate abstract function primitive step with explicit input bindings.
+/// Phase boundaries: policy/vector/candidates (source) → neighbor/event-append (eligibility) →
+///   blend/rank (score_rank) → lane-enforcement/assembly (projection).
 ///
-/// Insertion point in the canonical runtime route:
-///   ... → component_expand → AbstractFunctionExecutor("context_route.recommendation_resolve")
-///           → RecommendationAttentionPrimitiveAdapter → ResolveAsync (this class)
-///
-/// Policy source: function_parameters (function_name = 'context_route_recommendation_resolve',
-/// parameter_key = 'default_policy') stored in the topology data store.
-/// Policy is NOT read from an independent config table — it is resolved from stored topology data.
+/// Policy source: function_parameters (function_name from step_config, parameter_key from step_config).
+/// Not read from an independent config table — resolved from stored topology data.
 ///
 /// Status is always explicit:
 ///   Ok                  — candidates available
-///   InsufficientHistory — not enough history to recommend (not an error; expected cold start)
+///   InsufficientHistory — not enough history (not an error; expected cold start)
 ///   ExplicitError       — pipeline failure, including policy-missing and policy-invalid
 ///
 /// No silent fallback. No business-specific naming in this layer.
@@ -55,8 +52,10 @@ public class ContextRouteRecommendationResolver
     }
 
     /// <summary>
-    /// Resolves context route recommendations for the given working shape.
-    /// Loads policy from function_parameters; returns ExplicitError if policy is absent or invalid.
+    /// COMPATIBILITY FALLBACK — calls sub-phase methods in order.
+    /// Canonical path: af09 manifest → 4 primitive steps
+    ///   (recommendation_candidate_source → recommendation_eligibility →
+    ///    recommendation_score_rank → recommendation_projection).
     /// </summary>
     public async Task<ContextRouteRecommendationResult> ResolveAsync(
         RuntimeWorkingShape shape,
@@ -66,118 +65,169 @@ public class ContextRouteRecommendationResolver
     {
         ArgumentNullException.ThrowIfNull(shape);
 
-        // Resolve policy key: use context_route_policy_ref from structure_maps.state_policy
-        // when present, otherwise fall back to the manifest step_config parameter_key.
+        var source = await BuildCandidateSourceAsync(shape, functionName, defaultParameterKey, ct);
+        if (source.Status != RecommendationStatus.Ok)
+            return BuildProjectionResult(source, null, null);
+
+        var eligibility = await BuildEligibilityAsync(shape, source, ct);
+        if (eligibility.Status != RecommendationStatus.Ok)
+            return BuildProjectionResult(source, eligibility, null);
+
+        var scoreRank = await BuildScoreRankAsync(shape, source, eligibility, ct);
+        return BuildProjectionResult(source, eligibility, scoreRank);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Primitive-decomposed sub-phase methods (canonical dispatch target)
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Phase 1 — candidate source: load policy, check vector/session, load prefix candidates.
+    /// Called by recommendation_candidate_source primitive adapter.
+    /// Returns InsufficientHistory when no session ID; ExplicitError on policy or vector failure.
+    /// Prefix candidates are loaded BEFORE event append (ordering invariant for the LATERAL JOIN).
+    /// </summary>
+    public async Task<RecommendationCandidateSourceResult> BuildCandidateSourceAsync(
+        RuntimeWorkingShape shape,
+        string functionName,
+        string defaultParameterKey,
+        CancellationToken ct = default)
+    {
         var (policyKey, policyKeyError) = ResolvePolicyKey(shape.StructureMapStatePolicyJson, defaultParameterKey);
         if (policyKeyError is not null)
         {
-            _logger.LogWarning(
-                "ContextRouteRecommendationResolver: state_policy resolution failed — {ErrorCode}.",
-                policyKeyError);
-            return ExplicitError(policyKeyError);
+            _logger.LogWarning("ContextRouteRecommendationResolver: state_policy resolution failed — {ErrorCode}.", policyKeyError);
+            return CandidateSourceExplicitError(policyKeyError);
         }
 
-        var policyJson = await _topologyRepository.LoadFunctionParameterAsync(
-            functionName, policyKey!, ct);
-
+        var policyJson = await _topologyRepository.LoadFunctionParameterAsync(functionName, policyKey!, ct);
         if (policyJson is null)
         {
-            _logger.LogWarning(
-                "ContextRouteRecommendationResolver: function_parameter '{FunctionName}/{Key}' not found — CONTEXT_ROUTE_POLICY_NOT_FOUND.",
-                functionName, policyKey);
-            return ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND");
+            _logger.LogWarning("ContextRouteRecommendationResolver: function_parameter '{Fn}/{Key}' not found.", functionName, policyKey);
+            return CandidateSourceExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND");
         }
 
         ContextRoutePolicy policy;
-        try
-        {
-            policy = ParsePolicy(policyJson);
-        }
+        try { policy = ParsePolicy(policyJson); }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex,
-                "ContextRouteRecommendationResolver: policy JSON is invalid — CONTEXT_ROUTE_POLICY_INVALID.");
-            return ExplicitError($"CONTEXT_ROUTE_POLICY_INVALID:{ex.Message}");
+            _logger.LogWarning(ex, "ContextRouteRecommendationResolver: policy JSON invalid.");
+            return CandidateSourceExplicitError($"CONTEXT_ROUTE_POLICY_INVALID:{ex.Message}");
         }
 
         var vector = shape.Vector;
         if (vector is null)
-            return ExplicitError("MISSING_VECTOR");
+            return CandidateSourceExplicitError("MISSING_VECTOR");
 
         if (string.IsNullOrWhiteSpace(vector.ContextSessionId) ||
             !Guid.TryParse(vector.ContextSessionId, out var sessionId))
         {
-            _logger.LogDebug("ContextRouteRecommendationResolver: no ContextSessionId — returning InsufficientHistory.");
-            return InsufficientHistory("NO_SESSION_ID");
+            _logger.LogDebug("ContextRouteRecommendationResolver: no ContextSessionId — InsufficientHistory.");
+            return new RecommendationCandidateSourceResult(
+                Policy: policy,
+                EventVector: new Dictionary<Guid, float>(),
+                EventNorm: 0f,
+                PrefixCandidates: [],
+                SessionId: Guid.Empty,
+                CurrentOperation: "",
+                Role: vector.UserRole,
+                TableName: null,
+                TokenIds: [],
+                Status: RecommendationStatus.InsufficientHistory,
+                StatusDetail: "NO_SESSION_ID");
         }
 
         var tokenIds = ParseTokenIds(vector.ContextTokenIds);
         var currentOperation = vector.AttractorKey ?? "";
         var role = vector.UserRole;
         var tableName = (string?)null;
-
-        // Multi-hot event vector: token presence = 1.0, absence = 0.0.
-        // token.value from context_token_registry is NOT the vector weight;
-        // the topology observation signal is token ID presence (multi-hot).
         var eventVector = _vectorBuilder.BuildMultiHotVector(tokenIds);
         var eventNorm = _vectorBuilder.ComputeL2Norm(eventVector);
 
         // Read 1: prefix candidates — MUST run before AppendContextEventAsync.
-        // The LATERAL JOIN resolves next_operation by finding the event immediately
-        // following last_event_id in the same session. Appending first would make the
-        // current dispatch appear as that successor, corrupting next_operation.
-        var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(
-            tableName, role, policy.RecentDays, ct);
+        var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(tableName, role, policy.RecentDays, ct);
 
-        // Read 2: nearest prefixes (pure in-memory; skipped when no candidates).
-        var neighbors = prefixCandidates.Count > 0
+        return new RecommendationCandidateSourceResult(
+            Policy: policy,
+            EventVector: eventVector,
+            EventNorm: eventNorm,
+            PrefixCandidates: prefixCandidates,
+            SessionId: sessionId,
+            CurrentOperation: currentOperation,
+            Role: role,
+            TableName: tableName,
+            TokenIds: tokenIds,
+            Status: RecommendationStatus.Ok,
+            StatusDetail: null);
+    }
+
+    private static RecommendationCandidateSourceResult CandidateSourceExplicitError(string detail) =>
+        new(Policy: null, EventVector: new Dictionary<Guid, float>(), EventNorm: 0f,
+            PrefixCandidates: [], SessionId: Guid.Empty, CurrentOperation: "",
+            Role: null, TableName: null, TokenIds: [],
+            Status: RecommendationStatus.ExplicitError, StatusDetail: detail);
+
+    /// <summary>
+    /// Phase 2 — eligibility: neighbor search, transition stats, event append, TVR extension.
+    /// Called by recommendation_eligibility primitive adapter.
+    /// Event append always runs when source status is Ok (sessionId is available).
+    /// Returns InsufficientHistory when candidates/neighbors are insufficient after event append.
+    /// Transition stats failure returns ExplicitError BEFORE event append (matching original ordering).
+    /// </summary>
+    public async Task<RecommendationEligibilityResult> BuildEligibilityAsync(
+        RuntimeWorkingShape shape,
+        RecommendationCandidateSourceResult source,
+        CancellationToken ct = default)
+    {
+        if (source.Status != RecommendationStatus.Ok)
+            return new RecommendationEligibilityResult([], [], source.Status, source.StatusDetail);
+
+        var policy = source.Policy!;
+        var vector = shape.Vector!;
+
+        // Read 2: nearest prefixes (pure in-memory).
+        var neighbors = source.PrefixCandidates.Count > 0
             ? _neighborSearch.FindNearestPrefixes(
-                eventVector, eventNorm, prefixCandidates, policy.MinSimilarity, policy.TopK)
+                source.EventVector, source.EventNorm, source.PrefixCandidates,
+                policy.MinSimilarity, policy.TopK)
             : (IReadOnlyList<ContextNeighborResult>)[];
 
-        // Read 3: transition stats — only loaded when neighbor count already satisfies
-        // MinNeighbors, since transition stats are only used in the Ok path.
+        // Read 3: transition stats — only loaded when neighbor count satisfies MinNeighbors.
         var transitionStats = new List<ContextTransitionStat>();
-        if (neighbors.Count >= policy.MinNeighbors && !string.IsNullOrWhiteSpace(currentOperation))
+        if (neighbors.Count >= policy.MinNeighbors && !string.IsNullOrWhiteSpace(source.CurrentOperation))
         {
             try
             {
                 IReadOnlyList<ContextTransitionStat> stats;
                 if (policy.TransitionAggregation is not null)
-                {
                     stats = await _contextRouteRepository.GetWindowedTransitionStatsAsync(
-                        currentOperation, role, policy.TransitionAggregation, policy.MaxCandidatesShown, ct);
-                }
+                        source.CurrentOperation, source.Role, policy.TransitionAggregation, policy.MaxCandidatesShown, ct);
                 else
-                {
-                    stats = await _contextRouteRepository.GetTransitionStatsAsync(currentOperation, role, policy.MaxCandidatesShown, ct);
-                }
+                    stats = await _contextRouteRepository.GetTransitionStatsAsync(
+                        source.CurrentOperation, source.Role, policy.MaxCandidatesShown, ct);
                 transitionStats.AddRange(stats);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ContextRouteRepository transition stats query failed.");
-                return ExplicitError("TRANSITION_STATS_QUERY_FAILED");
+                return new RecommendationEligibilityResult([], [], RecommendationStatus.ExplicitError, "TRANSITION_STATS_QUERY_FAILED");
             }
         }
 
-        // Append current dispatch AFTER all recommendation reads, before any status return.
-        // Ordering constraint: LoadRecentPrefixVectorsAsync already ran — LATERAL JOIN is not corrupted.
-        // Appends on every path (including InsufficientHistory) so cold-start history can grow
-        // and subsequent dispatches can eventually produce Ok recommendations.
+        // Event append — MUST run after prefix candidates load (LATERAL JOIN ordering invariant).
+        // Runs on every path that has a valid sessionId so cold-start history can grow.
         var contextEvent = new ContextEventRecord(
             EventId: Guid.NewGuid(),
-            SessionId: sessionId,
+            SessionId: source.SessionId,
             UserId: vector.ContextUserId,
-            Role: role,
-            TableName: tableName,
+            Role: source.Role,
+            TableName: source.TableName,
             RecordId: vector.ContextRecordId,
-            Operation: currentOperation,
-            TokenIds: tokenIds,
+            Operation: source.CurrentOperation,
+            TokenIds: source.TokenIds,
             CreatedAt: DateTimeOffset.UtcNow,
             NextOperationHint: null,
-            NextTokenIdsHint: null
-        );
+            NextTokenIdsHint: null);
 
         try
         {
@@ -186,10 +236,10 @@ public class ContextRouteRecommendationResolver
         catch (Exception ex)
         {
             _logger.LogError(ex, "ContextRouteRepository.AppendContextEventAsync failed.");
-            return ExplicitError("CONTEXT_EVENT_APPEND_FAILED");
+            return new RecommendationEligibilityResult([], [], RecommendationStatus.ExplicitError, "CONTEXT_EVENT_APPEND_FAILED");
         }
 
-        if (TryBuildEnumTransitionEvent(vector, sessionId, out var enumTransition))
+        if (TryBuildEnumTransitionEvent(vector, source.SessionId, out var enumTransition))
         {
             try
             {
@@ -198,41 +248,58 @@ public class ContextRouteRecommendationResolver
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ContextRouteRepository.AppendContextEnumTransitionAsync failed.");
-                return ExplicitError("ENUM_TRANSITION_APPEND_FAILED");
+                return new RecommendationEligibilityResult([], [], RecommendationStatus.ExplicitError, "ENUM_TRANSITION_APPEND_FAILED");
             }
         }
 
-        // TopologyVectorRuntime extension: evidence extraction, MLP feature crossing, hub attention update.
-        // Runs AFTER AppendContextEventAsync so the event is in context before hub attention is updated.
-        // enabled=false → no-op (explicit, not silent). Failure → ExplicitError("TVR_EXTENSION_FAILED").
+        // TVR extension — after event append.
         if (policy.TopologyVectorRuntime is { Enabled: true } tvPolicy)
         {
             try
             {
                 await RunTopologyVectorRuntimeExtensionAsync(
-                    tvPolicy, currentOperation, tokenIds, tableName, sessionId, vector.IdOrHubId, ct);
+                    tvPolicy, source.CurrentOperation, source.TokenIds, source.TableName,
+                    source.SessionId, vector.IdOrHubId, ct);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "ContextRouteRecommendationResolver: TopologyVectorRuntime extension failed.");
-                return ExplicitError("TVR_EXTENSION_FAILED");
+                _logger.LogError(ex, "ContextRouteRecommendationResolver: TopologyVectorRuntime extension failed.");
+                return new RecommendationEligibilityResult([], [], RecommendationStatus.ExplicitError, "TVR_EXTENSION_FAILED");
             }
         }
 
-        if (prefixCandidates.Count == 0)
+        // Eligibility post-check (event is already appended — cold-start history can now grow).
+        if (source.PrefixCandidates.Count == 0)
         {
             _logger.LogDebug("ContextRouteRecommendationResolver: no prefix candidates — InsufficientHistory.");
-            return InsufficientHistory("NO_CONTEXT_HISTORY");
+            return new RecommendationEligibilityResult(neighbors, [], RecommendationStatus.InsufficientHistory, "NO_CONTEXT_HISTORY");
         }
 
         if (neighbors.Count < policy.MinNeighbors)
         {
-            _logger.LogDebug(
-                "ContextRouteRecommendationResolver: {Count} neighbors < min {Min} — InsufficientHistory.",
-                neighbors.Count, policy.MinNeighbors);
-            return InsufficientHistory("INSUFFICIENT_CONTEXT_HISTORY");
+            _logger.LogDebug("ContextRouteRecommendationResolver: {Count} neighbors < min {Min} — InsufficientHistory.", neighbors.Count, policy.MinNeighbors);
+            return new RecommendationEligibilityResult(neighbors, transitionStats, RecommendationStatus.InsufficientHistory, "INSUFFICIENT_CONTEXT_HISTORY");
         }
+
+        return new RecommendationEligibilityResult(neighbors, transitionStats, RecommendationStatus.Ok, null);
+    }
+
+    /// <summary>
+    /// Phase 3 — score and rank: load blend map, rank operations/tokens/enum items.
+    /// Called by recommendation_score_rank primitive adapter.
+    /// Skips computation when eligibility status is not Ok.
+    /// </summary>
+    public async Task<RecommendationScoreRankResult> BuildScoreRankAsync(
+        RuntimeWorkingShape shape,
+        RecommendationCandidateSourceResult source,
+        RecommendationEligibilityResult eligibility,
+        CancellationToken ct = default)
+    {
+        if (eligibility.Status != RecommendationStatus.Ok)
+            return new RecommendationScoreRankResult([], [], [], [], [], eligibility.Status, eligibility.StatusDetail);
+
+        var policy = source.Policy!;
+        var vector = shape.Vector!;
 
         IReadOnlyDictionary<string, HubAttentionCurrentRecord> tokenAttentionByCandidate;
         try
@@ -242,24 +309,64 @@ public class ContextRouteRecommendationResolver
         catch (Exception ex)
         {
             _logger.LogError(ex, "ContextRouteRecommendationResolver: recommendation blend current query failed.");
-            return ExplicitError("RECOMMENDATION_BLEND_QUERY_FAILED");
+            return new RecommendationScoreRankResult([], [], [], [], [], RecommendationStatus.ExplicitError, "RECOMMENDATION_BLEND_QUERY_FAILED");
         }
 
-        var nextOperations = ResolveNextOperations(neighbors, transitionStats, policy);
-        var nextTokens = ResolveNextTokens(neighbors, policy, tokenAttentionByCandidate);
-        var nextEnumItems = await ResolveNextEnumItemsAsync(vector, role, policy, ct);
-        var nearestIds = neighbors.Take(policy.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
-        var contributing = GetContributingTokenIds(eventVector);
+        var nextOperations = ResolveNextOperations(eligibility.Neighbors, eligibility.TransitionStats, policy);
+        var nextTokens = ResolveNextTokens(eligibility.Neighbors, policy, tokenAttentionByCandidate);
+        var nextEnumItems = await ResolveNextEnumItemsAsync(vector, source.Role, policy, ct);
+        var nearestIds = eligibility.Neighbors.Take(policy.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
+        var contributing = GetContributingTokenIds(source.EventVector);
 
-        return new ContextRouteRecommendationResult(
+        return new RecommendationScoreRankResult(
             NextOperations: nextOperations,
             NextTokens: nextTokens,
             NextEnumItems: nextEnumItems,
             NearestPrefixSessionIds: nearestIds,
             ContributingTokens: contributing,
             Status: RecommendationStatus.Ok,
-            StatusDetail: null
-        );
+            StatusDetail: null);
+    }
+
+    /// <summary>
+    /// Phase 4 — projection: assemble final result from intermediate phases.
+    /// Called by recommendation_projection primitive adapter (which also enforces lane separation).
+    /// Propagates error/insufficient status from whichever phase failed first.
+    /// </summary>
+    public static ContextRouteRecommendationResult BuildProjectionResult(
+        RecommendationCandidateSourceResult source,
+        RecommendationEligibilityResult? eligibility,
+        RecommendationScoreRankResult? scoreRank)
+    {
+        if (source.Status != RecommendationStatus.Ok)
+        {
+            return source.Status == RecommendationStatus.InsufficientHistory
+                ? InsufficientHistory(source.StatusDetail ?? "UNKNOWN")
+                : ExplicitError(source.StatusDetail ?? "UNKNOWN");
+        }
+
+        if (eligibility is null || eligibility.Status != RecommendationStatus.Ok)
+        {
+            return eligibility?.Status == RecommendationStatus.InsufficientHistory
+                ? InsufficientHistory(eligibility.StatusDetail ?? "UNKNOWN")
+                : ExplicitError(eligibility?.StatusDetail ?? "ELIGIBILITY_FAILED");
+        }
+
+        if (scoreRank is null || scoreRank.Status != RecommendationStatus.Ok)
+        {
+            return scoreRank?.Status == RecommendationStatus.InsufficientHistory
+                ? InsufficientHistory(scoreRank.StatusDetail ?? "UNKNOWN")
+                : ExplicitError(scoreRank?.StatusDetail ?? "SCORE_RANK_FAILED");
+        }
+
+        return new ContextRouteRecommendationResult(
+            NextOperations: scoreRank.NextOperations,
+            NextTokens: scoreRank.NextTokens,
+            NextEnumItems: scoreRank.NextEnumItems,
+            NearestPrefixSessionIds: scoreRank.NearestPrefixSessionIds,
+            ContributingTokens: scoreRank.ContributingTokens,
+            Status: RecommendationStatus.Ok,
+            StatusDetail: null);
     }
 
     // ---------------------------------------------------------------------------

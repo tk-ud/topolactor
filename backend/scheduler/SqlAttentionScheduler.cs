@@ -10,6 +10,14 @@ namespace Topolactor.Scheduler;
 /// <summary>
 /// Cron excitation trigger for SQL Attention hub-attractor exploration.
 ///
+/// COMPATIBILITY FALLBACK — adapter isolation boundary.
+/// This BackgroundService cron trigger is not manifest-driven and cannot be expressed
+/// as abstract function primitives without scheduler substrate work (scheduler_enqueue
+/// + abstract function manifest). It is kept as an explicit compatibility fallback until
+/// the scheduler-job-body-primitive-migration Bundle addresses cron job body abstraction.
+/// Do not add new SQL Attention repository or policy logic here; SQL Attention observation,
+/// ranking, and projection belong in the sql_attention primitive adapter (af08).
+///
 /// Design boundary:
 ///   This class is the cron trigger layer for SQL Attention watch + exploration.
 ///   It calls logs.refresh_logs_current_watch via SqlAttentionLogsRepository,

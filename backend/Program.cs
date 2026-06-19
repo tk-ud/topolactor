@@ -128,6 +128,20 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
     new RecommendationAttentionPrimitiveAdapter(
         sp.GetRequiredService<ILogger<RecommendationAttentionPrimitiveAdapter>>(),
         sp.GetRequiredService<ContextRouteRecommendationResolver>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new RecommendationCandidateSourcePrimitiveAdapter(
+        sp.GetRequiredService<ILogger<RecommendationCandidateSourcePrimitiveAdapter>>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new RecommendationEligibilityPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<RecommendationEligibilityPrimitiveAdapter>>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new RecommendationScoreRankPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<RecommendationScoreRankPrimitiveAdapter>>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(
+    new RecommendationProjectionPrimitiveAdapter());
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));

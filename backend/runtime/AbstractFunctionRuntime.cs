@@ -423,19 +423,10 @@ public sealed class SqlAttentionProjectionPrimitiveAdapter : IAbstractFunctionPr
 }
 
 /// <summary>
-/// Primitive adapter for the recommendation_attention primitive key.
-///
-/// Calls ContextRouteRecommendationResolver (COMPATIBILITY FALLBACK) as an opaque adapter.
-/// All semantics are manifest-authority:
-///   - function_name and parameter_key come from step_config (not payload).
-///   - working_shape is bound from runtime_context (not payload or external_context).
-///   - table authority for context_route.context_hub_recommendation_current is verified from manifest.
-///   - policy authority for context_route_recommendation_resolve is verified from manifest.
-///
-/// Prohibited:
-///   - Route/canonical topology auto-overwrite from recommendation result.
-///   - Phase Attention internals inside this adapter (SystemOperationCiRuntime is an opaque boundary).
-///   - Exposing function_name / parameter_key from payload.
+/// COMPATIBILITY FALLBACK — calls ContextRouteRecommendationResolver.ResolveAsync (monolithic).
+/// Canonical path uses the 4-step decomposed primitives (recommendation_candidate_source →
+/// recommendation_eligibility → recommendation_score_rank → recommendation_projection).
+/// Kept for backward compatibility with legacy manifests that use a single recommendation_attention step.
 /// </summary>
 public sealed class RecommendationAttentionPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
 {
@@ -454,27 +445,175 @@ public sealed class RecommendationAttentionPrimitiveAdapter : IAbstractFunctionP
 
     public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
     {
-        // 1. Verify table authority for context_route.context_hub_recommendation_current
         if (!context.AuthorityBindings.Any(b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal) && string.Equals(b.AuthorityRef, "context_route.context_hub_recommendation_current", StringComparison.Ordinal)))
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_TABLE_AUTHORITY_INVALID: required=context_route.context_hub_recommendation_current");
 
-        // 2. Read function_name from step_config (manifest-authority, NOT payload)
         if (!step.StepConfig.TryGetValue("function_name", out var functionName) || string.IsNullOrWhiteSpace(functionName))
-            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_FUNCTION_NAME_MISSING_FROM_STEP_CONFIG");
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_FUNCTION_NAME_MISSING: FUNCTION_NAME_MISSING");
 
-        // 3. Read parameter_key from step_config (manifest-authority, NOT payload)
         if (!step.StepConfig.TryGetValue("parameter_key", out var parameterKey) || string.IsNullOrWhiteSpace(parameterKey))
-            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_PARAMETER_KEY_MISSING_FROM_STEP_CONFIG");
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_PARAMETER_KEY_MISSING");
 
-        // 4. Read working_shape from runtime_context inputs (never from payload)
         if (!inputs.TryGetValue("working_shape", out var shapeRaw) || shapeRaw is not RuntimeWorkingShape shape)
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_WORKING_SHAPE_MISSING");
 
-        // 5. Delegate to ContextRouteRecommendationResolver (COMPATIBILITY FALLBACK adapter call).
-        //    function_name and parameter_key from step_config (manifest-authority) are threaded
-        //    through to LoadFunctionParameterAsync — the SQL query is manifest-authorized, not
-        //    C#-constant-authorized. Result is observation/evidence/projection only; no auto-overwrite.
         _logger.LogDebug("RecommendationAttentionPrimitiveAdapter: resolving via adapter for function_name={FunctionName}.", functionName);
         return await _resolver.ResolveAsync(shape, functionName!, parameterKey!, ct);
+    }
+}
+
+/// <summary>
+/// Primitive adapter for recommendation_candidate_source (phase 1 of decomposed af09 path).
+/// Loads policy from function_parameters, checks vector/session, loads prefix candidates.
+/// function_name and parameter_key MUST come from step_config (manifest-authority, not payload).
+/// working_shape is bound from runtime_context input.
+/// Table authority for context_route.context_hub_recommendation_current is required.
+/// Returns RecommendationCandidateSourceResult (includes InsufficientHistory for NO_SESSION_ID).
+/// </summary>
+public sealed class RecommendationCandidateSourcePrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly ILogger<RecommendationCandidateSourcePrimitiveAdapter> _logger;
+    private readonly ContextRouteRecommendationResolver _resolver;
+
+    public RecommendationCandidateSourcePrimitiveAdapter(
+        ILogger<RecommendationCandidateSourcePrimitiveAdapter> logger,
+        ContextRouteRecommendationResolver resolver)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    }
+
+    public string PrimitiveKey => "recommendation_candidate_source";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!context.AuthorityBindings.Any(b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal) && string.Equals(b.AuthorityRef, "context_route.context_hub_recommendation_current", StringComparison.Ordinal)))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_CANDIDATE_SOURCE_TABLE_AUTHORITY_INVALID: required=context_route.context_hub_recommendation_current");
+
+        if (!step.StepConfig.TryGetValue("function_name", out var functionName) || string.IsNullOrWhiteSpace(functionName))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_CANDIDATE_SOURCE_FUNCTION_NAME_MISSING: FUNCTION_NAME_MISSING");
+
+        if (!step.StepConfig.TryGetValue("parameter_key", out var parameterKey) || string.IsNullOrWhiteSpace(parameterKey))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_CANDIDATE_SOURCE_PARAMETER_KEY_MISSING");
+
+        if (!inputs.TryGetValue("working_shape", out var shapeRaw) || shapeRaw is not RuntimeWorkingShape shape)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_CANDIDATE_SOURCE_WORKING_SHAPE_MISSING");
+
+        _logger.LogDebug("RecommendationCandidateSourcePrimitiveAdapter: loading candidates for function_name={FunctionName}.", functionName);
+        return await _resolver.BuildCandidateSourceAsync(shape, functionName!, parameterKey!, ct);
+    }
+}
+
+/// <summary>
+/// Primitive adapter for recommendation_eligibility (phase 2 of decomposed af09 path).
+/// Runs neighbor search, loads transition stats, appends context event, runs TVR extension.
+/// Reads working_shape (runtime_context) and recommendation_source (result_context) from inputs.
+/// Event append always runs when source status is Ok (cold-start history growth).
+/// Returns RecommendationEligibilityResult (includes InsufficientHistory for thin history).
+/// </summary>
+public sealed class RecommendationEligibilityPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly ILogger<RecommendationEligibilityPrimitiveAdapter> _logger;
+    private readonly ContextRouteRecommendationResolver _resolver;
+
+    public RecommendationEligibilityPrimitiveAdapter(
+        ILogger<RecommendationEligibilityPrimitiveAdapter> logger,
+        ContextRouteRecommendationResolver resolver)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    }
+
+    public string PrimitiveKey => "recommendation_eligibility";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!inputs.TryGetValue("working_shape", out var shapeRaw) || shapeRaw is not RuntimeWorkingShape shape)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_ELIGIBILITY_WORKING_SHAPE_MISSING");
+
+        if (!inputs.TryGetValue("recommendation_source", out var sourceRaw) || sourceRaw is not RecommendationCandidateSourceResult source)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_ELIGIBILITY_SOURCE_MISSING");
+
+        return await _resolver.BuildEligibilityAsync(shape, source, ct);
+    }
+}
+
+/// <summary>
+/// Primitive adapter for recommendation_score_rank (phase 3 of decomposed af09 path).
+/// Loads attention blend map, ranks operations/tokens/enum items.
+/// Reads working_shape, recommendation_source, recommendation_eligibility from inputs.
+/// Skips computation when eligibility status is not Ok (propagates status).
+/// Returns RecommendationScoreRankResult per lane (ui_pressure, state_pressure).
+/// </summary>
+public sealed class RecommendationScoreRankPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly ILogger<RecommendationScoreRankPrimitiveAdapter> _logger;
+    private readonly ContextRouteRecommendationResolver _resolver;
+
+    public RecommendationScoreRankPrimitiveAdapter(
+        ILogger<RecommendationScoreRankPrimitiveAdapter> logger,
+        ContextRouteRecommendationResolver resolver)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    }
+
+    public string PrimitiveKey => "recommendation_score_rank";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!inputs.TryGetValue("working_shape", out var shapeRaw) || shapeRaw is not RuntimeWorkingShape shape)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_SCORE_RANK_WORKING_SHAPE_MISSING");
+
+        if (!inputs.TryGetValue("recommendation_source", out var sourceRaw) || sourceRaw is not RecommendationCandidateSourceResult source)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_SCORE_RANK_SOURCE_MISSING");
+
+        if (!inputs.TryGetValue("recommendation_eligibility", out var eligibilityRaw) || eligibilityRaw is not RecommendationEligibilityResult eligibility)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_SCORE_RANK_ELIGIBILITY_MISSING");
+
+        return await _resolver.BuildScoreRankAsync(shape, source, eligibility, ct);
+    }
+}
+
+/// <summary>
+/// Primitive adapter for recommendation_projection (phase 4 of decomposed af09 path).
+/// Assembles final ContextRouteRecommendationResult from all intermediate phase results.
+/// Enforces lane separation: ui_pressure and state_pressure candidates must not carry
+/// sql_attention_projection lane — mixing is fail-closed with InvalidProjection.
+/// Reads recommendation_source, recommendation_eligibility, recommendation_score_rank from inputs.
+/// Returns ContextRouteRecommendationResult (the terminal output stored as recommendation_result).
+/// </summary>
+public sealed class RecommendationProjectionPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    public string PrimitiveKey => "recommendation_projection";
+
+    public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!inputs.TryGetValue("recommendation_source", out var sourceRaw) || sourceRaw is not RecommendationCandidateSourceResult source)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_PROJECTION_SOURCE_MISSING");
+
+        if (!inputs.TryGetValue("recommendation_eligibility", out var eligibilityRaw) || eligibilityRaw is not RecommendationEligibilityResult eligibility)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_PROJECTION_ELIGIBILITY_MISSING");
+
+        if (!inputs.TryGetValue("recommendation_score_rank", out var scoreRankRaw) || scoreRankRaw is not RecommendationScoreRankResult scoreRank)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_PROJECTION_SCORE_RANK_MISSING");
+
+        var result = ContextRouteRecommendationResolver.BuildProjectionResult(source, eligibility, scoreRank);
+
+        // Lane enforcement: hub-local recommendation result (ui_pressure, state_pressure) must not
+        // contain sql_attention_projection candidates. Mixing lanes is fail-closed.
+        if (result.Status == RecommendationStatus.Ok)
+        {
+            var allCandidates = result.NextOperations.Concat(result.NextTokens).Concat(result.NextEnumItems);
+            foreach (var candidate in allCandidates)
+            {
+                if (string.Equals(candidate.Lane, RecommendationPressureLanes.SqlAttentionProjection, StringComparison.Ordinal))
+                    throw new AbstractFunctionFailCloseException(
+                        AbstractFunctionFailCloseStatus.InvalidProjection,
+                        $"RECOMMENDATION_HUB_LOCAL_LANE_MIXING_PREVENTED: sql_attention_projection candidate in hub-local result (value={candidate.Value})");
+            }
+        }
+
+        return Task.FromResult<object?>(result);
     }
 }
