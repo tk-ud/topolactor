@@ -22,7 +22,7 @@ Deno.test("screenOperationToDispatcherAxes: search uses manifest-scoped target a
   assertEquals(axes.runtimeDestination, "topology_transform_runtime");
 });
 
-Deno.test("screenOperationToDispatcherAxes: list and detail use Search action and differ by layer", () => {
+Deno.test("screenOperationToDispatcherAxes: list and detail use Read action and differ by layer", () => {
   const list = screenOperationToDispatcherAxes("list", {
     manifestKey: "orders",
   });
@@ -30,8 +30,8 @@ Deno.test("screenOperationToDispatcherAxes: list and detail use Search action an
     manifestKey: "orders",
   });
   assertEquals(list.target, detail.target);
-  assertEquals(list.action, "Search");
-  assertEquals(detail.action, "Search");
+  assertEquals(list.action, "Read");
+  assertEquals(detail.action, "Read");
   assertNotEquals(list.layer, detail.layer);
 });
 
@@ -89,21 +89,21 @@ Deno.test("screenOperationLabel returns Japanese labels", () => {
   assertEquals(screenOperationLabel("aggregation_view"), "集計ビュー");
 });
 
-Deno.test("screenOperationToDispatcherAxes: update uses SSOT diffUpdate action", () => {
+Deno.test("screenOperationToDispatcherAxes: update uses backend-aligned Update action", () => {
   const axes = screenOperationToDispatcherAxes("update", {
     manifestKey: "orders",
   });
   assertEquals(axes.layer, "screen_entity");
-  assertEquals(axes.action, "diffUpdate");
+  assertEquals(axes.action, "Update");
   assertEquals(dispatcherAxesToScreenOperationKind(axes), "update");
 });
 
-Deno.test("screenOperationToDispatcherAxes: aggregation_view uses Search action", () => {
+Deno.test("screenOperationToDispatcherAxes: aggregation_view uses Read action", () => {
   const axes = screenOperationToDispatcherAxes("aggregation_view", {
     manifestKey: "orders",
   });
   assertEquals(axes.layer, "screen_aggregation");
-  assertEquals(axes.action, "Search");
+  assertEquals(axes.action, "Read");
 });
 
 Deno.test("screenOperationToDispatcherAxes: logicalDelete maps to screen_entity / logicalDelete action", () => {

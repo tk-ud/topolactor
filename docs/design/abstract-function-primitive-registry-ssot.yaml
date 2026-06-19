@@ -1019,6 +1019,50 @@ backend_abstract_function_runtime_substrate:
         - generic_http_adapter_call
         - queue_enqueue
         - append_only_event_record
+      universal_rules:
+        provider_kind_branching: prohibited
+        required_by_bundle_branching: prohibited
+        hidden_retry_or_silent_fallback: prohibited
+        rule: >
+          external_and_event primitives are generic abstract-function adapters.
+          provider_kind and required_by_bundle are record/config data only and must
+          not select provider-specific or bundle-specific runtime branches.
+          ExternalPortPolicyStep operations (build_http_request, send_http,
+          enqueue_scheduler_event, append_runtime_event_log) are compatibility
+          entry adapters; the canonical path is through AbstractFunctionExecutor.
+      manifest_vocabulary:
+        http_request:
+          role: generic outbound HTTP call
+          purpose: Send a manifest-configured HTTP request to an external endpoint; no provider-specific branching.
+          required_step_config: [url, method]
+          optional_step_config: []
+          input_binding_source: result_context.request_body (optional)
+          result_context_key: http_response
+          fail_close_condition: missing url, missing method, non-2xx response status
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, hidden_retry, default_http_method, silent_fallback_on_error]
+        scheduler_enqueue:
+          role: scheduler event marker
+          purpose: Mark that a scheduler event has been enqueued for the current external port context.
+          required_step_config: []
+          optional_step_config: []
+          input_binding_source: external_context (ExternalPortContext.SchedulerEventEnqueued flag)
+          result_context_key: null
+          fail_close_condition: missing ExternalPortContext
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, direct_scheduler_client_call_without_manifest_authority]
+        event_log:
+          role: append-only runtime event log entry
+          purpose: Append a typed event log entry for the current bundle; entity ref is optional and resolved from external_context.
+          required_step_config: [event_type]
+          optional_step_config: [entity_ref_key]
+          input_binding_source: step_config.event_type, step_config.entity_ref_key → resolved from external_context (ExportJobId, FileArtifactId, ChecksumValue, AuthorizationKey)
+          result_context_key: null
+          fail_close_condition: missing event_type, entity_ref_key present but unresolvable
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, plaintext_secret_in_event_log, mutable_event_overwrite]
+      compatibility_fallback_adapters:
+        build_http_request: ExternalPortPolicyStep compatibility entry (not canonical)
+        send_http: ExternalPortPolicyStep compatibility entry (not canonical)
+        enqueue_scheduler_event: ExternalPortPolicyStep compatibility entry (not canonical)
+        append_runtime_event_log: ExternalPortPolicyStep compatibility entry (not canonical)
       prohibited:
         - provider_specific_runtime_branch
         - hidden_retry_or_silent_fallback

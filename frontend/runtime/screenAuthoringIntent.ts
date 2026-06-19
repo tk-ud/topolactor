@@ -83,17 +83,17 @@ export function screenOperationToDispatcherAxes(
 
   switch (kind) {
     case "list":
-      return { ...base, layer: "screen_list", action: "Search" };
+      return { ...base, layer: "screen_list", action: "Read" };
     case "search":
       return { ...base, layer: "screen_entity", action: "Search" };
     case "detail":
-      return { ...base, layer: "screen_detail", action: "Search" };
+      return { ...base, layer: "screen_detail", action: "Read" };
     case "create":
       return { ...base, layer: "screen_entity", action: "Create" };
     case "update":
-      return { ...base, layer: "screen_entity", action: "diffUpdate" };
+      return { ...base, layer: "screen_entity", action: "Update" };
     case "aggregation_view":
-      return { ...base, layer: "screen_aggregation", action: "Search" };
+      return { ...base, layer: "screen_aggregation", action: "Read" };
     case "logicalDelete":
       return { ...base, layer: "screen_entity", action: "logicalDelete" };
     case "delete":
@@ -119,7 +119,7 @@ export function dispatcherAxesToScreenOperationKind(axes: {
   if (action === "logicalDelete") return "logicalDelete";
   if (action === "Search") return "search";
   if (action === "Create") return "create";
-  if (action === "diffUpdate") return "update";
+  if (action === "Update") return "update";
   // Unknown axes — return "list" only as a safe UI display fallback (not a dispatch fallback).
   return "list";
 }

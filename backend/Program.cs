@@ -158,6 +158,12 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
     new CredentialReleaseLeaseAdapter(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
     new CredentialFailLeaseAdapter(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new EventLogPrimitiveAdapter(sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new HttpRequestPrimitiveAdapter(sp.GetRequiredService<IExternalPortHttpClient>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(
+    new SchedulerEnqueuePrimitiveAdapter());
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));

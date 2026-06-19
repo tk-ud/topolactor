@@ -902,3 +902,118 @@ public sealed class CredentialFailLeaseAdapter : IAbstractFunctionPrimitiveAdapt
         return null;
     }
 }
+
+/// <summary>
+/// Primitive adapter for event_log (external_and_event category).
+/// Appends an append-only runtime event log entry for the current bundle.
+/// event_type is required from step_config. entity_ref_key is optional; when present,
+/// it is resolved from ExternalPortContext fields (ExportJobId, FileArtifactId, ChecksumValue, AuthorizationKey).
+/// Missing entity_ref_key → null entityId (not fail-close). Unresolvable entity_ref_key → fail-close.
+/// Prohibited: provider_kind_branching, required_by_bundle_branching, mutable event overwrite.
+/// </summary>
+public sealed class EventLogPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalPortRuntimeEventLogRepository _eventLogRepository;
+
+    public EventLogPrimitiveAdapter(IExternalPortRuntimeEventLogRepository eventLogRepository)
+        => _eventLogRepository = eventLogRepository ?? throw new ArgumentNullException(nameof(eventLogRepository));
+
+    public string PrimitiveKey => "event_log";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!step.StepConfig.TryGetValue("event_type", out var eventType) || string.IsNullOrWhiteSpace(eventType))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "EVENT_LOG_EVENT_TYPE_MISSING");
+
+        string? entityId = null;
+        if (step.StepConfig.TryGetValue("entity_ref_key", out var refKey) && !string.IsNullOrWhiteSpace(refKey))
+        {
+            entityId = ResolveEntityRef(refKey, context);
+            if (entityId is null)
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, $"EVENT_LOG_ENTITY_REF_KEY_UNRESOLVABLE: {refKey}");
+        }
+
+        var bundle = context.ExternalPortContext?.RequiredByBundle
+            ?? context.ExternalPortContext?.Policy?.RequiredByBundle;
+        await _eventLogRepository.AppendAsync(eventType, entityId, bundle, ct);
+        return null;
+    }
+
+    private static string? ResolveEntityRef(string refKey, AbstractFunctionExecutionContext context)
+    {
+        var ext = context.ExternalPortContext;
+        if (ext is null) return null;
+        return refKey switch
+        {
+            "ExportJobId" => ext.ExportJobId?.ToString(),
+            "FileArtifactId" => ext.FileArtifactId?.ToString(),
+            "ChecksumValue" => ext.ChecksumValue,
+            "AuthorizationKey" => ext.AuthorizationKey,
+            _ => null
+        };
+    }
+}
+
+/// <summary>
+/// Primitive adapter for http_request (external_and_event category).
+/// Sends a generic outbound HTTP request using manifest-configured url and method.
+/// url and method are required from step_config (no provider-specific defaulting).
+/// Optional request_body input from input binding (result_context or payload).
+/// Returns ExternalPortHttpResponse stored as http_response.
+/// Prohibited: provider_kind_branching, hidden_retry, default_http_method, silent_fallback_on_error.
+/// </summary>
+public sealed class HttpRequestPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalPortHttpClient _httpClient;
+
+    public HttpRequestPrimitiveAdapter(IExternalPortHttpClient httpClient)
+        => _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+
+    public string PrimitiveKey => "http_request";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!step.StepConfig.TryGetValue("url", out var url) || string.IsNullOrWhiteSpace(url))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "HTTP_REQUEST_URL_MISSING");
+
+        if (!step.StepConfig.TryGetValue("method", out var method) || string.IsNullOrWhiteSpace(method))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "HTTP_REQUEST_METHOD_MISSING");
+
+        inputs.TryGetValue("request_body", out var bodyRaw);
+        var body = bodyRaw as string;
+
+        var httpRequest = new ExternalPortHttpRequest(
+            new Uri(url, UriKind.RelativeOrAbsolute),
+            new HttpMethod(method),
+            new Dictionary<string, string>(),
+            body);
+
+        var response = await _httpClient.SendAsync(httpRequest, ct);
+        if (response.StatusCode < 200 || response.StatusCode >= 300)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"HTTP_REQUEST_NON_2XX: {response.StatusCode}");
+
+        return response;
+    }
+}
+
+/// <summary>
+/// Primitive adapter for scheduler_enqueue (external_and_event category).
+/// Marks SchedulerEventEnqueued on ExternalPortContext — signals the caller that a scheduler event
+/// should be enqueued for the current external port execution.
+/// No step_config required; ExternalPortContext must be present (fail-close if missing).
+/// Returns null (no result_context output).
+/// Prohibited: provider_kind_branching, required_by_bundle_branching, direct scheduler client calls.
+/// </summary>
+public sealed class SchedulerEnqueuePrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    public string PrimitiveKey => "scheduler_enqueue";
+
+    public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (context.ExternalPortContext is null)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "SCHEDULER_ENQUEUE_EXTERNAL_PORT_CONTEXT_MISSING");
+
+        context.ExternalPortContext.SchedulerEventEnqueued = true;
+        return Task.FromResult<object?>(null);
+    }
+}
