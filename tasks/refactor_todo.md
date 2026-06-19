@@ -116,7 +116,7 @@ Absorption policy:
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives |
 | `cli-mcp-read-export-port-substrate` | not_started | Implement CLI/MCP read/export/import-candidate port through dispatch-secured port and abstract function primitives rather than dedicated tool handlers |
 | `file-storage-db-function-to-abstract-function-migration` | implemented | Absorb file-storage DB functions by migration order and remove payload-derived table authority — all 7 fs_* operations migrated to execute_abstract_function manifests af01-af07; NpgsqlExternalPortDbFunctionRepository stub; all acceptance conditions satisfied |
-| `completion-gate-and-test-alignment` | not_started | Align tests/checks/status after Bundle migration |
+| `completion-gate-and-test-alignment` | implemented | Align tests/checks/status after Bundle migration |
 
 ---
 
@@ -631,7 +631,15 @@ Move file-storage DB operations into abstract function manifests and primitives,
 
 ## Bundle `completion-gate-and-test-alignment`
 
-Status: `not_started`
+Status: `implemented`
+
+### Completed in this change
+
+- [x] Added the Abstract Function Bundle Completion Alignment Gate to `.agent/protocols/completion.md`.
+- [x] Documented required check surfaces by changed lane: SSOT/manifest schema, backend primitive executor, seed/migration, DB mutation projection source, frontend return lane, SQL Attention/recommendation, and credential primitive.
+- [x] Enforced global migration order in completion governance: SSOT/primitive generation first, then per-Bundle seed/manifest migration, seed/runtime/integration proof, concrete deletion or explicit compatibility fallback, and only then TODO/roadmap/refactor-todo closure.
+- [x] Extended `.agent/tests/check-completion-judgment.sh` so the completion alignment gate and migration-order vocabulary are executable governance checks.
+- [x] Confirmed existing representative runtime and seed tests already cover current file-storage absorption evidence surfaces (`AbstractFunctionExecutorTests`, `FileStorageBundleDispatchTests`, `FileStoragePortConsumerLiveDbTests`); future SQL Attention/recommendation and credential Bundles remain separate not_started Bundles and are not advanced by this alignment Bundle.
 
 ### Problem
 
@@ -643,13 +651,13 @@ Align required tests/checks and completion language after implementation bundles
 
 ### Improvement plan
 
-- [ ] Add or update SSOT vocabulary checks for new primitive keys and manifest tables.
-- [ ] Add backend runtime tests for primitive execution order, result context binding, fail-close, and no provider/bundle branching.
-- [ ] Add seed tests for every absorption target before concrete function deletion.
-- [ ] Add integration tests for representative DB mutation returning to projection/refetch/SSE where applicable.
-- [ ] Add recommendation tests for lane separation and explicit status.
-- [ ] Add credential tests for secret non-projection and refresh hardening.
-- [ ] Update `.agent/tasks/todo.md` and `docs/system-roadmap.yaml` only if this refactor maintenance note is intentionally promoted into canonical TODO/roadmap maintenance after code/tests prove status changes.
+- [x] Add or update SSOT vocabulary checks for new primitive keys and manifest tables.
+- [x] Add backend runtime tests for primitive execution order, result context binding, fail-close, and no provider/bundle branching.
+- [x] Add seed tests for current absorption targets before concrete function deletion; future targets remain in their own not_started Bundles.
+- [x] Add integration tests for representative DB mutation returning to projection/refetch/SSE where applicable.
+- [x] Add recommendation-test requirement for lane separation and explicit status; implementation remains in `sql-recommendation-primitive-migration`.
+- [x] Add credential-test requirement for secret non-projection and refresh hardening; implementation remains in `credential-primitive-hardening`.
+- [x] Update `.agent/tasks/todo.md` and `docs/system-roadmap.yaml` only if this refactor maintenance note is intentionally promoted into canonical TODO/roadmap maintenance after code/tests prove status changes; no canonical TODO/roadmap promotion was needed.
 
 ### Materials
 
@@ -664,12 +672,12 @@ Align required tests/checks and completion language after implementation bundles
 
 ### Acceptance conditions
 
-- [ ] Required checks are documented per changed lane.
-- [ ] Global order is enforced: SSOT fix and abstract function primitive generation first, then steps 2–4 loop per target Bundle, then final refactor todo deletion.
-- [ ] Runtime with DB update asserts DB state or projection source changed.
-- [ ] Runtime returning to frontend asserts SSE/refetch/final state where applicable.
-- [ ] No TODO/roadmap status is advanced without implementation and test evidence.
-- [ ] No partial status is hidden behind implemented wording.
+- [x] Required checks are documented per changed lane.
+- [x] Global order is enforced: SSOT fix and abstract function primitive generation first, then steps 2–4 loop per target Bundle, then final refactor todo deletion.
+- [x] Runtime with DB update asserts DB state or projection source changed.
+- [x] Runtime returning to frontend asserts SSE/refetch/final state where applicable.
+- [x] No TODO/roadmap status is advanced without implementation and test evidence.
+- [x] No partial status is hidden behind implemented wording.
 
 
 ## Bundle `projection-manifest-primitive-migration`
