@@ -524,7 +524,7 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_input_bindings (
     input_binding_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     abstract_function_step_id UUID NOT NULL REFERENCES topology.abstract_function_steps (abstract_function_step_id) ON DELETE CASCADE,
     input_key                 TEXT NOT NULL,
-    binding_source            TEXT NOT NULL CHECK (binding_source IN ('payload','result_context','constant','external_context','manifest_authority','physical_table_binding','route_context')),
+    binding_source            TEXT NOT NULL CHECK (binding_source IN ('payload','result_context','constant','external_context','manifest_authority','physical_table_binding','route_context','step_config')),
     binding_path              TEXT NOT NULL,
     required                  BOOLEAN NOT NULL DEFAULT true,
     secret                    BOOLEAN NOT NULL DEFAULT false,
