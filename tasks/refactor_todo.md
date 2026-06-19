@@ -18,6 +18,9 @@ Source judgment: audit carry-over from abstract-function / SQL Attention / recom
 
 ## Mandatory migration order
 
+**実装順序 (per Bundle):**
+`seed/manifest → dispatch → 汎用 primitive / abstract executor → SQL/repository adapter → seed-route test → 既存 concrete 削除/compat 縮小 → Bundle 完了`
+
 The refactor must follow this global order. Do not delete existing concrete functions first.
 
 **Execution path invariant (applies to all remaining Bundles):**
