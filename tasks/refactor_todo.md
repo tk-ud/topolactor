@@ -118,7 +118,7 @@ Absorption policy:
 | `abstract-function-runtime-substrate-ssot` | ssot_contract_complete | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
 | `abstract-function-manifest-schema` | ssot_contract_complete | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
 | `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete; SQL Attention list_projection and context_route recommendation_resolve migrated via abstract function; credential hardening remains not_started) |
-| `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
+| `credential-primitive-hardening` | implemented | Absorb credential flow by migration order while preserving runtime-only secret materialization |
 | `projection-manifest-primitive-migration` | investigation_needed | Move remaining projection constructor / runtime event / screen operation derivation mapping into projection manifest or projection primitives while preserving pure render/test-only exceptions |
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives rather than dedicated tool handlers |
 | `cli-mcp-read-export-port-substrate` | not_started | Implement CLI/MCP read/export/import-candidate port through dispatch-secured port and abstract function primitives rather than dedicated tool handlers |
@@ -377,7 +377,7 @@ Still open after the file-storage attachment migration:
 
 ## Bundle `credential-primitive-hardening`
 
-Status: `not_started`
+Status: `implemented`
 
 ### Problem
 
@@ -402,22 +402,26 @@ Preserve credential flow as abstract function primitives while keeping actual se
 
 ### Improvement plan
 
-- [ ] Keep `credential_requirement` as port record attachment, not standalone credential plane.
-- [ ] Keep plaintext out of DB, UI, seed, SSOT, projection, audit log, and runtime event log.
-- [ ] Harden `BuildTokenRefreshRequest` with manifest/policy-defined request shape.
-- [ ] Harden `ParseTokenRefreshResult` to use crypto hash adapter, expiry parsing, rotated payload policy, and explicit provider config without provider-specific C# branching.
-- [ ] Preserve lease/version/expiry guards.
-- [ ] Add tests for missing/invalid token response, stale version, plaintext projection prohibition, and provider branch prohibition.
+- [x] Keep `credential_requirement` as port record attachment, not standalone credential plane.
+- [x] Keep plaintext out of DB, UI, seed, SSOT, projection, audit log, and runtime event log.
+- [x] Harden `BuildTokenRefreshRequest` with manifest/policy-defined request shape.
+- [x] Harden `ParseTokenRefreshResult` to use crypto hash adapter, expiry parsing, rotated payload policy, and explicit provider config without provider-specific C# branching.
+- [x] Preserve lease/version/expiry guards.
+- [x] Add tests for missing/invalid token response, stale version, plaintext projection prohibition, and provider branch prohibition.
+- [x] Define `is_compensation_step` semantics in `docs/design/abstract-function-primitive-registry-ssot.yaml` (definition, boundary, application conditions, prohibited uses).
+- [x] Add live DB dispatch-chain integration test: `ExternalPortPolicyStepExecutor.ExecutePolicyAsync` → `execute_abstract_function` → `NpgsqlAbstractFunctionManifestRepository` → 6 credential primitives → success: vault write + release; failure: compensation via FailRefreshLeaseAsync.
 
 ### Materials
 
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 - `docs/design/auth-db-session-credential-ssot.yaml`
+- `docs/design/abstract-function-primitive-registry-ssot.yaml`
 - `backend/runtime/ExternalPortCredentialRefresher.cs`
 - `backend/runtime/ExternalPortCredentialReferenceResolver.cs`
 - `backend/repository/NpgsqlExternalCredentialVaultRepository.cs`
 - `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
+- `backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs`
 
 ### Target functions / classes
 
@@ -425,6 +429,7 @@ Preserve credential flow as abstract function primitives while keeping actual se
 - `ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential`
 - `ExternalPortPolicyStepExecutor.BuildTokenRefreshRequest`
 - `ExternalPortPolicyStepExecutor.ParseTokenRefreshResult`
+- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync` (dispatch-chain entry point for credential refresh)
 - `ExternalPortPolicyStepExecutor` credential operation keys
 - `IExternalCredentialCrypto`
 - `IExternalCredentialVaultRepository`
@@ -432,13 +437,15 @@ Preserve credential flow as abstract function primitives while keeping actual se
 
 ### Acceptance conditions
 
-- [ ] Credential primitive flow is manifest/policy-driven and provider_kind remains data.
-- [ ] No provider-specific runtime handler or provider switch is added.
-- [ ] Decrypted payload exists only inside runtime context and never enters projection/log/seed/SSOT.
-- [ ] Refresh token rotation updates encrypted payload/hash/expires/version atomically.
-- [ ] Token hash is computed by crypto adapter, not placeholder response-length logic.
-- [ ] Tests prove fail-close on invalid credential, missing crypto, stale version, invalid response, and plaintext projection attempts.
-- [ ] Existing concrete request/parse logic is deleted or marked compatibility fallback only after seed tests pass.
+- [x] Credential primitive flow is manifest/policy-driven and provider_kind remains data.
+- [x] No provider-specific runtime handler or provider switch is added.
+- [x] Decrypted payload exists only inside runtime context and never enters projection/log/seed/SSOT.
+- [x] Refresh token rotation updates encrypted payload/hash/expires/version atomically.
+- [x] Token hash is computed by crypto adapter, not placeholder response-length logic.
+- [x] Tests prove fail-close on invalid credential, missing crypto, stale version, invalid response, and plaintext projection attempts.
+- [x] Existing concrete request/parse logic is deleted or marked compatibility fallback only after seed tests pass.
+- [x] `is_compensation_step` defined in `abstract-function-primitive-registry-ssot.yaml` with definition, boundary, application conditions, and prohibited uses.
+- [x] Live DB integration test proves full dispatch chain: seeded port record and policy loaded from DB via `NpgsqlExternalPortPolicyRepository`; manifest loaded from DB via `NpgsqlAbstractFunctionManifestRepository`; `ExternalPortPolicyStepExecutor.ExecutePolicyAsync` as entry point; success path verifies vault write and release, no fail_lease; failure path (non-2xx HTTP) verifies compensation calls `FailRefreshLeaseAsync`.
 
 ---
 

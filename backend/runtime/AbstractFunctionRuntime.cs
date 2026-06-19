@@ -26,7 +26,7 @@ public sealed class AbstractFunctionFailCloseException : InvalidOperationExcepti
 
 public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active, IReadOnlyList<AbstractFunctionAuthorityBinding>? AuthorityBindings = null, IReadOnlyDictionary<string, string>? OutputShape = null);
 
-public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active);
+public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active, bool IsCompensationStep = false);
 
 public sealed record AbstractFunctionInputBinding(string InputKey, string BindingSource, string BindingPath, bool Required, bool Secret);
 
@@ -114,6 +114,8 @@ public sealed class AbstractFunctionExecutionContext
         "export_job_id" => ExternalPortContext?.ExportJobId,
         "file_artifact_id" => ExternalPortContext?.FileArtifactId,
         "checksum_value" => ExternalPortContext?.ChecksumValue,
+        "credential_vault_id" => ExternalPortContext?.CredentialVaultRecord?.CredentialVaultId,
+        "decrypted_credential_payload" => ExternalPortContext?.DecryptedCredentialPayload,
         _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_EXTERNAL_CONTEXT_BINDING_UNSUPPORTED: {key}")
     };
 
@@ -158,7 +160,8 @@ public sealed class AbstractFunctionExecutor
 {
     private static readonly ISet<string> SecretProjectionDenyKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "credential", "credential_payload", "decrypted_payload", "plaintext_payload", "signed_url", "bucket", "endpoint", "storage_path", "storage_ref", "raw_storage_ref"
+        "credential", "credential_payload", "decrypted_payload", "plaintext_payload", "signed_url", "bucket", "endpoint", "storage_path", "storage_ref", "raw_storage_ref",
+        "decrypted_credential_payload", "token_response", "token_body"
     };
 
     private readonly IAbstractFunctionManifestRepository _manifestRepository;
@@ -194,11 +197,15 @@ public sealed class AbstractFunctionExecutor
                 throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_POLICY_AUTHORITY_MISSING");
         }
 
+        var allActiveSteps = manifest.Steps.Where(static s => s.Active).ToList();
+        var normalSteps = allActiveSteps.Where(static s => !s.IsCompensationStep).OrderBy(static s => s.StepOrder).ToList();
+        var compensationSteps = allActiveSteps.Where(static s => s.IsCompensationStep).OrderBy(static s => s.StepOrder).ToList();
+
         var outputShape = manifest.OutputShape;
         if (outputShape is not null && outputShape.Count > 0)
         {
             var allowedOutputKeys = new HashSet<string>(outputShape.Values, StringComparer.Ordinal);
-            foreach (var step in manifest.Steps.Where(static s => s.Active && s.ResultContextKey is not null))
+            foreach (var step in normalSteps.Where(static s => s.ResultContextKey is not null))
             {
                 if (!allowedOutputKeys.Contains(step.ResultContextKey!))
                     throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, $"ABSTRACT_FUNCTION_OUTPUT_KEY_UNAUTHORIZED: {step.ResultContextKey}");
@@ -210,21 +217,44 @@ public sealed class AbstractFunctionExecutor
         var deniedProjectionKeys = new HashSet<string>(manifest.DeniedProjectionKeys, StringComparer.OrdinalIgnoreCase);
         foreach (var denied in SecretProjectionDenyKeys) deniedProjectionKeys.Add(denied);
 
-        foreach (var step in manifest.Steps.Where(static s => s.Active).OrderBy(static s => s.StepOrder))
+        try
         {
-            if (!_primitiveRegistry.TryGetValue(step.PrimitiveKey, out var primitive)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.UnsupportedPrimitive, $"ABSTRACT_FUNCTION_PRIMITIVE_UNSUPPORTED: {step.PrimitiveKey}");
-            var inputs = new Dictionary<string, object?>(StringComparer.Ordinal);
-            foreach (var binding in step.InputBindings)
+            foreach (var step in normalSteps)
             {
-                if (string.Equals(step.PrimitiveKey, "projection", StringComparison.Ordinal) && (binding.Secret || deniedProjectionKeys.Contains(binding.InputKey))) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.SecretProjectionDenied, "ABSTRACT_FUNCTION_SECRET_PROJECTION_DENIED");
-                var value = context.ResolveBinding(binding, step.StepConfig);
-                if (binding.Required && value is null) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, $"ABSTRACT_FUNCTION_INPUT_MISSING: {binding.InputKey}");
-                inputs[binding.InputKey] = value;
+                if (!_primitiveRegistry.TryGetValue(step.PrimitiveKey, out var primitive)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.UnsupportedPrimitive, $"ABSTRACT_FUNCTION_PRIMITIVE_UNSUPPORTED: {step.PrimitiveKey}");
+                var inputs = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var binding in step.InputBindings)
+                {
+                    if (string.Equals(step.PrimitiveKey, "projection", StringComparison.Ordinal) && (binding.Secret || deniedProjectionKeys.Contains(binding.InputKey))) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.SecretProjectionDenied, "ABSTRACT_FUNCTION_SECRET_PROJECTION_DENIED");
+                    var value = context.ResolveBinding(binding, step.StepConfig);
+                    if (binding.Required && value is null) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, $"ABSTRACT_FUNCTION_INPUT_MISSING: {binding.InputKey}");
+                    inputs[binding.InputKey] = value;
+                }
+                var result = await primitive.ExecuteAsync(step, inputs, context, ct);
+                context.StoreResult(step.ResultContextKey, result);
+                context.ApplyResultToExternalContext(step.ResultContextKey, result);
+                context.MarkExecuted(step.PrimitiveKey);
             }
-            var result = await primitive.ExecuteAsync(step, inputs, context, ct);
-            context.StoreResult(step.ResultContextKey, result);
-            context.ApplyResultToExternalContext(step.ResultContextKey, result);
-            context.MarkExecuted(step.PrimitiveKey);
+        }
+        catch
+        {
+            foreach (var cStep in compensationSteps)
+            {
+                if (!_primitiveRegistry.TryGetValue(cStep.PrimitiveKey, out var cPrimitive)) continue;
+                var cInputs = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var binding in cStep.InputBindings)
+                {
+                    try
+                    {
+                        var value = context.ResolveBinding(binding, cStep.StepConfig);
+                        cInputs[binding.InputKey] = value;
+                    }
+                    catch { /* best-effort: skip binding errors during compensation */ }
+                }
+                try { await cPrimitive.ExecuteAsync(cStep, cInputs, context, ct); }
+                catch { /* best-effort: ignore compensation step failures */ }
+            }
+            throw;
         }
         return context;
     }
@@ -615,5 +645,260 @@ public sealed class RecommendationProjectionPrimitiveAdapter : IAbstractFunction
         }
 
         return Task.FromResult<object?>(result);
+    }
+}
+
+/// <summary>
+/// Primitive adapter for credential_acquire_lease (step 1 of credential.refresh_token manifest).
+/// Reads credential_vault_id from external_context input binding, lease_owner and
+/// lease_duration_minutes from step_config (manifest-authority; fail-close if missing).
+/// Returns ExternalCredentialRefreshLease stored as credential_lease.
+/// Prohibited: provider-specific branching, bundle-specific branching, lease default supplementation.
+/// </summary>
+public sealed class CredentialAcquireLeaseAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalCredentialVaultRepository _vaultRepository;
+
+    public CredentialAcquireLeaseAdapter(IExternalCredentialVaultRepository vaultRepository)
+        => _vaultRepository = vaultRepository ?? throw new ArgumentNullException(nameof(vaultRepository));
+
+    public string PrimitiveKey => "credential_acquire_lease";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!step.StepConfig.TryGetValue("lease_owner", out var leaseOwner) || string.IsNullOrWhiteSpace(leaseOwner))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "CREDENTIAL_ACQUIRE_LEASE_OWNER_MISSING");
+
+        if (!step.StepConfig.TryGetValue("lease_duration_minutes", out var durationStr) || !int.TryParse(durationStr, out var durationMinutes) || durationMinutes <= 0)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "CREDENTIAL_ACQUIRE_LEASE_DURATION_MISSING");
+
+        if (!inputs.TryGetValue("credential_vault_id", out var vaultIdRaw) || vaultIdRaw is not Guid credentialVaultId)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_ACQUIRE_LEASE_VAULT_ID_MISSING");
+
+        var lease = await _vaultRepository.AcquireRefreshLeaseAsync(credentialVaultId, leaseOwner, TimeSpan.FromMinutes(durationMinutes), DateTimeOffset.UtcNow, ct)
+            ?? throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "CREDENTIAL_ACQUIRE_LEASE_UNAVAILABLE");
+
+        return lease;
+    }
+}
+
+/// <summary>
+/// Primitive adapter for credential_http_request (step 2 of credential.refresh_token manifest).
+/// Reads method from step_config (fail-close if missing; no GET/POST default).
+/// Endpoint resolved from step_config["endpoint"] or ExternalPortContext.PortRecord.UrlOrEnvReference.
+/// decrypted_credential_payload from external_context input binding (secret=true).
+/// Sends HTTP request and returns ExternalPortHttpResponse stored as token_response.
+/// Prohibited: provider-specific branching, env:-prefix special-casing, HTTP method defaulting.
+/// </summary>
+public sealed class CredentialHttpRequestAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalPortHttpClient _httpClient;
+
+    public CredentialHttpRequestAdapter(IExternalPortHttpClient httpClient)
+        => _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+
+    public string PrimitiveKey => "credential_http_request";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!step.StepConfig.TryGetValue("method", out var methodStr) || string.IsNullOrWhiteSpace(methodStr))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "CREDENTIAL_HTTP_REQUEST_METHOD_MISSING");
+
+        var endpoint = step.StepConfig.TryGetValue("endpoint", out var configEndpoint) && !string.IsNullOrWhiteSpace(configEndpoint)
+            ? configEndpoint
+            : context.ExternalPortContext?.PortRecord?.UrlOrEnvReference;
+
+        if (string.IsNullOrWhiteSpace(endpoint))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_HTTP_REQUEST_ENDPOINT_MISSING");
+
+        if (!inputs.TryGetValue("decrypted_credential_payload", out var payloadRaw) || payloadRaw is not string decryptedPayload)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_HTTP_REQUEST_DECRYPTED_PAYLOAD_MISSING");
+
+        var httpRequest = new ExternalPortHttpRequest(
+            new Uri(endpoint, UriKind.RelativeOrAbsolute),
+            new HttpMethod(methodStr),
+            new Dictionary<string, string>(),
+            decryptedPayload);
+
+        var httpResponse = await _httpClient.SendAsync(httpRequest, ct);
+        if (httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"CREDENTIAL_HTTP_REQUEST_NON_2XX: {httpResponse.StatusCode}");
+        return httpResponse;
+    }
+}
+
+/// <summary>
+/// Primitive adapter for credential_compute_token_hash (step 3 of credential.refresh_token manifest).
+/// Reads token_response from result_context input binding (secret=true).
+/// Computes hash via IExternalCredentialCrypto.ComputeTokenHash — no response-length placeholder.
+/// Returns hash string stored as token_hash.
+/// Prohibited: provider-specific branching, response-length hash, hardcoded hash key from request config.
+/// </summary>
+public sealed class CredentialComputeTokenHashAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalCredentialCrypto _crypto;
+
+    public CredentialComputeTokenHashAdapter(IExternalCredentialCrypto crypto)
+        => _crypto = crypto ?? throw new ArgumentNullException(nameof(crypto));
+
+    public string PrimitiveKey => "credential_compute_token_hash";
+
+    public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!inputs.TryGetValue("token_response", out var responseRaw) || responseRaw is not ExternalPortHttpResponse response)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_COMPUTE_TOKEN_HASH_RESPONSE_MISSING");
+
+        return Task.FromResult<object?>(_crypto.ComputeTokenHash(response.Body));
+    }
+}
+
+/// <summary>
+/// Primitive adapter for credential_parse_expires_at (step 4 of credential.refresh_token manifest).
+/// Reads token_response from result_context input binding (secret=true).
+/// Reads expires_at_response_key from step_config (fail-close if missing; no AddHours fallback).
+/// Parses DateTimeOffset from response JSON — supports ISO string or Unix timestamp number.
+/// Returns DateTimeOffset stored as token_expires_at.
+/// Prohibited: AddHours(1) expiry fallback, hardcoded response key, provider-specific branching.
+/// </summary>
+public sealed class CredentialParseExpiresAtAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    public string PrimitiveKey => "credential_parse_expires_at";
+
+    public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!inputs.TryGetValue("token_response", out var responseRaw) || responseRaw is not ExternalPortHttpResponse response)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_PARSE_EXPIRES_AT_RESPONSE_MISSING");
+
+        if (!step.StepConfig.TryGetValue("expires_at_response_key", out var expiresAtKey) || string.IsNullOrWhiteSpace(expiresAtKey))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "CREDENTIAL_PARSE_EXPIRES_AT_KEY_MISSING");
+
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(response.Body); }
+        catch (JsonException) { throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, "CREDENTIAL_PARSE_EXPIRES_AT_RESPONSE_INVALID_JSON"); }
+        using (doc)
+        {
+            if (!doc.RootElement.TryGetProperty(expiresAtKey, out var expiresAtProp))
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, $"CREDENTIAL_PARSE_EXPIRES_AT_KEY_NOT_IN_RESPONSE: {expiresAtKey}");
+
+            var expiresAt = expiresAtProp.ValueKind switch
+            {
+                JsonValueKind.String => DateTimeOffset.Parse(expiresAtProp.GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind),
+                JsonValueKind.Number => DateTimeOffset.FromUnixTimeSeconds(expiresAtProp.GetInt64()),
+                _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, "CREDENTIAL_PARSE_EXPIRES_AT_FORMAT_UNSUPPORTED")
+            };
+            return Task.FromResult<object?>(expiresAt);
+        }
+    }
+}
+
+/// <summary>
+/// Primitive adapter for credential_write_vault (step 5 of credential.refresh_token manifest).
+/// Reads vault record from ExternalPortContext (encryption_key_reference required; fail-close if missing).
+/// Reads credential_lease, token_hash, token_expires_at, token_response from inputs.
+/// Encrypts response body and writes atomically via IExternalCredentialVaultRepository.
+/// Atomic write uses lease.Version as expected_version (optimistic concurrency guard).
+/// Returns null (no output to result_context).
+/// Prohibited: plaintext credential in result_context, provider-specific branching, expiry fallback.
+/// </summary>
+public sealed class CredentialWriteVaultAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalCredentialVaultRepository _vaultRepository;
+    private readonly IExternalCredentialCrypto _crypto;
+
+    public CredentialWriteVaultAdapter(IExternalCredentialVaultRepository vaultRepository, IExternalCredentialCrypto crypto)
+    {
+        _vaultRepository = vaultRepository ?? throw new ArgumentNullException(nameof(vaultRepository));
+        _crypto = crypto ?? throw new ArgumentNullException(nameof(crypto));
+    }
+
+    public string PrimitiveKey => "credential_write_vault";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        var vaultRecord = context.ExternalPortContext?.CredentialVaultRecord
+            ?? throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_WRITE_VAULT_RECORD_MISSING");
+
+        if (string.IsNullOrWhiteSpace(vaultRecord.EncryptionKeyReference))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "CREDENTIAL_WRITE_VAULT_ENCRYPTION_KEY_MISSING");
+
+        if (!inputs.TryGetValue("credential_lease", out var leaseRaw) || leaseRaw is not ExternalCredentialRefreshLease lease)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_WRITE_VAULT_LEASE_MISSING");
+
+        if (!inputs.TryGetValue("token_hash", out var hashRaw) || hashRaw is not string tokenHash)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_WRITE_VAULT_TOKEN_HASH_MISSING");
+
+        if (!inputs.TryGetValue("token_expires_at", out var expiresAtRaw) || expiresAtRaw is not DateTimeOffset tokenExpiresAt)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_WRITE_VAULT_EXPIRES_AT_MISSING");
+
+        if (!inputs.TryGetValue("token_response", out var responseRaw) || responseRaw is not ExternalPortHttpResponse tokenResponse)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_WRITE_VAULT_TOKEN_RESPONSE_MISSING");
+
+        var encrypted = _crypto.EncryptForVaultStorage(tokenResponse.Body, vaultRecord.EncryptionKeyReference);
+
+        await _vaultRepository.WriteEncryptedCredentialPayloadAsync(
+            vaultRecord.CredentialVaultId,
+            lease.Version,
+            encrypted,
+            tokenHash,
+            tokenExpiresAt,
+            ct);
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Primitive adapter for credential_release_lease (step 6 of credential.refresh_token manifest).
+/// Reads credential_lease from result_context input binding.
+/// Calls IExternalCredentialVaultRepository.ReleaseRefreshLeaseAsync.
+/// Returns null (terminal step; no output).
+/// Prohibited: provider-specific branching, lease default supplementation.
+/// </summary>
+public sealed class CredentialReleaseLeaseAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalCredentialVaultRepository _vaultRepository;
+
+    public CredentialReleaseLeaseAdapter(IExternalCredentialVaultRepository vaultRepository)
+        => _vaultRepository = vaultRepository ?? throw new ArgumentNullException(nameof(vaultRepository));
+
+    public string PrimitiveKey => "credential_release_lease";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!inputs.TryGetValue("credential_lease", out var leaseRaw) || leaseRaw is not ExternalCredentialRefreshLease lease)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_RELEASE_LEASE_MISSING");
+
+        await _vaultRepository.ReleaseRefreshLeaseAsync(lease, ct);
+        return null;
+    }
+}
+
+/// <summary>
+/// Compensation-step adapter for credential_fail_lease (step 7 of credential.refresh_token manifest).
+/// Runs only when a preceding normal step fails (is_compensation_step = true in seed).
+/// Reads credential_lease from result_context (not required: if lease was never acquired, returns null).
+/// Calls IExternalCredentialVaultRepository.FailRefreshLeaseAsync with failure_code from step_config.
+/// Returns null; failures are silently swallowed by the compensation loop.
+/// </summary>
+public sealed class CredentialFailLeaseAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalCredentialVaultRepository _vaultRepository;
+
+    public CredentialFailLeaseAdapter(IExternalCredentialVaultRepository vaultRepository)
+        => _vaultRepository = vaultRepository ?? throw new ArgumentNullException(nameof(vaultRepository));
+
+    public string PrimitiveKey => "credential_fail_lease";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!inputs.TryGetValue("credential_lease", out var leaseRaw) || leaseRaw is not ExternalCredentialRefreshLease lease)
+            return null;
+
+        var failureCode = step.StepConfig.TryGetValue("failure_code", out var code) && !string.IsNullOrWhiteSpace(code)
+            ? code
+            : "step_failure";
+
+        await _vaultRepository.FailRefreshLeaseAsync(lease, failureCode, ct);
+        return null;
     }
 }

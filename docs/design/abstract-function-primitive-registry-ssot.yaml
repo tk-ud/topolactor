@@ -694,6 +694,34 @@ backend_abstract_function_runtime_substrate:
       - frontend_authored_operation_body
       - raw_sql_surface
       - secret_projection_surface
+    step_execution:
+      is_compensation_step:
+        definition: >
+          A boolean column on abstract_function_steps. When true, the step is a compensation
+          step whose purpose is to undo or mitigate side effects of previously executed normal
+          steps. Compensation steps are separated from normal steps before execution begins.
+          The executor runs normal steps in step_order; if any normal step throws, it catches
+          the exception, runs all compensation steps best-effort (in step_order), then
+          re-throws the original exception. Compensation step failures are silently swallowed.
+        boundary:
+          - Compensation steps run only after at least one normal step throws an exception.
+          - Compensation steps may only access result_context values written before the failure
+            (partial result_context). They must not assume that all normal steps completed.
+          - Compensation steps must not produce side effects that depend on the operation
+            completing successfully (e.g. writing new state, emitting events).
+          - Compensation step results are discarded; the result_context is not updated.
+          - If no exception is thrown by any normal step, compensation steps are never executed.
+        application_conditions:
+          - Use only for cleanup or rollback semantics (e.g. releasing a lease on failure).
+          - Do NOT use for post-processing that must always run (use a normal step instead).
+          - Do NOT use to branch on intermediate results; use result_context binding instead.
+          - A single manifest may have multiple compensation steps; all run best-effort on failure.
+          - Compensation step input bindings use required=false for context values that may
+            be absent if the step that would have written them had not yet executed.
+        prohibited:
+          - Using is_compensation_step=true as a shortcut for conditional execution in normal flow.
+          - Adding compensation steps for required post-processing (e.g. audit log, event emit).
+          - Relying on compensation steps to always run; compensation is exception-path only.
   primitive_categories:
     authority:
       primitives:
@@ -887,13 +915,101 @@ backend_abstract_function_runtime_substrate:
       primitives:
         - credential_reference_resolve
         - credential_materialize
+        - credential_acquire_lease
+        - credential_http_request
+        - credential_compute_token_hash
+        - credential_parse_expires_at
+        - credential_write_vault
+        - credential_release_lease
+        - credential_fail_lease
       owns:
         - runtime_only_secret_resolution
         - encrypted_payload_materialization_boundary
+        - external_credential_vault_refresh_primitive_chain
+      universal_rules:
+        provider_kind_branching: prohibited
+        required_by_bundle_branching: prohibited
+        csharp_default_http_method: prohibited
+        csharp_default_lease_duration: prohibited
+        csharp_default_expiry_response_key: prohibited
+        secret_projection: prohibited
+        rule: >
+          credential_* primitives are generic abstract-function adapters. provider_kind and
+          required_by_bundle are record/config data only and must not select provider-specific
+          or bundle-specific runtime branches. HTTP method, lease duration, and expiry key
+          must come from manifest step_config; C# default supplementation is fail-close invalid.
+      refresh_token_manifest_vocabulary:
+        credential_acquire_lease:
+          role: refresh lease acquisition guard
+          purpose: Acquire a DB refresh lease before any provider token request.
+          required_step_config: [lease_owner, lease_duration_minutes]
+          input_binding_source: external_context.credential_vault_id
+          result_context_key: credential_lease
+          secret_handling: no plaintext secret input or output
+          fail_close_condition: missing credential_vault_id, missing lease_owner, missing/invalid lease_duration_minutes, unavailable lease
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, default_lease_duration, direct_vault_mutation_without_lease]
+        credential_http_request:
+          role: generic provider token request
+          purpose: Send the manifest-configured token refresh HTTP request with runtime-only decrypted payload.
+          required_step_config: [method]
+          optional_step_config: [endpoint]
+          input_binding_source: external_context.decrypted_credential_payload secret=true
+          result_context_key: token_response
+          secret_handling: token_response and request body are runtime-only secret material and projection/log/seed/public SSOT/front output is prohibited
+          fail_close_condition: missing method, missing endpoint from step_config or port record, missing decrypted payload, non-2xx response
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, default_http_method, env_prefix_special_case_branching, logging_token_body]
+        credential_compute_token_hash:
+          role: token response hash derivation
+          purpose: Compute the persisted token_hash through the credential crypto adapter.
+          required_step_config: []
+          input_binding_source: result_context.token_response secret=true
+          result_context_key: token_hash
+          secret_handling: reads token_response body as secret and emits only hash material
+          fail_close_condition: missing token_response or unavailable crypto adapter
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, response_length_placeholder_hash, hardcoded_hash_key]
+        credential_parse_expires_at:
+          role: expiry extraction
+          purpose: Parse the provider response expiry from a manifest-declared response key.
+          required_step_config: [expires_at_response_key]
+          input_binding_source: result_context.token_response secret=true
+          result_context_key: token_expires_at
+          secret_handling: reads token_response only inside runtime and emits DateTimeOffset only
+          fail_close_condition: missing token_response, missing expires_at_response_key, invalid JSON, missing key, unsupported expiry format
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, default_expiry_key, AddHours_expiry_fallback]
+        credential_write_vault:
+          role: atomic encrypted vault update
+          purpose: Encrypt the provider token response and atomically persist encrypted_payload, token_hash, expires_at, and version under lease/version guard.
+          required_step_config: []
+          input_binding_source: result_context.credential_lease, result_context.token_hash, result_context.token_expires_at, result_context.token_response, external_context credential vault record
+          result_context_key: null
+          secret_handling: encrypts token_response body before storage; plaintext never enters projection/log/result output
+          fail_close_condition: missing vault record, missing encryption_key_reference, missing lease/hash/expiry/token_response, version conflict/write failure
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, plaintext_vault_write, write_without_lease_version_guard, expiry_fallback]
+        credential_release_lease:
+          role: terminal lease release
+          purpose: Release the acquired refresh lease after successful vault write.
+          required_step_config: []
+          input_binding_source: result_context.credential_lease
+          result_context_key: null
+          secret_handling: no plaintext secret input or output
+          fail_close_condition: missing credential_lease or repository release failure
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, synthetic_lease_creation]
+        credential_fail_lease:
+          role: compensation failure marker
+          purpose: Mark an acquired lease failed when a prior normal credential step fails.
+          required_step_config: [failure_code]
+          input_binding_source: result_context.credential_lease required=false
+          result_context_key: null
+          secret_handling: no plaintext secret input or output; failure code must not include secret material
+          fail_close_condition: compensation itself is best-effort after primary fail-close; missing lease is a no-op because acquisition may have failed before a lease existed
+          prohibited_behavior: [provider_kind_branching, required_by_bundle_branching, swallowing_primary_failure, logging_token_body]
       prohibited:
         - plaintext_seed
         - plaintext_projection
         - plaintext_runtime_event_log
+        - provider_kind_runtime_branching
+        - required_by_bundle_runtime_branching
+        - csharp_default_http_method_or_lease_duration_or_expiry_key
     external_and_event:
       primitives:
         - http_request

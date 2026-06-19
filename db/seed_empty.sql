@@ -2039,12 +2039,12 @@ INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step
 VALUES
     ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-0000000000e1', 1, 'resolve_port_record', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-0000000000e1', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-0000000000e1', 3, 'build_http_request', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000103', '00000000-0000-0000-0000-0000000000e1', 3, 'build_http_request', '{"method":"GET"}', NULL, true),
     ('00000000-0000-0000-0000-000000000104', '00000000-0000-0000-0000-0000000000e1', 4, 'send_http', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000105', '00000000-0000-0000-0000-0000000000e1', 5, 'capture_response', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000201', '00000000-0000-0000-0000-0000000000e2', 1, 'resolve_port_record', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000202', '00000000-0000-0000-0000-0000000000e2', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000203', '00000000-0000-0000-0000-0000000000e2', 3, 'build_http_request', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000203', '00000000-0000-0000-0000-0000000000e2', 3, 'build_http_request', '{"method":"POST"}', NULL, true),
     ('00000000-0000-0000-0000-000000000204', '00000000-0000-0000-0000-0000000000e2', 4, 'send_http', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000205', '00000000-0000-0000-0000-0000000000e2', 5, 'capture_response', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-0000000000e3', 1, 'resolve_port_record', '{}', NULL, true),
@@ -2357,7 +2357,7 @@ VALUES
     ('00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-0000000000e4',  2, 'resolve_credential_reference',     '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000403', '00000000-0000-0000-0000-0000000000e4',  3, 'load_encrypted_credential_payload','{}', NULL, true),
     ('00000000-0000-0000-0000-000000000404', '00000000-0000-0000-0000-0000000000e4',  4, 'decrypt_for_runtime_use',          '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000405', '00000000-0000-0000-0000-0000000000e4',  5, 'build_http_request',               '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000405', '00000000-0000-0000-0000-0000000000e4',  5, 'build_http_request',               '{"method":"PUT"}', NULL, true),
     ('00000000-0000-0000-0000-0000000004a0', '00000000-0000-0000-0000-0000000000e4',  6, 'inject_authorization_header',      '{}', NULL, true),
     ('00000000-0000-0000-0000-0000000004a1', '00000000-0000-0000-0000-0000000000e4',  7, 'send_http',                        '{}', NULL, true),
     ('00000000-0000-0000-0000-0000000004a2', '00000000-0000-0000-0000-0000000000e4',  8, 'capture_response',                 '{}', NULL, true),
@@ -2375,7 +2375,7 @@ VALUES
     ('00000000-0000-0000-0000-000000000412', '00000000-0000-0000-0000-0000000000e5',  2, 'resolve_credential_reference',     '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000413', '00000000-0000-0000-0000-0000000000e5',  3, 'load_encrypted_credential_payload','{}', NULL, true),
     ('00000000-0000-0000-0000-000000000414', '00000000-0000-0000-0000-0000000000e5',  4, 'decrypt_for_runtime_use',          '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000415', '00000000-0000-0000-0000-0000000000e5',  5, 'build_http_request',               '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000415', '00000000-0000-0000-0000-0000000000e5',  5, 'build_http_request',               '{"method":"PUT"}', NULL, true),
     ('00000000-0000-0000-0000-0000000004b0', '00000000-0000-0000-0000-0000000000e5',  6, 'inject_authorization_header',      '{}', NULL, true),
     ('00000000-0000-0000-0000-0000000004b1', '00000000-0000-0000-0000-0000000000e5',  7, 'send_http',                        '{}', NULL, true),
     ('00000000-0000-0000-0000-0000000004b2', '00000000-0000-0000-0000-0000000000e5',  8, 'capture_response',                 '{}', NULL, true),
@@ -2401,7 +2401,7 @@ VALUES
     -- email_bundle response_port
     ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000423', '00000000-0000-0000-0000-0000000000e6', 3, 'build_http_request',           '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000423', '00000000-0000-0000-0000-0000000000e6', 3, 'build_http_request',           '{"method":"POST"}', NULL, true),
     ('00000000-0000-0000-0000-000000000424', '00000000-0000-0000-0000-0000000000e6', 4, 'send_http',                    '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000425', '00000000-0000-0000-0000-0000000000e6', 5, 'append_runtime_event_log',     '{}', NULL, true),
     -- stripe_bundle hook_port
@@ -2427,7 +2427,7 @@ VALUES
     -- audit_approval_bundle response_port
     ('00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-0000000000ea', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-0000000000ea', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000463', '00000000-0000-0000-0000-0000000000ea', 3, 'build_http_request',           '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000463', '00000000-0000-0000-0000-0000000000ea', 3, 'build_http_request',           '{"method":"POST"}', NULL, true),
     ('00000000-0000-0000-0000-000000000464', '00000000-0000-0000-0000-0000000000ea', 4, 'send_http',                    '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000465', '00000000-0000-0000-0000-0000000000ea', 5, 'append_runtime_event_log',     '{}', NULL, true),
     -- export_sftp_bundle response_port
@@ -2440,3 +2440,119 @@ ON CONFLICT (policy_id, step_order) DO NOTHING;
 -- All 7 fs_* operations (record_export_job, record_file_artifact, write_manifest_record, authorize_signed_download,
 -- bind/list/unbind_record_file_attachment) are expressed through abstract function manifests af01-af07.
 -- record_table_ref for attachment operations comes from step_config (manifest-authority), not from payload.
+
+-- Idempotent fix: ensure build_http_request steps in generic substrate policies have explicit method.
+-- These rows were inserted with ON CONFLICT DO NOTHING, so UPDATE is needed for re-seeds.
+UPDATE topology.external_port_policy_steps SET step_config = '{"method":"GET"}'  WHERE policy_step_id = '00000000-0000-0000-0000-000000000103';
+UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000203';
+UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000423';
+UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000463';
+
+-- ---------------------------------------------------------------------------
+-- Abstract function manifest for credential token refresh (af10).
+-- credential.refresh_token routes through external_port_runtime with 6 primitive steps:
+--   credential_acquire_lease → credential_http_request → credential_compute_token_hash
+--   → credential_parse_expires_at → credential_write_vault → credential_release_lease
+-- Authority scope: external_credential_vault_refresh.
+-- Decrypted payload exists only inside runtime context; never enters projection/log/SSOT.
+-- No provider_kind switch; provider_kind remains data only.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.abstract_function_manifests
+    (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af10', 'credential.refresh_token', 'external_port_runtime', 'external_credential_vault_refresh',
+     '{}',
+     ARRAY['credential','credential_payload','decrypted_payload','plaintext_payload','decrypted_credential_payload','token_response','token_body'],
+     true)
+ON CONFLICT (abstract_function_id) DO NOTHING;
+
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf15', '00000000-0000-0000-0000-00000000af10', 1, 'credential_acquire_lease',
+     '{"lease_owner":"external_credential_vault_refresh","lease_duration_minutes":"5"}',
+     'credential_lease', true),
+    ('00000000-0000-0000-0000-00000000bf16', '00000000-0000-0000-0000-00000000af10', 2, 'credential_http_request',
+     '{"method":"POST"}',
+     'token_response', true),
+    ('00000000-0000-0000-0000-00000000bf17', '00000000-0000-0000-0000-00000000af10', 3, 'credential_compute_token_hash',
+     '{}',
+     'token_hash', true),
+    ('00000000-0000-0000-0000-00000000bf18', '00000000-0000-0000-0000-00000000af10', 4, 'credential_parse_expires_at',
+     '{"expires_at_response_key":"expires_at"}',
+     'token_expires_at', true),
+    ('00000000-0000-0000-0000-00000000bf19', '00000000-0000-0000-0000-00000000af10', 5, 'credential_write_vault',
+     '{}',
+     NULL, true),
+    ('00000000-0000-0000-0000-00000000bf1a', '00000000-0000-0000-0000-00000000af10', 6, 'credential_release_lease',
+     '{}',
+     NULL, true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+-- bf1b is a compensation step: runs on failure to fail the acquired lease.
+-- is_compensation_step = true so the executor skips it on the success path.
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active, is_compensation_step)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf1b', '00000000-0000-0000-0000-00000000af10', 7, 'credential_fail_lease',
+     '{"failure_code":"step_failure"}',
+     NULL, true, true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    -- bf15 (credential_acquire_lease): vault id from external_context
+    ('00000000-0000-0000-0000-00000000c040', '00000000-0000-0000-0000-00000000bf15', 'credential_vault_id',         'external_context', 'credential_vault_id',         true,  false, true),
+    -- bf16 (credential_http_request): decrypted payload from external_context (secret)
+    ('00000000-0000-0000-0000-00000000c041', '00000000-0000-0000-0000-00000000bf16', 'decrypted_credential_payload', 'external_context', 'decrypted_credential_payload', true,  true,  true),
+    -- bf17 (credential_compute_token_hash): token_response from result_context (secret)
+    ('00000000-0000-0000-0000-00000000c042', '00000000-0000-0000-0000-00000000bf17', 'token_response',               'result_context',   'token_response',               true,  true,  true),
+    -- bf18 (credential_parse_expires_at): token_response from result_context (secret)
+    ('00000000-0000-0000-0000-00000000c043', '00000000-0000-0000-0000-00000000bf18', 'token_response',               'result_context',   'token_response',               true,  true,  true),
+    -- bf19 (credential_write_vault): lease, hash, expiry (non-secret), token_response (secret)
+    ('00000000-0000-0000-0000-00000000c044', '00000000-0000-0000-0000-00000000bf19', 'credential_lease',             'result_context',   'credential_lease',             true,  false, true),
+    ('00000000-0000-0000-0000-00000000c045', '00000000-0000-0000-0000-00000000bf19', 'token_hash',                   'result_context',   'token_hash',                   true,  false, true),
+    ('00000000-0000-0000-0000-00000000c046', '00000000-0000-0000-0000-00000000bf19', 'token_expires_at',             'result_context',   'token_expires_at',             true,  false, true),
+    ('00000000-0000-0000-0000-00000000c047', '00000000-0000-0000-0000-00000000bf19', 'token_response',               'result_context',   'token_response',               true,  true,  true),
+    -- bf1a (credential_release_lease): credential_lease from result_context
+    ('00000000-0000-0000-0000-00000000c048', '00000000-0000-0000-0000-00000000bf1a', 'credential_lease',             'result_context',   'credential_lease',             true,  false, true),
+    -- bf1b (credential_fail_lease, compensation): credential_lease from result_context (not required: if
+    -- lease was never acquired the adapter returns null rather than failing the compensation step)
+    ('00000000-0000-0000-0000-00000000c049', '00000000-0000-0000-0000-00000000bf1b', 'credential_lease',             'result_context',   'credential_lease',             false, false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
+
+INSERT INTO topology.abstract_function_authority_bindings
+    (abstract_function_id, authority_kind, authority_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af10', 'policy', 'external_credential_vault_refresh',       true),
+    ('00000000-0000-0000-0000-00000000af10', 'table',  'topology.external_credential_vaults',     true)
+ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
+-- external_credential_vault_refresh_bundle: token refresh access_port
+INSERT INTO topology.external_access_ports
+    (access_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000f10', 'external_credential_vault_refresh', 'oauth_refresh', 'env:TOKEN_REFRESH_ENDPOINT_REF', 'external', 'vault:ref:token_refresh_credential', true)
+ON CONFLICT (access_port_id) DO NOTHING;
+
+-- Policy: external_credential_vault_refresh
+-- Steps: resolve_port_record → resolve_credential_reference → load_encrypted_credential_payload
+--        → decrypt_for_runtime_use → execute_abstract_function(credential.refresh_token)
+--        → append_runtime_event_log
+INSERT INTO topology.external_port_policies (policy_id, policy_key, port_kind, required_by_bundle, active)
+VALUES
+    ('00000000-0000-0000-0000-0000000000e0', 'external_credential_vault_refresh', 'access_port', 'external_credential_vault_refresh', true)
+ON CONFLICT (policy_id) DO NOTHING;
+
+DELETE FROM topology.external_port_policy_steps WHERE policy_id = '00000000-0000-0000-0000-0000000000e0';
+
+INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000501', '00000000-0000-0000-0000-0000000000e0', 1, 'resolve_port_record',              '{}',                                                              NULL,                          true),
+    ('00000000-0000-0000-0000-000000000502', '00000000-0000-0000-0000-0000000000e0', 2, 'resolve_credential_reference',     '{}',                                                              NULL,                          true),
+    ('00000000-0000-0000-0000-000000000503', '00000000-0000-0000-0000-0000000000e0', 3, 'load_encrypted_credential_payload','{}',                                                              NULL,                          true),
+    ('00000000-0000-0000-0000-000000000504', '00000000-0000-0000-0000-0000000000e0', 4, 'decrypt_for_runtime_use',          '{}',                                                              NULL,                          true),
+    ('00000000-0000-0000-0000-000000000505', '00000000-0000-0000-0000-0000000000e0', 5, 'execute_abstract_function',        '{}',                                                              'credential.refresh_token',    true),
+    ('00000000-0000-0000-0000-000000000506', '00000000-0000-0000-0000-0000000000e0', 6, 'append_runtime_event_log',         '{"event_type":"credential_token_refreshed"}',                    NULL,                          true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
