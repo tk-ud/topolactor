@@ -117,7 +117,7 @@ Absorption policy:
 |---|---|---|
 | `abstract-function-runtime-substrate-ssot` | ssot_contract_complete | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
 | `abstract-function-manifest-schema` | ssot_contract_complete | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
-| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete; SQL Attention list_projection and context_route recommendation_resolve migrated via abstract function; credential hardening implemented separately) |
+| `backend-abstract-function-executor` | implemented | Runtime executor for abstract function manifests and primitive registry is implemented; SQL Attention list_projection and context_route recommendation_resolve are migrated through seed manifests af08/af09 and generic primitive adapters; legacy concrete surfaces are explicit compatibility fallbacks only |
 | `credential-primitive-hardening` | implemented | Absorb credential flow by migration order while preserving runtime-only secret materialization |
 | `projection-manifest-primitive-migration` | investigation_needed | Move remaining projection constructor / runtime event / screen operation derivation mapping into projection manifest or projection primitives while preserving pure render/test-only exceptions |
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives rather than dedicated tool handlers |
@@ -289,9 +289,9 @@ topology.abstract_function_policy_bindings
 
 ## Bundle `backend-abstract-function-executor`
 
-Status: `partial_compatibility_fallback`
+Status: `implemented`
 
-Note: NOT marked complete based on file-storage migration alone. SQL Attention / recommendation Bundles remain not_started. File-storage attachment migration is the representative absorption case that proves the substrate works end-to-end.
+Note: Implemented after verifying the Bundle beyond the representative file-storage case: SQL Attention `list_projection` and context-route `recommendation_resolve` now run through `execute_abstract_function` manifests and generic primitive adapters. Remaining projection-manifest and scheduler job-body migrations are separate unresolved Bundles, not blockers for this executor Bundle.
 
 ### Problem
 
@@ -317,7 +317,10 @@ Implement a backend `execute_abstract_function` executor that reads abstract fun
 - [x] Support result context binding between primitive steps.
 - [x] Support explicit fail-close statuses for missing authority, missing input, invalid projection, and unsupported primitive; credential-specific hardening remains in its Bundle.
 - [x] Route external port `execute_abstract_function` through existing `external_port_runtime` lane without new API route.
-- [x] Keep concrete compute adapters for checksum, crypto, HTTP client, DB connection, and Phase Attention engine; only `call_postgres_function` is implemented in this Bundle slice.
+- [x] Keep concrete compute adapters for checksum, crypto, HTTP client, DB connection, SQL Attention evidence query/projection, recommendation phase internals, and Phase Attention engine behind generic primitive adapters.
+- [x] Add seed manifests for SQL Attention projection and context-route recommendation resolution through `execute_abstract_function`.
+- [x] Route SQL Attention admin projection and runtime recommendation through `AbstractFunctionExecutor`, without dedicated frontend wrapper or direct backend handler bypass.
+- [x] Preserve remaining direct SQL Attention / recommendation classes as compatibility/test adapters only, with canonical dispatch using abstract function manifests.
 
 ### Materials
 
@@ -353,7 +356,9 @@ Implement a backend `execute_abstract_function` executor that reads abstract fun
 - [x] Primitive registry is generic and data-driven for implemented primitives.
 - [x] Provider/bundle-specific branching does not enter the generic executor.
 - [x] Existing external port policy execution can call abstract function manifests.
-- [x] Failure paths are explicit and covered by tests for the substrate statuses in this slice.
+- [x] SQL Attention admin projection uses `sql_attention.list_projection` abstract function manifest af08, generic `sql_attention` primitive, and manifest authority for policy / `logs.attention`.
+- [x] Context-route recommendation uses `context_route.recommendation_resolve` abstract function manifest af09 and decomposed recommendation primitives rather than a monolithic canonical concrete resolver path.
+- [x] Failure paths are explicit and covered by tests for missing input, missing/invalid authority, missing/malformed policy, DB unavailability, invalid projection/lane mixing, and no silent fallback in this slice.
 - [x] Tests prove no silent fallback for `execute_abstract_function` executor wiring and no frontend judgment authority in this slice.
 
 ### Bundle `abstract_function_authority_bindings_runtime_enforcement` (PR #479)
@@ -368,9 +373,13 @@ Completed in PR #479:
 - [x] Unit tests cover: no bindings, no policy binding, inactive-only bindings, valid binding pass, no table authority.
 - [x] Live DB integration test (`SeededAbstractFunctions_LoadAuthorityBindings_AndEnforceFailClose`) proves seeded authority bindings are loaded and executor fail-closes on empty bindings.
 
-Still open after the file-storage attachment migration:
-- `NpgsqlExternalPortDbFunctionRepository` is now an explicit fail-closed compatibility stub (concrete fs_* methods deleted); full interface/class removal is not part of `completion-gate-and-test-alignment` and remains blocked until all Bundles leave the legacy `execute_db_function` operation key.
-- SQL Attention / recommendation Bundles remain not_started.
+Completed in this verification:
+- SQL Attention `sql_attention.list_projection` seed manifest af08 uses `admin_runtime` / `admin_sql_attention`, a single `sql_attention` primitive step, payload-bound `sourceSetId`, and manifest authority bindings for policy plus `logs.attention`.
+- Admin dispatch for `sql_attention:list_projection` calls `AbstractFunctionExecutor.ExecuteAsync("sql_attention.list_projection")`; the primitive reads policy/function identity from manifest step_config, queries evidence read-only, and returns projection without topology/route mutation.
+- Context-route recommendation seed manifest af09 uses `runtime_executor` / `context_route_recommendation` and decomposed primitives `recommendation_candidate_source`, `recommendation_eligibility`, `recommendation_score_rank`, and `recommendation_projection`.
+- Runtime recommendation resolution calls `AbstractFunctionExecutor.ExecuteAsync("context_route.recommendation_resolve")`; recommendation function identity remains manifest step_config authority, and lane-mixing fails closed as invalid_projection.
+- Legacy `recommendation_attention` and `SqlAttentionTopologyProjectionRuntime` direct surfaces are documented compatibility fallbacks for old manifests or isolated projection tests, not canonical dispatch targets.
+- `NpgsqlExternalPortDbFunctionRepository` remains an explicit fail-closed compatibility stub while the legacy `execute_db_function` operation key exists for compatibility; this does not keep the executor Bundle partial because file-storage concrete fs_* methods are already deleted and current SQL Attention/recommendation canonical paths do not use the stub.
 
 ---
 
