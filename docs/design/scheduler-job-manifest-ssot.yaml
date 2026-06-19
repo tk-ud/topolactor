@@ -21,7 +21,9 @@ scheduler_job_manifest_ssot:
     non_goals:
       - implementation_code_change
       - db_migration_or_seed_change
-      - ssot_map_or_roadmap_or_todo_wiring
+      - admin_contents_ui_implementation
+      - existing_cron_absorption_implementation
+      - production_ready_or_implemented_status_claim
       - domain_specific_scheduler_body_definition
 
   references:
@@ -46,9 +48,18 @@ scheduler_job_manifest_ssot:
     data_defined_fields:
       - job_key
       - trigger_kind
-      - schedule_interval_or_cron_expression
+      - schedule_policy_kind
+      - cron_expression
+      - schedule_interval_seconds
+      - timezone
+      - manual_run_allowed
       - active
       - input_source_binding
+      - input_due_column
+      - input_status_pending_value
+      - input_status_processing_value
+      - input_status_completed_value
+      - input_status_failed_value
       - credential_requirement_reference
       - external_port_reference
       - abstract_function_step_chain
@@ -73,6 +84,7 @@ scheduler_job_manifest_ssot:
     allowed_responsibilities:
       - cron_tick
       - due_job_selection
+      - schedule_policy_due_evaluation
       - input_source_selection_by_manifest_authority
       - input_lease_acquire_release_fail
       - queue_or_run_creation
@@ -85,14 +97,19 @@ scheduler_job_manifest_ssot:
       - weather_api_job_body
       - retention_job_body
       - domain_specific_if_switch_or_handler_selection
+      - trigger_kind_as_domain_job_body_selector
       - csharp_function_name_array_as_canonical_sequence
       - payload_derived_table_or_column_authority
       - credential_plaintext_materialization_outside_runtime_only_boundary
     driver_rule: >-
-      Cron/background drivers may only tick, ask for due active manifests, and
-      hand manifest/run identifiers to the generic scheduler substrate. They must
-      not know whether a job performs SQL Attention, weather ingestion,
-      retention, export, or any other domain sequence.
+      Cron/background drivers may only tick, ask for active due manifests from
+      topology.scheduler_jobs, and hand manifest/run identifiers to the generic
+      scheduler substrate. trigger_kind is limited to the runtime-orchestration
+      trigger vocabulary (cron, hook, client); cron expression, interval,
+      manual-only, and due-column details belong to schedule_policy_kind and
+      due policy fields. Drivers must not know whether a job performs SQL
+      Attention, weather ingestion, retention, export, or any other domain
+      sequence.
     sequence_rule: >-
       Domain sequence belongs to scheduler_job_steps as an ordered
       abstract_function_key chain. The substrate dispatches each step through the
@@ -105,14 +122,22 @@ scheduler_job_manifest_ssot:
       conceptual_fields:
         scheduler_job_id: stable_manifest_identifier
         job_key: unique_human_readable_job_key
-        trigger_kind: cron_interval_manual_or_event_due_selector
+        trigger_kind: runtime_orchestration_trigger_kind_cron_hook_or_client
+        schedule_policy_kind: cron_expression_interval_seconds_due_column_or_manual_only
         cron_expression: optional_cron_schedule_expression
         schedule_interval_seconds: optional_interval_schedule
         timezone: optional_schedule_timezone
+        manual_run_allowed: explicit_admin_or_client_manual_run_permission
         active: enables_due_selection_when_true
         input_table_ref: manifest_or_registry_bound_input_table_reference
         input_id_column: manifest_or_registry_bound_input_identifier_column
         input_status_column: manifest_or_registry_bound_status_column
+        input_status_pending_value: manifest_defined_lifecycle_value_for_due_unprocessed_input
+        input_status_processing_value: manifest_defined_lifecycle_value_written_after_processing_lease_acquired
+        input_status_completed_value: manifest_defined_lifecycle_value_for_successfully_completed_input
+        input_status_failed_value: manifest_defined_lifecycle_value_for_terminal_failed_input
+        input_status_skipped_value: optional_manifest_defined_lifecycle_value_for_policy_skipped_input
+        input_status_retry_wait_value: optional_manifest_defined_lifecycle_value_for_backoff_wait_input
         input_due_column: manifest_or_registry_bound_due_timestamp_column
         output_table_ref: manifest_or_registry_bound_output_table_reference
         max_batch_size: maximum_inputs_to_lease_per_tick
@@ -125,8 +150,16 @@ scheduler_job_manifest_ssot:
         created_by: admin_or_seed_author_reference
         updated_at: manifest_update_timestamp
       authority_rules:
+        - trigger_kind_must_be_one_of_runtime_orchestration_trigger_kind_enum_cron_hook_client
+        - schedule_policy_kind_owns_cron_interval_due_column_and_manual_only_policy
+        - trigger_kind_must_not_carry_composite_cron_interval_manual_or_event_due_selector_meaning
+        - driver_must_not_infer_domain_job_body_from_trigger_kind
         - input_and_output_table_refs_are_not_payload_values
         - table_column_authority_comes_from_seed_admin_manifest_registry_or_authority_binding
+        - status_values_are_manifest_defined_not_runtime_default_or_payload_derived
+        - input_lifecycle_uses_explicit_status_values_not_boolean_processed_flag
+        - processing_status_must_not_be_written_before_processing_lease_is_acquired
+        - completed_failed_status_must_be_consistent_between_scheduler_job_runs_and_input_row
         - authority_scope_must_cover_input_table_output_table_and_step_functions
         - credential_plaintext_is_never_a_field
 
@@ -156,7 +189,8 @@ scheduler_job_manifest_ssot:
         scheduler_job_id: parent_scheduler_job_manifest
         job_key: denormalized_run_identity_for_audit
         trigger_kind: trigger_kind_used_for_this_run
-        run_status: queued_running_succeeded_failed_partially_failed_cancelled_or_lease_expired
+        schedule_policy_kind: schedule_policy_kind_used_for_due_selection
+        run_status: queued_processing_completed_failed_partially_failed_cancelled_or_lease_expired
         input_ref: leased_input_identifier_or_batch_reference
         input_status_before: optional_input_status_snapshot_before_run
         input_status_after: optional_input_status_written_after_run
@@ -170,6 +204,7 @@ scheduler_job_manifest_ssot:
         - run_log_contains_references_status_and_sanitized_result_context_only
         - run_log_must_not_store_secret_payload_token_response_or_plaintext_credential
         - status_updates_follow_manifest_retry_and_on_error_policy
+        - completed_failed_status_must_match_manifest_defined_input_status_values
 
     topology.scheduler_job_run_steps:
       role: optional_per_step_ledger_for_debuggable_ordered_execution
@@ -214,7 +249,7 @@ scheduler_job_manifest_ssot:
       - input_table_input_column_status_column_due_column_and_output_table_are_manifest_or_registry_authority
       - runtime_payload_cannot_choose_tables_columns_joins_or_output_targets
       - table_authority_and_function_authority_are_explicit_in_authority_scope_or_authority_binding
-      - abstract_function_authority_bindings_remain_the_fail_close_surface_for table_column_join_output_policy
+      - abstract_function_authority_bindings_remain_the_fail_close_surface_for_table_column_join_output_policy
       - leases_must_target_only_authorized_input_sources
     authority_sources:
       - seed_manifest
@@ -238,12 +273,33 @@ scheduler_job_manifest_ssot:
       - raw_sql_or_table_name_from_payload
       - silent_fallback_to_legacy_concrete_function
 
+  runtime_execution_flow:
+    owner: scheduler_job_manifest_substrate
+    steps:
+      - cron_background_driver_reads_active_due_job_from_topology_scheduler_jobs
+      - scheduler_selects_input_by_manifest_defined_input_table_ref_input_id_column_input_status_column_input_status_values_and_input_due_column
+      - scheduler_acquires_processing_lease_then_writes_input_status_processing_value
+      - scheduler_loads_topology_scheduler_job_steps_ordered_by_step_order
+      - scheduler_dispatches_each_abstract_function_key_through_AbstractFunctionExecutor
+      - scheduler_passes_result_context_to_next_step
+      - scheduler_persists_authorized_output_upsert_primitive_result
+      - scheduler_writes_completed_or_failed_to_scheduler_job_runs_and_input_row
+    invariants:
+      - active_manifests_only
+      - no_domain_job_body_in_cron_or_background_driver
+      - trigger_kind_is_cron_hook_or_client_only
+      - schedule_policy_kind_selects_cron_expression_interval_seconds_due_column_or_manual_only
+      - input_status_pending_value_processing_value_completed_value_failed_value_are_manifest_defined
+      - output_upsert_authority_comes_from_manifest_registry_or_authority_binding
+      - result_context_is_sanitized_before_run_ledger_projection
+
   existing_cron_absorption_policy:
     rule: >-
       Existing cron routes should be absorbable by defining their due selector,
       input lease, abstract function step chain, output binding, and status policy
-      as scheduler manifests. This SSOT adds no migration, seed, CI, or code
-      wiring in the current change.
+      as scheduler manifests. This SSOT adds no implementation migration, seed,
+      admin UI, runtime code, or existing cron absorption in the current change;
+      only SSOT, roadmap/todo/map references, and wiring checks are in scope.
     sql_attention_evidence_generation_conceptual_non_implementation_example:
       job_key: sql_attention_evidence_generation
       sequence:
@@ -276,10 +332,15 @@ scheduler_job_manifest_ssot:
 
   current_change_boundary:
     includes:
-      - add_this_ssot_file_only
+      - add_scheduler_job_manifest_ssot
+      - wire_ssot_map_reference
+      - wire_system_roadmap_not_started_item
+      - wire_agent_todo_bundle
+      - add_structure_wiring_check
     excludes:
       - implementation_code_wiring
       - database_migration
       - seed_sql
-      - ssot_map_roadmap_todo_updates
-      - ci_test_addition
+      - admin_contents_ui_implementation
+      - existing_cron_absorption_implementation
+      - production_ready_or_implemented_status_claim
