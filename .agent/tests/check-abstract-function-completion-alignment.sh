@@ -24,6 +24,8 @@ check_file "backend/tests/Topolactor.Runtime.Tests/AbstractFunctionExecutorTests
 check_file "backend/tests/Topolactor.Runtime.Tests/FileStorageBundleDispatchTests.cs"
 check_file "backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs"
 check_file "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs"
+check_file "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs"
+check_file "backend/runtime/ExternalPortCredentialRefresher.cs"
 
 # Completion gate must define lane-specific evidence and migration-order constraints, not just an implemented label.
 check_term ".agent/protocols/completion.md" "Abstract Function Bundle Completion Alignment Gate"
@@ -47,7 +49,7 @@ BUNDLE_BLOCK="$(section "tasks/refactor_todo.md" '## Bundle `completion-gate-and
 
 # Current Bundle status map must not advance unrelated target Bundles by wording.
 check_term "tasks/refactor_todo.md" '| `sql-recommendation-primitive-migration` | not_started |'
-check_term "tasks/refactor_todo.md" '| `credential-primitive-hardening` | not_started |'
+check_term "tasks/refactor_todo.md" '| `credential-primitive-hardening` | implemented |'
 check_term "tasks/refactor_todo.md" '| `backend-abstract-function-executor` | partial_compatibility_fallback |'
 
 # Backend primitive executor evidence: order, result context binding, fail-close, policy-step execution, no provider/bundle branching.
@@ -72,6 +74,19 @@ check_term "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "No pe
 check_term "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "EXTERNAL_PORT_DB_FUNCTION_UNKNOWN"
 check_absent "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "case \"topology.fs_"
 check_absent "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "topology.fs_record_export_job"
+
+# Credential-primitive-hardening evidence: placeholder replaced, 6 new operation keys, atomic write, plaintext prohibition, seed policy.
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "ParseTokenRefreshResult_ComputesHashViaCryptoAdapter_NotLengthPlaceholder"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "AcquireRefreshLease_SetsRefreshLeaseOnContext"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "WriteEncryptedCredentialPayload_FullFlow_WritesAtomicallyAndClearsPlaintext"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "WriteEncryptedCredentialPayload_ClearsDecryptedPayload_PreventingPlaintextProjection"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialRefreshPolicy_ExecutesAllStepsInOrder"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialVaultGenericRefreshPolicy_SeedContainsAllOperationKeysWithoutPlaintext"
+check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "acquire_refresh_lease"
+check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "write_encrypted_credential_payload"
+check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "release_refresh_lease"
+check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "Compatibility fallback used by ExternalTokenRefresher"
+check_absent "backend/runtime/ExternalPortCredentialRefresher.cs" "sha256:{response.Body.Length}"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== Abstract function completion alignment evidence check passed ==="
