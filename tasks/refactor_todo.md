@@ -121,7 +121,6 @@ Absorption policy:
 | `credential-primitive-hardening` | implemented | Absorb credential flow by migration order while preserving runtime-only secret materialization |
 | `projection-manifest-primitive-migration` | investigation_needed | Move remaining projection constructor / runtime event / screen operation derivation mapping into projection manifest or projection primitives while preserving pure render/test-only exceptions |
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives rather than dedicated tool handlers |
-| `cli-mcp-read-export-port-substrate` | not_started | Implement CLI/MCP read/export/import-candidate port through dispatch-secured port and abstract function primitives rather than dedicated tool handlers |
 | `file-storage-db-function-to-abstract-function-migration` | implemented | Absorb file-storage DB functions by migration order and remove payload-derived table authority — all 7 fs_* operations migrated to execute_abstract_function manifests af01-af07; NpgsqlExternalPortDbFunctionRepository stub; all acceptance conditions satisfied |
 | `completion-gate-and-test-alignment` | implemented | Align tests/checks/status after Bundle migration |
 
@@ -554,7 +553,7 @@ Status: `implemented`
 - [x] Documented required check surfaces by changed lane: SSOT/manifest schema, backend primitive executor, seed/migration, DB mutation projection source, frontend return lane, SQL Attention/recommendation, and credential primitive.
 - [x] Enforced global migration order in completion governance: SSOT/primitive generation first, then per-Bundle seed/manifest migration, seed/runtime/integration proof, concrete deletion or explicit compatibility fallback, and only then TODO/roadmap/refactor-todo closure.
 - [x] Extended `.agent/tests/check-completion-judgment.sh` and added `.agent/tests/check-abstract-function-completion-alignment.sh` so the completion alignment gate, migration-order vocabulary, Bundle-to-test-surface mapping, seed/integration proof, and compatibility fallback classification are executable governance checks.
-- [x] Confirmed through `.agent/tests/check-abstract-function-completion-alignment.sh` that existing representative runtime and seed tests cover current file-storage absorption evidence surfaces (`AbstractFunctionExecutorTests`, `FileStorageBundleDispatchTests`, `FileStoragePortConsumerLiveDbTests`) and that `NpgsqlExternalPortDbFunctionRepository` remains an explicit fail-closed compatibility stub; future SQL Attention/recommendation and credential Bundles remain separate not_started Bundles and are not advanced by this alignment Bundle.
+- [x] Confirmed through `.agent/tests/check-abstract-function-completion-alignment.sh` that existing representative runtime and seed tests cover current file-storage absorption evidence surfaces (`AbstractFunctionExecutorTests`, `FileStorageBundleDispatchTests`, `FileStoragePortConsumerLiveDbTests`) and that `NpgsqlExternalPortDbFunctionRepository` remains an explicit fail-closed compatibility stub; future SQL Attention/recommendation, projection, and scheduler Bundles remain separate unresolved Bundles and are not advanced by this alignment Bundle.
 
 ### Problem
 
@@ -568,5 +567,5 @@ Align required tests/checks and completion language after implementation bundles
 
 - [x] Add or update SSOT vocabulary checks for new primitive keys and manifest tables; the executable alignment check now verifies that implemented completion wording is tied to concrete test surfaces.
 - [x] Add backend runtime tests for primitive execution order, result context binding, fail-close, and no provider/bundle branching.
-- [x] Add seed tests for current absorption targets before concrete function deletion; future targets remain in their own not_started Bundles.
+- [x] Add seed tests for current absorption targets before concrete function deletion; future targets remain in their own unresolved Bundles.
 - [x] Add integration tests for representative DB mutation returning to projection/refetch/SSE where applicable.

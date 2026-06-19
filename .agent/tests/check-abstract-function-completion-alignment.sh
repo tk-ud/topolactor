@@ -43,7 +43,8 @@ BUNDLE_BLOCK="$(section "tasks/refactor_todo.md" '## Bundle `completion-gate-and
 [[ "$BUNDLE_BLOCK" == *'FileStorageBundleDispatchTests'* ]] && pass "Bundle references file-storage runtime/seed tests" || fail "Bundle missing file-storage runtime/seed test reference"
 [[ "$BUNDLE_BLOCK" == *'FileStoragePortConsumerLiveDbTests'* ]] && pass "Bundle references live DB integration proof" || fail "Bundle missing live DB integration proof reference"
 [[ "$BUNDLE_BLOCK" == *'compatibility stub'* ]] && pass "Bundle records compatibility fallback classification" || fail "Bundle missing compatibility fallback classification"
-[[ "$BUNDLE_BLOCK" == *'future targets remain in their own not_started Bundles'* ]] && pass "Bundle keeps future absorption targets separate" || fail "Bundle hides future absorption targets"
+[[ "$BUNDLE_BLOCK" == *'future targets remain in their own unresolved Bundles'* ]] && pass "Bundle keeps future absorption targets separate" || fail "Bundle hides future absorption targets"
+check_absent "tasks/refactor_todo.md" '| `cli-mcp-read-export-port-substrate` |'
 
 # Current Bundle status map must reflect credential hardening as implemented.
 check_term "tasks/refactor_todo.md" '| `credential-primitive-hardening` | implemented |'
