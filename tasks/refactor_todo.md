@@ -62,7 +62,7 @@ Completed:
 
 Still open after this update:
 
-- SQL Attention / recommendation and credential hardening Bundles remain partial/not_started and must not be marked implemented.
+- SQL Attention / recommendation Bundles remain partial/not_started and must not be marked implemented.
 - File-storage C# concrete deletion: `NpgsqlExternalPortDbFunctionRepository` concrete `fs_*` switch/methods are now deleted (completed in PR#481). `topology.fs_*` PostgreSQL functions are opaque DB adapters called via `call_postgres_function` primitive — they are NOT deletion targets and must remain.
 - Attachment bind/list/unbind migrated to `execute_abstract_function` manifests af05-af07 with `step_config` binding authority for `record_table_ref` (completed in PR#481).
 
@@ -117,7 +117,7 @@ Absorption policy:
 |---|---|---|
 | `abstract-function-runtime-substrate-ssot` | ssot_contract_complete | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
 | `abstract-function-manifest-schema` | ssot_contract_complete | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
-| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete; SQL Attention list_projection and context_route recommendation_resolve migrated via abstract function; credential hardening remains not_started) |
+| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete; SQL Attention list_projection and context_route recommendation_resolve migrated via abstract function; credential hardening implemented separately) |
 | `credential-primitive-hardening` | implemented | Absorb credential flow by migration order while preserving runtime-only secret materialization |
 | `projection-manifest-primitive-migration` | investigation_needed | Move remaining projection constructor / runtime event / screen operation derivation mapping into projection manifest or projection primitives while preserving pure render/test-only exceptions |
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives rather than dedicated tool handlers |
@@ -292,7 +292,7 @@ topology.abstract_function_policy_bindings
 
 Status: `partial_compatibility_fallback`
 
-Note: NOT marked complete based on file-storage migration alone. SQL Attention / recommendation and credential hardening Bundles remain not_started. File-storage attachment migration is the representative absorption case that proves the substrate works end-to-end.
+Note: NOT marked complete based on file-storage migration alone. SQL Attention / recommendation Bundles remain not_started. File-storage attachment migration is the representative absorption case that proves the substrate works end-to-end.
 
 ### Problem
 
@@ -371,7 +371,7 @@ Completed in PR #479:
 
 Still open after the file-storage attachment migration:
 - `NpgsqlExternalPortDbFunctionRepository` is now an explicit fail-closed compatibility stub (concrete fs_* methods deleted); full interface/class removal is not part of `completion-gate-and-test-alignment` and remains blocked until all Bundles leave the legacy `execute_db_function` operation key.
-- SQL Attention / recommendation and credential hardening Bundles remain not_started.
+- SQL Attention / recommendation Bundles remain not_started.
 
 ---
 
@@ -470,7 +470,7 @@ Still open after this update:
 
 - Export job / file artifact / manifest record / signed download authorization operations remain on abstract function manifests af01–af04 (added in PR #479), no change needed.
 - `NpgsqlExternalPortDbFunctionRepository` is now an explicit fail-closed compatibility stub — removal of the interface/class entirely is not part of `completion-gate-and-test-alignment` and can proceed only after all Bundles leave the legacy `execute_db_function` operation key.
-- SQL Attention / recommendation and credential hardening remain not_started.
+- SQL Attention / recommendation remain not_started.
 
 ### Problem
 
