@@ -117,6 +117,31 @@ Completion summary must keep these as separate facts:
 - remote evidence fact (`REMOTE_REQUIRED` pending vs remote `success`)
 
 
+## Abstract Function Bundle Completion Alignment Gate
+
+When a Bundle migrates work into the backend-wide `execute_abstract_function` substrate, completion judgment must classify the changed lane and required evidence before any TODO/roadmap implemented claim. Required checks are lane-specific and cumulative:
+
+| Changed lane | Required evidence | Local check surface |
+|---|---|---|
+| abstract function SSOT vocabulary or manifest schema | primitive keys, manifest tables, authority bindings, projection deny keys, and fail-close statuses are present in SSOT-backed checks | `.agent/tests/check-completion-judgment.sh` plus the lane-specific SSOT check named by the changed Bundle |
+| backend primitive executor / policy step execution | primitive execution order, result-context binding, fail-close status, and no provider/bundle-specific branching are asserted | `backend/tests/Topolactor.Runtime.Tests/AbstractFunctionExecutorTests.cs` and the target Bundle runtime tests |
+| seed or migration for an absorption target | target seed uses `execute_abstract_function` before concrete function deletion and has an absorption-target seed test | target Bundle seed/integration test, e.g. `backend/tests/Topolactor.Integration.Tests/*` for live DB seed assertions |
+| runtime DB mutation returning to projection or read model | the test asserts DB state or projection source changed; backend `ok` alone is not completion evidence | runtime repository/integration test for the target Bundle |
+| runtime result returning to frontend | SSE/refetch/projection response/final state is asserted where applicable; render-only checks are not completion evidence | frontend or backend lane test named by `docs/design/pipeline-continuity-ssot.yaml` |
+| SQL Attention / recommendation primitive | lane separation, candidate/evidence/projection-only behavior, and explicit status are asserted; no automatic topology mutation is allowed | target recommendation/SQL Attention runtime tests |
+| credential primitive | runtime-only secret materialization, secret non-projection, and refresh/fail-close hardening are asserted | target credential runtime tests |
+
+Global abstract-function migration order is mandatory:
+
+1. SSOT fix and abstract function primitive/manifest generation.
+2. Per target Bundle: seed or manifest migration.
+3. Per target Bundle: seed/runtime/integration test proving the migrated path.
+4. Per target Bundle: concrete function/handler deletion or explicit compatibility-fallback classification.
+5. Final TODO/roadmap/refactor-todo deletion or implemented status only after the preceding evidence exists.
+
+No TODO/roadmap status may be advanced by wording alone. A partial, skeleton, compatibility fallback, missing target-lane test, or remaining concrete implementation/design/SSOT/test-authoring residue must remain visible as partial/investigation_needed/not_started work, not hidden behind implemented wording.
+
+
 ## Architecture substrate conformance gate
 
 Implementation cannot be marked `implemented` unless architecture substrate conformance is satisfied.

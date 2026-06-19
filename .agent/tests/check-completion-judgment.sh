@@ -19,6 +19,12 @@ check_term ".agent/protocols/completion.md" "REQUIRED_EXECUTED"
 check_term ".agent/protocols/completion.md" "REQUIRED_NOT_EXECUTED"
 check_term ".agent/protocols/completion.md" "NOT EXECUTED ≠ PASS"
 check_term ".agent/protocols/completion.md" "WorkEvent output sink gap is blocking for completion eligibility"
+check_term ".agent/protocols/completion.md" "Abstract Function Bundle Completion Alignment Gate"
+check_term ".agent/protocols/completion.md" "primitive execution order, result-context binding, fail-close status, and no provider/bundle-specific branching"
+check_term ".agent/protocols/completion.md" "Global abstract-function migration order is mandatory"
+check_term ".agent/protocols/completion.md" "SSOT fix and abstract function primitive/manifest generation"
+check_term ".agent/protocols/completion.md" "concrete function/handler deletion or explicit compatibility-fallback classification"
+check_term ".agent/protocols/completion.md" "No TODO/roadmap status may be advanced by wording alone"
 check_term ".agent/protocols/completion.md" "scenario-contract"
 check_term ".agent/protocols/scenario-contract.md" "docs/ SSOT reload"
 
@@ -68,6 +74,7 @@ check_term ".agent/prompt/audit.md" "- todo_granularity_judgment"
 check_term ".agent/prompt/implementation-change.md" "scope, implementation delta, protocol decisions, todo_granularity_judgment, check results"
 
 if [ "$FAILURES" -eq 0 ]; then
+  bash "$REPO_ROOT/.agent/tests/check-abstract-function-completion-alignment.sh"
   echo "=== Completion judgment checks passed ==="
   exit 0
 else

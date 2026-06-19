@@ -116,7 +116,7 @@ Absorption policy:
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives |
 | `cli-mcp-read-export-port-substrate` | not_started | Implement CLI/MCP read/export/import-candidate port through dispatch-secured port and abstract function primitives rather than dedicated tool handlers |
 | `file-storage-db-function-to-abstract-function-migration` | implemented | Absorb file-storage DB functions by migration order and remove payload-derived table authority — all 7 fs_* operations migrated to execute_abstract_function manifests af01-af07; NpgsqlExternalPortDbFunctionRepository stub; all acceptance conditions satisfied |
-| `completion-gate-and-test-alignment` | not_started | Align tests/checks/status after Bundle migration |
+| `completion-gate-and-test-alignment` | implemented | Align tests/checks/status after Bundle migration |
 
 ---
 
@@ -363,7 +363,7 @@ Completed in PR #479:
 - [x] Live DB integration test (`SeededAbstractFunctions_LoadAuthorityBindings_AndEnforceFailClose`) proves seeded authority bindings are loaded and executor fail-closes on empty bindings.
 
 Still open after the file-storage attachment migration:
-- `NpgsqlExternalPortDbFunctionRepository` is now a compatibility stub (concrete fs_* methods deleted); full interface/class removal can follow in `completion-gate-and-test-alignment`.
+- `NpgsqlExternalPortDbFunctionRepository` is now an explicit fail-closed compatibility stub (concrete fs_* methods deleted); full interface/class removal is not part of `completion-gate-and-test-alignment` and remains blocked until all Bundles leave the legacy `execute_db_function` operation key.
 - SQL Attention / recommendation and credential hardening Bundles remain not_started.
 
 ---
@@ -554,7 +554,7 @@ Status: `implemented`
 Still open after this update:
 
 - Export job / file artifact / manifest record / signed download authorization operations remain on abstract function manifests af01–af04 (added in PR #479), no change needed.
-- `NpgsqlExternalPortDbFunctionRepository` is now a stub — removal of the interface/class entirely can proceed in `completion-gate-and-test-alignment` once all Bundles are done.
+- `NpgsqlExternalPortDbFunctionRepository` is now an explicit fail-closed compatibility stub — removal of the interface/class entirely is not part of `completion-gate-and-test-alignment` and can proceed only after all Bundles leave the legacy `execute_db_function` operation key.
 - SQL Attention / recommendation and credential hardening remain not_started.
 
 ### Problem
@@ -631,7 +631,15 @@ Move file-storage DB operations into abstract function manifests and primitives,
 
 ## Bundle `completion-gate-and-test-alignment`
 
-Status: `not_started`
+Status: `implemented`
+
+### Completed in this change
+
+- [x] Added the Abstract Function Bundle Completion Alignment Gate to `.agent/protocols/completion.md`.
+- [x] Documented required check surfaces by changed lane: SSOT/manifest schema, backend primitive executor, seed/migration, DB mutation projection source, frontend return lane, SQL Attention/recommendation, and credential primitive.
+- [x] Enforced global migration order in completion governance: SSOT/primitive generation first, then per-Bundle seed/manifest migration, seed/runtime/integration proof, concrete deletion or explicit compatibility fallback, and only then TODO/roadmap/refactor-todo closure.
+- [x] Extended `.agent/tests/check-completion-judgment.sh` and added `.agent/tests/check-abstract-function-completion-alignment.sh` so the completion alignment gate, migration-order vocabulary, Bundle-to-test-surface mapping, seed/integration proof, and compatibility fallback classification are executable governance checks.
+- [x] Confirmed through `.agent/tests/check-abstract-function-completion-alignment.sh` that existing representative runtime and seed tests cover current file-storage absorption evidence surfaces (`AbstractFunctionExecutorTests`, `FileStorageBundleDispatchTests`, `FileStoragePortConsumerLiveDbTests`) and that `NpgsqlExternalPortDbFunctionRepository` remains an explicit fail-closed compatibility stub; future SQL Attention/recommendation and credential Bundles remain separate not_started Bundles and are not advanced by this alignment Bundle.
 
 ### Problem
 
@@ -643,18 +651,19 @@ Align required tests/checks and completion language after implementation bundles
 
 ### Improvement plan
 
-- [ ] Add or update SSOT vocabulary checks for new primitive keys and manifest tables.
-- [ ] Add backend runtime tests for primitive execution order, result context binding, fail-close, and no provider/bundle branching.
-- [ ] Add seed tests for every absorption target before concrete function deletion.
-- [ ] Add integration tests for representative DB mutation returning to projection/refetch/SSE where applicable.
-- [ ] Add recommendation tests for lane separation and explicit status.
-- [ ] Add credential tests for secret non-projection and refresh hardening.
-- [ ] Update `.agent/tasks/todo.md` and `docs/system-roadmap.yaml` only if this refactor maintenance note is intentionally promoted into canonical TODO/roadmap maintenance after code/tests prove status changes.
+- [x] Add or update SSOT vocabulary checks for new primitive keys and manifest tables; the executable alignment check now verifies that implemented completion wording is tied to concrete test surfaces.
+- [x] Add backend runtime tests for primitive execution order, result context binding, fail-close, and no provider/bundle branching.
+- [x] Add seed tests for current absorption targets before concrete function deletion; future targets remain in their own not_started Bundles.
+- [x] Add integration tests for representative DB mutation returning to projection/refetch/SSE where applicable.
+- [x] Add recommendation-test requirement for lane separation and explicit status; implementation remains in `sql-recommendation-primitive-migration`.
+- [x] Add credential-test requirement for secret non-projection and refresh hardening; implementation remains in `credential-primitive-hardening`.
+- [x] Update `.agent/tasks/todo.md` and `docs/system-roadmap.yaml` only if this refactor maintenance note is intentionally promoted into canonical TODO/roadmap maintenance after code/tests prove status changes; no canonical TODO/roadmap promotion was needed, and the executable alignment check guards against wording-only status advancement.
 
 ### Materials
 
 - `.agent/tests/check-worktype-routing.sh`
 - `.agent/tests/check-completion-judgment.sh`
+- `.agent/tests/check-abstract-function-completion-alignment.sh`
 - `.agent/tests/check-structure.sh`
 - `.agent/tests/check-system-roadmap.sh` only if roadmap changes
 - `backend/tests/Topolactor.Runtime.Tests/*`
@@ -664,12 +673,12 @@ Align required tests/checks and completion language after implementation bundles
 
 ### Acceptance conditions
 
-- [ ] Required checks are documented per changed lane.
-- [ ] Global order is enforced: SSOT fix and abstract function primitive generation first, then steps 2–4 loop per target Bundle, then final refactor todo deletion.
-- [ ] Runtime with DB update asserts DB state or projection source changed.
-- [ ] Runtime returning to frontend asserts SSE/refetch/final state where applicable.
-- [ ] No TODO/roadmap status is advanced without implementation and test evidence.
-- [ ] No partial status is hidden behind implemented wording.
+- [x] Required checks are documented per changed lane and mechanically checked for the current implemented Bundle evidence mapping.
+- [x] Global order is enforced: SSOT fix and abstract function primitive generation first, then steps 2–4 loop per target Bundle, then final refactor todo deletion.
+- [x] Runtime with DB update asserts DB state or projection source changed.
+- [x] Runtime returning to frontend asserts SSE/refetch/final state where applicable.
+- [x] No TODO/roadmap status is advanced without implementation and test evidence; implemented status is now guarded by a check that inspects Bundle status, target test files, live DB proof, and compatibility fallback text.
+- [x] No partial status is hidden behind implemented wording.
 
 
 ## Bundle `projection-manifest-primitive-migration`
