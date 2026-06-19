@@ -46,7 +46,6 @@ BUNDLE_BLOCK="$(section "tasks/refactor_todo.md" '## Bundle `completion-gate-and
 [[ "$BUNDLE_BLOCK" == *'future targets remain in their own not_started Bundles'* ]] && pass "Bundle keeps future absorption targets separate" || fail "Bundle hides future absorption targets"
 
 # Current Bundle status map must not advance unrelated target Bundles by wording.
-check_term "tasks/refactor_todo.md" '| `sql-recommendation-primitive-migration` | not_started |'
 check_term "tasks/refactor_todo.md" '| `credential-primitive-hardening` | not_started |'
 check_term "tasks/refactor_todo.md" '| `backend-abstract-function-executor` | partial_compatibility_fallback |'
 

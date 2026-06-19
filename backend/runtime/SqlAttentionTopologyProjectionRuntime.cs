@@ -6,6 +6,13 @@ using Topolactor.Schema;
 namespace Topolactor.Runtime;
 
 /// <summary>
+/// COMPATIBILITY FALLBACK — sql_attention:list_projection is now the canonical abstract function path
+/// via SqlAttentionProjectionPrimitiveAdapter (primitive key "sql_attention").
+/// This class is retained for:
+///   - Internal reuse by SqlAttentionProjectionPrimitiveAdapter (ParsePolicy, ProjectCandidates).
+///   - Existing unit tests that exercise projection logic in isolation.
+/// It is no longer the canonical dispatch target for AdminRuntime sql_attention:list_projection.
+///
 /// Child projection runtime that consumes SQL Attention evidence (logs.attention)
 /// and produces topology recommendation candidates for user-visible surfaces.
 ///
@@ -180,7 +187,7 @@ public class SqlAttentionTopologyProjectionRuntime
     // Policy parsing
     // ---------------------------------------------------------------------------
 
-    private static SqlAttentionTopologyProjectionPolicy ParsePolicy(string json)
+    internal static SqlAttentionTopologyProjectionPolicy ParsePolicy(string json)
     {
         var element = JsonSerializer.Deserialize<JsonElement>(json);
 

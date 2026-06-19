@@ -153,6 +153,53 @@ public record ContextRouteRecommendationResult(
 
 
 /// <summary>
+/// Intermediate result of recommendation_candidate_source primitive step.
+/// Carries policy, event vector, prefix candidates, and early-exit status.
+/// When Status != Ok, subsequent eligibility/score_rank/projection steps propagate without executing.
+/// </summary>
+public record RecommendationCandidateSourceResult(
+    ContextRoutePolicy? Policy,
+    IReadOnlyDictionary<Guid, float> EventVector,
+    float EventNorm,
+    IReadOnlyList<ContextPrefixVectorRecord> PrefixCandidates,
+    Guid SessionId,
+    string CurrentOperation,
+    string? Role,
+    string? TableName,
+    IReadOnlyList<Guid> TokenIds,
+    RecommendationStatus Status,
+    string? StatusDetail
+);
+
+/// <summary>
+/// Intermediate result of recommendation_eligibility primitive step.
+/// Carries neighbors and transition stats.
+/// Context event append always runs inside this step when the source status is Ok.
+/// When Status != Ok, score_rank and projection steps propagate without executing.
+/// </summary>
+public record RecommendationEligibilityResult(
+    IReadOnlyList<ContextNeighborResult> Neighbors,
+    IReadOnlyList<ContextTransitionStat> TransitionStats,
+    RecommendationStatus Status,
+    string? StatusDetail
+);
+
+/// <summary>
+/// Intermediate result of recommendation_score_rank primitive step.
+/// Carries ranked candidates per pressure lane (ui_pressure, state_pressure).
+/// When Status != Ok, recommendation_projection returns the propagated status.
+/// </summary>
+public record RecommendationScoreRankResult(
+    IReadOnlyList<RecommendationCandidate> NextOperations,
+    IReadOnlyList<RecommendationCandidate> NextTokens,
+    IReadOnlyList<RecommendationCandidate> NextEnumItems,
+    IReadOnlyList<Guid> NearestPrefixSessionIds,
+    IReadOnlyList<string> ContributingTokens,
+    RecommendationStatus Status,
+    string? StatusDetail
+);
+
+/// <summary>
 /// Runtime dispatch spec for a recommendation candidate. When null, the frontend must
 /// render the candidate as non-executable and must not infer target/layer/action.
 /// Mirrors the backend-resolved wiring pattern used by the runtime dispatch lane.

@@ -31,7 +31,7 @@ public partial class AdminRuntime
     private readonly EnumDictionaryRepository? _enumDictionaryRepository;
     private readonly AuthMasterRepository? _authMasterRepository;
     private readonly SqlAttentionLogsRepository? _sqlAttentionLogsRepository;
-    private readonly SqlAttentionTopologyProjectionRuntime? _sqlAttentionTopologyProjectionRuntime;
+    private readonly AbstractFunctionExecutor? _abstractFunctionExecutor;
     private readonly MockPresetRepository? _mockPresetRepository;
     private readonly TeamMarkdownRepository? _teamMarkdownRepository;
 
@@ -65,7 +65,7 @@ public partial class AdminRuntime
         EnumDictionaryRepository? enumDictionaryRepository = null,
         AuthMasterRepository? authMasterRepository = null,
         SqlAttentionLogsRepository? sqlAttentionLogsRepository = null,
-        SqlAttentionTopologyProjectionRuntime? sqlAttentionTopologyProjectionRuntime = null,
+        AbstractFunctionExecutor? abstractFunctionExecutor = null,
         MockPresetRepository? mockPresetRepository = null,
         TeamMarkdownRepository? teamMarkdownRepository = null)
     {
@@ -85,7 +85,7 @@ public partial class AdminRuntime
         _enumDictionaryRepository = enumDictionaryRepository;
         _authMasterRepository = authMasterRepository;
         _sqlAttentionLogsRepository = sqlAttentionLogsRepository;
-        _sqlAttentionTopologyProjectionRuntime = sqlAttentionTopologyProjectionRuntime;
+        _abstractFunctionExecutor = abstractFunctionExecutor;
         _mockPresetRepository = mockPresetRepository;
         _teamMarkdownRepository = teamMarkdownRepository;
     }
@@ -436,24 +436,45 @@ public partial class AdminRuntime
     private async Task<(JsonElement? data, ValidationError? error)> DataSqlAttentionListProjectionAsync(
         OperationVector vector, CancellationToken ct)
     {
-        if (_sqlAttentionTopologyProjectionRuntime is null)
+        if (_abstractFunctionExecutor is null)
             return (null, new ValidationError("SQL_ATTENTION_PROJECTION_RUNTIME_NOT_AVAILABLE",
-                "SqlAttentionTopologyProjectionRuntime is not registered"));
-        if (vector.Payload is null ||
-            !vector.Payload.Value.TryGetProperty("sourceSetId", out var sourceSetIdEl) ||
-            string.IsNullOrWhiteSpace(sourceSetIdEl.GetString()))
-            return (null, new ValidationError("SQL_ATTENTION_SOURCE_SET_ID_REQUIRED",
-                "payload.sourceSetId is required for sql_attention:list_projection"));
-        var sourceSetId = sourceSetIdEl.GetString()!.Trim();
+                "AbstractFunctionExecutor with sql_attention primitive is not registered"));
+
+        var context = new AbstractFunctionExecutionContext(
+            authorityScope: "admin_sql_attention",
+            requestPayload: vector.Payload,
+            requiredRuntimeLane: "admin_runtime");
+
         try
         {
-            var result = await _sqlAttentionTopologyProjectionRuntime.ProjectAsync(sourceSetId, ct);
-            return (JsonSerializer.SerializeToElement(result, _camelCaseSnakeEnumOptions), null);
+            var result = await _abstractFunctionExecutor.ExecuteAsync("sql_attention.list_projection", context, ct);
+            var projectionResult = result.ResultContext.TryGetValue("projection_result", out var r)
+                ? r as SqlAttentionTopologyProjectionResult
+                : null;
+            if (projectionResult is null)
+                return (null, new ValidationError("SQL_ATTENTION_PROJECTION_RESULT_MISSING",
+                    "Abstract function did not produce a sql_attention projection result."));
+            return (JsonSerializer.SerializeToElement(projectionResult, _camelCaseSnakeEnumOptions), null);
+        }
+        catch (AbstractFunctionFailCloseException ex)
+        {
+            _logger.LogError(ex, "AdminRuntime.DataSqlAttentionListProjectionAsync: fail-close status={Status}", ex.Status);
+            return ex.Status switch
+            {
+                AbstractFunctionFailCloseStatus.MissingInput =>
+                    (null, new ValidationError("SQL_ATTENTION_SOURCE_SET_ID_REQUIRED",
+                        "payload.sourceSetId is required for sql_attention:list_projection")),
+                AbstractFunctionFailCloseStatus.MissingAuthority =>
+                    (null, new ValidationError("SQL_ATTENTION_ABSTRACT_FUNCTION_MISSING_AUTHORITY", ex.Message)),
+                AbstractFunctionFailCloseStatus.InvalidAuthority =>
+                    (null, new ValidationError("SQL_ATTENTION_ABSTRACT_FUNCTION_INVALID_AUTHORITY", ex.Message)),
+                _ =>
+                    (null, new ValidationError("SQL_ATTENTION_PROJECTION_ABSTRACT_FUNCTION_FAILED", ex.Message))
+            };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex,
-                "AdminRuntime.DataSqlAttentionListProjectionAsync failed for sourceSetId={SourceSetId}", sourceSetId);
+            _logger.LogError(ex, "AdminRuntime.DataSqlAttentionListProjectionAsync: abstract function execution failed");
             return (null, new ValidationError("SQL_ATTENTION_PROJECTION_RUNTIME_FAILED", ex.Message));
         }
     }

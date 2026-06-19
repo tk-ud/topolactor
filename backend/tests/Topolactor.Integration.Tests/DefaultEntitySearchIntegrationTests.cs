@@ -45,14 +45,9 @@ public class DefaultEntitySearchIntegrationTests
             diffLogRepository: new DiffLogRepository(NullLogger<DiffLogRepository>.Instance),
             sqlAttentionLogsRepository: new SqlAttentionLogsRepository(NullLogger<SqlAttentionLogsRepository>.Instance, "test-double"),
             runtimeGuard: new RuntimeGuard(),
-            contextRouteRecommendationResolver: new ContextRouteRecommendationResolver(
-                NullLogger<ContextRouteRecommendationResolver>.Instance,
-                contextRouteRepository,
-                new ContextVectorBuilder(),
-                new ContextNeighborSearch(),
-                topologyRepository,
-                new SystemOperationCiRuntime(
-                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
+            abstractFunctionExecutor: new AbstractFunctionExecutor(
+                new NullAbstractFunctionManifestRepository(),
+                Array.Empty<IAbstractFunctionPrimitiveAdapter>()),
             outputLaneRouter: null);
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
@@ -184,5 +179,11 @@ public class DefaultEntitySearchIntegrationTests
         {
             await scheduler.StopAsync(CancellationToken.None);
         }
+    }
+
+    private sealed class NullAbstractFunctionManifestRepository : IAbstractFunctionManifestRepository
+    {
+        public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) =>
+            Task.FromResult<AbstractFunctionManifest?>(null);
     }
 }

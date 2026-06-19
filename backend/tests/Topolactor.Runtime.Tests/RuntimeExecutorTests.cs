@@ -36,6 +36,28 @@ public class RuntimeExecutorTests
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
 
+        var resolver = new ContextRouteRecommendationResolver(
+            NullLogger<ContextRouteRecommendationResolver>.Instance,
+            contextRouteRepository,
+            new ContextVectorBuilder(),
+            new ContextNeighborSearch(),
+            contextRoutePolicyRepository,
+            new SystemOperationCiRuntime(NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository));
+        var abstractFunctionExecutor = new AbstractFunctionExecutor(
+            new RecommendationManifestRepository(),
+            new IAbstractFunctionPrimitiveAdapter[]
+            {
+                new RecommendationAttentionPrimitiveAdapter(
+                    NullLogger<RecommendationAttentionPrimitiveAdapter>.Instance, resolver), // COMPATIBILITY FALLBACK
+                new RecommendationCandidateSourcePrimitiveAdapter(
+                    NullLogger<RecommendationCandidateSourcePrimitiveAdapter>.Instance, resolver),
+                new RecommendationEligibilityPrimitiveAdapter(
+                    NullLogger<RecommendationEligibilityPrimitiveAdapter>.Instance, resolver),
+                new RecommendationScoreRankPrimitiveAdapter(
+                    NullLogger<RecommendationScoreRankPrimitiveAdapter>.Instance, resolver),
+                new RecommendationProjectionPrimitiveAdapter()
+            });
+
         return new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
             operationVectorResolver: new OperationVectorResolver(),
@@ -48,14 +70,7 @@ public class RuntimeExecutorTests
             diffLogRepository: new DiffLogRepository(NullLogger<DiffLogRepository>.Instance),
             sqlAttentionLogsRepository: new SqlAttentionLogsRepository(NullLogger<SqlAttentionLogsRepository>.Instance, "test-double"),
             runtimeGuard: new RuntimeGuard(),
-            contextRouteRecommendationResolver: new ContextRouteRecommendationResolver(
-                NullLogger<ContextRouteRecommendationResolver>.Instance,
-                contextRouteRepository,
-                new ContextVectorBuilder(),
-                new ContextNeighborSearch(),
-                contextRoutePolicyRepository,
-                new SystemOperationCiRuntime(
-                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
+            abstractFunctionExecutor: abstractFunctionExecutor,
             manifestRepository: manifestRepository);
     }
 
@@ -1774,4 +1789,12 @@ internal sealed class AttractorFailingTopologyRepository
 
     public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
         => throw new InvalidOperationException("Cannot resolve attractor: simulated infrastructure failure.");
+}
+
+internal sealed class RecommendationManifestRepository : IAbstractFunctionManifestRepository
+{
+    public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) =>
+        Task.FromResult<AbstractFunctionManifest?>(functionKey == "context_route.recommendation_resolve"
+            ? RecommendationAttentionAbstractFunctionTests.CreateSeedManifest()
+            : null);
 }

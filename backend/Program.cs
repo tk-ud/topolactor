@@ -119,6 +119,29 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(_ =>
     new CallPostgresFunctionPrimitiveAdapter(connectionString));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, ProjectionPrimitiveAdapter>();
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, FailClosePrimitiveAdapter>();
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new SqlAttentionProjectionPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<SqlAttentionProjectionPrimitiveAdapter>>(),
+        sp.GetRequiredService<SqlAttentionLogsRepository>(),
+        sp.GetRequiredService<TopologyRepository>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new RecommendationAttentionPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<RecommendationAttentionPrimitiveAdapter>>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new RecommendationCandidateSourcePrimitiveAdapter(
+        sp.GetRequiredService<ILogger<RecommendationCandidateSourcePrimitiveAdapter>>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new RecommendationEligibilityPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<RecommendationEligibilityPrimitiveAdapter>>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new RecommendationScoreRankPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<RecommendationScoreRankPrimitiveAdapter>>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(
+    new RecommendationProjectionPrimitiveAdapter());
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
@@ -164,7 +187,7 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<EnumDictionaryRepository>(),
         sp.GetRequiredService<AuthMasterRepository>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
-        sp.GetRequiredService<SqlAttentionTopologyProjectionRuntime>(),
+        sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<MockPresetRepository>(),
         sp.GetRequiredService<TeamMarkdownRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
@@ -191,7 +214,7 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<DiffLogRepository>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
         sp.GetRequiredService<RuntimeGuard>(),
-        sp.GetRequiredService<ContextRouteRecommendationResolver>(),
+        sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<OutputLaneRouter>(),
         sp.GetRequiredService<HubNavigationResolver>(),
         sp.GetRequiredService<ManifestRepository>()));

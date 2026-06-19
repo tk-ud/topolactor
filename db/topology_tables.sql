@@ -498,7 +498,7 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policies (
 CREATE TABLE IF NOT EXISTS topology.abstract_function_manifests (
     abstract_function_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     function_key         TEXT NOT NULL UNIQUE,
-    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime')),
+    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime', 'admin_runtime', 'runtime_executor')),
     authority_scope      TEXT NOT NULL,
     output_shape         JSONB NOT NULL DEFAULT '{}'::jsonb,
     projection_deny_keys TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
@@ -524,7 +524,7 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_input_bindings (
     input_binding_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     abstract_function_step_id UUID NOT NULL REFERENCES topology.abstract_function_steps (abstract_function_step_id) ON DELETE CASCADE,
     input_key                 TEXT NOT NULL,
-    binding_source            TEXT NOT NULL CHECK (binding_source IN ('payload','result_context','constant','external_context','manifest_authority','physical_table_binding','route_context','step_config')),
+    binding_source            TEXT NOT NULL CHECK (binding_source IN ('payload','result_context','constant','external_context','manifest_authority','physical_table_binding','route_context','step_config','runtime_context')),
     binding_path              TEXT NOT NULL,
     required                  BOOLEAN NOT NULL DEFAULT true,
     secret                    BOOLEAN NOT NULL DEFAULT false,

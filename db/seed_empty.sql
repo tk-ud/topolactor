@@ -2247,6 +2247,98 @@ VALUES
     ('00000000-0000-0000-0000-00000000af07', 'table',  'topology.record_file_attachments', true)
 ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
 
+-- ---------------------------------------------------------------------------
+-- Abstract function manifest for SQL Attention projection (af08).
+-- sql_attention.list_projection routes through admin_runtime (read-only projection).
+-- Runtime lane: admin_runtime — not external_port_runtime.
+-- Authority scope: admin_sql_attention.
+-- Primitive: sql_attention — function_name and parameter_key from step_config (manifest-authority).
+-- Input: source_set_id bound from payload.sourceSetId.
+-- Table authority: logs.attention (read-only; no write to evidence layer).
+-- Policy authority: admin_sql_attention_projection.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.abstract_function_manifests
+    (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af08', 'sql_attention.list_projection', 'admin_runtime', 'admin_sql_attention', '{"sql_attention_result":"projection_result"}', ARRAY[]::text[], true)
+ON CONFLICT (abstract_function_id) DO NOTHING;
+
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf10', '00000000-0000-0000-0000-00000000af08', 1, 'sql_attention',
+     '{"function_name":"sql_attention_topology_projection","parameter_key":"default_policy"}',
+     'projection_result', true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000c030', '00000000-0000-0000-0000-00000000bf10', 'source_set_id', 'payload', 'sourceSetId', true, false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
+
+INSERT INTO topology.abstract_function_authority_bindings
+    (abstract_function_id, authority_kind, authority_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af08', 'policy', 'admin_sql_attention_projection', true),
+    ('00000000-0000-0000-0000-00000000af08', 'table',  'logs.attention',                 true)
+ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
+-- Abstract function manifest for context route recommendation (af09).
+-- Routes through runtime_executor lane with 4-step primitive decomposition:
+--   recommendation_candidate_source → recommendation_eligibility →
+--   recommendation_score_rank → recommendation_projection
+-- ContextRouteRecommendationResolver methods are called per phase via primitive adapters.
+-- Lane enforcement: recommendation_projection fails closed on sql_attention_projection mixing.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.abstract_function_manifests
+    (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af09', 'context_route.recommendation_resolve', 'runtime_executor', 'context_route_recommendation', '{"recommendation_source_step":"recommendation_source","recommendation_eligibility_step":"recommendation_eligibility","recommendation_score_rank_step":"recommendation_score_rank","context_route_result":"recommendation_result"}', ARRAY[]::text[], true)
+ON CONFLICT (abstract_function_id) DO NOTHING;
+
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf11', '00000000-0000-0000-0000-00000000af09', 1, 'recommendation_candidate_source',
+     '{"function_name":"context_route_recommendation_resolve","parameter_key":"default_policy"}',
+     'recommendation_source', true),
+    ('00000000-0000-0000-0000-00000000bf12', '00000000-0000-0000-0000-00000000af09', 2, 'recommendation_eligibility',
+     '{}',
+     'recommendation_eligibility', true),
+    ('00000000-0000-0000-0000-00000000bf13', '00000000-0000-0000-0000-00000000af09', 3, 'recommendation_score_rank',
+     '{}',
+     'recommendation_score_rank', true),
+    ('00000000-0000-0000-0000-00000000bf14', '00000000-0000-0000-0000-00000000af09', 4, 'recommendation_projection',
+     '{}',
+     'recommendation_result', true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    -- bf11 (recommendation_candidate_source): working_shape from runtime_context
+    ('00000000-0000-0000-0000-00000000c031', '00000000-0000-0000-0000-00000000bf11', 'working_shape',              'runtime_context', 'working_shape',              true,  false, true),
+    -- bf12 (recommendation_eligibility): working_shape + recommendation_source
+    ('00000000-0000-0000-0000-00000000c032', '00000000-0000-0000-0000-00000000bf12', 'working_shape',              'runtime_context', 'working_shape',              true,  false, true),
+    ('00000000-0000-0000-0000-00000000c033', '00000000-0000-0000-0000-00000000bf12', 'recommendation_source',      'result_context',  'recommendation_source',      true,  false, true),
+    -- bf13 (recommendation_score_rank): working_shape + recommendation_source + recommendation_eligibility
+    ('00000000-0000-0000-0000-00000000c034', '00000000-0000-0000-0000-00000000bf13', 'working_shape',              'runtime_context', 'working_shape',              true,  false, true),
+    ('00000000-0000-0000-0000-00000000c035', '00000000-0000-0000-0000-00000000bf13', 'recommendation_source',      'result_context',  'recommendation_source',      true,  false, true),
+    ('00000000-0000-0000-0000-00000000c036', '00000000-0000-0000-0000-00000000bf13', 'recommendation_eligibility', 'result_context',  'recommendation_eligibility', true,  false, true),
+    -- bf14 (recommendation_projection): recommendation_source + eligibility + score_rank
+    ('00000000-0000-0000-0000-00000000c037', '00000000-0000-0000-0000-00000000bf14', 'recommendation_source',      'result_context',  'recommendation_source',      true,  false, true),
+    ('00000000-0000-0000-0000-00000000c038', '00000000-0000-0000-0000-00000000bf14', 'recommendation_eligibility', 'result_context',  'recommendation_eligibility', true,  false, true),
+    ('00000000-0000-0000-0000-00000000c039', '00000000-0000-0000-0000-00000000bf14', 'recommendation_score_rank',  'result_context',  'recommendation_score_rank',  true,  false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
+
+INSERT INTO topology.abstract_function_authority_bindings
+    (abstract_function_id, authority_kind, authority_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af09', 'policy', 'context_route_recommendation_resolve', true),
+    ('00000000-0000-0000-0000-00000000af09', 'table',  'context_route.context_hub_recommendation_current', true)
+ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
 -- Consumer bundle policy steps (operation_key values constrained to external-port SSOT allowed set)
 -- file_storage steps use DELETE+INSERT to allow re-seeding with updated credential pipeline (17 steps)
 DELETE FROM topology.external_port_policy_steps

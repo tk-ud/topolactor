@@ -86,7 +86,7 @@ db_schema:
       authority_rules:
         - frontend_payload_is_not_table_column_join_output_authority
         - raw_sql_payload_is_prohibited
-        - runtime_lane_must_be_external_port_runtime
+        - runtime_lane_must_be_external_port_runtime_or_admin_runtime_or_runtime_executor
         - secret_projection_denied_for_credential_signed_url_bucket_endpoint_storage_path_raw_storage_refs
     abstract_function_steps:
       category: abstract_function_manifest

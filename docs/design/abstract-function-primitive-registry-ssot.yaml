@@ -749,6 +749,10 @@ backend_abstract_function_runtime_substrate:
       primitives:
         - sql_attention
         - recommendation_attention
+        - recommendation_candidate_source
+        - recommendation_eligibility
+        - recommendation_score_rank
+        - recommendation_projection
         - phase_attention_adapter
       owns:
         - candidate_source
@@ -756,10 +760,129 @@ backend_abstract_function_runtime_substrate:
         - score
         - rank
         - projection
+        - lane_mixing_prevention
       prohibited:
         - route_state_auto_mutation
         - canonical_topology_auto_mutation
         - phase_attention_internals_inside_manifest_steps
+        - sql_attention_projection_lane_in_hub_local_result
+      sql_attention_runtime_lane_extension:
+        note: >
+          sql_attention projection manifests route through admin_runtime (read-only, not external_port_runtime).
+          AbstractFunctionExecutionContext.RequiredRuntimeLane extends the default lane check for this lane.
+          function_name and parameter_key are resolved from step_config (manifest-authority).
+          source_set_id is bound from the request payload binding; it is never payload-derived authority.
+        valid_runtime_lanes:
+          - admin_runtime
+        step_config_required_keys:
+          - function_name
+          - parameter_key
+        payload_bound_inputs:
+          - source_set_id
+        table_authority_required: logs.attention
+        fail_close_on_missing_policy: MissingPolicy_status_in_result_not_fail_close_exception
+        fail_close_on_missing_source_set_id: missing_input_fail_close
+      recommendation_attention_lane_extension:
+        status: COMPATIBILITY_FALLBACK
+        note: >
+          COMPATIBILITY FALLBACK — recommendation_attention is the single-adapter legacy primitive.
+          The canonical af09 path uses the 4-step decomposed chain
+          (recommendation_candidate_source → recommendation_eligibility →
+          recommendation_score_rank → recommendation_projection).
+          recommendation_attention remains registered for backward compatibility;
+          af09 manifest no longer routes through it.
+          ContextRouteRecommendationResolver.ResolveAsync is also marked COMPATIBILITY FALLBACK
+          and delegates to the same 4 sub-methods used by the decomposed primitives.
+        valid_runtime_lanes:
+          - runtime_executor
+        step_config_required_keys:
+          - function_name
+          - parameter_key
+        runtime_context_bound_inputs:
+          - working_shape
+        table_authority_required: context_route.context_hub_recommendation_current
+        policy_authority_required: context_route_recommendation_resolve
+        fail_close_on_missing_authority: invalid_authority_fail_close
+        fail_close_on_missing_working_shape: missing_input_fail_close
+        no_route_topology_overwrite: true
+        phase_attention_adapter_boundary: SystemOperationCiRuntime_opaque
+      recommendation_decomposed_primitive_lane_extension:
+        note: >
+          Canonical 4-step decomposed primitive chain for af09 (context_route.recommendation_resolve).
+          Each primitive is a discrete step in the manifest (bf11–bf14); intermediate results flow
+          between steps via result_context binding. This is the canonical path; recommendation_attention
+          is the COMPATIBILITY FALLBACK single-adapter predecessor.
+          Phase Attention internals (SystemOperationCiRuntime) remain opaque inside the resolver;
+          they do not appear as manifest steps.
+          route/canonical_topology auto-overwrite is prohibited; context event evidence append
+          runs inside recommendation_eligibility as append-only evidence accumulation.
+        valid_runtime_lanes:
+          - runtime_executor
+        table_authority_required: context_route.context_hub_recommendation_current
+        policy_authority_required: context_route_recommendation_resolve
+        primitives:
+          recommendation_candidate_source:
+            step_order: 1
+            seed_id: bf11
+            result_context_key: recommendation_source
+            purpose: >
+              Load policy from function_parameters (manifest-authorized SQL via step_config
+              function_name + parameter_key). Check vector presence and session identity.
+              Load prefix candidates (before event append — ordering invariant for the LATERAL JOIN).
+              Returns RecommendationCandidateSourceResult; InsufficientHistory when session is absent.
+            step_config_required_keys:
+              - function_name
+              - parameter_key
+            inputs:
+              working_shape: runtime_context
+            fail_close_on_missing_function_name: invalid_authority_fail_close (FUNCTION_NAME_MISSING)
+            fail_close_on_missing_working_shape: missing_input_fail_close
+            fail_close_on_missing_table_authority: invalid_authority_fail_close
+          recommendation_eligibility:
+            step_order: 2
+            seed_id: bf12
+            result_context_key: recommendation_eligibility
+            purpose: >
+              Run neighbor cosine-similarity search. Load transition stats. Append context event
+              (always runs when source status is Ok — append-only evidence accumulation, not overwrite).
+              Run TVR extension after event append. Apply eligibility post-check
+              (InsufficientHistory for NO_CONTEXT_HISTORY / INSUFFICIENT_CONTEXT_HISTORY).
+              Propagates source status early without event append when source is not Ok.
+            inputs:
+              working_shape: runtime_context
+              recommendation_source: result_context
+          recommendation_score_rank:
+            step_order: 3
+            seed_id: bf13
+            result_context_key: recommendation_score_rank
+            purpose: >
+              Load attention blend map. Rank operations, context tokens, and enum items per
+              ui_pressure and state_pressure lanes. Skips computation and propagates eligibility
+              status when eligibility is not Ok.
+            inputs:
+              working_shape: runtime_context
+              recommendation_source: result_context
+              recommendation_eligibility: result_context
+          recommendation_projection:
+            step_order: 4
+            seed_id: bf14
+            result_context_key: recommendation_result
+            purpose: >
+              Assemble final ContextRouteRecommendationResult from all 3 intermediate results.
+              Propagates InsufficientHistory or ExplicitError from whichever phase failed first.
+              Enforces lane mixing prevention: any candidate with lane=sql_attention_projection
+              in the hub-local result (NextOperations / NextTokens / NextEnumItems) is fail-closed
+              with InvalidProjection status.
+              sql_attention_projection candidates must come only from the dedicated SQL Attention
+              primitive (af08) and must not appear in hub-local recommendation output.
+            inputs:
+              recommendation_source: result_context
+              recommendation_eligibility: result_context
+              recommendation_score_rank: result_context
+            lane_enforcement:
+              prohibited_in_hub_local_result: sql_attention_projection
+              fail_close_status: invalid_projection
+              error_token: RECOMMENDATION_HUB_LOCAL_LANE_MIXING_PREVENTED
     credential:
       primitives:
         - credential_reference_resolve
