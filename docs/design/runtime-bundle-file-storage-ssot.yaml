@@ -306,10 +306,14 @@ runtime_bundle_file_storage_ssot:
       abstract_function_boundary:
         status: required
         check: >-
-          record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download は
-          execute_db_function operation_key 経由で topology.fs_* PostgreSQL functions を呼ぶこと。
+          record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download
+          および attachment bind / list / unbind は execute_abstract_function operation_key 経由で
+          topology.abstract_function_manifests (af01-af07) を通じて topology.fs_* PostgreSQL functions を呼ぶこと。
           FileStorageBundleStepHandler は compute_checksum のみ保持する。
-          IExternalPortDbFunctionRepository が abstract function boundary として機能すること。
+          NpgsqlExternalPortDbFunctionRepository は compatibility placeholder stub として縮退済み
+          (全具体 fs_* メソッド削除済み)。
+          attachment 操作の record_table_ref は step_config binding source 経由の manifest authority であり
+          request payload 由来ではないこと。
     prohibited:
       - test_local_handwritten_UI_emission_treated_as_DB_projection
       - direct_FileStorageBundleStepHandler_concrete_mutation_for_non_checksum_steps

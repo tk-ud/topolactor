@@ -713,6 +713,22 @@ backend_abstract_function_runtime_substrate:
         - payload_value_binding
         - context_value_binding
         - prior_step_result_binding
+        - step_config_value_binding
+        - constant_value_binding
+      binding_sources:
+        - payload
+        - result_context
+        - constant
+        - external_context
+        - step_config
+        - manifest_authority
+        - physical_table_binding
+        - route_context
+      binding_source_notes:
+        step_config: >-
+          Reads from the step's own step_config dictionary (manifest-seeded, not request payload).
+          Used when the binding must come from manifest authority rather than payload
+          (e.g. record_table_ref for attachment operations where payload-derived table authority is prohibited).
       fail_close_status:
         - missing_input
         - invalid_input_binding

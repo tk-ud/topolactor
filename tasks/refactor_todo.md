@@ -112,7 +112,7 @@ Absorption policy:
 | `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete as representative absorption case; SQL Attention / recommendation / credential hardening remain not_started) |
 | `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
 | `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
-| `file-storage-db-function-to-abstract-function-migration` | partial_compatibility_fallback | Absorb file-storage DB functions by migration order and remove payload-derived table authority |
+| `file-storage-db-function-to-abstract-function-migration` | implemented | Absorb file-storage DB functions by migration order and remove payload-derived table authority — all 7 fs_* operations migrated to execute_abstract_function manifests af01-af07; NpgsqlExternalPortDbFunctionRepository stub; all acceptance conditions satisfied |
 | `completion-gate-and-test-alignment` | not_started | Align tests/checks/status after Bundle migration |
 
 ---
@@ -533,7 +533,7 @@ Preserve credential flow as abstract function primitives while keeping actual se
 
 ## Bundle `file-storage-db-function-to-abstract-function-migration`
 
-Status: `partial_compatibility_fallback`
+Status: `implemented`
 
 ### Completed
 
