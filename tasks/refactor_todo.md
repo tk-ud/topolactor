@@ -55,7 +55,7 @@ Completed:
 Still open after this update:
 
 - SQL Attention / recommendation and credential hardening Bundles remain partial/not_started and must not be marked implemented.
-- File-storage concrete deletion is not complete; `execute_abstract_function` now has DB manifest loading and a `call_postgres_function` primitive path, but existing `topology.fs_*` PostgreSQL functions remain the call target until concrete deletion is proven safe.
+- File-storage C# concrete deletion: `NpgsqlExternalPortDbFunctionRepository` concrete `fs_*` switch/methods are now deleted (completed in PR#481). `topology.fs_*` PostgreSQL functions are opaque DB adapters called via `call_postgres_function` primitive — they are NOT deletion targets and must remain.
 - Attachment bind/list/unbind migrated to `execute_abstract_function` manifests af05-af07 with `step_config` binding authority for `record_table_ref` (completed in PR#481).
 
 ## Audit conclusion
