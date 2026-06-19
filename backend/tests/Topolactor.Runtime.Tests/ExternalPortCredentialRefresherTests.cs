@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Topolactor.Repository;
 using Topolactor.Runtime;
@@ -749,8 +748,8 @@ public class CredentialPrimitiveHardeningTests
         try
         {
             var http = new FakeHttpClient(200, "new-token");
-            var resolver = new FakeEndpointReferenceResolver();
-            var executor = new ExternalPortPolicyStepExecutor(httpClient: http, endpointReferenceResolver: resolver);
+            var resolver = new FakeStepConfigResolver();
+            var executor = new ExternalPortPolicyStepExecutor(httpClient: http, stepConfigResolver: resolver);
             var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
 
             await executor.ExecuteAsync(
@@ -773,8 +772,8 @@ public class CredentialPrimitiveHardeningTests
     {
         Environment.SetEnvironmentVariable("TOPOLACTOR_TEST_CRED_EP_MISSING", null);
         var http = new FakeHttpClient(200, "ignored");
-        var resolver = new FakeEndpointReferenceResolver();
-        var executor = new ExternalPortPolicyStepExecutor(httpClient: http, endpointReferenceResolver: resolver);
+        var resolver = new FakeStepConfigResolver();
+        var executor = new ExternalPortPolicyStepExecutor(httpClient: http, stepConfigResolver: resolver);
         var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -1173,7 +1172,7 @@ public class CredentialPrimitiveHardeningTests
             var http = new FakeHttpClient(200, """{"expires_in":3600}""");
             var executor = new ExternalPortPolicyStepExecutor(
                 crypto: crypto, httpClient: http, credentialVaultRepository: repo,
-                endpointReferenceResolver: new FakeEndpointReferenceResolver());
+                stepConfigResolver: new FakeStepConfigResolver());
             var context = new ExternalPortExecutionContext
             {
                 CredentialVaultRecord = NewVaultRecord(version: 1)
@@ -1181,15 +1180,7 @@ public class CredentialPrimitiveHardeningTests
 
             await executor.ExecutePolicyAsync(policy, context);
 
-            Assert.Equal(
-                new[]
-                {
-                    "load_encrypted_credential_payload", "decrypt_for_runtime_use",
-                    "acquire_refresh_lease", "request_token_by_config",
-                    "update_token_hash", "update_expires_at_and_version",
-                    "write_encrypted_credential_payload", "release_refresh_lease",
-                },
-                context.ExecutedOperationKeys);
+            Assert.Equal(steps.Select(s => s.OperationKey).ToList(), context.ExecutedOperationKeys);
             Assert.Null(context.DecryptedCredentialPayload);
             Assert.True(repo.LeaseReleased);
             Assert.NotNull(repo.LastWriteTokenHash);
@@ -1212,8 +1203,7 @@ public class CredentialPrimitiveHardeningTests
                 new Guid(policyId),
                 int.Parse(m.Groups[1].Value),
                 m.Groups[2].Value,
-                JsonSerializer.Deserialize<Dictionary<string, string>>(m.Groups[3].Value)
-                    ?? new Dictionary<string, string>(),
+                NpgsqlExternalPortPolicyRepository.ParseStepConfig(m.Groups[3].Value),
                 Active: true))
             .OrderBy(s => s.StepOrder)
             .ToList();
@@ -1286,13 +1276,13 @@ public class CredentialPrimitiveHardeningTests
         public string ComputeTokenHash(string plaintextPayload) => $"sha256:{plaintextPayload.GetHashCode():x8}";
     }
 
-    private sealed class FakeEndpointReferenceResolver : IExternalPortEndpointReferenceResolver
+    private sealed class FakeStepConfigResolver : IExternalPortStepConfigResolver
     {
-        public string Resolve(string endpointRef)
+        public string Resolve(string configValue)
         {
-            if (!endpointRef.StartsWith("env:", StringComparison.Ordinal))
-                return endpointRef;
-            var envKey = endpointRef[4..];
+            if (!configValue.StartsWith("env:", StringComparison.Ordinal))
+                return configValue;
+            var envKey = configValue[4..];
             return Environment.GetEnvironmentVariable(envKey)
                 ?? throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_ENV_MISSING");
         }

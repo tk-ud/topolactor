@@ -97,18 +97,18 @@ public interface IExternalPortHttpClient
     Task<ExternalPortHttpResponse> SendAsync(ExternalPortHttpRequest request, CancellationToken ct = default);
 }
 
-public interface IExternalPortEndpointReferenceResolver
+public interface IExternalPortStepConfigResolver
 {
-    string Resolve(string endpointRef);
+    string Resolve(string configValue);
 }
 
-public sealed class EnvironmentVariableEndpointReferenceResolver : IExternalPortEndpointReferenceResolver
+public sealed class EnvironmentVariableStepConfigResolver : IExternalPortStepConfigResolver
 {
-    public string Resolve(string endpointRef)
+    public string Resolve(string configValue)
     {
-        if (!endpointRef.StartsWith("env:", StringComparison.Ordinal))
-            return endpointRef;
-        var envKey = endpointRef[4..];
+        if (!configValue.StartsWith("env:", StringComparison.Ordinal))
+            return configValue;
+        var envKey = configValue[4..];
         return Environment.GetEnvironmentVariable(envKey)
             ?? throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_ENV_MISSING");
     }
@@ -463,7 +463,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
     private readonly IReadOnlyList<IExternalPortBundleStepHandler> _bundleHandlers;
     private readonly IExternalCredentialCrypto? _crypto;
     private readonly IExternalCredentialVaultRepository? _credentialVaultRepository;
-    private readonly IExternalPortEndpointReferenceResolver? _endpointReferenceResolver;
+    private readonly IExternalPortStepConfigResolver? _stepConfigResolver;
 
     public ExternalPortPolicyStepExecutor(
         IExternalPortHttpClient? httpClient = null,
@@ -475,11 +475,11 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null,
         IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null,
         IExternalCredentialVaultRepository? credentialVaultRepository = null,
-        IExternalPortEndpointReferenceResolver? endpointReferenceResolver = null)
+        IExternalPortStepConfigResolver? stepConfigResolver = null)
     {
         _crypto = crypto;
         _credentialVaultRepository = credentialVaultRepository;
-        _endpointReferenceResolver = endpointReferenceResolver;
+        _stepConfigResolver = stepConfigResolver;
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
         {
@@ -539,10 +539,8 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_MISSING");
                 }
 
-                if (_endpointReferenceResolver is not null)
-                    endpoint = _endpointReferenceResolver.Resolve(endpoint);
-                else if (endpoint.StartsWith("env:", StringComparison.Ordinal))
-                    throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_RESOLVER_MISSING");
+                if (_stepConfigResolver is not null)
+                    endpoint = _stepConfigResolver.Resolve(endpoint);
                 var method = step.StepConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Get;
                 context.HttpRequest = new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), method, new Dictionary<string, string>(), null);
                 context.MarkExecuted(step.OperationKey);
@@ -703,10 +701,8 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_DECRYPTED_PAYLOAD_MISSING");
                 if (!step.StepConfig.TryGetValue("endpoint", out var endpoint) || string.IsNullOrWhiteSpace(endpoint))
                     throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_ENDPOINT_MISSING");
-                if (_endpointReferenceResolver is not null)
-                    endpoint = _endpointReferenceResolver.Resolve(endpoint);
-                else if (endpoint.StartsWith("env:", StringComparison.Ordinal))
-                    throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_RESOLVER_MISSING");
+                if (_stepConfigResolver is not null)
+                    endpoint = _stepConfigResolver.Resolve(endpoint);
                 if (!step.StepConfig.TryGetValue("method", out var methodValue) || string.IsNullOrWhiteSpace(methodValue))
                     throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_METHOD_MISSING");
                 var method = new HttpMethod(methodValue);
