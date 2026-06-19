@@ -57,7 +57,7 @@ check_term "docs/system-roadmap.yaml" "scheduler-job-manifest-substrate-implemen
 check_term "docs/system-roadmap.yaml" "not_started"
 check_term "docs/system-roadmap.yaml" "scheduler job manifest tables"
 check_term "docs/system-roadmap.yaml" "input lease / run ledger"
-check_term "docs/system-roadmap.yaml" "abstract function step chain"
+check_term "docs/system-roadmap.yaml" "abstract_function_step_chain_dispatch"
 check_term "docs/system-roadmap.yaml" "external service reference boundary"
 check_term "docs/system-roadmap.yaml" "representative existing cron absorption"
 check_term "docs/system-roadmap.yaml" "scheduler_job_manifest_tables_not_implemented"
