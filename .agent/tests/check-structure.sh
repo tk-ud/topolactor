@@ -457,7 +457,7 @@ check_content "docs/design/admin-console-workflow-ssot.yaml" "hub_navigation_ord
 check_content ".agent/reports/README.md" "routine inspection reports"
 check_content ".agent/reports/README.md" "Do not use this directory as the default place for normal PR summaries"
 check_content ".agent/README.md" "Directory Responsibilities"
-check_content ".agent/README.md" "`protocols/`: judgment gates (blocking/pass semantics only)."
+check_content ".agent/README.md" '`protocols/`: judgment gates (blocking/pass semantics only).'
 check_content ".agent/README.md" ".agent Directory Map"
 check_content ".agent/skills/agent-workflow.md" "STRUCTURE_CHECK"
 check_content ".agent/skills/agent-workflow.md" "SCENARIO_CONTRACT"
