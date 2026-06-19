@@ -23,7 +23,7 @@ WITH upserted_preset AS (
           "surface": "record_file_attachment_bindings",
           "derivedFrom": "physical_search_crud_aggregate.v1",
           "componentImplementation": "none; existing CRUD/component catalog composition only",
-          "runtimeMutationAuthority": "external port substrate via portTargetRef and execute_db_function policy steps",
+          "runtimeMutationAuthority": "external port substrate via portTargetRef and execute_abstract_function policy steps (manifests af05-af07)",
           "credentialPlane": "external_port_substrate reference_key resolution only",
           "forbiddenProjectionFields": ["storage_ref", "authorization_key", "signed_url", "credential", "bucket", "endpoint"],
           "payloadFromResolver": "frontend/runtime/payloadFromResolver.ts"

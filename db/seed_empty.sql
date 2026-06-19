@@ -2148,9 +2148,9 @@ ON CONFLICT (policy_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
--- Abstract function manifests for file-storage migration seed path.
--- These rows express the DB mutation authority and projection deny rules before
--- concrete execute_db_function compatibility steps are removed.
+-- Abstract function manifests for file-storage operations (af01-af07).
+-- These rows are the primary authority surface: all 7 fs_* domain mutations route
+-- through execute_abstract_function → call_postgres_function primitive (not execute_db_function).
 -- ---------------------------------------------------------------------------
 INSERT INTO topology.abstract_function_manifests
     (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
@@ -2260,7 +2260,7 @@ WHERE policy_id IN (
 
 INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
 VALUES
-    -- file_storage_bundle access_port (17 steps: credential pipeline + compute_checksum + 4x execute_db_function interleaved with 4x append_runtime_event_log)
+    -- file_storage_bundle access_port (17 steps: credential pipeline + compute_checksum + 4x execute_abstract_function interleaved with 4x append_runtime_event_log)
     ('00000000-0000-0000-0000-000000000401', '00000000-0000-0000-0000-0000000000e4',  1, 'resolve_port_record',              '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000402', '00000000-0000-0000-0000-0000000000e4',  2, 'resolve_credential_reference',     '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000403', '00000000-0000-0000-0000-0000000000e4',  3, 'load_encrypted_credential_payload','{}', NULL, true),
@@ -2278,7 +2278,7 @@ VALUES
     ('00000000-0000-0000-0000-000000000409', '00000000-0000-0000-0000-0000000000e4', 15, 'execute_abstract_function', '{}', 'file_storage.write_manifest_record', true),
     ('00000000-0000-0000-0000-000000000410', '00000000-0000-0000-0000-0000000000e4', 16, 'execute_abstract_function', '{}', 'file_storage.authorize_signed_download', true),
     ('00000000-0000-0000-0000-000000000493', '00000000-0000-0000-0000-0000000000e4', 17, 'append_runtime_event_log', '{"event_type":"signed_url_generated","entity_ref_key":"AuthorizationKey"}', NULL, true),
-    -- file_storage_bundle response_port (17 steps: credential pipeline + compute_checksum + 4x execute_db_function interleaved with 4x append_runtime_event_log)
+    -- file_storage_bundle response_port (17 steps: credential pipeline + compute_checksum + 4x execute_abstract_function interleaved with 4x append_runtime_event_log)
     ('00000000-0000-0000-0000-000000000411', '00000000-0000-0000-0000-0000000000e5',  1, 'resolve_port_record',              '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000412', '00000000-0000-0000-0000-0000000000e5',  2, 'resolve_credential_reference',     '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000413', '00000000-0000-0000-0000-0000000000e5',  3, 'load_encrypted_credential_payload','{}', NULL, true),

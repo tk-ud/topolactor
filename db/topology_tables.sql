@@ -572,11 +572,11 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policy_steps (
 COMMENT ON TABLE topology.external_port_policies IS 'Seed-driven policy surface for external port generic primitive execution.';
 
 -- Update operation_key CHECK constraint to sync with SSOT operation_key_allowed_values.
--- execute_db_function is the abstract function boundary for consumer bundle domain mutations.
+-- execute_abstract_function is the primary abstract function boundary for consumer bundle domain mutations
+-- (manifests af01-af07 dispatch topology.fs_* PostgreSQL functions via call_postgres_function primitive).
+-- execute_db_function remains in the constraint for schema compatibility; NpgsqlExternalPortDbFunctionRepository
+-- is now a compatibility stub (no concrete fs_* methods); no new operations should use this path.
 -- compute_checksum is a bundle-specific key handled by FileStorageBundleStepHandler.
--- Old file_storage-specific direct operation_keys (record_export_job, record_file_artifact,
--- write_manifest_record, authorize_signed_download) are no longer operation_keys; they are
--- topology.fs_* PostgreSQL function names called via execute_db_function step_config.function.
 ALTER TABLE topology.external_port_policy_steps
     DROP CONSTRAINT IF EXISTS external_port_policy_steps_operation_key_check;
 
@@ -772,8 +772,9 @@ COMMENT ON TABLE topology.runtime_event_log IS
 
 -- ---------------------------------------------------------------------------
 -- file_storage_bundle domain PostgreSQL functions.
--- Called via execute_db_function operation_key from ExternalPortPolicyStepExecutor.
--- These are abstract function boundary implementations; bundle-specific C# handler
+-- Called via execute_abstract_function → abstract function manifests af01-af07
+-- → call_postgres_function primitive adapter (not via execute_db_function directly).
+-- These are opaque DB adapter implementations; bundle-specific C# handler
 -- code (FileStorageBundleStepHandler) must NOT call these directly.
 -- storage_ref / authorization_key are opaque reference identifiers — never plaintext.
 -- ---------------------------------------------------------------------------
@@ -804,7 +805,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION topology.fs_record_export_job IS
-    'Records or idempotently upserts a file_storage export job. Called via execute_db_function policy step.';
+    'Records or idempotently upserts a file_storage export job. Called via execute_abstract_function manifest / call_postgres_function primitive step.';
 
 CREATE OR REPLACE FUNCTION topology.fs_record_file_artifact(
     p_export_job_id   UUID,
@@ -841,7 +842,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION topology.fs_record_file_artifact IS
-    'Atomically inserts file_artifact and its checksum_record in a single transaction. Called via execute_db_function policy step.';
+    'Atomically inserts file_artifact and its checksum_record in a single transaction. Called via execute_abstract_function manifest / call_postgres_function primitive step.';
 
 CREATE OR REPLACE FUNCTION topology.fs_write_manifest_record(
     p_export_job_id    UUID,
@@ -874,7 +875,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION topology.fs_write_manifest_record IS
-    'Writes or updates export package manifest record. Called via execute_db_function policy step.';
+    'Writes or updates export package manifest record. Called via execute_abstract_function manifest / call_postgres_function primitive step.';
 
 CREATE OR REPLACE FUNCTION topology.fs_authorize_signed_download(
     p_file_artifact_id UUID,
@@ -894,7 +895,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION topology.fs_authorize_signed_download IS
-    'Creates a non-guessable authorization_key reference for signed download. authorization_key is opaque ref — not a signed URL. Called via execute_db_function policy step.';
+    'Creates a non-guessable authorization_key reference for signed download. authorization_key is opaque ref — not a signed URL. Called via execute_abstract_function manifest / call_postgres_function primitive step.';
 
 CREATE OR REPLACE FUNCTION topology.fs_bind_record_file_attachment(
     p_record_table_ref TEXT,
@@ -927,7 +928,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION topology.fs_bind_record_file_attachment IS
-    'Binds an arbitrary record reference to an existing file_artifact through execute_db_function; does not create a credential or signed URL projection.';
+    'Binds an arbitrary record reference to an existing file_artifact via execute_abstract_function manifest af05 / call_postgres_function primitive; does not create a credential or signed URL projection.';
 
 CREATE OR REPLACE FUNCTION topology.fs_list_record_file_attachments(
     p_record_table_ref TEXT,
@@ -980,4 +981,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION topology.fs_unbind_record_file_attachment IS
-    'Removes a record-to-file_artifact binding through execute_db_function.';
+    'Removes a record-to-file_artifact binding via execute_abstract_function manifest af07 / call_postgres_function primitive.';

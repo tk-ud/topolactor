@@ -56,7 +56,7 @@ Still open after this update:
 
 - SQL Attention / recommendation and credential hardening Bundles remain partial/not_started and must not be marked implemented.
 - File-storage concrete deletion is not complete; `execute_abstract_function` now has DB manifest loading and a `call_postgres_function` primitive path, but existing `topology.fs_*` PostgreSQL functions remain the call target until concrete deletion is proven safe.
-- Attachment bind/list/unbind remain on `execute_db_function` compatibility path pending manifest authority for record-table binding.
+- Attachment bind/list/unbind migrated to `execute_abstract_function` manifests af05-af07 with `step_config` binding authority for `record_table_ref` (completed in PR#481).
 
 ## Audit conclusion
 
@@ -274,7 +274,7 @@ topology.abstract_function_policy_bindings
 - [x] Table/column/join/output authority comes from manifest/physical table binding, not frontend payload. (`abstract_function_authority_bindings` is the authority surface; `db-schema.yaml` states `frontend_payload_is_not_table_column_join_output_authority`.)
 - [x] `external_port_policy_steps` can call an abstract function by key instead of carrying the full operation body. (`abstract_function_key TEXT REFERENCES topology.abstract_function_manifests(function_key)` column added in PR #478; `execute_abstract_function` is a valid `operation_key`.)
 - [x] Secret-bearing fields are deny-listed fail-close. (`projection_deny_keys` column in `abstract_function_manifests`; `db-schema.yaml` states `secret_projection_denied_for_credential_signed_url_bucket_endpoint_storage_path_raw_storage_refs`.)
-- [x] Migration path preserves existing external port policy-step lane. (`execute_db_function` operation_key and `NpgsqlExternalPortDbFunctionRepository` compatibility path remain active; no legacy step removed.)
+- [x] Migration path preserves existing external port policy-step lane. (`execute_db_function` operation_key remains in schema CHECK constraint for compatibility; `NpgsqlExternalPortDbFunctionRepository` is now a compatibility stub — all concrete fs_* methods deleted in PR#481; no active seed row uses execute_db_function for file-storage mutations.)
 
 ---
 
