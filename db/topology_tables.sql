@@ -498,7 +498,7 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policies (
 CREATE TABLE IF NOT EXISTS topology.abstract_function_manifests (
     abstract_function_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     function_key         TEXT NOT NULL UNIQUE,
-    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime')),
+    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime', 'admin_runtime')),
     authority_scope      TEXT NOT NULL,
     output_shape         JSONB NOT NULL DEFAULT '{}'::jsonb,
     projection_deny_keys TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
