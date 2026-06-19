@@ -23,6 +23,8 @@ check_file "tasks/refactor_todo.md"
 check_file "backend/tests/Topolactor.Runtime.Tests/AbstractFunctionExecutorTests.cs"
 check_file "backend/tests/Topolactor.Runtime.Tests/FileStorageBundleDispatchTests.cs"
 check_file "backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs"
+check_file "backend/tests/Topolactor.Runtime.Tests/SqlAttentionAbstractFunctionTests.cs"
+check_file "backend/tests/Topolactor.Runtime.Tests/RecommendationAttentionAbstractFunctionTests.cs"
 check_file "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs"
 
 # Completion gate must define lane-specific evidence and migration-order constraints, not just an implemented label.
@@ -48,7 +50,22 @@ check_absent "tasks/refactor_todo.md" '| `cli-mcp-read-export-port-substrate` |'
 
 # Current Bundle status map must reflect credential hardening as implemented.
 check_term "tasks/refactor_todo.md" '| `credential-primitive-hardening` | implemented |'
-check_term "tasks/refactor_todo.md" '| `backend-abstract-function-executor` | partial_compatibility_fallback |'
+check_term "tasks/refactor_todo.md" '| `backend-abstract-function-executor` | implemented |'
+check_term "tasks/refactor_todo.md" 'SQL Attention list_projection and context_route recommendation_resolve are migrated through seed manifests af08/af09'
+
+
+# SQL Attention / recommendation absorption evidence: seed-route tests for af08/af09 and no topology/route auto-mutation.
+check_term "backend/tests/Topolactor.Runtime.Tests/SqlAttentionAbstractFunctionTests.cs" "Seed path tests for sql_attention.list_projection abstract function manifest (af08)"
+check_term "backend/tests/Topolactor.Runtime.Tests/SqlAttentionAbstractFunctionTests.cs" 'executor.ExecuteAsync("sql_attention.list_projection"'
+check_term "backend/tests/Topolactor.Runtime.Tests/SqlAttentionAbstractFunctionTests.cs" "No auto-mutation: result is observation/projection only"
+check_term "backend/tests/Topolactor.Runtime.Tests/RecommendationAttentionAbstractFunctionTests.cs" "Seed path tests for context_route.recommendation_resolve abstract function manifest (af09)"
+check_term "backend/tests/Topolactor.Runtime.Tests/RecommendationAttentionAbstractFunctionTests.cs" "recommendation_candidate_source"
+check_term "backend/tests/Topolactor.Runtime.Tests/RecommendationAttentionAbstractFunctionTests.cs" "recommendation_projection"
+check_term "backend/tests/Topolactor.Runtime.Tests/RecommendationAttentionAbstractFunctionTests.cs" "RECOMMENDATION_HUB_LOCAL_LANE_MIXING_PREVENTED"
+check_term "db/seed_empty.sql" "'sql_attention.list_projection', 'admin_runtime', 'admin_sql_attention'"
+check_term "db/seed_empty.sql" "'context_route.recommendation_resolve', 'runtime_executor', 'context_route_recommendation'"
+check_term "backend/runtime/AdminRuntime.cs" 'ExecuteAsync("sql_attention.list_projection"'
+check_term "backend/runtime/RuntimeExecutor.cs" 'ExecuteAsync("context_route.recommendation_resolve"'
 
 # Backend primitive executor evidence: order, result context binding, fail-close, policy-step execution, no provider/bundle branching.
 check_term "backend/tests/Topolactor.Runtime.Tests/AbstractFunctionExecutorTests.cs" "ExecuteAsync_UsesManifestOrderAndBindsResultContext"
