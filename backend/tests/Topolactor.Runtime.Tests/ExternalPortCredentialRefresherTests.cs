@@ -667,6 +667,120 @@ public class CredentialPrimitiveHardeningTests
         Assert.DoesNotContain("switch (provider", credentialSection, StringComparison.OrdinalIgnoreCase);
     }
 
+    // --- Non-2xx fail-close ---
+
+    [Fact]
+    public async Task CredentialHttpRequestAdapter_Non2xxResponse_FailsClose()
+    {
+        var adapter = new CredentialHttpRequestAdapter(new HardeningNon2xxHttpClient(401));
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 1, "credential_http_request",
+            new Dictionary<string, string> { ["method"] = "POST", ["endpoint"] = "https://token.example.com" },
+            Array.Empty<AbstractFunctionInputBinding>(), "token_response", true);
+        var inputs = new Dictionary<string, object?> { ["decrypted_credential_payload"] = "secret" };
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => adapter.ExecuteAsync(step, inputs, new AbstractFunctionExecutionContext("test")));
+        Assert.Contains("CREDENTIAL_HTTP_REQUEST_NON_2XX", ex.Message);
+        Assert.Contains("401", ex.Message);
+    }
+
+    // --- Seed-route test: full chain through AbstractFunctionExecutor ---
+
+    [Fact]
+    public async Task SeedSql_CredentialRefreshManifest_ExecutesFullChainThroughAbstractFunctionExecutor()
+    {
+        var vaultId = Guid.NewGuid();
+        var vaultRecord = new ExternalCredentialVaultRecord(
+            vaultId, "oauth", "bundle", "refresh", null, new byte[] { 1 }, "key-ref", null, 300, 1, null, true);
+
+        var spyVault = new HardeningSpyVaultRepository(vaultId);
+        var fakeHttp = new HardeningSuccessHttpClient(@"{""access_token"":""tok"",""expires_at"":""2027-06-20T00:00:00Z""}");
+        var crypto = new HardeningFakeCredentialCrypto();
+
+        var executor = new AbstractFunctionExecutor(
+            new HardeningStaticManifestRepository(BuildCredentialRefreshManifest()),
+            new IAbstractFunctionPrimitiveAdapter[]
+            {
+                new CredentialAcquireLeaseAdapter(spyVault),
+                new CredentialHttpRequestAdapter(fakeHttp),
+                new CredentialComputeTokenHashAdapter(crypto),
+                new CredentialParseExpiresAtAdapter(),
+                new CredentialWriteVaultAdapter(spyVault, crypto),
+                new CredentialReleaseLeaseAdapter(spyVault),
+                new CredentialFailLeaseAdapter(spyVault)
+            });
+
+        var portRecord = new ExternalPortRecord(Guid.NewGuid(), "oauth_refresh", "external_credential_vault_refresh", "oauth",
+            "https://token.example.com", null, null, null, "external", null, true);
+        var policy = new ExternalPortPolicy(Guid.NewGuid(), "external_credential_vault_refresh", "access_port",
+            "external_credential_vault_refresh", Array.Empty<ExternalPortPolicyStep>(), true);
+        var portContext = new ExternalPortExecutionContext
+        {
+            PortRecord = portRecord,
+            Policy = policy,
+            CredentialVaultRecord = vaultRecord,
+            DecryptedCredentialPayload = @"{""refresh_token"":""rt123""}"
+        };
+        var context = new AbstractFunctionExecutionContext("external_credential_vault_refresh", externalPortContext: portContext);
+
+        await executor.ExecuteAsync("credential.refresh_token", context);
+
+        Assert.Equal(new[] { "credential_acquire_lease", "credential_http_request", "credential_compute_token_hash", "credential_parse_expires_at", "credential_write_vault", "credential_release_lease" },
+            context.ExecutedPrimitiveKeys);
+        Assert.True(spyVault.WriteWasCalled, "vault write must be called");
+        Assert.True(spyVault.ReleaseWasCalled, "lease release must be called on success path");
+        Assert.False(spyVault.FailWasCalled, "FailRefreshLease must NOT be called on success path");
+    }
+
+    // --- Compensation: lease fail on step failure ---
+
+    [Fact]
+    public async Task CredentialRefreshManifest_WhenHttpStepFails_CompensationCallsFailLease()
+    {
+        var vaultId = Guid.NewGuid();
+        var vaultRecord = new ExternalCredentialVaultRecord(
+            vaultId, "oauth", "bundle", "refresh", null, new byte[] { 1 }, "key-ref", null, 300, 1, null, true);
+
+        var spyVault = new HardeningSpyVaultRepository(vaultId);
+        var non2xxHttp = new HardeningNon2xxHttpClient(401);
+        var crypto = new HardeningFakeCredentialCrypto();
+
+        var executor = new AbstractFunctionExecutor(
+            new HardeningStaticManifestRepository(BuildCredentialRefreshManifest()),
+            new IAbstractFunctionPrimitiveAdapter[]
+            {
+                new CredentialAcquireLeaseAdapter(spyVault),
+                new CredentialHttpRequestAdapter(non2xxHttp),
+                new CredentialComputeTokenHashAdapter(crypto),
+                new CredentialParseExpiresAtAdapter(),
+                new CredentialWriteVaultAdapter(spyVault, crypto),
+                new CredentialReleaseLeaseAdapter(spyVault),
+                new CredentialFailLeaseAdapter(spyVault)
+            });
+
+        var portRecord = new ExternalPortRecord(Guid.NewGuid(), "oauth_refresh", "external_credential_vault_refresh", "oauth",
+            "https://token.example.com", null, null, null, "external", null, true);
+        var policy = new ExternalPortPolicy(Guid.NewGuid(), "external_credential_vault_refresh", "access_port",
+            "external_credential_vault_refresh", Array.Empty<ExternalPortPolicyStep>(), true);
+        var portContext = new ExternalPortExecutionContext
+        {
+            PortRecord = portRecord,
+            Policy = policy,
+            CredentialVaultRecord = vaultRecord,
+            DecryptedCredentialPayload = @"{""refresh_token"":""rt123""}"
+        };
+        var context = new AbstractFunctionExecutionContext("external_credential_vault_refresh", externalPortContext: portContext);
+
+        await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => executor.ExecuteAsync("credential.refresh_token", context));
+
+        Assert.True(spyVault.AcquireWasCalled, "lease must have been acquired before failure");
+        Assert.True(spyVault.FailWasCalled, "compensation must call FailRefreshLease after step failure");
+        Assert.False(spyVault.WriteWasCalled, "vault write must NOT be called after HTTP failure");
+        Assert.False(spyVault.ReleaseWasCalled, "ReleaseRefreshLease must NOT be called when step failed");
+    }
+
     // --- Primitive adapter fail-close ---
 
     [Fact]
@@ -806,6 +920,129 @@ public class CredentialPrimitiveHardeningTests
             dir = dir.Parent;
         }
         throw new FileNotFoundException($"Could not find {relativePath} from {AppContext.BaseDirectory}.");
+    }
+
+    private static AbstractFunctionManifest BuildCredentialRefreshManifest()
+    {
+        var manifestId = Guid.Parse("00000000-0000-0000-0000-00000000af10");
+        var bf15 = new AbstractFunctionStep(
+            Guid.Parse("00000000-0000-0000-0000-00000000bf15"), 1, "credential_acquire_lease",
+            new Dictionary<string, string> { ["lease_owner"] = "external_credential_vault_refresh", ["lease_duration_minutes"] = "5" },
+            new[] { new AbstractFunctionInputBinding("credential_vault_id", "external_context", "credential_vault_id", true, false) },
+            "credential_lease", true, false);
+        var bf16 = new AbstractFunctionStep(
+            Guid.Parse("00000000-0000-0000-0000-00000000bf16"), 2, "credential_http_request",
+            new Dictionary<string, string> { ["method"] = "POST" },
+            new[] { new AbstractFunctionInputBinding("decrypted_credential_payload", "external_context", "decrypted_credential_payload", true, true) },
+            "token_response", true, false);
+        var bf17 = new AbstractFunctionStep(
+            Guid.Parse("00000000-0000-0000-0000-00000000bf17"), 3, "credential_compute_token_hash",
+            new Dictionary<string, string>(),
+            new[] { new AbstractFunctionInputBinding("token_response", "result_context", "token_response", true, true) },
+            "token_hash", true, false);
+        var bf18 = new AbstractFunctionStep(
+            Guid.Parse("00000000-0000-0000-0000-00000000bf18"), 4, "credential_parse_expires_at",
+            new Dictionary<string, string> { ["expires_at_response_key"] = "expires_at" },
+            new[] { new AbstractFunctionInputBinding("token_response", "result_context", "token_response", true, true) },
+            "token_expires_at", true, false);
+        var bf19 = new AbstractFunctionStep(
+            Guid.Parse("00000000-0000-0000-0000-00000000bf19"), 5, "credential_write_vault",
+            new Dictionary<string, string>(),
+            new AbstractFunctionInputBinding[]
+            {
+                new("credential_lease",  "result_context", "credential_lease",  true,  false),
+                new("token_hash",        "result_context", "token_hash",        true,  false),
+                new("token_expires_at",  "result_context", "token_expires_at",  true,  false),
+                new("token_response",    "result_context", "token_response",    true,  true)
+            },
+            null, true, false);
+        var bf1a = new AbstractFunctionStep(
+            Guid.Parse("00000000-0000-0000-0000-00000000bf1a"), 6, "credential_release_lease",
+            new Dictionary<string, string>(),
+            new[] { new AbstractFunctionInputBinding("credential_lease", "result_context", "credential_lease", true, false) },
+            null, true, false);
+        var bf1b = new AbstractFunctionStep(
+            Guid.Parse("00000000-0000-0000-0000-00000000bf1b"), 7, "credential_fail_lease",
+            new Dictionary<string, string> { ["failure_code"] = "step_failure" },
+            new[] { new AbstractFunctionInputBinding("credential_lease", "result_context", "credential_lease", false, false) },
+            null, true, true);
+        var authorityBindings = new[]
+        {
+            new AbstractFunctionAuthorityBinding("policy", "external_credential_vault_refresh", true),
+            new AbstractFunctionAuthorityBinding("table",  "topology.external_credential_vaults", true)
+        };
+        return new AbstractFunctionManifest(
+            manifestId, "credential.refresh_token", "external_port_runtime", "external_credential_vault_refresh",
+            new[] { bf15, bf16, bf17, bf18, bf19, bf1a, bf1b },
+            new[] { "credential", "credential_payload", "decrypted_payload", "plaintext_payload", "decrypted_credential_payload", "token_response", "token_body" },
+            true, authorityBindings);
+    }
+
+    private sealed class HardeningStaticManifestRepository : IAbstractFunctionManifestRepository
+    {
+        private readonly AbstractFunctionManifest _manifest;
+        public HardeningStaticManifestRepository(AbstractFunctionManifest manifest) => _manifest = manifest;
+        public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) =>
+            Task.FromResult<AbstractFunctionManifest?>(_manifest);
+    }
+
+    private sealed class HardeningSpyVaultRepository : IExternalCredentialVaultRepository
+    {
+        private readonly Guid _vaultId;
+        public bool AcquireWasCalled { get; private set; }
+        public bool WriteWasCalled { get; private set; }
+        public bool ReleaseWasCalled { get; private set; }
+        public bool FailWasCalled { get; private set; }
+
+        public HardeningSpyVaultRepository(Guid vaultId) => _vaultId = vaultId;
+
+        public Task<ExternalCredentialVaultRecord?> LoadAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+        public Task<ExternalCredentialVaultRecord?> LoadByReferenceKeyAsync(string referenceKey, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+        public Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+
+        public Task<ExternalCredentialRefreshLease?> AcquireRefreshLeaseAsync(Guid credentialVaultId, string leaseOwner, TimeSpan leaseDuration, DateTimeOffset now, CancellationToken ct = default)
+        {
+            AcquireWasCalled = true;
+            return Task.FromResult<ExternalCredentialRefreshLease?>(
+                new ExternalCredentialRefreshLease(Guid.NewGuid(), credentialVaultId, leaseOwner, now.Add(leaseDuration), 1));
+        }
+
+        public Task WriteEncryptedCredentialPayloadAsync(Guid credentialVaultId, int expectedVersion, byte[] encryptedPayload, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default)
+        {
+            WriteWasCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task ReleaseRefreshLeaseAsync(ExternalCredentialRefreshLease lease, CancellationToken ct = default)
+        {
+            ReleaseWasCalled = true;
+            return Task.CompletedTask;
+        }
+
+        public Task FailRefreshLeaseAsync(ExternalCredentialRefreshLease lease, string failureCode, CancellationToken ct = default)
+        {
+            FailWasCalled = true;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class HardeningSuccessHttpClient : IExternalPortHttpClient
+    {
+        private readonly string _responseBody;
+        public HardeningSuccessHttpClient(string responseBody) => _responseBody = responseBody;
+        public Task<ExternalPortHttpResponse> SendAsync(ExternalPortHttpRequest request, CancellationToken ct = default) =>
+            Task.FromResult(new ExternalPortHttpResponse(200, _responseBody));
+    }
+
+    private sealed class HardeningNon2xxHttpClient : IExternalPortHttpClient
+    {
+        private readonly int _statusCode;
+        public HardeningNon2xxHttpClient(int statusCode) => _statusCode = statusCode;
+        public Task<ExternalPortHttpResponse> SendAsync(ExternalPortHttpRequest request, CancellationToken ct = default) =>
+            Task.FromResult(new ExternalPortHttpResponse(_statusCode, "error"));
     }
 
     private sealed class HardeningFakeCredentialCrypto : IExternalCredentialCrypto

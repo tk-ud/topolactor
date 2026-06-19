@@ -26,7 +26,7 @@ public sealed class AbstractFunctionFailCloseException : InvalidOperationExcepti
 
 public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active, IReadOnlyList<AbstractFunctionAuthorityBinding>? AuthorityBindings = null, IReadOnlyDictionary<string, string>? OutputShape = null);
 
-public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active);
+public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active, bool IsCompensationStep = false);
 
 public sealed record AbstractFunctionInputBinding(string InputKey, string BindingSource, string BindingPath, bool Required, bool Secret);
 
@@ -197,11 +197,15 @@ public sealed class AbstractFunctionExecutor
                 throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_POLICY_AUTHORITY_MISSING");
         }
 
+        var allActiveSteps = manifest.Steps.Where(static s => s.Active).ToList();
+        var normalSteps = allActiveSteps.Where(static s => !s.IsCompensationStep).OrderBy(static s => s.StepOrder).ToList();
+        var compensationSteps = allActiveSteps.Where(static s => s.IsCompensationStep).OrderBy(static s => s.StepOrder).ToList();
+
         var outputShape = manifest.OutputShape;
         if (outputShape is not null && outputShape.Count > 0)
         {
             var allowedOutputKeys = new HashSet<string>(outputShape.Values, StringComparer.Ordinal);
-            foreach (var step in manifest.Steps.Where(static s => s.Active && s.ResultContextKey is not null))
+            foreach (var step in normalSteps.Where(static s => s.ResultContextKey is not null))
             {
                 if (!allowedOutputKeys.Contains(step.ResultContextKey!))
                     throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, $"ABSTRACT_FUNCTION_OUTPUT_KEY_UNAUTHORIZED: {step.ResultContextKey}");
@@ -213,21 +217,44 @@ public sealed class AbstractFunctionExecutor
         var deniedProjectionKeys = new HashSet<string>(manifest.DeniedProjectionKeys, StringComparer.OrdinalIgnoreCase);
         foreach (var denied in SecretProjectionDenyKeys) deniedProjectionKeys.Add(denied);
 
-        foreach (var step in manifest.Steps.Where(static s => s.Active).OrderBy(static s => s.StepOrder))
+        try
         {
-            if (!_primitiveRegistry.TryGetValue(step.PrimitiveKey, out var primitive)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.UnsupportedPrimitive, $"ABSTRACT_FUNCTION_PRIMITIVE_UNSUPPORTED: {step.PrimitiveKey}");
-            var inputs = new Dictionary<string, object?>(StringComparer.Ordinal);
-            foreach (var binding in step.InputBindings)
+            foreach (var step in normalSteps)
             {
-                if (string.Equals(step.PrimitiveKey, "projection", StringComparison.Ordinal) && (binding.Secret || deniedProjectionKeys.Contains(binding.InputKey))) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.SecretProjectionDenied, "ABSTRACT_FUNCTION_SECRET_PROJECTION_DENIED");
-                var value = context.ResolveBinding(binding, step.StepConfig);
-                if (binding.Required && value is null) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, $"ABSTRACT_FUNCTION_INPUT_MISSING: {binding.InputKey}");
-                inputs[binding.InputKey] = value;
+                if (!_primitiveRegistry.TryGetValue(step.PrimitiveKey, out var primitive)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.UnsupportedPrimitive, $"ABSTRACT_FUNCTION_PRIMITIVE_UNSUPPORTED: {step.PrimitiveKey}");
+                var inputs = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var binding in step.InputBindings)
+                {
+                    if (string.Equals(step.PrimitiveKey, "projection", StringComparison.Ordinal) && (binding.Secret || deniedProjectionKeys.Contains(binding.InputKey))) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.SecretProjectionDenied, "ABSTRACT_FUNCTION_SECRET_PROJECTION_DENIED");
+                    var value = context.ResolveBinding(binding, step.StepConfig);
+                    if (binding.Required && value is null) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, $"ABSTRACT_FUNCTION_INPUT_MISSING: {binding.InputKey}");
+                    inputs[binding.InputKey] = value;
+                }
+                var result = await primitive.ExecuteAsync(step, inputs, context, ct);
+                context.StoreResult(step.ResultContextKey, result);
+                context.ApplyResultToExternalContext(step.ResultContextKey, result);
+                context.MarkExecuted(step.PrimitiveKey);
             }
-            var result = await primitive.ExecuteAsync(step, inputs, context, ct);
-            context.StoreResult(step.ResultContextKey, result);
-            context.ApplyResultToExternalContext(step.ResultContextKey, result);
-            context.MarkExecuted(step.PrimitiveKey);
+        }
+        catch
+        {
+            foreach (var cStep in compensationSteps)
+            {
+                if (!_primitiveRegistry.TryGetValue(cStep.PrimitiveKey, out var cPrimitive)) continue;
+                var cInputs = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var binding in cStep.InputBindings)
+                {
+                    try
+                    {
+                        var value = context.ResolveBinding(binding, cStep.StepConfig);
+                        cInputs[binding.InputKey] = value;
+                    }
+                    catch { /* best-effort: skip binding errors during compensation */ }
+                }
+                try { await cPrimitive.ExecuteAsync(cStep, cInputs, context, ct); }
+                catch { /* best-effort: ignore compensation step failures */ }
+            }
+            throw;
         }
         return context;
     }
@@ -693,7 +720,10 @@ public sealed class CredentialHttpRequestAdapter : IAbstractFunctionPrimitiveAda
             new Dictionary<string, string>(),
             decryptedPayload);
 
-        return await _httpClient.SendAsync(httpRequest, ct);
+        var httpResponse = await _httpClient.SendAsync(httpRequest, ct);
+        if (httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"CREDENTIAL_HTTP_REQUEST_NON_2XX: {httpResponse.StatusCode}");
+        return httpResponse;
     }
 }
 
@@ -839,6 +869,36 @@ public sealed class CredentialReleaseLeaseAdapter : IAbstractFunctionPrimitiveAd
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "CREDENTIAL_RELEASE_LEASE_MISSING");
 
         await _vaultRepository.ReleaseRefreshLeaseAsync(lease, ct);
+        return null;
+    }
+}
+
+/// <summary>
+/// Compensation-step adapter for credential_fail_lease (step 7 of credential.refresh_token manifest).
+/// Runs only when a preceding normal step fails (is_compensation_step = true in seed).
+/// Reads credential_lease from result_context (not required: if lease was never acquired, returns null).
+/// Calls IExternalCredentialVaultRepository.FailRefreshLeaseAsync with failure_code from step_config.
+/// Returns null; failures are silently swallowed by the compensation loop.
+/// </summary>
+public sealed class CredentialFailLeaseAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly IExternalCredentialVaultRepository _vaultRepository;
+
+    public CredentialFailLeaseAdapter(IExternalCredentialVaultRepository vaultRepository)
+        => _vaultRepository = vaultRepository ?? throw new ArgumentNullException(nameof(vaultRepository));
+
+    public string PrimitiveKey => "credential_fail_lease";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        if (!inputs.TryGetValue("credential_lease", out var leaseRaw) || leaseRaw is not ExternalCredentialRefreshLease lease)
+            return null;
+
+        var failureCode = step.StepConfig.TryGetValue("failure_code", out var code) && !string.IsNullOrWhiteSpace(code)
+            ? code
+            : "step_failure";
+
+        await _vaultRepository.FailRefreshLeaseAsync(lease, failureCode, ct);
         return null;
     }
 }

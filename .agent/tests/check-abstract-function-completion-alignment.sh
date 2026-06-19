@@ -73,6 +73,15 @@ check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresh
 check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "SeedSql_BuildHttpRequest_AllStepsHaveExplicitMethod"
 check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "Program_RegistersAllSixCredentialPrimitiveAdapters"
 check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialPrimitives_DoNotBranchOnProviderKindOrRequiredByBundle"
+# Non-2xx fail-close, seed-route test, and compensation test.
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialHttpRequestAdapter_Non2xxResponse_FailsClose"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "SeedSql_CredentialRefreshManifest_ExecutesFullChainThroughAbstractFunctionExecutor"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialRefreshManifest_WhenHttpStepFails_CompensationCallsFailLease"
+# Seed must contain compensation step (bf1b) and CredentialFailLeaseAdapter.
+check_term "db/seed_empty.sql" "credential_fail_lease"
+check_term "db/seed_empty.sql" "is_compensation_step"
+check_term "backend/runtime/AbstractFunctionRuntime.cs" "CredentialFailLeaseAdapter"
+check_term "backend/Program.cs" "CredentialFailLeaseAdapter"
 
 # Compatibility fallback is explicit and fail-closed, not hidden as implemented runtime behavior.
 check_term "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "Compatibility placeholder for the execute_db_function operation_key"

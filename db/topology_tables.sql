@@ -515,6 +515,7 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_steps (
     step_config               JSONB NOT NULL DEFAULT '{}'::jsonb,
     result_context_key        TEXT,
     active                    BOOLEAN NOT NULL DEFAULT true,
+    is_compensation_step      BOOLEAN NOT NULL DEFAULT false,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (abstract_function_id, step_order)

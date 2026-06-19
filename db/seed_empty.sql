@@ -2489,6 +2489,16 @@ VALUES
      NULL, true)
 ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
 
+-- bf1b is a compensation step: runs on failure to fail the acquired lease.
+-- is_compensation_step = true so the executor skips it on the success path.
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active, is_compensation_step)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf1b', '00000000-0000-0000-0000-00000000af10', 7, 'credential_fail_lease',
+     '{"failure_code":"step_failure"}',
+     NULL, true, true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
 INSERT INTO topology.abstract_function_input_bindings
     (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
 VALUES
@@ -2506,7 +2516,10 @@ VALUES
     ('00000000-0000-0000-0000-00000000c046', '00000000-0000-0000-0000-00000000bf19', 'token_expires_at',             'result_context',   'token_expires_at',             true,  false, true),
     ('00000000-0000-0000-0000-00000000c047', '00000000-0000-0000-0000-00000000bf19', 'token_response',               'result_context',   'token_response',               true,  true,  true),
     -- bf1a (credential_release_lease): credential_lease from result_context
-    ('00000000-0000-0000-0000-00000000c048', '00000000-0000-0000-0000-00000000bf1a', 'credential_lease',             'result_context',   'credential_lease',             true,  false, true)
+    ('00000000-0000-0000-0000-00000000c048', '00000000-0000-0000-0000-00000000bf1a', 'credential_lease',             'result_context',   'credential_lease',             true,  false, true),
+    -- bf1b (credential_fail_lease, compensation): credential_lease from result_context (not required: if
+    -- lease was never acquired the adapter returns null rather than failing the compensation step)
+    ('00000000-0000-0000-0000-00000000c049', '00000000-0000-0000-0000-00000000bf1b', 'credential_lease',             'result_context',   'credential_lease',             false, false, true)
 ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
 
 INSERT INTO topology.abstract_function_authority_bindings
