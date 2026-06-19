@@ -827,6 +827,45 @@ system_roadmap_ssot:
         - scheduler_evidence_job_status_projection_surface_not_connected
         - cron_trigger_driver_loop_implementation_not_started
 
+    product.scheduler_job_manifest_substrate:
+      bundle_id: scheduler-job-manifest-substrate-implementation
+      title: Admin-authored scheduler job manifest substrate
+      status: not_started
+      production_ready: false
+      public_summary: >-
+        New extension roadmap item for a DB-backed scheduler job manifest substrate
+        authored from admin.contents. The SSOT is defined, but implementation is
+        not started: scheduler job manifest tables, admin.contents authoring,
+        cron/background driver wiring, input lease / run ledger, abstract
+        function step chain dispatch, external service reference boundary, and
+        representative existing cron absorption remain future work. This item
+        does not mark scheduler substrate implementation, DDL, seed, admin UI,
+        or existing cron absorption as complete.
+      scope:
+        - scheduler_job_manifest_tables
+        - admin_contents_authoring_surface
+        - cron_background_driver_domain_independent_tick
+        - input_lease_and_run_ledger
+        - abstract_function_step_chain_dispatch
+        - external_service_reference_boundary
+        - representative_existing_cron_absorption
+      detail_ref:
+        - docs/design/scheduler-job-manifest-ssot.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/abstract-function-primitive-registry-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - docs/design/db-schema.yaml
+        - .agent/tasks/todo.md#scheduler-job-manifest-substrate-implementation
+      known_gap_ref:
+        - scheduler_job_manifest_tables_not_implemented
+        - admin_contents_scheduler_job_authoring_not_implemented
+        - cron_driver_manifest_reading_not_implemented
+        - input_lease_run_ledger_not_implemented
+        - abstract_function_step_chain_scheduler_dispatch_not_implemented
+        - external_service_reference_boundary_not_connected
+        - representative_existing_cron_absorption_not_implemented
+
     product.audit_approval_port_consumer:
       bundle_id: audit-approval-port-consumer
       title: Audit/Approval bundle port consumer implementation

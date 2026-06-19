@@ -679,6 +679,29 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: scheduler_job_manifest_substrate
+    change_surfaces:
+      - scheduler_job_manifest
+      - cron/background scheduler job body
+      - admin.contents scheduler job authoring
+      - abstract function step chain
+      - scheduler job run ledger
+      - scheduler job manifest tables
+      - input lease / run ledger
+      - representative existing cron absorption
+      - docs/design/scheduler-job-manifest-ssot.yaml
+    required_docs:
+      - docs/design/scheduler-job-manifest-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/abstract-function-primitive-registry-ssot.yaml
+      - docs/design/external-port-substrate-ssot.yaml
+      - docs/design/db-schema.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
   - work_type: runtime_bundle_audit_approval_ssot
     change_surfaces:
       - runtime_bundle_audit_approval
