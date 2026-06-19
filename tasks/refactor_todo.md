@@ -408,16 +408,20 @@ Preserve credential flow as abstract function primitives while keeping actual se
 - [x] Harden `ParseTokenRefreshResult` to use crypto hash adapter, expiry parsing, rotated payload policy, and explicit provider config without provider-specific C# branching.
 - [x] Preserve lease/version/expiry guards.
 - [x] Add tests for missing/invalid token response, stale version, plaintext projection prohibition, and provider branch prohibition.
+- [x] Define `is_compensation_step` semantics in `docs/design/abstract-function-primitive-registry-ssot.yaml` (definition, boundary, application conditions, prohibited uses).
+- [x] Add live DB dispatch-chain integration test: `ExternalPortPolicyStepExecutor.ExecutePolicyAsync` → `execute_abstract_function` → `NpgsqlAbstractFunctionManifestRepository` → 6 credential primitives → success: vault write + release; failure: compensation via FailRefreshLeaseAsync.
 
 ### Materials
 
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/runtime-bundle-secret-credential-ssot.yaml`
 - `docs/design/auth-db-session-credential-ssot.yaml`
+- `docs/design/abstract-function-primitive-registry-ssot.yaml`
 - `backend/runtime/ExternalPortCredentialRefresher.cs`
 - `backend/runtime/ExternalPortCredentialReferenceResolver.cs`
 - `backend/repository/NpgsqlExternalCredentialVaultRepository.cs`
 - `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
+- `backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs`
 
 ### Target functions / classes
 
@@ -425,6 +429,7 @@ Preserve credential flow as abstract function primitives while keeping actual se
 - `ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential`
 - `ExternalPortPolicyStepExecutor.BuildTokenRefreshRequest`
 - `ExternalPortPolicyStepExecutor.ParseTokenRefreshResult`
+- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync` (dispatch-chain entry point for credential refresh)
 - `ExternalPortPolicyStepExecutor` credential operation keys
 - `IExternalCredentialCrypto`
 - `IExternalCredentialVaultRepository`
@@ -439,6 +444,8 @@ Preserve credential flow as abstract function primitives while keeping actual se
 - [x] Token hash is computed by crypto adapter, not placeholder response-length logic.
 - [x] Tests prove fail-close on invalid credential, missing crypto, stale version, invalid response, and plaintext projection attempts.
 - [x] Existing concrete request/parse logic is deleted or marked compatibility fallback only after seed tests pass.
+- [x] `is_compensation_step` defined in `abstract-function-primitive-registry-ssot.yaml` with definition, boundary, application conditions, and prohibited uses.
+- [x] Live DB integration test proves full dispatch chain: seeded port record and policy loaded from DB via `NpgsqlExternalPortPolicyRepository`; manifest loaded from DB via `NpgsqlAbstractFunctionManifestRepository`; `ExternalPortPolicyStepExecutor.ExecutePolicyAsync` as entry point; success path verifies vault write and release, no fail_lease; failure path (non-2xx HTTP) verifies compensation calls `FailRefreshLeaseAsync`.
 
 ---
 

@@ -83,6 +83,20 @@ check_term "db/seed_empty.sql" "is_compensation_step"
 check_term "backend/runtime/AbstractFunctionRuntime.cs" "CredentialFailLeaseAdapter"
 check_term "backend/Program.cs" "CredentialFailLeaseAdapter"
 
+# Live DB dispatch-chain proof: real seed/repository/dispatch path (implements reviewer requirement).
+check_file "backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs"
+check_term "backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs" "SeededCredentialRefreshPolicy_ProjectsPortRecordPolicyAndManifestFromDb"
+check_term "backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs" "SeededCredentialRefreshPolicy_DispatchesViaExternalPortPolicyStepExecutor_SuccessPath"
+check_term "backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs" "SeededCredentialRefreshPolicy_DispatchesViaExternalPortPolicyStepExecutor_Non2xxTriggersCompensation"
+check_term "backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs" "NpgsqlAbstractFunctionManifestRepository"
+check_term "backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs" "ExecutePolicyAsync"
+check_term "backend/tests/Topolactor.Integration.Tests/CredentialRefreshPortConsumerLiveDbTests.cs" "NpgsqlExternalPortPolicyRepository"
+# is_compensation_step must be defined in SSOT (definition, boundary, application conditions).
+check_term "docs/design/abstract-function-primitive-registry-ssot.yaml" "is_compensation_step"
+check_term "docs/design/abstract-function-primitive-registry-ssot.yaml" "boundary"
+check_term "docs/design/abstract-function-primitive-registry-ssot.yaml" "application_conditions"
+check_term "docs/design/abstract-function-primitive-registry-ssot.yaml" "Compensation steps run only after at least one normal step throws"
+
 # Compatibility fallback is explicit and fail-closed, not hidden as implemented runtime behavior.
 check_term "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "Compatibility placeholder for the execute_db_function operation_key"
 check_term "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "No per-function switch or payload-derived table authority exists here"

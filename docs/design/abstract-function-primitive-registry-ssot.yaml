@@ -694,6 +694,34 @@ backend_abstract_function_runtime_substrate:
       - frontend_authored_operation_body
       - raw_sql_surface
       - secret_projection_surface
+    step_execution:
+      is_compensation_step:
+        definition: >
+          A boolean column on abstract_function_steps. When true, the step is a compensation
+          step whose purpose is to undo or mitigate side effects of previously executed normal
+          steps. Compensation steps are separated from normal steps before execution begins.
+          The executor runs normal steps in step_order; if any normal step throws, it catches
+          the exception, runs all compensation steps best-effort (in step_order), then
+          re-throws the original exception. Compensation step failures are silently swallowed.
+        boundary:
+          - Compensation steps run only after at least one normal step throws an exception.
+          - Compensation steps may only access result_context values written before the failure
+            (partial result_context). They must not assume that all normal steps completed.
+          - Compensation steps must not produce side effects that depend on the operation
+            completing successfully (e.g. writing new state, emitting events).
+          - Compensation step results are discarded; the result_context is not updated.
+          - If no exception is thrown by any normal step, compensation steps are never executed.
+        application_conditions:
+          - Use only for cleanup or rollback semantics (e.g. releasing a lease on failure).
+          - Do NOT use for post-processing that must always run (use a normal step instead).
+          - Do NOT use to branch on intermediate results; use result_context binding instead.
+          - A single manifest may have multiple compensation steps; all run best-effort on failure.
+          - Compensation step input bindings use required=false for context values that may
+            be absent if the step that would have written them had not yet executed.
+        prohibited:
+          - Using is_compensation_step=true as a shortcut for conditional execution in normal flow.
+          - Adding compensation steps for required post-processing (e.g. audit log, event emit).
+          - Relying on compensation steps to always run; compensation is exception-path only.
   primitive_categories:
     authority:
       primitives:
