@@ -2069,7 +2069,7 @@ VALUES
     ('00000000-0000-0000-0000-000000000603', '00000000-0000-0000-0000-0000000000f0', 3, 'acquire_refresh_lease',             '{"lease_duration_seconds":"300","lease_owner":"credential_primitive"}', NULL, true),
     ('00000000-0000-0000-0000-000000000604', '00000000-0000-0000-0000-0000000000f0', 4, 'request_token_by_config',           '{"endpoint":"env:TOKEN_REFRESH_ENDPOINT_REF","method":"POST"}', NULL, true),
     ('00000000-0000-0000-0000-000000000605', '00000000-0000-0000-0000-0000000000f0', 5, 'update_token_hash',                 '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000606', '00000000-0000-0000-0000-0000000000f0', 6, 'update_expires_at_and_version',     '{"default_expires_in_seconds":"3600"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000606', '00000000-0000-0000-0000-0000000000f0', 6, 'update_expires_at_and_version',     '{"expires_in_seconds":"3600"}', NULL, true),
     ('00000000-0000-0000-0000-000000000607', '00000000-0000-0000-0000-0000000000f0', 7, 'write_encrypted_credential_payload','{}', NULL, true),
     ('00000000-0000-0000-0000-000000000608', '00000000-0000-0000-0000-0000000000f0', 8, 'release_refresh_lease',             '{}', NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;

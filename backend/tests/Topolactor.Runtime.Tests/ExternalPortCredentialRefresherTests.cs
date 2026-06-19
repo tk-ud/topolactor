@@ -657,7 +657,7 @@ public class CredentialPrimitiveHardeningTests
         var context = new ExternalPortExecutionContext { CredentialVaultRecord = NewVaultRecord() };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            executor.ExecuteAsync(NewStep(1, "acquire_refresh_lease"), context));
+            executor.ExecuteAsync(NewStep(1, "acquire_refresh_lease", new Dictionary<string, string> { ["lease_duration_seconds"] = "300", ["lease_owner"] = "cred_primitive" }), context));
         Assert.Equal("EXTERNAL_CREDENTIAL_REFRESH_LEASE_UNAVAILABLE", ex.Message);
     }
 
@@ -669,7 +669,7 @@ public class CredentialPrimitiveHardeningTests
         var executor = new ExternalPortPolicyStepExecutor(credentialVaultRepository: repo);
         var context = new ExternalPortExecutionContext { CredentialVaultRecord = NewVaultRecord() };
 
-        await executor.ExecuteAsync(NewStep(1, "acquire_refresh_lease"), context);
+        await executor.ExecuteAsync(NewStep(1, "acquire_refresh_lease", new Dictionary<string, string> { ["lease_duration_seconds"] = "300", ["lease_owner"] = "cred_primitive" }), context);
 
         Assert.Same(lease, context.RefreshLease);
         Assert.Contains("acquire_refresh_lease", context.ExecutedOperationKeys);
@@ -723,7 +723,7 @@ public class CredentialPrimitiveHardeningTests
         var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            executor.ExecuteAsync(NewStep(1, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token" }), context));
+            executor.ExecuteAsync(NewStep(1, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token", ["method"] = "POST" }), context));
         Assert.Equal("EXTERNAL_TOKEN_REFRESH_HTTP_FAILED", ex.Message);
     }
 
@@ -734,7 +734,7 @@ public class CredentialPrimitiveHardeningTests
         var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
         var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
 
-        await executor.ExecuteAsync(NewStep(1, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token" }), context);
+        await executor.ExecuteAsync(NewStep(1, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token", ["method"] = "POST" }), context);
 
         Assert.NotNull(context.HttpResponse);
         Assert.Equal(200, context.HttpResponse.StatusCode);
@@ -749,12 +749,13 @@ public class CredentialPrimitiveHardeningTests
         try
         {
             var http = new FakeHttpClient(200, "new-token");
-            var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
+            var resolver = new FakeEndpointReferenceResolver();
+            var executor = new ExternalPortPolicyStepExecutor(httpClient: http, endpointReferenceResolver: resolver);
             var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
 
             await executor.ExecuteAsync(
                 NewStep(1, "request_token_by_config",
-                    new Dictionary<string, string> { ["endpoint"] = "env:TOPOLACTOR_TEST_CRED_EP" }),
+                    new Dictionary<string, string> { ["endpoint"] = "env:TOPOLACTOR_TEST_CRED_EP", ["method"] = "POST" }),
                 context);
 
             Assert.NotNull(context.HttpResponse);
@@ -772,13 +773,14 @@ public class CredentialPrimitiveHardeningTests
     {
         Environment.SetEnvironmentVariable("TOPOLACTOR_TEST_CRED_EP_MISSING", null);
         var http = new FakeHttpClient(200, "ignored");
-        var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
+        var resolver = new FakeEndpointReferenceResolver();
+        var executor = new ExternalPortPolicyStepExecutor(httpClient: http, endpointReferenceResolver: resolver);
         var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             executor.ExecuteAsync(
                 NewStep(1, "request_token_by_config",
-                    new Dictionary<string, string> { ["endpoint"] = "env:TOPOLACTOR_TEST_CRED_EP_MISSING" }),
+                    new Dictionary<string, string> { ["endpoint"] = "env:TOPOLACTOR_TEST_CRED_EP_MISSING", ["method"] = "POST" }),
                 context));
         Assert.Equal("EXTERNAL_HTTP_ENDPOINT_ENV_MISSING", ex.Message);
     }
@@ -869,7 +871,7 @@ public class CredentialPrimitiveHardeningTests
         };
 
         await executor.ExecuteAsync(
-            NewStep(1, "update_expires_at_and_version", new Dictionary<string, string> { ["default_expires_in_seconds"] = "3600" }),
+            NewStep(1, "update_expires_at_and_version", new Dictionary<string, string> { ["expires_in_seconds"] = "3600" }),
             context);
 
         Assert.NotNull(context.PendingExpiresAt);
@@ -888,7 +890,9 @@ public class CredentialPrimitiveHardeningTests
             CredentialVaultRecord = NewVaultRecord()
         };
 
-        await executor.ExecuteAsync(NewStep(1, "update_expires_at_and_version"), context);
+        await executor.ExecuteAsync(
+            NewStep(1, "update_expires_at_and_version", new Dictionary<string, string> { ["response_expiry_key"] = "expires_in" }),
+            context);
 
         Assert.NotNull(context.PendingExpiresAt);
         Assert.True(context.PendingExpiresAt!.Value >= before.AddSeconds(900 - 2));
@@ -1048,10 +1052,10 @@ public class CredentialPrimitiveHardeningTests
             {
                 NewStep(1, "load_encrypted_credential_payload"),
                 NewStep(2, "decrypt_for_runtime_use"),
-                NewStep(3, "acquire_refresh_lease", new Dictionary<string, string> { ["lease_duration_seconds"] = "300" }),
-                NewStep(4, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token" }),
+                NewStep(3, "acquire_refresh_lease", new Dictionary<string, string> { ["lease_duration_seconds"] = "300", ["lease_owner"] = "cred_primitive" }),
+                NewStep(4, "request_token_by_config", new Dictionary<string, string> { ["endpoint"] = "https://auth.invalid/token", ["method"] = "POST" }),
                 NewStep(5, "update_token_hash"),
-                NewStep(6, "update_expires_at_and_version"),
+                NewStep(6, "update_expires_at_and_version", new Dictionary<string, string> { ["response_expiry_key"] = "expires_in" }),
                 NewStep(7, "write_encrypted_credential_payload"),
                 NewStep(8, "release_refresh_lease"),
             },
@@ -1096,7 +1100,7 @@ public class CredentialPrimitiveHardeningTests
             {
                 NewStep(1, "load_encrypted_credential_payload"),
                 NewStep(2, "decrypt_for_runtime_use"),
-                NewStep(3, "acquire_refresh_lease", new Dictionary<string, string> { ["lease_duration_seconds"] = "300" }),
+                NewStep(3, "acquire_refresh_lease", new Dictionary<string, string> { ["lease_duration_seconds"] = "300", ["lease_owner"] = "cred_primitive" }),
                 NewStep(4, "fail_close"),
             },
             Active: true);
@@ -1141,7 +1145,7 @@ public class CredentialPrimitiveHardeningTests
         Assert.Contains("update_expires_at_and_version", source);
         Assert.Contains("write_encrypted_credential_payload", source);
         Assert.Contains("release_refresh_lease", source);
-        Assert.Contains("default_expires_in_seconds", source);
+        Assert.Contains("expires_in_seconds", source);
         Assert.Contains("env:TOKEN_REFRESH_ENDPOINT_REF", source);
         Assert.DoesNotContain("api_key =", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("client_secret =", source, StringComparison.OrdinalIgnoreCase);
@@ -1168,7 +1172,8 @@ public class CredentialPrimitiveHardeningTests
             var crypto = new FakeCrypto("old-plaintext-token");
             var http = new FakeHttpClient(200, """{"expires_in":3600}""");
             var executor = new ExternalPortPolicyStepExecutor(
-                crypto: crypto, httpClient: http, credentialVaultRepository: repo);
+                crypto: crypto, httpClient: http, credentialVaultRepository: repo,
+                endpointReferenceResolver: new FakeEndpointReferenceResolver());
             var context = new ExternalPortExecutionContext
             {
                 CredentialVaultRecord = NewVaultRecord(version: 1)
@@ -1279,6 +1284,18 @@ public class CredentialPrimitiveHardeningTests
         public byte[] EncryptForVaultStorage(string plaintextPayload, string encryptionKeyReference) =>
             System.Text.Encoding.UTF8.GetBytes(plaintextPayload);
         public string ComputeTokenHash(string plaintextPayload) => $"sha256:{plaintextPayload.GetHashCode():x8}";
+    }
+
+    private sealed class FakeEndpointReferenceResolver : IExternalPortEndpointReferenceResolver
+    {
+        public string Resolve(string endpointRef)
+        {
+            if (!endpointRef.StartsWith("env:", StringComparison.Ordinal))
+                return endpointRef;
+            var envKey = endpointRef[4..];
+            return Environment.GetEnvironmentVariable(envKey)
+                ?? throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_ENV_MISSING");
+        }
     }
 
     private sealed class FakeVaultRepository : IExternalCredentialVaultRepository

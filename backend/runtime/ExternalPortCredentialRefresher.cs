@@ -97,6 +97,23 @@ public interface IExternalPortHttpClient
     Task<ExternalPortHttpResponse> SendAsync(ExternalPortHttpRequest request, CancellationToken ct = default);
 }
 
+public interface IExternalPortEndpointReferenceResolver
+{
+    string Resolve(string endpointRef);
+}
+
+public sealed class EnvironmentVariableEndpointReferenceResolver : IExternalPortEndpointReferenceResolver
+{
+    public string Resolve(string endpointRef)
+    {
+        if (!endpointRef.StartsWith("env:", StringComparison.Ordinal))
+            return endpointRef;
+        var envKey = endpointRef[4..];
+        return Environment.GetEnvironmentVariable(envKey)
+            ?? throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_ENV_MISSING");
+    }
+}
+
 public interface IExternalPortPolicyStepExecutor
 {
     Task ExecuteAsync(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct = default);
@@ -446,6 +463,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
     private readonly IReadOnlyList<IExternalPortBundleStepHandler> _bundleHandlers;
     private readonly IExternalCredentialCrypto? _crypto;
     private readonly IExternalCredentialVaultRepository? _credentialVaultRepository;
+    private readonly IExternalPortEndpointReferenceResolver? _endpointReferenceResolver;
 
     public ExternalPortPolicyStepExecutor(
         IExternalPortHttpClient? httpClient = null,
@@ -456,10 +474,12 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         AbstractFunctionExecutor? abstractFunctionExecutor = null,
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null,
         IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null,
-        IExternalCredentialVaultRepository? credentialVaultRepository = null)
+        IExternalCredentialVaultRepository? credentialVaultRepository = null,
+        IExternalPortEndpointReferenceResolver? endpointReferenceResolver = null)
     {
         _crypto = crypto;
         _credentialVaultRepository = credentialVaultRepository;
+        _endpointReferenceResolver = endpointReferenceResolver;
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
         {
@@ -519,7 +539,10 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_MISSING");
                 }
 
-                endpoint = ResolveEndpointRef(endpoint);
+                if (_endpointReferenceResolver is not null)
+                    endpoint = _endpointReferenceResolver.Resolve(endpoint);
+                else if (endpoint.StartsWith("env:", StringComparison.Ordinal))
+                    throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_RESOLVER_MISSING");
                 var method = step.StepConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Get;
                 context.HttpRequest = new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), method, new Dictionary<string, string>(), null);
                 context.MarkExecuted(step.OperationKey);
@@ -659,9 +682,10 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING");
                 if (context.CredentialVaultRecord is null)
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
-                var leaseDurationSeconds = step.StepConfig.TryGetValue("lease_duration_seconds", out var durStr)
-                    && int.TryParse(durStr, out var dur) ? dur : 300;
-                var leaseOwner = ReadConfig(step.StepConfig, "lease_owner") ?? "credential_primitive";
+                if (!step.StepConfig.TryGetValue("lease_duration_seconds", out var durStr) || !int.TryParse(durStr, out var leaseDurationSeconds))
+                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_LEASE_DURATION_MISSING");
+                var leaseOwner = ReadConfig(step.StepConfig, "lease_owner")
+                    ?? throw new InvalidOperationException("EXTERNAL_CREDENTIAL_LEASE_OWNER_MISSING");
                 context.RefreshLease = await _credentialVaultRepository.AcquireRefreshLeaseAsync(
                     context.CredentialVaultRecord.CredentialVaultId,
                     leaseOwner,
@@ -679,8 +703,13 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_DECRYPTED_PAYLOAD_MISSING");
                 if (!step.StepConfig.TryGetValue("endpoint", out var endpoint) || string.IsNullOrWhiteSpace(endpoint))
                     throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_ENDPOINT_MISSING");
-                endpoint = ResolveEndpointRef(endpoint);
-                var method = step.StepConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Post;
+                if (_endpointReferenceResolver is not null)
+                    endpoint = _endpointReferenceResolver.Resolve(endpoint);
+                else if (endpoint.StartsWith("env:", StringComparison.Ordinal))
+                    throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_RESOLVER_MISSING");
+                if (!step.StepConfig.TryGetValue("method", out var methodValue) || string.IsNullOrWhiteSpace(methodValue))
+                    throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_METHOD_MISSING");
+                var method = new HttpMethod(methodValue);
                 var tokenRequest = new ExternalPortHttpRequest(
                     new Uri(endpoint, UriKind.RelativeOrAbsolute), method,
                     new Dictionary<string, string>(), context.DecryptedCredentialPayload);
@@ -704,9 +733,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             {
                 if (context.HttpResponse is null)
                     throw new InvalidOperationException("EXTERNAL_HTTP_RESPONSE_MISSING");
-                if (context.CredentialVaultRecord is null)
-                    throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
-                context.PendingExpiresAt = ParseExpiresAt(step.StepConfig, context.HttpResponse, context.CredentialVaultRecord.ExpiresAt);
+                context.PendingExpiresAt = ParseExpiresAtFromStepConfig(step.StepConfig, context.HttpResponse);
                 context.MarkExecuted(step.OperationKey);
                 return Task.CompletedTask;
             },
@@ -815,6 +842,25 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         return new ExternalTokenRefreshResult(response.Body, hash, expiresAt, PayloadRotated: true);
     }
 
+    private static DateTimeOffset ParseExpiresAtFromStepConfig(
+        IReadOnlyDictionary<string, string> config,
+        ExternalPortHttpResponse response)
+    {
+        if (config.TryGetValue("expires_in_seconds", out var secsStr) && int.TryParse(secsStr, out var secs))
+            return DateTimeOffset.UtcNow.AddSeconds(secs);
+        if (config.TryGetValue("response_expiry_key", out var jsonKey) && !string.IsNullOrWhiteSpace(jsonKey))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(response.Body);
+                if (doc.RootElement.TryGetProperty(jsonKey, out var el) && el.TryGetInt32(out var expiresIn))
+                    return DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+            }
+            catch { }
+        }
+        throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_EXPIRY_MISSING");
+    }
+
     private static DateTimeOffset ParseExpiresAt(
         IReadOnlyDictionary<string, string> config,
         ExternalPortHttpResponse response,
@@ -850,15 +896,6 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             "AuthorizationKey" => context.AuthorizationKey,
             _ => null
         };
-    }
-
-    private static string ResolveEndpointRef(string endpoint)
-    {
-        if (!endpoint.StartsWith("env:", StringComparison.Ordinal))
-            return endpoint;
-        var envKey = endpoint[4..];
-        return Environment.GetEnvironmentVariable(envKey)
-            ?? throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_ENV_MISSING");
     }
 
     private static string? FirstNonBlank(params string?[] values) =>
