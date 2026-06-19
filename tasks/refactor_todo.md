@@ -20,6 +20,11 @@ Source judgment: audit carry-over from abstract-function / SQL Attention / recom
 
 The refactor must follow this global order. Do not delete existing concrete functions first.
 
+**Execution path invariant (applies to all remaining Bundles):**
+Every migrated operation must satisfy:
+`seed/manifest → dispatch → 汎用 primitive / abstract executor → manifest-authorized SQL`
+No Bundle is complete if any of the four legs is missing: the seed/manifest must express the operation, the dispatch layer must route to `AbstractFunctionExecutor`, the generic primitive adapter must carry the semantics, and SQL/DB access must be authorized through the manifest (step_config / authority_bindings), not through C#-side hardcoding, frontend payload authority, or direct repository calls outside the primitive adapter.
+
 1. **SSOT fix and abstract function primitive generation**
    - Extend the existing SSOT documents first. Do not create a separate abstract-function runtime SSOT unless the user explicitly reopens SSOT ownership.
    - Define or extend `execute_abstract_function`, primitive taxonomy, manifest/runtime boundary, authority/input/output/projection rules, and fail-close vocabulary.
