@@ -74,6 +74,7 @@ check_term ".agent/prompt/audit.md" "- todo_granularity_judgment"
 check_term ".agent/prompt/implementation-change.md" "scope, implementation delta, protocol decisions, todo_granularity_judgment, check results"
 
 if [ "$FAILURES" -eq 0 ]; then
+  bash "$REPO_ROOT/.agent/tests/check-abstract-function-completion-alignment.sh"
   echo "=== Completion judgment checks passed ==="
   exit 0
 else
