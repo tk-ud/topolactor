@@ -8,23 +8,22 @@ using Xunit;
 namespace Topolactor.Runtime.Tests;
 
 /// <summary>
-/// Tests for AdminRuntime sql_attention:list_projection dispatch (NG5 pipeline alignment).
+/// Tests for AdminRuntime sql_attention:list_projection dispatch.
 ///
 /// Coverage:
 ///   - sql_attention:list_projection is reachable via ExecuteDataAsync.
-///   - Runtime not registered → explicit error SQL_ATTENTION_PROJECTION_RUNTIME_NOT_AVAILABLE.
-///   - Missing sourceSetId → explicit error SQL_ATTENTION_SOURCE_SET_ID_REQUIRED.
-///   - Empty sourceSetId → explicit error SQL_ATTENTION_SOURCE_SET_ID_REQUIRED.
+///   - Executor not registered → explicit error SQL_ATTENTION_PROJECTION_RUNTIME_NOT_AVAILABLE.
+///   - Missing sourceSetId (null payload) → fail-close from abstract function → SQL_ATTENTION_SOURCE_SET_ID_REQUIRED.
+///   - Empty sourceSetId → fail-close from sql_attention primitive → SQL_ATTENTION_SOURCE_SET_ID_REQUIRED.
 ///   - Cold start (no policy) → emission.data status=MissingPolicy (no silent fallback).
-///   - No evidence → emission.data status=NoEvidence (not an error).
-///   - Direct bypass route does not exist; projection must go through admin dispatch pipeline.
+///   - Unknown layer:action → ADMIN_OPERATION_NOT_FOUND.
 /// </summary>
 public class AdminRuntimeSqlAttentionProjectionTests
 {
     [Fact]
-    public async Task ListProjection_RuntimeNotRegistered_ReturnsExplicitError()
+    public async Task ListProjection_ExecutorNotRegistered_ReturnsExplicitError()
     {
-        var runtime = CreateAdminRuntimeWithoutProjectionRuntime();
+        var runtime = BuildAdminRuntime(abstractFunctionExecutor: null);
         var vector = new OperationVector("admin", "sql_attention", "list_projection", null, "admin",
             JsonSerializer.SerializeToElement(new { sourceSetId = "test_set" }), null);
 
@@ -36,9 +35,9 @@ public class AdminRuntimeSqlAttentionProjectionTests
     }
 
     [Fact]
-    public async Task ListProjection_MissingPayload_ReturnsExplicitError()
+    public async Task ListProjection_MissingPayload_ReturnsSourceSetIdRequired()
     {
-        var runtime = CreateAdminRuntime();
+        var runtime = BuildAdminRuntime(CreateAbstractFunctionExecutor());
         var vector = new OperationVector("admin", "sql_attention", "list_projection", null, "admin", null, null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
@@ -49,9 +48,9 @@ public class AdminRuntimeSqlAttentionProjectionTests
     }
 
     [Fact]
-    public async Task ListProjection_EmptySourceSetId_ReturnsExplicitError()
+    public async Task ListProjection_EmptySourceSetId_ReturnsSourceSetIdRequired()
     {
-        var runtime = CreateAdminRuntime();
+        var runtime = BuildAdminRuntime(CreateAbstractFunctionExecutor());
         var vector = new OperationVector("admin", "sql_attention", "list_projection", null, "admin",
             JsonSerializer.SerializeToElement(new { sourceSetId = "   " }), null);
 
@@ -65,9 +64,9 @@ public class AdminRuntimeSqlAttentionProjectionTests
     [Fact]
     public async Task ListProjection_ColdStart_ReturnsMissingPolicyInEmissionData()
     {
-        // No policy in function_parameters (default test-double) → MissingPolicy status.
+        // No policy in function_parameters (test-double TopologyRepository returns null) → MissingPolicy status.
         // Not an error at the dispatch layer; explicit status in emission.data.
-        var runtime = CreateAdminRuntime();
+        var runtime = BuildAdminRuntime(CreateAbstractFunctionExecutor());
         var vector = new OperationVector("admin", "sql_attention", "list_projection", null, "admin",
             JsonSerializer.SerializeToElement(new { sourceSetId = "test_source_set" }), null);
 
@@ -83,8 +82,7 @@ public class AdminRuntimeSqlAttentionProjectionTests
     [Fact]
     public async Task ListProjection_UnknownLayerAction_ReturnsAdminOperationNotFound()
     {
-        // Confirm the dispatch switch does not silently swallow an unknown action.
-        var runtime = CreateAdminRuntime();
+        var runtime = BuildAdminRuntime(CreateAbstractFunctionExecutor());
         var vector = new OperationVector("admin", "sql_attention", "nonexistent_action", null, "admin",
             JsonSerializer.SerializeToElement(new { sourceSetId = "test" }), null);
 
@@ -99,32 +97,57 @@ public class AdminRuntimeSqlAttentionProjectionTests
     // Helpers
     // ---------------------------------------------------------------------------
 
-    private static SqlAttentionTopologyProjectionRuntime CreateProjectionRuntime()
+    private static AbstractFunctionExecutor CreateAbstractFunctionExecutor()
     {
         var logsRepo = new SqlAttentionLogsRepository(
             NullLogger<SqlAttentionLogsRepository>.Instance, "test-double");
         var topologyRepo = new TopologyRepository(
             NullLogger<TopologyRepository>.Instance, "test-double");
-        return new SqlAttentionTopologyProjectionRuntime(
-            NullLogger<SqlAttentionTopologyProjectionRuntime>.Instance,
+        var adapter = new SqlAttentionProjectionPrimitiveAdapter(
+            NullLogger<SqlAttentionProjectionPrimitiveAdapter>.Instance,
             logsRepo,
             topologyRepo);
+        var manifest = CreateSeedManifest();
+        return new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { adapter });
     }
 
-    private static AdminRuntime CreateAdminRuntime(
-        SqlAttentionTopologyProjectionRuntime? projectionRuntime = null)
+    private static AbstractFunctionManifest CreateSeedManifest()
     {
-        projectionRuntime ??= CreateProjectionRuntime();
-        return BuildAdminRuntime(projectionRuntime);
+        var step = new AbstractFunctionStep(
+            AbstractFunctionStepId: Guid.Parse("00000000-0000-0000-0000-00000000bf10"),
+            StepOrder: 1,
+            PrimitiveKey: "sql_attention",
+            StepConfig: new Dictionary<string, string>
+            {
+                ["function_name"] = SqlAttentionTopologyProjectionRuntime.ProjectionFunctionName,
+                ["parameter_key"] = SqlAttentionTopologyProjectionRuntime.ProjectionPolicyKey
+            },
+            InputBindings: new[]
+            {
+                new AbstractFunctionInputBinding("source_set_id", "payload", "sourceSetId", true, false)
+            },
+            ResultContextKey: "projection_result",
+            Active: true);
+
+        return new AbstractFunctionManifest(
+            AbstractFunctionId: Guid.Parse("00000000-0000-0000-0000-00000000af08"),
+            FunctionKey: "sql_attention.list_projection",
+            RuntimeLane: "admin_runtime",
+            AuthorityScope: "admin_sql_attention",
+            Steps: new[] { step },
+            DeniedProjectionKeys: Array.Empty<string>(),
+            Active: true,
+            AuthorityBindings: new AbstractFunctionAuthorityBinding[]
+            {
+                new("policy", "admin_sql_attention_projection", true),
+                new("table", "logs.attention", true)
+            },
+            OutputShape: new Dictionary<string, string> { ["sql_attention_result"] = "projection_result" });
     }
 
-    private static AdminRuntime CreateAdminRuntimeWithoutProjectionRuntime()
-    {
-        return BuildAdminRuntime(sqlAttentionTopologyProjectionRuntime: null);
-    }
-
-    private static AdminRuntime BuildAdminRuntime(
-        SqlAttentionTopologyProjectionRuntime? sqlAttentionTopologyProjectionRuntime)
+    private static AdminRuntime BuildAdminRuntime(AbstractFunctionExecutor? abstractFunctionExecutor)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
         var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
@@ -138,6 +161,14 @@ public class AdminRuntimeSqlAttentionProjectionTests
             registrar,
             pkg,
             uiRepo,
-            sqlAttentionTopologyProjectionRuntime: sqlAttentionTopologyProjectionRuntime);
+            abstractFunctionExecutor: abstractFunctionExecutor);
+    }
+
+    private sealed class StaticManifestRepository : IAbstractFunctionManifestRepository
+    {
+        private readonly AbstractFunctionManifest? _manifest;
+        public StaticManifestRepository(AbstractFunctionManifest? manifest) => _manifest = manifest;
+        public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) =>
+            Task.FromResult(_manifest);
     }
 }

@@ -370,7 +370,7 @@ Still open after the file-storage attachment migration:
 
 ## Bundle `sql-recommendation-primitive-migration`
 
-Status: `not_started`
+Status: `partial_compatibility_fallback`
 
 ### Problem
 
@@ -382,27 +382,49 @@ Move SQL Attention and recommendation execution into abstract function primitive
 
 ### Migration steps
 
-1. **Abstract function fix**
+1. **Abstract function fix** ✓
    - Define `sql_attention` and `recommendation_attention` as primitive boundaries.
    - Define `phase_attention_adapter` as the only allowed Phase Attention bridge.
-2. **Add seed for absorption target**
+2. **Add seed for absorption target** ✓ (SQL Attention projection only)
    - Add seed/manifest rows for SQL Attention projection/evidence and context-route recommendation candidate generation.
    - Seed must express lane separation and route non-mutation.
-3. **Seed test**
+3. **Seed test** ✓ (SQL Attention projection only)
    - Add tests proving SQL Attention/recommendation seed paths produce candidates/evidence without mutating route/topology state.
    - Tests must cover no silent fallback, lane separation, append ordering, and projection/evidence boundaries.
-4. **Delete existing concrete functions**
+4. **Delete existing concrete functions** ✓ (SQL Attention projection only — compatibility fallback marked)
    - Remove/shrink dedicated resolver/runtime branches only after seed tests pass.
    - Keep Phase Attention internals as adapter code, not abstract function steps.
 
-### Improvement plan
+### Completed in this change (SQL Attention list_projection)
 
-- [ ] Define `sql_attention` primitive as relational observation, evidence append, ranking, and projection.
+- [x] SSOT fix: `sql_attention_runtime_lane_extension` added to `abstract-function-primitive-registry-ssot.yaml`; `admin_runtime` documented as valid lane for sql_attention projection; `function_name`, `parameter_key` documented as step_config-authority (not payload-derived).
+- [x] Seed (af08): `sql_attention.list_projection` manifest seeded with `runtime_lane=admin_runtime`, `authority_scope=admin_sql_attention`, `sql_attention` primitive step, `source_set_id` payload binding, `logs.attention` table authority, `admin_sql_attention_projection` policy authority.
+- [x] Primitive adapter: `SqlAttentionProjectionPrimitiveAdapter` (key `"sql_attention"`) added to `AbstractFunctionRuntime.cs`; verifies table authority, reads `function_name`/`parameter_key` from step_config, loads policy from `topology.function_parameters`, loads evidence from `logs.attention`, projects via `SqlAttentionTopologyProjectionRuntime.ProjectCandidates`.
+- [x] `AbstractFunctionExecutionContext.RequiredRuntimeLane` added; `AbstractFunctionExecutor` uses it for lane check (backward-compatible default `"external_port_runtime"`).
+- [x] `SqlAttentionProjectionPrimitiveAdapter` registered in `Program.cs` as `IAbstractFunctionPrimitiveAdapter`.
+- [x] `AdminRuntime` updated: `_sqlAttentionTopologyProjectionRuntime` replaced by `_abstractFunctionExecutor`; `DataSqlAttentionListProjectionAsync` routes through `AbstractFunctionExecutor`.
+- [x] `SqlAttentionTopologyProjectionRuntime` marked as compatibility fallback; `ParsePolicy` made `internal static` for primitive adapter reuse.
+- [x] `SqlAttentionScheduler` (BackgroundService cron route) remains unchanged per SSOT exception.
+- [x] Seed path tests: `SqlAttentionAbstractFunctionTests.cs` added covering seed execution, MissingPolicy result, lane separation, authority checks, fail-close vocabulary, no route/topology mutation.
+- [x] `AdminRuntimeSqlAttentionProjectionTests.cs` updated to use abstract function path with `AbstractFunctionExecutor`.
+- [x] All 921 runtime tests pass.
+
+### Remaining (recommendation_attention and ContextRouteRecommendationResolver)
+
 - [ ] Define `recommendation_attention` primitive as candidate source, eligibility, feature resolve, score, rank, diversify/suppress, projection, feedback/event.
 - [ ] Preserve lane separation: `ui_pressure`, `state_pressure`, `sql_attention_projection`.
 - [ ] Preserve prohibition on auto-overwriting route state or canonical topology state.
 - [ ] Migrate `ContextRouteRecommendationResolver` algorithm into primitive composition or isolate it behind a primitive adapter.
-- [ ] Migrate SQL Attention scheduler/repository/projection runtime behavior into primitive composition or isolate it behind a primitive adapter.
+- [ ] Keep Phase Attention internals behind `phase_attention_adapter` only.
+
+### Improvement plan
+
+- [x] Define `sql_attention` primitive as relational observation, evidence append, ranking, and projection. (done)
+- [ ] Define `recommendation_attention` primitive as candidate source, eligibility, feature resolve, score, rank, diversify/suppress, projection, feedback/event.
+- [ ] Preserve lane separation: `ui_pressure`, `state_pressure`, `sql_attention_projection`.
+- [ ] Preserve prohibition on auto-overwriting route state or canonical topology state.
+- [ ] Migrate `ContextRouteRecommendationResolver` algorithm into primitive composition or isolate it behind a primitive adapter.
+- [ ] Migrate remaining SQL Attention scheduler/repository behavior into primitive composition or isolate behind a primitive adapter.
 - [ ] Keep Phase Attention internals behind `phase_attention_adapter` only.
 
 ### Materials

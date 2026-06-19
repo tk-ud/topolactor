@@ -760,6 +760,22 @@ backend_abstract_function_runtime_substrate:
         - route_state_auto_mutation
         - canonical_topology_auto_mutation
         - phase_attention_internals_inside_manifest_steps
+      sql_attention_runtime_lane_extension:
+        note: >
+          sql_attention projection manifests route through admin_runtime (read-only, not external_port_runtime).
+          AbstractFunctionExecutionContext.RequiredRuntimeLane extends the default lane check for this lane.
+          function_name and parameter_key are resolved from step_config (manifest-authority).
+          source_set_id is bound from the request payload binding; it is never payload-derived authority.
+        valid_runtime_lanes:
+          - admin_runtime
+        step_config_required_keys:
+          - function_name
+          - parameter_key
+        payload_bound_inputs:
+          - source_set_id
+        table_authority_required: logs.attention
+        fail_close_on_missing_policy: MissingPolicy_status_in_result_not_fail_close_exception
+        fail_close_on_missing_source_set_id: missing_input_fail_close
     credential:
       primitives:
         - credential_reference_resolve

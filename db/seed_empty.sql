@@ -2247,6 +2247,43 @@ VALUES
     ('00000000-0000-0000-0000-00000000af07', 'table',  'topology.record_file_attachments', true)
 ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
 
+-- ---------------------------------------------------------------------------
+-- Abstract function manifest for SQL Attention projection (af08).
+-- sql_attention.list_projection routes through admin_runtime (read-only projection).
+-- Runtime lane: admin_runtime — not external_port_runtime.
+-- Authority scope: admin_sql_attention.
+-- Primitive: sql_attention — function_name and parameter_key from step_config (manifest-authority).
+-- Input: source_set_id bound from payload.sourceSetId.
+-- Table authority: logs.attention (read-only; no write to evidence layer).
+-- Policy authority: admin_sql_attention_projection.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.abstract_function_manifests
+    (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af08', 'sql_attention.list_projection', 'admin_runtime', 'admin_sql_attention', '{"sql_attention_result":"projection_result"}', ARRAY[]::text[], true)
+ON CONFLICT (abstract_function_id) DO NOTHING;
+
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf10', '00000000-0000-0000-0000-00000000af08', 1, 'sql_attention',
+     '{"function_name":"sql_attention_topology_projection","parameter_key":"default_policy"}',
+     'projection_result', true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000c030', '00000000-0000-0000-0000-00000000bf10', 'source_set_id', 'payload', 'sourceSetId', true, false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
+
+INSERT INTO topology.abstract_function_authority_bindings
+    (abstract_function_id, authority_kind, authority_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af08', 'policy', 'admin_sql_attention_projection', true),
+    ('00000000-0000-0000-0000-00000000af08', 'table',  'logs.attention',                 true)
+ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
 -- Consumer bundle policy steps (operation_key values constrained to external-port SSOT allowed set)
 -- file_storage steps use DELETE+INSERT to allow re-seeding with updated credential pipeline (17 steps)
 DELETE FROM topology.external_port_policy_steps

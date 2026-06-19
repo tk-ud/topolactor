@@ -119,6 +119,11 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(_ =>
     new CallPostgresFunctionPrimitiveAdapter(connectionString));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, ProjectionPrimitiveAdapter>();
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, FailClosePrimitiveAdapter>();
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new SqlAttentionProjectionPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<SqlAttentionProjectionPrimitiveAdapter>>(),
+        sp.GetRequiredService<SqlAttentionLogsRepository>(),
+        sp.GetRequiredService<TopologyRepository>()));
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
@@ -164,7 +169,7 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<EnumDictionaryRepository>(),
         sp.GetRequiredService<AuthMasterRepository>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
-        sp.GetRequiredService<SqlAttentionTopologyProjectionRuntime>(),
+        sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<MockPresetRepository>(),
         sp.GetRequiredService<TeamMarkdownRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
