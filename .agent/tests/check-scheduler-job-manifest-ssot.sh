@@ -18,7 +18,7 @@ check_file() {
 
 check_term() {
   local path="$1" term="$2"
-  if rg -qF -- "$term" "$REPO_ROOT/$path"; then
+  if grep -qF -- "$term" "$REPO_ROOT/$path"; then
     pass "$path -> $term"
   else
     fail "$path missing: $term"
@@ -28,6 +28,7 @@ check_term() {
 echo "=== Scheduler job manifest SSOT wiring check ==="
 
 check_file "docs/design/scheduler-job-manifest-ssot.yaml"
+
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "scheduler_job_manifest_ssot"
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "scheduler_job_manifest_substrate"
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "admin.contents"
@@ -54,12 +55,12 @@ check_term ".agent/docs/ssot-map.yaml" "docs/design/scheduler-job-manifest-ssot.
 
 check_term "docs/system-roadmap.yaml" "product.scheduler_job_manifest_substrate"
 check_term "docs/system-roadmap.yaml" "scheduler-job-manifest-substrate-implementation"
-check_term "docs/system-roadmap.yaml" "not_started"
-check_term "docs/system-roadmap.yaml" "scheduler job manifest tables"
-check_term "docs/system-roadmap.yaml" "input lease / run ledger"
+check_term "docs/system-roadmap.yaml" "status: not_started"
+check_term "docs/system-roadmap.yaml" "scheduler_job_manifest_tables"
+check_term "docs/system-roadmap.yaml" "input_lease_and_run_ledger"
 check_term "docs/system-roadmap.yaml" "abstract_function_step_chain_dispatch"
-check_term "docs/system-roadmap.yaml" "external service reference boundary"
-check_term "docs/system-roadmap.yaml" "representative existing cron absorption"
+check_term "docs/system-roadmap.yaml" "external_service_reference_boundary"
+check_term "docs/system-roadmap.yaml" "representative_existing_cron_absorption"
 check_term "docs/system-roadmap.yaml" "scheduler_job_manifest_tables_not_implemented"
 
 check_term ".agent/tasks/todo.md" "scheduler-job-manifest-substrate-implementation"
@@ -77,7 +78,7 @@ roadmap_block="$(
     in_block { print }
   ' "$REPO_ROOT/docs/system-roadmap.yaml"
 )"
-if printf '%s\n' "$roadmap_block" | rg -n "status: implemented|status: production_ready|production_ready: true" >/dev/null; then
+if printf '%s\n' "$roadmap_block" | grep -Eq "status: implemented|status: production_ready|production_ready: true"; then
   fail "scheduler job manifest roadmap item must not be marked implemented/production_ready by the wiring check"
 else
   pass "roadmap item remains non-implemented"
