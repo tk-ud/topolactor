@@ -573,6 +573,21 @@ Status: `implemented`
 - [x] Extended `.agent/tests/check-completion-judgment.sh` and added `.agent/tests/check-abstract-function-completion-alignment.sh` so the completion alignment gate, migration-order vocabulary, Bundle-to-test-surface mapping, seed/integration proof, and compatibility fallback classification are executable governance checks.
 - [x] Confirmed through `.agent/tests/check-abstract-function-completion-alignment.sh` that existing representative runtime and seed tests cover current file-storage absorption evidence surfaces (`AbstractFunctionExecutorTests`, `FileStorageBundleDispatchTests`, `FileStoragePortConsumerLiveDbTests`) and that `NpgsqlExternalPortDbFunctionRepository` remains an explicit fail-closed compatibility stub; future SQL Attention/recommendation, projection, and scheduler Bundles remain separate unresolved Bundles and are not advanced by this alignment Bundle.
 
+### Problem
+
+A backend-wide abstract function substrate crosses runtime, DB, external port, SQL Attention, recommendation, credential, projection, and test lanes. Completion cannot be claimed by syntax or file presence alone.
+
+### Purpose
+
+Align required tests/checks and completion language after implementation bundles land.
+
+### Improvement plan
+
+- [x] Add or update SSOT vocabulary checks for new primitive keys and manifest tables; the executable alignment check now verifies that implemented completion wording is tied to concrete test surfaces.
+- [x] Add backend runtime tests for primitive execution order, result context binding, fail-close, and no provider/bundle branching.
+- [x] Add seed tests for current absorption targets before concrete function deletion; future targets remain in their own unresolved Bundles.
+- [x] Add integration tests for representative DB mutation returning to projection/refetch/SSE where applicable.
+
 ---
 
 ## Bundle `projection-manifest-primitive-migration`
@@ -637,18 +652,3 @@ Blocking reasons:
 - `backend/tests/.../ManifestScreenOperationDeriverTests.cs`
 - `frontend/tests/screenAuthoringIntent.test.ts`
 - `db/seed_empty.sql` (many `append_runtime_event_log` rows)
-
-### Problem
-
-A backend-wide abstract function substrate crosses runtime, DB, external port, SQL Attention, recommendation, credential, projection, and test lanes. Completion cannot be claimed by syntax or file presence alone.
-
-### Purpose
-
-Align required tests/checks and completion language after implementation bundles land.
-
-### Improvement plan
-
-- [x] Add or update SSOT vocabulary checks for new primitive keys and manifest tables; the executable alignment check now verifies that implemented completion wording is tied to concrete test surfaces.
-- [x] Add backend runtime tests for primitive execution order, result context binding, fail-close, and no provider/bundle branching.
-- [x] Add seed tests for current absorption targets before concrete function deletion; future targets remain in their own unresolved Bundles.
-- [x] Add integration tests for representative DB mutation returning to projection/refetch/SSE where applicable.
