@@ -124,6 +124,10 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
         sp.GetRequiredService<ILogger<SqlAttentionProjectionPrimitiveAdapter>>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
         sp.GetRequiredService<TopologyRepository>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new RecommendationAttentionPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<RecommendationAttentionPrimitiveAdapter>>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>()));
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
@@ -196,7 +200,7 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<DiffLogRepository>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
         sp.GetRequiredService<RuntimeGuard>(),
-        sp.GetRequiredService<ContextRouteRecommendationResolver>(),
+        sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<OutputLaneRouter>(),
         sp.GetRequiredService<HubNavigationResolver>(),
         sp.GetRequiredService<ManifestRepository>()));

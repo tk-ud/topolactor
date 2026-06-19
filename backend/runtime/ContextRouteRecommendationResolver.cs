@@ -7,11 +7,16 @@ using Topolactor.Schema;
 namespace Topolactor.Runtime;
 
 /// <summary>
+/// COMPATIBILITY FALLBACK — not the canonical dispatch target for context route recommendation.
+/// Canonical path: seed/manifest af09 → AbstractFunctionExecutor → recommendation_attention primitive
+///   → RecommendationAttentionPrimitiveAdapter → this class (adapter call only).
+///
 /// Resolves context route recommendations: next operations and next token candidates
 /// derived from nearest historical context prefix search + transition statistics.
 ///
 /// Insertion point in the canonical runtime route:
-///   ... → component_expand → context_route_recommendation_resolve → emission_or_projection
+///   ... → component_expand → AbstractFunctionExecutor("context_route.recommendation_resolve")
+///           → RecommendationAttentionPrimitiveAdapter → ResolveAsync (this class)
 ///
 /// Policy source: function_parameters (function_name = 'context_route_recommendation_resolve',
 /// parameter_key = 'default_policy') stored in the topology data store.

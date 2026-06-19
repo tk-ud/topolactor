@@ -37,12 +37,13 @@ public sealed class AbstractFunctionExecutionContext
     private readonly Dictionary<string, object?> _resultContext = new(StringComparer.Ordinal);
     private readonly List<string> _executedPrimitiveKeys = new();
 
-    public AbstractFunctionExecutionContext(string authorityScope, JsonElement? requestPayload = null, ExternalPortExecutionContext? externalPortContext = null, string? requiredRuntimeLane = null)
+    public AbstractFunctionExecutionContext(string authorityScope, JsonElement? requestPayload = null, ExternalPortExecutionContext? externalPortContext = null, string? requiredRuntimeLane = null, RuntimeWorkingShape? runtimeContext = null)
     {
         AuthorityScope = authorityScope;
         RequestPayload = requestPayload;
         ExternalPortContext = externalPortContext;
         _requiredRuntimeLane = requiredRuntimeLane;
+        RuntimeContext = runtimeContext;
     }
 
     private readonly string? _requiredRuntimeLane;
@@ -50,6 +51,7 @@ public sealed class AbstractFunctionExecutionContext
     public string AuthorityScope { get; }
     public JsonElement? RequestPayload { get; }
     public ExternalPortExecutionContext? ExternalPortContext { get; }
+    public RuntimeWorkingShape? RuntimeContext { get; }
     public string RequiredRuntimeLane => _requiredRuntimeLane ?? "external_port_runtime";
     public IReadOnlyDictionary<string, object?> ResultContext => _resultContext;
     public IReadOnlyList<string> ExecutedPrimitiveKeys => _executedPrimitiveKeys;
@@ -63,6 +65,7 @@ public sealed class AbstractFunctionExecutionContext
         if (binding.BindingSource == "result_context") return _resultContext.TryGetValue(binding.BindingPath, out var value) ? value : null;
         if (binding.BindingSource == "constant") return binding.BindingPath;
         if (binding.BindingSource == "external_context") return ResolveExternalContext(binding.BindingPath);
+        if (binding.BindingSource == "runtime_context") return ResolveRuntimeContext(binding.BindingPath);
         if (binding.BindingSource == "step_config")
         {
             if (stepConfig is null)
@@ -112,6 +115,12 @@ public sealed class AbstractFunctionExecutionContext
         "file_artifact_id" => ExternalPortContext?.FileArtifactId,
         "checksum_value" => ExternalPortContext?.ChecksumValue,
         _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_EXTERNAL_CONTEXT_BINDING_UNSUPPORTED: {key}")
+    };
+
+    private object? ResolveRuntimeContext(string key) => key switch
+    {
+        "working_shape" => RuntimeContext,
+        _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_RUNTIME_CONTEXT_BINDING_UNSUPPORTED: {key}")
     };
 
     private static object? ResolveJsonPath(JsonElement? payload, string key)
@@ -410,5 +419,62 @@ public sealed class SqlAttentionProjectionPrimitiveAdapter : IAbstractFunctionPr
             StatusDetail: null,
             Candidates: candidates,
             EvaluatedAt: evaluatedAt);
+    }
+}
+
+/// <summary>
+/// Primitive adapter for the recommendation_attention primitive key.
+///
+/// Calls ContextRouteRecommendationResolver (COMPATIBILITY FALLBACK) as an opaque adapter.
+/// All semantics are manifest-authority:
+///   - function_name and parameter_key come from step_config (not payload).
+///   - working_shape is bound from runtime_context (not payload or external_context).
+///   - table authority for context_route.context_hub_recommendation_current is verified from manifest.
+///   - policy authority for context_route_recommendation_resolve is verified from manifest.
+///
+/// Prohibited:
+///   - Route/canonical topology auto-overwrite from recommendation result.
+///   - Phase Attention internals inside this adapter (SystemOperationCiRuntime is an opaque boundary).
+///   - Exposing function_name / parameter_key from payload.
+/// </summary>
+public sealed class RecommendationAttentionPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly ILogger<RecommendationAttentionPrimitiveAdapter> _logger;
+    private readonly ContextRouteRecommendationResolver _resolver;
+
+    public RecommendationAttentionPrimitiveAdapter(
+        ILogger<RecommendationAttentionPrimitiveAdapter> logger,
+        ContextRouteRecommendationResolver resolver)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    }
+
+    public string PrimitiveKey => "recommendation_attention";
+
+    public async Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        // 1. Verify table authority for context_route.context_hub_recommendation_current
+        if (!context.AuthorityBindings.Any(b => string.Equals(b.AuthorityKind, "table", StringComparison.Ordinal) && string.Equals(b.AuthorityRef, "context_route.context_hub_recommendation_current", StringComparison.Ordinal)))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_TABLE_AUTHORITY_INVALID: required=context_route.context_hub_recommendation_current");
+
+        // 2. Read function_name from step_config (manifest-authority, NOT payload)
+        if (!step.StepConfig.TryGetValue("function_name", out var functionName) || string.IsNullOrWhiteSpace(functionName))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_FUNCTION_NAME_MISSING_FROM_STEP_CONFIG");
+
+        // 3. Read parameter_key from step_config (manifest-authority, NOT payload)
+        if (!step.StepConfig.TryGetValue("parameter_key", out var parameterKey) || string.IsNullOrWhiteSpace(parameterKey))
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_PARAMETER_KEY_MISSING_FROM_STEP_CONFIG");
+
+        // 4. Read working_shape from runtime_context inputs (never from payload)
+        if (!inputs.TryGetValue("working_shape", out var shapeRaw) || shapeRaw is not RuntimeWorkingShape shape)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_WORKING_SHAPE_MISSING");
+
+        // 5. Delegate to ContextRouteRecommendationResolver (COMPATIBILITY FALLBACK adapter call)
+        //    The resolver loads policy from topology.function_parameters[function_name/parameter_key]
+        //    internally — these are manifest-authority values passed via step_config, not payload.
+        //    Result is observation/evidence/projection only; no route/topology auto-overwrite.
+        _logger.LogDebug("RecommendationAttentionPrimitiveAdapter: resolving via adapter for function_name={FunctionName}.", functionName);
+        return await _resolver.ResolveAsync(shape, ct);
     }
 }

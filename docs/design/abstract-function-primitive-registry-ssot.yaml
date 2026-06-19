@@ -776,6 +776,31 @@ backend_abstract_function_runtime_substrate:
         table_authority_required: logs.attention
         fail_close_on_missing_policy: MissingPolicy_status_in_result_not_fail_close_exception
         fail_close_on_missing_source_set_id: missing_input_fail_close
+      recommendation_attention_lane_extension:
+        note: >
+          recommendation_attention manifests route through runtime_executor lane.
+          AbstractFunctionExecutionContext.RuntimeContext carries the RuntimeWorkingShape
+          and is bound through the "runtime_context" binding source (binding_path="working_shape").
+          function_name and parameter_key are resolved from step_config (manifest-authority).
+          ContextRouteRecommendationResolver is called as an opaque adapter (COMPATIBILITY FALLBACK);
+          its internals (vector building, Phase Attention boundary via SystemOperationCiRuntime)
+          are not visible to the manifest step chain.
+          route/canonical_topology auto-overwrite is prohibited; context event evidence appends are
+          permitted as append-only evidence accumulation (not topology overwrite).
+          Phase Attention internals must not appear inside manifest steps — adapter boundary only.
+        valid_runtime_lanes:
+          - runtime_executor
+        step_config_required_keys:
+          - function_name
+          - parameter_key
+        runtime_context_bound_inputs:
+          - working_shape
+        table_authority_required: context_route.context_hub_recommendation_current
+        policy_authority_required: context_route_recommendation_resolve
+        fail_close_on_missing_authority: invalid_authority_fail_close
+        fail_close_on_missing_working_shape: missing_input_fail_close
+        no_route_topology_overwrite: true
+        phase_attention_adapter_boundary: SystemOperationCiRuntime_opaque
     credential:
       primitives:
         - credential_reference_resolve

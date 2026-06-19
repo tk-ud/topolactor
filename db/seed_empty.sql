@@ -2284,6 +2284,37 @@ VALUES
     ('00000000-0000-0000-0000-00000000af08', 'table',  'logs.attention',                 true)
 ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
 
+-- Abstract function manifest for context route recommendation (af09).
+-- Routes through runtime_executor lane; ContextRouteRecommendationResolver is called
+-- as a COMPATIBILITY FALLBACK adapter via the recommendation_attention primitive.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.abstract_function_manifests
+    (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af09', 'context_route.recommendation_resolve', 'runtime_executor', 'context_route_recommendation', '{"context_route_result":"recommendation_result"}', ARRAY[]::text[], true)
+ON CONFLICT (abstract_function_id) DO NOTHING;
+
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf11', '00000000-0000-0000-0000-00000000af09', 1, 'recommendation_attention',
+     '{"function_name":"context_route_recommendation_resolve","parameter_key":"default_policy"}',
+     'recommendation_result', true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000c031', '00000000-0000-0000-0000-00000000bf11', 'working_shape', 'runtime_context', 'working_shape', true, false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
+
+INSERT INTO topology.abstract_function_authority_bindings
+    (abstract_function_id, authority_kind, authority_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af09', 'policy', 'context_route_recommendation_resolve', true),
+    ('00000000-0000-0000-0000-00000000af09', 'table',  'context_route.context_hub_recommendation_current', true)
+ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
 -- Consumer bundle policy steps (operation_key values constrained to external-port SSOT allowed set)
 -- file_storage steps use DELETE+INSERT to allow re-seeding with updated credential pipeline (17 steps)
 DELETE FROM topology.external_port_policy_steps

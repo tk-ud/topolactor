@@ -26,7 +26,7 @@ public class RuntimeExecutor : IDispatchableRuntime
     private readonly DiffLogRepository _diffLogRepository;
     private readonly SqlAttentionLogsRepository _sqlAttentionLogsRepository;
     private readonly RuntimeGuard _runtimeGuard;
-    private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
+    private readonly AbstractFunctionExecutor _abstractFunctionExecutor;
     private readonly OutputLaneRouter? _outputLaneRouter;
     private readonly HubNavigationResolver? _hubNavigationResolver;
     private readonly ScreenDataShapeQueryRuntime _screenDataShapeQueryRuntime;
@@ -43,7 +43,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         DiffLogRepository diffLogRepository,
         SqlAttentionLogsRepository sqlAttentionLogsRepository,
         RuntimeGuard runtimeGuard,
-        ContextRouteRecommendationResolver contextRouteRecommendationResolver,
+        AbstractFunctionExecutor abstractFunctionExecutor,
         OutputLaneRouter? outputLaneRouter = null,
         HubNavigationResolver? hubNavigationResolver = null,
         ManifestRepository? manifestRepository = null)
@@ -59,7 +59,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         _diffLogRepository = diffLogRepository ?? throw new ArgumentNullException(nameof(diffLogRepository));
         _sqlAttentionLogsRepository = sqlAttentionLogsRepository ?? throw new ArgumentNullException(nameof(sqlAttentionLogsRepository));
         _runtimeGuard = runtimeGuard ?? throw new ArgumentNullException(nameof(runtimeGuard));
-        _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
+        _abstractFunctionExecutor = abstractFunctionExecutor ?? throw new ArgumentNullException(nameof(abstractFunctionExecutor));
         _outputLaneRouter = outputLaneRouter;
         _hubNavigationResolver = hubNavigationResolver;
         _screenDataShapeQueryRuntime = new ScreenDataShapeQueryRuntime(manifestRepository);
@@ -207,24 +207,31 @@ public class RuntimeExecutor : IDispatchableRuntime
             }
         }
 
-        // Step 9: Context route recommendation (non-fatal — failure yields ExplicitError status)
+        // Step 9: Context route recommendation via abstract function executor (non-fatal)
         ContextRouteRecommendationResult? recommendation = null;
         try
         {
-            recommendation = await _contextRouteRecommendationResolver.ResolveAsync(workingShape, ct);
+            var recContext = new AbstractFunctionExecutionContext(
+                authorityScope: "context_route_recommendation",
+                requiredRuntimeLane: "runtime_executor",
+                runtimeContext: workingShape);
+            var recResult = await _abstractFunctionExecutor.ExecuteAsync("context_route.recommendation_resolve", recContext, ct);
+            recommendation = recResult.ResultContext.TryGetValue("recommendation_result", out var r)
+                ? r as ContextRouteRecommendationResult : null;
+            recommendation ??= new ContextRouteRecommendationResult(
+                NextOperations: [], NextTokens: [], NextEnumItems: [],
+                NearestPrefixSessionIds: [], ContributingTokens: [],
+                Status: RecommendationStatus.ExplicitError,
+                StatusDetail: "RECOMMENDATION_RESULT_MISSING_FROM_ABSTRACT_FUNCTION_CONTEXT");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ContextRouteRecommendationResolver.ResolveAsync failed.");
+            _logger.LogError(ex, "AbstractFunctionExecutor recommendation_resolve failed.");
             recommendation = new ContextRouteRecommendationResult(
-                NextOperations: [],
-                NextTokens: [],
-                NextEnumItems: [],
-                NearestPrefixSessionIds: [],
-                ContributingTokens: [],
+                NextOperations: [], NextTokens: [], NextEnumItems: [],
+                NearestPrefixSessionIds: [], ContributingTokens: [],
                 Status: RecommendationStatus.ExplicitError,
-                StatusDetail: ex.Message
-            );
+                StatusDetail: ex.Message);
         }
 
         var recommendProjectionSpec = RecommendNavigationProjectionSpec.FromRecommendation(
