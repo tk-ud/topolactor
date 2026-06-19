@@ -909,7 +909,7 @@ public sealed class CredentialFailLeaseAdapter : IAbstractFunctionPrimitiveAdapt
 /// event_type is required from step_config. entity_ref_key is optional; when present,
 /// it is resolved from ExternalPortContext fields (ExportJobId, FileArtifactId, ChecksumValue, AuthorizationKey).
 /// Missing entity_ref_key → null entityId (not fail-close). Unresolvable entity_ref_key → fail-close.
-/// Prohibited: provider_kind_branching, required_by_bundle_branching, mutable event overwrite.
+/// Prohibited: provider-specific branching, bundle-specific branching, mutable event overwrite.
 /// </summary>
 public sealed class EventLogPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
 {
@@ -960,7 +960,7 @@ public sealed class EventLogPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
 /// url and method are required from step_config (no provider-specific defaulting).
 /// Optional request_body input from input binding (result_context or payload).
 /// Returns ExternalPortHttpResponse stored as http_response.
-/// Prohibited: provider_kind_branching, hidden_retry, default_http_method, silent_fallback_on_error.
+/// Prohibited: provider-specific branching, hidden retry, default HTTP method, silent fallback on error.
 /// </summary>
 public sealed class HttpRequestPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
 {
@@ -1002,7 +1002,7 @@ public sealed class HttpRequestPrimitiveAdapter : IAbstractFunctionPrimitiveAdap
 /// should be enqueued for the current external port execution.
 /// No step_config required; ExternalPortContext must be present (fail-close if missing).
 /// Returns null (no result_context output).
-/// Prohibited: provider_kind_branching, required_by_bundle_branching, direct scheduler client calls.
+/// Prohibited: provider-specific branching, bundle-specific branching, direct scheduler client calls.
 /// </summary>
 public sealed class SchedulerEnqueuePrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
 {
