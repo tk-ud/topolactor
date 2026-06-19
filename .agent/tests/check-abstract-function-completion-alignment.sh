@@ -79,6 +79,18 @@ check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresh
 check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialRefreshManifest_WhenHttpStepFails_CompensationCallsFailLease"
 # Seed must contain compensation step (bf1b) and CredentialFailLeaseAdapter.
 check_term "db/seed_empty.sql" "credential_fail_lease"
+# SSOT vocabulary alignment: external-port substrate and primitive registry must use canonical credential_* names.
+for primitive in credential_acquire_lease credential_http_request credential_compute_token_hash credential_parse_expires_at credential_write_vault credential_release_lease credential_fail_lease; do
+  check_term "docs/design/external-port-substrate-ssot.yaml" "$primitive"
+  check_term "docs/design/abstract-function-primitive-registry-ssot.yaml" "$primitive"
+done
+check_term "docs/design/external-port-substrate-ssot.yaml" "legacy_vocabulary_disposition"
+check_term "docs/design/external-port-substrate-ssot.yaml" "provider_kind_branching: prohibited"
+check_term "docs/design/external-port-substrate-ssot.yaml" "required_by_bundle_branching: prohibited"
+check_term "docs/design/external-port-substrate-ssot.yaml" "credential_requirement_boundary: port_record_attachment_not_standalone_credential_plane"
+check_term "docs/design/abstract-function-primitive-registry-ssot.yaml" "csharp_default_http_method: prohibited"
+check_term "docs/design/abstract-function-primitive-registry-ssot.yaml" "csharp_default_lease_duration: prohibited"
+check_term "docs/design/abstract-function-primitive-registry-ssot.yaml" "csharp_default_expiry_response_key: prohibited"
 check_term "db/seed_empty.sql" "is_compensation_step"
 check_term "backend/runtime/AbstractFunctionRuntime.cs" "CredentialFailLeaseAdapter"
 check_term "backend/Program.cs" "CredentialFailLeaseAdapter"
