@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Topolactor.Repository;
 using Topolactor.Runtime;
 using Xunit;
@@ -740,6 +742,47 @@ public class CredentialPrimitiveHardeningTests
         Assert.Contains("request_token_by_config", context.ExecutedOperationKeys);
     }
 
+    [Fact]
+    public async Task RequestTokenByConfig_WithEnvEndpoint_ResolvesFromEnvironment()
+    {
+        Environment.SetEnvironmentVariable("TOPOLACTOR_TEST_CRED_EP", "https://auth.test.invalid/token");
+        try
+        {
+            var http = new FakeHttpClient(200, "new-token");
+            var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
+            var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
+
+            await executor.ExecuteAsync(
+                NewStep(1, "request_token_by_config",
+                    new Dictionary<string, string> { ["endpoint"] = "env:TOPOLACTOR_TEST_CRED_EP" }),
+                context);
+
+            Assert.NotNull(context.HttpResponse);
+            Assert.Equal("new-token", context.HttpResponse.Body);
+            Assert.Contains("request_token_by_config", context.ExecutedOperationKeys);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOPOLACTOR_TEST_CRED_EP", null);
+        }
+    }
+
+    [Fact]
+    public async Task RequestTokenByConfig_WithMissingEnvEndpoint_FailsClose()
+    {
+        Environment.SetEnvironmentVariable("TOPOLACTOR_TEST_CRED_EP_MISSING", null);
+        var http = new FakeHttpClient(200, "ignored");
+        var executor = new ExternalPortPolicyStepExecutor(httpClient: http);
+        var context = new ExternalPortExecutionContext { DecryptedCredentialPayload = "old-token" };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(
+                NewStep(1, "request_token_by_config",
+                    new Dictionary<string, string> { ["endpoint"] = "env:TOPOLACTOR_TEST_CRED_EP_MISSING" }),
+                context));
+        Assert.Equal("EXTERNAL_HTTP_ENDPOINT_ENV_MISSING", ex.Message);
+    }
+
     // ── update_token_hash ─────────────────────────────────────────────────────
 
     [Fact]
@@ -1039,6 +1082,34 @@ public class CredentialPrimitiveHardeningTests
         Assert.NotNull(repo.LastWriteExpiresAt);
     }
 
+    [Fact]
+    public async Task ExecutePolicyAsync_FailsAfterLeaseAcquisition_FailsLease()
+    {
+        var lease = NewLease(version: 1);
+        var repo = new FakeVaultRepository { LeaseToReturn = lease };
+        var crypto = new FakeCrypto("old-token");
+        var executor = new ExternalPortPolicyStepExecutor(
+            crypto: crypto, credentialVaultRepository: repo);
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(), "test_policy", "access_port", "test-bundle",
+            new[]
+            {
+                NewStep(1, "load_encrypted_credential_payload"),
+                NewStep(2, "decrypt_for_runtime_use"),
+                NewStep(3, "acquire_refresh_lease", new Dictionary<string, string> { ["lease_duration_seconds"] = "300" }),
+                NewStep(4, "fail_close"),
+            },
+            Active: true);
+        var context = new ExternalPortExecutionContext { CredentialVaultRecord = NewVaultRecord() };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.ExecutePolicyAsync(policy, context));
+
+        Assert.True(repo.LeaseFailCalled);
+        Assert.Equal("EXTERNAL_CREDENTIAL_REFRESH_FAILED", repo.LastLeaseFailCode);
+        Assert.False(repo.LeaseReleased);
+    }
+
     // ── plaintext projection prohibition ─────────────────────────────────────
 
     [Fact]
@@ -1075,6 +1146,72 @@ public class CredentialPrimitiveHardeningTests
         Assert.DoesNotContain("api_key =", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("client_secret =", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("raw_token", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CredentialVaultGenericRefreshPolicy_SeedPolicyExecution_RunsAllStepsInOrder()
+    {
+        Environment.SetEnvironmentVariable("TOKEN_REFRESH_ENDPOINT_REF", "https://auth.seed-test.invalid/token");
+        try
+        {
+            var seedSql = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+            const string policyId = "00000000-0000-0000-0000-0000000000f0";
+            var steps = ParseSeedStepsForPolicy(seedSql, policyId);
+            Assert.Equal(8, steps.Count);
+
+            var policy = new ExternalPortPolicy(
+                new Guid(policyId), "credential_vault_generic_refresh", "access_port",
+                "external-port-substrate-seed-coding", steps, Active: true);
+
+            var lease = NewLease(version: 1);
+            var repo = new FakeVaultRepository { LeaseToReturn = lease };
+            var crypto = new FakeCrypto("old-plaintext-token");
+            var http = new FakeHttpClient(200, """{"expires_in":3600}""");
+            var executor = new ExternalPortPolicyStepExecutor(
+                crypto: crypto, httpClient: http, credentialVaultRepository: repo);
+            var context = new ExternalPortExecutionContext
+            {
+                CredentialVaultRecord = NewVaultRecord(version: 1)
+            };
+
+            await executor.ExecutePolicyAsync(policy, context);
+
+            Assert.Equal(
+                new[]
+                {
+                    "load_encrypted_credential_payload", "decrypt_for_runtime_use",
+                    "acquire_refresh_lease", "request_token_by_config",
+                    "update_token_hash", "update_expires_at_and_version",
+                    "write_encrypted_credential_payload", "release_refresh_lease",
+                },
+                context.ExecutedOperationKeys);
+            Assert.Null(context.DecryptedCredentialPayload);
+            Assert.True(repo.LeaseReleased);
+            Assert.NotNull(repo.LastWriteTokenHash);
+            Assert.NotNull(repo.LastWriteExpiresAt);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOKEN_REFRESH_ENDPOINT_REF", null);
+        }
+    }
+
+    private static IReadOnlyList<ExternalPortPolicyStep> ParseSeedStepsForPolicy(string seedSql, string policyId)
+    {
+        var pattern = new Regex(
+            $@"'[0-9a-f-]{{36}}',\s*'{Regex.Escape(policyId)}',\s*(\d+),\s*'([a-z_]+)',\s*'(\{{[^']*\}})'",
+            RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        return pattern.Matches(seedSql)
+            .Select(m => new ExternalPortPolicyStep(
+                Guid.NewGuid(),
+                new Guid(policyId),
+                int.Parse(m.Groups[1].Value),
+                m.Groups[2].Value,
+                JsonSerializer.Deserialize<Dictionary<string, string>>(m.Groups[3].Value)
+                    ?? new Dictionary<string, string>(),
+                Active: true))
+            .OrderBy(s => s.StepOrder)
+            .ToList();
     }
 
     [Fact]
@@ -1152,6 +1289,8 @@ public class CredentialPrimitiveHardeningTests
         public string? LastWriteTokenHash { get; private set; }
         public DateTimeOffset? LastWriteExpiresAt { get; private set; }
         public bool LeaseReleased { get; private set; }
+        public bool LeaseFailCalled { get; private set; }
+        public string? LastLeaseFailCode { get; private set; }
 
         public Task<ExternalCredentialVaultRecord?> LoadAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult<ExternalCredentialVaultRecord?>(null);
@@ -1178,8 +1317,12 @@ public class CredentialPrimitiveHardeningTests
             return Task.CompletedTask;
         }
 
-        public Task FailRefreshLeaseAsync(ExternalCredentialRefreshLease lease, string failureCode, CancellationToken ct = default) =>
-            Task.CompletedTask;
+        public Task FailRefreshLeaseAsync(ExternalCredentialRefreshLease lease, string failureCode, CancellationToken ct = default)
+        {
+            LeaseFailCalled = true;
+            LastLeaseFailCode = failureCode;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeHttpClient : IExternalPortHttpClient

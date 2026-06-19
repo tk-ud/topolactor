@@ -445,6 +445,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
     private readonly IReadOnlyDictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>> _registry;
     private readonly IReadOnlyList<IExternalPortBundleStepHandler> _bundleHandlers;
     private readonly IExternalCredentialCrypto? _crypto;
+    private readonly IExternalCredentialVaultRepository? _credentialVaultRepository;
 
     public ExternalPortPolicyStepExecutor(
         IExternalPortHttpClient? httpClient = null,
@@ -458,6 +459,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IExternalCredentialVaultRepository? credentialVaultRepository = null)
     {
         _crypto = crypto;
+        _credentialVaultRepository = credentialVaultRepository;
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
         {
@@ -517,6 +519,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_MISSING");
                 }
 
+                endpoint = ResolveEndpointRef(endpoint);
                 var method = step.StepConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Get;
                 context.HttpRequest = new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), method, new Dictionary<string, string>(), null);
                 context.MarkExecuted(step.OperationKey);
@@ -652,14 +655,14 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             },
             ["acquire_refresh_lease"] = async (step, context, ct) =>
             {
-                if (credentialVaultRepository is null)
+                if (_credentialVaultRepository is null)
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING");
                 if (context.CredentialVaultRecord is null)
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
                 var leaseDurationSeconds = step.StepConfig.TryGetValue("lease_duration_seconds", out var durStr)
                     && int.TryParse(durStr, out var dur) ? dur : 300;
                 var leaseOwner = ReadConfig(step.StepConfig, "lease_owner") ?? "credential_primitive";
-                context.RefreshLease = await credentialVaultRepository.AcquireRefreshLeaseAsync(
+                context.RefreshLease = await _credentialVaultRepository.AcquireRefreshLeaseAsync(
                     context.CredentialVaultRecord.CredentialVaultId,
                     leaseOwner,
                     TimeSpan.FromSeconds(leaseDurationSeconds),
@@ -676,6 +679,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_DECRYPTED_PAYLOAD_MISSING");
                 if (!step.StepConfig.TryGetValue("endpoint", out var endpoint) || string.IsNullOrWhiteSpace(endpoint))
                     throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_ENDPOINT_MISSING");
+                endpoint = ResolveEndpointRef(endpoint);
                 var method = step.StepConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Post;
                 var tokenRequest = new ExternalPortHttpRequest(
                     new Uri(endpoint, UriKind.RelativeOrAbsolute), method,
@@ -710,7 +714,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             {
                 if (_crypto is null)
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_CRYPTO_MISSING");
-                if (credentialVaultRepository is null)
+                if (_credentialVaultRepository is null)
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING");
                 if (context.CredentialVaultRecord is null)
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_RECORD_MISSING");
@@ -725,7 +729,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 ExternalTokenRefresher.FailCloseOnMissingOrInvalidCredential(context.CredentialVaultRecord);
                 var encrypted = _crypto.EncryptForVaultStorage(
                     context.HttpResponse.Body, context.CredentialVaultRecord.EncryptionKeyReference!);
-                await credentialVaultRepository.WriteEncryptedCredentialPayloadAsync(
+                await _credentialVaultRepository.WriteEncryptedCredentialPayloadAsync(
                     context.CredentialVaultRecord.CredentialVaultId,
                     context.RefreshLease.Version,
                     encrypted,
@@ -737,11 +741,11 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             },
             ["release_refresh_lease"] = async (step, context, ct) =>
             {
-                if (credentialVaultRepository is null)
+                if (_credentialVaultRepository is null)
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_VAULT_REPOSITORY_MISSING");
                 if (context.RefreshLease is null)
                     throw new InvalidOperationException("EXTERNAL_CREDENTIAL_REFRESH_LEASE_MISSING");
-                await credentialVaultRepository.ReleaseRefreshLeaseAsync(context.RefreshLease, ct);
+                await _credentialVaultRepository.ReleaseRefreshLeaseAsync(context.RefreshLease, ct);
                 context.MarkExecuted(step.OperationKey);
             },
         };
@@ -753,9 +757,16 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         context.RequiredByBundle ??= policy.RequiredByBundle;
         context.PortKind ??= policy.PortKind;
 
-        foreach (var step in policy.PolicySteps.Where(static s => s.Active).OrderBy(static s => s.StepOrder))
+        try
         {
-            await ExecuteAsync(step, context, ct);
+            foreach (var step in policy.PolicySteps.Where(static s => s.Active).OrderBy(static s => s.StepOrder))
+                await ExecuteAsync(step, context, ct);
+        }
+        catch
+        {
+            if (_credentialVaultRepository is not null && context.RefreshLease is not null)
+                await _credentialVaultRepository.FailRefreshLeaseAsync(context.RefreshLease, "EXTERNAL_CREDENTIAL_REFRESH_FAILED", ct);
+            throw;
         }
     }
 
@@ -839,6 +850,15 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             "AuthorizationKey" => context.AuthorizationKey,
             _ => null
         };
+    }
+
+    private static string ResolveEndpointRef(string endpoint)
+    {
+        if (!endpoint.StartsWith("env:", StringComparison.Ordinal))
+            return endpoint;
+        var envKey = endpoint[4..];
+        return Environment.GetEnvironmentVariable(envKey)
+            ?? throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_ENV_MISSING");
     }
 
     private static string? FirstNonBlank(params string?[] values) =>

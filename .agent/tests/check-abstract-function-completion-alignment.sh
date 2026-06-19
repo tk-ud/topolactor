@@ -82,10 +82,17 @@ check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresh
 check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "WriteEncryptedCredentialPayload_ClearsDecryptedPayload_PreventingPlaintextProjection"
 check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialRefreshPolicy_ExecutesAllStepsInOrder"
 check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialVaultGenericRefreshPolicy_SeedContainsAllOperationKeysWithoutPlaintext"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "RequestTokenByConfig_WithEnvEndpoint_ResolvesFromEnvironment"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "RequestTokenByConfig_WithMissingEnvEndpoint_FailsClose"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "ExecutePolicyAsync_FailsAfterLeaseAcquisition_FailsLease"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialVaultGenericRefreshPolicy_SeedPolicyExecution_RunsAllStepsInOrder"
 check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "acquire_refresh_lease"
 check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "write_encrypted_credential_payload"
 check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "release_refresh_lease"
 check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "Compatibility fallback used by ExternalTokenRefresher"
+check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "ResolveEndpointRef"
+check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "EXTERNAL_HTTP_ENDPOINT_ENV_MISSING"
+check_term "backend/runtime/ExternalPortCredentialRefresher.cs" "FailRefreshLeaseAsync"
 check_absent "backend/runtime/ExternalPortCredentialRefresher.cs" "sha256:{response.Body.Length}"
 
 if [ "$FAILURES" -eq 0 ]; then
