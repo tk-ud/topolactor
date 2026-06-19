@@ -112,6 +112,9 @@ Absorption policy:
 | `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete as representative absorption case; SQL Attention / recommendation / credential hardening remain not_started) |
 | `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
 | `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
+| `projection-manifest-primitive-migration` | investigation_needed | Move remaining projection constructor / runtime event / screen operation derivation mapping into projection manifest or projection primitives while preserving pure render/test-only exceptions |
+| `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives |
+| `cli-mcp-read-export-port-substrate` | not_started | Implement CLI/MCP read/export/import-candidate port through dispatch-secured port and abstract function primitives rather than dedicated tool handlers |
 | `file-storage-db-function-to-abstract-function-migration` | implemented | Absorb file-storage DB functions by migration order and remove payload-derived table authority — all 7 fs_* operations migrated to execute_abstract_function manifests af01-af07; NpgsqlExternalPortDbFunctionRepository stub; all acceptance conditions satisfied |
 | `completion-gate-and-test-alignment` | not_started | Align tests/checks/status after Bundle migration |
 
@@ -668,6 +671,279 @@ Align required tests/checks and completion language after implementation bundles
 - [ ] No TODO/roadmap status is advanced without implementation and test evidence.
 - [ ] No partial status is hidden behind implemented wording.
 
+
+## Bundle `projection-manifest-primitive-migration`
+
+Status: `investigation_needed`
+
+### Problem
+
+Projection execution is mostly routed through manifest / screen data shape / runtime lanes, but several general runtime surfaces still encode projection semantics in C#/TS branch tables. Confirmed examples include component-kind prop normalization in `projectionConstructor.ts`, frontend wiring-kind to backend layer/action mapping in `renderEmission.ts`, local UI event action mapping in `renderEmission.ts`, screen operation kind to dispatcher axes in `ManifestScreenOperationDeriver.cs`, and the backend SSE runtime emitting a fixed `projection` event type. These are not admin-only authoring exceptions when they participate in the general runtime projection / dispatch / SSE lane.
+
+### Purpose
+
+Move projection mapping authority toward projection manifest, screen_data_shape authority, projection primitive definitions, and abstract function output/projection metadata while keeping the frontend as request/render surface only.
+
+### Improvement plan
+
+1. **Projection authority inventory**
+   - Classify each branch as projection authority, dispatch authority, pure view normalization, local UI state only, admin authoring UX, or test-only handwritten emission.
+   - Do not migrate pure rendering, visual layout-only sizing, inert draft preview, or test-only handwritten emission.
+2. **Manifest / primitive contract extension**
+   - Extend existing SSOT/manifest vocabulary for projection constructor keys, component prop schemas/defaults, event binding action vocabulary, screen operation axis derivation, and SSE projection event metadata where the mapping is currently hardcoded.
+   - Reuse `abstract_function_manifests.output_shape`, projection deny keys, screen_data_shape, and component registry primitives; do not create a parallel projection SSOT unless existing SSOT ownership is explicitly reopened.
+3. **Seed / manifest absorption**
+   - Add or extend seed rows so component props, screen operation dispatch axes, external port event binding output propagation, and SSE projection payload type are resolved from manifest/primitive data rather than C#/TS switches.
+4. **Seed tests before deletion**
+   - Add tests proving data-defined projection construction, dispatch axis resolution, event binding construction, fail-close on missing/invalid projection metadata, and no frontend authority over table/column/join/output or secret-bearing values.
+5. **Delete / shrink concrete mapping**
+   - Remove or shrink branch tables only after seed tests pass. Compatibility fallbacks must be explicit and fail closed.
+
+### Materials
+
+- `docs/framework-core.yaml`
+- `docs/framework-policy.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/abstract-function-primitive-registry-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
+- `backend/tests/Topolactor.Runtime.Tests/ScreenDataShapeQueryEvaluatorTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/ManifestScreenOperationDeriverTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/DraftPreviewComposerTests.cs`
+- `backend/tests/Topolactor.Integration.Tests/SseEndToEndTests.cs`
+- `frontend/tests/*projection*.test.ts`
+
+### Target files
+
+- `frontend/runtime/projectionConstructor.ts`
+- `frontend/runtime/projectionRuntime.ts`
+- `frontend/runtime/renderEmission.ts`
+- `frontend/runtime/payloadFromResolver.ts`
+- `frontend/runtime/propBindingResolver.ts`
+- `frontend/runtime/frontendLocalCalculationResolver.ts`
+- `backend/runtime/SseProjectionRuntime.cs`
+- `backend/runtime/ScreenDataShapeValueResolver.cs`
+- `backend/runtime/ScreenDataShapeQueryEvaluator.cs`
+- `backend/repository/ManifestCanonicalProjection.cs`
+- `backend/repository/ManifestScreenOperationDeriver.cs`
+- `db/seed_empty.sql`
+- `docs/design/db-schema.yaml` if manifest/schema additions are required
+
+### Target functions/classes
+
+- `constructProjection`
+- `normalizeComponentProps`
+- `mapWiringKindToLayer`
+- `mapWiringKindToAction`
+- `buildRuntimeDispatchSpec`
+- `buildLocalUiStateEventBinding`
+- `buildExternalPortEventBinding`
+- `resolvePayloadFromSource`
+- `resolvePropBinding`
+- `evaluateAllCalcBindings`
+- `SseProjectionRuntime.ExecuteAsync`
+- `ScreenDataShapeValueResolver.Resolve`
+- `ScreenDataShapeQueryEvaluator.Evaluate`
+- `ManifestCanonicalProjection.ApplyCanonicalProjectionAsync`
+- `ManifestScreenOperationDeriver.TryDeriveAxes`
+
+### Acceptance conditions
+
+- [ ] Projection constructor mapping and output prop defaults are manifest/primitive-defined where they affect runtime projection semantics.
+- [ ] Screen operation kind → dispatcher axes are data-defined or explicitly registered primitive vocabulary, not an unbounded C# switch.
+- [ ] SSE event type/payload metadata for projection lane is manifest/primitive-defined or explicitly justified as transport skeleton.
+- [ ] Frontend remains a render/request surface and cannot provide table/column/join/output authority.
+- [ ] Missing/invalid projection metadata fails closed with explicit error; no silent fallback to handwritten defaults.
+- [ ] Pure view rendering, visual layout-only formatting, draft preview display helpers, and test-only handwritten emissions are documented as out of scope and not migrated.
+- [ ] Tests cover data-defined projection construction, screen_data_shape authority, dispatch axis resolution, SSE/refetch projection continuity, and projection deny keys.
+
+### Explicitly out of scope
+
+- Admin import/runtime/admin submit UX unless a mapping leaks into general runtime projection or dispatch.
+- Pure display components and visual layout CSS formatting (`layoutNodeFlowProjection.ts`, `visualLayoutUtils.ts`) when they do not choose runtime authority.
+- Draft preview sample display helpers (`draftPreviewProjection.ts`) that only shape inert preview data and do not dispatch or mutate.
+- Test-only handwritten emissions.
+- SQL Attention / recommendation projection migration already covered by `sql-recommendation-primitive-migration`.
+- Credential secret projection hardening already covered by `credential-primitive-hardening`.
+
+---
+
+## Bundle `scheduler-job-body-primitive-migration`
+
+Status: `investigation_needed`
+
+### Problem
+
+The runtime timeline scheduler is a valid substrate for trigger alignment, queueing, cancellation, and dispatch order, but scheduler-adjacent classes still risk mixing substrate responsibilities with job-body semantics. Confirmed hardcoded boundaries include fixed cron/service loops for retention and system CI, fixed db_notify → hook/SSE projection payload routing, fixed SSE fan-out event handling, and frontend component-event queue retry/append behavior. `SqlAttentionScheduler` is already part of the existing SQL Attention / recommendation migration and should not be duplicated as a separate Bundle.
+
+### Purpose
+
+Preserve scheduler substrate primitives (claim/lease/retry/due selection, trigger alignment, queue overflow signaling, cancellation, listener/broadcaster transport) while moving job bodies, projection/evidence append decisions, fixed event-type handling, and runtime action selection into abstract function manifests or manifest-backed job primitives.
+
+### Improvement plan
+
+1. **Scheduler substrate vs job-body split**
+   - Keep queueing, trigger alignment, due selection, claim/lease, retry, LISTEN/NOTIFY transport, and client response/cancellation contract in hard runtime substrate where SSOT allows it.
+   - Classify retention policy execution, system CI diagnostic invocation, db_notify projection routing, and component-event append/retry payload shaping as job bodies or event primitives when they choose runtime action/evidence/projection semantics.
+2. **Abstract job primitive vocabulary**
+   - Add or extend primitives such as `scheduler_enqueue`, `scheduler_claim_due`, `scheduler_release_lease`, `event_log`, `runtime_event_projection`, `retention_execute`, and `diagnostic_execute` only where SSOT authorizes the boundary.
+3. **Manifest-backed job definitions**
+   - Represent recurring job identity, runtime action, evidence append, projection response, event type, and target manifests through seed/manifest rows instead of per-job C# branches.
+4. **Tests before shrinking concrete jobs**
+   - Add tests for queue semantics remaining in scheduler substrate, job body manifest resolution, retry/lease fail-close, runtime event log/evidence append, SSE projection event metadata, and no SQL Attention lane regression.
+5. **Delete / shrink concrete job bodies**
+   - Shrink scheduler classes to trigger/queue/transport shells after manifest-backed job tests pass.
+
+### Materials
+
+- `docs/framework-core.yaml`
+- `docs/framework-policy.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/abstract-function-primitive-registry-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
+- `backend/tests/Topolactor.Runtime.Tests/SystemOperationCiSchedulerTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/LogRetentionRuntimeTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/SchedulerLoadBenchmarkTests.cs`
+- `backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs`
+- `backend/tests/Topolactor.Integration.Tests/SseEndToEndTests.cs`
+
+### Target files
+
+- `backend/scheduler/RuntimeTimelineScheduler.cs`
+- `backend/scheduler/RetentionScheduler.cs`
+- `backend/scheduler/SystemOperationCiScheduler.cs`
+- `backend/scheduler/DbNotifyListener.cs`
+- `backend/repository/DbNotifyRepository.cs`
+- `backend/scheduler/SseEventBroadcaster.cs`
+- `frontend/runtime/frontendScheduler.ts`
+- `backend/runtime/LogRetentionRuntime.cs`
+- `backend/runtime/SystemOperationCiRuntime.cs`
+- `db/seed_empty.sql`
+- `docs/design/db-schema.yaml` if job manifest/schema additions are required
+
+### Target functions/classes
+
+- `RuntimeTimelineScheduler.AlignAndDispatchAsync`
+- `RuntimeTimelineScheduler.EnqueueCronTrigger`
+- `RuntimeTimelineScheduler.EnqueueHookTrigger`
+- `RuntimeTimelineScheduler.ExecuteAsync`
+- `RetentionScheduler.ExecuteAsync`
+- `SystemOperationCiScheduler.ExecuteAsync`
+- `DbNotifyListener.HandleNotificationPayload`
+- `DbNotifyRepository.NotifyAsync`
+- `SseEventBroadcaster.Broadcast`
+- `emitComponentOperationEvent`
+- `flushComponentEventQueue`
+- `scheduleUserOperation`
+- `scheduleAdminDispatch`
+
+### Acceptance conditions
+
+- [ ] Scheduler substrate responsibilities remain explicit and are not moved into manifests when they are runtime skeleton concerns.
+- [ ] Job body runtime action selection, projection/evidence append decisions, fixed event types, and output lane routing are manifest/primitive-defined or explicitly justified as transport skeleton.
+- [ ] Claim/lease/retry/due-selection behavior is either substrate-owned with tests or primitive-owned with manifest tests; the boundary is documented.
+- [ ] Cron/hook/client triggers still enter the canonical scheduler → ManifestDispatcher route with explicit failure signals.
+- [ ] SQL Attention scheduler work is consolidated into `sql-recommendation-primitive-migration` instead of duplicated here.
+- [ ] Tests prove no silent fallback, queue overflow/cancellation behavior, job body manifest resolution, runtime event/evidence append, and SSE projection continuity.
+
+### Explicitly out of scope
+
+- Rewriting `RuntimeTimelineScheduler` queue mechanics into a DB job queue unless the job scheduler SSOT is explicitly reopened.
+- SQL Attention-specific observation/ranking/projection details; integrate those into `sql-recommendation-primitive-migration`.
+- Admin-only runtime/import/submit UX unless it leaks into the general scheduler/dispatch route.
+- Provider-specific external scheduler clients.
+- Treating frontend component-event local persistence as projection authority when it only preserves retry durability and redacts payload.
+
+---
+
+## Bundle `cli-mcp-read-export-port-substrate`
+
+Status: `not_started`
+
+### Problem
+
+CLI/MCP read/export/import-candidate behavior is currently SSOT-defined but implementation-thin. The design requires MCP/CLI entrypoints to pass through auth, capability/scope resolution, ManifestDispatcher/runtime dispatch, Data Reader/authorized read model, export job/audit log, and file stream authorization. `.cursor/mcp.json` contains no MCP server wiring, and no concrete dispatch-secured MCP tool/resource implementation was confirmed in the inspected runtime. This should be tracked as a design-to-implementation Bundle, not as a concrete handler-deletion Bundle yet.
+
+### Purpose
+
+Implement CLI/MCP read/export/import-candidate port through the canonical dispatch-secured port substrate and abstract function primitives, preventing future dedicated tool handlers (`read_file`, `stream_file`, `call_tool`, export/import wrappers) from bypassing policy, manifest, projection, audit, or file-stream authorization.
+
+### Improvement plan
+
+1. **Contract-to-runtime mapping**
+   - Map `read`, `search`, `aggregate`, `analyze`, `validate`, `export`, `stream_file`, `create_export_job`, `import_structured_output`, `assign_business_object_candidate`, `create_draft_operation`, and `create_commit_candidate` to portTargetRef / policy step / abstract function / projection or file stream primitives.
+2. **MCP API port entrypoint**
+   - Add an authenticated MCP/CLI API port entrypoint that resolves scope/capability and then enters ManifestDispatcher/runtime dispatch. Do not add a direct DB reader or core API bypass.
+3. **Data Reader and file stream primitives**
+   - Implement authorized read model generation, query validation, export job creation, manifest/checksum/audit logging, and file stream authorization as abstract function or port primitives.
+4. **Structured input candidate lane**
+   - Implement external structured output import as evidence/candidate/draft only; DB commit remains UI/human approval plus canonical dispatch.
+5. **Tests and guards**
+   - Add tests for auth/scope fail-close, dispatch bypass denial, direct SQL denial, file stream permission, export audit/manifest/checksum, candidate import non-authority, and no approval/commit/delete/email execution through CLI/MCP.
+
+### Materials
+
+- `docs/design/cli-model-context-protocols-port-ssot.yaml`
+- `docs/design/cli-mcp-port-implementation-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/runtime-bundle-file-storage-ssot.yaml`
+- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
+- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
+- `.cursor/mcp.json`
+- `.agent/tasks/todo.md`
+- `docs/system-roadmap.yaml`
+
+### Target files
+
+- `docs/design/cli-mcp-port-implementation-ssot.yaml`
+- `docs/design/cli-model-context-protocols-port-ssot.yaml`
+- `.cursor/mcp.json` only if local MCP server config is intentionally added
+- New backend MCP/API port entrypoint files under `backend/endpoint/` only after route ownership is confirmed
+- New backend runtime/repository files for Data Reader, export job, audit log, file stream authorization, and candidate import only as reusable port/abstract-function substrate
+- `db/topology_tables.sql` / `db/seed_empty.sql` if CLI/MCP port manifests or export/candidate tables are added
+- Backend and integration tests under `backend/tests/Topolactor.Runtime.Tests/` and `backend/tests/Topolactor.Integration.Tests/`
+
+### Target functions/classes
+
+- MCP API port entrypoint boundary (new, dispatch-secured)
+- Data Reader authorized read-model builder (new)
+- Context API scope/capability resolver (new or extended)
+- Export job primitive / repository (new or extended)
+- File stream authorization primitive (new or extended)
+- Structured output candidate importer (new)
+- ManifestDispatcher / abstract function executor integration points
+- Tool/resource adapters for `read`, `search`, `aggregate`, `export`, `stream_file`, `import_structured_output`, and `call_tool` only as thin entry adapters into the canonical route
+
+### Acceptance conditions
+
+- [ ] CLI/MCP tools/resources cannot execute without authentication, scope/capability resolution, and ManifestDispatcher/runtime dispatch.
+- [ ] No direct DB connection, direct SQL execution, core API direct call, dedicated backend bypass route, or direct API wrapper is introduced.
+- [ ] Export creates an export job with source record ids, manifest, checksum, audit/runtime event evidence, and authorized file stream metadata.
+- [ ] Structured import creates candidates/drafts/commit candidates only; no record commit, delete, approval, payment approval, email send, credential read/export, or arbitrary mutation is possible from CLI/MCP.
+- [ ] PortTargetRef / policy step / abstract function / projection or file stream mapping is seed/manifest-driven.
+- [ ] Tests cover fail-close and forbidden-operation cases, including `read_file`/`stream_file`/`call_tool` bypass attempts.
+
+### Explicitly out of scope
+
+- Browser UI automation.
+- Direct database connection or direct SQL execution from CLI/MCP.
+- Approval execution, record commit, delete, payment approval, email send, credential read/export, or autonomous external AI mutation.
+- Provider-specific MCP server behavior or local developer `.cursor/mcp.json` convenience wiring unless it is a thin client of the canonical authenticated port.
+- Treating external AI structured output as SSOT.
+
+---
+
+## Investigation exclusions / consolidation notes from PR #481 follow-up scan
+
+- `SqlAttentionScheduler.cs` is not added as a standalone scheduler Bundle because SQL Attention observation/ranking/projection is already explicitly owned by `sql-recommendation-primitive-migration`; scheduler substrate concerns may be handled by `scheduler-job-body-primitive-migration` only where generic.
+- `draftPreviewProjection.ts` and `layoutNodeFlowProjection.ts` are excluded unless later evidence shows general runtime authority leakage; current inspected behavior is preview/display or visual-layout shaping rather than canonical projection authority.
+- Admin runtime/import/submit UX remains an exception unless its handwritten mapping leaks into the general runtime projection/dispatch/scheduler boundary.
+- CLI/MCP is tracked as `not_started` implementation-substrate work, not concrete deletion work, because inspected implementation is design-thin (`.cursor/mcp.json` has no configured MCP server and no confirmed runtime MCP handler surface).
+- `DbNotifyRepository`, `DbNotifyListener`, `SseEventBroadcaster`, and `SseProjectionRuntime` are not marked deletion targets outright; LISTEN/NOTIFY/SSE transport can remain hard runtime skeleton, while fixed event metadata/payload projection authority should be evaluated under the projection and scheduler Bundles.
+
+---
 ## Immediate high-risk items
 
 - `record_table_ref` must not remain frontend/payload-authoritative for attachment binding.
