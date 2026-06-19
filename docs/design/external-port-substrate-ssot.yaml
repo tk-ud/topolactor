@@ -110,16 +110,50 @@ external_port_substrate_ssot:
         forbidden_schema: auth.credentials
       refresher_boundary:
         kind: generic_primitive
+        canonical_runtime_route: seed_manifest_to_dispatch_to_execute_abstract_function_to_generic_credential_primitives_to_manifest_authorized_repository_adapter
         required_primitives:
-          - acquire_refresh_lease
-          - release_refresh_lease
-          - load_encrypted_credential_payload
-          - decrypt_for_runtime_use
-          - request_token_by_config
-          - write_encrypted_credential_payload
-          - update_token_hash
-          - update_expires_at_and_version
-          - fail_close_on_missing_or_invalid_credential
+          - credential_acquire_lease
+          - credential_http_request
+          - credential_compute_token_hash
+          - credential_parse_expires_at
+          - credential_write_vault
+          - credential_release_lease
+          - credential_fail_lease
+        legacy_vocabulary_disposition:
+          acquire_refresh_lease: absorbed_by_credential_acquire_lease
+          release_refresh_lease: absorbed_by_credential_release_lease
+          load_encrypted_credential_payload: remains_policy_step_before_execute_abstract_function_not_refresh_manifest_primitive
+          decrypt_for_runtime_use: remains_policy_step_before_execute_abstract_function_not_refresh_manifest_primitive
+          request_token_by_config: absorbed_by_credential_http_request
+          write_encrypted_credential_payload: absorbed_by_credential_write_vault
+          update_token_hash: absorbed_by_credential_compute_token_hash_then_credential_write_vault
+          update_expires_at_and_version: absorbed_by_credential_parse_expires_at_then_credential_write_vault
+          fail_close_on_missing_or_invalid_credential: absorbed_by_credential_fail_lease_and_abstract_function_fail_close_status
+        runtime_branching_policy:
+          provider_kind_branching: prohibited
+          required_by_bundle_branching: prohibited
+          rule: provider_kind and required_by_bundle are data carried by port/vault/policy records only; they must not select dedicated credential runtimes, provider-specific handlers, or bundle-specific C# branches.
+        credential_requirement_boundary: port_record_attachment_not_standalone_credential_plane
+        prohibited_planes:
+          - dedicated_credential_runtime
+          - dedicated_credential_executor_defined_grammar
+          - dedicated_credential_admin_ui
+          - standalone_credential_rotation_service
+        secret_projection_boundary:
+          prohibited_outputs:
+            - decrypted_payload
+            - decrypted_credential_payload
+            - token_response
+            - token_body
+            - access_token
+            - refresh_token
+            - client_secret
+          rule: decrypted payload and provider token bodies are runtime-only values and must not appear in projection, log, seed SQL literal payloads, public SSOT examples, or frontend responses.
+        config_defaulting_policy:
+          http_method_default: prohibited
+          lease_duration_default: prohibited
+          expiry_response_key_default: prohibited
+          rule: method, lease duration, and expires_at response key must be supplied by manifest step_config; C# runtime defaults are forbidden.
         db_guards:
           - refresh lease
           - version check
@@ -259,12 +293,13 @@ external_port_substrate_ssot:
       - enqueue_scheduler_event
       - append_runtime_event_log
       - fail_close
-      - acquire_refresh_lease
-      - request_token_by_config
-      - write_encrypted_credential_payload
-      - update_token_hash
-      - update_expires_at_and_version
-      - release_refresh_lease
+      - credential_acquire_lease
+      - credential_http_request
+      - credential_compute_token_hash
+      - credential_parse_expires_at
+      - credential_write_vault
+      - credential_release_lease
+      - credential_fail_lease
       - compute_checksum
     abstract_function_key_surface:
       purpose: >-
