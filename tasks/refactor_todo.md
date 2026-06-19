@@ -122,6 +122,13 @@ Absorption policy:
 | `projection-manifest-primitive-migration` | investigation_needed | Move remaining projection constructor / runtime event / screen operation derivation mapping into projection manifest or projection primitives while preserving pure render/test-only exceptions |
 | `scheduler-job-body-primitive-migration` | investigation_needed | Separate scheduler substrate from hardcoded job bodies and move recurring job/evidence/projection work into abstract function or manifest-backed job primitives rather than dedicated tool handlers |
 
+> 2026-06-19 investigation update (`projection-manifest-primitive-migration`): Bundle investigated. Remains `investigation_needed` due to incomplete SSOT specification for `event_log` primitive and uncoordinated `external_and_event` category migration. Details:
+> 1. `projection_constructor_mapping` — already data-defined: `ManifestDispatcher.ExtractProjectionConstructorMapping()` reads from DB and injects into emission. Not a remaining migration target.
+> 2. Frontend `normalizeComponentProps` switch (`frontend/runtime/projectionConstructor.ts`) — SSOT explicitly preserves as hardcoded shapes: `frontend_contract.abstract_functions.source: hardcoded_shapes` in `runtime-orchestration-ssot.yaml`. Confirmed preserve exception; NOT a migration target.
+> 3. `screen_operation_derivation_mapping` (`backend/repository/ManifestScreenOperationDeriver.cs` + `frontend/runtime/screenAuthoringIntent.ts`) — admin authoring helper that WRITES manifest rows; not a runtime dispatch surface. SSOT does not list this as a `data_defined` boundary. NOT a migration target for this bundle. However, a frontend/backend discrepancy exists: frontend uses "Search" for list/detail and "diffUpdate" for update; backend uses "Read" for list/detail and "Update" for update. This is a correctness bug separate from the substrate migration and is flagged as a separate normal-todo candidate.
+> 4. `event_log` primitive — SSOT defines it in `external_and_event.primitives` (owns `append_only_event_record`), but: (a) SSOT specification is incomplete — no `required_step_config`, `input_binding_source`, or `fail_close_condition` defined (unlike fully-specified credential primitives); (b) companion primitives `http_request` and `scheduler_enqueue` also lack AbstractFunctionPrimitive implementations and remain as ExternalPortPolicyStep operations (`send_http`/`build_http_request`, `enqueue_scheduler_event`); (c) implementing `event_log` alone is inconsistent within the `external_and_event` category; (d) no migration spec exists for transitioning `append_runtime_event_log` seed rows from ExternalPortPolicyStep format to AbstractFunctionPrimitive format.
+> Blocking reasons requiring SSOT resolution: (1) Extend `external_and_event` primitive entries in `abstract-function-primitive-registry-ssot.yaml` to specify `required_step_config`, `input_binding_source`, and `fail_close_condition` for `event_log` (and `http_request`, `scheduler_enqueue`). (2) Define category-level migration order for `external_and_event` — all three primitives should migrate together. (3) Fix `screen_operation_derivation_mapping` discrepancy as a separate correctness issue. No concrete code was changed in this pass.
+
 > 2026-06-19 investigation update: selected as the current refactor Bundle candidate. Implementation is blocked by the current runtime SSOT exception for `SqlAttentionScheduler_BackgroundService_cron_route_only`: `docs/design/runtime-orchestration-ssot.yaml` explicitly declares the SQL Attention cron BackgroundService cannot route through `ManifestDispatcher` / abstract function because it has no client-side dispatch vector or manifest resolution axis. Therefore this Bundle remains `investigation_needed` rather than `implemented`; changing it requires an SSOT/design-change decision that either (a) defines a scheduler job manifest / scheduler_enqueue abstract-function lane for cron-triggered evidence generation, or (b) keeps the exception and removes this as a refactor deletion target. No concrete scheduler code was changed in this pass.
 | `file-storage-db-function-to-abstract-function-migration` | implemented | Absorb file-storage DB functions by migration order and remove payload-derived table authority — all 7 fs_* operations migrated to execute_abstract_function manifests af01-af07; NpgsqlExternalPortDbFunctionRepository stub; all acceptance conditions satisfied |
 | `completion-gate-and-test-alignment` | implemented | Align tests/checks/status after Bundle migration |
@@ -565,6 +572,71 @@ Status: `implemented`
 - [x] Enforced global migration order in completion governance: SSOT/primitive generation first, then per-Bundle seed/manifest migration, seed/runtime/integration proof, concrete deletion or explicit compatibility fallback, and only then TODO/roadmap/refactor-todo closure.
 - [x] Extended `.agent/tests/check-completion-judgment.sh` and added `.agent/tests/check-abstract-function-completion-alignment.sh` so the completion alignment gate, migration-order vocabulary, Bundle-to-test-surface mapping, seed/integration proof, and compatibility fallback classification are executable governance checks.
 - [x] Confirmed through `.agent/tests/check-abstract-function-completion-alignment.sh` that existing representative runtime and seed tests cover current file-storage absorption evidence surfaces (`AbstractFunctionExecutorTests`, `FileStorageBundleDispatchTests`, `FileStoragePortConsumerLiveDbTests`) and that `NpgsqlExternalPortDbFunctionRepository` remains an explicit fail-closed compatibility stub; future SQL Attention/recommendation, projection, and scheduler Bundles remain separate unresolved Bundles and are not advanced by this alignment Bundle.
+
+---
+
+## Bundle `projection-manifest-primitive-migration`
+
+Status: `investigation_needed`
+
+### Investigation summary (2026-06-19)
+
+Investigated four surfaces named in the bundle description. Judgment: `investigation_needed` — blocked by incomplete `event_log` primitive SSOT specification and uncoordinated `external_and_event` category migration.
+
+#### Surface 1: `projection_constructor_mapping`
+
+**Judgment: not a remaining migration target.**
+
+`ManifestDispatcher.ExtractProjectionConstructorMapping()` already reads the `projection_constructor_mapping` topology entry from the DB manifest and injects it into emission. This surface is data-defined. No code change needed.
+
+#### Surface 2: Frontend `normalizeComponentProps` switch (`frontend/runtime/projectionConstructor.ts`)
+
+**Judgment: confirmed SSOT preserve exception — not a migration target.**
+
+`docs/design/runtime-orchestration-ssot.yaml` explicitly declares `frontend_contract.abstract_functions.source: hardcoded_shapes`. The frontend projection constructor is a pure render/test-only surface and must not be absorbed into data-defined primitives.
+
+#### Surface 3: `screen_operation_derivation_mapping`
+
+**Judgment: not a migration target for this bundle; frontend/backend discrepancy is a separate correctness bug.**
+
+`backend/repository/ManifestScreenOperationDeriver.cs` and `frontend/runtime/screenAuthoringIntent.ts` are admin authoring helpers that write manifest rows. They are not runtime dispatch surfaces. The SSOT `boundaries.data_defined` list does not include `screen_operation_derivation_mapping`. Moving this into data would create a circular dependency (used to BUILD manifests, not to DISPATCH them).
+
+**Discrepancy flagged (separate correctness issue):**
+- Frontend `screenAuthoringIntent.ts`: list/detail → `action: "Search"`, update → `action: "diffUpdate"`
+- Backend `ManifestScreenOperationDeriver.cs`: list/detail → `action: "Read"`, update → `action: "Update"`
+- `backend/tests/.../ManifestScreenOperationDeriverTests.cs` confirms backend uses "Read"
+- `frontend/tests/screenAuthoringIntent.test.ts` confirms frontend uses "Search" / "diffUpdate"
+- This discrepancy should be resolved as a separate correctness fix, not as a projection primitive migration.
+
+#### Surface 4: `event_log` primitive (`append_runtime_event_log`)
+
+**Judgment: investigation_needed — SSOT specification incomplete; category-level migration plan absent.**
+
+`docs/design/abstract-function-primitive-registry-ssot.yaml` defines `event_log` in `backend_abstract_function_runtime_substrate.primitive_categories.external_and_event.primitives` (owns `append_only_event_record`). Currently `append_runtime_event_log` is an `ExternalPortPolicyStep` operation handled directly in `ExternalPortPolicyStepExecutor._registry` (`backend/runtime/ExternalPortCredentialRefresher.cs:552`). The implementation reads `event_type` and `entity_ref_key` from `step.StepConfig`.
+
+Blocking reasons:
+
+1. **Incomplete SSOT specification**: The `external_and_event` category entry has no `required_step_config`, `input_binding_source`, `result_context_key`, or `fail_close_condition` fields — unlike the fully-specified credential primitives which have all four. Implementing without this spec risks creating a new hardcoded surface in violation of migration rules.
+2. **Category migration must be coordinated**: `http_request` and `scheduler_enqueue` companion primitives also remain as ExternalPortPolicyStep operations (`build_http_request`/`send_http`, `enqueue_scheduler_event`). Implementing only `event_log` as an AbstractFunctionPrimitive while the other two remain as ExternalPortPolicyStep operations is inconsistent within the `external_and_event` category.
+3. **No migration spec for seed data**: Many `append_runtime_event_log` rows in `db/seed_empty.sql` are `external_port_policy_steps` entries. No migration spec exists for transitioning from ExternalPortPolicyStep format to AbstractFunctionPrimitive format.
+
+### Unblocking actions required (SSOT decisions)
+
+1. Extend `docs/design/abstract-function-primitive-registry-ssot.yaml` `external_and_event` category to specify `required_step_config`, `input_binding_source`, and `fail_close_condition` for `event_log`, `http_request`, and `scheduler_enqueue`.
+2. Define whether `external_and_event` primitives migrate from `ExternalPortPolicyStep._registry` to `AbstractFunctionPrimitive` registry, or whether they remain as ExternalPortPolicyStep operations permanently (due to ExternalPort context requirements).
+3. Fix `screen_operation_derivation_mapping` frontend/backend discrepancy as a separate correctness task.
+
+### Materials
+
+- `docs/design/abstract-function-primitive-registry-ssot.yaml` `external_and_event`
+- `docs/design/runtime-orchestration-ssot.yaml` `frontend_contract`
+- `backend/runtime/ExternalPortCredentialRefresher.cs` (`ExternalPortPolicyStepExecutor._registry`, `append_runtime_event_log` case)
+- `backend/repository/ManifestScreenOperationDeriver.cs`
+- `frontend/runtime/screenAuthoringIntent.ts`
+- `frontend/runtime/projectionConstructor.ts`
+- `backend/tests/.../ManifestScreenOperationDeriverTests.cs`
+- `frontend/tests/screenAuthoringIntent.test.ts`
+- `db/seed_empty.sql` (many `append_runtime_event_log` rows)
 
 ### Problem
 
