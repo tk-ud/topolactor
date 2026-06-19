@@ -142,6 +142,20 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
         sp.GetRequiredService<ContextRouteRecommendationResolver>()));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(
     new RecommendationProjectionPrimitiveAdapter());
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new CredentialAcquireLeaseAdapter(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new CredentialHttpRequestAdapter(sp.GetRequiredService<IExternalPortHttpClient>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new CredentialComputeTokenHashAdapter(sp.GetRequiredService<IExternalCredentialCrypto>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(
+    new CredentialParseExpiresAtAdapter());
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new CredentialWriteVaultAdapter(
+        sp.GetRequiredService<IExternalCredentialVaultRepository>(),
+        sp.GetRequiredService<IExternalCredentialCrypto>()));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new CredentialReleaseLeaseAdapter(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));

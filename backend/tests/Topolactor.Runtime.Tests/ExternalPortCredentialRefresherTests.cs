@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Topolactor.Repository;
 using Topolactor.Runtime;
 using Xunit;
@@ -531,5 +532,311 @@ public class ExternalPortSeedDrivenPolicyTests
 
         public Task FailRefreshLeaseAsync(ExternalCredentialRefreshLease lease, string failureCode, CancellationToken ct = default) =>
             Task.CompletedTask;
+    }
+}
+
+public class CredentialPrimitiveHardeningTests
+{
+    // --- C# violation fixes ---
+
+    [Fact]
+    public async Task CredentialPrimitive_BuildHttpRequest_RequiresExplicitMethod()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var context = new ExternalPortExecutionContext
+        {
+            PortRecord = new ExternalPortRecord(Guid.NewGuid(), "access_port", "bundle", "oauth", "https://token.invalid", null, null, null, "external", null, true)
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => executor.ExecuteAsync(
+                NewStep(1, "build_http_request", new Dictionary<string, string> { ["endpoint"] = "https://token.invalid" }),
+                context));
+        Assert.Equal("EXTERNAL_HTTP_METHOD_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public void CredentialPrimitive_BuildTokenRefreshRequest_RequiresExplicitMethod()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var request = new ExternalTokenRefreshRequest(
+            Guid.NewGuid(), "oauth", "refresh",
+            new Dictionary<string, string> { ["endpoint"] = "https://token.invalid" },
+            "secret", null, 1);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => executor.BuildTokenRefreshRequest(request));
+        Assert.Equal("EXTERNAL_HTTP_METHOD_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public void CredentialPrimitive_ParseTokenRefreshResult_RequiresCryptoAdapter()
+    {
+        var executor = new ExternalPortPolicyStepExecutor();
+        var request = new ExternalTokenRefreshRequest(
+            Guid.NewGuid(), "oauth", "refresh",
+            new Dictionary<string, string> { ["expires_at_response_key"] = "expires_at" },
+            "secret", null, 1);
+        var response = new ExternalPortHttpResponse(200, """{"access_token":"tok","expires_at":"2026-06-20T00:00:00Z"}""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => executor.ParseTokenRefreshResult(request, response));
+        Assert.Equal("EXTERNAL_TOKEN_REFRESH_HASH_ADAPTER_REQUIRED", ex.Message);
+    }
+
+    [Fact]
+    public void CredentialPrimitive_ParseTokenRefreshResult_RequiresExpiresAtKey()
+    {
+        var crypto = new HardeningFakeCredentialCrypto();
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto);
+        var request = new ExternalTokenRefreshRequest(
+            Guid.NewGuid(), "oauth", "refresh",
+            new Dictionary<string, string>(),
+            "secret", null, 1);
+        var response = new ExternalPortHttpResponse(200, """{"access_token":"tok"}""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => executor.ParseTokenRefreshResult(request, response));
+        Assert.Equal("EXTERNAL_TOKEN_REFRESH_EXPIRY_MAPPING_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public void CredentialPrimitive_ParseTokenRefreshResult_ComputesHashViaCrypto()
+    {
+        var crypto = new HardeningFakeCredentialCrypto();
+        var executor = new ExternalPortPolicyStepExecutor(crypto: crypto);
+        var request = new ExternalTokenRefreshRequest(
+            Guid.NewGuid(), "oauth", "refresh",
+            new Dictionary<string, string> { ["expires_at_response_key"] = "expires_at" },
+            "secret", null, 1);
+        var body = """{"access_token":"tok","expires_at":"2026-06-20T00:00:00Z"}""";
+        var response = new ExternalPortHttpResponse(200, body);
+
+        var result = executor.ParseTokenRefreshResult(request, response);
+
+        Assert.Equal(crypto.ComputeTokenHash(body), result.TokenHash);
+        Assert.NotEqual($"sha256:{body.Length}", result.TokenHash);
+    }
+
+    // --- Seed evidence ---
+
+    [Fact]
+    public void SeedSql_CredentialRefreshPolicy_UsesExecuteAbstractFunction()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        Assert.Contains("execute_abstract_function", source);
+        Assert.Contains("credential.refresh_token", source);
+        Assert.Contains("external_credential_vault_refresh", source);
+        Assert.DoesNotContain("acquire_refresh_lease", source);
+        Assert.DoesNotContain("request_token_by_config", source);
+    }
+
+    [Fact]
+    public void SeedSql_BuildHttpRequest_AllStepsHaveExplicitMethod()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        var lines = source.Split('\n');
+        var buildHttpLines = lines.Where(static l => l.Contains("'build_http_request'")).ToList();
+        Assert.NotEmpty(buildHttpLines);
+        foreach (var line in buildHttpLines)
+            Assert.Contains("\"method\"", line);
+    }
+
+    // --- DI registration ---
+
+    [Fact]
+    public void Program_RegistersAllSixCredentialPrimitiveAdapters()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/Program.cs"));
+        Assert.Contains("CredentialAcquireLeaseAdapter", source);
+        Assert.Contains("CredentialHttpRequestAdapter", source);
+        Assert.Contains("CredentialComputeTokenHashAdapter", source);
+        Assert.Contains("CredentialParseExpiresAtAdapter", source);
+        Assert.Contains("CredentialWriteVaultAdapter", source);
+        Assert.Contains("CredentialReleaseLeaseAdapter", source);
+    }
+
+    // --- No provider/bundle branching ---
+
+    [Fact]
+    public void CredentialPrimitives_DoNotBranchOnProviderKindOrRequiredByBundle()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/runtime/AbstractFunctionRuntime.cs"));
+        var idx = source.IndexOf("class CredentialAcquireLeaseAdapter", StringComparison.Ordinal);
+        Assert.True(idx >= 0, "Credential adapter classes not found in AbstractFunctionRuntime.cs");
+        var credentialSection = source[idx..];
+        Assert.DoesNotContain("provider_kind", credentialSection, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("required_by_bundle", credentialSection, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("switch (provider", credentialSection, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // --- Primitive adapter fail-close ---
+
+    [Fact]
+    public async Task CredentialAcquireLeaseAdapter_MissingLeaseDuration_FailsClose()
+    {
+        var adapter = new CredentialAcquireLeaseAdapter(new HardeningNullVaultRepository());
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 1, "credential_acquire_lease",
+            new Dictionary<string, string> { ["lease_owner"] = "test" },
+            Array.Empty<AbstractFunctionInputBinding>(), "credential_lease", true);
+        var inputs = new Dictionary<string, object?> { ["credential_vault_id"] = Guid.NewGuid() };
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => adapter.ExecuteAsync(step, inputs, new AbstractFunctionExecutionContext("test")));
+        Assert.Equal("CREDENTIAL_ACQUIRE_LEASE_DURATION_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task CredentialHttpRequestAdapter_MissingMethod_FailsClose()
+    {
+        var adapter = new CredentialHttpRequestAdapter(new HardeningThrowingHttpClient());
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 1, "credential_http_request",
+            new Dictionary<string, string>(),
+            Array.Empty<AbstractFunctionInputBinding>(), "token_response", true);
+        var inputs = new Dictionary<string, object?> { ["decrypted_credential_payload"] = "secret" };
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => adapter.ExecuteAsync(step, inputs, new AbstractFunctionExecutionContext("test")));
+        Assert.Equal("CREDENTIAL_HTTP_REQUEST_METHOD_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task CredentialParseExpiresAtAdapter_MissingExpiresAtKey_FailsClose()
+    {
+        var adapter = new CredentialParseExpiresAtAdapter();
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 1, "credential_parse_expires_at",
+            new Dictionary<string, string>(),
+            Array.Empty<AbstractFunctionInputBinding>(), "token_expires_at", true);
+        var response = new ExternalPortHttpResponse(200, """{"token":"abc","expires_at":"2026-06-20T00:00:00Z"}""");
+        var inputs = new Dictionary<string, object?> { ["token_response"] = response };
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => adapter.ExecuteAsync(step, inputs, new AbstractFunctionExecutionContext("test")));
+        Assert.Equal("CREDENTIAL_PARSE_EXPIRES_AT_KEY_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task CredentialParseExpiresAtAdapter_ParsesIsoDtoString()
+    {
+        var adapter = new CredentialParseExpiresAtAdapter();
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 1, "credential_parse_expires_at",
+            new Dictionary<string, string> { ["expires_at_response_key"] = "expires_at" },
+            Array.Empty<AbstractFunctionInputBinding>(), "token_expires_at", true);
+        var response = new ExternalPortHttpResponse(200, """{"token":"abc","expires_at":"2026-06-20T12:00:00Z"}""");
+        var inputs = new Dictionary<string, object?> { ["token_response"] = response };
+
+        var result = await adapter.ExecuteAsync(step, inputs, new AbstractFunctionExecutionContext("test"));
+
+        Assert.IsType<DateTimeOffset>(result);
+        Assert.Equal(new DateTimeOffset(2026, 6, 20, 12, 0, 0, TimeSpan.Zero), (DateTimeOffset)result!);
+    }
+
+    [Fact]
+    public async Task CredentialParseExpiresAtAdapter_ParsesUnixTimestampNumber()
+    {
+        var adapter = new CredentialParseExpiresAtAdapter();
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 1, "credential_parse_expires_at",
+            new Dictionary<string, string> { ["expires_at_response_key"] = "exp" },
+            Array.Empty<AbstractFunctionInputBinding>(), "token_expires_at", true);
+        var unixTs = new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds();
+        var response = new ExternalPortHttpResponse(200, $$"""{"token":"abc","exp":{{unixTs}}}""");
+        var inputs = new Dictionary<string, object?> { ["token_response"] = response };
+
+        var result = await adapter.ExecuteAsync(step, inputs, new AbstractFunctionExecutionContext("test"));
+
+        Assert.IsType<DateTimeOffset>(result);
+        Assert.Equal(unixTs, ((DateTimeOffset)result!).ToUnixTimeSeconds());
+    }
+
+    [Fact]
+    public async Task CredentialWriteVaultAdapter_MissingTokenHash_FailsClose()
+    {
+        var adapter = new CredentialWriteVaultAdapter(new HardeningNullVaultRepository(), new HardeningFakeCredentialCrypto());
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 1, "credential_write_vault",
+            new Dictionary<string, string>(),
+            Array.Empty<AbstractFunctionInputBinding>(), null, true);
+        var vaultRecord = new ExternalCredentialVaultRecord(
+            Guid.NewGuid(), "oauth", "bundle", "refresh", null, new byte[] { 1 }, "key-ref", null, 300, 1, null, true);
+        var portContext = new ExternalPortExecutionContext { CredentialVaultRecord = vaultRecord };
+        var lease = new ExternalCredentialRefreshLease(Guid.NewGuid(), vaultRecord.CredentialVaultId, "owner", DateTimeOffset.UtcNow.AddMinutes(5), 1);
+        var inputs = new Dictionary<string, object?>
+        {
+            ["credential_lease"] = lease,
+            // token_hash missing intentionally
+            ["token_expires_at"] = DateTimeOffset.UtcNow.AddHours(1),
+            ["token_response"] = new ExternalPortHttpResponse(200, "body")
+        };
+        var context = new AbstractFunctionExecutionContext("test", externalPortContext: portContext);
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => adapter.ExecuteAsync(step, inputs, context));
+        Assert.Equal("CREDENTIAL_WRITE_VAULT_TOKEN_HASH_MISSING", ex.Message);
+    }
+
+    [Fact]
+    public async Task CredentialReleaseLeaseAdapter_MissingLease_FailsClose()
+    {
+        var adapter = new CredentialReleaseLeaseAdapter(new HardeningNullVaultRepository());
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 1, "credential_release_lease",
+            new Dictionary<string, string>(),
+            Array.Empty<AbstractFunctionInputBinding>(), null, true);
+        var inputs = new Dictionary<string, object?>();
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => adapter.ExecuteAsync(step, inputs, new AbstractFunctionExecutionContext("test")));
+        Assert.Equal("CREDENTIAL_RELEASE_LEASE_MISSING", ex.Message);
+    }
+
+    // --- Helpers ---
+
+    private static ExternalPortPolicyStep NewStep(int order, string operationKey, IReadOnlyDictionary<string, string>? config = null) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), order, operationKey, config ?? new Dictionary<string, string>(), Active: true);
+
+    private static string FindRepositoryFile(string relativePath)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate)) return candidate;
+            dir = dir.Parent;
+        }
+        throw new FileNotFoundException($"Could not find {relativePath} from {AppContext.BaseDirectory}.");
+    }
+
+    private sealed class HardeningFakeCredentialCrypto : IExternalCredentialCrypto
+    {
+        public string DecryptForRuntimeUse(byte[] encryptedPayload, string encryptionKeyReference) => "plaintext";
+        public byte[] EncryptForVaultStorage(string plaintextPayload, string encryptionKeyReference) =>
+            System.Text.Encoding.UTF8.GetBytes(plaintextPayload);
+        public string ComputeTokenHash(string plaintextPayload) => $"sha256:{plaintextPayload.GetHashCode():x8}";
+    }
+
+    private sealed class HardeningNullVaultRepository : IExternalCredentialVaultRepository
+    {
+        public Task<ExternalCredentialVaultRecord?> LoadAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+        public Task<ExternalCredentialVaultRecord?> LoadByReferenceKeyAsync(string referenceKey, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+        public Task<ExternalCredentialVaultRecord?> LoadByProviderAndBundleAsync(string providerKind, string requiredByBundle, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(null);
+        public Task<ExternalCredentialRefreshLease?> AcquireRefreshLeaseAsync(Guid credentialVaultId, string leaseOwner, TimeSpan leaseDuration, DateTimeOffset now, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialRefreshLease?>(null);
+        public Task WriteEncryptedCredentialPayloadAsync(Guid credentialVaultId, int expectedVersion, byte[] encryptedPayload, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default) =>
+            Task.CompletedTask;
+        public Task ReleaseRefreshLeaseAsync(ExternalCredentialRefreshLease lease, CancellationToken ct = default) =>
+            Task.CompletedTask;
+        public Task FailRefreshLeaseAsync(ExternalCredentialRefreshLease lease, string failureCode, CancellationToken ct = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class HardeningThrowingHttpClient : IExternalPortHttpClient
+    {
+        public Task<ExternalPortHttpResponse> SendAsync(ExternalPortHttpRequest request, CancellationToken ct = default) =>
+            throw new InvalidOperationException("should not reach HTTP client");
     }
 }

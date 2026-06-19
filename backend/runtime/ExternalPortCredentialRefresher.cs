@@ -427,17 +427,12 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         "verify_signature_by_config",
         "enqueue_scheduler_event",
         "append_runtime_event_log",
-        "fail_close",
-        "acquire_refresh_lease",
-        "request_token_by_config",
-        "write_encrypted_credential_payload",
-        "update_token_hash",
-        "update_expires_at_and_version",
-        "release_refresh_lease"
+        "fail_close"
     };
 
     private readonly IReadOnlyDictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>> _registry;
     private readonly IReadOnlyList<IExternalPortBundleStepHandler> _bundleHandlers;
+    private readonly IExternalCredentialCrypto? _crypto;
 
     public ExternalPortPolicyStepExecutor(
         IExternalPortHttpClient? httpClient = null,
@@ -449,6 +444,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null,
         IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null)
     {
+        _crypto = crypto;
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
         _registry = new Dictionary<string, Func<ExternalPortPolicyStep, ExternalPortExecutionContext, CancellationToken, Task>>(StringComparer.Ordinal)
         {
@@ -508,7 +504,9 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     throw new InvalidOperationException("EXTERNAL_HTTP_ENDPOINT_MISSING");
                 }
 
-                var method = step.StepConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Get;
+                if (!step.StepConfig.TryGetValue("method", out var methodValue) || string.IsNullOrWhiteSpace(methodValue))
+                    throw new InvalidOperationException("EXTERNAL_HTTP_METHOD_MISSING");
+                var method = new HttpMethod(methodValue);
                 context.HttpRequest = new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), method, new Dictionary<string, string>(), null);
                 context.MarkExecuted(step.OperationKey);
                 return Task.CompletedTask;
@@ -670,27 +668,58 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         throw new InvalidOperationException("EXTERNAL_PORT_POLICY_OPERATION_UNSUPPORTED");
     }
 
+    /// <summary>
+    /// Compatibility placeholder for credential refresh request building.
+    /// Canonical path: credential.refresh_token abstract function manifest →
+    /// credential_acquire_lease → credential_http_request → credential_compute_token_hash
+    /// → credential_parse_expires_at → credential_write_vault → credential_release_lease.
+    /// No per-function switch or payload-derived table authority exists here.
+    /// </summary>
     public ExternalPortHttpRequest BuildTokenRefreshRequest(ExternalTokenRefreshRequest request)
     {
         if (!request.RequestConfig.TryGetValue("endpoint", out var endpoint) || string.IsNullOrWhiteSpace(endpoint))
-        {
             throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_ENDPOINT_MISSING");
-        }
 
-        var method = request.RequestConfig.TryGetValue("method", out var methodValue) ? new HttpMethod(methodValue) : HttpMethod.Post;
-        return new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), method, new Dictionary<string, string>(), request.RuntimeSecretPayload);
+        if (!request.RequestConfig.TryGetValue("method", out var methodValue) || string.IsNullOrWhiteSpace(methodValue))
+            throw new InvalidOperationException("EXTERNAL_HTTP_METHOD_MISSING");
+
+        return new ExternalPortHttpRequest(new Uri(endpoint, UriKind.RelativeOrAbsolute), new HttpMethod(methodValue), new Dictionary<string, string>(), request.RuntimeSecretPayload);
     }
 
+    /// <summary>
+    /// Compatibility placeholder for credential refresh result parsing.
+    /// Canonical path uses credential_compute_token_hash and credential_parse_expires_at primitives.
+    /// No per-function switch or payload-derived table authority exists here.
+    /// </summary>
     public ExternalTokenRefreshResult ParseTokenRefreshResult(ExternalTokenRefreshRequest request, ExternalPortHttpResponse response)
     {
         if (response.StatusCode < 200 || response.StatusCode >= 300)
-        {
             throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_HTTP_FAILED");
-        }
 
-        var hash = request.RequestConfig.TryGetValue("token_hash", out var tokenHash) ? tokenHash : $"sha256:{response.Body.Length}";
-        var expiresAt = request.CurrentExpiresAt?.AddHours(1) ?? DateTimeOffset.UtcNow.AddHours(1);
-        return new ExternalTokenRefreshResult(response.Body, hash, expiresAt, PayloadRotated: true);
+        if (_crypto is null)
+            throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_HASH_ADAPTER_REQUIRED");
+
+        var hash = _crypto.ComputeTokenHash(response.Body);
+
+        if (!request.RequestConfig.TryGetValue("expires_at_response_key", out var expiresAtKey) || string.IsNullOrWhiteSpace(expiresAtKey))
+            throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_EXPIRY_MAPPING_MISSING");
+
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(response.Body); }
+        catch (JsonException) { throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_RESPONSE_BODY_INVALID_JSON"); }
+        using (doc)
+        {
+            if (!doc.RootElement.TryGetProperty(expiresAtKey, out var expiresAtProp))
+                throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_EXPIRY_MISSING_IN_RESPONSE");
+
+            var expiresAt = expiresAtProp.ValueKind switch
+            {
+                JsonValueKind.String => DateTimeOffset.Parse(expiresAtProp.GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind),
+                JsonValueKind.Number => DateTimeOffset.FromUnixTimeSeconds(expiresAtProp.GetInt64()),
+                _ => throw new InvalidOperationException("EXTERNAL_TOKEN_REFRESH_EXPIRY_FORMAT_UNSUPPORTED")
+            };
+            return new ExternalTokenRefreshResult(response.Body, hash, expiresAt, PayloadRotated: true);
+        }
     }
 
     private static Task MarkOnly(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct)

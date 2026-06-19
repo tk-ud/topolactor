@@ -45,8 +45,8 @@ BUNDLE_BLOCK="$(section "tasks/refactor_todo.md" '## Bundle `completion-gate-and
 [[ "$BUNDLE_BLOCK" == *'compatibility stub'* ]] && pass "Bundle records compatibility fallback classification" || fail "Bundle missing compatibility fallback classification"
 [[ "$BUNDLE_BLOCK" == *'future targets remain in their own not_started Bundles'* ]] && pass "Bundle keeps future absorption targets separate" || fail "Bundle hides future absorption targets"
 
-# Current Bundle status map must not advance unrelated target Bundles by wording.
-check_term "tasks/refactor_todo.md" '| `credential-primitive-hardening` | not_started |'
+# Current Bundle status map must reflect credential hardening as implemented.
+check_term "tasks/refactor_todo.md" '| `credential-primitive-hardening` | implemented |'
 check_term "tasks/refactor_todo.md" '| `backend-abstract-function-executor` | partial_compatibility_fallback |'
 
 # Backend primitive executor evidence: order, result context binding, fail-close, policy-step execution, no provider/bundle branching.
@@ -64,6 +64,15 @@ check_term "backend/tests/Topolactor.Runtime.Tests/FileStorageBundleDispatchTest
 check_term "backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs" "Assert.Equal(\"execute_abstract_function\", step11.OperationKey)"
 check_term "backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs" "Assert.Equal(\"execute_abstract_function\", reader.GetString(0))"
 check_term "backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs" "Assert.DoesNotContain(\"signed_url\", listJson"
+
+# Credential primitive hardening evidence: C# violation fixes, seed evidence, DI wiring, no branching.
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialPrimitive_BuildHttpRequest_RequiresExplicitMethod"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialPrimitive_ParseTokenRefreshResult_RequiresCryptoAdapter"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialPrimitive_ParseTokenRefreshResult_RequiresExpiresAtKey"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "SeedSql_CredentialRefreshPolicy_UsesExecuteAbstractFunction"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "SeedSql_BuildHttpRequest_AllStepsHaveExplicitMethod"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "Program_RegistersAllSixCredentialPrimitiveAdapters"
+check_term "backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs" "CredentialPrimitives_DoNotBranchOnProviderKindOrRequiredByBundle"
 
 # Compatibility fallback is explicit and fail-closed, not hidden as implemented runtime behavior.
 check_term "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "Compatibility placeholder for the execute_db_function operation_key"
