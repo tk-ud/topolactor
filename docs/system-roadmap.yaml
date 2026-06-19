@@ -726,8 +726,7 @@ system_roadmap_ssot:
         File/Storage Bundle as port consumer of external_port_substrate. Seed binding
         (access_port / response_port / credential_requirement / policy_steps / portTargetRef wiring)
         implemented per PR#460. Physical tables, manifest_binding, SSOT operation_key definitions,
-        and DB function executor (topology.fs_* PostgreSQL functions via execute_db_function
-        operation_key) implemented per PR#463. Credential resolution pipeline
+        and DB function executor implemented per PR#463. Credential resolution pipeline
         (load_encrypted_credential_payload / decrypt_for_runtime_use / inject_authorization_header)
         seeded in policy_steps 3-4-6. reference_key-based credential vault resolution in place.
         SSE broadcast on dispatch completion. DB projection test via draftPreviewResultToEmission.
@@ -737,6 +736,9 @@ system_roadmap_ssot:
         step_config-driven event_type/entity_ref_key resolution; 4 evidence steps interleaved in
         17-step seed pipeline for e4/e5 (checksum_verified, export_job_initiated, file_write_completed,
         signed_url_generated). Live DB projection proof in FileStoragePortConsumerLiveDbTests.
+        Attachment bind/list/unbind migrated to execute_abstract_function substrate per PR#481
+        (manifests af05-af07; record_table_ref from step_config binding source — manifest authority,
+        not payload; NpgsqlExternalPortDbFunctionRepository shrunk to stub).
         Remaining partial: UI Builder portTargetRef wiring / preset, projection response.
         Object storage provider-specific client not added.
         external_integration_completion_gate: docs/design/runtime-bundle-file-storage-ssot.yaml#external_integration_completion_gate
@@ -754,6 +756,7 @@ system_roadmap_ssot:
         - file_storage_physical_table_and_manifest_binding_not_connected
         - file_storage_checksum_and_manifest_runtime_not_connected
         - file_storage_evidence_and_runtime_event_log_not_connected
+        - file_storage_attachment_binding_execute_abstract_function_migration_pr481
       known_gap_ref:
         - file_storage_portTargetRef_action_wiring_and_preset_not_connected
         - file_storage_projection_response_not_connected

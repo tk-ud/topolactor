@@ -177,17 +177,14 @@ runtime_bundle_file_storage_ssot:
   operation_key_surface:
     bundle_handler: FileStorageBundleStepHandler
     note: >-
-      These operation_keys are file_storage_bundle-specific and are NOT part of the generic
-      external_port_substrate core operation_key_allowed_values. They are registered via
-      IExternalPortBundleStepHandler extension contract defined in external-port-substrate-ssot.yaml.
-    operation_keys:
-      record_export_job:
-        meaning: Records export job initiation metadata into topology.export_jobs using idempotency_key from payload.
-        boundary: Writes job metadata only; must not write file content, credential, bucket name, or plaintext URL.
-        prohibited:
-          - file_content_write
-          - plaintext_credential_in_payload
-          - provider_specific_runtime_call
+      FileStorageBundleStepHandler handles only compute_checksum (hard-runtime SHA-256 computation).
+      All other file_storage domain mutations (record_export_job / record_file_artifact /
+      write_manifest_record / authorize_signed_download / bind / list / unbind attachment) are
+      dispatched via execute_abstract_function operation_key → abstract function manifests af01-af07
+      → call_postgres_function primitive → topology.fs_* PostgreSQL functions. These operations
+      are NOT registered on IExternalPortBundleStepHandler; they do not appear in
+      FileStorageBundleStepHandler.SupportedOperationKeys.
+    bundle_handler_operation_keys:
       compute_checksum:
         meaning: Computes SHA-256 hash from HTTP response body or export job reference. Stores result in execution context only.
         boundary: Computation only; must not write to DB before file_artifact record exists.
@@ -195,7 +192,22 @@ runtime_bundle_file_storage_ssot:
           - db_write_before_artifact_exists
           - plaintext_storage_path_in_checksum
           - provider_specific_hash_algorithm
+    abstract_function_manifest_operations:
+      note: >-
+        The following operations are dispatched via execute_abstract_function → manifests af01-af07
+        → call_postgres_function primitive. They are NOT FileStorageBundleStepHandler operation_keys.
+        Boundary rules below describe the PostgreSQL function semantics; enforcement comes from
+        manifest authority bindings and projection_deny_keys (not C# step handler branching).
+      record_export_job:
+        manifest: af01 (file_storage.record_export_job)
+        meaning: Records export job initiation metadata into topology.export_jobs using idempotency_key from payload.
+        boundary: Writes job metadata only; must not write file content, credential, bucket name, or plaintext URL.
+        prohibited:
+          - file_content_write
+          - plaintext_credential_in_payload
+          - provider_specific_runtime_call
       record_file_artifact:
+        manifest: af02 (file_storage.record_file_artifact)
         meaning: Atomically writes file_artifact metadata and checksum_record into DB. Requires ChecksumValue present in context.
         boundary: Writes artifact metadata and checksum record in a single transaction; storage_ref is env-var reference identifier only.
         prohibited:
@@ -203,6 +215,7 @@ runtime_bundle_file_storage_ssot:
           - plaintext_storage_url_in_storage_ref
           - provider_specific_storage_client
       write_manifest_record:
+        manifest: af03 (file_storage.write_manifest_record)
         meaning: Writes export package manifest record into topology.export_manifests linking export_job_id and file_artifact_ids.
         boundary: Requires export_job_id and at least one file_artifact_id from execution context.
         prohibited:
@@ -210,12 +223,34 @@ runtime_bundle_file_storage_ssot:
           - plaintext_credential_in_manifest
           - provider_specific_format_branching
       authorize_signed_download:
+        manifest: af04 (file_storage.authorize_signed_download)
         meaning: Creates a non-guessable authorization_key reference in topology.signed_download_authorizations. Does not generate or store actual signed URL.
         boundary: authorization_key is opaque reference identifier; actual signed URL resolution is runtime secret store concern.
         prohibited:
           - storing_actual_signed_url
           - plaintext_storage_credential_in_key
           - signed_url_in_output_prop
+      bind_record_file_attachment:
+        manifest: af05 (file_storage.bind_record_file_attachment)
+        meaning: Binds an existing file_artifact to a record reference via topology.fs_bind_record_file_attachment.
+        boundary: record_table_ref comes from manifest step_config (not payload); does not project credential or signed URL.
+        prohibited:
+          - payload_derived_record_table_ref
+          - signed_url_projection
+      list_record_file_attachments:
+        manifest: af06 (file_storage.list_record_file_attachments)
+        meaning: Lists file_artifact attachments for a record reference via topology.fs_list_record_file_attachments.
+        boundary: record_table_ref from manifest step_config; output is JSONB metadata only (no credentials or signed URLs).
+        prohibited:
+          - payload_derived_record_table_ref
+          - credential_or_signed_url_in_output
+      unbind_record_file_attachment:
+        manifest: af07 (file_storage.unbind_record_file_attachment)
+        meaning: Removes a file_artifact attachment binding via topology.fs_unbind_record_file_attachment.
+        boundary: record_table_ref from manifest step_config; returns affected row count only.
+        prohibited:
+          - payload_derived_record_table_ref
+          - signed_url_projection
 
   secure_consumer_dispatch_lane_ref:
     lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
@@ -306,10 +341,14 @@ runtime_bundle_file_storage_ssot:
       abstract_function_boundary:
         status: required
         check: >-
-          record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download は
-          execute_db_function operation_key 経由で topology.fs_* PostgreSQL functions を呼ぶこと。
+          record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download
+          および attachment bind / list / unbind は execute_abstract_function operation_key 経由で
+          topology.abstract_function_manifests (af01-af07) を通じて topology.fs_* PostgreSQL functions を呼ぶこと。
           FileStorageBundleStepHandler は compute_checksum のみ保持する。
-          IExternalPortDbFunctionRepository が abstract function boundary として機能すること。
+          NpgsqlExternalPortDbFunctionRepository は compatibility placeholder stub として縮退済み
+          (全具体 fs_* メソッド削除済み)。
+          attachment 操作の record_table_ref は step_config binding source 経由の manifest authority であり
+          request payload 由来ではないこと。
     prohibited:
       - test_local_handwritten_UI_emission_treated_as_DB_projection
       - direct_FileStorageBundleStepHandler_concrete_mutation_for_non_checksum_steps

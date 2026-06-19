@@ -181,17 +181,21 @@ public class FileStorageBundleDispatchTests
     }
 
     [Fact]
-    public void NpgsqlExternalPortDbFunctionRepository_Source_DispatchesFsStarFunctions()
+    public void NpgsqlExternalPortDbFunctionRepository_AfterMigration_HasNoConcreteFsStarFunctions()
     {
         var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalPortDbFunctionRepository.cs"));
-        Assert.Contains("topology.fs_record_export_job", source);
-        Assert.Contains("topology.fs_record_file_artifact", source);
-        Assert.Contains("topology.fs_write_manifest_record", source);
-        Assert.Contains("topology.fs_authorize_signed_download", source);
-        Assert.Contains("topology.fs_bind_record_file_attachment", source);
-        Assert.Contains("topology.fs_list_record_file_attachments", source);
-        Assert.Contains("topology.fs_unbind_record_file_attachment", source);
         Assert.Contains("IExternalPortDbFunctionRepository", source);
+        Assert.Contains("EXTERNAL_PORT_DB_FUNCTION_UNKNOWN", source);
+        // All fs_* concrete implementations migrated to execute_abstract_function manifest path
+        Assert.DoesNotContain("topology.fs_record_export_job", source);
+        Assert.DoesNotContain("topology.fs_record_file_artifact", source);
+        Assert.DoesNotContain("topology.fs_write_manifest_record", source);
+        Assert.DoesNotContain("topology.fs_authorize_signed_download", source);
+        Assert.DoesNotContain("topology.fs_bind_record_file_attachment", source);
+        Assert.DoesNotContain("topology.fs_list_record_file_attachments", source);
+        Assert.DoesNotContain("topology.fs_unbind_record_file_attachment", source);
+        // Prohibited patterns absent
+        Assert.DoesNotContain("record_table_ref", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("object_storage", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("provider_kind", source, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("plaintext", source, StringComparison.OrdinalIgnoreCase);
@@ -344,6 +348,31 @@ public class FileStorageBundleDispatchTests
         Assert.Contains("file_write_completed", seed);
         Assert.Contains("signed_url_generated", seed);
         Assert.Contains("entity_ref_key", seed);
+    }
+
+    [Fact]
+    public void SeedSql_AttachmentPolicies_UseExecuteAbstractFunctionNotDbFunction()
+    {
+        var seed = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        Assert.Contains("file_storage.bind_record_file_attachment", seed);
+        Assert.Contains("file_storage.list_record_file_attachments", seed);
+        Assert.Contains("file_storage.unbind_record_file_attachment", seed);
+        // Attachment policies must NOT use execute_db_function for these operations
+        Assert.DoesNotContain("'execute_db_function', '{\"function\":\"topology.fs_bind_record_file_attachment\"", seed);
+        Assert.DoesNotContain("'execute_db_function', '{\"function\":\"topology.fs_list_record_file_attachments\"", seed);
+        Assert.DoesNotContain("'execute_db_function', '{\"function\":\"topology.fs_unbind_record_file_attachment\"", seed);
+    }
+
+    [Fact]
+    public void SeedSql_AttachmentManifests_HasStepConfigRecordTableRef_NotPayloadBinding()
+    {
+        var seed = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        // Verify step_config binding source exists for record_table_ref (manifest-authority, not payload)
+        Assert.Contains("step_config", seed);
+        Assert.Contains("record_table_ref", seed);
+        // record_table_ref must NOT appear as a payload binding source in attachment steps
+        Assert.DoesNotContain("'payload',     'record_table_ref'", seed);
+        Assert.DoesNotContain("'payload', 'record_table_ref'", seed);
     }
 
     private static ExternalPortPolicy BuildFileStoragePolicy(bool accessPort) =>

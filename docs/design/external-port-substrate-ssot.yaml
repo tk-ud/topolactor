@@ -311,27 +311,27 @@ external_port_substrate_ssot:
         ssot_ref: docs/design/abstract-function-primitive-registry-ssot.yaml#backend_abstract_function_runtime_substrate
       execute_db_function:
         meaning: >-
-          Calls a named PostgreSQL function registered under the topology schema.
-          Acts as the abstract function boundary for consumer bundle domain mutations
-          that are not hard-runtime compute operations (e.g., record_export_job,
-          record_file_artifact, write_manifest_record, authorize_signed_download).
+          Compatibility placeholder operation_key. All file-storage consumer bundle domain
+          mutations (record_export_job / record_file_artifact / write_manifest_record /
+          authorize_signed_download / bind / list / unbind attachment) have been migrated
+          to execute_abstract_function manifests af01-af07 via call_postgres_function primitive.
+          NpgsqlExternalPortDbFunctionRepository is a stub that throws for any function name.
+          No new file-storage or other consumer-bundle operations should be added to this path.
         boundary: >-
-          function_name must be prefixed "topology." and registered as a DB function.
-          Execution delegates to IExternalPortDbFunctionRepository.
-          Result context properties are stored per step_config "output" key.
-          Consumer bundle domain mutations that cannot be expressed as hard runtime
-          compute primitives (checksum, crypto) must use this path.
-        step_config_required:
-          function: fully_qualified_postgresql_function_name (topology.* prefix required)
-        step_config_optional:
-          output: context_property_name_to_store_result
-        abstract_function_relation: IExternalPortDbFunctionRepository
+          operation_key remains valid in the CHECK constraint for backwards schema compatibility
+          but no active seed rows use it for file-storage domain mutations post-PR#481.
+          IExternalPortDbFunctionRepository throws EXTERNAL_PORT_DB_FUNCTION_UNKNOWN for all inputs.
+        abstract_function_relation: IExternalPortDbFunctionRepository (compatibility stub only)
+        migration_note: >-
+          New consumer-bundle domain mutations must use execute_abstract_function with a manifest
+          row, input bindings, and authority bindings. execute_db_function must not grow.
         prohibited:
           - direct_sql_outside_postgresql_function
           - plaintext_credential_or_bucket_or_endpoint_in_function_params
           - provider_kind_or_bundle_branching_in_function_selection
           - function_name_without_topology_prefix
           - adding_bundle_specific_concrete_mutation_to_FileStorageBundleStepHandler
+          - new_file_storage_or_consumer_bundle_operations_on_execute_db_function_path
     execution_rule: >-
       Runtime reads topology.external_port_policy_steps ordered by step_order and dispatches
       operation_key through a generic registry/dictionary. provider_kind and
@@ -365,8 +365,12 @@ external_port_substrate_ssot:
           - compute_checksum
         note: >-
           record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download
-          were moved to execute_db_function operation_key via topology.fs_* PostgreSQL functions (PR#463).
+          / bind_record_file_attachment / list_record_file_attachments / unbind_record_file_attachment
+          are all dispatched via execute_abstract_function → abstract function manifests af01-af07
+          → call_postgres_function primitive → topology.fs_* PostgreSQL functions (PR#481).
           FileStorageBundleStepHandler retains only compute_checksum (hard-runtime SHA-256 computation).
+          NpgsqlExternalPortDbFunctionRepository is a compatibility placeholder stub (all concrete
+          fs_* methods deleted); execute_db_function route is a shell with no active file-storage use.
         detail_ref: docs/design/runtime-bundle-file-storage-ssot.yaml#operation_key_surface
     prohibited:
       - adding_bundle_specific_repository_or_handler_directly_to_generic_executor

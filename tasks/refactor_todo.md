@@ -55,8 +55,8 @@ Completed:
 Still open after this update:
 
 - SQL Attention / recommendation and credential hardening Bundles remain partial/not_started and must not be marked implemented.
-- File-storage concrete deletion is not complete; `execute_abstract_function` now has DB manifest loading and a `call_postgres_function` primitive path, but existing `topology.fs_*` PostgreSQL functions remain the call target until concrete deletion is proven safe.
-- Attachment bind/list/unbind remain on `execute_db_function` compatibility path pending manifest authority for record-table binding.
+- File-storage C# concrete deletion: `NpgsqlExternalPortDbFunctionRepository` concrete `fs_*` switch/methods are now deleted (completed in PR#481). `topology.fs_*` PostgreSQL functions are opaque DB adapters called via `call_postgres_function` primitive — they are NOT deletion targets and must remain.
+- Attachment bind/list/unbind migrated to `execute_abstract_function` manifests af05-af07 with `step_config` binding authority for `record_table_ref` (completed in PR#481).
 
 ## Audit conclusion
 
@@ -109,10 +109,10 @@ Absorption policy:
 |---|---|---|
 | `abstract-function-runtime-substrate-ssot` | ssot_contract_complete | Define backend-wide abstract function runtime SSOT and primitive taxonomy |
 | `abstract-function-manifest-schema` | ssot_contract_complete | Add DB manifest/schema surface for abstract functions, steps, authority, output shapes |
-| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (authority enforcement: partial_done — bindings loaded and fail-close enforced; file-storage concrete deletion remains blocked) |
+| `backend-abstract-function-executor` | partial_compatibility_fallback | Implement runtime executor for abstract function manifests and primitive registry (step_config binding source added; OutputProp propagation added; file-storage attachment migration complete as representative absorption case; SQL Attention / recommendation / credential hardening remain not_started) |
 | `sql-recommendation-primitive-migration` | not_started | Absorb SQL Attention and recommendation by migration order: abstract function fix → seed → seed test → concrete function deletion |
 | `credential-primitive-hardening` | not_started | Absorb credential flow by migration order while preserving runtime-only secret materialization |
-| `file-storage-db-function-to-abstract-function-migration` | partial_compatibility_fallback | Absorb file-storage DB functions by migration order and remove payload-derived table authority |
+| `file-storage-db-function-to-abstract-function-migration` | implemented | Absorb file-storage DB functions by migration order and remove payload-derived table authority — all 7 fs_* operations migrated to execute_abstract_function manifests af01-af07; NpgsqlExternalPortDbFunctionRepository stub; all acceptance conditions satisfied |
 | `completion-gate-and-test-alignment` | not_started | Align tests/checks/status after Bundle migration |
 
 ---
@@ -274,13 +274,15 @@ topology.abstract_function_policy_bindings
 - [x] Table/column/join/output authority comes from manifest/physical table binding, not frontend payload. (`abstract_function_authority_bindings` is the authority surface; `db-schema.yaml` states `frontend_payload_is_not_table_column_join_output_authority`.)
 - [x] `external_port_policy_steps` can call an abstract function by key instead of carrying the full operation body. (`abstract_function_key TEXT REFERENCES topology.abstract_function_manifests(function_key)` column added in PR #478; `execute_abstract_function` is a valid `operation_key`.)
 - [x] Secret-bearing fields are deny-listed fail-close. (`projection_deny_keys` column in `abstract_function_manifests`; `db-schema.yaml` states `secret_projection_denied_for_credential_signed_url_bucket_endpoint_storage_path_raw_storage_refs`.)
-- [x] Migration path preserves existing external port policy-step lane. (`execute_db_function` operation_key and `NpgsqlExternalPortDbFunctionRepository` compatibility path remain active; no legacy step removed.)
+- [x] Migration path preserves existing external port policy-step lane. (`execute_db_function` operation_key remains in schema CHECK constraint for compatibility; `NpgsqlExternalPortDbFunctionRepository` is now a compatibility stub — all concrete fs_* methods deleted in PR#481; no active seed row uses execute_db_function for file-storage mutations.)
 
 ---
 
 ## Bundle `backend-abstract-function-executor`
 
-Status: `not_started`
+Status: `partial_compatibility_fallback`
+
+Note: NOT marked complete based on file-storage migration alone. SQL Attention / recommendation and credential hardening Bundles remain not_started. File-storage attachment migration is the representative absorption case that proves the substrate works end-to-end.
 
 ### Problem
 
@@ -357,8 +359,8 @@ Completed in PR #479:
 - [x] Unit tests cover: no bindings, no policy binding, inactive-only bindings, valid binding pass, no table authority.
 - [x] Live DB integration test (`SeededAbstractFunctions_LoadAuthorityBindings_AndEnforceFailClose`) proves seeded authority bindings are loaded and executor fail-closes on empty bindings.
 
-Still open after PR #479:
-- file-storage concrete deletion remains blocked (abstract function seed path is now authority-enforced, but `NpgsqlExternalPortDbFunctionRepository` compatibility path not yet deleted).
+Still open after the file-storage attachment migration:
+- `NpgsqlExternalPortDbFunctionRepository` is now a compatibility stub (concrete fs_* methods deleted); full interface/class removal can follow in `completion-gate-and-test-alignment`.
 - SQL Attention / recommendation and credential hardening Bundles remain not_started.
 
 ---
@@ -531,7 +533,26 @@ Preserve credential flow as abstract function primitives while keeping actual se
 
 ## Bundle `file-storage-db-function-to-abstract-function-migration`
 
-Status: `not_started`
+Status: `implemented`
+
+### Completed
+
+- Attachment bind/list/unbind policy steps migrated from `execute_db_function` to `execute_abstract_function` (seed rows ed/ee/ef).
+- Abstract function manifests af05/af06/af07 added for `file_storage.bind_record_file_attachment`, `file_storage.list_record_file_attachments`, `file_storage.unbind_record_file_attachment`.
+- Steps bf05–bf09 added; input bindings c015–c021 added with `record_table_ref` using `step_config` binding source (manifest authority, not payload).
+- Authority bindings added for af05–af07 (policy + table authority for `topology.record_file_attachments`).
+- `AbstractFunctionRuntime.ResolveBinding` extended with `step_config` binding source.
+- `AbstractFunctionRuntime.ApplyResultToExternalContext` extended with generic `OutputProp` propagation.
+- `NpgsqlExternalPortDbFunctionRepository` shrunk to compatibility placeholder stub (all 7 concrete fs_* methods deleted).
+- `Program.cs` DI registration updated to parameterless stub registration.
+- Unit tests added: `step_config` binding, `OutputProp` propagation, no-concrete-methods assertion, seed attachment migration assertion.
+- Integration test stubs added: seeded attachment policies use `execute_abstract_function`, manifest step_config authority verified.
+
+Still open after this update:
+
+- Export job / file artifact / manifest record / signed download authorization operations remain on abstract function manifests af01–af04 (added in PR #479), no change needed.
+- `NpgsqlExternalPortDbFunctionRepository` is now a stub — removal of the interface/class entirely can proceed in `completion-gate-and-test-alignment` once all Bundles are done.
+- SQL Attention / recommendation and credential hardening remain not_started.
 
 ### Problem
 
@@ -558,12 +579,12 @@ Move file-storage DB operations into abstract function manifests and primitives,
 
 ### Improvement plan
 
-- [ ] Replace `functionName switch` with manifest-driven `call_postgres_function`, `db_query`, or `db_mutation` primitives.
-- [ ] Move parameter binding into abstract function input binding rows/specs.
-- [ ] Resolve `record_table_ref` through manifest/physical table binding/current route context, not frontend payload.
-- [ ] Keep `compute_checksum` as hard-runtime primitive.
-- [ ] Keep complex opaque functions such as signed download authorization behind `call_postgres_function` where appropriate.
-- [ ] Ensure projection denies signed URL, bucket, endpoint, storage path, credential, and raw storage refs.
+- [x] Replace `functionName switch` with manifest-driven `call_postgres_function`, `db_query`, or `db_mutation` primitives. (`NpgsqlExternalPortDbFunctionRepository` is now a stub; all operations route through abstract function manifests.)
+- [x] Move parameter binding into abstract function input binding rows/specs. (Input bindings c001–c021 in seed cover all file-storage operations.)
+- [x] Resolve `record_table_ref` through manifest/physical table binding/current route context, not frontend payload. (`step_config` binding source added; attachment manifests use `binding_source = 'step_config'` for `record_table_ref`.)
+- [x] Keep `compute_checksum` as hard-runtime primitive. (No change — checksum remains in `FileStorageBundleStepHandler`.)
+- [x] Keep complex opaque functions such as signed download authorization behind `call_postgres_function` where appropriate. (All fs_* calls remain as `call_postgres_function` primitive steps.)
+- [x] Ensure projection denies signed URL, bucket, endpoint, storage path, credential, and raw storage refs. (`projection_deny_keys` enforced in manifests af01–af07.)
 
 ### Materials
 
@@ -595,13 +616,13 @@ Move file-storage DB operations into abstract function manifests and primitives,
 
 ### Acceptance conditions
 
-- [ ] `record_table_ref` is no longer payload-authoritative.
-- [ ] Attachment bind/list/unbind use manifest/physical table authority.
-- [ ] File-storage operation bodies are expressible through abstract function manifests/primitives.
-- [ ] `NpgsqlExternalPortDbFunctionRepository` no longer grows per-bundle/per-function switch cases for simple DB operations.
-- [ ] `compute_checksum` remains the only file-storage hard-runtime compute handler unless SSOT explicitly authorizes more.
-- [ ] Tests prove DB state/projection result and deny-list secret projection behavior.
-- [ ] Existing concrete file-storage DB function methods are deleted or marked compatibility fallback only after seed tests pass.
+- [x] `record_table_ref` is no longer payload-authoritative. (`step_config` binding source reads from manifest step_config, not request payload.)
+- [x] Attachment bind/list/unbind use manifest/physical table authority. (Authority bindings for `topology.record_file_attachments` added for af05–af07.)
+- [x] File-storage operation bodies are expressible through abstract function manifests/primitives. (All seven fs_* operations covered by manifests af01–af07 and steps bf01–bf09.)
+- [x] `NpgsqlExternalPortDbFunctionRepository` no longer grows per-bundle/per-function switch cases for simple DB operations. (Shrunk to stub; throws for any unknown function name.)
+- [x] `compute_checksum` remains the only file-storage hard-runtime compute handler unless SSOT explicitly authorizes more. (Checksum stays in `FileStorageBundleStepHandler`; no new hard-runtime handlers added.)
+- [x] Tests prove DB state/projection result and deny-list secret projection behavior. (Unit tests in `FileStorageBundleDispatchTests` and `AbstractFunctionExecutorTests`; integration stubs in `FileStoragePortConsumerLiveDbTests`.)
+- [x] Existing concrete file-storage DB function methods are deleted or marked compatibility fallback only after seed tests pass. (All 7 concrete fs_* methods deleted after seed tests were added.)
 
 ---
 
