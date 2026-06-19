@@ -470,11 +470,11 @@ public sealed class RecommendationAttentionPrimitiveAdapter : IAbstractFunctionP
         if (!inputs.TryGetValue("working_shape", out var shapeRaw) || shapeRaw is not RuntimeWorkingShape shape)
             throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_RECOMMENDATION_ATTENTION_WORKING_SHAPE_MISSING");
 
-        // 5. Delegate to ContextRouteRecommendationResolver (COMPATIBILITY FALLBACK adapter call)
-        //    The resolver loads policy from topology.function_parameters[function_name/parameter_key]
-        //    internally — these are manifest-authority values passed via step_config, not payload.
-        //    Result is observation/evidence/projection only; no route/topology auto-overwrite.
+        // 5. Delegate to ContextRouteRecommendationResolver (COMPATIBILITY FALLBACK adapter call).
+        //    function_name and parameter_key from step_config (manifest-authority) are threaded
+        //    through to LoadFunctionParameterAsync — the SQL query is manifest-authorized, not
+        //    C#-constant-authorized. Result is observation/evidence/projection only; no auto-overwrite.
         _logger.LogDebug("RecommendationAttentionPrimitiveAdapter: resolving via adapter for function_name={FunctionName}.", functionName);
-        return await _resolver.ResolveAsync(shape, ct);
+        return await _resolver.ResolveAsync(shape, functionName!, parameterKey!, ct);
     }
 }

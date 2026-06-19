@@ -266,13 +266,13 @@ public class RecommendationAttentionAbstractFunctionTests
             OutputShape: new Dictionary<string, string> { ["context_route_result"] = "recommendation_result" });
 
     private static (AbstractFunctionExecutor executor, RecommendationAttentionPrimitiveAdapter adapter)
-        CreateExecutor(AbstractFunctionManifest manifest)
+        CreateExecutor(AbstractFunctionManifest manifest, TopologyRepository? topologyRepo = null)
     {
         var contextRouteRepo = new ContextRouteRepository(
             NullLogger<ContextRouteRepository>.Instance, "test-double");
         // StubValidPolicyTopologyRepository returns a valid policy so the resolver proceeds past
         // the policy-load step; the cold-start (no session) path yields InsufficientHistory.
-        var topologyRepo = new StubValidPolicyTopologyRepository();
+        topologyRepo ??= new StubValidPolicyTopologyRepository();
         var resolver = new ContextRouteRecommendationResolver(
             NullLogger<ContextRouteRecommendationResolver>.Instance,
             contextRouteRepo,
@@ -286,6 +286,28 @@ public class RecommendationAttentionAbstractFunctionTests
             new StaticManifestRepository(manifest),
             new IAbstractFunctionPrimitiveAdapter[] { adapter });
         return (executor, adapter);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Manifest-authorized SQL path: step_config values reach LoadFunctionParameterAsync
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task SeedPath_StepConfig_FunctionNameAndParameterKeyFlowToSqlCall()
+    {
+        // Proves the "manifest-authorized SQL" leg: function_name and parameter_key
+        // from seed step_config must reach topology.function_parameters SQL query,
+        // not be replaced by C# constants in ContextRouteRecommendationResolver.
+        var capturing = new CapturingTopologyRepository();
+        var (executor, _) = CreateExecutor(CreateSeedManifest(), capturing);
+        var context = RuntimeExecutorContext(MinimalWorkingShape());
+
+        // Cold-start: no session → InsufficientHistory, but policy SQL runs first.
+        await executor.ExecuteAsync("context_route.recommendation_resolve", context);
+
+        // The function_name and parameter_key from step_config must reach the SQL call.
+        Assert.Equal("context_route_recommendation_resolve", capturing.CapturedFunctionName);
+        Assert.Equal("default_policy", capturing.CapturedParameterKey);
     }
 
     private sealed class StaticManifestRepository : IAbstractFunctionManifestRepository

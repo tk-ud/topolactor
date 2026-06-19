@@ -236,7 +236,7 @@ public partial class ContextRouteRecommendationResolverTests
         var resolver = CreateResolver();
         var shape = MakeShape(sessionId: null);
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
         Assert.NotNull(result.StatusDetail);
@@ -250,7 +250,7 @@ public partial class ContextRouteRecommendationResolverTests
         var resolver = CreateResolver();
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
         Assert.Equal("NO_CONTEXT_HISTORY", result.StatusDetail);
@@ -265,7 +265,7 @@ public partial class ContextRouteRecommendationResolverTests
         var resolver = CreateResolver(topologyRepo: new StubMissingPolicyTopologyRepository());
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("CONTEXT_ROUTE_POLICY_NOT_FOUND", result.StatusDetail);
@@ -280,7 +280,7 @@ public partial class ContextRouteRecommendationResolverTests
 
         // No session, no tokens, no history
         var shape = MakeShape(sessionId: null);
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         // Status must never be null — always explicit
         Assert.True(
@@ -461,7 +461,7 @@ public partial class ContextRouteRecommendationResolverTests
             contextTokenIds: tokenId.ToString()
         );
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.Ok, result.Status);
         Assert.NotEmpty(result.NextOperations);
@@ -479,7 +479,7 @@ public partial class ContextRouteRecommendationResolverTests
             statePolicyJson: "{ not valid json !!!"
         );
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("CONTEXT_ROUTE_STATE_POLICY_INVALID", result.StatusDetail);
@@ -494,7 +494,7 @@ public partial class ContextRouteRecommendationResolverTests
             statePolicyJson: """{"context_route_policy_ref": ""}"""
         );
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("CONTEXT_ROUTE_POLICY_REF_INVALID", result.StatusDetail);
@@ -512,7 +512,7 @@ public partial class ContextRouteRecommendationResolverTests
             statePolicyJson: $$$"""{"context_route_policy_ref": "{{{scopedKey}}}"}"""
         );
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         // Policy loaded successfully → InsufficientHistory (no history), not ExplicitError.
         Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
@@ -528,7 +528,7 @@ public partial class ContextRouteRecommendationResolverTests
             statePolicyJson: """{"context_route_policy_ref": "unknown_policy"}"""
         );
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("CONTEXT_ROUTE_POLICY_NOT_FOUND", result.StatusDetail);
@@ -553,7 +553,7 @@ public partial class ContextRouteRecommendationResolverTests
             contextTokenIds: tokenId.ToString(),
             hubId: hubId);
 
-        await resolver.ResolveAsync(shape);
+        await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         // All three hub attention DB calls must use hubId, not sessionId.
         Assert.NotEmpty(tracking.LoadHubIds);
@@ -585,7 +585,7 @@ public partial class ContextRouteRecommendationResolverTests
             contextTokenIds: tokenId.ToString(),
             hubId: null);
 
-        await resolver.ResolveAsync(shape);
+        await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Empty(tracking.LoadHubIds);
         Assert.Empty(tracking.UpsertHubIds);
@@ -602,7 +602,7 @@ public partial class ContextRouteRecommendationResolverTests
         var resolver = CreateResolver(repo, new StubBlendOnlyPolicyTopologyRepository());
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("CONTEXT_EVENT_APPEND_FAILED", result.StatusDetail);
@@ -624,7 +624,7 @@ public partial class ContextRouteRecommendationResolverTests
             sessionId: Guid.NewGuid().ToString(),
             contextTokenIds: tokenId.ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("TRANSITION_STATS_QUERY_FAILED", result.StatusDetail);
@@ -647,7 +647,7 @@ public partial class ContextRouteRecommendationResolverTests
             contextTokenIds: tokenId.ToString(),
             hubId: hubId);
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("TVR_EXTENSION_FAILED", result.StatusDetail);
@@ -707,7 +707,7 @@ public partial class ContextRouteRecommendationResolverTests
         var resolver = CreateResolver(topologyRepo: new StubNullRecentDaysPolicyTopologyRepository());
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
     }
@@ -720,7 +720,7 @@ public partial class ContextRouteRecommendationResolverTests
         var resolver = CreateResolver(topologyRepo: new StubPreferRecentFalsePolicyTopologyRepository());
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
     }
@@ -743,7 +743,7 @@ public partial class ContextRouteRecommendationResolverTests
             sessionId: Guid.NewGuid().ToString(),
             contextTokenIds: tokenId.ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.Ok, result.Status);
         Assert.True(tracking.LoadPrefixSequence > 0, "LoadRecentPrefixVectorsAsync must have been called.");
@@ -766,7 +766,7 @@ public partial class ContextRouteRecommendationResolverTests
 
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
         Assert.Equal("NO_CONTEXT_HISTORY", result.StatusDetail);
@@ -790,7 +790,7 @@ public partial class ContextRouteRecommendationResolverTests
             sessionId: Guid.NewGuid().ToString(),
             contextTokenIds: null); // empty event vector → norm=0 → no neighbors pass min_similarity
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
         Assert.Equal("INSUFFICIENT_CONTEXT_HISTORY", result.StatusDetail);
@@ -810,7 +810,7 @@ public partial class ContextRouteRecommendationResolverTests
 
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("TVR_EXTENSION_FAILED", result.StatusDetail);
@@ -825,7 +825,7 @@ public partial class ContextRouteRecommendationResolverTests
 
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
         Assert.NotEqual("TVR_EXTENSION_FAILED", result.StatusDetail);
@@ -850,7 +850,7 @@ public partial class ContextRouteRecommendationResolverTests
             contextTokenIds: tokenId.ToString(),
             hubId: hubId);
 
-        var result = await resolver.ResolveAsync(shape);
+        var result = await resolver.ResolveAsync(shape, "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("TVR_EXTENSION_FAILED", result.StatusDetail);
@@ -1215,7 +1215,7 @@ public partial class ContextRouteRecommendationResolverTests
         var repo = new OperationKindBlendRepository(tokenA, tokenB);
         var resolver = CreateResolver(repo, new StubBlendOnlyPolicyTopologyRepository());
 
-        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), $"{tokenA},{tokenB}", hubId: Guid.NewGuid()));
+        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), $"{tokenA},{tokenB}", hubId: Guid.NewGuid()), "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.Ok, result.Status);
         Assert.Equal(tokenB.ToString(), result.NextTokens[0].Value);
@@ -1228,7 +1228,7 @@ public partial class ContextRouteRecommendationResolverTests
         var repo = new CountingBlendRepository(tokenId);
         var resolver = CreateResolver(repo, new StubValidPolicyTopologyRepository());
 
-        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: null));
+        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: null), "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.Ok, result.Status);
         Assert.Equal(0, repo.LoadHubAttentionCalls);
@@ -1242,7 +1242,7 @@ public partial class ContextRouteRecommendationResolverTests
         var repo = new ThrowingBlendReadRepository(tokenId);
         var resolver = CreateResolver(repo, new StubBlendOnlyPolicyTopologyRepository());
 
-        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: Guid.NewGuid()));
+        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: Guid.NewGuid()), "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
         Assert.Equal("RECOMMENDATION_BLEND_QUERY_FAILED", result.StatusDetail);
@@ -1255,7 +1255,7 @@ public partial class ContextRouteRecommendationResolverTests
         var repo = new MissingBlendRowsRepository(tokenId);
         var resolver = CreateResolver(repo, new StubValidPolicyTopologyRepository());
 
-        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: Guid.NewGuid()));
+        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: Guid.NewGuid()), "context_route_recommendation_resolve", "default_policy");
 
         Assert.Equal(RecommendationStatus.Ok, result.Status);
         Assert.NotEmpty(result.NextTokens);

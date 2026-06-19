@@ -124,3 +124,25 @@ internal sealed class StubBlendOnlyPolicyTopologyRepository()
         CancellationToken ct = default)
         => Task.FromResult<string?>(ContextRoutePolicyTestFixtures.BlendOnlyPolicyJson());
 }
+
+/// <summary>
+/// Topology repository stub that captures the functionName and parameterKey passed to
+/// LoadFunctionParameterAsync. Used to prove that manifest step_config values are forwarded
+/// to the SQL call rather than being replaced by C# constants.
+/// </summary>
+internal sealed class CapturingTopologyRepository()
+    : TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy")
+{
+    public string? CapturedFunctionName { get; private set; }
+    public string? CapturedParameterKey { get; private set; }
+
+    public override Task<string?> LoadFunctionParameterAsync(
+        string functionName,
+        string parameterKey,
+        CancellationToken ct = default)
+    {
+        CapturedFunctionName = functionName;
+        CapturedParameterKey = parameterKey;
+        return Task.FromResult<string?>(ContextRoutePolicyTestFixtures.ValidPolicyJson());
+    }
+}

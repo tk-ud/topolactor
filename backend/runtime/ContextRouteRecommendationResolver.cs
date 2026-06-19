@@ -31,9 +31,6 @@ namespace Topolactor.Runtime;
 /// </summary>
 public class ContextRouteRecommendationResolver
 {
-    private const string PolicyFunctionName = "context_route_recommendation_resolve";
-    private const string PolicyParameterKey = "default_policy";
-
     private readonly ILogger<ContextRouteRecommendationResolver> _logger;
     private readonly ContextRouteRepository _contextRouteRepository;
     private readonly TopologyRepository _topologyRepository;
@@ -63,13 +60,15 @@ public class ContextRouteRecommendationResolver
     /// </summary>
     public async Task<ContextRouteRecommendationResult> ResolveAsync(
         RuntimeWorkingShape shape,
+        string functionName,
+        string defaultParameterKey,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(shape);
 
         // Resolve policy key: use context_route_policy_ref from structure_maps.state_policy
-        // when present, otherwise fall back to the global default_policy key.
-        var (policyKey, policyKeyError) = ResolvePolicyKey(shape.StructureMapStatePolicyJson);
+        // when present, otherwise fall back to the manifest step_config parameter_key.
+        var (policyKey, policyKeyError) = ResolvePolicyKey(shape.StructureMapStatePolicyJson, defaultParameterKey);
         if (policyKeyError is not null)
         {
             _logger.LogWarning(
@@ -79,13 +78,13 @@ public class ContextRouteRecommendationResolver
         }
 
         var policyJson = await _topologyRepository.LoadFunctionParameterAsync(
-            PolicyFunctionName, policyKey!, ct);
+            functionName, policyKey!, ct);
 
         if (policyJson is null)
         {
             _logger.LogWarning(
                 "ContextRouteRecommendationResolver: function_parameter '{FunctionName}/{Key}' not found — CONTEXT_ROUTE_POLICY_NOT_FOUND.",
-                PolicyFunctionName, policyKey);
+                functionName, policyKey);
             return ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND");
         }
 
@@ -627,10 +626,10 @@ public class ContextRouteRecommendationResolver
     /// Null/empty/`{}` state_policy with no context_route_policy_ref → (default_policy, null).
     /// No silent fallback on broken refs.
     /// </summary>
-    private static (string? Key, string? ErrorCode) ResolvePolicyKey(string? statePolicyJson)
+    private static (string? Key, string? ErrorCode) ResolvePolicyKey(string? statePolicyJson, string defaultParameterKey)
     {
         if (string.IsNullOrWhiteSpace(statePolicyJson))
-            return (PolicyParameterKey, null);
+            return (defaultParameterKey, null);
 
         JsonDocument doc;
         try
@@ -645,7 +644,7 @@ public class ContextRouteRecommendationResolver
         using (doc)
         {
             if (!doc.RootElement.TryGetProperty("context_route_policy_ref", out var refEl))
-                return (PolicyParameterKey, null);
+                return (defaultParameterKey, null);
 
             var policyRef = refEl.GetString();
             if (string.IsNullOrWhiteSpace(policyRef))
