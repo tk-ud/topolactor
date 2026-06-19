@@ -176,6 +176,7 @@ check_file "docs/design/db-schema.yaml"
 check_file "docs/design/sql-attention-logs-ssot.md"
 check_file "docs/design/sql-attention-logs-ssot.yaml"
 check_file "docs/design/admin-console-workflow-ssot.yaml"
+check_file "docs/design/scheduler-job-manifest-ssot.yaml"
 
 check_file ".agent/README.md"
 check_file ".agent/docs/structure-map.yaml"
@@ -238,6 +239,7 @@ check_file ".agent/tests/check-unified-test-gate.sh"
 check_file ".agent/tests/check-sql-attention-ssot.sh"
 check_file ".agent/tests/check-recommendation-pressure-lane-boundary.sh"
 check_file ".agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
+check_file ".agent/tests/check-scheduler-job-manifest-ssot.sh"
 check_file "docs/design/pipeline-continuity-ssot.yaml"
 check_file "docs/design/cli-model-context-protocols-port-ssot.yaml"
 check_file "docs/design/cli-model-context-protocols-port-ssot.md"
@@ -455,7 +457,7 @@ check_content "docs/design/admin-console-workflow-ssot.yaml" "hub_navigation_ord
 check_content ".agent/reports/README.md" "routine inspection reports"
 check_content ".agent/reports/README.md" "Do not use this directory as the default place for normal PR summaries"
 check_content ".agent/README.md" "Directory Responsibilities"
-check_content ".agent/README.md" "`protocols/`: judgment gates (blocking/pass semantics only)."
+check_content ".agent/README.md" '`protocols/`: judgment gates (blocking/pass semantics only).'
 check_content ".agent/README.md" ".agent Directory Map"
 check_content ".agent/skills/agent-workflow.md" "STRUCTURE_CHECK"
 check_content ".agent/skills/agent-workflow.md" "SCENARIO_CONTRACT"
@@ -929,6 +931,12 @@ if bash "$REPO_ROOT/.agent/tests/check-cli-mcp-port-implementation-ssot.sh"; the
   echo "OK  [subcheck] .agent/tests/check-cli-mcp-port-implementation-ssot.sh"
 else
   fail "Subcheck failed: .agent/tests/check-cli-mcp-port-implementation-ssot.sh"
+fi
+
+if bash "$REPO_ROOT/.agent/tests/check-scheduler-job-manifest-ssot.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-scheduler-job-manifest-ssot.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-scheduler-job-manifest-ssot.sh"
 fi
 
 if bash "$REPO_ROOT/.agent/tests/check-design-ssot-progress-terms.sh"; then
