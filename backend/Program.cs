@@ -175,7 +175,7 @@ builder.Services.AddSingleton<IExternalPortHttpClient>(sp =>
 builder.Services.AddSingleton<IExternalPortCredentialReferenceResolver>(sp =>
     new ExternalPortCredentialReferenceResolver(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<IExternalCredentialCrypto, AesExternalCredentialCrypto>();
-builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
+builder.Services.AddSingleton<ExternalPortPolicyStepExecutor>(sp =>
     new ExternalPortPolicyStepExecutor(
         httpClient: sp.GetRequiredService<IExternalPortHttpClient>(),
         credentialReferenceResolver: sp.GetRequiredService<IExternalPortCredentialReferenceResolver>(),
@@ -185,6 +185,12 @@ builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
         dbFunctionRepository: sp.GetRequiredService<IExternalPortDbFunctionRepository>(),
         abstractFunctionExecutor: sp.GetRequiredService<AbstractFunctionExecutor>(),
         runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
+
+builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
+    new ExternalPortPolicyStepExecutorCompatibilityShim(
+        sp.GetRequiredService<ExternalPortPolicyStepExecutor>(),
+        sp.GetRequiredService<AbstractFunctionExecutor>()));
+
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
     new ExternalPortDispatchRuntime(
         sp.GetRequiredService<ILogger<ExternalPortDispatchRuntime>>(),
