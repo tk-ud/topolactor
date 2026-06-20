@@ -24,7 +24,10 @@ public sealed record SchedulerJobRecord(
     string AuthorityScope,
     string? CredentialRequirementRef,
     string? ExternalPortRef,
-    IReadOnlyDictionary<string, object?> ProjectionPolicy);
+    IReadOnlyDictionary<string, object?> ProjectionPolicy)
+{
+    public DateTimeOffset? LastCompletedAt { get; init; }
+}
 
 public sealed record SchedulerJobStepRecord(
     Guid SchedulerJobStepId,
@@ -65,21 +68,31 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
         var result = new List<SchedulerJobRecord>();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT scheduler_job_id, job_key, trigger_kind, schedule_policy_kind,
-                   cron_expression, schedule_interval_seconds, manual_run_allowed, active,
-                   input_table_ref, input_status_column,
-                   input_status_pending_value, input_status_processing_value,
-                   input_status_completed_value, input_status_failed_value,
-                   max_batch_size, lease_seconds, authority_scope,
-                   credential_requirement_ref, external_port_ref, projection_policy
-            FROM topology.scheduler_jobs
-            WHERE active = true
-            ORDER BY job_key ASC
+            SELECT j.scheduler_job_id, j.job_key, j.trigger_kind, j.schedule_policy_kind,
+                   j.cron_expression, j.schedule_interval_seconds, j.manual_run_allowed, j.active,
+                   j.input_table_ref, j.input_status_column,
+                   j.input_status_pending_value, j.input_status_processing_value,
+                   j.input_status_completed_value, j.input_status_failed_value,
+                   j.max_batch_size, j.lease_seconds, j.authority_scope,
+                   j.credential_requirement_ref, j.external_port_ref, j.projection_policy,
+                   (SELECT MAX(r.completed_at)
+                    FROM topology.scheduler_job_runs r
+                    WHERE r.scheduler_job_id = j.scheduler_job_id
+                      AND r.run_status = 'completed') AS last_completed_at
+            FROM topology.scheduler_jobs j
+            WHERE j.active = true
+            ORDER BY j.job_key ASC
             """;
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            result.Add(MapRecord(reader));
+        {
+            var lastCompletedAtOrd = reader.GetOrdinal("last_completed_at");
+            DateTimeOffset? lastCompletedAt = reader.IsDBNull(lastCompletedAtOrd)
+                ? null
+                : reader.GetFieldValue<DateTimeOffset>(lastCompletedAtOrd);
+            result.Add(MapRecord(reader) with { LastCompletedAt = lastCompletedAt });
+        }
 
         return result;
     }

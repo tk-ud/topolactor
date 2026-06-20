@@ -313,7 +313,7 @@ public class SchedulerJobRunnerTests
             ["notify_manifest_id"] = $"\"{notifyManifestId}\"",
         };
         var job = new SchedulerJobRecord(
-            Guid.NewGuid(), "demo_schedule", "cron", "cron", null, null, true, true,
+            Guid.NewGuid(), "demo_schedule", "cron", "cron", "* * * * *", null, true, true,
             null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null, projPolicy);
         var steps = new[]
         {
@@ -329,7 +329,7 @@ public class SchedulerJobRunnerTests
 
         await runner.RunDueJobsAsync(CancellationToken.None);
 
-        // cron policy is always due: run must be created and reach completed
+        // cron policy with cron_expression set is due: run must be created and reach completed
         Assert.Single(fakeRepo.CreatedRuns);
         Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
         // DB NOTIFY fired with notify_manifest_id from projection_policy
@@ -500,6 +500,128 @@ public class SchedulerJobRunnerTests
         Assert.Equal("failed", finalCall.Status);
         Assert.NotNull(finalCall.LastError);
         Assert.Contains("ABSTRACT_FUNCTION_RUNTIME_LANE_INVALID", finalCall.LastError);
+    }
+
+    [Fact]
+    public async Task RunDueJobsAsync_CronPolicy_NullCronExpression_SkipsJob()
+    {
+        // Proves: cron job with no cron_expression set is skipped — not due.
+        // Guard: job author must set cron_expression before the job fires on any poll cycle.
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "demo_schedule", "cron", "cron",
+            CronExpression: null, // not configured — must be skipped
+            ScheduleIntervalSeconds: null, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null,
+            new Dictionary<string, object?>(StringComparer.Ordinal));
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], []);
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(null),
+            Array.Empty<IAbstractFunctionPrimitiveAdapter>());
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.RunDueJobsAsync(CancellationToken.None);
+
+        Assert.Empty(fakeRepo.CreatedRuns);
+        Assert.Empty(fakeRepo.UpdateCalls);
+    }
+
+    [Fact]
+    public async Task RunDueJobsAsync_IntervalSeconds_NoLastRun_IsDue()
+    {
+        // Proves: interval_seconds job with no prior completed run (LastCompletedAt=null) is due.
+        var authority = new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "demo.scheduler_projection", "scheduler_job_runtime", "demo_scheduler_job",
+            new[] { MakeStep(1, "echo", new[] { new AbstractFunctionInputBinding("source", "constant", "ok", false, false) }, "scheduler_projection") },
+            Array.Empty<string>(), true, authority);
+
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "interval_job", "cron", "interval_seconds",
+            CronExpression: null,
+            ScheduleIntervalSeconds: 300, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null,
+            new Dictionary<string, object?>(StringComparer.Ordinal));
+        // LastCompletedAt defaults to null — no prior run
+
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", "scheduler_projection", true)
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps);
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.RunDueJobsAsync(CancellationToken.None);
+
+        Assert.Single(fakeRepo.CreatedRuns);
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+    }
+
+    [Fact]
+    public async Task RunDueJobsAsync_IntervalSeconds_GapNotMet_Skipped()
+    {
+        // Proves: interval_seconds job is skipped when the gap since LastCompletedAt < interval.
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "interval_job", "cron", "interval_seconds",
+            CronExpression: null,
+            ScheduleIntervalSeconds: 3600, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null,
+            new Dictionary<string, object?>(StringComparer.Ordinal))
+        {
+            LastCompletedAt = DateTimeOffset.UtcNow.AddSeconds(-60), // only 60s ago, interval is 3600s
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], []);
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(null),
+            Array.Empty<IAbstractFunctionPrimitiveAdapter>());
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.RunDueJobsAsync(CancellationToken.None);
+
+        Assert.Empty(fakeRepo.CreatedRuns);
+        Assert.Empty(fakeRepo.UpdateCalls);
+    }
+
+    [Fact]
+    public async Task RunDueJobsAsync_IntervalSeconds_GapMet_IsDue()
+    {
+        // Proves: interval_seconds job is due when the gap since LastCompletedAt >= interval.
+        var authority = new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "demo.scheduler_projection", "scheduler_job_runtime", "demo_scheduler_job",
+            new[] { MakeStep(1, "echo", new[] { new AbstractFunctionInputBinding("source", "constant", "ok", false, false) }, "scheduler_projection") },
+            Array.Empty<string>(), true, authority);
+
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "interval_job", "cron", "interval_seconds",
+            CronExpression: null,
+            ScheduleIntervalSeconds: 300, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null,
+            new Dictionary<string, object?>(StringComparer.Ordinal))
+        {
+            LastCompletedAt = DateTimeOffset.UtcNow.AddSeconds(-400), // 400s ago, interval is 300s → due
+        };
+
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", "scheduler_projection", true)
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps);
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.RunDueJobsAsync(CancellationToken.None);
+
+        Assert.Single(fakeRepo.CreatedRuns);
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
     }
 
     // ─── Spy ─────────────────────────────────────────────────────────────────

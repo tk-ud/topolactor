@@ -72,13 +72,13 @@ ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
 INSERT INTO topology.scheduler_jobs
     (scheduler_job_id, job_key, trigger_kind, schedule_policy_kind, manual_run_allowed,
      active, authority_scope, max_batch_size, lease_seconds,
-     retry_policy, projection_policy, created_by)
+     retry_policy, projection_policy, cron_expression, created_by)
 VALUES
     ('00000000-0000-0000-0000-00000000c060', 'demo_schedule', 'cron', 'cron', true,
      true, 'demo_scheduler_job', 1, 60,
      '{"max_attempts":1,"backoff_seconds":0}',
      '{"allowed_result_keys":["scheduler_projection"],"notify_manifest_id":"00000000-0000-0000-0000-0000000000f0"}',
-     'seed')
+     '* * * * *', 'seed')
 ON CONFLICT (scheduler_job_id) DO NOTHING;
 
 -- Scheduler job step: step 1 → demo.scheduler_projection

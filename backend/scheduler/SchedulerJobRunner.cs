@@ -241,10 +241,17 @@ public sealed class SchedulerJobRunner : BackgroundService
         job.SchedulePolicyKind switch
         {
             "manual_only" => false,
-            "cron" => true,             // poll-based: always due; cron expression parsing deferred
-            "interval_seconds" => true, // poll-based: always due; last-run gap tracking deferred
+            "cron" => job.CronExpression is not null,
+            "interval_seconds" => IsIntervalDue(job),
             _ => false,
         };
+
+    private static bool IsIntervalDue(SchedulerJobRecord job)
+    {
+        if (job.ScheduleIntervalSeconds is not { } interval || interval <= 0) return false;
+        if (job.LastCompletedAt is null) return true;
+        return (DateTimeOffset.UtcNow - job.LastCompletedAt.Value).TotalSeconds >= interval;
+    }
 
     private static TimeSpan ParseEnvSeconds(string envVar, TimeSpan fallback)
     {
