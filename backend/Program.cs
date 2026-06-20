@@ -328,7 +328,8 @@ builder.Services.AddHostedService<SqlAttentionScheduler>();
 builder.Services.AddHostedService(sp => new SchedulerJobRunner(
     sp.GetRequiredService<ILogger<SchedulerJobRunner>>(),
     sp.GetRequiredService<ISchedulerJobManifestRepository>(),
-    sp.GetRequiredService<AbstractFunctionExecutor>()));
+    sp.GetRequiredService<AbstractFunctionExecutor>(),
+    sp.GetRequiredService<DbNotifyRepository>()));
 builder.Services.AddHostedService(sp => new DbNotifyListener(
     sp.GetRequiredService<ILogger<DbNotifyListener>>(),
     connectionString,

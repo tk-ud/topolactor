@@ -13,6 +13,7 @@ services:
       - topolactor_demo_pgdata:/var/lib/postgresql/data
       - ../db:/db:ro
       - ../db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - ../db/demo/demo_scheduler.sql:/docker-entrypoint-initdb.d/01-demo-scheduler.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U topolactor_demo -d topolactor_demo"]
       interval: 10s

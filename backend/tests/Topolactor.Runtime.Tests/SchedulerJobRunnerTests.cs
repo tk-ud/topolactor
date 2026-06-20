@@ -308,6 +308,117 @@ public class SchedulerJobRunnerTests
     }
 
     [Fact]
+    public async Task TryExecuteJobAsync_NotifyManifestId_DbNotifyCalledOnSuccess()
+    {
+        // Proves: after successful step chain, SchedulerJobRunner fires DB NOTIFY with the
+        // manifest_id from projection_policy.notify_manifest_id.
+        // This is the representative path: cron poll → AbstractFunctionExecutor → DB NOTIFY
+        // → DbNotifyListener → RuntimeTimelineScheduler → ManifestDispatcher → SSE.
+        var notifyManifestId = Guid.Parse("00000000-0000-0000-0000-0000000000f0");
+        var authority = new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "demo.scheduler_projection", "scheduler_job_runtime", "demo_scheduler_job",
+            new[] { MakeStep(1, "echo", new[] { new AbstractFunctionInputBinding("source", "constant", "ok", false, false) }, "scheduler_projection") },
+            Array.Empty<string>(), true, authority);
+
+        var projPolicy = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["allowed_result_keys"] = "[\"scheduler_projection\"]",
+            // Raw JSON text matching ParseJsonObject(GetRawText()) format
+            ["notify_manifest_id"] = $"\"{notifyManifestId}\"",
+        };
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "demo_schedule", "cron", "cron", null, null, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null, projPolicy);
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", "scheduler_projection", true)
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps);
+        var spy = new SpyDbNotifyRepository();
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor, spy);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Equal(1, spy.CallCount);
+        Assert.Equal(notifyManifestId, spy.LastManifestId);
+        Assert.Null(spy.LastTableId);
+        Assert.Null(spy.LastTableRegistryId);
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_NotifyManifestId_DbNotifyNotCalledOnFailure()
+    {
+        // Proves: DB NOTIFY is NOT sent when the step chain fails.
+        // Only a completed run triggers the NOTIFY path.
+        var notifyManifestId = Guid.Parse("00000000-0000-0000-0000-0000000000f0");
+        var authority = new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "demo.scheduler_projection", "scheduler_job_runtime", "demo_scheduler_job",
+            new[] { MakeStep(1, "fail_close", new[] { new AbstractFunctionInputBinding("source", "constant", "x", false, false) }, null) },
+            Array.Empty<string>(), true, authority);
+
+        var projPolicy = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["allowed_result_keys"] = "[\"scheduler_projection\"]",
+            ["notify_manifest_id"] = $"\"{notifyManifestId}\"",
+        };
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "demo_schedule", "cron", "cron", null, null, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null, projPolicy);
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", null, true)
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps);
+        var spy = new SpyDbNotifyRepository();
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new FailClosePrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor, spy);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal("failed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Equal(0, spy.CallCount);
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_NoNotifyManifestId_DbNotifyNotCalled()
+    {
+        // Proves: when projection_policy has no notify_manifest_id, DB NOTIFY is skipped.
+        var authority = new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "demo.scheduler_projection", "scheduler_job_runtime", "demo_scheduler_job",
+            new[] { MakeStep(1, "echo", new[] { new AbstractFunctionInputBinding("source", "constant", "ok", false, false) }, "scheduler_projection") },
+            Array.Empty<string>(), true, authority);
+
+        var job = MakeJob(); // projection_policy has no notify_manifest_id
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", "scheduler_projection", true)
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps);
+        var spy = new SpyDbNotifyRepository();
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor, spy);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Equal(0, spy.CallCount);
+    }
+
+    [Fact]
     public async Task TryExecuteJobAsync_WrongRuntimeLane_FailsWithRuntimeLaneInvalid()
     {
         // Proves: abstract function manifests with runtime_lane != "scheduler_job_runtime"
@@ -339,5 +450,24 @@ public class SchedulerJobRunnerTests
         Assert.Equal("failed", finalCall.Status);
         Assert.NotNull(finalCall.LastError);
         Assert.Contains("ABSTRACT_FUNCTION_RUNTIME_LANE_INVALID", finalCall.LastError);
+    }
+
+    // ─── Spy ─────────────────────────────────────────────────────────────────
+
+    private sealed class SpyDbNotifyRepository() : DbNotifyRepository(NullLogger<DbNotifyRepository>.Instance)
+    {
+        public int CallCount { get; private set; }
+        public Guid? LastManifestId { get; private set; }
+        public string? LastTableId { get; private set; }
+        public string? LastTableRegistryId { get; private set; }
+
+        public override Task NotifyAsync(string? tableId, string? tableRegistryId, Guid? manifestId, CancellationToken ct = default)
+        {
+            CallCount++;
+            LastTableId = tableId;
+            LastTableRegistryId = tableRegistryId;
+            LastManifestId = manifestId;
+            return Task.CompletedTask;
+        }
     }
 }

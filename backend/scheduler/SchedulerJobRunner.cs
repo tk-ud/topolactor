@@ -31,15 +31,18 @@ public sealed class SchedulerJobRunner : BackgroundService
     private readonly ILogger<SchedulerJobRunner> _logger;
     private readonly ISchedulerJobManifestRepository _manifestRepository;
     private readonly AbstractFunctionExecutor _abstractFunctionExecutor;
+    private readonly DbNotifyRepository? _dbNotifyRepository;
 
     public SchedulerJobRunner(
         ILogger<SchedulerJobRunner> logger,
         ISchedulerJobManifestRepository manifestRepository,
-        AbstractFunctionExecutor abstractFunctionExecutor)
+        AbstractFunctionExecutor abstractFunctionExecutor,
+        DbNotifyRepository? dbNotifyRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _manifestRepository = manifestRepository ?? throw new ArgumentNullException(nameof(manifestRepository));
         _abstractFunctionExecutor = abstractFunctionExecutor ?? throw new ArgumentNullException(nameof(abstractFunctionExecutor));
+        _dbNotifyRepository = dbNotifyRepository;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -189,6 +192,24 @@ public sealed class SchedulerJobRunner : BackgroundService
         _logger.LogInformation(
             "SchedulerJobRunner: job={JobKey} run={RunId} completed status={Status}.",
             job.JobKey, run.SchedulerJobRunId, runStatus);
+
+        if (string.Equals(runStatus, "completed", StringComparison.Ordinal))
+            await FireNotifyAsync(job.ProjectionPolicy, ct);
+    }
+
+    private async Task FireNotifyAsync(IReadOnlyDictionary<string, object?> projectionPolicy, CancellationToken ct)
+    {
+        if (_dbNotifyRepository is null) return;
+        if (!projectionPolicy.TryGetValue("notify_manifest_id", out var raw) || raw is not string rawJson) return;
+
+        string? manifestIdStr;
+        try { manifestIdStr = JsonSerializer.Deserialize<string>(rawJson); }
+        catch { return; }
+
+        if (!Guid.TryParse(manifestIdStr, out var manifestId)) return;
+
+        await _dbNotifyRepository.NotifyAsync(null, null, manifestId, ct);
+        _logger.LogDebug("SchedulerJobRunner: DB NOTIFY sent manifest_id={ManifestId}.", manifestId);
     }
 
     private static string? BuildSanitizedResultContext(
