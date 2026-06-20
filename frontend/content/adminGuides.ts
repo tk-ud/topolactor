@@ -197,6 +197,17 @@ export const ADMIN_ROUTE_CARDS: {
       "削除は確認ダイアログ必須",
     ],
   },
+  {
+    href: "/admin/scheduler",
+    label: "スケジューラー Job 設定",
+    purpose: "スケジューラー Job の read-only 設定確認画面（Job 一覧・ポリシー・権限スコープ確認）",
+    relation: "scheduler-job-substrate（read-only）",
+    howToSummary: [
+      "Job 一覧で job_key・ポリシー・active 状態を確認",
+      "credentialRequirementRef / externalPortRef は参照キーのみ表示（認証情報の平文は出ない）",
+    ],
+    caution: "編集不可の read-only 画面。seed / DB 変更は直接 SQL で行ってください。",
+  },
 ];
 
 export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {

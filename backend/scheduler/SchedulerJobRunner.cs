@@ -220,8 +220,8 @@ public sealed class SchedulerJobRunner : BackgroundService
         job.SchedulePolicyKind switch
         {
             "manual_only" => false,
-            // interval and cron due-check: future implementation when cron/interval substrate is added.
-            // Currently the runner substrate is proven via manual trigger (TryExecuteJobAsync directly).
+            "cron" => true,             // poll-based: always due; cron expression parsing deferred
+            "interval_seconds" => true, // poll-based: always due; last-run gap tracking deferred
             _ => false,
         };
 

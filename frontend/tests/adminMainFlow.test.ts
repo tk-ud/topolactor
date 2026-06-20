@@ -54,6 +54,7 @@ Deno.test("ADMIN_ROUTE_CARDS contain canonical admin routes only", () => {
       "/admin/manifests",
       "/admin/enums",
       "/admin/users",
+      "/admin/scheduler",
     ],
   );
 });
@@ -85,6 +86,7 @@ Deno.test("Fresh /admin route registry matches runtime-orchestration SSOT exactl
     "/admin/contents",
     "/admin/enums",
     "/admin/manifests",
+    "/admin/scheduler",
     "/admin/team-dashboard",
     "/admin/ui-builder",
     "/admin/users",

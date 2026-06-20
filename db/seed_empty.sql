@@ -2636,7 +2636,7 @@ INSERT INTO topology.scheduler_jobs
      active, authority_scope, max_batch_size, lease_seconds,
      retry_policy, projection_policy, created_by)
 VALUES
-    ('00000000-0000-0000-0000-00000000sj01', 'demo_schedule', 'cron', 'manual_only', true,
+    ('00000000-0000-0000-0000-00000000c060', 'demo_schedule', 'cron', 'manual_only', true,
      true, 'demo_scheduler_job', 1, 60,
      '{"max_attempts":1,"backoff_seconds":0}',
      '{"allowed_result_keys":["scheduler_projection"]}',
@@ -2650,8 +2650,24 @@ INSERT INTO topology.scheduler_job_steps
     (scheduler_job_step_id, scheduler_job_id, step_order, abstract_function_key,
      input_binding, result_context_key, result_binding, on_error, active)
 VALUES
-    ('00000000-0000-0000-0000-00000000ss01',
-     '00000000-0000-0000-0000-00000000sj01',
+    ('00000000-0000-0000-0000-00000000c061',
+     '00000000-0000-0000-0000-00000000c060',
      1, 'demo.scheduler_projection',
      '{}', 'scheduler_projection', '{}', 'fail_run', true)
 ON CONFLICT (scheduler_job_id, step_order) DO NOTHING;
+
+-- Manifest entry: admin dispatch for scheduler_jobs:list_settings → admin_runtime
+-- Enables frontend SchedulerJobSettingsPanel to reach AdminRuntime.DataListSchedulerJobsSettingsAsync
+-- via ManifestDispatcher.ResolveActiveManifestAsync(role=null, target=admin, layer=scheduler_jobs, action=list_settings).
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000000f0',
+    NULL,
+    ARRAY[
+        '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"scheduler_jobs","action":"list_settings"}'::jsonb,
+        '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+        '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO NOTHING;
