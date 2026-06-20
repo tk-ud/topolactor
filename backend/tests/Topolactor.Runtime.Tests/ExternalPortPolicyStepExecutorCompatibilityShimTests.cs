@@ -170,7 +170,7 @@ public class ExternalPortPolicyStepExecutorCompatibilityShimTests
     {
         public string PrimitiveKey => "stub_http_request";
         public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default) =>
-            Task.FromResult<object?>(new ExternalPortHttpResponse(200, "{\"ok\":true}", new Dictionary<string, string>()));
+            Task.FromResult<object?>(new ExternalPortHttpResponse(200, "{\"ok\":true}"));
     }
 
     private sealed class RecordingPolicyStepExecutor : IExternalPortPolicyStepExecutor
