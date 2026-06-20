@@ -60,6 +60,9 @@
 \echo '[init.sql] applying seed_empty.sql'
 \i /db/seed_empty.sql
 
+\echo '[init.sql] applying external_port_compat_absorption_seed.sql'
+\i /db/external_port_compat_absorption_seed.sql
+
 \echo '[init.sql] applying hub_search_preset_seed.sql'
 \i /db/hub_search_preset_seed.sql
 
