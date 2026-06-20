@@ -1248,3 +1248,37 @@ export async function reorderHubRelations(
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "reorder hub_relations failed");
   return body.emission?.data as HubNavigationLifecycleResult;
 }
+
+// ---------------------------------------------------------------------------
+// Scheduler Job Settings Projection (read-only)
+// ---------------------------------------------------------------------------
+
+export type SchedulerJobManifestItem = {
+  schedulerJobId: string;
+  jobKey: string;
+  triggerKind: string;
+  schedulePolicyKind: string;
+  cronExpression: string | null;
+  scheduleIntervalSeconds: number | null;
+  manualRunAllowed: boolean;
+  active: boolean;
+  maxBatchSize: number;
+  leaseSeconds: number;
+  authorityScope: string;
+  /** reference key only — no credential plaintext */
+  credentialRequirementRef: string | null;
+  /** reference key only — no external port config */
+  externalPortRef: string | null;
+};
+
+export async function fetchSchedulerJobManifests(): Promise<SchedulerJobManifestItem[] | null> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "scheduler_jobs",
+    action: "list_settings",
+  });
+  if (emission === null) return null;
+  const data = emission.data as { ok: boolean; schedulerJobs: SchedulerJobManifestItem[] } | null;
+  return data?.schedulerJobs ?? null;
+}

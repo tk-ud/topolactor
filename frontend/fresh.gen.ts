@@ -8,6 +8,7 @@ import * as $admin_contents from "./routes/admin/contents.tsx";
 import * as $admin_enums from "./routes/admin/enums.tsx";
 import * as $admin_index from "./routes/admin/index.tsx";
 import * as $admin_manifests from "./routes/admin/manifests.tsx";
+import * as $admin_scheduler from "./routes/admin/scheduler.tsx";
 import * as $admin_team_dashboard_index from "./routes/admin/team-dashboard/index.tsx";
 import * as $admin_ui_builder from "./routes/admin/ui-builder.tsx";
 import * as $admin_users from "./routes/admin/users.tsx";
@@ -49,6 +50,7 @@ import * as $OperationPanel from "./islands/OperationPanel.tsx";
 import * as $PresetUploaderDrawer from "./islands/PresetUploaderDrawer.tsx";
 import * as $ProjectionShell from "./islands/ProjectionShell.tsx";
 import * as $RegistryVectorValidator from "./islands/RegistryVectorValidator.tsx";
+import * as $SchedulerJobSettingsPanel from "./islands/SchedulerJobSettingsPanel.tsx";
 import * as $SeedAdmin from "./islands/SeedAdmin.tsx";
 import * as $SuperAuthPanel from "./islands/SuperAuthPanel.tsx";
 import * as $TeamMarkdownDashboard from "./islands/TeamMarkdownDashboard.tsx";
@@ -63,6 +65,7 @@ const manifest = {
     "./routes/admin/enums.tsx": $admin_enums,
     "./routes/admin/index.tsx": $admin_index,
     "./routes/admin/manifests.tsx": $admin_manifests,
+    "./routes/admin/scheduler.tsx": $admin_scheduler,
     "./routes/admin/team-dashboard/index.tsx": $admin_team_dashboard_index,
     "./routes/admin/ui-builder.tsx": $admin_ui_builder,
     "./routes/admin/users.tsx": $admin_users,
@@ -107,6 +110,7 @@ const manifest = {
     "./islands/PresetUploaderDrawer.tsx": $PresetUploaderDrawer,
     "./islands/ProjectionShell.tsx": $ProjectionShell,
     "./islands/RegistryVectorValidator.tsx": $RegistryVectorValidator,
+    "./islands/SchedulerJobSettingsPanel.tsx": $SchedulerJobSettingsPanel,
     "./islands/SeedAdmin.tsx": $SeedAdmin,
     "./islands/SuperAuthPanel.tsx": $SuperAuthPanel,
     "./islands/TeamMarkdownDashboard.tsx": $TeamMarkdownDashboard,

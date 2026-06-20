@@ -67,7 +67,8 @@ public partial class AdminRuntime
         SqlAttentionLogsRepository? sqlAttentionLogsRepository = null,
         AbstractFunctionExecutor? abstractFunctionExecutor = null,
         MockPresetRepository? mockPresetRepository = null,
-        TeamMarkdownRepository? teamMarkdownRepository = null)
+        TeamMarkdownRepository? teamMarkdownRepository = null,
+        ISchedulerJobManifestRepository? schedulerJobManifestRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -88,6 +89,7 @@ public partial class AdminRuntime
         _abstractFunctionExecutor = abstractFunctionExecutor;
         _mockPresetRepository = mockPresetRepository;
         _teamMarkdownRepository = teamMarkdownRepository;
+        _schedulerJobManifestRepository = schedulerJobManifestRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -319,6 +321,7 @@ public partial class AdminRuntime
             "mock_preset:compile"                       => await DataMockPresetCompileAsync(vector, ct),
             "mock_preset:bind"                          => await DataMockPresetBindAsync(vector, ct),
             "mock_preset:save_mappings"                 => await DataMockPresetSaveMappingsAsync(vector, ct),
+            "scheduler_jobs:list_settings"              => await DataListSchedulerJobsSettingsAsync(ct),
             var a when a.StartsWith("team_markdown:", StringComparison.OrdinalIgnoreCase)
                                                         => await ExecuteTeamMarkdownAsync(vector with { Action = a["team_markdown:".Length..] }, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",

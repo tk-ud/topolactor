@@ -2556,3 +2556,26 @@ VALUES
     ('00000000-0000-0000-0000-000000000505', '00000000-0000-0000-0000-0000000000e0', 5, 'execute_abstract_function',        '{}',                                                              'credential.refresh_token',    true),
     ('00000000-0000-0000-0000-000000000506', '00000000-0000-0000-0000-0000000000e0', 6, 'append_runtime_event_log',         '{"event_type":"credential_token_refreshed"}',                    NULL,                          true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
+
+
+-- =============================================================================
+-- Scheduler job manifest substrate: canonical admin dispatch entry.
+-- Demo entries (demo.scheduler_projection, demo_schedule) live in
+-- db/demo/demo_scheduler.sql and are applied by demo/test compose after init.
+-- =============================================================================
+
+-- Manifest entry: admin dispatch for scheduler_jobs:list_settings → admin_runtime
+-- Enables frontend SchedulerJobSettingsPanel to reach AdminRuntime.DataListSchedulerJobsSettingsAsync
+-- via ManifestDispatcher.ResolveActiveManifestAsync(role=null, target=admin, layer=scheduler_jobs, action=list_settings).
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000000f0',
+    NULL,
+    ARRAY[
+        '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"scheduler_jobs","action":"list_settings"}'::jsonb,
+        '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+        '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO NOTHING;

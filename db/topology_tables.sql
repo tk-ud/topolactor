@@ -498,7 +498,7 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policies (
 CREATE TABLE IF NOT EXISTS topology.abstract_function_manifests (
     abstract_function_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     function_key         TEXT NOT NULL UNIQUE,
-    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime', 'admin_runtime', 'runtime_executor')),
+    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime', 'admin_runtime', 'runtime_executor', 'scheduler_job_runtime')),
     authority_scope      TEXT NOT NULL,
     output_shape         JSONB NOT NULL DEFAULT '{}'::jsonb,
     projection_deny_keys TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
@@ -525,7 +525,7 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_input_bindings (
     input_binding_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     abstract_function_step_id UUID NOT NULL REFERENCES topology.abstract_function_steps (abstract_function_step_id) ON DELETE CASCADE,
     input_key                 TEXT NOT NULL,
-    binding_source            TEXT NOT NULL CHECK (binding_source IN ('payload','result_context','constant','external_context','manifest_authority','physical_table_binding','route_context','step_config','runtime_context')),
+    binding_source            TEXT NOT NULL CHECK (binding_source IN ('payload','result_context','constant','external_context','manifest_authority','physical_table_binding','route_context','step_config','runtime_context','scheduler_context')),
     binding_path              TEXT NOT NULL,
     required                  BOOLEAN NOT NULL DEFAULT true,
     secret                    BOOLEAN NOT NULL DEFAULT false,
@@ -983,3 +983,139 @@ $$;
 
 COMMENT ON FUNCTION topology.fs_unbind_record_file_attachment IS
     'Removes a record-to-file_artifact binding via execute_abstract_function manifest af07 / call_postgres_function primitive.';
+
+
+-- =============================================================================
+-- Scheduler job manifest substrate tables
+-- Canonical DB surface for scheduler_job_manifest_substrate bundle.
+-- schedule_policy_kind owns cron/interval/due-column/manual-only logic;
+-- trigger_kind is cron|hook|client per runtime-orchestration-ssot.
+-- Table/column/output authority comes from manifest seed, never from payload.
+-- Credential plaintext never stored here; only reference keys are allowed.
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- topology.scheduler_jobs
+-- Scheduler job manifest header and authority scope.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.scheduler_jobs (
+    scheduler_job_id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_key                       TEXT        NOT NULL UNIQUE,
+    trigger_kind                  TEXT        NOT NULL DEFAULT 'cron',
+    schedule_policy_kind          TEXT        NOT NULL DEFAULT 'manual_only',
+    cron_expression               TEXT,
+    schedule_interval_seconds     BIGINT,
+    timezone                      TEXT        NOT NULL DEFAULT 'UTC',
+    manual_run_allowed            BOOLEAN     NOT NULL DEFAULT false,
+    active                        BOOLEAN     NOT NULL DEFAULT true,
+    input_table_ref               TEXT,
+    input_id_column               TEXT        NOT NULL DEFAULT 'id',
+    input_status_column           TEXT,
+    input_status_pending_value    TEXT,
+    input_status_processing_value TEXT,
+    input_status_completed_value  TEXT,
+    input_status_failed_value     TEXT,
+    input_status_skipped_value    TEXT,
+    input_status_retry_wait_value TEXT,
+    input_due_column              TEXT,
+    output_table_ref              TEXT,
+    max_batch_size                INTEGER     NOT NULL DEFAULT 10,
+    lease_seconds                 INTEGER     NOT NULL DEFAULT 300,
+    retry_policy                  JSONB       NOT NULL DEFAULT '{"max_attempts":3,"backoff_seconds":60}',
+    authority_scope               TEXT        NOT NULL,
+    credential_requirement_ref    TEXT,
+    external_port_ref             TEXT,
+    projection_policy             JSONB       NOT NULL DEFAULT '{}',
+    created_by                    TEXT        NOT NULL DEFAULT 'seed',
+    created_at                    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE topology.scheduler_jobs IS
+    'Scheduler job manifest header. authority_scope, input_table_ref, output_table_ref, '
+    'and status values are seed/admin-authored manifest authority — not payload-derived. '
+    'trigger_kind is cron|hook|client per runtime-orchestration-ssot. '
+    'schedule_policy_kind owns due-selection policy (cron_expression|interval_seconds|due_column|manual_only). '
+    'credential_requirement_ref and external_port_ref are references only — no plaintext credentials stored.';
+
+
+-- ---------------------------------------------------------------------------
+-- topology.scheduler_job_steps
+-- Ordered abstract function step chain for a scheduler job.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.scheduler_job_steps (
+    scheduler_job_step_id UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    scheduler_job_id      UUID        NOT NULL REFERENCES topology.scheduler_jobs (scheduler_job_id) ON DELETE CASCADE,
+    step_order            INTEGER     NOT NULL,
+    abstract_function_key TEXT        NOT NULL,
+    input_binding         JSONB       NOT NULL DEFAULT '{}',
+    result_context_key    TEXT,
+    result_binding        JSONB       NOT NULL DEFAULT '{}',
+    on_error              TEXT        NOT NULL DEFAULT 'fail_run',
+    authority_scope       TEXT,
+    active                BOOLEAN     NOT NULL DEFAULT true,
+    UNIQUE (scheduler_job_id, step_order)
+);
+
+COMMENT ON TABLE topology.scheduler_job_steps IS
+    'Ordered abstract function step chain for a scheduler job. '
+    'abstract_function_key resolves through AbstractFunctionExecutor — not a C# function name array. '
+    'on_error is fail_run|retry|skip_input|mark_input_failed. '
+    'input_binding is manifest-defined binding from scheduler_context, constant, or prior result_context.';
+
+
+-- ---------------------------------------------------------------------------
+-- topology.scheduler_job_runs
+-- Run ledger and input lease status for each job execution.
+-- run_log contains references, status, and sanitized result_context only.
+-- Secret material, token body, and plaintext credentials must not be stored here.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.scheduler_job_runs (
+    scheduler_job_run_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    scheduler_job_id      UUID        NOT NULL REFERENCES topology.scheduler_jobs (scheduler_job_id),
+    job_key               TEXT        NOT NULL,
+    trigger_kind          TEXT        NOT NULL DEFAULT 'cron',
+    schedule_policy_kind  TEXT        NOT NULL DEFAULT 'manual_only',
+    run_status            TEXT        NOT NULL DEFAULT 'queued',
+    input_ref             TEXT,
+    input_status_before   TEXT,
+    input_status_after    TEXT,
+    attempt_count         INTEGER     NOT NULL DEFAULT 1,
+    lease_until           TIMESTAMPTZ,
+    started_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_at          TIMESTAMPTZ,
+    last_error            JSONB,
+    result_context        JSONB       NOT NULL DEFAULT '{}'
+);
+
+COMMENT ON TABLE topology.scheduler_job_runs IS
+    'Run ledger for scheduler job executions. '
+    'run_status: queued|processing|completed|failed|partially_failed|cancelled|lease_expired. '
+    'result_context stores sanitized result allowed by projection_policy only. '
+    'Secret material, token body, and plaintext credentials must never be stored in result_context.';
+
+
+-- ---------------------------------------------------------------------------
+-- topology.scheduler_job_run_steps
+-- Optional per-step ledger for debuggable ordered execution.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.scheduler_job_run_steps (
+    scheduler_job_run_step_id UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    scheduler_job_run_id      UUID        NOT NULL REFERENCES topology.scheduler_job_runs (scheduler_job_run_id) ON DELETE CASCADE,
+    scheduler_job_step_id     UUID        NOT NULL REFERENCES topology.scheduler_job_steps (scheduler_job_step_id),
+    step_order                INTEGER     NOT NULL,
+    abstract_function_key     TEXT        NOT NULL,
+    run_step_status           TEXT        NOT NULL DEFAULT 'queued',
+    attempt_count             INTEGER     NOT NULL DEFAULT 0,
+    started_at                TIMESTAMPTZ,
+    completed_at              TIMESTAMPTZ,
+    last_error                JSONB,
+    result_context_key        TEXT,
+    result_context_delta      JSONB       NOT NULL DEFAULT '{}'
+);
+
+COMMENT ON TABLE topology.scheduler_job_run_steps IS
+    'Per-step run ledger for scheduler job execution. '
+    'run_step_status: queued|running|succeeded|failed|skipped. '
+    'result_context_delta stores sanitized delta allowed by projection_policy. '
+    'Secret material must not appear in result_context_delta or last_error.';

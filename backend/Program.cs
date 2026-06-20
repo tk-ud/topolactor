@@ -115,6 +115,8 @@ builder.Services.AddSingleton<IExternalPortBundleStepHandler>(_ => new FileStora
 builder.Services.AddSingleton<IExternalPortDbFunctionRepository, NpgsqlExternalPortDbFunctionRepository>();
 builder.Services.AddSingleton<IAbstractFunctionManifestRepository>(_ =>
     new NpgsqlAbstractFunctionManifestRepository(connectionString));
+builder.Services.AddSingleton<ISchedulerJobManifestRepository>(_ =>
+    new NpgsqlSchedulerJobManifestRepository(connectionString));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(_ =>
     new CallPostgresFunctionPrimitiveAdapter(connectionString));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, ProjectionPrimitiveAdapter>();
@@ -211,7 +213,8 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
         sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<MockPresetRepository>(),
-        sp.GetRequiredService<TeamMarkdownRepository>()));
+        sp.GetRequiredService<TeamMarkdownRepository>(),
+        sp.GetRequiredService<ISchedulerJobManifestRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
     new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>()));
@@ -322,6 +325,11 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<RuntimeTimelineSch
 builder.Services.AddHostedService<RetentionScheduler>();
 builder.Services.AddHostedService<SystemOperationCiScheduler>();
 builder.Services.AddHostedService<SqlAttentionScheduler>();
+builder.Services.AddHostedService(sp => new SchedulerJobRunner(
+    sp.GetRequiredService<ILogger<SchedulerJobRunner>>(),
+    sp.GetRequiredService<ISchedulerJobManifestRepository>(),
+    sp.GetRequiredService<AbstractFunctionExecutor>(),
+    sp.GetRequiredService<DbNotifyRepository>()));
 builder.Services.AddHostedService(sp => new DbNotifyListener(
     sp.GetRequiredService<ILogger<DbNotifyListener>>(),
     connectionString,
