@@ -863,7 +863,6 @@ non_goals:
 
 manifest_topology_key_expansion_draft_lane:
   name: manifest_topology_key_expansion_draft_lane
-  status: planned
   role: sql_attention_evidence_consumer
   execution_model: sql_only
 
