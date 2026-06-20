@@ -219,3 +219,38 @@ The canonical route above retains the following structural vocabulary for cross-
 SQL Attention projection recommendation is rendered as the `sql_attention_projection` section of the `recommend_navigation_child_island` under `main_projection_island`. It is a sibling lane to hub-local recommendation pressure, not an input to hub-local `next_operation`, `next_enum_item`, or `state_pressure` arrays.
 
 The backend resolves the source context (`sourceSetId`) and exposes either a fetchable/renderable SQL Attention projection spec or an explicit unavailable/error status. The frontend must not supply a fixed sourceSetId fallback, infer topology promotion, or convert SQL Attention candidates into UI operation or enum candidates. Executable actions, if later attached to a recommendation candidate, must use backend-resolved runtime dispatch wiring rather than frontend-derived target/layer/action.
+
+## SQL Attention manifest topology key expansion draft lane
+
+This lane consumes SQL Attention evidence and remains a SQL-only evidence consumer. It does not change the SQL Attention exploration field: `hubs.hub_relations` is used only as the near-neighbor key discovery space.
+
+```text
+logs.attention SQLAT evidence
+→ SQL-Attention-explored hub relation neighborhood
+→ high-pressure discrete Key extraction
+→ full registered manifest topology search by Key
+→ hit-set common-axis / column-pressure aggregation
+→ draft candidate JSONB insert
+→ Markdown projection insert
+→ DB NOTIFY / SSE projection signal
+```
+
+The hub-relation neighborhood is the **Key extraction space**, not the candidate completion space. High-pressure discrete Keys discovered there are expanded across the full registered manifest topology space: topology manifest JSONB, screen data shape JSONB, logical tables, logical columns, enum group or discrete-value metadata, and physical-table manifest bindings when available.
+
+Discrete Keys may be enum values, statuses, categories, types, kinds, states, booleans, or other low-cardinality values that can slice a candidate search set. Candidate compilation searches the Key hit-set for same-name axes, same-type axes, same-name-and-same-type common axes, enum group matches, value overlap when available, `logs.diff` pressure, `logs.attention` pressure, table-ref reuse, and manifest reuse.
+
+The canonical output authority is a `source=sql_attention` draft candidate JSONB record. Markdown is only a human-readable projection for discovery and review, preferably through the Markdown viewer / team dashboard saved-view surface. Markdown must not become runtime authority, topology promotion authority, event wiring authority, or the only saved state.
+
+Draft output is insert-only at this lane. A draft payload must preserve source evidence refs, candidate lane, high-pressure Key, hit manifest refs, hit table refs, common-axis candidates, candidate columns, score, and draft status. Raw count alone is insufficient scoring; routine high-frequency values need lift or pressure delta, ID columns are axis or dimension candidates rather than primary display text, and generic columns should be dampened.
+
+The Markdown projection body may be generated in SQL, but it must not contain raw HTML, island markup, CSS class authority, executable scripts, or promotion instructions as authority. The UI decides display surface and placement. DB notification on insert should use structured payload fields such as `event_type=sql_attention_draft_candidate_created`, `source=sql_attention`, `candidate_id`, `candidate_lane`, and `markdown_projection_id`.
+
+Prohibited shortcuts:
+
+- completing the candidate inside the hub-relation neighborhood only
+- full-space schema mining without SQL Attention evidence
+- requiring C# candidate inference
+- mutating active manifests, topology registry, hub relations, or runtime routes
+- auto-apply or auto-promote
+- treating Markdown as runtime SSOT
+- generating HTML, island markup, or UI placement from SQL
