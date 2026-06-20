@@ -79,8 +79,8 @@ Deno.test("fetchSchedulerJobManifests: projection must not contain credential pl
     maxBatchSize: 1,
     leaseSeconds: 60,
     authorityScope: "demo_scheduler_job",
-    credentialRequirementRef: "ref_only_not_plaintext",
-    externalPortRef: "ref_only_not_config",
+    credentialRequirementRef: "vault_ref_key_only",
+    externalPortRef: "ext_port_ref_key_only",
   };
 
   globalThis.fetch = makeFetch(200, {
@@ -99,7 +99,7 @@ Deno.test("fetchSchedulerJobManifests: projection must not contain credential pl
     assertEquals(jobStr.includes("token_body"), false, "no token_body in projection");
     assertEquals(jobStr.includes("plaintext"), false, "no plaintext field in projection");
     // credentialRequirementRef is allowed as reference key
-    assertEquals(job?.credentialRequirementRef, "ref_only_not_plaintext");
+    assertEquals(job?.credentialRequirementRef, "vault_ref_key_only");
   } finally {
     globalThis.fetch = original;
   }
