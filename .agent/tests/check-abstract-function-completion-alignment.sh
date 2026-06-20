@@ -19,7 +19,6 @@ section(){ awk -v start="$2" -v end="$3" '
 echo "=== Abstract function completion alignment evidence check ==="
 
 check_file ".agent/protocols/completion.md"
-check_file "tasks/refactor_todo.md"
 check_file "backend/tests/Topolactor.Runtime.Tests/AbstractFunctionExecutorTests.cs"
 check_file "backend/tests/Topolactor.Runtime.Tests/FileStorageBundleDispatchTests.cs"
 check_file "backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs"
@@ -37,22 +36,13 @@ check_term ".agent/protocols/completion.md" "SQL Attention / recommendation prim
 check_term ".agent/protocols/completion.md" "credential primitive"
 check_term ".agent/protocols/completion.md" "concrete function/handler deletion or explicit compatibility-fallback classification"
 
-# The implemented Bundle must name the executable evidence surfaces it relies on.
-BUNDLE_BLOCK="$(section "tasks/refactor_todo.md" '## Bundle `completion-gate-and-test-alignment`' '## Bundle `projection-manifest-primitive-migration`')"
-[[ "$BUNDLE_BLOCK" == *'Status: `implemented`'* ]] && pass "completion-gate-and-test-alignment implemented status present" || fail "completion-gate-and-test-alignment not implemented"
-[[ "$BUNDLE_BLOCK" == *'.agent/tests/check-abstract-function-completion-alignment.sh'* ]] && pass "Bundle references executable alignment check" || fail "Bundle does not reference executable alignment check"
-[[ "$BUNDLE_BLOCK" == *'AbstractFunctionExecutorTests'* ]] && pass "Bundle references backend primitive executor tests" || fail "Bundle missing backend primitive executor test reference"
-[[ "$BUNDLE_BLOCK" == *'FileStorageBundleDispatchTests'* ]] && pass "Bundle references file-storage runtime/seed tests" || fail "Bundle missing file-storage runtime/seed test reference"
-[[ "$BUNDLE_BLOCK" == *'FileStoragePortConsumerLiveDbTests'* ]] && pass "Bundle references live DB integration proof" || fail "Bundle missing live DB integration proof reference"
-[[ "$BUNDLE_BLOCK" == *'compatibility stub'* ]] && pass "Bundle records compatibility fallback classification" || fail "Bundle missing compatibility fallback classification"
-[[ "$BUNDLE_BLOCK" == *'future targets remain in their own unresolved Bundles'* ]] && pass "Bundle keeps future absorption targets separate" || fail "Bundle hides future absorption targets"
-check_absent "tasks/refactor_todo.md" '| `cli-mcp-read-export-port-substrate` |'
-
-# Current Bundle status map must reflect credential hardening as implemented.
-check_term "tasks/refactor_todo.md" '| `credential-primitive-hardening` | implemented |'
-check_term "tasks/refactor_todo.md" '| `backend-abstract-function-executor` | implemented |'
-check_term "tasks/refactor_todo.md" 'SQL Attention list_projection and context_route recommendation_resolve are migrated through seed manifests af08/af09'
-
+# The completed carry-over note was intentionally removed. This check must audit executable
+# evidence directly and must not require tasks/refactor_todo.md as a status ledger.
+if [ -e "$REPO_ROOT/tasks/refactor_todo.md" ]; then
+  fail "tasks/refactor_todo.md should not be required or restored after completed carry-over removal"
+else
+  pass "completed carry-over note absent: tasks/refactor_todo.md"
+fi
 
 # SQL Attention / recommendation absorption evidence: seed-route tests for af08/af09 and no topology/route auto-mutation.
 check_term "backend/tests/Topolactor.Runtime.Tests/SqlAttentionAbstractFunctionTests.cs" "Seed path tests for sql_attention.list_projection abstract function manifest (af08)"
