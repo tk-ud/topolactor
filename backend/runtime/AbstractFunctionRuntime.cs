@@ -32,18 +32,34 @@ public sealed record AbstractFunctionInputBinding(string InputKey, string Bindin
 
 public sealed record AbstractFunctionAuthorityBinding(string AuthorityKind, string AuthorityRef, bool Active);
 
+/// <summary>
+/// Execution context for scheduler job runtime.
+/// Carries job identity and run identity for scheduler_context binding source.
+/// Prohibited: payload-derived table/column/output authority, credential plaintext.
+/// </summary>
+public sealed class SchedulerExecutionContext
+{
+    public Guid SchedulerJobId { get; init; }
+    public string JobKey { get; init; } = string.Empty;
+    public Guid SchedulerJobRunId { get; init; }
+    public string? InputRef { get; init; }
+    public string TriggerKind { get; init; } = "cron";
+    public string SchedulePolicyKind { get; init; } = "manual_only";
+}
+
 public sealed class AbstractFunctionExecutionContext
 {
     private readonly Dictionary<string, object?> _resultContext = new(StringComparer.Ordinal);
     private readonly List<string> _executedPrimitiveKeys = new();
 
-    public AbstractFunctionExecutionContext(string authorityScope, JsonElement? requestPayload = null, ExternalPortExecutionContext? externalPortContext = null, string? requiredRuntimeLane = null, RuntimeWorkingShape? runtimeContext = null)
+    public AbstractFunctionExecutionContext(string authorityScope, JsonElement? requestPayload = null, ExternalPortExecutionContext? externalPortContext = null, string? requiredRuntimeLane = null, RuntimeWorkingShape? runtimeContext = null, SchedulerExecutionContext? schedulerContext = null)
     {
         AuthorityScope = authorityScope;
         RequestPayload = requestPayload;
         ExternalPortContext = externalPortContext;
         _requiredRuntimeLane = requiredRuntimeLane;
         RuntimeContext = runtimeContext;
+        SchedulerContext = schedulerContext;
     }
 
     private readonly string? _requiredRuntimeLane;
@@ -52,6 +68,7 @@ public sealed class AbstractFunctionExecutionContext
     public JsonElement? RequestPayload { get; }
     public ExternalPortExecutionContext? ExternalPortContext { get; }
     public RuntimeWorkingShape? RuntimeContext { get; }
+    public SchedulerExecutionContext? SchedulerContext { get; }
     public string RequiredRuntimeLane => _requiredRuntimeLane ?? "external_port_runtime";
     public IReadOnlyDictionary<string, object?> ResultContext => _resultContext;
     public IReadOnlyList<string> ExecutedPrimitiveKeys => _executedPrimitiveKeys;
@@ -66,6 +83,7 @@ public sealed class AbstractFunctionExecutionContext
         if (binding.BindingSource == "constant") return binding.BindingPath;
         if (binding.BindingSource == "external_context") return ResolveExternalContext(binding.BindingPath);
         if (binding.BindingSource == "runtime_context") return ResolveRuntimeContext(binding.BindingPath);
+        if (binding.BindingSource == "scheduler_context") return ResolveSchedulerContext(binding.BindingPath);
         if (binding.BindingSource == "step_config")
         {
             if (stepConfig is null)
@@ -124,6 +142,22 @@ public sealed class AbstractFunctionExecutionContext
         "working_shape" => RuntimeContext,
         _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_RUNTIME_CONTEXT_BINDING_UNSUPPORTED: {key}")
     };
+
+    private object? ResolveSchedulerContext(string key)
+    {
+        if (SchedulerContext is null)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_SCHEDULER_CONTEXT_MISSING");
+        return key switch
+        {
+            "scheduler_job_id" => (object?)SchedulerContext.SchedulerJobId,
+            "job_key" => SchedulerContext.JobKey,
+            "run_id" => (object?)SchedulerContext.SchedulerJobRunId,
+            "input_ref" => SchedulerContext.InputRef,
+            "trigger_kind" => SchedulerContext.TriggerKind,
+            "schedule_policy_kind" => SchedulerContext.SchedulePolicyKind,
+            _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_SCHEDULER_CONTEXT_BINDING_UNSUPPORTED: {key}")
+        };
+    }
 
     private static object? ResolveJsonPath(JsonElement? payload, string key)
     {
