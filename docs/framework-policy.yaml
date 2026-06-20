@@ -139,7 +139,7 @@ framework_policy:
       - extend_seed_for_target_bundle
       - run_tests_against_target_bundle_seed
       - delete_existing_concrete_functions_for_target_bundle
-      - delete_refactor_todo_after_all_target_bundles_complete
+      - remove_completed_carry_over_note_after_target_bundle_evidence_passes
     bundle_loop_rule: steps_2_to_4_repeat_per_target_bundle
 
   topolactor_space_boundary_policy:
