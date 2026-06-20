@@ -290,6 +290,56 @@ public class SchedulerJobRunnerTests
     }
 
     [Fact]
+    public async Task RunDueJobsAsync_CronPolicy_ExecutesAndFiresDbNotify()
+    {
+        // Proves: cron policy job is due on every poll cycle.
+        // Full representative path: cron poll → IsJobDue(cron)=true
+        // → TryExecuteJobAsync → AbstractFunctionExecutor (demo.scheduler_projection)
+        // → DB NOTIFY(manifest_id=0000000000f0).
+        // The downstream path from DB NOTIFY is proven by SsotWiringAuditSchedulerRuntimeTests:
+        // DbNotifyListener → RuntimeTimelineScheduler.EnqueueHookTrigger
+        // → ManifestDispatcher(db_notify_projection_mapping → sse_projection_runtime)
+        // → SseEventBroadcaster → frontend SSE event {event:projection, data:{manifest_id:...}}.
+        var notifyManifestId = Guid.Parse("00000000-0000-0000-0000-0000000000f0");
+        var authority = new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "demo.scheduler_projection", "scheduler_job_runtime", "demo_scheduler_job",
+            new[] { MakeStep(1, "echo", new[] { new AbstractFunctionInputBinding("source", "constant", "ok", false, false) }, "scheduler_projection") },
+            Array.Empty<string>(), true, authority);
+
+        var projPolicy = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["allowed_result_keys"] = "[\"scheduler_projection\"]",
+            ["notify_manifest_id"] = $"\"{notifyManifestId}\"",
+        };
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "demo_schedule", "cron", "cron", null, null, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null, projPolicy);
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", "scheduler_projection", true)
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps);
+        var spy = new SpyDbNotifyRepository();
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor, spy);
+
+        await runner.RunDueJobsAsync(CancellationToken.None);
+
+        // cron policy is always due: run must be created and reach completed
+        Assert.Single(fakeRepo.CreatedRuns);
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+        // DB NOTIFY fired with notify_manifest_id from projection_policy
+        Assert.Equal(1, spy.CallCount);
+        Assert.Equal(notifyManifestId, spy.LastManifestId);
+        Assert.Null(spy.LastTableId);
+        Assert.Null(spy.LastTableRegistryId);
+    }
+
+    [Fact]
     public async Task RunDueJobsAsync_ManualOnlyPolicy_NeverAutoTriggered()
     {
         // Proves: manual_only schedule policy skips the auto-poll loop entirely.

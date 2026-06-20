@@ -62,7 +62,9 @@ ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- Demo scheduler job: demo_schedule
--- schedule_policy_kind = manual_only: not auto-triggered by cron (safe for demo).
+-- schedule_policy_kind = cron: picked up by the SchedulerJobRunner poll loop.
+-- trigger_kind = cron: identifies the trigger mechanism.
+-- manual_run_allowed = true: can also be triggered via admin.
 -- projection_policy.notify_manifest_id = 0000000000f0:
 --   On successful completion, SchedulerJobRunner fires DB NOTIFY with this manifest_id.
 --   DbNotifyListener routes it through the NOTIFY → SSE representative path.
@@ -72,7 +74,7 @@ INSERT INTO topology.scheduler_jobs
      active, authority_scope, max_batch_size, lease_seconds,
      retry_policy, projection_policy, created_by)
 VALUES
-    ('00000000-0000-0000-0000-00000000c060', 'demo_schedule', 'cron', 'manual_only', true,
+    ('00000000-0000-0000-0000-00000000c060', 'demo_schedule', 'cron', 'cron', true,
      true, 'demo_scheduler_job', 1, 60,
      '{"max_attempts":1,"backoff_seconds":0}',
      '{"allowed_result_keys":["scheduler_projection"],"notify_manifest_id":"00000000-0000-0000-0000-0000000000f0"}',
