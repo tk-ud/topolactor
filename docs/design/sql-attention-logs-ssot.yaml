@@ -860,6 +860,7 @@ non_goals:
   - automatic_registry_mutation_from_phase_vector
   - automatic_migration_or_column_promotion_from_phase_vector
   - evidence_layer_single_score_collapse
+
 manifest_topology_key_expansion_draft_lane:
   name: manifest_topology_key_expansion_draft_lane
   status: planned
