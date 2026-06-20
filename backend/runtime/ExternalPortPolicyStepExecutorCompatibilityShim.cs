@@ -63,13 +63,19 @@ public sealed class ExternalPortPolicyStepExecutorCompatibilityShim : IExternalP
             throw new InvalidOperationException("EXTERNAL_PORT_COMPAT_OPERATION_REQUIRES_ABSTRACT_FUNCTION_KEY");
         }
 
-        await _abstractFunctionExecutor.ExecuteAsync(
+        var resultContext = await _abstractFunctionExecutor.ExecuteAsync(
             functionKey,
             new AbstractFunctionExecutionContext(
                 context.RequiredByBundle ?? context.Policy?.RequiredByBundle ?? string.Empty,
                 context.RequestPayload,
                 context),
             ct);
+
+        var httpResponse = resultContext.ResultContext.Values.OfType<ExternalPortHttpResponse>().FirstOrDefault();
+        if (httpResponse is not null)
+        {
+            context.HttpResponse = httpResponse;
+        }
 
         context.MarkExecuted(step.OperationKey);
     }
