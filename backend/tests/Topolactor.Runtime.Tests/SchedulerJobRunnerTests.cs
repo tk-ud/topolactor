@@ -503,6 +503,30 @@ public class SchedulerJobRunnerTests
     }
 
     [Fact]
+    public async Task RunDueJobsAsync_CronPolicy_InvalidCronExpression_SkipsJob()
+    {
+        // Proves: malformed/unsupported cron_expression causes the job to be skipped.
+        // CronScheduleEvaluator.IsDue returns false for any invalid expression.
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "demo_schedule", "cron", "cron",
+            CronExpression: "not-a-cron", // invalid — evaluator returns false → skip
+            ScheduleIntervalSeconds: null, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null,
+            new Dictionary<string, object?>(StringComparer.Ordinal));
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], []);
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(null),
+            Array.Empty<IAbstractFunctionPrimitiveAdapter>());
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.RunDueJobsAsync(CancellationToken.None);
+
+        Assert.Empty(fakeRepo.CreatedRuns);
+        Assert.Empty(fakeRepo.UpdateCalls);
+    }
+
+    [Fact]
     public async Task RunDueJobsAsync_CronPolicy_NullCronExpression_SkipsJob()
     {
         // Proves: cron job with no cron_expression set is skipped — not due.

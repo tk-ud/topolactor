@@ -241,7 +241,8 @@ public sealed class SchedulerJobRunner : BackgroundService
         job.SchedulePolicyKind switch
         {
             "manual_only" => false,
-            "cron" => job.CronExpression is not null,
+            "cron" => job.CronExpression is not null
+                      && CronScheduleEvaluator.IsDue(job.CronExpression, DateTimeOffset.UtcNow),
             "interval_seconds" => IsIntervalDue(job),
             _ => false,
         };
