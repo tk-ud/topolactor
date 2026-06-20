@@ -292,14 +292,15 @@ public class SchedulerJobRunnerTests
     [Fact]
     public async Task RunDueJobsAsync_CronPolicy_ExecutesAndFiresDbNotify()
     {
-        // Proves: cron policy job is due on every poll cycle.
-        // Full representative path: cron poll → IsJobDue(cron)=true
-        // → TryExecuteJobAsync → AbstractFunctionExecutor (demo.scheduler_projection)
-        // → DB NOTIFY(manifest_id=0000000000f0).
-        // The downstream path from DB NOTIFY is proven by SsotWiringAuditSchedulerRuntimeTests:
-        // DbNotifyListener → RuntimeTimelineScheduler.EnqueueHookTrigger
-        // → ManifestDispatcher(db_notify_projection_mapping → sse_projection_runtime)
-        // → SseEventBroadcaster → frontend SSE event {event:projection, data:{manifest_id:...}}.
+        // Proves: cron job with a matching cron_expression and no prior run in the current
+        // minute slot is due. Full representative path:
+        //   cron poll → CronScheduleEvaluator.IsDue("* * * * *")=true, no same-slot run
+        //   → TryExecuteJobAsync → AbstractFunctionExecutor (demo.scheduler_projection)
+        //   → DB NOTIFY(manifest_id=0000000000f0).
+        // Downstream from DB NOTIFY proven by SsotWiringAuditSchedulerRuntimeTests:
+        //   DbNotifyListener → RuntimeTimelineScheduler.EnqueueHookTrigger
+        //   → ManifestDispatcher(db_notify_projection_mapping → sse_projection_runtime)
+        //   → SseEventBroadcaster → frontend SSE event {event:projection, data:{manifest_id:...}}.
         var notifyManifestId = Guid.Parse("00000000-0000-0000-0000-0000000000f0");
         var authority = new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) };
         var manifest = new AbstractFunctionManifest(
@@ -500,6 +501,70 @@ public class SchedulerJobRunnerTests
         Assert.Equal("failed", finalCall.Status);
         Assert.NotNull(finalCall.LastError);
         Assert.Contains("ABSTRACT_FUNCTION_RUNTIME_LANE_INVALID", finalCall.LastError);
+    }
+
+    [Fact]
+    public async Task RunDueJobsAsync_CronPolicy_SameMinuteCompleted_Skipped()
+    {
+        // Proves: cron job is skipped when a completed run already exists in the current
+        // minute slot. Prevents multiple executions within the same cron-minute boundary.
+        var now = DateTimeOffset.UtcNow;
+        var thisMinute = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, TimeSpan.Zero);
+
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "demo_schedule", "cron", "cron", "* * * * *", null, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null,
+            new Dictionary<string, object?>(StringComparer.Ordinal))
+        {
+            LastCompletedAt = thisMinute, // already ran this minute slot
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], []);
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(null),
+            Array.Empty<IAbstractFunctionPrimitiveAdapter>());
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.RunDueJobsAsync(CancellationToken.None);
+
+        Assert.Empty(fakeRepo.CreatedRuns);
+        Assert.Empty(fakeRepo.UpdateCalls);
+    }
+
+    [Fact]
+    public async Task RunDueJobsAsync_CronPolicy_PriorMinuteCompleted_IsDue()
+    {
+        // Proves: cron job is due when the last completed run was in a prior minute slot.
+        // The same-slot guard only blocks within the current minute boundary.
+        var authority = new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "demo.scheduler_projection", "scheduler_job_runtime", "demo_scheduler_job",
+            new[] { MakeStep(1, "echo", new[] { new AbstractFunctionInputBinding("source", "constant", "ok", false, false) }, "scheduler_projection") },
+            Array.Empty<string>(), true, authority);
+
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "demo_schedule", "cron", "cron", "* * * * *", null, true, true,
+            null, null, null, null, null, null, 1, 60, "demo_scheduler_job", null, null,
+            new Dictionary<string, object?>(StringComparer.Ordinal))
+        {
+            LastCompletedAt = DateTimeOffset.UtcNow.AddMinutes(-1), // previous minute → not same slot
+        };
+
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", "scheduler_projection", true)
+        };
+
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps);
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.RunDueJobsAsync(CancellationToken.None);
+
+        Assert.Single(fakeRepo.CreatedRuns);
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
     }
 
     [Fact]

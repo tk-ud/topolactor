@@ -242,10 +242,18 @@ public sealed class SchedulerJobRunner : BackgroundService
         {
             "manual_only" => false,
             "cron" => job.CronExpression is not null
-                      && CronScheduleEvaluator.IsDue(job.CronExpression, DateTimeOffset.UtcNow),
+                      && CronScheduleEvaluator.IsDue(job.CronExpression, DateTimeOffset.UtcNow)
+                      && !HasRunThisSlot(job, DateTimeOffset.UtcNow),
             "interval_seconds" => IsIntervalDue(job),
             _ => false,
         };
+
+    // Returns true when a completed run already exists in the current cron-minute slot,
+    // preventing multiple executions within the same minute boundary.
+    private static bool HasRunThisSlot(SchedulerJobRecord job, DateTimeOffset now) =>
+        job.LastCompletedAt is { } last &&
+        last.Year == now.Year && last.Month == now.Month && last.Day == now.Day &&
+        last.Hour == now.Hour && last.Minute == now.Minute;
 
     private static bool IsIntervalDue(SchedulerJobRecord job)
     {
