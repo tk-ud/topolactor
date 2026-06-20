@@ -19,6 +19,7 @@
 | `webhook-inbox-port-consumer` | webhook_inbox_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
 | `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
 | `scheduler-job-manifest-substrate-implementation` | admin-authored scheduler job manifest substrate 実装 | not_started | 1 | `product.scheduler_job_manifest_substrate` | `docs/design/scheduler-job-manifest-ssot.yaml` |
+| `sql-attention-key-expansion-draft-lane-implementation` | SQL Attention key expansion draft lane 実装 | not_started | 1 | - | `docs/design/sql-attention-logs-ssot.yaml` |
 | `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
 | `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
@@ -395,6 +396,100 @@ NG軸:
 - credential plaintext を manifest / projection / seed / run log / admin UI に出すこと
 - payload-derived table / column / output authority
 - C# 関数名配列や switch を canonical step chain として増やすこと
+
+---
+
+## Bundle "sql-attention-key-expansion-draft-lane-implementation"
+
+**Status:** not_started
+**SSOT:** "docs/design/sql-attention-logs-ssot.yaml" / "docs/design/sql-attention-logs-ssot.md"
+
+問題点:
+SQL Attention manifest topology key expansion draft lane の SSOT は定義されたが、実装側にはまだ "logs.attention" SQLAT evidence から高圧な離散値 Key を抽出し、registered manifest topology 全空間へ SQL 横断検索し、"source=sql_attention" の draft candidate JSONB と Markdown projection を insert する lane がない。現状のままだと、SQL Attention evidence は観測・推薦証跡に留まり、manifest topology / screen_data_shape / logical table / logical column / enum/discrete metadata を使った draft candidate 生成へ接続されない。
+
+目的:
+SQL Attention で近傍探索された "hubs.hub_relations" 群を Key discovery space として扱い、そこで得た高圧な離散値 Key を registered manifest topology 全空間へ展開して、relationship_axis_candidate / meaning_projection_candidate / aggregate_projection_candidate を draft candidate JSONB として insert する。Markdown は人間向け projection / review surface とし、runtime authority / topology promotion authority / UI placement authority にはしない。DB notify / SSE は draft 作成通知のみを担い、採用・昇格・配置は明示操作へ残す。
+
+実装方針:
+
+- [ ] "logs.attention" の SQLAT evidence を source として読み、source evidence refs / source tag "sql_attention" を保持する。
+- [ ] SQLAT-explored hub relation neighborhood は Key extraction space に限定し、candidate completion space として扱わない。
+- [ ] enum value / status / category / type / kind / state / boolean / low-cardinality value などの高圧 discrete Key を SQL query/function で抽出する。
+- [ ] 抽出 Key をもとに、topology manifest JSONB / screen data shape JSONB / logical tables / logical columns / enum group or discrete value metadata / physical table manifest bindings を SQL 横断検索する。
+- [ ] hit 集合から same-name axis / same-type axis / same-name-and-same-type common axis / enum group match / value overlap / logs.diff pressure / logs.attention pressure / table-ref reuse / manifest reuse を再集計する。
+- [ ] raw count だけで scoring せず、routine high-frequency value の dampening、lift / pressure delta、ID column の axis/dimension 扱い、generic column dampening を入れる。
+- [ ] "source=sql_attention"、"candidate_lane=manifest_topology_key_expansion_draft_lane"、"status=draft" を持つ draft candidate JSONB を insert-only で保存する。
+- [ ] draft payload には candidate_id / candidate_type / source / candidate_lane / source_evidence_refs / high_pressure_key / hit_manifest_refs / hit_table_refs / common_axis_candidates / candidate_columns / score / status を保持する。
+- [ ] Markdown projection は SQL で生成してよいが、authority は draft candidate JSONB とし、Markdown body は human-readable review / search / dashboard projection に限定する。
+- [ ] Markdown projection には raw HTML / island markup / CSS class authority / executable script / promotion instruction as authority を含めない。
+- [ ] insert 後の DB NOTIFY / SSE payload は structured JSON とし、event_type / source / candidate_id / candidate_lane / markdown_projection_id などを渡す。UI placement は SQL で決めない。
+- [ ] C# は scheduler / orchestration / SQL execution / notification bridge までに限定し、candidate inference 本体を C# switch / hardcoded heuristic として実装しない。
+
+対応資料:
+
+- "docs/design/sql-attention-logs-ssot.yaml"
+- "docs/design/sql-attention-logs-ssot.md"
+- "docs/design/team-markdown-dashboard-saved-view-ssot.yaml"
+- "docs/design/runtime-orchestration-ssot.yaml"
+- "docs/design/pipeline-continuity-ssot.yaml"
+- "docs/design/db-schema.yaml"
+
+対象ファイル名:
+
+- "db/sql_attention_logs_tables.sql"
+- "db/topology_tables.sql"
+- "db/seed_empty.sql"
+- "backend/scheduler/*"
+- "backend/repository/*"
+- "backend/runtime/*"
+- "backend/endpoint/SseEndpoint.cs"
+- "backend/Program.cs"
+- "frontend/runtime/sseReceiver.ts"
+- "frontend/runtime/sseDispatcher.ts"
+- "frontend/islands/*"
+- "frontend/routes/admin/*"
+- "frontend/tests/*"
+- "backend/tests/*"
+- ".agent/tests/check-sql-attention-ssot.sh"
+- ".agent/tests/check-structure.sh"（必要なら語彙/境界 guard 追加のみ）
+
+対象関数名またはruntime境界名:
+
+- SQL function: "extract_sql_attention_high_pressure_keys" 相当
+- SQL function: "compile_sql_attention_manifest_topology_draft_candidates" 相当
+- SQL function / trigger: "insert_sql_attention_draft_candidate" 相当
+- SQL trigger: "notify_sql_attention_draft_candidate_created" 相当
+- "SqlAttentionScheduler" / SQL Attention scheduled lane
+- "RuntimeTimelineScheduler"
+- "SseEndpoint"
+- "SseReceiver"
+- "SseDispatcher"
+- "Team Markdown Dashboard / saved markdown projection boundary"
+- "Draft candidate insert-only boundary"
+- "DB NOTIFY / SSE projection signal boundary"
+
+NG軸:
+
+- hub relation neighborhood だけで candidate completion すること
+- SQL Attention evidence なしの full-space schema mining
+- C# 側 candidate inference 必須化
+- active manifest / topology registry / hub relation / runtime route の自動 mutation
+- auto-apply / auto-promote
+- Markdown を runtime SSOT / topology promotion authority として扱うこと
+- SQL から HTML / island markup / UI placement を生成すること
+- raw count only scoring
+- ID column を primary display text として扱うこと
+- "/admin/contents" の Step 2.5 / Step 3 をこの candidate generation lane の write target として扱うこと
+
+受入条件:
+
+- [ ] SQLAT evidence から discrete Key extraction → manifest topology full-space expansion → draft candidate JSONB insert までが SQL-driven lane として動作する。
+- [ ] draft candidate JSONB が source evidence refs、source="sql_attention"、candidate_lane、high_pressure_key、hit refs、common axis candidates、candidate columns、score、status を保持する。
+- [ ] Markdown projection は human-readable projection として保存/通知され、authority は draft candidate JSONB に残る。
+- [ ] DB NOTIFY / SSE payload は structured JSON であり、SQL が UI placement / HTML / island markup を決めていない。
+- [ ] hub relation neighborhood only completion、schema mining without SQLAT evidence、auto mutation、auto promote を防ぐ test / guard がある。
+- [ ] C# implementation は orchestration / SQL execution / notification bridge に留まり、candidate inference logic を C# hardcode として持たない。
+- [ ] 関連 backend/frontend tests または ".agent/tests/*" が追加/更新されている。
 
 ---
 
