@@ -399,10 +399,10 @@ NG軸:
 
 ---
 
-Bundle "sql-attention-key-expansion-draft-lane-implementation"
+## Bundle "sql-attention-key-expansion-draft-lane-implementation"
 
-Status: not_started
-SSOT: "docs/design/sql-attention-logs-ssot.yaml" / "docs/design/sql-attention-logs-ssot.md"
+**Status:** not_started
+**SSOT:** "docs/design/sql-attention-logs-ssot.yaml" / "docs/design/sql-attention-logs-ssot.md"
 
 問題点:
 SQL Attention manifest topology key expansion draft lane の SSOT は定義されたが、実装側にはまだ "logs.attention" SQLAT evidence から高圧な離散値 Key を抽出し、registered manifest topology 全空間へ SQL 横断検索し、"source=sql_attention" の draft candidate JSONB と Markdown projection を insert する lane がない。現状のままだと、SQL Attention evidence は観測・推薦証跡に留まり、manifest topology / screen_data_shape / logical table / logical column / enum/discrete metadata を使った draft candidate 生成へ接続されない。
