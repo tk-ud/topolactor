@@ -35,6 +35,22 @@ public class ExternalPortPolicyStepExecutorCompatibilityShimTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_CompatibilityHttpOperation_BridgesHttpResponseForCaptureResponse()
+    {
+        var inner = new RecordingPolicyStepExecutor();
+        var shim = new ExternalPortPolicyStepExecutorCompatibilityShim(inner, BuildHttpExecutor("test.http", "test_scope"));
+        var context = new ExternalPortExecutionContext { RequiredByBundle = "test_scope" };
+        var step = Step("send_http", new Dictionary<string, string> { ["abstract_function_key"] = "test.http" });
+
+        await shim.ExecuteAsync(step, context);
+
+        Assert.False(inner.ExecuteCalled);
+        Assert.Equal(new[] { "send_http" }, context.ExecutedOperationKeys);
+        Assert.NotNull(context.HttpResponse);
+        Assert.Equal("{\"ok\":true}", context.HttpResponse!.Body);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_NonCompatibilityOperation_DelegatesToInnerExecutor()
     {
         var inner = new RecordingPolicyStepExecutor();
@@ -109,6 +125,33 @@ public class ExternalPortPolicyStepExecutorCompatibilityShimTests
             new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
     }
 
+    private static AbstractFunctionExecutor BuildHttpExecutor(string functionKey, string authorityScope, string policyKey = "test_policy")
+    {
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(),
+            functionKey,
+            "external_port_runtime",
+            authorityScope,
+            new[]
+            {
+                new AbstractFunctionStep(
+                    Guid.NewGuid(),
+                    1,
+                    "stub_http_request",
+                    new Dictionary<string, string>(),
+                    Array.Empty<AbstractFunctionInputBinding>(),
+                    "http_response",
+                    true)
+            },
+            Array.Empty<string>(),
+            true,
+            new[] { new AbstractFunctionAuthorityBinding("policy", policyKey, true) });
+
+        return new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new StubHttpRequestPrimitiveAdapter() });
+    }
+
     private sealed class StaticManifestRepository : IAbstractFunctionManifestRepository
     {
         private readonly AbstractFunctionManifest _manifest;
@@ -121,6 +164,13 @@ public class ExternalPortPolicyStepExecutorCompatibilityShimTests
         public string PrimitiveKey => "echo";
         public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default) =>
             Task.FromResult(inputs.TryGetValue("source", out var value) ? value : null);
+    }
+
+    private sealed class StubHttpRequestPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+    {
+        public string PrimitiveKey => "stub_http_request";
+        public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default) =>
+            Task.FromResult<object?>(new ExternalPortHttpResponse(200, "{\"ok\":true}", new Dictionary<string, string>()));
     }
 
     private sealed class RecordingPolicyStepExecutor : IExternalPortPolicyStepExecutor
