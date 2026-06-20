@@ -860,3 +860,110 @@ non_goals:
   - automatic_registry_mutation_from_phase_vector
   - automatic_migration_or_column_promotion_from_phase_vector
   - evidence_layer_single_score_collapse
+manifest_topology_key_expansion_draft_lane:
+  name: manifest_topology_key_expansion_draft_lane
+  status: planned
+  role: sql_attention_evidence_consumer
+  execution_model: sql_only
+
+  source:
+    required_source: logs.attention_sql_attention_evidence
+    source_tag_required: true
+    source_tag: sql_attention
+    evidence_refs_required: true
+
+  key_discovery_space:
+    source: sql_attention_explored_hub_relation_neighborhood
+    rule: hub_relation_neighborhood_is_key_extraction_space_not_candidate_completion_space
+    discrete_key_examples:
+      - enum_value
+      - status
+      - category
+      - type
+      - kind
+      - state
+      - boolean
+      - low_cardinality_value
+
+  expansion_space:
+    target: all_registered_manifest_topology_space
+    rule: expand_high_pressure_discrete_keys_across_full_registered_manifest_topology_space
+    not_limited_to:
+      - sql_attention_neighbor_hub_relations
+    search_basis:
+      - topology_manifest_jsonb
+      - screen_data_shape_jsonb
+      - logical_tables
+      - logical_columns
+      - enum_group_or_discrete_value_metadata
+      - physical_table_manifest_bindings_when_available
+
+  candidate_compilation:
+    model: sql_query_or_sql_function
+    csharp_role: trigger_orchestration_only
+    from_key_hit_set:
+      - same_name_column_axis
+      - same_type_column_axis
+      - same_name_and_same_type_common_axis
+      - enum_group_match
+      - value_overlap_when_available
+      - logs_diff_pressure
+      - logs_attention_pressure
+      - table_ref_reuse
+      - manifest_reuse
+    candidate_types:
+      - relationship_axis_candidate
+      - meaning_projection_candidate
+      - aggregate_projection_candidate
+
+  draft_output:
+    write_mode: insert_only
+    write_target: draft_candidate_db
+    payload_format: jsonb
+    required_payload_values:
+      source: sql_attention
+      candidate_lane: manifest_topology_key_expansion_draft_lane
+      status: draft
+
+  markdown_projection:
+    mode: saved_markdown_projection
+    markdown_body_generated_by: sql
+    markdown_is_authority: false
+    authority_record: draft_candidate_jsonb
+    recommended_surface:
+      - md_viewer_preset
+      - team_markdown_dashboard_saved_view
+    prohibited_markdown_content:
+      - raw_html
+      - island_markup
+      - css_class_authority
+      - executable_script
+      - promotion_instruction_as_authority
+
+  notification:
+    mode: db_notify_on_insert
+    trigger: after_draft_candidate_or_markdown_projection_insert
+    notify_payload_format: structured_json
+    notify_payload_required_values:
+      event_type: sql_attention_draft_candidate_created
+      source: sql_attention
+      candidate_lane: manifest_topology_key_expansion_draft_lane
+    sse_behavior:
+      - notify_projection_if_available
+      - ui_decides_display_surface
+      - no_ui_placement_authority_in_sql
+
+  prohibited:
+    - hub_relation_neighborhood_only_candidate_completion
+    - full_space_schema_mining_without_sql_attention_evidence
+    - csharp_candidate_inference_required
+    - direct_manifest_active_mutation
+    - direct_topology_registry_mutation
+    - direct_hub_relation_mutation
+    - direct_runtime_route_mutation
+    - auto_apply
+    - auto_promote
+    - treating_markdown_as_runtime_ssot
+    - sql_generated_html
+    - sql_generated_island_markup
+    - sql_generated_ui_placement
