@@ -173,3 +173,36 @@ Original concept and architecture by Takumi Udagawa.
 Commercial use, modification, redistribution, and cloud deployment are allowed under the license.
 
 If you build on topolactor, attribution and citation are appreciated.
+
+## Top-Level Directory Agenda
+
+- `.agent/`
+  - Agent-facing documentation, rules, prompts, protocols, checklists, tests, tasks, reports, and helper scripts.
+  - Repository work starts from `AGENTS.md`, then follows `.agent/rules/rule.md`, `.agent/README.md`, and the matching worktype route.
+  - Do not treat all `.agent/` files as always-read scope.
+
+- `docs/`
+  - Canonical design / governance SSOT surface.
+  - Architecture, runtime boundaries, data model, and implementation judgment must be checked against the matching docs.
+
+- `db/`
+  - Semantic topology space.
+  - Owns database schema, topology tables, promotion tables, SQL attention logs, seeds, and persistence-side topology authority.
+
+- `backend/`
+  - Abstract runtime.
+  - Owns thin HTTP endpoint boundary, runtime executor, operation vector / attractor resolution, semantic mapper, repository boundary, guards, and runtime contract schemas.
+
+- `frontend/`
+  - Physical projection space.
+  - Fresh / Deno / Preact frontend.
+  - Owns routes, islands, UI components, package projection, frontend schema, registry, runtime executor, and backend API clients.
+
+- `infra/`
+  - Local/demo/bootstrap hosting boundary.
+  - Owns compose wiring, nginx reverse proxy route boundary, and local compose environment template.
+  - Does not own runtime policy, topology semantics, database schema authority, or frontend projection judgment.
+
+- `articles/`
+  - Public article / explanatory surface.
+  - Not authoritative implementation SSOT.
