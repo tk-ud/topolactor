@@ -2503,7 +2503,7 @@ ON CONFLICT (policy_id, step_order) DO NOTHING;
 INSERT INTO topology.external_port_policy_steps
     (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
 VALUES
-    ('00000000-0000-0000-0000-000000000451', '00000000-0000-0000-0000-0000000000e8', 7, 'append_runtime_event_log',
+    ('00000000-0000-0000-0000-000000000455', '00000000-0000-0000-0000-0000000000e8', 7, 'append_runtime_event_log',
      '{"event_type":"validation_completed","evidence_table_ref":"topology.webhook_intake_snapshots","status_value":"validated"}',
      NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
@@ -2511,7 +2511,7 @@ ON CONFLICT (policy_id, step_order) DO NOTHING;
 INSERT INTO topology.external_port_policy_steps
     (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
 VALUES
-    ('00000000-0000-0000-0000-000000000452', '00000000-0000-0000-0000-0000000000e8', 8, 'append_runtime_event_log',
+    ('00000000-0000-0000-0000-000000000456', '00000000-0000-0000-0000-0000000000e8', 8, 'append_runtime_event_log',
      '{"event_type":"preview_generated","evidence_table_ref":"topology.webhook_intake_snapshots","status_value":"preview_ready"}',
      NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
@@ -2521,7 +2521,7 @@ ON CONFLICT (policy_id, step_order) DO NOTHING;
 INSERT INTO topology.external_port_policy_steps
     (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
 VALUES
-    ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e8', 10, 'append_runtime_event_log',
+    ('00000000-0000-0000-0000-000000000457', '00000000-0000-0000-0000-0000000000e8', 10, 'append_runtime_event_log',
      '{"event_type":"explicit_apply_initiated","evidence_table_ref":"topology.webhook_intake_snapshots","status_value":"apply_initiated"}',
      NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
