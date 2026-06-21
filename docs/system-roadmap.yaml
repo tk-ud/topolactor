@@ -120,7 +120,7 @@ system_roadmap_ssot:
         lifecycle_state_visibility:
           status: implemented
           acceptance: draft_validated_applied_failed_and_persisted_are_visibly_distinguishable
-          evidence:
+          evidence_ref:
             - frontend/tests/visualLayoutBuilder.test.ts
         recovery_navigation:
           status: implemented
