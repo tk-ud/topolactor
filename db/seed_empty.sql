@@ -2156,15 +2156,15 @@ INSERT INTO topology.abstract_function_manifests
     (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
 VALUES
     ('00000000-0000-0000-0000-00000000af01', 'file_storage.record_export_job', 'external_port_runtime', 'file_storage_bundle', '{"result":"ExportJobId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
-    ('00000000-0000-0000-0000-00000000af02', 'file_storage.record_file_artifact', 'external_port_runtime', 'file_storage_bundle', '{"result":"FileArtifactId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
+    ('00000000-0000-0000-0000-00000000af02', 'file_storage.record_file_artifact', 'external_port_runtime', 'file_storage_bundle', '{"result":"FileArtifactId","step2_result":"OutputProp"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
     ('00000000-0000-0000-0000-00000000af03', 'file_storage.write_manifest_record', 'external_port_runtime', 'file_storage_bundle', '{"result":"ManifestId"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
-    ('00000000-0000-0000-0000-00000000af04', 'file_storage.authorize_signed_download', 'external_port_runtime', 'file_storage_bundle', '{"result":"AuthorizationKey"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
+    ('00000000-0000-0000-0000-00000000af04', 'file_storage.authorize_signed_download', 'external_port_runtime', 'file_storage_bundle', '{"result":"AuthorizationKey","step2_result":"OutputProp"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
     -- Attachment operations: authority_scope matches required_by_bundle of attachment port records.
     -- record_table_ref is manifest-authority (step_config), not payload-derived.
     ('00000000-0000-0000-0000-00000000af05', 'file_storage.bind_record_file_attachment',   'external_port_runtime', 'file_storage_attachment_bind',   '{"step1_result":"AttachmentBindingId","step2_result":"OutputProp"}', ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
     ('00000000-0000-0000-0000-00000000af06', 'file_storage.list_record_file_attachments',  'external_port_runtime', 'file_storage_attachment_list',   '{"result":"OutputProp"}',                                           ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true),
     ('00000000-0000-0000-0000-00000000af07', 'file_storage.unbind_record_file_attachment', 'external_port_runtime', 'file_storage_attachment_unbind', '{"step1_result":"RemovedCount","step2_result":"OutputProp"}',        ARRAY['credential','signed_url','bucket','endpoint','storage_path','storage_ref','raw_storage_ref'], true)
-ON CONFLICT (abstract_function_id) DO NOTHING;
+ON CONFLICT (abstract_function_id) DO UPDATE SET output_shape = EXCLUDED.output_shape;
 
 INSERT INTO topology.abstract_function_steps
     (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
@@ -2181,6 +2181,16 @@ VALUES
     -- unbind: step 1 calls postgres function, step 2 projects result to OutputProp
     ('00000000-0000-0000-0000-00000000bf08', '00000000-0000-0000-0000-00000000af07', 1, 'call_postgres_function', '{"function":"topology.fs_unbind_record_file_attachment","required_table_authority":"topology.record_file_attachments","record_table_ref":"topology.export_jobs","arguments":["record_table_ref","record_id","file_artifact_id","relation_kind"]}',   'RemovedCount',        true),
     ('00000000-0000-0000-0000-00000000bf09', '00000000-0000-0000-0000-00000000af07', 2, 'projection',             '{}',                                                                                                                                                                                                                                                  'OutputProp',          true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+-- Projection steps for af02 (record_file_artifact) and af04 (authorize_signed_download).
+-- These add step 2 to each manifest: collects non-secret output fields into OutputProp for SSE broadcast.
+-- storage_ref / signed_url / credential are absent from bindings and blocked by projection_deny_keys.
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf0a', '00000000-0000-0000-0000-00000000af02', 2, 'projection', '{}', 'OutputProp', true),
+    ('00000000-0000-0000-0000-00000000bf0b', '00000000-0000-0000-0000-00000000af04', 2, 'projection', '{}', 'OutputProp', true)
 ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
 
 
@@ -2225,6 +2235,21 @@ VALUES
     ('00000000-0000-0000-0000-00000000c020', '00000000-0000-0000-0000-00000000bf08', 'relation_kind',    'constant',    'attachment',       false, false, true),
     -- unbind step 2 (bf09): projection reads RemovedCount from result_context → OutputProp
     ('00000000-0000-0000-0000-00000000c021', '00000000-0000-0000-0000-00000000bf09', 'removed_count', 'result_context', 'RemovedCount', true, false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
+
+-- Input bindings for bf0a (af02 projection) and bf0b (af04 projection).
+-- Projects non-secret artifact metadata and opaque authorization reference only.
+-- storage_ref / signed_url / credential are absent — blocked at the binding level and by projection_deny_keys.
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    -- af02 projection step (bf0a): file_artifact_id from result_context, file_name/file_type from payload
+    ('00000000-0000-0000-0000-00000000c022', '00000000-0000-0000-0000-00000000bf0a', 'file_artifact_id', 'result_context',   'FileArtifactId', true,  false, true),
+    ('00000000-0000-0000-0000-00000000c023', '00000000-0000-0000-0000-00000000bf0a', 'file_name',        'payload',          'file_name',      true,  false, true),
+    ('00000000-0000-0000-0000-00000000c024', '00000000-0000-0000-0000-00000000bf0a', 'file_type',        'payload',          'file_type',      false, false, true),
+    -- af04 projection step (bf0b): authorization_key (opaque reference) from result_context, file_artifact_id from external_context
+    ('00000000-0000-0000-0000-00000000c025', '00000000-0000-0000-0000-00000000bf0b', 'authorization_key', 'result_context',  'AuthorizationKey', true,  false, true),
+    ('00000000-0000-0000-0000-00000000c026', '00000000-0000-0000-0000-00000000bf0b', 'file_artifact_id',  'external_context', 'file_artifact_id', false, false, true)
 ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
 
 INSERT INTO topology.abstract_function_authority_bindings

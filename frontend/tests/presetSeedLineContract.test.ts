@@ -35,6 +35,8 @@ const SEED_FILES = [
   "db/physical_search_crud_aggregate_preset_seed.sql",
   "db/physical_details_inline_editor_md_generator_preset_seed.sql",
   "db/aggregate_dashboard_preset_seed.sql",
+  "db/file_attachment_crud_preset_seed.sql",
+  "db/file_storage_export_job_preset_seed.sql",
 ];
 
 // Regression pin: target refs that are specifically banned as observed past violations.

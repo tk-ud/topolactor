@@ -210,6 +210,111 @@ Deno.test("fileStoragePortConsumer: attachment CRUD preset seed uses portTargetR
   assertStringIncludes(seed, "forbiddenProjectionFields");
 });
 
+Deno.test("fileStoragePortConsumer: export_job preset seed uses portTargetRef wiring to access_port and omits secret projections", async () => {
+  const seed = await Deno.readTextFile(new URL("../../db/file_storage_export_job_preset_seed.sql", import.meta.url));
+  assertStringIncludes(seed, "file_storage_export_job.v1");
+  assertStringIncludes(seed, "derivedFrom");
+  assertStringIncludes(seed, "physical_search_crud_aggregate.v1");
+  assertStringIncludes(seed, `external-port:access_port:${FILE_STORAGE_ACCESS_PORT_ID}`);
+  assertStringIncludes(seed, "credentialPlane");
+  assertStringIncludes(seed, "external_port_substrate reference_key resolution only");
+  assertStringIncludes(seed, "forbiddenProjectionFields");
+  // Projection response fields must be present (non-secret only)
+  assertStringIncludes(seed, "authorization_key");
+  assertStringIncludes(seed, "file_artifact_id");
+  // Secret fields must be absent from the seed
+  assertEquals(seed.includes("signed_url_value"), false);
+  assertEquals(seed.includes("storage_endpoint"), false);
+  assertEquals(seed.includes("bucket_name"), false);
+});
+
+// Proves record_file_artifact projection response (af02 step 2 OutputProp) maps through
+// draftPreviewResultToEmission / renderEmission into json viewer props.
+// DB projection proof (that af02 step 2 actually fires) is in
+// backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs.
+Deno.test("fileStoragePortConsumer: record_file_artifact projection result maps through draft preview emission into json viewer props", () => {
+  const previewResult: DraftPreviewResult = {
+    success: true,
+    layoutId: "layout-file-storage-artifact-projection",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    data: {
+      exportJobResult: {
+        file_artifact_id: "artifact-job-001",
+        file_name: "export-2026-06.pdf",
+        file_type: "pdf",
+      },
+    },
+    layoutNodes: [{
+      nodeId: "export_job_result_json",
+      nodeKind: "catalog_component",
+      componentId: "export_job_result_json",
+      componentKey: "json_viewer.template",
+      componentKind: "data_display/json",
+      orderIndex: 0,
+      propsJson: JSON.stringify({ title: "Export job result" }),
+      propBindings: {
+        data: { source: "emission.data.exportJobResult" },
+      },
+    }],
+  };
+
+  const emission = draftPreviewResultToEmission(previewResult);
+  assertExists(emission);
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  assertExists(specs[0].runtimeSpec);
+  const props = specs[0].runtimeSpec!.props as Record<string, unknown>;
+  const data = props.data as Record<string, unknown>;
+  assertEquals(data.file_artifact_id, "artifact-job-001");
+  assertEquals(data.file_name, "export-2026-06.pdf");
+  assertEquals(data.file_type, "pdf");
+  // Verify no secret fields appear in the projected output
+  assertEquals("signed_url" in data, false);
+  assertEquals("credential" in data, false);
+  assertEquals("storage_ref" in data, false);
+});
+
+// Proves authorize_signed_download projection response (af04 step 2 OutputProp) maps through
+// the emission pipeline. authorization_key is an opaque DB reference, not a signed URL.
+Deno.test("fileStoragePortConsumer: authorize_signed_download projection returns authorization_key reference without signed_url", () => {
+  const previewResult: DraftPreviewResult = {
+    success: true,
+    layoutId: "layout-file-storage-signed-download-projection",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    data: {
+      exportJobResult: {
+        authorization_key: "opaque-auth-ref-001",
+        file_artifact_id: "artifact-job-001",
+      },
+    },
+    layoutNodes: [{
+      nodeId: "export_job_result_json",
+      nodeKind: "catalog_component",
+      componentId: "export_job_result_json",
+      componentKey: "json_viewer.template",
+      componentKind: "data_display/json",
+      orderIndex: 0,
+      propsJson: JSON.stringify({ title: "Export job result" }),
+      propBindings: {
+        data: { source: "emission.data.exportJobResult" },
+      },
+    }],
+  };
+
+  const emission = draftPreviewResultToEmission(previewResult);
+  assertExists(emission);
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  assertExists(specs[0].runtimeSpec);
+  const props = specs[0].runtimeSpec!.props as Record<string, unknown>;
+  const data = props.data as Record<string, unknown>;
+  assertEquals(data.authorization_key, "opaque-auth-ref-001");
+  assertEquals(data.file_artifact_id, "artifact-job-001");
+  // Signed URL must not appear — authorization_key is an opaque reference only
+  assertEquals("signed_url" in data, false);
+  assertEquals("credential" in data, false);
+  assertEquals("storage_ref" in data, false);
+  assertEquals("bucket" in data, false);
+});
+
 Deno.test("fileStoragePortConsumer: attachment list result projects through draft preview emission into card list props", () => {
   const previewResult: DraftPreviewResult = {
     success: true,
