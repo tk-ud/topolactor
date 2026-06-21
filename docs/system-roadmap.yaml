@@ -754,6 +754,23 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-file-storage-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#file-storage-port-consumer
+      completion_condition:
+        - ui_builder_preset_seed_registered_in_init_sql_and_wires_portTargetRef_to_access_port
+        - payloadFrom_fields_align_with_af02_required_payload_bindings_file_name_file_type
+        - af02_step2_projects_file_artifact_id_file_name_file_type_via_OutputProp
+        - af04_step2_projects_authorization_key_opaque_reference_not_signed_url_via_OutputProp
+        - all_projection_bindings_secret_false_deny_keys_block_storage_ref_signed_url_credential
+        - provider_specific_client_absent_external_integration_completion_gate_preserved
+      evidence_ref:
+        - db/init.sql#file_storage_export_job_preset_seed
+        - db/file_storage_export_job_preset_seed.sql
+        - db/file_attachment_crud_preset_seed.sql
+        - db/seed_empty.sql#bf0a_af02_projection_step
+        - db/seed_empty.sql#bf0b_af04_projection_step
+        - backend/tests/Topolactor.Runtime.Tests/FileStorageBundleDispatchTests.cs
+        - backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs
+        - frontend/tests/fileStoragePortConsumer.test.ts
+        - frontend/tests/presetSeedLineContract.test.ts
       closed_gap_ref:
         - file_storage_seed_binding_and_credential_requirement_implemented_per_pr460
         - file_storage_physical_table_and_manifest_binding_not_connected
