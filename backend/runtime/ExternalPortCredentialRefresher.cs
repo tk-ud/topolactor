@@ -564,7 +564,8 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             {
                 var expected = FirstNonBlank(
                     ReadConfig(step.StepConfig, "expected_signature"),
-                    ReadConfig(context.SignatureConfig, "expected_signature"));
+                    ReadConfig(context.SignatureConfig, "expected_signature"),
+                    context.CredentialVaultRecord?.TokenHash);
                 var actual = FirstNonBlank(
                     ReadConfig(context.SignatureInput, "signature"),
                     ReadConfig(step.StepConfig, "signature"));

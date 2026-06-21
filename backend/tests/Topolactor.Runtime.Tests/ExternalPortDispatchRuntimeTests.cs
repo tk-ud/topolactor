@@ -370,6 +370,61 @@ public class ExternalPortDispatchRuntimeTests
     }
 
     [Fact]
+    public async Task WebhookInboxPortConsumer_CredentialVaultPath_VerifiesSignatureFromTokenHash()
+    {
+        // Proves the credential-vault path: step_config={} for verify_signature_by_config is valid
+        // when resolve_credential_reference has populated context.CredentialVaultRecord.TokenHash.
+        // This is the real-DB path: seed has verify_signature_by_config step_config={} and the
+        // expected value comes from vault:ref:webhook_inbox_signing_key resolved at runtime.
+        var hookPortId = Guid.Parse("00000000-0000-0000-0000-00000000dcba");
+        var record = new ExternalPortRecord(
+            hookPortId, "hook_port", "webhook_inbox_bundle", "generic-webhook",
+            null, "/hooks/webhook_inbox", "x-webhook-signature", "webhook_inbox",
+            "vault_ref", "webhook_inbox_signing_key", Active: true);
+        var vaultRecord = new ExternalCredentialVaultRecord(
+            Guid.NewGuid(), "generic-webhook", "webhook_inbox_bundle", "signing_key",
+            TokenHash: "vault-signing-key",
+            EncryptedPayload: null, EncryptionKeyReference: null, ExpiresAt: null,
+            RefreshBeforeSeconds: 0, Version: 1, LockedUntil: null, Active: true);
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(), "webhook_inbox_hook_policy", "hook_port", "webhook_inbox_bundle",
+            [
+                NewStep(1, "resolve_port_record"),
+                NewStep(2, "resolve_credential_reference"),
+                NewStep(3, "verify_signature_by_config"),   // step_config={} — expected comes from vault TokenHash
+                NewStep(4, "enqueue_scheduler_event"),
+            ],
+            Active: true);
+
+        var resolver = new FakeCredentialReferenceResolver(vaultRecord);
+        var eventLog = new CapturingRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor(
+            credentialReferenceResolver: resolver,
+            runtimeEventLogRepository: eventLog);
+        var runtime = new ExternalPortDispatchRuntime(
+            NullLogger<ExternalPortDispatchRuntime>.Instance,
+            new FakeRepo(record, policy),
+            executor);
+
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            hook_path = "/hooks/webhook_inbox",
+            route_key = "webhook_inbox",
+            signature_input = new { signature = "vault-signing-key" },
+            dispatch_payload = new { event_id = "evt-vault-test" }
+        });
+        var request = new EndpointRequestDto(
+            "dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort",
+            null, payload, null, "hook");
+
+        var result = await runtime.ExecuteAsync(request, null);
+
+        Assert.True(result.Success, $"Expected success but got: {string.Join(", ", result.Errors.Select(e => e.Code))}");
+        Assert.DoesNotContain(result.Errors, e => e.Code == "EXTERNAL_SIGNATURE_CONFIG_MISSING");
+        Assert.DoesNotContain(result.Errors, e => e.Code == "EXTERNAL_SIGNATURE_VERIFICATION_FAILED");
+    }
+
+    [Fact]
     public void Source_DoesNotContainProviderKindBranching()
     {
         var source = File.ReadAllText(FindRepositoryFile("backend/runtime/ExternalPortDispatchRuntime.cs"));
@@ -569,6 +624,14 @@ public class ExternalPortDispatchRuntimeTests
             dir = dir.Parent;
         }
         throw new FileNotFoundException(relativePath);
+    }
+
+    private sealed class FakeCredentialReferenceResolver : IExternalPortCredentialReferenceResolver
+    {
+        private readonly ExternalCredentialVaultRecord _record;
+        public FakeCredentialReferenceResolver(ExternalCredentialVaultRecord record) => _record = record;
+        public Task<ExternalCredentialVaultRecord?> ResolveCredentialReferenceAsync(ExternalPortRecord portRecord, CancellationToken ct = default)
+            => Task.FromResult<ExternalCredentialVaultRecord?>(_record);
     }
 
     private sealed class NullRuntime : IDispatchableRuntime

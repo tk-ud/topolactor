@@ -17,7 +17,7 @@ printf '=== executing webhook_inbox runtime tests ===\n'
 dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj \
     --filter "WebhookInboxPortConsumer" --no-restore
 
-# Seed: 7-step policy chain with webhook_received and signature_verification_success
+# Seed: 12-step policy chain (full audit boundary) with webhook_received, signature_verification_success, and full intake→apply chain
 check "$SEED" '"event_type":"webhook_received"'
 check "$SEED" '"event_type":"signature_verification_success"'
 check "$SEED" '"evidence_table_ref":"topology.signature_verification_evidence"'
