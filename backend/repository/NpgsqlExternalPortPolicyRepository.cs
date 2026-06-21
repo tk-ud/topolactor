@@ -159,6 +159,47 @@ public sealed class NpgsqlExternalPortPolicyRepository : IExternalPortPolicyRepo
         return await LoadPortRecordByIdAsync(portKind, portId, routeKey, ct);
     }
 
+
+    public async Task<ExternalPortRecord?> LoadHookPortRecordAsync(
+        string hookPath,
+        string routeKey,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(hookPath))
+            throw new ArgumentException("hookPath is required.", nameof(hookPath));
+        if (string.IsNullOrWhiteSpace(routeKey))
+            throw new ArgumentException("routeKey is required.", nameof(routeKey));
+
+        var shape = GetPortTableShape("hook_port");
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT {shape.IdColumn} AS port_id,
+                   required_by_bundle,
+                   provider_kind,
+                   {shape.UrlOrEnvReferenceSelect},
+                   {shape.HookPathSelect},
+                   {shape.HeaderKeySelect},
+                   {shape.RouteKeySelect},
+                   credential_kind,
+                   reference_key,
+                   active
+            FROM {shape.TableName}
+            WHERE active = true
+              AND hook_path = @hookPath
+              AND route_key = @routeKey
+            """;
+        cmd.Parameters.AddWithValue("hookPath", hookPath);
+        cmd.Parameters.AddWithValue("routeKey", routeKey);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        var record = MapPortRecord(reader, shape.PortKind);
+        if (await reader.ReadAsync(ct)) throw new InvalidOperationException("EXTERNAL_PORT_RECORD_AMBIGUOUS");
+        return record;
+    }
+
     public async Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(portRecord);

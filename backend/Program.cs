@@ -169,6 +169,8 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
+builder.Services.AddSingleton<IExternalPortConsumerEvidenceRepository>(_ =>
+    new NpgsqlExternalPortConsumerEvidenceRepository(connectionString));
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IExternalPortHttpClient>(sp =>
     new HttpExternalPortHttpClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ExternalPort")));
@@ -184,7 +186,8 @@ builder.Services.AddSingleton<ExternalPortPolicyStepExecutor>(sp =>
         bundleHandlers: sp.GetServices<IExternalPortBundleStepHandler>(),
         dbFunctionRepository: sp.GetRequiredService<IExternalPortDbFunctionRepository>(),
         abstractFunctionExecutor: sp.GetRequiredService<AbstractFunctionExecutor>(),
-        runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
+        runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>(),
+        consumerEvidenceRepository: sp.GetRequiredService<IExternalPortConsumerEvidenceRepository>()));
 
 builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
     new ExternalPortPolicyStepExecutorCompatibilityShim(

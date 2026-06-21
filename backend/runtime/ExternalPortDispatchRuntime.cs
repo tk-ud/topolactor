@@ -36,15 +36,33 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
     {
         try
         {
-            if (!TryReadPortTargetRef(request.Payload, out var rawTargetRef))
-                return Fail("EXTERNAL_PORT_TARGET_REF_MISSING", "dispatchExternalPort payload must include port_target_ref or target_ref.");
-            if (!TryParsePortTargetRef(rawTargetRef!, out var portKind, out var portId, out var routeKey))
-                return Fail("EXTERNAL_PORT_TARGET_REF_INVALID", "portTargetRef must use external-port:<portKind>:<portId>[:routeKey].");
-            var rawRef = rawTargetRef!;
+            ExternalPortRecord? record;
+            string rawRef;
+            string portKind;
+            Guid portId;
+            string? routeKey;
+            if (TryReadPortTargetRef(request.Payload, out var rawTargetRef))
+            {
+                if (!TryParsePortTargetRef(rawTargetRef!, out portKind, out portId, out routeKey))
+                    return Fail("EXTERNAL_PORT_TARGET_REF_INVALID", "portTargetRef must use external-port:<portKind>:<portId>[:routeKey].");
+                rawRef = rawTargetRef!;
+                record = await _repository.LoadPortRecordByIdAsync(portKind, portId, routeKey, ct);
+            }
+            else if (TryReadHookRoute(request.Payload, out var hookPath, out var hookRouteKey))
+            {
+                portKind = "hook_port";
+                routeKey = hookRouteKey;
+                record = await _repository.LoadHookPortRecordAsync(hookPath!, hookRouteKey!, ct);
+                portId = record?.PortId ?? Guid.Empty;
+                rawRef = record is null ? $"external-port:hook_port:missing:{hookRouteKey}" : $"external-port:hook_port:{record.PortId}:{hookRouteKey}";
+            }
+            else
+            {
+                return Fail("EXTERNAL_PORT_TARGET_REF_MISSING", "dispatchExternalPort payload must include port_target_ref/target_ref or hook_path with route_key.");
+            }
 
-            var record = await _repository.LoadPortRecordByIdAsync(portKind, portId, routeKey, ct);
             if (record is null)
-                return Fail("EXTERNAL_PORT_RECORD_MISSING", "No active external port record matched portTargetRef.");
+                return Fail("EXTERNAL_PORT_RECORD_MISSING", "No active external port record matched the dispatch target.");
 
             ExternalPortResolver.FailCloseOnInvalidPortRecord(record);
             if (!string.Equals(record.PortKind, portKind, StringComparison.Ordinal) || record.PortId != portId)
@@ -64,8 +82,11 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
                 PortKind = record.PortKind,
                 RequiredByBundle = record.RequiredByBundle,
                 RouteKey = routeKey,
+                DispatchId = Guid.NewGuid().ToString("N"),
                 RequestPayload = ReadObjectProperty(request.Payload, "dispatch_payload"),
-                OutputProp = ReadStringProperty(request.Payload, "output_prop")
+                OutputProp = ReadStringProperty(request.Payload, "output_prop"),
+                SignatureInput = ReadStringMapProperty(request.Payload, "signature_input"),
+                SignatureConfig = ReadStringMapProperty(request.Payload, "signature_config")
             };
             await _policyStepExecutor.ExecutePolicyAsync(policy, context, ct);
 
@@ -79,6 +100,7 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
                 providerKind = record.ProviderKind,
                 credentialKind = record.CredentialKind,
                 policyKey = policy.PolicyKey,
+                dispatchId = context.DispatchId,
                 executedOperationKeys = context.ExecutedOperationKeys,
                 outputProp = context.OutputProp
             };
@@ -130,9 +152,25 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
             : null;
     }
 
+    private static bool TryReadHookRoute(JsonElement? payload, out string? hookPath, out string? routeKey)
+    {
+        hookPath = ReadStringProperty(payload, "hook_path");
+        routeKey = ReadStringProperty(payload, "route_key");
+        return !string.IsNullOrWhiteSpace(hookPath) && !string.IsNullOrWhiteSpace(routeKey);
+    }
+
     private static JsonElement? ReadObjectProperty(JsonElement? payload, string name)
     {
         if (payload is not { ValueKind: JsonValueKind.Object } element) return null;
         return element.TryGetProperty(name, out var prop) && prop.ValueKind == JsonValueKind.Object ? prop.Clone() : null;
+    }
+
+    private static IReadOnlyDictionary<string, string> ReadStringMapProperty(JsonElement? payload, string name)
+    {
+        if (payload is not { ValueKind: JsonValueKind.Object } element) return new Dictionary<string, string>();
+        if (!element.TryGetProperty(name, out var prop) || prop.ValueKind != JsonValueKind.Object) return new Dictionary<string, string>();
+        return prop.EnumerateObject()
+            .Where(static item => item.Value.ValueKind == JsonValueKind.String)
+            .ToDictionary(static item => item.Name, static item => item.Value.GetString() ?? string.Empty, StringComparer.Ordinal);
     }
 }

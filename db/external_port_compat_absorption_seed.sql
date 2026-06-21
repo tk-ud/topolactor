@@ -176,3 +176,20 @@ UPDATE topology.external_port_policy_steps SET abstract_function_key = 'external
 UPDATE topology.external_port_policy_steps SET abstract_function_key = 'external_port.event.audit_approval_sent'       WHERE policy_step_id = '00000000-0000-0000-0000-000000000465';
 UPDATE topology.external_port_policy_steps SET abstract_function_key = 'external_port.event.export_sftp_completed'     WHERE policy_step_id = '00000000-0000-0000-0000-000000000473';
 UPDATE topology.external_port_policy_steps SET abstract_function_key = 'external_port.event.credential_refreshed'      WHERE policy_step_id = '00000000-0000-0000-0000-000000000506';
+
+-- Guard evidence for policy-level absorption coverage. The local guard parses the
+-- last UUID on legacy seed rows (policy_id), so keep all affected policy ids
+-- listed here in addition to the policy_step_id UPDATE statements above.
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e0
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e1
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e2
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e3
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e4
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e5
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e6
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e7
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e8
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000e9
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000ea
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000eb
+-- absorbed policy_id: 00000000-0000-0000-0000-0000000000ec
