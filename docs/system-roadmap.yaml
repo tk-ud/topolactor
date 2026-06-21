@@ -802,6 +802,16 @@ system_roadmap_ssot:
       detail_ref:
         - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
+      completion_condition:
+        - hook_path_route_key_resolves_active_hook_port_record_fail_close_on_missing
+        - signature_verification_fail_close_no_scheduler_enqueue_on_failure
+        - signature_verification_failure_written_to_runtime_event_log
+        - webhook_received_signature_success_scheduler_enqueued_evidence_via_append_runtime_event_log
+        - consumer_evidence_correlated_by_dispatch_id_no_cross_dispatch_mixing
+        - sse_projection_excludes_raw_payload_signature_headers_credentials
+        - no_webhook_specific_runtime_client_handler_added
+        - no_provider_kind_required_by_bundle_csharp_branching
+        - http_intake_endpoint_no_jwt_signature_verified_by_policy_step
       closed_gap_ref:
         - webhook_inbox_seed_binding_and_credential_requirement_implemented_per_pr460
         - webhook_intake_schema_connected
