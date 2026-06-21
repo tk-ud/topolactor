@@ -321,6 +321,11 @@ public interface IExternalPortPolicyRepository
         string? routeKey,
         CancellationToken ct = default);
 
+    Task<ExternalPortRecord?> LoadHookPortRecordAsync(
+        string hookPath,
+        string routeKey,
+        CancellationToken ct = default);
+
     Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default);
 }
 
@@ -366,6 +371,37 @@ public interface IExternalPortRuntimeEventLogRepository
         string eventType,
         string? entityId,
         string? requiredByBundle,
+        CancellationToken ct = default);
+}
+
+public sealed record ExternalPortConsumerEvidenceProjection(
+    string TableRef,
+    string EventType,
+    string? EntityId,
+    string? Status,
+    IReadOnlyDictionary<string, string> Evidence);
+
+/// <summary>
+/// Generic, seed-directed evidence/projection boundary for external_port_substrate consumers.
+/// Table refs come from policy step_config and are validated by the implementation;
+/// provider_kind / required_by_bundle are data only and must not select a runtime/client.
+/// </summary>
+public interface IExternalPortConsumerEvidenceRepository
+{
+    Task AppendEvidenceAsync(
+        string tableRef,
+        string eventType,
+        string? entityId,
+        string? requiredByBundle,
+        ExternalPortExecutionContext context,
+        IReadOnlyDictionary<string, string> stepConfig,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<ExternalPortConsumerEvidenceProjection>> LoadProjectionAsync(
+        string tableRef,
+        string? requiredByBundle,
+        string? entityId,
+        int limit = 20,
         CancellationToken ct = default);
 }
 
@@ -442,7 +478,8 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         IExternalPortDbFunctionRepository? dbFunctionRepository = null,
         AbstractFunctionExecutor? abstractFunctionExecutor = null,
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null,
-        IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null)
+        IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null,
+        IExternalPortConsumerEvidenceRepository? consumerEvidenceRepository = null)
     {
         _crypto = crypto;
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
@@ -566,6 +603,43 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
                 var bundle = context.RequiredByBundle ?? context.PortRecord?.RequiredByBundle;
                 await runtimeEventLogRepository.AppendAsync(eventType, entityId, bundle, ct);
+
+                if (step.StepConfig.TryGetValue("evidence_table_ref", out var evidenceTableRef) &&
+                    !string.IsNullOrWhiteSpace(evidenceTableRef))
+                {
+                    if (consumerEvidenceRepository is null)
+                        throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_REPOSITORY_MISSING");
+
+                    await consumerEvidenceRepository.AppendEvidenceAsync(
+                        evidenceTableRef,
+                        eventType,
+                        entityId,
+                        bundle,
+                        context,
+                        step.StepConfig,
+                        ct);
+                }
+
+                if (step.StepConfig.TryGetValue("projection_table_ref", out var projectionTableRef) &&
+                    !string.IsNullOrWhiteSpace(projectionTableRef))
+                {
+                    if (consumerEvidenceRepository is null)
+                        throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_REPOSITORY_MISSING");
+
+                    var projection = await consumerEvidenceRepository.LoadProjectionAsync(
+                        projectionTableRef,
+                        bundle,
+                        entityId,
+                        limit: 20,
+                        ct);
+                    context.OutputProp = JsonSerializer.Serialize(new
+                    {
+                        projectionTableRef,
+                        responseLane = "projection_response",
+                        rows = projection
+                    });
+                }
+
                 context.MarkExecuted(step.OperationKey);
             },
             ["capture_response"] = (step, context, ct) =>

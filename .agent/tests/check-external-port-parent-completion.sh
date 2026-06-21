@@ -14,6 +14,9 @@ TODO=.agent/tasks/todo.md
 ROADMAP=docs/system-roadmap.yaml
 
 printf '=== external_port_substrate parent completion guard ===\n'
+printf '=== executing runtime boundary tests ===\n'
+dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --filter "ExternalPortParentCompletion" --no-restore
+
 
 for table in \
   topology.email_drafts \
@@ -58,6 +61,8 @@ for event_type in \
 done
 
 check "$RUNTIME" "TryReadPortTargetRef"
+check "$RUNTIME" "TryReadHookRoute"
+check "$RUNTIME" "LoadHookPortRecordAsync"
 check "$RUNTIME" "LoadPortRecordByIdAsync"
 check "$RUNTIME" "SseEventBroadcaster"
 check "$RUNTIME" "external_port_dispatch"
@@ -68,6 +73,7 @@ check "$EXEC" "verify_signature_by_config"
 check "$EXEC" "enqueue_scheduler_event"
 check "$EXEC" "append_runtime_event_log"
 check "$PROGRAM" "IExternalPortRuntimeEventLogRepository"
+check "$PROGRAM" "IExternalPortConsumerEvidenceRepository"
 check "$PROGRAM" "ExternalPortDispatchRuntime"
 check "$PROGRAM" "RuntimeTimelineScheduler"
 

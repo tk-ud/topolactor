@@ -2408,39 +2408,53 @@ VALUES
     -- email_bundle response_port
     ('00000000-0000-0000-0000-000000000421', '00000000-0000-0000-0000-0000000000e6', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000423', '00000000-0000-0000-0000-0000000000e6', 3, 'build_http_request',           '{"method":"POST"}', NULL, true),
-    ('00000000-0000-0000-0000-000000000424', '00000000-0000-0000-0000-0000000000e6', 4, 'send_http',                    '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000425', '00000000-0000-0000-0000-0000000000e6', 5, 'append_runtime_event_log',     '{"event_type":"send_success"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000423', '00000000-0000-0000-0000-0000000000e6', 3, 'load_encrypted_credential_payload', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000424', '00000000-0000-0000-0000-0000000000e6', 4, 'decrypt_for_runtime_use',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000425', '00000000-0000-0000-0000-0000000000e6', 5, 'build_http_request',           '{"method":"POST"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000426', '00000000-0000-0000-0000-0000000000e6', 6, 'inject_authorization_header',  '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000427', '00000000-0000-0000-0000-0000000000e6', 7, 'send_http',                    '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000428', '00000000-0000-0000-0000-0000000000e6', 8, 'capture_response',             '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000429', '00000000-0000-0000-0000-0000000000e6', 9, 'append_runtime_event_log',     '{"event_type":"send_success","evidence_table_ref":"topology.email_delivery_evidence","projection_table_ref":"topology.email_delivery_evidence","status_value":"delivered"}', NULL, true),
     -- stripe_bundle hook_port
     ('00000000-0000-0000-0000-000000000431', '00000000-0000-0000-0000-0000000000e7', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000432', '00000000-0000-0000-0000-0000000000e7', 2, 'resolve_credential_reference', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000433', '00000000-0000-0000-0000-0000000000e7', 3, 'verify_signature_by_config',   '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000434', '00000000-0000-0000-0000-0000000000e7', 4, 'enqueue_scheduler_event',      '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000435', '00000000-0000-0000-0000-0000000000e7', 5, 'append_runtime_event_log',     '{"event_type":"scheduler_enqueued"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000435', '00000000-0000-0000-0000-0000000000e7', 5, 'append_runtime_event_log',     '{"event_type":"webhook_received","evidence_table_ref":"topology.webhook_intake_snapshots","projection_table_ref":"topology.webhook_intake_snapshots","status_value":"scheduler_enqueued"}', NULL, true),
     -- webhook_inbox_bundle hook_port
     ('00000000-0000-0000-0000-000000000441', '00000000-0000-0000-0000-0000000000e8', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000442', '00000000-0000-0000-0000-0000000000e8', 2, 'resolve_credential_reference', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000443', '00000000-0000-0000-0000-0000000000e8', 3, 'verify_signature_by_config',   '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000444', '00000000-0000-0000-0000-0000000000e8', 4, 'enqueue_scheduler_event',      '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000445', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',     '{"event_type":"scheduler_enqueued"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000445', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',     '{"event_type":"scheduler_enqueued","evidence_table_ref":"topology.webhook_intake_snapshots","projection_table_ref":"topology.webhook_intake_snapshots","status_value":"scheduler_enqueued"}', NULL, true),
     -- job_scheduler_bundle access_port
     ('00000000-0000-0000-0000-000000000451', '00000000-0000-0000-0000-0000000000e9', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000452', '00000000-0000-0000-0000-0000000000e9', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e9', 3, 'append_runtime_event_log',     '{"event_type":"trigger_received"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e9', 3, 'append_runtime_event_log',     '{"event_type":"trigger_received","evidence_table_ref":"topology.scheduler_external_event_evidence","projection_table_ref":"topology.scheduler_external_event_evidence","status_value":"trigger_received"}', NULL, true),
     -- job_scheduler_bundle hook_port (credential_kind = none; resolve_credential_reference skipped)
     ('00000000-0000-0000-0000-000000000481', '00000000-0000-0000-0000-0000000000ec', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000482', '00000000-0000-0000-0000-0000000000ec', 2, 'enqueue_scheduler_event',      '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000483', '00000000-0000-0000-0000-0000000000ec', 3, 'append_runtime_event_log',     '{"event_type":"scheduler_enqueued"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000483', '00000000-0000-0000-0000-0000000000ec', 3, 'append_runtime_event_log',     '{"event_type":"scheduler_enqueued","evidence_table_ref":"topology.scheduler_external_event_evidence","projection_table_ref":"topology.scheduler_external_event_evidence","status_value":"scheduler_enqueued"}', NULL, true),
     -- audit_approval_bundle response_port
     ('00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-0000000000ea', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-0000000000ea', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000463', '00000000-0000-0000-0000-0000000000ea', 3, 'build_http_request',           '{"method":"POST"}', NULL, true),
-    ('00000000-0000-0000-0000-000000000464', '00000000-0000-0000-0000-0000000000ea', 4, 'send_http',                    '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000465', '00000000-0000-0000-0000-0000000000ea', 5, 'append_runtime_event_log',     '{"event_type":"approval_reviewed"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000463', '00000000-0000-0000-0000-0000000000ea', 3, 'load_encrypted_credential_payload', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000464', '00000000-0000-0000-0000-0000000000ea', 4, 'decrypt_for_runtime_use',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000465', '00000000-0000-0000-0000-0000000000ea', 5, 'build_http_request',           '{"method":"POST"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000466', '00000000-0000-0000-0000-0000000000ea', 6, 'inject_authorization_header',  '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000467', '00000000-0000-0000-0000-0000000000ea', 7, 'send_http',                    '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000468', '00000000-0000-0000-0000-0000000000ea', 8, 'capture_response',             '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000469', '00000000-0000-0000-0000-0000000000ea', 9, 'append_runtime_event_log',     '{"event_type":"approval_reviewed","evidence_table_ref":"topology.audit_approval_evidence","projection_table_ref":"topology.audit_approval_evidence","status_value":"reviewed"}', NULL, true),
     -- export_sftp_bundle response_port
     ('00000000-0000-0000-0000-000000000471', '00000000-0000-0000-0000-0000000000eb', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-0000000000eb', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{"event_type":"transfer_initiated"}', NULL, true)
+    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'load_encrypted_credential_payload', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000474', '00000000-0000-0000-0000-0000000000eb', 4, 'decrypt_for_runtime_use',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000475', '00000000-0000-0000-0000-0000000000eb', 5, 'build_http_request',           '{"method":"POST"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000476', '00000000-0000-0000-0000-0000000000eb', 6, 'inject_authorization_header',  '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000477', '00000000-0000-0000-0000-0000000000eb', 7, 'send_http',                    '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000478', '00000000-0000-0000-0000-0000000000eb', 8, 'capture_response',             '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000479', '00000000-0000-0000-0000-0000000000eb', 9, 'append_runtime_event_log',     '{"event_type":"transfer_initiated","evidence_table_ref":"topology.sftp_transfer_log","projection_table_ref":"topology.sftp_transfer_log","status_value":"transfer_initiated"}', NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
 
 -- file_storage_bundle domain operation steps use execute_abstract_function (manifest-authority).
@@ -2452,7 +2466,7 @@ ON CONFLICT (policy_id, step_order) DO NOTHING;
 -- These rows were inserted with ON CONFLICT DO NOTHING, so UPDATE is needed for re-seeds.
 UPDATE topology.external_port_policy_steps SET step_config = '{"method":"GET"}'  WHERE policy_step_id = '00000000-0000-0000-0000-000000000103';
 UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000203';
-UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000423';
+UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000425';
 UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000463';
 
 -- ---------------------------------------------------------------------------

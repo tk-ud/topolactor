@@ -143,6 +143,74 @@ public class ExternalPortSeedDrivenPolicyTests
             context.ExecutedOperationKeys);
     }
 
+
+    [Fact]
+    public async Task ExternalPortParentCompletion_ExternalCredentialResponsePolicy_ExecutesCredentialHttpOrder()
+    {
+        var http = new CapturingHttpClient();
+        var executor = new ExternalPortPolicyStepExecutor(
+            httpClient: http,
+            credentialReferenceResolver: new StaticCredentialReferenceResolver(),
+            crypto: new FakeExternalCredentialCrypto("Bearer runtime-token"));
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(),
+            "response_external_policy",
+            "response_port",
+            "email_bundle",
+            [
+                NewStep(1, "resolve_credential_reference"),
+                NewStep(2, "load_encrypted_credential_payload"),
+                NewStep(3, "decrypt_for_runtime_use"),
+                NewStep(4, "build_http_request", new Dictionary<string, string> { ["method"] = "POST", ["endpoint"] = "https://example.invalid/send" }),
+                NewStep(5, "inject_authorization_header"),
+                NewStep(6, "send_http")
+            ],
+            Active: true);
+        var context = new ExternalPortExecutionContext
+        {
+            PortRecord = new ExternalPortRecord(Guid.NewGuid(), "response_port", "email_bundle", "generic-http", "https://example.invalid/send", null, "Authorization", null, "external", "vault-ref", true)
+        };
+
+        await executor.ExecutePolicyAsync(policy, context);
+
+        Assert.Equal(new[]
+        {
+            "resolve_credential_reference",
+            "load_encrypted_credential_payload",
+            "decrypt_for_runtime_use",
+            "build_http_request",
+            "inject_authorization_header",
+            "send_http"
+        }, context.ExecutedOperationKeys);
+        Assert.NotNull(http.LastRequest);
+        Assert.Equal("Bearer runtime-token", http.LastRequest!.Headers["Authorization"]);
+    }
+
+    [Fact]
+    public void ExternalPortParentCompletion_SeedExternalPolicies_PreserveCredentialHttpOrder()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        foreach (var policyId in new[]
+        {
+            "00000000-0000-0000-0000-0000000000e4",
+            "00000000-0000-0000-0000-0000000000e5",
+            "00000000-0000-0000-0000-0000000000e6",
+            "00000000-0000-0000-0000-0000000000ea",
+            "00000000-0000-0000-0000-0000000000eb"
+        })
+        {
+            var policyRows = source.Split('\n')
+                .Where(line => line.Contains($"'{policyId}'", StringComparison.Ordinal))
+                .ToArray();
+            var load = Array.FindIndex(policyRows, line => line.Contains("load_encrypted_credential_payload", StringComparison.Ordinal));
+            var decrypt = Array.FindIndex(policyRows, line => line.Contains("decrypt_for_runtime_use", StringComparison.Ordinal));
+            var inject = Array.FindIndex(policyRows, line => line.Contains("inject_authorization_header", StringComparison.Ordinal));
+            var send = Array.FindIndex(policyRows, line => line.Contains("send_http", StringComparison.Ordinal));
+            Assert.True(load >= 0, $"{policyId} missing load_encrypted_credential_payload");
+            Assert.True(load < decrypt && decrypt < inject && inject < send, $"{policyId} credential/http order is not fail-closed");
+        }
+    }
+
     [Fact]
     public async Task ExecuteAsync_VerifySignatureByConfig_FailClosesOnMismatch()
     {
@@ -481,8 +549,40 @@ public class ExternalPortSeedDrivenPolicyTests
         public Task<ExternalPortRecord?> LoadPortRecordByCanonicalBindingAsync(string manifestKey, string tableRef, string portKind, Guid portId, string? routeKey, CancellationToken ct = default) =>
             Task.FromResult<ExternalPortRecord?>(null);
 
+        public Task<ExternalPortRecord?> LoadHookPortRecordAsync(string hookPath, string routeKey, CancellationToken ct = default) =>
+            Task.FromResult<ExternalPortRecord?>(null);
+
         public Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default) =>
             Task.FromResult<ExternalPortPolicy?>(null);
+    }
+
+    private sealed class StaticCredentialReferenceResolver : IExternalPortCredentialReferenceResolver
+    {
+        public Task<ExternalCredentialVaultRecord?> ResolveCredentialReferenceAsync(ExternalPortRecord portRecord, CancellationToken ct = default) =>
+            Task.FromResult<ExternalCredentialVaultRecord?>(new ExternalCredentialVaultRecord(
+                Guid.NewGuid(),
+                portRecord.ProviderKind,
+                portRecord.RequiredByBundle,
+                "api_token",
+                "sha256:test",
+                new byte[] { 1, 2, 3 },
+                "env:TEST_KEY",
+                null,
+                300,
+                1,
+                null,
+                true));
+    }
+
+    private sealed class CapturingHttpClient : IExternalPortHttpClient
+    {
+        public ExternalPortHttpRequest? LastRequest { get; private set; }
+
+        public Task<ExternalPortHttpResponse> SendAsync(ExternalPortHttpRequest request, CancellationToken ct = default)
+        {
+            LastRequest = request;
+            return Task.FromResult(new ExternalPortHttpResponse(202, "{}"));
+        }
     }
 
     private sealed class FakeExternalCredentialCrypto : IExternalCredentialCrypto

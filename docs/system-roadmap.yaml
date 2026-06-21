@@ -641,7 +641,13 @@ system_roadmap_ssot:
       detail_ref:
         - docs/design/external-port-substrate-ssot.yaml
         - docs/design/runtime-bundle-secret-credential-ssot.yaml
-      evidence:
+      completion_condition:
+        - dispatch_resolution_uses_port_target_ref_or_hook_path_route_key_without_canonical_binding_consumer_branch
+        - credential_resolution_base_runs_load_decrypt_inject_send_order_for_external_credentials
+        - response_boundary_uses_projection_response_payload_and_sse_broadcast_lane
+        - consumer_evidence_repository_writes_seed_declared_tables_and_reads_sanitized_projection_rows
+        - provider_specific_runtime_client_handler_admin_ui_absent
+      evidence_ref:
         - db/topology_tables.sql#topology.external_credential_vault
         - db/topology_tables.sql#topology.external_credential_refresh_attempt
         - backend/runtime/ExternalPortCredentialRefresher.cs
