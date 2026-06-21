@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Scheduler;
 using Topolactor.Schema;
@@ -153,6 +154,8 @@ public class ExternalPortDispatchRuntimeTests
     [Fact]
     public async Task WebhookInboxPortConsumer_FullEventLogChain_LogsAllThreeEventTypes()
     {
+        // Policy step order mirrors seed_empty.sql policy e8:
+        // verify_signature_by_config BEFORE intake_snapshot write (SSOT: intake_snapshot_write_after_signature_verification).
         var hookPortId = Guid.Parse("00000000-0000-0000-0000-00000000cafe");
         var record = new ExternalPortRecord(
             hookPortId, "hook_port", "webhook_inbox_bundle", "generic-webhook",
@@ -162,20 +165,20 @@ public class ExternalPortDispatchRuntimeTests
             [
                 NewStep(1, "resolve_port_record"),
                 NewStep(2, "resolve_credential_reference"),
-                NewStep(3, "append_runtime_event_log", new Dictionary<string, string>
-                {
-                    ["event_type"] = "webhook_received",
-                    ["evidence_table_ref"] = "topology.webhook_intake_snapshots",
-                    ["projection_table_ref"] = "topology.webhook_intake_snapshots",
-                    ["status_value"] = "received"
-                }),
-                NewStep(4, "verify_signature_by_config", new Dictionary<string, string> { ["expected_signature"] = "sig-ok" }),
-                NewStep(5, "append_runtime_event_log", new Dictionary<string, string>
+                NewStep(3, "verify_signature_by_config", new Dictionary<string, string> { ["expected_signature"] = "sig-ok" }),
+                NewStep(4, "append_runtime_event_log", new Dictionary<string, string>
                 {
                     ["event_type"] = "signature_verification_success",
                     ["evidence_table_ref"] = "topology.signature_verification_evidence",
                     ["projection_table_ref"] = "topology.signature_verification_evidence",
                     ["status_value"] = "verified"
+                }),
+                NewStep(5, "append_runtime_event_log", new Dictionary<string, string>
+                {
+                    ["event_type"] = "webhook_received",
+                    ["evidence_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["projection_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["status_value"] = "received"
                 }),
                 NewStep(6, "enqueue_scheduler_event"),
                 NewStep(7, "append_runtime_event_log", new Dictionary<string, string>
@@ -200,6 +203,94 @@ public class ExternalPortDispatchRuntimeTests
         Assert.Contains("signature_verification_success", eventLog.EventTypes);
         Assert.Contains("scheduler_enqueued", eventLog.EventTypes);
         Assert.DoesNotContain("signature_verification_failure", eventLog.EventTypes);
+
+        // Verify step execution order: signature verification must precede intake snapshot write.
+        var sigSuccessIdx = eventLog.EventTypes.ToList().IndexOf("signature_verification_success");
+        var receivedIdx = eventLog.EventTypes.ToList().IndexOf("webhook_received");
+        Assert.True(sigSuccessIdx < receivedIdx, "signature_verification_success must be logged before webhook_received (intake snapshot).");
+    }
+
+    [Fact]
+    public async Task WebhookInboxPortConsumer_SchedulerChain_HookTriggerRoutesViaManifestDispatcherToExternalPortRuntime()
+    {
+        // Proves scheduler_then_runtime_route_only: intake uses EnqueueHookTrigger (not ExecuteAsync directly).
+        // Chain: EnqueueHookTrigger → scheduler background queue → ManifestDispatcher → external_port_runtime → ExternalPortDispatchRuntime.
+        var hookPortId = Guid.Parse("00000000-0000-0000-0000-00000000cafe");
+        var record = new ExternalPortRecord(
+            hookPortId, "hook_port", "webhook_inbox_bundle", "generic-webhook",
+            null, "/hooks/webhook_inbox", "x-webhook-signature", "webhook_inbox", "none", null, Active: true);
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(), "webhook_inbox_hook_policy", "hook_port", "webhook_inbox_bundle",
+            [
+                NewStep(1, "resolve_port_record"),
+                NewStep(2, "resolve_credential_reference"),
+                NewStep(3, "verify_signature_by_config", new Dictionary<string, string> { ["expected_signature"] = "sig-ok" }),
+                NewStep(4, "append_runtime_event_log", new Dictionary<string, string>
+                {
+                    ["event_type"] = "signature_verification_success",
+                    ["evidence_table_ref"] = "topology.signature_verification_evidence",
+                    ["projection_table_ref"] = "topology.signature_verification_evidence",
+                    ["status_value"] = "verified"
+                }),
+                NewStep(5, "append_runtime_event_log", new Dictionary<string, string>
+                {
+                    ["event_type"] = "webhook_received",
+                    ["evidence_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["projection_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["status_value"] = "received"
+                }),
+                NewStep(6, "enqueue_scheduler_event"),
+                NewStep(7, "append_runtime_event_log", new Dictionary<string, string>
+                {
+                    ["event_type"] = "scheduler_enqueued",
+                    ["evidence_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["projection_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["status_value"] = "scheduler_enqueued"
+                })
+            ],
+            Active: true);
+
+        var eventLog = new CapturingRuntimeEventLogRepository();
+        var evidence = new FakeConsumerEvidenceRepository();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: eventLog, consumerEvidenceRepository: evidence);
+        var externalPortRuntime = new ExternalPortDispatchRuntime(
+            NullLogger<ExternalPortDispatchRuntime>.Instance,
+            new FakeRepo(record, policy),
+            executor);
+
+        var scheduler = BuildSchedulerWithExternalPortRuntime(externalPortRuntime);
+
+        var hookPayload = JsonSerializer.SerializeToElement(new
+        {
+            hook_path = "/hooks/webhook_inbox",
+            route_key = "webhook_inbox",
+            signature_input = new { signature = "sig-ok" },
+            dispatch_payload = new { event_id = "evt-chain-test" }
+        });
+        var hookRequest = new EndpointRequestDto(
+            "dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort",
+            null, hookPayload, null, "hook");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await scheduler.StartAsync(cts.Token);
+        try
+        {
+            var enqueued = scheduler.EnqueueHookTrigger(hookRequest);
+            Assert.True(enqueued, "EnqueueHookTrigger must return true (queue not full).");
+
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(4);
+            while (DateTimeOffset.UtcNow < deadline && !eventLog.EventTypes.Contains("scheduler_enqueued"))
+                await Task.Delay(30, cts.Token);
+
+            Assert.Contains("signature_verification_success", eventLog.EventTypes);
+            Assert.Contains("webhook_received", eventLog.EventTypes);
+            Assert.Contains("scheduler_enqueued", eventLog.EventTypes);
+            Assert.DoesNotContain("signature_verification_failure", eventLog.EventTypes);
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+        }
     }
 
     [Fact]
@@ -357,6 +448,37 @@ public class ExternalPortDispatchRuntimeTests
         }
     }
 
+    private static RuntimeTimelineScheduler BuildSchedulerWithExternalPortRuntime(ExternalPortDispatchRuntime externalPortRuntime)
+    {
+        var handlers = new Dictionary<string, IDispatchableRuntime>
+        {
+            ["topology_transform_runtime"] = externalPortRuntime,
+            ["external_port_runtime"]      = externalPortRuntime,
+            ["admin_runtime"]              = new NullRuntime(),
+            ["sse_projection_runtime"]     = new NullRuntime(),
+        };
+
+        var topologyRepo    = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var contextRouteRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
+        var uiTopoRepo      = new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double");
+        var topoVectorRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepo);
+        var adminRuntime    = new AdminRuntime(
+            NullLogger<AdminRuntime>.Instance,
+            contextRouteRepo,
+            new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, topologyRepo, topoVectorRuntime),
+            new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiTopoRepo),
+            uiTopoRepo);
+        var targetOverride  = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);
+        var dispatcher      = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            handlers,
+            new OperationVectorResolver(),
+            targetOverride,
+            manifestRepository: null);
+
+        return new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+    }
+
     private static string FindRepositoryFile(string relativePath)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -367,5 +489,11 @@ public class ExternalPortDispatchRuntimeTests
             dir = dir.Parent;
         }
         throw new FileNotFoundException(relativePath);
+    }
+
+    private sealed class NullRuntime : IDispatchableRuntime
+    {
+        public Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default) =>
+            Task.FromResult(new EndpointResponseDto(Success: true, Emission: null, Errors: []));
     }
 }

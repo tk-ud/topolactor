@@ -2470,24 +2470,25 @@ UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}'
 UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000463';
 
 -- webhook_inbox_bundle: expand policy e8 from 5 to 7 steps for full audit_log chain.
--- Renumber in reverse order to avoid UNIQUE (policy_id, step_order) conflicts.
+-- Renumber existing steps 4→6 and 5→7 in reverse order to avoid UNIQUE (policy_id, step_order) conflicts.
+-- Step 3 (verify_signature_by_config, ID 443) is intentionally left at step_order=3;
+-- intake_snapshot and signature_verification_evidence writes must only occur after signature verification.
 UPDATE topology.external_port_policy_steps SET step_order = 7 WHERE policy_step_id = '00000000-0000-0000-0000-000000000445';
 UPDATE topology.external_port_policy_steps SET step_order = 6 WHERE policy_step_id = '00000000-0000-0000-0000-000000000444';
-UPDATE topology.external_port_policy_steps SET step_order = 4 WHERE policy_step_id = '00000000-0000-0000-0000-000000000443';
--- Step 3: log webhook_received evidence before signature verification
+-- Step 4: log signature_verification_success evidence immediately after successful verification
 INSERT INTO topology.external_port_policy_steps
     (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
 VALUES
-    ('00000000-0000-0000-0000-000000000448', '00000000-0000-0000-0000-0000000000e8', 3, 'append_runtime_event_log',
-     '{"event_type":"webhook_received","evidence_table_ref":"topology.webhook_intake_snapshots","projection_table_ref":"topology.webhook_intake_snapshots","status_value":"received"}',
+    ('00000000-0000-0000-0000-000000000449', '00000000-0000-0000-0000-0000000000e8', 4, 'append_runtime_event_log',
+     '{"event_type":"signature_verification_success","evidence_table_ref":"topology.signature_verification_evidence","projection_table_ref":"topology.signature_verification_evidence","status_value":"verified"}',
      NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
--- Step 5: log signature_verification_success evidence after successful verification
+-- Step 5: write intake snapshot (webhook_received) only after signature is verified
 INSERT INTO topology.external_port_policy_steps
     (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
 VALUES
-    ('00000000-0000-0000-0000-000000000449', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',
-     '{"event_type":"signature_verification_success","evidence_table_ref":"topology.signature_verification_evidence","projection_table_ref":"topology.signature_verification_evidence","status_value":"verified"}',
+    ('00000000-0000-0000-0000-000000000448', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',
+     '{"event_type":"webhook_received","evidence_table_ref":"topology.webhook_intake_snapshots","projection_table_ref":"topology.webhook_intake_snapshots","status_value":"received"}',
      NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
 

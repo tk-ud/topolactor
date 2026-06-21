@@ -450,9 +450,11 @@ app.MapPost("/intake/legacy-change", (
 // hook_path and route_key are fixed to match the active hook_port record in seed.
 // Signature verification fail-close is enforced by the verify_signature_by_config policy step.
 // Raw body is passed as dispatch_payload for payload_hash computation only; never stored in plaintext.
+// Per SSOT scheduler_then_runtime_route_only: intake enqueues to scheduler as hook trigger;
+// scheduler → ManifestDispatcher → external_port_runtime is the canonical execution route.
 app.MapPost("/hooks/webhook_inbox", async (
     HttpContext ctx,
-    ExternalPortDispatchRuntime hookRuntime) =>
+    RuntimeTimelineScheduler scheduler) =>
 {
     var signatureHeader = ctx.Request.Headers.TryGetValue("x-webhook-signature", out var sig)
         ? sig.FirstOrDefault() ?? string.Empty
@@ -478,9 +480,13 @@ app.MapPost("/hooks/webhook_inbox", async (
     });
     var hookRequest = new EndpointRequestDto(
         "dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort",
-        null, hookPayload, null, "webhook");
-    var result = await hookRuntime.ExecuteAsync(hookRequest, null, ctx.RequestAborted);
-    return Results.Json(result, statusCode: result.Success ? 202 : 422);
+        null, hookPayload, null, "hook");
+    if (!scheduler.EnqueueHookTrigger(hookRequest))
+    {
+        ValidationError[] errors = [new ValidationError("SCHEDULER_QUEUE_FULL", "webhook intake rejected; runtime queue full.")];
+        return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 503);
+    }
+    return Results.Json(new EndpointResponseDto(true, null, []), statusCode: 202);
 });
 
 void AppendRefreshCookie(HttpResponse response, string refreshPlain)
