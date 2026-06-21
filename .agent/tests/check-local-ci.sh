@@ -45,6 +45,7 @@ run_check "UNIFIED_TEST_GATE" "bash .agent/tests/check-unified-test-gate.sh" "re
 run_check "RUNTIME_ENVIRONMENT" "bash .agent/tests/check-runtime-environment.sh" "required"
 run_check "EXTERNAL_PORT_COMPAT_ABSORPTION" "bash .agent/tests/check-external-port-compat-absorption.sh" "required"
 run_check "EXTERNAL_PORT_PARENT_COMPLETION" "bash .agent/tests/check-external-port-parent-completion.sh" "required"
+run_check "WEBHOOK_INBOX_PORT_CONSUMER" "bash .agent/tests/check-webhook-inbox-port-consumer.sh" "required"
 # check-structure.sh must run last.
 run_check "STRUCTURE_CHECK_LAST" "bash .agent/tests/check-structure.sh" "required"
 

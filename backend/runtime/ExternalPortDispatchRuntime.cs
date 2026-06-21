@@ -19,21 +19,25 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
     private readonly IExternalPortPolicyRepository _repository;
     private readonly IExternalPortPolicyStepExecutor _policyStepExecutor;
     private readonly SseEventBroadcaster? _sseBroadcaster;
+    private readonly IExternalPortRuntimeEventLogRepository? _runtimeEventLog;
 
     public ExternalPortDispatchRuntime(
         ILogger<ExternalPortDispatchRuntime> logger,
         IExternalPortPolicyRepository repository,
         IExternalPortPolicyStepExecutor policyStepExecutor,
-        SseEventBroadcaster? sseBroadcaster = null)
+        SseEventBroadcaster? sseBroadcaster = null,
+        IExternalPortRuntimeEventLogRepository? runtimeEventLog = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _policyStepExecutor = policyStepExecutor ?? throw new ArgumentNullException(nameof(policyStepExecutor));
         _sseBroadcaster = sseBroadcaster;
+        _runtimeEventLog = runtimeEventLog;
     }
 
     public async Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
     {
+        ExternalPortExecutionContext? context = null;
         try
         {
             ExternalPortRecord? record;
@@ -76,7 +80,7 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
             if (policy is null || !policy.Active || policy.PolicySteps.Count == 0)
                 return Fail("EXTERNAL_PORT_POLICY_MISSING", "No active external port policy/steps matched the resolved port record.");
 
-            var context = new ExternalPortExecutionContext
+            context = new ExternalPortExecutionContext
             {
                 PortRecord = record,
                 PortKind = record.PortKind,
@@ -115,6 +119,23 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
         {
             _logger.LogWarning(ex, "External port dispatch failed closed.");
+            if (_runtimeEventLog is not null &&
+                string.Equals(ex.Message, "EXTERNAL_SIGNATURE_VERIFICATION_FAILED", StringComparison.Ordinal) &&
+                context is not null)
+            {
+                try
+                {
+                    await _runtimeEventLog.AppendAsync(
+                        "signature_verification_failure",
+                        context.DispatchId,
+                        context.RequiredByBundle ?? context.PortRecord?.RequiredByBundle,
+                        ct);
+                }
+                catch (Exception logEx)
+                {
+                    _logger.LogWarning(logEx, "Failed to append signature_verification_failure to event log.");
+                }
+            }
             return Fail(ex.Message, "External port dispatch failed closed at the generic execution boundary.");
         }
     }

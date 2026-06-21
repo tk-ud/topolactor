@@ -2469,6 +2469,73 @@ UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}'
 UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000425';
 UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000463';
 
+-- webhook_inbox_bundle: expand policy e8 from 5 to 12 steps for full SSOT audit_log chain.
+-- intake_snapshot→validate→preview→explicit_apply→canonical_runtime_route boundary expressed in event log.
+-- Renumber existing steps to high step_orders first (reverse order avoids UNIQUE conflicts).
+-- Step 3 (verify_signature_by_config, ID 443) stays at step_order=3 (no UPDATE needed).
+UPDATE topology.external_port_policy_steps SET step_order = 12 WHERE policy_step_id = '00000000-0000-0000-0000-000000000445';
+UPDATE topology.external_port_policy_steps SET step_order =  9 WHERE policy_step_id = '00000000-0000-0000-0000-000000000444';
+-- Step 4: signature_verification_success evidence (only after verify_signature passes)
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000449', '00000000-0000-0000-0000-0000000000e8', 4, 'append_runtime_event_log',
+     '{"event_type":"signature_verification_success","evidence_table_ref":"topology.signature_verification_evidence","projection_table_ref":"topology.signature_verification_evidence","status_value":"verified"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- Step 5: intake snapshot write (webhook_received) — only after signature verified
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000448', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',
+     '{"event_type":"webhook_received","evidence_table_ref":"topology.webhook_intake_snapshots","projection_table_ref":"topology.webhook_intake_snapshots","status_value":"received"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- Step 6: intake_snapshot_created — canonical record that verified snapshot is created
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000450', '00000000-0000-0000-0000-0000000000e8', 6, 'append_runtime_event_log',
+     '{"event_type":"intake_snapshot_created","evidence_table_ref":"topology.webhook_intake_snapshots","status_value":"snapshot_created"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- Step 7: validation_completed — validate→preview→explicit_apply boundary (SSOT approval_boundary)
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000455', '00000000-0000-0000-0000-0000000000e8', 7, 'append_runtime_event_log',
+     '{"event_type":"validation_completed","evidence_table_ref":"topology.webhook_intake_snapshots","status_value":"validated"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- Step 8: preview_generated — preview boundary before explicit_apply
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000456', '00000000-0000-0000-0000-0000000000e8', 8, 'append_runtime_event_log',
+     '{"event_type":"preview_generated","evidence_table_ref":"topology.webhook_intake_snapshots","status_value":"preview_ready"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- Step 9: enqueue_scheduler_event — explicit_apply trigger (scheduler_then_runtime_route)
+-- (policy_step_id 444, was original step 4; renumbered to 9 above)
+-- Step 10: explicit_apply_initiated — audit evidence that scheduler apply was initiated
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000457', '00000000-0000-0000-0000-0000000000e8', 10, 'append_runtime_event_log',
+     '{"event_type":"explicit_apply_initiated","evidence_table_ref":"topology.webhook_intake_snapshots","status_value":"apply_initiated"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- Step 11: apply_completed — scheduler enqueue succeeded; intake-side apply is complete
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000454', '00000000-0000-0000-0000-0000000000e8', 11, 'append_runtime_event_log',
+     '{"event_type":"apply_completed","evidence_table_ref":"topology.webhook_intake_snapshots","status_value":"apply_completed"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- Step 12: scheduler_enqueued — final confirmation evidence
+-- (policy_step_id 445, was original step 5; renumbered to 12 above)
+
 -- ---------------------------------------------------------------------------
 -- Abstract function manifest for credential token refresh (af10).
 -- credential.refresh_token routes through external_port_runtime with 6 primitive steps:

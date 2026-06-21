@@ -199,7 +199,8 @@ builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
         sp.GetRequiredService<ILogger<ExternalPortDispatchRuntime>>(),
         sp.GetRequiredService<IExternalPortPolicyRepository>(),
         sp.GetRequiredService<IExternalPortPolicyStepExecutor>(),
-        sp.GetRequiredService<SseEventBroadcaster>()));
+        sp.GetRequiredService<SseEventBroadcaster>(),
+        sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>(sp =>
@@ -443,6 +444,48 @@ app.MapPost("/intake/legacy-change", (
     var role = jwtGuard.TryGetRole(token);
     var result = intake.Handle(request, role ?? string.Empty);
     return Results.Json(result, statusCode: result.Accepted ? 202 : 422);
+});
+
+// POST /hooks/webhook_inbox — generic webhook intake boundary (no JWT; signature verified by policy step).
+// hook_path and route_key are fixed to match the active hook_port record in seed.
+// Signature verification fail-close is enforced by the verify_signature_by_config policy step.
+// Raw body is passed as dispatch_payload for payload_hash computation only; never stored in plaintext.
+// Per SSOT scheduler_then_runtime_route_only: intake enqueues to scheduler as hook trigger;
+// scheduler → ManifestDispatcher → external_port_runtime is the canonical execution route.
+app.MapPost("/hooks/webhook_inbox", async (
+    HttpContext ctx,
+    RuntimeTimelineScheduler scheduler) =>
+{
+    var signatureHeader = ctx.Request.Headers.TryGetValue("x-webhook-signature", out var sig)
+        ? sig.FirstOrDefault() ?? string.Empty
+        : string.Empty;
+
+    JsonElement bodyElement;
+    try
+    {
+        bodyElement = await JsonSerializer.DeserializeAsync<JsonElement>(ctx.Request.Body, cancellationToken: ctx.RequestAborted);
+    }
+    catch
+    {
+        ValidationError[] parseErrors = [new ValidationError("WEBHOOK_INTAKE_BODY_INVALID", "Request body must be valid JSON.")];
+        return Results.Json(new EndpointResponseDto(false, null, parseErrors), statusCode: 422);
+    }
+
+    var hookPayload = JsonSerializer.SerializeToElement(new
+    {
+        hook_path = "/hooks/webhook_inbox",
+        route_key = "webhook_inbox",
+        signature_input = new { signature = signatureHeader },
+        dispatch_payload = bodyElement
+    });
+    var hookRequest = new EndpointRequestDto(
+        "dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort",
+        null, hookPayload, null, "hook");
+    // AlignAndDispatchAsync routes via scheduler → ManifestDispatcher → external_port_runtime
+    // and returns the result synchronously, enabling explicit rejection on signature failure
+    // per SSOT failure_policy.on_signature_verification_failure: reject_webhook_explicitly.
+    var result = await scheduler.AlignAndDispatchAsync(hookRequest, ctx.RequestAborted);
+    return Results.Json(result, statusCode: result.Success ? 202 : 422);
 });
 
 void AppendRefreshCookie(HttpResponse response, string refreshPlain)
