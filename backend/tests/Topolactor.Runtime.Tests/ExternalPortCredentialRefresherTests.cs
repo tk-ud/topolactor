@@ -186,6 +186,22 @@ public class ExternalPortSeedDrivenPolicyTests
         Assert.Equal("Bearer runtime-token", http.LastRequest!.Headers["Authorization"]);
     }
 
+
+    [Fact]
+    public void ExternalPortParentCompletion_ConsumerEvidenceRepository_ValidatesTableRefThroughManifestBindingsAndKeepsShapeAdapterProviderAgnostic()
+    {
+        var source = File.ReadAllText(FindRepositoryFile("backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs"));
+
+        Assert.Contains("physical_table_manifest_bindings", source);
+        Assert.Contains("topology.physical_tables", source);
+        Assert.Contains("hubs.topology_manifests", source);
+        Assert.Contains("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_NOT_MANIFEST_BOUND", source);
+        Assert.Contains("DDL shape adapter", source);
+        Assert.DoesNotContain("ProviderKind", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("switch (requiredByBundle", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("switch (provider", source, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void ExternalPortParentCompletion_SeedExternalPolicies_PreserveCredentialHttpOrder()
     {

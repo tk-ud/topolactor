@@ -16,6 +16,7 @@ ROADMAP=docs/system-roadmap.yaml
 printf '=== external_port_substrate parent completion guard ===\n'
 printf '=== executing runtime boundary tests ===\n'
 dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --filter "ExternalPortParentCompletion" --no-restore
+dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --filter "ExternalPortConsumerEvidenceRepositoryLiveDbTests" --no-restore
 
 
 for table in \
@@ -74,6 +75,8 @@ check "$EXEC" "enqueue_scheduler_event"
 check "$EXEC" "append_runtime_event_log"
 check "$PROGRAM" "IExternalPortRuntimeEventLogRepository"
 check "$PROGRAM" "IExternalPortConsumerEvidenceRepository"
+check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "physical_table_manifest_bindings"
+check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "evidence_json->>'dispatch_id' = @entityId"
 check "$PROGRAM" "ExternalPortDispatchRuntime"
 check "$PROGRAM" "RuntimeTimelineScheduler"
 

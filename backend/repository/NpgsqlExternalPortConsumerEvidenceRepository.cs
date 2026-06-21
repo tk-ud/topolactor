@@ -9,6 +9,9 @@ namespace Topolactor.Repository;
 
 public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPortConsumerEvidenceRepository
 {
+    // Fixed SQL below is a DDL shape adapter only: tableRef authority is still data-defined
+    // and must be present in active topology.physical_table_manifest_bindings before use.
+    // This adapter does not select provider_kind or required_by_bundle runtime/client behavior.
     private static readonly IReadOnlySet<string> AllowedTableRefs = new HashSet<string>(StringComparer.Ordinal)
     {
         "topology.email_delivery_evidence",
@@ -38,6 +41,7 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         var evidenceJson = BuildEvidenceJson(eventType, entityId, requiredByBundle, context, stepConfig);
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
+        await ValidateTableRefBoundToActiveManifestAsync(conn, tableRef, ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = InsertSql(tableRef);
         AddCommonParameters(cmd, eventType, entityId, requiredByBundle, context, stepConfig, evidenceJson);
@@ -52,8 +56,12 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         CancellationToken ct = default)
     {
         EnsureAllowed(tableRef);
+        if (string.IsNullOrWhiteSpace(entityId))
+            throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_ENTITY_ID_REQUIRED");
+
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
+        await ValidateTableRefBoundToActiveManifestAsync(conn, tableRef, ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = SelectSql(tableRef);
         cmd.Parameters.AddWithValue("requiredByBundle", (object?)requiredByBundle ?? DBNull.Value);
@@ -95,14 +103,14 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
 
     private static string SelectSql(string tableRef) => tableRef switch
     {
-        "topology.email_delivery_evidence" => "SELECT event_type, email_draft_id::text AS entity_id, delivery_status AS status, evidence_json::text FROM topology.email_delivery_evidence ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.webhook_intake_snapshots" => "SELECT 'webhook_received' AS event_type, scheduler_event_ref AS entity_id, 'received' AS status, evidence_json::text FROM topology.webhook_intake_snapshots WHERE (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY received_at DESC LIMIT @limit",
-        "topology.signature_verification_evidence" => "SELECT 'signature_verification' AS event_type, webhook_intake_snapshot_id::text AS entity_id, verification_status AS status, evidence_json::text FROM topology.signature_verification_evidence WHERE (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.payment_state_projections" => "SELECT 'payment_state_projected' AS event_type, webhook_intake_snapshot_id::text AS entity_id, payment_state AS status, evidence_json::text FROM topology.payment_state_projections ORDER BY projected_at DESC LIMIT @limit",
-        "topology.scheduler_external_event_evidence" => "SELECT 'scheduler_enqueued' AS event_type, trigger_ref AS entity_id, scheduler_status AS status, evidence_json::text FROM topology.scheduler_external_event_evidence WHERE (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.audit_approval_evidence" => "SELECT event_type, approval_request_id::text AS entity_id, approval_status AS status, evidence_json::text FROM topology.audit_approval_evidence ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.audit_notification_evidence" => "SELECT 'notification_recorded' AS event_type, response_port_ref AS entity_id, notification_status AS status, evidence_json::text FROM topology.audit_notification_evidence ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.sftp_transfer_log" => "SELECT 'transfer_projected' AS event_type, response_port_ref AS entity_id, transfer_status AS status, evidence_json::text FROM topology.sftp_transfer_log ORDER BY recorded_at DESC LIMIT @limit",
+        "topology.email_delivery_evidence" => "SELECT event_type, evidence_json->>'dispatch_id' AS entity_id, delivery_status AS status, evidence_json::text FROM topology.email_delivery_evidence WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY recorded_at DESC LIMIT @limit",
+        "topology.webhook_intake_snapshots" => "SELECT 'webhook_received' AS event_type, evidence_json->>'dispatch_id' AS entity_id, 'received' AS status, evidence_json::text FROM topology.webhook_intake_snapshots WHERE evidence_json->>'dispatch_id' = @entityId AND (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY received_at DESC LIMIT @limit",
+        "topology.signature_verification_evidence" => "SELECT 'signature_verification' AS event_type, evidence_json->>'dispatch_id' AS entity_id, verification_status AS status, evidence_json::text FROM topology.signature_verification_evidence WHERE evidence_json->>'dispatch_id' = @entityId AND (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY recorded_at DESC LIMIT @limit",
+        "topology.payment_state_projections" => "SELECT 'payment_state_projected' AS event_type, evidence_json->>'dispatch_id' AS entity_id, payment_state AS status, evidence_json::text FROM topology.payment_state_projections WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY projected_at DESC LIMIT @limit",
+        "topology.scheduler_external_event_evidence" => "SELECT 'scheduler_enqueued' AS event_type, evidence_json->>'dispatch_id' AS entity_id, scheduler_status AS status, evidence_json::text FROM topology.scheduler_external_event_evidence WHERE evidence_json->>'dispatch_id' = @entityId AND (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY recorded_at DESC LIMIT @limit",
+        "topology.audit_approval_evidence" => "SELECT event_type, evidence_json->>'dispatch_id' AS entity_id, approval_status AS status, evidence_json::text FROM topology.audit_approval_evidence WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY recorded_at DESC LIMIT @limit",
+        "topology.audit_notification_evidence" => "SELECT 'notification_recorded' AS event_type, evidence_json->>'dispatch_id' AS entity_id, notification_status AS status, evidence_json::text FROM topology.audit_notification_evidence WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY recorded_at DESC LIMIT @limit",
+        "topology.sftp_transfer_log" => "SELECT 'transfer_projected' AS event_type, evidence_json->>'dispatch_id' AS entity_id, transfer_status AS status, evidence_json::text FROM topology.sftp_transfer_log WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY recorded_at DESC LIMIT @limit",
         _ => throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_UNSUPPORTED")
     };
 
@@ -125,12 +133,34 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         JsonSerializer.Serialize(new Dictionary<string, string?>
         {
             ["event_type"] = eventType,
+            ["dispatch_id"] = entityId ?? context.DispatchId,
             ["entity_id"] = entityId,
             ["required_by_bundle"] = requiredByBundle,
             ["port_kind"] = context.PortKind,
             ["route_key"] = context.RouteKey,
             ["projection_table_ref"] = Read(stepConfig, "projection_table_ref")
         }.Where(static kvp => !string.IsNullOrWhiteSpace(kvp.Value)).ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!));
+
+    private static async Task ValidateTableRefBoundToActiveManifestAsync(NpgsqlConnection conn, string tableRef, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT 1
+            FROM topology.physical_tables pt
+            JOIN topology.physical_table_manifest_bindings pmb
+              ON pmb.physical_table_id = pt.physical_table_id
+             AND pmb.active = true
+            JOIN hubs.topology_manifests tm
+              ON tm.topology_manifest_id = pmb.topology_manifest_id
+             AND tm.status = 'active'
+            WHERE pt.active = true
+              AND pt.table_ref = @tableRef
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("tableRef", tableRef);
+        if (await cmd.ExecuteScalarAsync(ct) is null)
+            throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_NOT_MANIFEST_BOUND");
+    }
 
     private static string ComputePayloadHash(JsonElement? payload)
     {

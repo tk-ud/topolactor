@@ -82,6 +82,7 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
                 PortKind = record.PortKind,
                 RequiredByBundle = record.RequiredByBundle,
                 RouteKey = routeKey,
+                DispatchId = Guid.NewGuid().ToString("N"),
                 RequestPayload = ReadObjectProperty(request.Payload, "dispatch_payload"),
                 OutputProp = ReadStringProperty(request.Payload, "output_prop"),
                 SignatureInput = ReadStringMapProperty(request.Payload, "signature_input"),
@@ -99,6 +100,7 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
                 providerKind = record.ProviderKind,
                 credentialKind = record.CredentialKind,
                 policyKey = policy.PolicyKey,
+                dispatchId = context.DispatchId,
                 executedOperationKeys = context.ExecutedOperationKeys,
                 outputProp = context.OutputProp
             };

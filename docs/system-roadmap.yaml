@@ -662,11 +662,11 @@ system_roadmap_ssot:
         - .agent/tests/check-external-port-credential-vault-refresher.sh
         - .agent/tests/check-external-port-substrate-seed-coding.sh
       closed_gap_ref:
-        - external_port_policy_read_repository_implemented_consumer_runtime_wiring_not_started
+        - external_port_policy_read_repository_and_consumer_runtime_wiring_implemented
         - consumer_bundle_seed_binding_implemented_per_pr460_all_7_bundles
         - secure_consumer_dispatch_lane_named_invariant_added_to_ssot
-        - consumer_bundle_physical_table_manifest_evidence_projection_connected
-        - hook_port_receive_scheduler_enqueue_boundary_guarded
+        - consumer_bundle_physical_table_manifest_evidence_projection_runtime_connected
+        - hook_port_receive_scheduler_enqueue_runtime_event_and_projection_guarded
 
     product.email_port_consumer:
       bundle_id: email-port-consumer

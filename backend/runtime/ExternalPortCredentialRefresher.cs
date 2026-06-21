@@ -269,6 +269,8 @@ public sealed class ExternalPortExecutionContext
 
     public string? OutputProp { get; set; }
 
+    public string DispatchId { get; set; } = Guid.NewGuid().ToString("N");
+
     public IReadOnlyDictionary<string, string> SignatureConfig { get; set; } = new Dictionary<string, string>();
 
     public IReadOnlyDictionary<string, string> SignatureInput { get; set; } = new Dictionary<string, string>();
@@ -593,7 +595,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 if (!step.StepConfig.TryGetValue("event_type", out var eventType) || string.IsNullOrWhiteSpace(eventType))
                     throw new InvalidOperationException("EXTERNAL_PORT_RUNTIME_EVENT_LOG_EVENT_TYPE_MISSING");
 
-                string? entityId = null;
+                string? entityId = context.DispatchId;
                 if (step.StepConfig.TryGetValue("entity_ref_key", out var refKey) && !string.IsNullOrWhiteSpace(refKey))
                 {
                     entityId = ResolveEntityId(step.StepConfig, context);
