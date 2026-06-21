@@ -222,11 +222,13 @@ Deno.test("fileStoragePortConsumer: export_job preset seed uses portTargetRef wi
   // Projection response fields must be present (non-secret only)
   assertStringIncludes(seed, "authorization_key");
   assertStringIncludes(seed, "file_artifact_id");
-  // payloadFrom must include file_name and file_type to align with af02 c009/c00a bindings
+  // payloadFrom must include file_name and file_type to align with af02 c009/c00a bindings (required=true)
   assertStringIncludes(seed, "file_name_input");
   assertStringIncludes(seed, "file_type_input");
   assertStringIncludes(seed, `"file_name":"node:file_name_input.value"`);
   assertStringIncludes(seed, `"file_type":"node:file_type_input.value"`);
+  // file_type_input must be required:true to match af02 step 1 binding c00a (required=true from payload)
+  assertStringIncludes(seed, `"File type","required":true`);
   // unresolved_json must be empty (no caller resolution gap)
   assertStringIncludes(seed, "$$[]$$::jsonb");
   // Secret fields must be absent from the seed
