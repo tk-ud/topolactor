@@ -830,7 +830,7 @@ system_roadmap_ssot:
     product.scheduler_job_manifest_substrate:
       bundle_id: scheduler-job-manifest-substrate-implementation
       title: Admin-authored scheduler job manifest substrate
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: >-
         New extension roadmap item for a DB-backed scheduler job manifest substrate

@@ -18,7 +18,7 @@
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
 | `webhook-inbox-port-consumer` | webhook_inbox_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
 | `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
-| `scheduler-job-manifest-substrate-implementation` | admin-authored scheduler job manifest substrate 実装 | not_started | 1 | `product.scheduler_job_manifest_substrate` | `docs/design/scheduler-job-manifest-ssot.yaml` |
+| `scheduler-job-manifest-substrate-implementation` | admin-authored scheduler job manifest substrate 実装 | partial | 1 | `product.scheduler_job_manifest_substrate` | `docs/design/scheduler-job-manifest-ssot.yaml` |
 | `sql-attention-key-expansion-draft-lane-implementation` | SQL Attention key expansion draft lane 実装 | not_started | 1 | - | `docs/design/sql-attention-logs-ssot.yaml` |
 | `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
 | `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
@@ -344,7 +344,7 @@ topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に�
 
 ## Bundle `scheduler-job-manifest-substrate-implementation`
 
-**Status:** not_started
+**Status:** partial
 **Roadmap/status SSOT:** `product.scheduler_job_manifest_substrate`
 **SSOT:** `docs/design/scheduler-job-manifest-ssot.yaml`
 
