@@ -169,13 +169,15 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
+builder.Services.AddSingleton<IExternalPortConsumerEvidenceRepository>(_ =>
+    new NpgsqlExternalPortConsumerEvidenceRepository(connectionString));
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IExternalPortHttpClient>(sp =>
     new HttpExternalPortHttpClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ExternalPort")));
 builder.Services.AddSingleton<IExternalPortCredentialReferenceResolver>(sp =>
     new ExternalPortCredentialReferenceResolver(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<IExternalCredentialCrypto, AesExternalCredentialCrypto>();
-builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
+builder.Services.AddSingleton<ExternalPortPolicyStepExecutor>(sp =>
     new ExternalPortPolicyStepExecutor(
         httpClient: sp.GetRequiredService<IExternalPortHttpClient>(),
         credentialReferenceResolver: sp.GetRequiredService<IExternalPortCredentialReferenceResolver>(),
@@ -184,7 +186,14 @@ builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
         bundleHandlers: sp.GetServices<IExternalPortBundleStepHandler>(),
         dbFunctionRepository: sp.GetRequiredService<IExternalPortDbFunctionRepository>(),
         abstractFunctionExecutor: sp.GetRequiredService<AbstractFunctionExecutor>(),
-        runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
+        runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>(),
+        consumerEvidenceRepository: sp.GetRequiredService<IExternalPortConsumerEvidenceRepository>()));
+
+builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
+    new ExternalPortPolicyStepExecutorCompatibilityShim(
+        sp.GetRequiredService<ExternalPortPolicyStepExecutor>(),
+        sp.GetRequiredService<AbstractFunctionExecutor>()));
+
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
     new ExternalPortDispatchRuntime(
         sp.GetRequiredService<ILogger<ExternalPortDispatchRuntime>>(),

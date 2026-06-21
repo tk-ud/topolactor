@@ -623,9 +623,9 @@ system_roadmap_ssot:
     product.external_port_substrate:
       bundle_id: external-port-substrate-implementation
       title: External port substrate shared foundation
-      status: partial
-      production_ready: false
-      public_summary: Shared substrate for 7 consumer bundles (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp) + credential_requirement substrate. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). secret_credential_bundle is reclassified as credential_requirement substrate boundary — not a standalone consumer bundle. DB guarded credential vault DDL, generic refresher primitive skeleton, fixed-form auth/external credential management projection manifest seed, DB-backed external port policy read repository, DB repository atomic encrypted credential payload update, Design Inspector dispatchExternalPort event-to-generic-external-port-runtime boundary wiring, all 7 consumer bundle seed bindings (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp), and secure_consumer_dispatch_lane named invariant are present. Consumer bundle runtime execution (physical table / manifest / preset / evidence / checksum / projection connection per bundle) and provider/KMS/client implementations remain incomplete or out of scope.
+      status: implemented
+      production_ready: true
+      public_summary: Shared substrate for 7 consumer bundles (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp) + credential_requirement substrate. Defines access_port / response_port / hook_port as physical tables and credential_requirement as port record attachment (not standalone entity). DB guarded credential vault DDL, generic refresher primitive skeleton, fixed-form auth/external credential management projection manifest seed, DB-backed external port policy read repository, DB repository atomic encrypted credential payload update, dispatchExternalPort generic runtime boundary wiring, all 7 consumer bundle seed bindings, consumer bundle physical table / manifest binding / evidence projection surfaces, runtime_event_log evidence, generic hook enqueue boundary, and secure_consumer_dispatch_lane named invariant are present. Provider-specific clients/runtimes remain intentionally out of scope.
       scope:
         - external_access_ports_physical_table
         - external_response_ports_physical_table
@@ -641,7 +641,12 @@ system_roadmap_ssot:
       detail_ref:
         - docs/design/external-port-substrate-ssot.yaml
         - docs/design/runtime-bundle-secret-credential-ssot.yaml
-        - .agent/tasks/todo.md#external-port-substrate-implementation
+      completion_condition:
+        - dispatch_resolution_uses_port_target_ref_or_hook_path_route_key_without_canonical_binding_consumer_branch
+        - credential_resolution_base_runs_load_decrypt_inject_send_order_for_external_credentials
+        - response_boundary_uses_projection_response_payload_and_sse_broadcast_lane
+        - consumer_evidence_repository_writes_seed_declared_tables_and_reads_sanitized_projection_rows
+        - provider_specific_runtime_client_handler_admin_ui_absent
       evidence_ref:
         - db/topology_tables.sql#topology.external_credential_vault
         - db/topology_tables.sql#topology.external_credential_refresh_attempt
@@ -657,19 +662,11 @@ system_roadmap_ssot:
         - .agent/tests/check-external-port-credential-vault-refresher.sh
         - .agent/tests/check-external-port-substrate-seed-coding.sh
       closed_gap_ref:
-        - external_port_policy_read_repository_implemented_consumer_runtime_wiring_not_started
+        - external_port_policy_read_repository_and_consumer_runtime_wiring_implemented
         - consumer_bundle_seed_binding_implemented_per_pr460_all_7_bundles
         - secure_consumer_dispatch_lane_named_invariant_added_to_ssot
-      known_gap_ref:
-        - external_port_access_response_hook_tables_not_connected_to_consumer_bundles
-        - consumer_bundle_physical_table_and_manifest_binding_not_connected
-        - client_ui_consumer_portTargetRef_action_wiring_not_connected
-        - hook_consumer_hook_port_receive_wiring_not_connected
-        - consumer_bundle_evidence_and_runtime_event_log_not_connected
-        - consumer_bundle_projection_response_not_connected
-        - credential_admin_ui_panel_out_of_scope
-        - kms_or_encryption_vendor_selection_out_of_scope
-        - provider_specific_client_implementation_out_of_scope
+        - consumer_bundle_physical_table_manifest_evidence_projection_runtime_connected
+        - hook_port_receive_scheduler_enqueue_runtime_event_and_projection_guarded
 
     product.email_port_consumer:
       bundle_id: email-port-consumer
@@ -830,7 +827,7 @@ system_roadmap_ssot:
     product.scheduler_job_manifest_substrate:
       bundle_id: scheduler-job-manifest-substrate-implementation
       title: Admin-authored scheduler job manifest substrate
-      status: not_started
+      status: partial
       production_ready: false
       public_summary: >-
         New extension roadmap item for a DB-backed scheduler job manifest substrate
