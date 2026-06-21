@@ -123,6 +123,141 @@ public class ExternalPortDispatchRuntimeTests
     }
 
     [Fact]
+    public async Task WebhookInboxPortConsumer_SignatureVerificationFailure_FailsClosedAndDoesNotEnqueueScheduler()
+    {
+        var hookPortId = Guid.Parse("00000000-0000-0000-0000-00000000cafe");
+        var record = new ExternalPortRecord(
+            hookPortId, "hook_port", "webhook_inbox_bundle", "generic-webhook",
+            null, "/hooks/webhook_inbox", "x-webhook-signature", "webhook_inbox", "none", null, Active: true);
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(), "webhook_inbox_hook_policy", "hook_port", "webhook_inbox_bundle",
+            [
+                NewStep(1, "resolve_port_record"),
+                NewStep(2, "verify_signature_by_config", new Dictionary<string, string> { ["expected_signature"] = "expected-sig" }),
+                NewStep(3, "enqueue_scheduler_event")
+            ],
+            Active: true);
+        var repo = new FakeRepo(record, policy);
+        var eventLog = new CapturingRuntimeEventLogRepository();
+        var executor = new ExternalPortPolicyStepExecutor();
+        var runtime = new ExternalPortDispatchRuntime(NullLogger<ExternalPortDispatchRuntime>.Instance, repo, executor, null, eventLog);
+
+        var response = await runtime.ExecuteAsync(NewHookRouteRequest("/hooks/webhook_inbox", "webhook_inbox", "wrong-sig"), null);
+
+        Assert.False(response.Success);
+        Assert.Equal("EXTERNAL_SIGNATURE_VERIFICATION_FAILED", response.Errors[0].Code);
+        Assert.Contains("signature_verification_failure", eventLog.EventTypes);
+        Assert.DoesNotContain("scheduler_enqueued", eventLog.EventTypes);
+    }
+
+    [Fact]
+    public async Task WebhookInboxPortConsumer_FullEventLogChain_LogsAllThreeEventTypes()
+    {
+        var hookPortId = Guid.Parse("00000000-0000-0000-0000-00000000cafe");
+        var record = new ExternalPortRecord(
+            hookPortId, "hook_port", "webhook_inbox_bundle", "generic-webhook",
+            null, "/hooks/webhook_inbox", "x-webhook-signature", "webhook_inbox", "none", null, Active: true);
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(), "webhook_inbox_hook_policy", "hook_port", "webhook_inbox_bundle",
+            [
+                NewStep(1, "resolve_port_record"),
+                NewStep(2, "resolve_credential_reference"),
+                NewStep(3, "append_runtime_event_log", new Dictionary<string, string>
+                {
+                    ["event_type"] = "webhook_received",
+                    ["evidence_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["projection_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["status_value"] = "received"
+                }),
+                NewStep(4, "verify_signature_by_config", new Dictionary<string, string> { ["expected_signature"] = "sig-ok" }),
+                NewStep(5, "append_runtime_event_log", new Dictionary<string, string>
+                {
+                    ["event_type"] = "signature_verification_success",
+                    ["evidence_table_ref"] = "topology.signature_verification_evidence",
+                    ["projection_table_ref"] = "topology.signature_verification_evidence",
+                    ["status_value"] = "verified"
+                }),
+                NewStep(6, "enqueue_scheduler_event"),
+                NewStep(7, "append_runtime_event_log", new Dictionary<string, string>
+                {
+                    ["event_type"] = "scheduler_enqueued",
+                    ["evidence_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["projection_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["status_value"] = "scheduler_enqueued"
+                })
+            ],
+            Active: true);
+        var repo = new FakeRepo(record, policy);
+        var eventLog = new CapturingRuntimeEventLogRepository();
+        var evidence = new FakeConsumerEvidenceRepository();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: eventLog, consumerEvidenceRepository: evidence);
+        var runtime = new ExternalPortDispatchRuntime(NullLogger<ExternalPortDispatchRuntime>.Instance, repo, executor);
+
+        var response = await runtime.ExecuteAsync(NewHookRouteRequest("/hooks/webhook_inbox", "webhook_inbox", "sig-ok"), null);
+
+        Assert.True(response.Success);
+        Assert.Contains("webhook_received", eventLog.EventTypes);
+        Assert.Contains("signature_verification_success", eventLog.EventTypes);
+        Assert.Contains("scheduler_enqueued", eventLog.EventTypes);
+        Assert.DoesNotContain("signature_verification_failure", eventLog.EventTypes);
+    }
+
+    [Fact]
+    public async Task WebhookInboxPortConsumer_SsePayload_ExcludesRawWebhookPayloadAndCredentials()
+    {
+        var hookPortId = Guid.Parse("00000000-0000-0000-0000-00000000cafe");
+        var record = new ExternalPortRecord(
+            hookPortId, "hook_port", "webhook_inbox_bundle", "generic-webhook",
+            null, "/hooks/webhook_inbox", "x-webhook-signature", "webhook_inbox", "none", null, Active: true);
+        var policy = new ExternalPortPolicy(
+            Guid.NewGuid(), "webhook_inbox_hook_policy", "hook_port", "webhook_inbox_bundle",
+            [
+                NewStep(1, "resolve_port_record"),
+                NewStep(2, "verify_signature_by_config", new Dictionary<string, string> { ["expected_signature"] = "sig-ok" }),
+                NewStep(3, "enqueue_scheduler_event"),
+                NewStep(4, "append_runtime_event_log", new Dictionary<string, string>
+                {
+                    ["event_type"] = "scheduler_enqueued",
+                    ["evidence_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["projection_table_ref"] = "topology.webhook_intake_snapshots",
+                    ["status_value"] = "scheduler_enqueued"
+                })
+            ],
+            Active: true);
+        var repo = new FakeRepo(record, policy);
+        var eventLog = new FakeRuntimeEventLogRepository();
+        var evidence = new FakeConsumerEvidenceRepository();
+        var broadcaster = new SseEventBroadcaster();
+        var subscription = broadcaster.Subscribe();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: eventLog, consumerEvidenceRepository: evidence);
+        var runtime = new ExternalPortDispatchRuntime(NullLogger<ExternalPortDispatchRuntime>.Instance, repo, executor, broadcaster);
+
+        var sensitivePayload = JsonSerializer.SerializeToElement(new
+        {
+            hook_path = "/hooks/webhook_inbox",
+            route_key = "webhook_inbox",
+            signature_input = new { signature = "sig-ok" },
+            dispatch_payload = new
+            {
+                event_id = "evt-sse-test",
+                raw_secret = "sk_live_must_not_appear_in_sse",
+                webhook_token = "whsec_sensitive_value"
+            }
+        });
+        var sensitiveRequest = new EndpointRequestDto(
+            "dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort",
+            null, sensitivePayload, null, "webhook");
+        var response = await runtime.ExecuteAsync(sensitiveRequest, null);
+
+        Assert.True(response.Success);
+        Assert.True(subscription.Reader.TryRead(out var evt));
+        Assert.Equal("external_port_dispatch", evt.EventType);
+        Assert.DoesNotContain("sk_live_must_not_appear_in_sse", evt.Data, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("whsec_sensitive_value", evt.Data, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("raw_secret", evt.Data, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Source_DoesNotContainProviderKindBranching()
     {
         var source = File.ReadAllText(FindRepositoryFile("backend/runtime/ExternalPortDispatchRuntime.cs"));
@@ -185,6 +320,17 @@ public class ExternalPortDispatchRuntimeTests
         public Task AppendAsync(string eventType, string? entityId, string? requiredByBundle, CancellationToken ct = default)
         {
             LastEventType = eventType;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class CapturingRuntimeEventLogRepository : IExternalPortRuntimeEventLogRepository
+    {
+        private readonly List<string> _eventTypes = new();
+        public IReadOnlyList<string> EventTypes => _eventTypes;
+        public Task AppendAsync(string eventType, string? entityId, string? requiredByBundle, CancellationToken ct = default)
+        {
+            _eventTypes.Add(eventType);
             return Task.CompletedTask;
         }
     }

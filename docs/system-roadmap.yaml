@@ -785,23 +785,31 @@ system_roadmap_ssot:
     product.webhook_inbox_port_consumer:
       bundle_id: webhook-inbox-port-consumer
       title: Webhook Inbox bundle port consumer implementation
-      status: partial
-      production_ready: false
-      public_summary: Webhook Inbox Bundle as port consumer of external_port_substrate. hook_port consumer (not UI/client consumer). Seed binding (hook_port / webhook signing key credential_requirement / policy_steps including verify_signature_by_config + enqueue_scheduler_event) implemented per PR#460. Remaining work is physical table (webhook_intake_snapshot / signature_verification_evidence), manifest binding, hook_port receive wiring (hook_path / route_key resolution → scheduler enqueue boundary), evidence/runtime_event_log, and projection response. Webhook provider-specific client not added.
+      status: implemented
+      production_ready: true
+      public_summary: Webhook Inbox Bundle implemented as port consumer of external_port_substrate. hook_port consumer using generic hook lane (hook_path/route_key → port record resolution → signature verification → intake snapshot/evidence → scheduler enqueue → runtime_event_log → sanitized projection → SSE lane). Physical tables (webhook_intake_snapshots / signature_verification_evidence) connected. 7-step policy chain with webhook_received / signature_verification_success / scheduler_enqueued evidence. Signature verification fail-close with signature_verification_failure event log. HTTP endpoint /hooks/webhook_inbox (no JWT; signature verified by policy step). SSE projection excludes raw payload, signature headers, credentials. No webhook-specific runtime/client added.
       scope:
         - webhook_inbox_hook_port_consumer_definition
         - webhook_signing_key_credential_requirement_as_port_attachment
         - scheduler_then_runtime_route_boundary
         - signature_verification_required
+        - webhook_received_evidence
+        - signature_verification_evidence
+        - scheduler_enqueued_evidence
+        - signature_verification_failure_event_log
+        - http_intake_endpoint_no_jwt
+        - sse_sanitized_projection_only
       detail_ref:
         - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
-        - .agent/tasks/todo.md#webhook-inbox-port-consumer
       closed_gap_ref:
         - webhook_inbox_seed_binding_and_credential_requirement_implemented_per_pr460
-      known_gap_ref:
-        - webhook_intake_schema_implementation_not_started
-        - scheduler_hook_trigger_wiring_implementation_not_started
+        - webhook_intake_schema_connected
+        - signature_verification_evidence_connected
+        - generic_hook_lane_wired
+        - evidence_and_runtime_event_log_implemented
+        - projection_response_implemented
+        - sse_sanitized_projection_verified
 
     product.job_scheduler_port_consumer:
       bundle_id: job-scheduler-port-consumer

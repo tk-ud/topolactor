@@ -15,7 +15,6 @@
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
-| `webhook-inbox-port-consumer` | webhook_inbox_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-webhook-inbox-ssot.yaml` |
 | `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
 | `scheduler-job-manifest-substrate-implementation` | admin-authored scheduler job manifest substrate 実装 | partial | 1 | `product.scheduler_job_manifest_substrate` | `docs/design/scheduler-job-manifest-ssot.yaml` |
 | `sql-attention-key-expansion-draft-lane-implementation` | SQL Attention key expansion draft lane 実装 | not_started | 1 | - | `docs/design/sql-attention-logs-ssot.yaml` |
@@ -232,29 +231,6 @@ PR#460 完了済み: hook_port (stripe) seed binding / credential_requirement / 
 対応資料:
 - `docs/design/runtime-bundle-stripe-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
-
----
-
-## Bundle `webhook-inbox-port-consumer`
-
-**Status:** partial
-**SSOT:** `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
-
-PR#460 完了済み: hook_port (generic_webhook) seed binding / credential_requirement / policy_steps (verify_signature_by_config / enqueue_scheduler_event)。hook consumer のため UI Builder portTargetRef 配線ではなく hook_port receive wiring を使用する。
-残作業は physical table / intake snapshot / verification evidence / scheduler wiring 接続。webhook provider-specific client / runtime は追加しない。
-既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
-
-残 todo:
-- [ ] webhook_intake_snapshot / signature_verification_evidence physical table 接続実装
-- [ ] physical table manifest binding (webhook_inbox manifest / screen_data_shape)
-- [ ] generic hook lane seed/wiring: hook_path / route_key resolution → scheduler enqueue boundary（webhook 専用 handler/runtime 新設なし; hook_port_receive → scheduler_enqueue_event → external_port_runtime）
-- [ ] evidence / runtime_event_log: webhook_received / signature_verification_success / signature_verification_failure / intake_snapshot_created / scheduler_enqueued
-- [ ] projection response: intake status / verification evidence projection
-
-対応資料:
-- `docs/design/runtime-bundle-webhook-inbox-ssot.yaml`
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
 
 ---
 

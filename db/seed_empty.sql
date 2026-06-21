@@ -2469,6 +2469,28 @@ UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}'
 UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000425';
 UPDATE topology.external_port_policy_steps SET step_config = '{"method":"POST"}' WHERE policy_step_id = '00000000-0000-0000-0000-000000000463';
 
+-- webhook_inbox_bundle: expand policy e8 from 5 to 7 steps for full audit_log chain.
+-- Renumber in reverse order to avoid UNIQUE (policy_id, step_order) conflicts.
+UPDATE topology.external_port_policy_steps SET step_order = 7 WHERE policy_step_id = '00000000-0000-0000-0000-000000000445';
+UPDATE topology.external_port_policy_steps SET step_order = 6 WHERE policy_step_id = '00000000-0000-0000-0000-000000000444';
+UPDATE topology.external_port_policy_steps SET step_order = 4 WHERE policy_step_id = '00000000-0000-0000-0000-000000000443';
+-- Step 3: log webhook_received evidence before signature verification
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, step_config_secret_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000448', '00000000-0000-0000-0000-0000000000e8', 3, 'append_runtime_event_log',
+     '{"event_type":"webhook_received","evidence_table_ref":"topology.webhook_intake_snapshots","projection_table_ref":"topology.webhook_intake_snapshots","status_value":"received"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+-- Step 5: log signature_verification_success evidence after successful verification
+INSERT INTO topology.external_port_policy_steps
+    (policy_step_id, policy_id, step_order, operation_key, step_config, step_config_secret_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000449', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',
+     '{"event_type":"signature_verification_success","evidence_table_ref":"topology.signature_verification_evidence","projection_table_ref":"topology.signature_verification_evidence","status_value":"verified"}',
+     NULL, true)
+ON CONFLICT (policy_id, step_order) DO NOTHING;
+
 -- ---------------------------------------------------------------------------
 -- Abstract function manifest for credential token refresh (af10).
 -- credential.refresh_token routes through external_port_runtime with 6 primitive steps:
