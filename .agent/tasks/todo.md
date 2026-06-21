@@ -12,7 +12,6 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-read-export-port` | CLI/MCP dispatch-secured read/export/import-candidate port 実装 | not_started | 1 | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
-| `external-port-substrate-implementation` | external_port_substrate / 7 consumer bundles + credential_requirement substrate 実装 todo | partial | 1 | `product.external_port_substrate` | `docs/design/external-port-substrate-ssot.yaml` |
 | `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
@@ -141,64 +140,6 @@ NG軸:
 ---
 
 
-
-## Bundle `external-port-substrate-implementation`
-
-**Status:** partial
-**Roadmap/status SSOT:** `product.external_port_substrate`
-**SSOT:** `docs/design/external-port-substrate-ssot.yaml`
-
-問題点:
-external_port_substrate と 7 consumer bundles / credential_requirement substrate の SSOT 境界は確定済み。残作業は設計確定ではなく、DB seed / record / projection 解決、generic access/response/hook connect/receive、各 consumer bundle 接続を実装すること。
-
-目的:
-SSOT を再定義せず、`docs/design/external-port-substrate-ssot.yaml` と各 runtime bundle SSOT に従って external_port_substrate と 7 consumer bundles / credential_requirement substrate の実装残を管理する。詳細作業は `.agent/tasks/external-port-substrate-implementation-todo.md` へ委譲する。
-
-実装方針:
-- [x] `external-port-substrate-seed-coding` bundle increment: external port physical tables / seed policy-step surface / generic resolver-executor boundary を partial 実装する
-- [x] `auth-external-credential-management-topology-projection` bundle increment: auth / external credential management を fixed-form topology / manifest / screen_data_shape / Step 2.5 relation projection として seed 実装する
-- [x] DB repository atomic encrypted credential update を実装する
-- [x] `external-port-canonical-physical-binding-execution` bundle increment: physical table catalog / manifest binding seed / `LoadPortRecordByCanonicalBindingAsync` (admin projection validation only) を実装した。PR#458/#459 で追加された `canonical_binding_*` consumer dispatch branch は post-merge cleanup で削除済み。consumer path は `port_target_ref` lane のみ。
-- [x] consumer bundle seed binding: file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp の port records / policies / policy_steps を seed で追加した (runtime新設なし、port_target_ref lane 既存利用)。
-- [ ] consumer bundle の既存 generic lane への接続整理 (export_job → port record 解決 → generic connect 等) は各 bundle consumer todo で管理する。
-
-対応資料:
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
-- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/auth-db-session-credential-ssot.yaml`
-
-対象ファイル名:
-- `docs/design/external-port-substrate-ssot.yaml`
-- `db/topology_tables.sql`
-- `db/seed_empty.sql`
-- `backend/runtime/ExternalPortCredentialRefresher.cs`
-- `backend/repository/NpgsqlExternalPortPolicyRepository.cs`
-- `backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs`
-- `.agent/tests/check-external-port-substrate-seed-coding.sh`
-- `docs/design/extended-runtime-bundle-registry-ssot.yaml`
-- `docs/design/runtime-bundle-secret-credential-ssot.yaml`
-- `docs/system-roadmap.yaml`
-
-対象関数名またはruntime境界名:
-- `ExternalPortRecord`
-- `ExternalPortPolicy`
-- `ExternalPortPolicyStep`
-- `IExternalPortResolver`
-- `IExternalPortPolicyRepository`
-- `IExternalPortPolicyStepExecutor`
-- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
-- `ExternalPortResolver.ResolveAsync`
-
-対象 surface 名:
-- `external_port_substrate`（共通基盤 SSOT surface）
-- `external-port-substrate-seed-coding`（parent: `external-port-substrate-implementation`, partial）
-- `auth-external-credential-management-topology-projection`（parent: `external-port-substrate-implementation`, implemented）
-- `credential_requirement`（port record 付属要件 surface）
-- `admin_setting_projection`（port 設定 admin role write surface）
-
----
 
 ## Bundle `file-storage-port-consumer`
 

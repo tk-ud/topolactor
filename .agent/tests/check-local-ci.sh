@@ -44,6 +44,7 @@ run_check() {
 run_check "UNIFIED_TEST_GATE" "bash .agent/tests/check-unified-test-gate.sh" "required"
 run_check "RUNTIME_ENVIRONMENT" "bash .agent/tests/check-runtime-environment.sh" "required"
 run_check "EXTERNAL_PORT_COMPAT_ABSORPTION" "bash .agent/tests/check-external-port-compat-absorption.sh" "required"
+run_check "EXTERNAL_PORT_PARENT_COMPLETION" "bash .agent/tests/check-external-port-parent-completion.sh" "required"
 # check-structure.sh must run last.
 run_check "STRUCTURE_CHECK_LAST" "bash .agent/tests/check-structure.sh" "required"
 

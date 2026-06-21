@@ -2347,7 +2347,14 @@ WHERE policy_id IN (
     '00000000-0000-0000-0000-0000000000e5',
     '00000000-0000-0000-0000-0000000000ed',
     '00000000-0000-0000-0000-0000000000ee',
-    '00000000-0000-0000-0000-0000000000ef'
+    '00000000-0000-0000-0000-0000000000ef',
+    '00000000-0000-0000-0000-0000000000e6',
+    '00000000-0000-0000-0000-0000000000e7',
+    '00000000-0000-0000-0000-0000000000e8',
+    '00000000-0000-0000-0000-0000000000e9',
+    '00000000-0000-0000-0000-0000000000ec',
+    '00000000-0000-0000-0000-0000000000ea',
+    '00000000-0000-0000-0000-0000000000eb'
 );
 
 INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
@@ -2403,37 +2410,37 @@ VALUES
     ('00000000-0000-0000-0000-000000000422', '00000000-0000-0000-0000-0000000000e6', 2, 'resolve_credential_reference', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000423', '00000000-0000-0000-0000-0000000000e6', 3, 'build_http_request',           '{"method":"POST"}', NULL, true),
     ('00000000-0000-0000-0000-000000000424', '00000000-0000-0000-0000-0000000000e6', 4, 'send_http',                    '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000425', '00000000-0000-0000-0000-0000000000e6', 5, 'append_runtime_event_log',     '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000425', '00000000-0000-0000-0000-0000000000e6', 5, 'append_runtime_event_log',     '{"event_type":"send_success"}', NULL, true),
     -- stripe_bundle hook_port
     ('00000000-0000-0000-0000-000000000431', '00000000-0000-0000-0000-0000000000e7', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000432', '00000000-0000-0000-0000-0000000000e7', 2, 'resolve_credential_reference', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000433', '00000000-0000-0000-0000-0000000000e7', 3, 'verify_signature_by_config',   '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000434', '00000000-0000-0000-0000-0000000000e7', 4, 'enqueue_scheduler_event',      '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000435', '00000000-0000-0000-0000-0000000000e7', 5, 'append_runtime_event_log',     '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000435', '00000000-0000-0000-0000-0000000000e7', 5, 'append_runtime_event_log',     '{"event_type":"scheduler_enqueued"}', NULL, true),
     -- webhook_inbox_bundle hook_port
     ('00000000-0000-0000-0000-000000000441', '00000000-0000-0000-0000-0000000000e8', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000442', '00000000-0000-0000-0000-0000000000e8', 2, 'resolve_credential_reference', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000443', '00000000-0000-0000-0000-0000000000e8', 3, 'verify_signature_by_config',   '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000444', '00000000-0000-0000-0000-0000000000e8', 4, 'enqueue_scheduler_event',      '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000445', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',     '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000445', '00000000-0000-0000-0000-0000000000e8', 5, 'append_runtime_event_log',     '{"event_type":"scheduler_enqueued"}', NULL, true),
     -- job_scheduler_bundle access_port
     ('00000000-0000-0000-0000-000000000451', '00000000-0000-0000-0000-0000000000e9', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000452', '00000000-0000-0000-0000-0000000000e9', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e9', 3, 'append_runtime_event_log',     '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000453', '00000000-0000-0000-0000-0000000000e9', 3, 'append_runtime_event_log',     '{"event_type":"trigger_received"}', NULL, true),
     -- job_scheduler_bundle hook_port (credential_kind = none; resolve_credential_reference skipped)
     ('00000000-0000-0000-0000-000000000481', '00000000-0000-0000-0000-0000000000ec', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000482', '00000000-0000-0000-0000-0000000000ec', 2, 'enqueue_scheduler_event',      '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000483', '00000000-0000-0000-0000-0000000000ec', 3, 'append_runtime_event_log',     '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000483', '00000000-0000-0000-0000-0000000000ec', 3, 'append_runtime_event_log',     '{"event_type":"scheduler_enqueued"}', NULL, true),
     -- audit_approval_bundle response_port
     ('00000000-0000-0000-0000-000000000461', '00000000-0000-0000-0000-0000000000ea', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000462', '00000000-0000-0000-0000-0000000000ea', 2, 'resolve_credential_reference', '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000463', '00000000-0000-0000-0000-0000000000ea', 3, 'build_http_request',           '{"method":"POST"}', NULL, true),
     ('00000000-0000-0000-0000-000000000464', '00000000-0000-0000-0000-0000000000ea', 4, 'send_http',                    '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000465', '00000000-0000-0000-0000-0000000000ea', 5, 'append_runtime_event_log',     '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000465', '00000000-0000-0000-0000-0000000000ea', 5, 'append_runtime_event_log',     '{"event_type":"approval_reviewed"}', NULL, true),
     -- export_sftp_bundle response_port
     ('00000000-0000-0000-0000-000000000471', '00000000-0000-0000-0000-0000000000eb', 1, 'resolve_port_record',          '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-0000000000eb', 2, 'resolve_credential_reference', '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{}', NULL, true)
+    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb', 3, 'append_runtime_event_log',     '{"event_type":"transfer_initiated"}', NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
 
 -- file_storage_bundle domain operation steps use execute_abstract_function (manifest-authority).
@@ -2579,3 +2586,89 @@ VALUES (
     'active'
 )
 ON CONFLICT (manifest_id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- external_port_substrate consumer bundle completion physical catalog and
+-- manifest bindings. These are projection/evidence surfaces only; no provider
+-- credential, endpoint, token, or signed URL values are seeded.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
+VALUES
+    ('topology.email_drafts', 'topology', 'email_bundle', true),
+    ('topology.email_approval_records', 'topology', 'email_bundle', true),
+    ('topology.email_delivery_evidence', 'topology', 'email_bundle', true),
+    ('topology.webhook_intake_snapshots', 'topology', 'stripe_webhook_inbox_bundle', true),
+    ('topology.signature_verification_evidence', 'topology', 'stripe_webhook_inbox_bundle', true),
+    ('topology.payment_state_projections', 'topology', 'stripe_bundle', true),
+    ('topology.scheduler_external_event_evidence', 'topology', 'job_scheduler_bundle', true),
+    ('topology.audit_approval_requests', 'topology', 'audit_approval_bundle', true),
+    ('topology.audit_approval_evidence', 'topology', 'audit_approval_bundle', true),
+    ('topology.audit_notification_evidence', 'topology', 'audit_approval_bundle', true),
+    ('topology.sftp_transfer_log', 'topology', 'export_sftp_bundle', true)
+ON CONFLICT (table_ref) DO UPDATE
+    SET schema_name = EXCLUDED.schema_name,
+        category    = EXCLUDED.category,
+        active      = EXCLUDED.active;
+
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES
+    ('00000000-0000-0000-0000-0000000000a3', '{"description":"email_bundle","system":true}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a4', '{"description":"stripe_bundle","system":true}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a5', '{"description":"webhook_inbox_bundle","system":true}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a6', '{"description":"job_scheduler_bundle_external_intake","system":true}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a7', '{"description":"audit_approval_bundle","system":true}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a8', '{"description":"export_sftp_bundle","system":true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+VALUES
+    ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-0000000000a3', 'email.response_port.approval.delivery.projection', 'active', '{"source":"external-port-consumer-completion","bundle":"email_bundle","portTargetRefActionWiring":"dispatchExternalPort","preset":"physical_search_crud_aggregate.v1","responseProjection":"delivery_status_and_approval_evidence"}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a4', '00000000-0000-0000-0000-0000000000a4', 'stripe.hook_port.intake.payment.projection', 'active', '{"source":"external-port-consumer-completion","bundle":"stripe_bundle","hook_port_receive":"hook_path_route_key_to_scheduler_enqueue_event","responseProjection":"payment_state_projected"}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a5', '00000000-0000-0000-0000-0000000000a5', 'webhook_inbox.hook_port.intake.projection', 'active', '{"source":"external-port-consumer-completion","bundle":"webhook_inbox_bundle","hook_port_receive":"hook_path_route_key_to_scheduler_enqueue_event","responseProjection":"intake_snapshot_and_signature_evidence"}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a6', '00000000-0000-0000-0000-0000000000a6', 'job_scheduler.external_hook.evidence.projection', 'active', '{"source":"external-port-consumer-completion","bundle":"job_scheduler_bundle","builtInSchedulerPortDependency":"forbidden","externalHookOnly":"external_port_substrate"}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a7', '00000000-0000-0000-0000-0000000000a7', 'audit_approval.response_port.evidence.projection', 'active', '{"source":"external-port-consumer-completion","bundle":"audit_approval_bundle","portTargetRefActionWiring":"dispatchExternalPort","preset":"physical_search_crud_aggregate.v1","responseProjection":"approval_status_and_audit_evidence"}'::jsonb),
+    ('00000000-0000-0000-0000-0000000000a8', '00000000-0000-0000-0000-0000000000a8', 'export_sftp.response_port.transfer.projection', 'active', '{"source":"external-port-consumer-completion","bundle":"export_sftp_bundle","portTargetRefActionWiring":"dispatchExternalPort","preset":"physical_search_crud_aggregate.v1","checksumBoundary":"pre_and_post_transfer","responseProjection":"transfer_status"}'::jsonb)
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET manifest_key = EXCLUDED.manifest_key,
+        status       = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at   = now();
+
+INSERT INTO topology.physical_table_manifest_bindings
+    (physical_table_id, topology_manifest_id, active, binding_evidence_json)
+SELECT pt.physical_table_id,
+       CASE pt.category
+           WHEN 'email_bundle' THEN '00000000-0000-0000-0000-0000000000a3'::uuid
+           WHEN 'stripe_bundle' THEN '00000000-0000-0000-0000-0000000000a4'::uuid
+           WHEN 'stripe_webhook_inbox_bundle' THEN
+               CASE WHEN pt.table_ref = 'topology.payment_state_projections'
+                    THEN '00000000-0000-0000-0000-0000000000a4'::uuid
+                    ELSE '00000000-0000-0000-0000-0000000000a5'::uuid END
+           WHEN 'job_scheduler_bundle' THEN '00000000-0000-0000-0000-0000000000a6'::uuid
+           WHEN 'audit_approval_bundle' THEN '00000000-0000-0000-0000-0000000000a7'::uuid
+           WHEN 'export_sftp_bundle' THEN '00000000-0000-0000-0000-0000000000a8'::uuid
+       END,
+       true,
+       jsonb_build_object(
+           'source', 'external-port-consumer-completion',
+           'bundle', pt.category,
+           'uiBuilderPreset', CASE WHEN pt.category IN ('email_bundle','audit_approval_bundle','export_sftp_bundle') THEN 'physical_search_crud_aggregate.v1' ELSE NULL END,
+           'portTargetRefLane', true,
+           'credentialProjection', 'reference_only')
+FROM topology.physical_tables pt
+WHERE pt.table_ref IN (
+    'topology.email_drafts',
+    'topology.email_approval_records',
+    'topology.email_delivery_evidence',
+    'topology.webhook_intake_snapshots',
+    'topology.signature_verification_evidence',
+    'topology.payment_state_projections',
+    'topology.scheduler_external_event_evidence',
+    'topology.audit_approval_requests',
+    'topology.audit_approval_evidence',
+    'topology.audit_notification_evidence',
+    'topology.sftp_transfer_log')
+ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
+    SET active = true,
+        binding_evidence_json = EXCLUDED.binding_evidence_json,
+        updated_at = now();

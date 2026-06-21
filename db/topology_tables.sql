@@ -772,6 +772,115 @@ COMMENT ON TABLE topology.runtime_event_log IS
     'entity_id is opaque reference identifier only.';
 
 -- ---------------------------------------------------------------------------
+-- external_port_substrate consumer bundle evidence tables.
+-- These physical tables are generic evidence/projection surfaces only. Provider
+-- credentials, endpoint values, tokens, and signed URLs are never stored here.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.email_drafts (
+    email_draft_id      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    approval_record_id  UUID,
+    delivery_status     TEXT        NOT NULL DEFAULT 'draft',
+    response_port_ref   TEXT,
+    evidence_json       JSONB       NOT NULL DEFAULT '{}',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.email_approval_records (
+    approval_record_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    email_draft_id      UUID,
+    approval_status     TEXT        NOT NULL DEFAULT 'pending',
+    reviewed_by         TEXT,
+    reviewed_at         TIMESTAMPTZ,
+    evidence_json       JSONB       NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS topology.email_delivery_evidence (
+    delivery_evidence_id UUID       PRIMARY KEY DEFAULT gen_random_uuid(),
+    email_draft_id       UUID,
+    event_type           TEXT       NOT NULL,
+    delivery_status      TEXT       NOT NULL,
+    evidence_json        JSONB      NOT NULL DEFAULT '{}',
+    recorded_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.webhook_intake_snapshots (
+    webhook_intake_snapshot_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    required_by_bundle         TEXT NOT NULL,
+    route_key                  TEXT,
+    hook_path                  TEXT,
+    payload_hash               TEXT NOT NULL,
+    scheduler_event_ref        TEXT,
+    received_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    evidence_json              JSONB NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS topology.signature_verification_evidence (
+    signature_verification_evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    webhook_intake_snapshot_id         UUID,
+    required_by_bundle                 TEXT NOT NULL,
+    verification_status                TEXT NOT NULL,
+    evidence_json                      JSONB NOT NULL DEFAULT '{}',
+    recorded_at                        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.payment_state_projections (
+    payment_state_projection_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    webhook_intake_snapshot_id  UUID,
+    payment_state               TEXT NOT NULL,
+    evidence_json               JSONB NOT NULL DEFAULT '{}',
+    projected_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.scheduler_external_event_evidence (
+    scheduler_event_evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    required_by_bundle          TEXT NOT NULL DEFAULT 'job_scheduler_bundle',
+    trigger_ref                 TEXT,
+    scheduler_status            TEXT NOT NULL DEFAULT 'scheduler_enqueued',
+    evidence_json               JSONB NOT NULL DEFAULT '{}',
+    recorded_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.audit_approval_requests (
+    approval_request_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_status      TEXT NOT NULL DEFAULT 'pending',
+    response_port_ref   TEXT,
+    evidence_json       JSONB NOT NULL DEFAULT '{}',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.audit_approval_evidence (
+    approval_evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    approval_request_id  UUID,
+    event_type           TEXT NOT NULL,
+    approval_status      TEXT NOT NULL,
+    evidence_json        JSONB NOT NULL DEFAULT '{}',
+    recorded_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.audit_notification_evidence (
+    notification_evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    approval_request_id      UUID,
+    notification_status      TEXT NOT NULL,
+    response_port_ref        TEXT,
+    evidence_json            JSONB NOT NULL DEFAULT '{}',
+    recorded_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.sftp_transfer_log (
+    sftp_transfer_log_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    export_job_id        UUID,
+    transfer_status      TEXT NOT NULL DEFAULT 'pending',
+    checksum_before      TEXT,
+    checksum_after       TEXT,
+    manifest_ref         TEXT,
+    response_port_ref    TEXT,
+    evidence_json        JSONB NOT NULL DEFAULT '{}',
+    recorded_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
 -- file_storage_bundle domain PostgreSQL functions.
 -- Called via execute_abstract_function → abstract function manifests af01-af07
 -- → call_postgres_function primitive adapter (not via execute_db_function directly).
