@@ -481,12 +481,11 @@ app.MapPost("/hooks/webhook_inbox", async (
     var hookRequest = new EndpointRequestDto(
         "dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort",
         null, hookPayload, null, "hook");
-    if (!scheduler.EnqueueHookTrigger(hookRequest))
-    {
-        ValidationError[] errors = [new ValidationError("SCHEDULER_QUEUE_FULL", "webhook intake rejected; runtime queue full.")];
-        return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 503);
-    }
-    return Results.Json(new EndpointResponseDto(true, null, []), statusCode: 202);
+    // AlignAndDispatchAsync routes via scheduler → ManifestDispatcher → external_port_runtime
+    // and returns the result synchronously, enabling explicit rejection on signature failure
+    // per SSOT failure_policy.on_signature_verification_failure: reject_webhook_explicitly.
+    var result = await scheduler.AlignAndDispatchAsync(hookRequest, ctx.RequestAborted);
+    return Results.Json(result, statusCode: result.Success ? 202 : 422);
 });
 
 void AppendRefreshCookie(HttpResponse response, string refreshPlain)

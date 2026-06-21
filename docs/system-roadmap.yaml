@@ -806,12 +806,15 @@ system_roadmap_ssot:
         - hook_path_route_key_resolves_active_hook_port_record_fail_close_on_missing
         - signature_verification_fail_close_no_scheduler_enqueue_on_failure
         - signature_verification_failure_written_to_runtime_event_log
-        - webhook_received_signature_success_scheduler_enqueued_evidence_via_append_runtime_event_log
+        - explicit_rejection_to_caller_on_signature_failure_via_scheduler_align_and_dispatch
+        - intake_snapshot_created_validation_completed_preview_generated_explicit_apply_initiated_apply_completed_in_event_log
+        - intake_snapshot_write_after_signature_verification_only
         - consumer_evidence_correlated_by_dispatch_id_no_cross_dispatch_mixing
         - sse_projection_excludes_raw_payload_signature_headers_credentials
         - no_webhook_specific_runtime_client_handler_added
         - no_provider_kind_required_by_bundle_csharp_branching
         - http_intake_endpoint_no_jwt_signature_verified_by_policy_step
+        - scheduler_then_runtime_route_only_no_direct_runtime_execution_from_webhook
       closed_gap_ref:
         - webhook_inbox_seed_binding_and_credential_requirement_implemented_per_pr460
         - webhook_intake_schema_connected
