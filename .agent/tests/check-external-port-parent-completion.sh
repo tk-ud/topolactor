@@ -16,7 +16,7 @@ ROADMAP=docs/system-roadmap.yaml
 printf '=== external_port_substrate parent completion guard ===\n'
 printf '=== executing runtime boundary tests ===\n'
 dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --filter "ExternalPortParentCompletion" --no-restore
-dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --filter "ExternalPortConsumerEvidenceRepositoryLiveDbTests" --no-restore
+TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --filter "ExternalPortConsumerEvidenceRepositoryLiveDbTests" --no-restore
 
 
 for table in \
