@@ -222,10 +222,72 @@ Deno.test("fileStoragePortConsumer: export_job preset seed uses portTargetRef wi
   // Projection response fields must be present (non-secret only)
   assertStringIncludes(seed, "authorization_key");
   assertStringIncludes(seed, "file_artifact_id");
+  // payloadFrom must include file_name and file_type to align with af02 c009/c00a bindings
+  assertStringIncludes(seed, "file_name_input");
+  assertStringIncludes(seed, "file_type_input");
+  assertStringIncludes(seed, `"file_name":"node:file_name_input.value"`);
+  assertStringIncludes(seed, `"file_type":"node:file_type_input.value"`);
+  // unresolved_json must be empty (no caller resolution gap)
+  assertStringIncludes(seed, "$$[]$$::jsonb");
   // Secret fields must be absent from the seed
   assertEquals(seed.includes("signed_url_value"), false);
   assertEquals(seed.includes("storage_endpoint"), false);
   assertEquals(seed.includes("bucket_name"), false);
+});
+
+// Proves that the export_job preset seed's wiring_candidate_json (the DB SSOT for dispatchExternalPort)
+// correctly flows through draftPreviewResultToEmission + renderEmission + parseEventBinding.
+// This test is seed-derived: the portTargetRef and payloadFrom are extracted from the actual SQL seed
+// file rather than being handwritten. This anchors the frontend pipeline proof to the DB seed SSOT.
+// DB manifest proof (af02/af04 steps load correctly from seed_empty.sql) is in
+// backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs.
+Deno.test("fileStoragePortConsumer: export_job seed wiring_candidate_json portTargetRef flows through render pipeline (seed-derived)", async () => {
+  const seedSql = await Deno.readTextFile(new URL("../../db/file_storage_export_job_preset_seed.sql", import.meta.url));
+  // Extract wiring_candidate_json compile snapshot block — same extraction as presetSeedLineContract.test.ts
+  const sectionStart = seedSql.indexOf("INSERT INTO topology.mock_preset_compile_snapshot");
+  const section = seedSql.slice(sectionStart);
+  const blocks: unknown[] = [];
+  const re = /\$\$([\s\S]*?)\$\$::jsonb/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(section)) !== null) blocks.push(JSON.parse(m[1].trim()));
+  // blocks[2] = wiring_candidate_json
+  const wiringCandidates = blocks[2] as Array<Record<string, unknown>>;
+  assertExists(wiringCandidates[0]);
+  const binding = wiringCandidates[0].binding as Record<string, unknown>;
+  const portTargetRef = binding.portTargetRef as string;
+  const payloadFrom = binding.payloadFrom as Record<string, string>;
+  assertEquals(portTargetRef, `external-port:access_port:${FILE_STORAGE_ACCESS_PORT_ID}`);
+  assertExists(payloadFrom["file_name"]);
+  assertExists(payloadFrom["file_type"]);
+
+  // Build emission from the seed-extracted wiring and verify the render pipeline
+  const previewResult: DraftPreviewResult = {
+    success: true,
+    layoutId: "layout-file-storage-seed-derived",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    layoutNodes: [{
+      nodeId: "export_job_submit_button",
+      nodeKind: "catalog_component",
+      componentId: "export_job_submit_button",
+      componentKey: "button.primitive",
+      componentKind: "action/button",
+      orderIndex: 7,
+      runtimeInteractions: [{
+        trigger: "click",
+        actionType: "dispatchExternalPort",
+        portTargetRef,
+        payloadFrom,
+        outputProp: binding.outputProp as string,
+      }],
+    }],
+  };
+  const emission = draftPreviewResultToEmission(previewResult);
+  assertExists(emission);
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  assertExists(specs[0].runtimeSpec);
+  const parsed = factoryTestOnly.parseEventBinding(specs[0].runtimeSpec!.eventBinding.click);
+  assertExists(parsed);
+  assertEquals(parsed.externalPortDispatch?.portTargetRef, portTargetRef);
 });
 
 // Proves record_file_artifact projection response (af02 step 2 OutputProp) maps through
