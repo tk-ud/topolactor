@@ -375,6 +375,121 @@ public class FileStorageBundleDispatchTests
         Assert.DoesNotContain("'payload', 'record_table_ref'", seed);
     }
 
+    [Fact]
+    public void SeedSql_Af02Af04_HaveProjectionSteps_WithUpdatedOutputShape()
+    {
+        var seed = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        // af02 output_shape must include step2_result:OutputProp
+        Assert.Contains("\"result\":\"FileArtifactId\",\"step2_result\":\"OutputProp\"", seed);
+        // af04 output_shape must include step2_result:OutputProp
+        Assert.Contains("\"result\":\"AuthorizationKey\",\"step2_result\":\"OutputProp\"", seed);
+        // Projection steps bf0a and bf0b must be present
+        Assert.Contains("00000000-0000-0000-0000-00000000bf0a", seed);
+        Assert.Contains("00000000-0000-0000-0000-00000000bf0b", seed);
+        // Projection input bindings must be present
+        Assert.Contains("00000000-0000-0000-0000-00000000c022", seed);
+        Assert.Contains("00000000-0000-0000-0000-00000000c025", seed);
+    }
+
+    [Fact]
+    public void SeedSql_Af02ProjectionBindings_OmitStorageRefAndSignedUrl()
+    {
+        var seed = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        // Verify that bf0a input bindings exist for non-secret fields only
+        Assert.Contains("bf0a", seed);
+        Assert.Contains("'file_artifact_id', 'result_context'", seed);
+        Assert.Contains("'file_name',        'payload'", seed);
+        Assert.Contains("'file_type',        'payload'", seed);
+        // storage_ref must NOT appear as a non-secret binding in the projection step
+        Assert.DoesNotContain("'storage_ref',      'result_context'", seed);
+        Assert.DoesNotContain("'storage_ref',  'result_context'", seed);
+    }
+
+    [Fact]
+    public void SeedSql_Af04ProjectionBindings_OmitSignedUrlAndCredential()
+    {
+        var seed = File.ReadAllText(FindRepositoryFile("db/seed_empty.sql"));
+        // Verify bf0b input bindings: authorization_key (opaque) and file_artifact_id only
+        Assert.Contains("bf0b", seed);
+        Assert.Contains("'authorization_key', 'result_context'", seed);
+        // No signed_url or credential row in the bf0b binding section (deny keys in ARRAY[] don't count)
+        Assert.DoesNotContain("'00000000-0000-0000-0000-00000000bf0b', 'signed_url'", seed);
+        Assert.DoesNotContain("'00000000-0000-0000-0000-00000000bf0b', 'credential'", seed);
+        Assert.DoesNotContain("'00000000-0000-0000-0000-00000000bf0b', 'storage_ref'", seed);
+    }
+
+    [Fact]
+    public async Task ProjectionPrimitiveAdapter_DeniesSecretInputKey()
+    {
+        // Proves AbstractFunctionExecutor refuses a projection step with secret=true binding.
+        // This guards the af02/af04 projection steps from accidentally binding signed_url or storage_ref.
+        // No policy set in context — executor skips per-key policy check and only validates authority binding exists.
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 2, "projection", new Dictionary<string, string>(),
+            [new AbstractFunctionInputBinding("signed_url", "result_context", "SignedUrl", false, true)],
+            "OutputProp", true);
+
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "file_storage.test", "external_port_runtime", "file_storage_bundle",
+            [step], ["credential", "signed_url"], true,
+            [new AbstractFunctionAuthorityBinding("policy", "file_storage_access_port_generic", true)],
+            new Dictionary<string, string> { ["step2_result"] = "OutputProp" });
+
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), [new ProjectionPrimitiveAdapter()]);
+        // No Policy in context → policyKey is null → executor checks only that a policy authority binding exists
+        var context = new AbstractFunctionExecutionContext("file_storage_bundle", externalPortContext: new ExternalPortExecutionContext());
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => executor.ExecuteAsync("file_storage.test", context));
+        Assert.Equal(AbstractFunctionFailCloseStatus.SecretProjectionDenied, ex.Status);
+    }
+
+    [Fact]
+    public async Task ProjectionPrimitiveAdapter_SafeFields_SetsOutputProp()
+    {
+        // Proves the projection primitive correctly populates OutputProp with non-secret fields,
+        // mirroring what af02 step 2 (bf0a) does for file_artifact_id / file_name / file_type.
+        var step = new AbstractFunctionStep(
+            Guid.NewGuid(), 2, "projection", new Dictionary<string, string>(),
+            [
+                new AbstractFunctionInputBinding("file_artifact_id", "result_context", "FileArtifactId", true,  false),
+                new AbstractFunctionInputBinding("file_name",        "payload",        "file_name",       true,  false),
+                new AbstractFunctionInputBinding("file_type",        "payload",        "file_type",       false, false),
+            ],
+            "OutputProp", true);
+
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "file_storage.test_projection", "external_port_runtime", "file_storage_bundle",
+            [step], ["credential", "signed_url", "bucket", "endpoint", "storage_path", "storage_ref", "raw_storage_ref"], true,
+            [new AbstractFunctionAuthorityBinding("policy", "file_storage_access_port_generic", true)],
+            new Dictionary<string, string> { ["step2_result"] = "OutputProp" });
+
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), [new ProjectionPrimitiveAdapter()]);
+        using var payloadDoc = JsonDocument.Parse("""{"file_name":"export-2026-06.pdf","file_type":"pdf"}""");
+        // No Policy in context → policyKey is null → skips per-key policy check
+        var externalCtx = new ExternalPortExecutionContext();
+        var context = new AbstractFunctionExecutionContext("file_storage_bundle", requestPayload: payloadDoc.RootElement, externalPortContext: externalCtx);
+        context.StoreResult("FileArtifactId", Guid.Parse("11111111-0000-0000-0000-000000000001"));
+
+        await executor.ExecuteAsync("file_storage.test_projection", context);
+
+        Assert.NotNull(externalCtx.OutputProp);
+        var doc = JsonDocument.Parse(externalCtx.OutputProp!);
+        Assert.True(doc.RootElement.TryGetProperty("file_artifact_id", out _));
+        Assert.True(doc.RootElement.TryGetProperty("file_name", out var fileNameEl));
+        Assert.Equal("export-2026-06.pdf", fileNameEl.GetString());
+        Assert.False(doc.RootElement.TryGetProperty("signed_url", out _));
+        Assert.False(doc.RootElement.TryGetProperty("storage_ref", out _));
+        Assert.False(doc.RootElement.TryGetProperty("credential", out _));
+    }
+
+    private sealed class StaticManifestRepository : IAbstractFunctionManifestRepository
+    {
+        private readonly AbstractFunctionManifest _manifest;
+        public StaticManifestRepository(AbstractFunctionManifest manifest) => _manifest = manifest;
+        public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) => Task.FromResult<AbstractFunctionManifest?>(_manifest);
+    }
+
     private static ExternalPortPolicy BuildFileStoragePolicy(bool accessPort) =>
         new(Guid.NewGuid(), "file_storage_test_policy", accessPort ? "access_port" : "response_port", "file_storage_bundle",
         [

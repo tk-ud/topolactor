@@ -12,7 +12,7 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-read-export-port` | CLI/MCP dispatch-secured read/export/import-candidate port 実装 | not_started | 1 | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
-| `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
+| `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | implemented | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
 | `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
@@ -142,7 +142,7 @@ NG軸:
 
 ## Bundle `file-storage-port-consumer`
 
-**Status:** partial
+**Status:** implemented
 **SSOT:** `docs/design/runtime-bundle-file-storage-ssot.yaml`
 
 PR#460 完了済み: access_port / response_port seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
@@ -179,8 +179,10 @@ evidence / runtime_event_log 実装済み:
 - [x] frontend Test 4 を unit test scope に明確化 (DB 証明は backend integration test)
 
 残 todo:
-- [ ] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring (export_job → access/response port connect)
-- [ ] projection response: signed download authorization / file artifact projection
+- [x] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring (export_job → access/response port connect)
+      (db/file_storage_export_job_preset_seed.sql 追加; SEED_FILES に登録; 全 6 contract pass)
+- [x] projection response: signed download authorization / file artifact projection
+      (af02/af04 に projection step 2 追加: bf0a/bf0b, c022-c026; output_shape 更新; backend+frontend tests pass)
 - [x] record ↔ file_artifact attachment binding surface: bind / list / unbind は execute_abstract_function 経由 topology.fs_* DB function 実装（manifests af05-af07 / steps bf05-bf09 / input bindings c015-c021 / authority bindings for topology.record_file_attachments; record_table_ref は step_config binding source 経由の manifest authority であり payload 由来ではない; standalone attachments table 新設なし・既存 file_artifacts を artifact 正本として維持; signed URL / storage path / credential は projection_deny_keys により拒否; NpgsqlExternalPortDbFunctionRepository は stub に縮退済み）
 
 対応資料:

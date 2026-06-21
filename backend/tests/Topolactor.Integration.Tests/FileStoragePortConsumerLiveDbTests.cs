@@ -375,6 +375,66 @@ public class FileStoragePortConsumerLiveDbTests
         Assert.Equal("[]", afterUnbind);
     }
 
+    [Fact]
+    public async Task SeededAf02_RecordFileArtifact_HasProjectionStep2_WithOutputPropResultKey()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var manifestRepo = new NpgsqlAbstractFunctionManifestRepository(cs);
+        var manifest = await manifestRepo.LoadAsync("file_storage.record_file_artifact");
+        Assert.NotNull(manifest);
+        Assert.Equal("file_storage_bundle", manifest.AuthorityScope);
+        // Must have 2 steps: call_postgres_function + projection
+        var steps = manifest.Steps.Where(s => s.Active && !s.IsCompensationStep).OrderBy(s => s.StepOrder).ToList();
+        Assert.Equal(2, steps.Count);
+        Assert.Equal("call_postgres_function", steps[0].PrimitiveKey);
+        Assert.Equal("FileArtifactId", steps[0].ResultContextKey);
+        Assert.Equal("projection", steps[1].PrimitiveKey);
+        Assert.Equal("OutputProp", steps[1].ResultContextKey);
+        // Projection step must bind file_artifact_id, file_name, file_type — not storage_ref or signed_url
+        var projBindings = steps[1].InputBindings.Select(b => b.InputKey).ToList();
+        Assert.Contains("file_artifact_id", projBindings);
+        Assert.Contains("file_name", projBindings);
+        Assert.Contains("file_type", projBindings);
+        Assert.DoesNotContain("storage_ref", projBindings);
+        Assert.DoesNotContain("signed_url", projBindings);
+        Assert.DoesNotContain("credential", projBindings);
+        // Output shape must declare OutputProp as authorized result key
+        Assert.NotNull(manifest.OutputShape);
+        Assert.Contains(manifest.OutputShape, kvp => kvp.Value == "OutputProp");
+    }
+
+    [Fact]
+    public async Task SeededAf04_AuthorizeSignedDownload_HasProjectionStep2_WithOutputPropResultKey()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var manifestRepo = new NpgsqlAbstractFunctionManifestRepository(cs);
+        var manifest = await manifestRepo.LoadAsync("file_storage.authorize_signed_download");
+        Assert.NotNull(manifest);
+        Assert.Equal("file_storage_bundle", manifest.AuthorityScope);
+        var steps = manifest.Steps.Where(s => s.Active && !s.IsCompensationStep).OrderBy(s => s.StepOrder).ToList();
+        Assert.Equal(2, steps.Count);
+        Assert.Equal("call_postgres_function", steps[0].PrimitiveKey);
+        Assert.Equal("AuthorizationKey", steps[0].ResultContextKey);
+        Assert.Equal("projection", steps[1].PrimitiveKey);
+        Assert.Equal("OutputProp", steps[1].ResultContextKey);
+        // Projection step must bind authorization_key (opaque reference) and file_artifact_id — not signed_url
+        var projBindings = steps[1].InputBindings.Select(b => b.InputKey).ToList();
+        Assert.Contains("authorization_key", projBindings);
+        Assert.Contains("file_artifact_id", projBindings);
+        Assert.DoesNotContain("signed_url", projBindings);
+        Assert.DoesNotContain("storage_ref", projBindings);
+        Assert.DoesNotContain("credential", projBindings);
+        // No secret=true bindings allowed in projection step
+        Assert.All(steps[1].InputBindings, b => Assert.False(b.Secret));
+        // Output shape must declare OutputProp as authorized result key
+        Assert.NotNull(manifest.OutputShape);
+        Assert.Contains(manifest.OutputShape, kvp => kvp.Value == "OutputProp");
+    }
+
     private static string? GetConnectionString()
     {
         var cs = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");

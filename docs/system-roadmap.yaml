@@ -717,7 +717,7 @@ system_roadmap_ssot:
     product.file_storage_port_consumer:
       bundle_id: file-storage-port-consumer
       title: File/Storage bundle port consumer implementation
-      status: partial
+      status: implemented
       production_ready: false
       public_summary: >-
         File/Storage Bundle as port consumer of external_port_substrate. Seed binding
@@ -726,19 +726,25 @@ system_roadmap_ssot:
         and DB function executor implemented per PR#463. Credential resolution pipeline
         (load_encrypted_credential_payload / decrypt_for_runtime_use / inject_authorization_header)
         seeded in policy_steps 3-4-6. reference_key-based credential vault resolution in place.
-        SSE broadcast on dispatch completion. DB projection test via draftPreviewResultToEmission.
-        FileStorageBundleStepHandler retains only compute_checksum. Evidence/runtime_event_log
-        implemented: topology.runtime_event_log table, IExternalPortRuntimeEventLogRepository,
-        NpgsqlExternalPortRuntimeEventLogRepository, append_runtime_event_log step handler with
-        step_config-driven event_type/entity_ref_key resolution; 4 evidence steps interleaved in
-        17-step seed pipeline for e4/e5 (checksum_verified, export_job_initiated, file_write_completed,
-        signed_url_generated). Live DB projection proof in FileStoragePortConsumerLiveDbTests.
-        Attachment bind/list/unbind migrated to execute_abstract_function substrate per PR#481
-        (manifests af05-af07; record_table_ref from step_config binding source — manifest authority,
-        not payload; NpgsqlExternalPortDbFunctionRepository shrunk to stub).
-        Remaining partial: UI Builder portTargetRef wiring / preset, projection response.
-        Object storage provider-specific client not added.
-        external_integration_completion_gate: docs/design/runtime-bundle-file-storage-ssot.yaml#external_integration_completion_gate
+        SSE broadcast on dispatch completion. FileStorageBundleStepHandler retains only compute_checksum.
+        Evidence/runtime_event_log implemented: topology.runtime_event_log table,
+        IExternalPortRuntimeEventLogRepository, NpgsqlExternalPortRuntimeEventLogRepository,
+        append_runtime_event_log step handler; 4 evidence steps in 17-step seed pipeline
+        (checksum_verified, export_job_initiated, file_write_completed, signed_url_generated).
+        Live DB projection proof in FileStoragePortConsumerLiveDbTests. Attachment bind/list/unbind
+        migrated to execute_abstract_function substrate per PR#481 (manifests af05-af07).
+        UI Builder portTargetRef wiring: file_storage_export_job.v1 preset seed (derived from
+        physical_search_crud_aggregate.v1) wires export_job_submit_button to
+        external-port:access_port:f01 via dispatchExternalPort portTargetRef; payload fields
+        idempotency_key/export_format/period/requested_by/file_name/file_type align with af02
+        record_file_artifact step 1 required payload bindings. file_attachment_crud.v1 preset
+        (PR prior) wires bind/list/unbind to response_port:f0a/f0b/f0c. Both presets registered in
+        init.sql and pass 6 presetSeedLineContract contracts. Projection response: af02 step 2
+        (bf0a) projects file_artifact_id/file_name/file_type; af04 step 2 (bf0b) projects
+        authorization_key (opaque DB reference, not signed URL) and file_artifact_id. output_shape
+        updated on af02/af04. All projection bindings secret=false; storage_ref/signed_url/credential
+        absent from projection steps; blocked by projection_deny_keys on manifests.
+        Object storage provider-specific client not added (external_integration_completion_gate).
       scope:
         - file_storage_access_and_response_port_consumer_definition
         - object_storage_credential_requirement_as_port_attachment
@@ -748,13 +754,29 @@ system_roadmap_ssot:
         - docs/design/runtime-bundle-file-storage-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#file-storage-port-consumer
+      completion_condition:
+        - ui_builder_preset_seed_registered_in_init_sql_and_wires_portTargetRef_to_access_port
+        - payloadFrom_fields_align_with_af02_required_payload_bindings_file_name_file_type
+        - af02_step2_projects_file_artifact_id_file_name_file_type_via_OutputProp
+        - af04_step2_projects_authorization_key_opaque_reference_not_signed_url_via_OutputProp
+        - all_projection_bindings_secret_false_deny_keys_block_storage_ref_signed_url_credential
+        - provider_specific_client_absent_external_integration_completion_gate_preserved
+      evidence_ref:
+        - db/init.sql#file_storage_export_job_preset_seed
+        - db/file_storage_export_job_preset_seed.sql
+        - db/file_attachment_crud_preset_seed.sql
+        - db/seed_empty.sql#bf0a_af02_projection_step
+        - db/seed_empty.sql#bf0b_af04_projection_step
+        - backend/tests/Topolactor.Runtime.Tests/FileStorageBundleDispatchTests.cs
+        - backend/tests/Topolactor.Integration.Tests/FileStoragePortConsumerLiveDbTests.cs
+        - frontend/tests/fileStoragePortConsumer.test.ts
+        - frontend/tests/presetSeedLineContract.test.ts
       closed_gap_ref:
         - file_storage_seed_binding_and_credential_requirement_implemented_per_pr460
         - file_storage_physical_table_and_manifest_binding_not_connected
         - file_storage_checksum_and_manifest_runtime_not_connected
         - file_storage_evidence_and_runtime_event_log_not_connected
         - file_storage_attachment_binding_execute_abstract_function_migration_pr481
-      known_gap_ref:
         - file_storage_portTargetRef_action_wiring_and_preset_not_connected
         - file_storage_projection_response_not_connected
 

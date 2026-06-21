@@ -78,5 +78,8 @@
 \echo '[init.sql] applying aggregate_dashboard_preset_seed.sql'
 \i /db/aggregate_dashboard_preset_seed.sql
 
+\echo '[init.sql] applying file_storage_export_job_preset_seed.sql'
+\i /db/file_storage_export_job_preset_seed.sql
+
 \echo '[init.sql] applying ui_component_registry_preset_catalog_bootstrap.sql'
 \i /db/ui_component_registry_preset_catalog_bootstrap.sql
