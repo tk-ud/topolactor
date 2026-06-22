@@ -390,9 +390,19 @@ public class ExportSftpTransferLogDbStateTests
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM topology.export_jobs WHERE export_job_id = @id";
-        cmd.Parameters.AddWithValue("id", jobId);
-        await cmd.ExecuteNonQueryAsync();
+
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM topology.sftp_transfer_log WHERE export_job_id = @id";
+            cmd.Parameters.AddWithValue("id", jobId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "DELETE FROM topology.export_jobs WHERE export_job_id = @id";
+            cmd.Parameters.AddWithValue("id", jobId);
+            await cmd.ExecuteNonQueryAsync();
+        }
     }
 }
