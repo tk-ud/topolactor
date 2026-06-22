@@ -201,11 +201,72 @@ public class ExportSftpTransferLogDbStateTests
         return d;
     }
 
+    // Fixed UUIDs matching seed_empty.sql so ON CONFLICT is safe whether or not seed was applied.
+    private static readonly Guid SftpHubId = new("00000000-0000-0000-0000-0000000000a8");
+    private static readonly Guid SftpTopologyManifestId = new("00000000-0000-0000-0000-0000000000a8");
+
+    private static async Task EnsureSftpManifestBindingAsync(string cs)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                INSERT INTO hubs.hub (hub_id, relation)
+                VALUES (@hubId, '{"description":"export_sftp_bundle","system":true}')
+                ON CONFLICT (hub_id) DO NOTHING
+                """;
+            cmd.Parameters.AddWithValue("hubId", SftpHubId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                INSERT INTO hubs.topology_manifests
+                    (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+                VALUES (@manifestId, @hubId, 'export_sftp.response_port.transfer.projection', 'active', '{}'::jsonb)
+                ON CONFLICT (topology_manifest_id) DO NOTHING
+                """;
+            cmd.Parameters.AddWithValue("manifestId", SftpTopologyManifestId);
+            cmd.Parameters.AddWithValue("hubId", SftpHubId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        long physicalTableId;
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
+                VALUES ('topology.sftp_transfer_log', 'topology', 'export_sftp_bundle', true)
+                ON CONFLICT (table_ref) DO UPDATE SET active = true
+                RETURNING physical_table_id
+                """;
+            physicalTableId = (long)(await cmd.ExecuteScalarAsync())!;
+        }
+
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = """
+                INSERT INTO topology.physical_table_manifest_bindings
+                    (physical_table_id, topology_manifest_id, active, binding_evidence_json)
+                VALUES (@physicalTableId, @manifestId, true, '{}')
+                ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE SET active = true
+                """;
+            cmd.Parameters.AddWithValue("physicalTableId", physicalTableId);
+            cmd.Parameters.AddWithValue("manifestId", SftpTopologyManifestId);
+            await cmd.ExecuteNonQueryAsync();
+        }
+    }
+
     private static async Task<(Guid jobId, Guid artifactId, Guid manifestId, Guid checksumId)> InsertPrerequisitesAsync(
         string cs,
         string checksumFileValue = "sha256:test",
         string? manifestChecksum = null)
     {
+        await EnsureSftpManifestBindingAsync(cs);
+
         var jobId = Guid.NewGuid();
         var artifactId = Guid.NewGuid();
         var manifestId = Guid.NewGuid();
@@ -273,6 +334,8 @@ public class ExportSftpTransferLogDbStateTests
 
     private static async Task InsertExportJobOnlyAsync(string cs, Guid jobId)
     {
+        await EnsureSftpManifestBindingAsync(cs);
+
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
