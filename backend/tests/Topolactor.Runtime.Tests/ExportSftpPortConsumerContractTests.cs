@@ -186,8 +186,9 @@ public class ExportSftpPortConsumerContractTests
 
         // dispatch_payload must carry export_job_id so ExternalPortDispatchRuntime can surface it as RequestPayload
         Assert.NotNull(scheduler.LastEnqueuedRequest);
-        var enqueuedPayload = scheduler.LastEnqueuedRequest!.Payload;
-        Assert.True(enqueuedPayload.HasValue && enqueuedPayload.Value.TryGetProperty("dispatch_payload", out var dispatchPayload),
+        Assert.True(scheduler.LastEnqueuedRequest!.Payload.HasValue, "no payload on enqueued scheduler request");
+        var outerPayload = scheduler.LastEnqueuedRequest.Payload!.Value;
+        Assert.True(outerPayload.TryGetProperty("dispatch_payload", out var dispatchPayload),
             "dispatch_payload missing from enqueued scheduler request");
         Assert.Equal(exportJobId.ToString(), dispatchPayload.GetProperty("export_job_id").GetString());
         Assert.False(dispatchPayload.TryGetProperty("retry_requested", out _),
