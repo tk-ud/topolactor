@@ -785,7 +785,16 @@ system_roadmap_ssot:
       title: Export/SFTP bundle port consumer implementation
       status: implemented
       production_ready: false
-      public_summary: Export/SFTP Bundle as port consumer of external_port_substrate. Implemented on the generic response_port lane: topology.sftp_transfer_log depends on file-storage export_jobs/file_artifacts/export_manifests/file_checksum_records, manifest binding and safe screen_data_shape evidence are seeded, checksum/manifest failure is explicit, export_sftp_transfer.v1 CRUD-derived UI Builder preset uses portTargetRef external-port:response_port:f08, runtime_event_log records transfer_initiated/transfer_completed/transfer_failed/checksum_mismatch/retry_attempted, and projection response exposes transfer status only. SFTP provider-specific client/runtime and credential/endpoint/remote_path/raw provider projection are not added.
+      public_summary: >-
+        Export/SFTP Bundle as port consumer of external_port_substrate. Implemented on the
+        generic response_port lane: topology.sftp_transfer_log depends on file-storage
+        export_jobs/file_artifacts/export_manifests/file_checksum_records, manifest binding
+        and safe screen_data_shape evidence are seeded, checksum/manifest failure is explicit,
+        export_sftp_transfer.v1 CRUD-derived UI Builder preset uses portTargetRef
+        external-port:response_port:f08, runtime_event_log records transfer_initiated/
+        transfer_completed/transfer_failed/checksum_mismatch/retry_attempted, and projection
+        response exposes transfer status only. SFTP provider-specific client/runtime and
+        credential/endpoint/remote_path/raw provider projection are not added.
       scope:
         - export_sftp_response_port_consumer_definition
         - sftp_credential_requirement_as_port_attachment
@@ -810,6 +819,12 @@ system_roadmap_ssot:
         - export_sftp_evidence_and_runtime_event_log_connected
         - export_sftp_projection_response_connected
       known_gap_ref: []
+      completion_condition:
+        - sftp_transfer_log_references_file_storage_export_job_artifact_manifest_checksum
+        - export_sftp_response_port_policy_records_transfer_lifecycle_runtime_event_log
+        - export_sftp_transfer_preset_seed_registered_in_init_sql_and_wires_portTargetRef_to_response_port
+        - projection_response_exposes_transfer_status_safe_fields_only
+        - provider_specific_sftp_client_or_runtime_not_added
       resolved_gap_ref:
         - export_sftp_physical_table_and_manifest_binding_not_connected
         - export_sftp_checksum_and_manifest_verification_boundary_not_connected

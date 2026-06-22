@@ -89,10 +89,11 @@ inserted_mappings AS (
     RETURNING 1
 )
 INSERT INTO topology.mock_preset_compile_snapshot (
-    preset_id, layout_patch_json, package_membership_candidate_json,
-    wiring_candidate_json, style_candidate_json, unresolved_json, compile_status
+    preset_id, compiler_version, layout_patch_json,
+    package_membership_candidate_json, wiring_candidate_json, style_candidate_json, unresolved_json
 ) VALUES (
     (SELECT preset_id FROM preset),
+    'export-sftp-transfer-seed.v1',
     $${"nodes":[
       {"nodeId":"sftp_transfer_shell","nodeKind":"catalog_component","componentKey":"section.alias","componentKind":"disclosure_structure/section","parentNodeId":null,"slotKey":"root","orderIndex":0},
       {"nodeId":"export_job_id_input","nodeKind":"catalog_component","componentKey":"form_field.template","componentKind":"form_input/form_field","parentNodeId":"sftp_transfer_shell","slotKey":"body","orderIndex":1},
@@ -104,6 +105,5 @@ INSERT INTO topology.mock_preset_compile_snapshot (
     $${"activeTopologyWrite":false,"activeTopology":false}$$::jsonb,
     $$[{"nodeId":"sftp_transfer_submit_button","sourceObjectId":"sftp_transfer_submit_button","capabilityTag":"requires_event_binding","wiringKind":"response_port","targetSurface":"external_port","targetRef":"external-port:response_port:00000000-0000-0000-0000-000000000f08","status":"confirmed","binding":{"event":"click","actionType":"dispatchExternalPort","portTargetRef":"external-port:response_port:00000000-0000-0000-0000-000000000f08","payloadFrom":{"export_job_id":"node:export_job_id_input.value","transfer_request_ref":"node:transfer_request_ref_input.value","requested_by":"node:requested_by_input.value"},"outputProp":"sftpTransferResult","projectionTableRef":"topology.sftp_transfer_log","forbiddenProjectionFields":["credential","host","user","username","private_key","endpoint","remote_path","signed_url","raw_provider_response"]}}]$$::jsonb,
     $$[]$$::jsonb,
-    $$[]$$::jsonb,
-    'compiled'
+    $$[]$$::jsonb
 );
