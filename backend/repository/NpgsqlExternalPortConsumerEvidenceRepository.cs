@@ -42,9 +42,12 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await ValidateTableRefBoundToActiveManifestAsync(conn, tableRef, ct);
+        SftpTransferSourceRefs? sftpRefs = tableRef == "topology.sftp_transfer_log"
+            ? await ResolveSftpTransferSourceRefsAsync(conn, eventType, context, ct)
+            : null;
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = InsertSql(tableRef);
-        AddCommonParameters(cmd, eventType, entityId, requiredByBundle, context, stepConfig, evidenceJson);
+        AddCommonParameters(cmd, eventType, entityId, requiredByBundle, context, stepConfig, evidenceJson, sftpRefs);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -97,7 +100,7 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         "topology.scheduler_external_event_evidence" => "INSERT INTO topology.scheduler_external_event_evidence (required_by_bundle, trigger_ref, scheduler_status, evidence_json) VALUES (@requiredByBundle, @entityId, @statusValue, @evidenceJson)",
         "topology.audit_approval_evidence" => "INSERT INTO topology.audit_approval_evidence (event_type, approval_status, evidence_json) VALUES (@eventType, @statusValue, @evidenceJson)",
         "topology.audit_notification_evidence" => "INSERT INTO topology.audit_notification_evidence (notification_status, response_port_ref, evidence_json) VALUES (@statusValue, @entityId, @evidenceJson)",
-        "topology.sftp_transfer_log" => "INSERT INTO topology.sftp_transfer_log (export_job_id, transfer_status, checksum_before, checksum_after, manifest_ref, response_port_ref, evidence_json) VALUES (NULL, @statusValue, @checksumBefore, @checksumAfter, @manifestRef, @entityId, @evidenceJson)",
+        "topology.sftp_transfer_log" => "INSERT INTO topology.sftp_transfer_log (export_job_id, file_artifact_id, manifest_id, checksum_record_id, transfer_status, failure_reason, checksum_before, checksum_after, manifest_ref, response_port_ref, retry_evidence_json, evidence_json) VALUES (@exportJobId, @fileArtifactId, @manifestId, @checksumRecordId, @statusValue, @failureReason, @checksumBefore, @checksumAfter, @manifestRef, @entityId, @retryEvidenceJson, @evidenceJson)",
         _ => throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_UNSUPPORTED")
     };
 
@@ -114,7 +117,7 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         _ => throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_UNSUPPORTED")
     };
 
-    private static void AddCommonParameters(NpgsqlCommand cmd, string eventType, string? entityId, string? requiredByBundle, ExternalPortExecutionContext context, IReadOnlyDictionary<string, string> stepConfig, string evidenceJson)
+    private static void AddCommonParameters(NpgsqlCommand cmd, string eventType, string? entityId, string? requiredByBundle, ExternalPortExecutionContext context, IReadOnlyDictionary<string, string> stepConfig, string evidenceJson, SftpTransferSourceRefs? sftpRefs = null)
     {
         cmd.Parameters.AddWithValue("eventType", eventType);
         cmd.Parameters.AddWithValue("entityId", (object?)entityId ?? DBNull.Value);
@@ -123,10 +126,63 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         cmd.Parameters.AddWithValue("hookPath", (object?)context.PortRecord?.HookPath ?? DBNull.Value);
         cmd.Parameters.AddWithValue("payloadHash", ComputePayloadHash(context.RequestPayload));
         cmd.Parameters.AddWithValue("statusValue", FirstNonBlank(Read(stepConfig, "status_value"), eventType)!);
-        cmd.Parameters.AddWithValue("checksumBefore", (object?)context.ChecksumValue ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("checksumAfter", (object?)Read(stepConfig, "checksum_after_ref") ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("manifestRef", (object?)Read(stepConfig, "manifest_ref") ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("checksumBefore", (object?)sftpRefs?.ChecksumValue ?? (object?)context.ChecksumValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("checksumAfter", (object?)Read(stepConfig, "checksum_after_ref") ?? (object?)sftpRefs?.ChecksumValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("manifestRef", (object?)sftpRefs?.ManifestId.ToString() ?? (object?)Read(stepConfig, "manifest_ref") ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("exportJobId", sftpRefs is not null ? sftpRefs.ExportJobId : DBNull.Value);
+        cmd.Parameters.AddWithValue("fileArtifactId", sftpRefs is not null ? sftpRefs.FileArtifactId : DBNull.Value);
+        cmd.Parameters.AddWithValue("manifestId", sftpRefs is not null ? sftpRefs.ManifestId : DBNull.Value);
+        cmd.Parameters.AddWithValue("checksumRecordId", sftpRefs is not null ? sftpRefs.ChecksumRecordId : DBNull.Value);
+        cmd.Parameters.AddWithValue("failureReason", (object?)Read(stepConfig, "failure_reason") ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("retryEvidenceJson", NpgsqlDbType.Jsonb, BuildRetryEvidenceJson(eventType, stepConfig));
         cmd.Parameters.AddWithValue("evidenceJson", NpgsqlDbType.Jsonb, evidenceJson);
+    }
+
+    private static async Task<SftpTransferSourceRefs> ResolveSftpTransferSourceRefsAsync(NpgsqlConnection conn, string eventType, ExternalPortExecutionContext context, CancellationToken ct)
+    {
+        var exportJobId = ReadGuidProperty(context.RequestPayload, "export_job_id")
+            ?? context.ExportJobId
+            ?? throw new InvalidOperationException("SFTP_TRANSFER_EXPORT_JOB_ID_REQUIRED");
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT ej.export_job_id, fa.file_artifact_id, em.manifest_id, cr.checksum_record_id, cr.checksum_value, em.checksum
+            FROM topology.export_jobs ej
+            JOIN topology.export_manifests em
+              ON em.export_job_id = ej.export_job_id
+            JOIN topology.file_artifacts fa
+              ON fa.export_job_id = ej.export_job_id
+            JOIN topology.file_checksum_records cr
+              ON cr.export_job_id = ej.export_job_id
+             AND cr.file_artifact_id = fa.file_artifact_id
+            WHERE ej.export_job_id = @exportJobId
+              AND ej.status = 'completed'
+              AND cr.verification_status = 'verified'
+            ORDER BY fa.created_at DESC
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("exportJobId", exportJobId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            throw new InvalidOperationException("SFTP_TRANSFER_EXPORT_JOB_MANIFEST_CHECKSUM_REQUIRED");
+
+        var refs = new SftpTransferSourceRefs(
+            reader.GetGuid(0),
+            reader.GetGuid(1),
+            reader.GetGuid(2),
+            reader.GetGuid(3),
+            reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetString(5));
+
+        if (!string.Equals(eventType, "checksum_mismatch", StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(refs.ManifestChecksum) &&
+            !string.Equals(refs.ManifestChecksum, refs.ChecksumValue, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("SFTP_TRANSFER_CHECKSUM_MISMATCH");
+        }
+
+        return refs;
     }
 
     private static string BuildEvidenceJson(string eventType, string? entityId, string? requiredByBundle, ExternalPortExecutionContext context, IReadOnlyDictionary<string, string> stepConfig) =>
@@ -161,6 +217,32 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         if (await cmd.ExecuteScalarAsync(ct) is null)
             throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_NOT_MANIFEST_BOUND");
     }
+
+    private static string BuildRetryEvidenceJson(string eventType, IReadOnlyDictionary<string, string> stepConfig)
+    {
+        if (!string.Equals(eventType, "retry_attempted", StringComparison.Ordinal))
+            return "{}";
+        return JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["event_type"] = eventType,
+            ["retry_policy_ref"] = Read(stepConfig, "retry_policy_ref") ?? "explicit_retry_evidence"
+        });
+    }
+
+    private static Guid? ReadGuidProperty(JsonElement? payload, string name)
+    {
+        if (payload is not { ValueKind: JsonValueKind.Object } element) return null;
+        if (!element.TryGetProperty(name, out var prop) || prop.ValueKind != JsonValueKind.String) return null;
+        return Guid.TryParse(prop.GetString(), out var value) ? value : null;
+    }
+
+    private sealed record SftpTransferSourceRefs(
+        Guid ExportJobId,
+        Guid FileArtifactId,
+        Guid ManifestId,
+        Guid ChecksumRecordId,
+        string ChecksumValue,
+        string? ManifestChecksum);
 
     private static string ComputePayloadHash(JsonElement? payload)
     {

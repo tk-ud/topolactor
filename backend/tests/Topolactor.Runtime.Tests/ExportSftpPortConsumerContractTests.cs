@@ -51,6 +51,23 @@ public class ExportSftpPortConsumerContractTests
         Assert.DoesNotContain("BEGIN OPENSSH", ssot, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void NpgsqlEvidenceRepository_SftpTransferLog_RequiresCanonicalFileStorageRefsBeforeInsert()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "backend", "repository", "NpgsqlExternalPortConsumerEvidenceRepository.cs"));
+        Assert.Contains("ResolveSftpTransferSourceRefsAsync", source);
+        Assert.Contains("SFTP_TRANSFER_EXPORT_JOB_ID_REQUIRED", source);
+        Assert.Contains("SFTP_TRANSFER_EXPORT_JOB_MANIFEST_CHECKSUM_REQUIRED", source);
+        Assert.Contains("SFTP_TRANSFER_CHECKSUM_MISMATCH", source);
+        Assert.Contains("JOIN topology.export_manifests", source);
+        Assert.Contains("JOIN topology.file_artifacts", source);
+        Assert.Contains("JOIN topology.file_checksum_records", source);
+        Assert.Contains("ej.status = 'completed'", source);
+        Assert.Contains("cr.verification_status = 'verified'", source);
+        Assert.DoesNotContain("INSERT INTO topology.sftp_transfer_log (export_job_id, transfer_status", source);
+        Assert.DoesNotContain("VALUES (NULL, @statusValue", source);
+    }
+
     private static string RepoRoot([CallerFilePath] string sourceFile = "")
     {
         var fromSource = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "..", "..", ".."));
