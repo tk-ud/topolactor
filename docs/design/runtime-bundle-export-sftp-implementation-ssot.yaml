@@ -81,6 +81,21 @@ runtime_bundle_export_sftp_implementation_ssot:
           value: scheduler_retry_requested
           note: Placed in retry hook trigger payload. NOT from request payload.
       scheduler_boundary: ISchedulerEnqueueBoundary via RuntimeTimelineSchedulerEnqueueBoundary
+      dispatch_payload_authority:
+        export_job_id:
+          source: context.ExportJobId (set by abstract function steps in original dispatch)
+          placement: dispatch_payload nested in enqueue payload
+          purpose: >-
+            Preserves file_storage export_job reference across the
+            scheduler → ManifestDispatcher → ExternalPortDispatchRuntime re-dispatch boundary.
+            ExternalPortDispatchRuntime reads dispatch_payload as RequestPayload, so
+            export_job_id must appear there, not only in IdOrHubId.
+        retry_requested:
+          prohibited_in_dispatch_payload: true
+          reason: >-
+            Re-dispatched execution must follow the transfer lifecycle path (success/fail/mismatch).
+            Self-re-enqueue is prohibited. Payload semantics of retry scheduling and
+            scheduled retry execution are explicitly separated.
       enqueue_failure_policy:
         boundary_missing: throw EXTERNAL_PORT_SCHEDULER_ENQUEUE_BOUNDARY_MISSING
         queue_full: throw SCHEDULER_QUEUE_FULL

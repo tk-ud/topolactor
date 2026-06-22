@@ -169,6 +169,53 @@ public class ExportSftpPortConsumerContractTests
         Assert.Equal("enqueued", evidence.LastStepConfig?.GetValueOrDefault("scheduler_enqueue_result"));
     }
 
+    [Fact]
+    public async Task RetryEnqueue_DispatchPayload_CarriesExportJobIdAndReDispatchFollowsTransferPath()
+    {
+        // Phase 1: retry scheduling — context.ExportJobId set by abstract function steps
+        var exportJobId = Guid.NewGuid();
+        var step = NewLifecycleStep();
+        var retryLog = new CapturingRuntimeEventLogRepository();
+        var retryEvidence = new BranchingEvidenceRepository();
+        var scheduler = new CapturingSchedulerEnqueueBoundary();
+        var retryExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: retryLog, consumerEvidenceRepository: retryEvidence, schedulerEnqueueBoundary: scheduler);
+        var retryContext = NewLifecycleContext(new { export_job_id = exportJobId.ToString(), retry_requested = true });
+        retryContext.ExportJobId = exportJobId;
+
+        await retryExecutor.ExecuteAsync(step, retryContext);
+
+        // dispatch_payload must carry export_job_id so ExternalPortDispatchRuntime can surface it as RequestPayload
+        Assert.NotNull(scheduler.LastEnqueuedRequest);
+        var enqueuedPayload = scheduler.LastEnqueuedRequest!.Payload;
+        Assert.True(enqueuedPayload.HasValue && enqueuedPayload.Value.TryGetProperty("dispatch_payload", out var dispatchPayload),
+            "dispatch_payload missing from enqueued scheduler request");
+        Assert.Equal(exportJobId.ToString(), dispatchPayload.GetProperty("export_job_id").GetString());
+        Assert.False(dispatchPayload.TryGetProperty("retry_requested", out _),
+            "retry_requested must not appear in dispatch_payload to prevent self-re-enqueue");
+
+        // Phase 2: re-dispatch — simulate ExternalPortDispatchRuntime extracting dispatch_payload as RequestPayload
+        var reDispatchPayload = dispatchPayload.Clone();
+        var reDispatchLog = new CapturingRuntimeEventLogRepository();
+        var reDispatchEvidence = new BranchingEvidenceRepository();
+        var reDispatchExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: reDispatchLog, consumerEvidenceRepository: reDispatchEvidence);
+        var reDispatchContext = new ExternalPortExecutionContext
+        {
+            DispatchId = Guid.NewGuid().ToString("N"),
+            RequiredByBundle = "export_sftp_bundle",
+            PortKind = "response_port",
+            RequestPayload = reDispatchPayload
+        };
+
+        await reDispatchExecutor.ExecuteAsync(step, reDispatchContext);
+
+        // Re-dispatch follows transfer lifecycle path (not retry), and export_job_id survives in RequestPayload
+        Assert.Equal(new[] { "transfer_initiated", "transfer_completed" }, reDispatchLog.EventTypes);
+        Assert.False(reDispatchContext.SchedulerEventEnqueued);
+        Assert.True(reDispatchContext.RequestPayload.HasValue);
+        Assert.Equal(exportJobId.ToString(),
+            reDispatchContext.RequestPayload.Value.GetProperty("export_job_id").GetString());
+    }
+
     private static string RepoRoot([CallerFilePath] string sourceFile = "")
     {
         var fromSource = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "..", "..", ".."));
@@ -259,6 +306,7 @@ public class ExportSftpPortConsumerContractTests
         public CapturingSchedulerEnqueueBoundary(bool queueFull = false) => _queueFull = queueFull;
         public int EnqueueCount => _enqueueCount;
         public string? LastEnqueuedTarget => _lastRequest?.Target;
+        public EndpointRequestDto? LastEnqueuedRequest => _lastRequest;
 
         public bool TryEnqueueHookTrigger(EndpointRequestDto request)
         {

@@ -953,16 +953,24 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         var portTargetRef = ReadConfig(stepConfig, "retry_trigger_target")
             ?? throw new InvalidOperationException("EXTERNAL_PORT_RETRY_TRIGGER_TARGET_MISSING");
         var retryPolicyRef = ReadConfig(stepConfig, "retry_policy_ref");
-        var payloadDict = new Dictionary<string, string> { ["port_target_ref"] = portTargetRef };
+        var payloadBuilder = new Dictionary<string, object?> { ["port_target_ref"] = portTargetRef };
         if (retryPolicyRef is not null)
-            payloadDict["retry_policy_ref"] = retryPolicyRef;
+            payloadBuilder["retry_policy_ref"] = retryPolicyRef;
+        // dispatch_payload carries export_job_id as the authoritative file_storage boundary reference.
+        // ExternalPortDispatchRuntime reads dispatch_payload as the re-dispatch RequestPayload, so
+        // export_job_id must be here to survive the scheduler → ManifestDispatcher → ExternalPortDispatchRuntime path.
+        // retry_requested is intentionally absent — the re-dispatched execution follows the transfer
+        // lifecycle path (success/fail/mismatch); self-re-enqueue is prohibited.
+        if (context.ExportJobId.HasValue)
+            payloadBuilder["dispatch_payload"] = new Dictionary<string, string>
+                { ["export_job_id"] = context.ExportJobId.Value.ToString() };
         return new EndpointRequestDto(
             OperationType: "external_port",
             Target: portTargetRef,
             Layer: ReadConfig(stepConfig, "retry_trigger_layer") ?? "response_port",
             Action: ReadConfig(stepConfig, "retry_trigger_action") ?? "retry",
             IdOrHubId: context.ExportJobId,
-            Payload: JsonSerializer.SerializeToElement(payloadDict),
+            Payload: JsonSerializer.SerializeToElement(payloadBuilder),
             Context: null,
             TriggerKind: "hook",
             Role: null);
