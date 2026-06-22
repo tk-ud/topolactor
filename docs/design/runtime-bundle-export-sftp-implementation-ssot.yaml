@@ -83,7 +83,11 @@ runtime_bundle_export_sftp_implementation_ssot:
       scheduler_boundary: ISchedulerEnqueueBoundary via RuntimeTimelineSchedulerEnqueueBoundary
       dispatch_payload_authority:
         export_job_id:
-          source: context.ExportJobId (set by abstract function steps in original dispatch)
+          source: >-
+            context.ExportJobId (set by abstract function steps, when present) OR
+            RequestPayload.export_job_id (from original dispatch payload). The sftp
+            response_port policy chain has no abstract function steps, so
+            RequestPayload.export_job_id is the primary source in that path.
           placement: dispatch_payload nested in enqueue payload
           purpose: >-
             Preserves file_storage export_job reference across the

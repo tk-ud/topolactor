@@ -172,7 +172,9 @@ public class ExportSftpPortConsumerContractTests
     [Fact]
     public async Task RetryEnqueue_DispatchPayload_CarriesExportJobIdAndReDispatchFollowsTransferPath()
     {
-        // Phase 1: retry scheduling — context.ExportJobId set by abstract function steps
+        // Phase 1: retry scheduling — export_job_id comes from RequestPayload only.
+        // The sftp response_port policy chain has no abstract function steps, so context.ExportJobId
+        // is never set there; RequestPayload.export_job_id is the authoritative source.
         var exportJobId = Guid.NewGuid();
         var step = NewLifecycleStep();
         var retryLog = new CapturingRuntimeEventLogRepository();
@@ -180,7 +182,7 @@ public class ExportSftpPortConsumerContractTests
         var scheduler = new CapturingSchedulerEnqueueBoundary();
         var retryExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: retryLog, consumerEvidenceRepository: retryEvidence, schedulerEnqueueBoundary: scheduler);
         var retryContext = NewLifecycleContext(new { export_job_id = exportJobId.ToString(), retry_requested = true });
-        retryContext.ExportJobId = exportJobId;
+        Assert.Null(retryContext.ExportJobId); // ExportJobId not set — RequestPayload is the source
 
         await retryExecutor.ExecuteAsync(step, retryContext);
 
