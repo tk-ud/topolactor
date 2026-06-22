@@ -441,7 +441,7 @@ PR#460 完了済み: response_port (notification) seed binding / credential_requ
 **SSOT:** `docs/design/runtime-bundle-export-sftp-ssot.yaml`
 **Implementation SSOT:** `docs/design/runtime-bundle-export-sftp-implementation-ssot.yaml`
 
-Implemented: response_port (sftp) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提を維持し、file-storage の export_job / file_artifact / export_manifest / checksum_record 正本に依存する `topology.sftp_transfer_log`、manifest binding、checksum/manifest evidence boundary、CRUD preset 派生 `export_sftp_transfer.v1`、runtime_event_log lifecycle、safe transfer status projection を接続済み。SFTP provider-specific client / runtime は追加しない。
+Implemented: response_port (sftp) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提を維持し、file-storage の export_job / file_artifact / export_manifest / checksum_record 正本に依存する `topology.sftp_transfer_log`、manifest binding、checksum/manifest evidence boundary、CRUD preset 派生 `export_sftp_transfer.v1`、conditional runtime_event_log lifecycle (success/failure/mismatch/retry are mutually exclusive branches)、safe transfer status projection を接続済み。SFTP provider-specific client / runtime は追加しない。
 既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
 完了:
@@ -450,7 +450,7 @@ Implemented: response_port (sftp) seed binding / credential_requirement / policy
 - [x] checksum 転送前後の検証境界実装 (port substrate と独立)
 - [x] manifest 確認境界実装
 - [x] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring: export_job → response_port 解決 → generic response_port connect（SFTP provider-specific client 新設なし）/ evidence projection
-- [x] evidence / runtime_event_log: transfer_initiated / transfer_completed / transfer_failed / checksum_mismatch / retry_attempted
+- [x] evidence / runtime_event_log: conditional transfer_completed / transfer_failed / checksum_mismatch / retry_attempted branches (同一dispatchで直列全appendしない)
 - [x] projection response: transfer status projection (credential / endpoint / remote_path / raw provider response は projection deny)
 
 対応資料:

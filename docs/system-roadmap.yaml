@@ -791,9 +791,9 @@ system_roadmap_ssot:
         export_jobs/file_artifacts/export_manifests/file_checksum_records, manifest binding
         and safe screen_data_shape evidence are seeded, checksum/manifest failure is explicit,
         export_sftp_transfer.v1 CRUD-derived UI Builder preset uses portTargetRef
-        external-port:response_port:f08, runtime_event_log records transfer_initiated/
-        transfer_completed/transfer_failed/checksum_mismatch/retry_attempted, and projection
-        response exposes transfer status only. SFTP provider-specific client/runtime and
+        external-port:response_port:f08, runtime_event_log records mutually exclusive transfer_completed/transfer_failed/
+        checksum_mismatch/retry_attempted branches, and projection response exposes transfer status
+        only. SFTP provider-specific client/runtime and
         credential/endpoint/remote_path/raw provider projection are not added.
       scope:
         - export_sftp_response_port_consumer_definition
@@ -821,7 +821,7 @@ system_roadmap_ssot:
       known_gap_ref: []
       completion_condition:
         - sftp_transfer_log_references_file_storage_export_job_artifact_manifest_checksum
-        - export_sftp_response_port_policy_records_transfer_lifecycle_runtime_event_log
+        - export_sftp_response_port_policy_records_conditional_transfer_lifecycle_runtime_event_log
         - export_sftp_transfer_preset_seed_registered_in_init_sql_and_wires_portTargetRef_to_response_port
         - projection_response_exposes_transfer_status_safe_fields_only
         - provider_specific_sftp_client_or_runtime_not_added

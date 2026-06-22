@@ -465,6 +465,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         "verify_signature_by_config",
         "enqueue_scheduler_event",
         "append_runtime_event_log",
+        "record_transfer_lifecycle_evidence",
         "fail_close"
     };
 
@@ -652,6 +653,58 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 context.MarkExecuted(step.OperationKey);
                 return Task.CompletedTask;
             },
+            ["record_transfer_lifecycle_evidence"] = async (step, context, ct) =>
+            {
+                if (runtimeEventLogRepository is null)
+                    throw new InvalidOperationException("EXTERNAL_PORT_RUNTIME_EVENT_LOG_REPOSITORY_MISSING");
+                if (consumerEvidenceRepository is null)
+                    throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_REPOSITORY_MISSING");
+
+                var tableRef = ReadConfig(step.StepConfig, "evidence_table_ref")
+                    ?? throw new InvalidOperationException("TRANSFER_LIFECYCLE_EVIDENCE_TABLE_REF_MISSING");
+                var projectionTableRef = ReadConfig(step.StepConfig, "projection_table_ref");
+                var bundle = context.RequiredByBundle ?? context.PortRecord?.RequiredByBundle;
+                var entityId = context.DispatchId;
+
+                async Task AppendLifecycleAsync(string eventType, IReadOnlyDictionary<string, string> config)
+                {
+                    await consumerEvidenceRepository.AppendEvidenceAsync(tableRef, eventType, entityId, bundle, context, config, ct);
+                    await runtimeEventLogRepository.AppendAsync(eventType, entityId, bundle, ct);
+                }
+
+                if (ReadBoolProperty(context.RequestPayload, "retry_requested"))
+                {
+                    context.SchedulerEventEnqueued = true;
+                    var retryEvent = ReadConfig(step.StepConfig, "retry_event_type") ?? "retry_attempted";
+                    await AppendLifecycleAsync(retryEvent, MergeConfig(step.StepConfig, retryEvent, "retry_attempted"));
+                    await LoadLifecycleProjectionAsync(consumerEvidenceRepository, projectionTableRef, bundle, entityId, context, ct);
+                    context.MarkExecuted(step.OperationKey);
+                    return;
+                }
+
+                var completedEvent = ReadConfig(step.StepConfig, "completed_event_type") ?? "transfer_completed";
+                try
+                {
+                    await AppendLifecycleAsync(completedEvent, MergeConfig(step.StepConfig, completedEvent, "transfer_completed"));
+                    await LoadLifecycleProjectionAsync(consumerEvidenceRepository, projectionTableRef, bundle, entityId, context, ct);
+                    context.MarkExecuted(step.OperationKey);
+                }
+                catch (InvalidOperationException ex) when (string.Equals(ex.Message, "SFTP_TRANSFER_CHECKSUM_MISMATCH", StringComparison.Ordinal))
+                {
+                    var mismatchEvent = ReadConfig(step.StepConfig, "checksum_mismatch_event_type") ?? "checksum_mismatch";
+                    await AppendLifecycleAsync(mismatchEvent, MergeConfig(step.StepConfig, mismatchEvent, "checksum_mismatch", "checksum_mismatch"));
+                    context.MarkExecuted(step.OperationKey);
+                    throw;
+                }
+                catch (InvalidOperationException ex) when (string.Equals(ex.Message, "SFTP_TRANSFER_EXPORT_JOB_MANIFEST_CHECKSUM_REQUIRED", StringComparison.Ordinal) ||
+                                                   string.Equals(ex.Message, "SFTP_TRANSFER_EXPORT_JOB_ID_REQUIRED", StringComparison.Ordinal))
+                {
+                    var failedEvent = ReadConfig(step.StepConfig, "failed_event_type") ?? "transfer_failed";
+                    await AppendLifecycleAsync(failedEvent, MergeConfig(step.StepConfig, failedEvent, "transfer_failed", ex.Message));
+                    context.MarkExecuted(step.OperationKey);
+                    throw;
+                }
+            },
             ["execute_db_function"] = async (step, context, ct) =>
             {
                 if (dbFunctionRepository is null)
@@ -797,6 +850,53 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             };
             return new ExternalTokenRefreshResult(response.Body, hash, expiresAt, PayloadRotated: true);
         }
+    }
+
+    private static async Task LoadLifecycleProjectionAsync(
+        IExternalPortConsumerEvidenceRepository consumerEvidenceRepository,
+        string? projectionTableRef,
+        string? bundle,
+        string? entityId,
+        ExternalPortExecutionContext context,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(projectionTableRef)) return;
+        var projection = await consumerEvidenceRepository.LoadProjectionAsync(projectionTableRef, bundle, entityId, limit: 20, ct);
+        context.OutputProp = JsonSerializer.Serialize(new
+        {
+            projectionTableRef,
+            responseLane = "projection_response",
+            rows = projection
+        });
+    }
+
+    private static IReadOnlyDictionary<string, string> MergeConfig(
+        IReadOnlyDictionary<string, string> config,
+        string eventType,
+        string statusValue,
+        string? failureReason = null)
+    {
+        var merged = new Dictionary<string, string>(config, StringComparer.Ordinal)
+        {
+            ["event_type"] = eventType,
+            ["status_value"] = statusValue
+        };
+        if (!string.IsNullOrWhiteSpace(failureReason))
+            merged["failure_reason"] = failureReason;
+        return merged;
+    }
+
+    private static bool ReadBoolProperty(JsonElement? payload, string name)
+    {
+        if (payload is not { ValueKind: JsonValueKind.Object } element) return false;
+        if (!element.TryGetProperty(name, out var prop)) return false;
+        return prop.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => bool.TryParse(prop.GetString(), out var parsed) && parsed,
+            _ => false
+        };
     }
 
     private static Task MarkOnly(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct)

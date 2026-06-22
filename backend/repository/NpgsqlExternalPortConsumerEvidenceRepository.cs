@@ -130,9 +130,9 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         cmd.Parameters.AddWithValue("checksumAfter", (object?)Read(stepConfig, "checksum_after_ref") ?? (object?)sftpRefs?.ChecksumValue ?? DBNull.Value);
         cmd.Parameters.AddWithValue("manifestRef", (object?)sftpRefs?.ManifestId.ToString() ?? (object?)Read(stepConfig, "manifest_ref") ?? DBNull.Value);
         cmd.Parameters.AddWithValue("exportJobId", sftpRefs is not null ? sftpRefs.ExportJobId : DBNull.Value);
-        cmd.Parameters.AddWithValue("fileArtifactId", sftpRefs is not null ? sftpRefs.FileArtifactId : DBNull.Value);
-        cmd.Parameters.AddWithValue("manifestId", sftpRefs is not null ? sftpRefs.ManifestId : DBNull.Value);
-        cmd.Parameters.AddWithValue("checksumRecordId", sftpRefs is not null ? sftpRefs.ChecksumRecordId : DBNull.Value);
+        cmd.Parameters.AddWithValue("fileArtifactId", sftpRefs?.FileArtifactId is not null ? sftpRefs.FileArtifactId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("manifestId", sftpRefs?.ManifestId is not null ? sftpRefs.ManifestId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("checksumRecordId", sftpRefs?.ChecksumRecordId is not null ? sftpRefs.ChecksumRecordId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("failureReason", (object?)Read(stepConfig, "failure_reason") ?? DBNull.Value);
         cmd.Parameters.AddWithValue("retryEvidenceJson", NpgsqlDbType.Jsonb, BuildRetryEvidenceJson(eventType, stepConfig));
         cmd.Parameters.AddWithValue("evidenceJson", NpgsqlDbType.Jsonb, evidenceJson);
@@ -165,7 +165,11 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
+        {
+            if (string.Equals(eventType, "transfer_failed", StringComparison.Ordinal))
+                return new SftpTransferSourceRefs(exportJobId, null, null, null, null, null);
             throw new InvalidOperationException("SFTP_TRANSFER_EXPORT_JOB_MANIFEST_CHECKSUM_REQUIRED");
+        }
 
         var refs = new SftpTransferSourceRefs(
             reader.GetGuid(0),
@@ -238,10 +242,10 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
 
     private sealed record SftpTransferSourceRefs(
         Guid ExportJobId,
-        Guid FileArtifactId,
-        Guid ManifestId,
-        Guid ChecksumRecordId,
-        string ChecksumValue,
+        Guid? FileArtifactId,
+        Guid? ManifestId,
+        Guid? ChecksumRecordId,
+        string? ChecksumValue,
         string? ManifestChecksum);
 
     private static string ComputePayloadHash(JsonElement? payload)
