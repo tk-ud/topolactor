@@ -964,17 +964,16 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         var payloadBuilder = new Dictionary<string, object?> { ["port_target_ref"] = portTargetRef };
         if (retryPolicyRef is not null)
             payloadBuilder["retry_policy_ref"] = retryPolicyRef;
-        // export_job_id authority: context.ExportJobId (set by abstract function steps, when present)
-        // OR RequestPayload.export_job_id (from the original dispatch payload). The sftp response port
-        // policy chain has no abstract function steps, so RequestPayload is the primary source there.
-        // ExternalPortDispatchRuntime reads dispatch_payload as the re-dispatch RequestPayload, so
-        // export_job_id must be here to survive the scheduler → ManifestDispatcher → ExternalPortDispatchRuntime path.
-        // retry_requested is intentionally absent to prevent self-re-enqueue.
-        var exportJobIdStr = context.ExportJobId?.ToString()
-            ?? ReadStringFromPayload(context.RequestPayload, "export_job_id");
-        if (exportJobIdStr is not null)
-            payloadBuilder["dispatch_payload"] = new Dictionary<string, string>
-                { ["export_job_id"] = exportJobIdStr };
+        // RequestPayload.export_job_id is the canonical authority across the scheduler queue boundary.
+        // context.ExportJobId is a derived runtime cache; when present it is cross-checked for consistency.
+        // Absent canonical value → fail-close. Mismatch → fail-close. retry_requested intentionally absent.
+        var payloadExportJobId = ReadStringFromPayload(context.RequestPayload, "export_job_id")
+            ?? throw new InvalidOperationException("SFTP_RETRY_EXPORT_JOB_ID_REQUIRED");
+        if (context.ExportJobId.HasValue &&
+            !string.Equals(context.ExportJobId.Value.ToString(), payloadExportJobId, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("SFTP_RETRY_EXPORT_JOB_ID_MISMATCH");
+        payloadBuilder["dispatch_payload"] = new Dictionary<string, string>
+            { ["export_job_id"] = payloadExportJobId };
         return new EndpointRequestDto(
             OperationType: "external_port",
             Target: portTargetRef,

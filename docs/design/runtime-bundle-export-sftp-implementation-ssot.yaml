@@ -83,11 +83,17 @@ runtime_bundle_export_sftp_implementation_ssot:
       scheduler_boundary: ISchedulerEnqueueBoundary via RuntimeTimelineSchedulerEnqueueBoundary
       dispatch_payload_authority:
         export_job_id:
-          source: >-
-            context.ExportJobId (set by abstract function steps, when present) OR
-            RequestPayload.export_job_id (from original dispatch payload). The sftp
-            response_port policy chain has no abstract function steps, so
-            RequestPayload.export_job_id is the primary source in that path.
+          canonical_authority: RequestPayload.export_job_id
+          rationale: >-
+            RequestPayload.export_job_id crosses the scheduler queue boundary and is the
+            persistent canonical source. context.ExportJobId is a derived runtime cache
+            set by abstract function steps when present; it is NOT the scheduler queue
+            boundary authority.
+          verification_policy:
+            RequestPayload_export_job_id_absent: fail-close (SFTP_RETRY_EXPORT_JOB_ID_REQUIRED)
+            context_ExportJobId_present_matches: accepted; RequestPayload value used
+            context_ExportJobId_present_mismatch: fail-close (SFTP_RETRY_EXPORT_JOB_ID_MISMATCH)
+            context_ExportJobId_absent: RequestPayload value used directly
           placement: dispatch_payload nested in enqueue payload
           purpose: >-
             Preserves file_storage export_job reference across the

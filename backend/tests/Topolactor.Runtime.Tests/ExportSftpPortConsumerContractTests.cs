@@ -170,11 +170,10 @@ public class ExportSftpPortConsumerContractTests
     }
 
     [Fact]
-    public async Task RetryEnqueue_DispatchPayload_CarriesExportJobIdAndReDispatchFollowsTransferPath()
+    public async Task RetryEnqueue_DispatchPayload_CarriesExportJobIdFromRequestPayloadAndReDispatchFollowsTransferPath()
     {
-        // Phase 1: retry scheduling — export_job_id comes from RequestPayload only.
-        // The sftp response_port policy chain has no abstract function steps, so context.ExportJobId
-        // is never set there; RequestPayload.export_job_id is the authoritative source.
+        // RequestPayload.export_job_id is the canonical scheduler-boundary authority.
+        // context.ExportJobId is absent (sftp response_port chain has no abstract function steps).
         var exportJobId = Guid.NewGuid();
         var step = NewLifecycleStep();
         var retryLog = new CapturingRuntimeEventLogRepository();
@@ -182,7 +181,7 @@ public class ExportSftpPortConsumerContractTests
         var scheduler = new CapturingSchedulerEnqueueBoundary();
         var retryExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: retryLog, consumerEvidenceRepository: retryEvidence, schedulerEnqueueBoundary: scheduler);
         var retryContext = NewLifecycleContext(new { export_job_id = exportJobId.ToString(), retry_requested = true });
-        Assert.Null(retryContext.ExportJobId); // ExportJobId not set — RequestPayload is the source
+        Assert.Null(retryContext.ExportJobId); // ExportJobId not manually set — RequestPayload is the only source
 
         await retryExecutor.ExecuteAsync(step, retryContext);
 
@@ -217,6 +216,35 @@ public class ExportSftpPortConsumerContractTests
         Assert.True(reDispatchContext.RequestPayload.HasValue);
         Assert.Equal(exportJobId.ToString(),
             reDispatchContext.RequestPayload.Value.GetProperty("export_job_id").GetString());
+    }
+
+    [Fact]
+    public async Task RetryBranch_ExportJobIdAbsentFromRequestPayload_FailsClose()
+    {
+        var step = NewLifecycleStep();
+        var log = new CapturingRuntimeEventLogRepository();
+        var evidence = new BranchingEvidenceRepository();
+        var scheduler = new CapturingSchedulerEnqueueBoundary();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: scheduler);
+        var context = NewLifecycleContext(new { retry_requested = true }); // no export_job_id in payload
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
+        Assert.Equal("SFTP_RETRY_EXPORT_JOB_ID_REQUIRED", ex.Message);
+        Assert.Equal(0, scheduler.EnqueueCount);
+    }
+
+    [Fact]
+    public async Task RetryBranch_ExportJobIdMismatchBetweenPayloadAndContext_FailsClose()
+    {
+        var step = NewLifecycleStep();
+        var log = new CapturingRuntimeEventLogRepository();
+        var evidence = new BranchingEvidenceRepository();
+        var scheduler = new CapturingSchedulerEnqueueBoundary();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: scheduler);
+        var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
+        context.ExportJobId = Guid.NewGuid(); // different value: mismatch → fail-close
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
+        Assert.Equal("SFTP_RETRY_EXPORT_JOB_ID_MISMATCH", ex.Message);
+        Assert.Equal(0, scheduler.EnqueueCount);
     }
 
     private static string RepoRoot([CallerFilePath] string sourceFile = "")
