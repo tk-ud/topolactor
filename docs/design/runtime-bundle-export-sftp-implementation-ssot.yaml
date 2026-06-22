@@ -61,6 +61,66 @@ runtime_bundle_export_sftp_implementation_ssot:
       portTargetRef: external-port:response_port:00000000-0000-0000-0000-000000000f08
       runtime: existing external_port_runtime generic policy steps
       provider_specific_runtime: prohibited
+    retry_scheduler_enqueue:
+      authority: policy_step_config
+      step_config_fields:
+        retry_trigger_target:
+          required: true
+          value: external-port:response_port:00000000-0000-0000-0000-000000000f08
+          note: >-
+            portTargetRef used as port_target_ref in retry hook trigger payload.
+            Must come from step_config, NOT from request payload.
+        retry_trigger_layer:
+          required: false
+          default: response_port
+        retry_trigger_action:
+          required: false
+          default: retry
+        retry_policy_ref:
+          required: false
+          value: scheduler_retry_requested
+          note: Placed in retry hook trigger payload. NOT from request payload.
+      scheduler_boundary: ISchedulerEnqueueBoundary via RuntimeTimelineSchedulerEnqueueBoundary
+      dispatch_payload_authority:
+        export_job_id:
+          canonical_authority: RequestPayload.export_job_id
+          rationale: >-
+            RequestPayload.export_job_id crosses the scheduler queue boundary and is the
+            persistent canonical source. context.ExportJobId is a derived runtime cache
+            set by abstract function steps when present; it is NOT the scheduler queue
+            boundary authority.
+          verification_policy:
+            RequestPayload_export_job_id_absent: fail-close (SFTP_RETRY_EXPORT_JOB_ID_REQUIRED)
+            context_ExportJobId_present_matches: accepted; RequestPayload value used
+            context_ExportJobId_present_mismatch: fail-close (SFTP_RETRY_EXPORT_JOB_ID_MISMATCH)
+            context_ExportJobId_absent: RequestPayload value used directly
+          placement: dispatch_payload nested in enqueue payload
+          purpose: >-
+            Preserves file_storage export_job reference across the
+            scheduler → ManifestDispatcher → ExternalPortDispatchRuntime re-dispatch boundary.
+            ExternalPortDispatchRuntime reads dispatch_payload as RequestPayload, so
+            export_job_id must appear there, not only in IdOrHubId.
+        retry_requested:
+          prohibited_in_dispatch_payload: true
+          reason: >-
+            Re-dispatched execution must follow the transfer lifecycle path (success/fail/mismatch).
+            Self-re-enqueue is prohibited. Payload semantics of retry scheduling and
+            scheduled retry execution are explicitly separated.
+      enqueue_failure_policy:
+        boundary_missing: throw EXTERNAL_PORT_SCHEDULER_ENQUEUE_BOUNDARY_MISSING
+        queue_full: throw SCHEDULER_QUEUE_FULL
+        silent_fallback: prohibited
+      retry_evidence_safe_fields:
+        - scheduler_enqueue_result
+        - scheduler_enqueue_boundary_ref
+      retry_evidence_denied_fields:
+        - credential
+        - host
+        - user
+        - private_key
+        - endpoint
+        - remote_path
+        - signed_url
     runtime_event_log:
       required_events:
         - transfer_initiated

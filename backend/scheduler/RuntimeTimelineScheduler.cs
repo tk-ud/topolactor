@@ -230,6 +230,24 @@ public class RuntimeTimelineScheduler : BackgroundService
 }
 
 /// <summary>
+/// Thin boundary adapter connecting ExternalPortPolicyStepExecutor to RuntimeTimelineScheduler.
+/// Routes retry hook triggers through the existing scheduler substrate.
+/// Uses Lazy to break the DI circular dependency:
+///   ExternalPortPolicyStepExecutor → ISchedulerEnqueueBoundary → RuntimeTimelineScheduler
+///   → ManifestDispatcher → ExternalPortDispatchRuntime → ExternalPortPolicyStepExecutor
+/// </summary>
+public sealed class RuntimeTimelineSchedulerEnqueueBoundary : ISchedulerEnqueueBoundary
+{
+    private readonly Lazy<RuntimeTimelineScheduler> _scheduler;
+
+    public RuntimeTimelineSchedulerEnqueueBoundary(Lazy<RuntimeTimelineScheduler> scheduler)
+        => _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+
+    public bool TryEnqueueHookTrigger(EndpointRequestDto request) =>
+        _scheduler.Value.EnqueueHookTrigger(request);
+}
+
+/// <summary>
 /// An item in the background runtime queue (cron/hook triggers only).
 /// </summary>
 internal record SchedulerItem(

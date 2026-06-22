@@ -46,6 +46,7 @@ public class ExportSftpPortConsumerContractTests
         Assert.Contains("\"requires_manifest\":\"true\"", sql);
         Assert.Contains("\"requires_checksum\":\"true\"", sql);
         Assert.DoesNotContain("execute_db_function',     '{\"function\":\"export_sftp", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"retry_trigger_target\":\"external-port:response_port:00000000-0000-0000-0000-000000000f08\"", sql);
     }
 
     [Fact]
@@ -112,12 +113,138 @@ public class ExportSftpPortConsumerContractTests
 
         var retryLog = new CapturingRuntimeEventLogRepository();
         var retryEvidence = new BranchingEvidenceRepository();
-        var retryExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: retryLog, consumerEvidenceRepository: retryEvidence);
+        var retryScheduler = new CapturingSchedulerEnqueueBoundary();
+        var retryExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: retryLog, consumerEvidenceRepository: retryEvidence, schedulerEnqueueBoundary: retryScheduler);
         var retryContext = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
         await retryExecutor.ExecuteAsync(step, retryContext);
         Assert.True(retryContext.SchedulerEventEnqueued);
+        Assert.Equal(1, retryScheduler.EnqueueCount);
+        Assert.Equal("external-port:response_port:00000000-0000-0000-0000-000000000f08", retryScheduler.LastEnqueuedTarget);
         Assert.Equal(new[] { "retry_attempted" }, retryLog.EventTypes);
         Assert.Equal(new[] { "retry_attempted" }, retryEvidence.AppendedEventTypes);
+    }
+
+    [Fact]
+    public async Task RetryBranch_WithoutSchedulerBoundary_ThrowsExplicitFailure()
+    {
+        var step = NewLifecycleStep();
+        var log = new CapturingRuntimeEventLogRepository();
+        var evidence = new BranchingEvidenceRepository();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence);
+        var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
+        Assert.Equal("EXTERNAL_PORT_SCHEDULER_ENQUEUE_BOUNDARY_MISSING", ex.Message);
+        Assert.False(context.SchedulerEventEnqueued);
+    }
+
+    [Fact]
+    public async Task RetryBranch_SchedulerQueueFull_ThrowsExplicitFailure()
+    {
+        var step = NewLifecycleStep();
+        var log = new CapturingRuntimeEventLogRepository();
+        var evidence = new BranchingEvidenceRepository();
+        var fullScheduler = new CapturingSchedulerEnqueueBoundary(queueFull: true);
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: fullScheduler);
+        var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
+        Assert.Equal("SCHEDULER_QUEUE_FULL", ex.Message);
+        Assert.False(context.SchedulerEventEnqueued);
+    }
+
+    [Fact]
+    public async Task RetryBranch_SchedulerEnqueueSucceeds_SetsEnqueuedAndRecordsEvidence()
+    {
+        var step = NewLifecycleStep();
+        var log = new CapturingRuntimeEventLogRepository();
+        var evidence = new BranchingEvidenceRepository();
+        var scheduler = new CapturingSchedulerEnqueueBoundary();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: scheduler);
+        var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
+        await executor.ExecuteAsync(step, context);
+        Assert.True(context.SchedulerEventEnqueued);
+        Assert.Equal(1, scheduler.EnqueueCount);
+        Assert.Equal("external-port:response_port:00000000-0000-0000-0000-000000000f08", scheduler.LastEnqueuedTarget);
+        Assert.Equal(new[] { "retry_attempted" }, log.EventTypes);
+        Assert.Contains("scheduler_enqueue_result", evidence.LastStepConfig?.Keys ?? []);
+        Assert.Equal("enqueued", evidence.LastStepConfig?.GetValueOrDefault("scheduler_enqueue_result"));
+    }
+
+    [Fact]
+    public async Task RetryEnqueue_DispatchPayload_CarriesExportJobIdFromRequestPayloadAndReDispatchFollowsTransferPath()
+    {
+        // RequestPayload.export_job_id is the canonical scheduler-boundary authority.
+        // context.ExportJobId is absent (sftp response_port chain has no abstract function steps).
+        var exportJobId = Guid.NewGuid();
+        var step = NewLifecycleStep();
+        var retryLog = new CapturingRuntimeEventLogRepository();
+        var retryEvidence = new BranchingEvidenceRepository();
+        var scheduler = new CapturingSchedulerEnqueueBoundary();
+        var retryExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: retryLog, consumerEvidenceRepository: retryEvidence, schedulerEnqueueBoundary: scheduler);
+        var retryContext = NewLifecycleContext(new { export_job_id = exportJobId.ToString(), retry_requested = true });
+        Assert.Null(retryContext.ExportJobId); // ExportJobId not manually set — RequestPayload is the only source
+
+        await retryExecutor.ExecuteAsync(step, retryContext);
+
+        // dispatch_payload must carry export_job_id so ExternalPortDispatchRuntime can surface it as RequestPayload
+        Assert.NotNull(scheduler.LastEnqueuedRequest);
+        Assert.True(scheduler.LastEnqueuedRequest!.Payload.HasValue, "no payload on enqueued scheduler request");
+        var outerPayload = scheduler.LastEnqueuedRequest.Payload!.Value;
+        Assert.True(outerPayload.TryGetProperty("dispatch_payload", out var dispatchPayload),
+            "dispatch_payload missing from enqueued scheduler request");
+        Assert.Equal(exportJobId.ToString(), dispatchPayload.GetProperty("export_job_id").GetString());
+        Assert.False(dispatchPayload.TryGetProperty("retry_requested", out _),
+            "retry_requested must not appear in dispatch_payload to prevent self-re-enqueue");
+
+        // Phase 2: re-dispatch — simulate ExternalPortDispatchRuntime extracting dispatch_payload as RequestPayload
+        var reDispatchPayload = dispatchPayload.Clone();
+        var reDispatchLog = new CapturingRuntimeEventLogRepository();
+        var reDispatchEvidence = new BranchingEvidenceRepository();
+        var reDispatchExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: reDispatchLog, consumerEvidenceRepository: reDispatchEvidence);
+        var reDispatchContext = new ExternalPortExecutionContext
+        {
+            DispatchId = Guid.NewGuid().ToString("N"),
+            RequiredByBundle = "export_sftp_bundle",
+            PortKind = "response_port",
+            RequestPayload = reDispatchPayload
+        };
+
+        await reDispatchExecutor.ExecuteAsync(step, reDispatchContext);
+
+        // Re-dispatch follows transfer lifecycle path (not retry), and export_job_id survives in RequestPayload
+        Assert.Equal(new[] { "transfer_initiated", "transfer_completed" }, reDispatchLog.EventTypes);
+        Assert.False(reDispatchContext.SchedulerEventEnqueued);
+        Assert.True(reDispatchContext.RequestPayload.HasValue);
+        Assert.Equal(exportJobId.ToString(),
+            reDispatchContext.RequestPayload.Value.GetProperty("export_job_id").GetString());
+    }
+
+    [Fact]
+    public async Task RetryBranch_ExportJobIdAbsentFromRequestPayload_FailsClose()
+    {
+        var step = NewLifecycleStep();
+        var log = new CapturingRuntimeEventLogRepository();
+        var evidence = new BranchingEvidenceRepository();
+        var scheduler = new CapturingSchedulerEnqueueBoundary();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: scheduler);
+        var context = NewLifecycleContext(new { retry_requested = true }); // no export_job_id in payload
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
+        Assert.Equal("SFTP_RETRY_EXPORT_JOB_ID_REQUIRED", ex.Message);
+        Assert.Equal(0, scheduler.EnqueueCount);
+    }
+
+    [Fact]
+    public async Task RetryBranch_ExportJobIdMismatchBetweenPayloadAndContext_FailsClose()
+    {
+        var step = NewLifecycleStep();
+        var log = new CapturingRuntimeEventLogRepository();
+        var evidence = new BranchingEvidenceRepository();
+        var scheduler = new CapturingSchedulerEnqueueBoundary();
+        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: scheduler);
+        var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
+        context.ExportJobId = Guid.NewGuid(); // different value: mismatch → fail-close
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
+        Assert.Equal("SFTP_RETRY_EXPORT_JOB_ID_MISMATCH", ex.Message);
+        Assert.Equal(0, scheduler.EnqueueCount);
     }
 
     private static string RepoRoot([CallerFilePath] string sourceFile = "")
@@ -149,7 +276,9 @@ public class ExportSftpPortConsumerContractTests
             ["completed_event_type"] = "transfer_completed",
             ["failed_event_type"] = "transfer_failed",
             ["checksum_mismatch_event_type"] = "checksum_mismatch",
-            ["retry_event_type"] = "retry_attempted"
+            ["retry_event_type"] = "retry_attempted",
+            ["retry_trigger_target"] = "external-port:response_port:00000000-0000-0000-0000-000000000f08",
+            ["retry_policy_ref"] = "scheduler_retry_requested"
         },
         true);
 
@@ -177,11 +306,13 @@ public class ExportSftpPortConsumerContractTests
         private readonly string? _failCompletedWith;
         private readonly List<string> _appendedEventTypes = new();
         public IReadOnlyList<string> AppendedEventTypes => _appendedEventTypes;
+        public IReadOnlyDictionary<string, string>? LastStepConfig { get; private set; }
         public BranchingEvidenceRepository(string? failCompletedWith = null) => _failCompletedWith = failCompletedWith;
 
         public Task AppendEvidenceAsync(string tableRef, string eventType, string? entityId, string? requiredByBundle, ExternalPortExecutionContext context, IReadOnlyDictionary<string, string> stepConfig, CancellationToken ct = default)
         {
             _appendedEventTypes.Add(eventType);
+            LastStepConfig = stepConfig;
             if (eventType == "transfer_completed" && _failCompletedWith is not null)
                 throw new InvalidOperationException(_failCompletedWith);
             return Task.CompletedTask;
@@ -194,6 +325,26 @@ public class ExportSftpPortConsumerContractTests
                 new(tableRef, _appendedEventTypes.LastOrDefault() ?? "none", entityId, _appendedEventTypes.LastOrDefault(), new Dictionary<string, string>())
             ];
             return Task.FromResult(rows);
+        }
+    }
+
+    private sealed class CapturingSchedulerEnqueueBoundary : ISchedulerEnqueueBoundary
+    {
+        private readonly bool _queueFull;
+        private int _enqueueCount;
+        private EndpointRequestDto? _lastRequest;
+
+        public CapturingSchedulerEnqueueBoundary(bool queueFull = false) => _queueFull = queueFull;
+        public int EnqueueCount => _enqueueCount;
+        public string? LastEnqueuedTarget => _lastRequest?.Target;
+        public EndpointRequestDto? LastEnqueuedRequest => _lastRequest;
+
+        public bool TryEnqueueHookTrigger(EndpointRequestDto request)
+        {
+            if (_queueFull) return false;
+            _lastRequest = request;
+            _enqueueCount++;
+            return true;
         }
     }
 

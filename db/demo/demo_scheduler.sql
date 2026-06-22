@@ -37,19 +37,19 @@ ON CONFLICT (abstract_function_id) DO NOTHING;
 INSERT INTO topology.abstract_function_steps
     (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
 VALUES
-    ('00000000-0000-0000-0000-00000000bf20', '00000000-0000-0000-0000-00000000af11', 1,
+    ('00000000-0000-0000-0000-00000000bf40', '00000000-0000-0000-0000-00000000af11', 1,
      'projection', '{}', 'scheduler_projection', true)
-ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+ON CONFLICT (abstract_function_step_id) DO NOTHING;
 
 -- Input bindings: scheduler_context (not request payload — isolation boundary)
 INSERT INTO topology.abstract_function_input_bindings
     (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
 VALUES
-    ('00000000-0000-0000-0000-00000000c050', '00000000-0000-0000-0000-00000000bf20',
+    ('00000000-0000-0000-0000-00000000c050', '00000000-0000-0000-0000-00000000bf40',
      'job_key',      'scheduler_context', 'job_key',      true, false, true),
-    ('00000000-0000-0000-0000-00000000c051', '00000000-0000-0000-0000-00000000bf20',
+    ('00000000-0000-0000-0000-00000000c051', '00000000-0000-0000-0000-00000000bf40',
      'run_id',       'scheduler_context', 'run_id',       true, false, true),
-    ('00000000-0000-0000-0000-00000000c052', '00000000-0000-0000-0000-00000000bf20',
+    ('00000000-0000-0000-0000-00000000c052', '00000000-0000-0000-0000-00000000bf40',
      'trigger_kind', 'scheduler_context', 'trigger_kind', false, false, true)
 ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
 

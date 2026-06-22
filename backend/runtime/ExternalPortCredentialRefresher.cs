@@ -482,7 +482,8 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         AbstractFunctionExecutor? abstractFunctionExecutor = null,
         IEnumerable<IExternalPortBundleStepHandler>? bundleHandlers = null,
         IExternalPortRuntimeEventLogRepository? runtimeEventLogRepository = null,
-        IExternalPortConsumerEvidenceRepository? consumerEvidenceRepository = null)
+        IExternalPortConsumerEvidenceRepository? consumerEvidenceRepository = null,
+        ISchedulerEnqueueBoundary? schedulerEnqueueBoundary = null)
     {
         _crypto = crypto;
         _bundleHandlers = bundleHandlers?.ToList() ?? new List<IExternalPortBundleStepHandler>();
@@ -586,6 +587,12 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             },
             ["enqueue_scheduler_event"] = (step, context, ct) =>
             {
+                if (schedulerEnqueueBoundary is not null)
+                {
+                    var request = BuildRetrySchedulerRequest(step.StepConfig, context);
+                    if (!schedulerEnqueueBoundary.TryEnqueueHookTrigger(request))
+                        throw new InvalidOperationException("SCHEDULER_QUEUE_FULL");
+                }
                 context.SchedulerEventEnqueued = true;
                 context.MarkExecuted(step.OperationKey);
                 return Task.CompletedTask;
@@ -674,9 +681,21 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
                 if (ReadBoolProperty(context.RequestPayload, "retry_requested"))
                 {
+                    if (schedulerEnqueueBoundary is null)
+                        throw new InvalidOperationException("EXTERNAL_PORT_SCHEDULER_ENQUEUE_BOUNDARY_MISSING");
+                    var retryRequest = BuildRetrySchedulerRequest(step.StepConfig, context);
+                    if (!schedulerEnqueueBoundary.TryEnqueueHookTrigger(retryRequest))
+                        throw new InvalidOperationException("SCHEDULER_QUEUE_FULL");
                     context.SchedulerEventEnqueued = true;
                     var retryEvent = ReadConfig(step.StepConfig, "retry_event_type") ?? "retry_attempted";
-                    await AppendLifecycleAsync(retryEvent, MergeConfig(step.StepConfig, retryEvent, "retry_attempted"));
+                    var retryConfig = new Dictionary<string, string>(step.StepConfig, StringComparer.Ordinal)
+                    {
+                        ["event_type"] = retryEvent,
+                        ["status_value"] = "retry_attempted",
+                        ["scheduler_enqueue_result"] = "enqueued",
+                        ["scheduler_enqueue_boundary_ref"] = ReadConfig(step.StepConfig, "retry_trigger_target") ?? "scheduler_enqueue_boundary"
+                    };
+                    await AppendLifecycleAsync(retryEvent, retryConfig);
                     await LoadLifecycleProjectionAsync(consumerEvidenceRepository, projectionTableRef, bundle, entityId, context, ct);
                     context.MarkExecuted(step.OperationKey);
                     return;
@@ -901,6 +920,14 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         };
     }
 
+    private static string? ReadStringFromPayload(JsonElement? payload, string name)
+    {
+        if (payload is not { ValueKind: JsonValueKind.Object } element) return null;
+        return element.TryGetProperty(name, out var prop) && prop.ValueKind == JsonValueKind.String
+            ? prop.GetString()
+            : null;
+    }
+
     private static Task MarkOnly(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct)
     {
         context.MarkExecuted(step.OperationKey);
@@ -927,4 +954,41 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
     private static string? ReadConfig(IReadOnlyDictionary<string, string> config, string key) =>
         config.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 
+    private static EndpointRequestDto BuildRetrySchedulerRequest(
+        IReadOnlyDictionary<string, string> stepConfig,
+        ExternalPortExecutionContext context)
+    {
+        var portTargetRef = ReadConfig(stepConfig, "retry_trigger_target")
+            ?? throw new InvalidOperationException("EXTERNAL_PORT_RETRY_TRIGGER_TARGET_MISSING");
+        var retryPolicyRef = ReadConfig(stepConfig, "retry_policy_ref");
+        var payloadBuilder = new Dictionary<string, object?> { ["port_target_ref"] = portTargetRef };
+        if (retryPolicyRef is not null)
+            payloadBuilder["retry_policy_ref"] = retryPolicyRef;
+        // RequestPayload.export_job_id is the canonical authority across the scheduler queue boundary.
+        // context.ExportJobId is a derived runtime cache; when present it is cross-checked for consistency.
+        // Absent canonical value → fail-close. Mismatch → fail-close. retry_requested intentionally absent.
+        var payloadExportJobId = ReadStringFromPayload(context.RequestPayload, "export_job_id")
+            ?? throw new InvalidOperationException("SFTP_RETRY_EXPORT_JOB_ID_REQUIRED");
+        if (context.ExportJobId.HasValue &&
+            !string.Equals(context.ExportJobId.Value.ToString(), payloadExportJobId, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("SFTP_RETRY_EXPORT_JOB_ID_MISMATCH");
+        payloadBuilder["dispatch_payload"] = new Dictionary<string, string>
+            { ["export_job_id"] = payloadExportJobId };
+        return new EndpointRequestDto(
+            OperationType: "external_port",
+            Target: portTargetRef,
+            Layer: ReadConfig(stepConfig, "retry_trigger_layer") ?? "response_port",
+            Action: ReadConfig(stepConfig, "retry_trigger_action") ?? "retry",
+            IdOrHubId: context.ExportJobId,
+            Payload: JsonSerializer.SerializeToElement(payloadBuilder),
+            Context: null,
+            TriggerKind: "hook",
+            Role: null);
+    }
+
+}
+
+public interface ISchedulerEnqueueBoundary
+{
+    bool TryEnqueueHookTrigger(EndpointRequestDto request);
 }
