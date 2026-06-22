@@ -590,7 +590,8 @@ ALTER TABLE topology.external_port_policy_steps
         'append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config',
         'write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version',
         'release_refresh_lease',
-        'compute_checksum','execute_abstract_function'
+        'compute_checksum','execute_abstract_function',
+        'record_transfer_lifecycle_evidence'
     ));
 
 -- ---------------------------------------------------------------------------
@@ -870,15 +871,37 @@ CREATE TABLE IF NOT EXISTS topology.audit_notification_evidence (
 
 CREATE TABLE IF NOT EXISTS topology.sftp_transfer_log (
     sftp_transfer_log_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    export_job_id        UUID,
-    transfer_status      TEXT NOT NULL DEFAULT 'pending',
+    export_job_id        UUID REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
+    file_artifact_id     UUID REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE SET NULL,
+    manifest_id          UUID REFERENCES topology.export_manifests (manifest_id) ON DELETE SET NULL,
+    checksum_record_id   UUID REFERENCES topology.file_checksum_records (checksum_record_id) ON DELETE SET NULL,
+    transfer_status      TEXT NOT NULL DEFAULT 'pending'
+                         CHECK (transfer_status IN (
+                            'pending',
+                            'transfer_initiated',
+                            'transfer_completed',
+                            'transfer_failed',
+                            'checksum_mismatch',
+                            'retry_attempted'
+                         )),
+    failure_reason       TEXT,
     checksum_before      TEXT,
     checksum_after       TEXT,
     manifest_ref         TEXT,
     response_port_ref    TEXT,
+    retry_evidence_json  JSONB NOT NULL DEFAULT '{}'::jsonb,
     evidence_json        JSONB NOT NULL DEFAULT '{}',
     recorded_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_sftp_transfer_log_export_job
+    ON topology.sftp_transfer_log (export_job_id);
+
+CREATE INDEX IF NOT EXISTS idx_sftp_transfer_log_status
+    ON topology.sftp_transfer_log (transfer_status);
+
+COMMENT ON TABLE topology.sftp_transfer_log IS
+    'Export/SFTP transfer evidence and safe projection table. Depends on file_storage_bundle export_jobs, file_artifacts, export_manifests, and file_checksum_records. Prohibited: plaintext credential, host, user, private key, endpoint, remote_path, signed_url, or raw provider response.';
 
 -- ---------------------------------------------------------------------------
 -- file_storage_bundle domain PostgreSQL functions.

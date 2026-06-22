@@ -2479,8 +2479,32 @@ VALUES
     ('00000000-0000-0000-0000-000000000476', '00000000-0000-0000-0000-0000000000eb', 6, 'inject_authorization_header',  '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000477', '00000000-0000-0000-0000-0000000000eb', 7, 'send_http',                    '{}', NULL, true),
     ('00000000-0000-0000-0000-000000000478', '00000000-0000-0000-0000-0000000000eb', 8, 'capture_response',             '{}', NULL, true),
-    ('00000000-0000-0000-0000-000000000479', '00000000-0000-0000-0000-0000000000eb', 9, 'append_runtime_event_log',     '{"event_type":"transfer_initiated","evidence_table_ref":"topology.sftp_transfer_log","projection_table_ref":"topology.sftp_transfer_log","status_value":"transfer_initiated"}', NULL, true)
+    ('00000000-0000-0000-0000-000000000479', '00000000-0000-0000-0000-0000000000eb', 9, 'record_transfer_lifecycle_evidence', '{"evidence_table_ref":"topology.sftp_transfer_log","projection_table_ref":"topology.sftp_transfer_log","initiated_event_type":"transfer_initiated","completed_event_type":"transfer_completed","failed_event_type":"transfer_failed","checksum_mismatch_event_type":"checksum_mismatch","retry_event_type":"retry_attempted","requires_export_job":"true","requires_manifest":"true","requires_checksum":"true","retry_policy_ref":"scheduler_retry_requested"}', NULL, true)
 ON CONFLICT (policy_id, step_order) DO NOTHING;
+
+-- export_sftp_bundle implemented transfer lifecycle policy. Re-seed this policy
+-- idempotently so older bootstrap rows with only transfer_initiated cannot mask
+-- explicit failure/retry evidence. Checksum/manifest verification is recorded as
+-- an independent boundary from the generic response_port credential lane.
+DELETE FROM topology.external_port_policy_steps
+WHERE policy_id = '00000000-0000-0000-0000-0000000000eb';
+
+INSERT INTO topology.external_port_policy_steps (policy_step_id, policy_id, step_order, operation_key, step_config, abstract_function_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000471', '00000000-0000-0000-0000-0000000000eb',  1, 'resolve_port_record',          '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000472', '00000000-0000-0000-0000-0000000000eb',  2, 'resolve_credential_reference', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000473', '00000000-0000-0000-0000-0000000000eb',  3, 'load_encrypted_credential_payload', '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000474', '00000000-0000-0000-0000-0000000000eb',  4, 'decrypt_for_runtime_use',      '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000475', '00000000-0000-0000-0000-0000000000eb',  5, 'build_http_request',           '{"method":"POST","requires_export_job":"true","requires_manifest":"true","requires_checksum":"true"}', NULL, true),
+    ('00000000-0000-0000-0000-000000000476', '00000000-0000-0000-0000-0000000000eb',  6, 'inject_authorization_header',  '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000477', '00000000-0000-0000-0000-0000000000eb',  7, 'send_http',                    '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000478', '00000000-0000-0000-0000-0000000000eb',  8, 'capture_response',             '{}', NULL, true),
+    ('00000000-0000-0000-0000-000000000479', '00000000-0000-0000-0000-0000000000eb',  9, 'record_transfer_lifecycle_evidence', '{"evidence_table_ref":"topology.sftp_transfer_log","projection_table_ref":"topology.sftp_transfer_log","initiated_event_type":"transfer_initiated","completed_event_type":"transfer_completed","failed_event_type":"transfer_failed","checksum_mismatch_event_type":"checksum_mismatch","retry_event_type":"retry_attempted","requires_export_job":"true","requires_manifest":"true","requires_checksum":"true","retry_policy_ref":"scheduler_retry_requested"}', NULL, true)
+ON CONFLICT (policy_id, step_order) DO UPDATE
+    SET operation_key = EXCLUDED.operation_key,
+        step_config = EXCLUDED.step_config,
+        abstract_function_key = EXCLUDED.abstract_function_key,
+        active = EXCLUDED.active;
 
 -- file_storage_bundle domain operation steps use execute_abstract_function (manifest-authority).
 -- All 7 fs_* operations (record_export_job, record_file_artifact, write_manifest_record, authorize_signed_download,

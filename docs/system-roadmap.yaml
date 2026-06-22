@@ -783,9 +783,18 @@ system_roadmap_ssot:
     product.export_sftp_port_consumer:
       bundle_id: export-sftp-port-consumer
       title: Export/SFTP bundle port consumer implementation
-      status: partial
+      status: implemented
       production_ready: false
-      public_summary: Export/SFTP Bundle as port consumer of external_port_substrate. Seed binding (response_port / sftp credential_requirement / policy_steps / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (sftp_transfer_log), manifest/checksum verification boundary, portTargetRef action wiring (after file-storage-port-consumer), evidence/runtime_event_log, and projection response. Depends on file-storage-port-consumer completion. SFTP provider-specific client not added.
+      public_summary: >-
+        Export/SFTP Bundle as port consumer of external_port_substrate. Implemented on the
+        generic response_port lane: topology.sftp_transfer_log depends on file-storage
+        export_jobs/file_artifacts/export_manifests/file_checksum_records, manifest binding
+        and safe screen_data_shape evidence are seeded, checksum/manifest failure is explicit,
+        export_sftp_transfer.v1 CRUD-derived UI Builder preset uses portTargetRef
+        external-port:response_port:f08, runtime_event_log records mutually exclusive transfer_completed/transfer_failed/
+        checksum_mismatch/retry_attempted branches, and projection response exposes transfer status
+        only. SFTP provider-specific client/runtime and
+        credential/endpoint/remote_path/raw provider projection are not added.
       scope:
         - export_sftp_response_port_consumer_definition
         - sftp_credential_requirement_as_port_attachment
@@ -793,11 +802,30 @@ system_roadmap_ssot:
         - transfer_manifest_checksum_required
       detail_ref:
         - docs/design/runtime-bundle-export-sftp-ssot.yaml
+        - docs/design/runtime-bundle-export-sftp-implementation-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - .agent/tasks/todo.md#export-sftp-port-consumer
+      evidence_ref:
+        - db/topology_tables.sql#sftp_transfer_log
+        - db/seed_empty.sql#export_sftp_bundle
+        - db/export_sftp_transfer_preset_seed.sql
+        - frontend/tests/exportSftpPortConsumer.test.ts
+        - backend/tests/Topolactor.Runtime.Tests/ExportSftpPortConsumerContractTests.cs
       closed_gap_ref:
         - export_sftp_seed_binding_and_credential_requirement_implemented_per_pr460
-      known_gap_ref:
+        - export_sftp_physical_table_and_manifest_binding_connected
+        - export_sftp_checksum_and_manifest_verification_boundary_connected
+        - export_sftp_portTargetRef_action_wiring_connected
+        - export_sftp_evidence_and_runtime_event_log_connected
+        - export_sftp_projection_response_connected
+      known_gap_ref: []
+      completion_condition:
+        - sftp_transfer_log_references_file_storage_export_job_artifact_manifest_checksum
+        - export_sftp_response_port_policy_records_conditional_transfer_lifecycle_runtime_event_log
+        - export_sftp_transfer_preset_seed_registered_in_init_sql_and_wires_portTargetRef_to_response_port
+        - projection_response_exposes_transfer_status_safe_fields_only
+        - provider_specific_sftp_client_or_runtime_not_added
+      resolved_gap_ref:
         - export_sftp_physical_table_and_manifest_binding_not_connected
         - export_sftp_checksum_and_manifest_verification_boundary_not_connected
         - export_sftp_portTargetRef_action_wiring_not_connected
