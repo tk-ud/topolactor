@@ -682,9 +682,11 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                     return;
                 }
 
+                var initiatedEvent = ReadConfig(step.StepConfig, "initiated_event_type") ?? "transfer_initiated";
                 var completedEvent = ReadConfig(step.StepConfig, "completed_event_type") ?? "transfer_completed";
                 try
                 {
+                    await AppendLifecycleAsync(initiatedEvent, MergeConfig(step.StepConfig, initiatedEvent, "transfer_initiated"));
                     await AppendLifecycleAsync(completedEvent, MergeConfig(step.StepConfig, completedEvent, "transfer_completed"));
                     await LoadLifecycleProjectionAsync(consumerEvidenceRepository, projectionTableRef, bundle, entityId, context, ct);
                     context.MarkExecuted(step.OperationKey);

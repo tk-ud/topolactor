@@ -590,7 +590,8 @@ ALTER TABLE topology.external_port_policy_steps
         'append_runtime_event_log','fail_close','acquire_refresh_lease','request_token_by_config',
         'write_encrypted_credential_payload','update_token_hash','update_expires_at_and_version',
         'release_refresh_lease',
-        'compute_checksum','execute_abstract_function'
+        'compute_checksum','execute_abstract_function',
+        'record_transfer_lifecycle_evidence'
     ));
 
 -- ---------------------------------------------------------------------------
