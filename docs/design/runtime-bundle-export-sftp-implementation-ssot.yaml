@@ -63,6 +63,7 @@ runtime_bundle_export_sftp_implementation_ssot:
       provider_specific_runtime: prohibited
     runtime_event_log:
       required_events:
+        - transfer_initiated
         - transfer_completed
         - transfer_failed
         - checksum_mismatch

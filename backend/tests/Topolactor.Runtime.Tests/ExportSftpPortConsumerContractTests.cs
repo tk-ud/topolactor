@@ -32,10 +32,12 @@ public class ExportSftpPortConsumerContractTests
         var sql = File.ReadAllText(Path.Combine(RepoRoot(), "db", "seed_empty.sql"));
         Assert.Contains("'export_sftp_response_port_generic'", sql);
         Assert.Contains("record_transfer_lifecycle_evidence", sql);
+        Assert.Contains("transfer_initiated", sql);
         Assert.Contains("transfer_completed", sql);
         Assert.Contains("transfer_failed", sql);
         Assert.Contains("checksum_mismatch", sql);
         Assert.Contains("retry_attempted", sql);
+        Assert.Contains("\"initiated_event_type\":\"transfer_initiated\"", sql);
         Assert.DoesNotContain("'append_runtime_event_log',     '{\"event_type\":\"transfer_completed", sql);
         Assert.DoesNotContain("'append_runtime_event_log',     '{\"event_type\":\"transfer_failed", sql);
         Assert.DoesNotContain("'append_runtime_event_log',     '{\"event_type\":\"checksum_mismatch", sql);
@@ -86,8 +88,8 @@ public class ExportSftpPortConsumerContractTests
         var successExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: successLog, consumerEvidenceRepository: successEvidence);
         var successContext = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString() });
         await successExecutor.ExecuteAsync(step, successContext);
-        Assert.Equal(new[] { "transfer_completed" }, successLog.EventTypes);
-        Assert.Equal(new[] { "transfer_completed" }, successEvidence.AppendedEventTypes);
+        Assert.Equal(new[] { "transfer_initiated", "transfer_completed" }, successLog.EventTypes);
+        Assert.Equal(new[] { "transfer_initiated", "transfer_completed" }, successEvidence.AppendedEventTypes);
         Assert.False(successContext.SchedulerEventEnqueued);
 
         var missingLog = new CapturingRuntimeEventLogRepository();
@@ -96,8 +98,8 @@ public class ExportSftpPortConsumerContractTests
         var missingContext = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString() });
         var missingEx = await Assert.ThrowsAsync<InvalidOperationException>(() => missingExecutor.ExecuteAsync(step, missingContext));
         Assert.Equal("SFTP_TRANSFER_EXPORT_JOB_MANIFEST_CHECKSUM_REQUIRED", missingEx.Message);
-        Assert.Equal(new[] { "transfer_failed" }, missingLog.EventTypes);
-        Assert.Equal(new[] { "transfer_completed", "transfer_failed" }, missingEvidence.AppendedEventTypes);
+        Assert.Equal(new[] { "transfer_initiated", "transfer_failed" }, missingLog.EventTypes);
+        Assert.Equal(new[] { "transfer_initiated", "transfer_completed", "transfer_failed" }, missingEvidence.AppendedEventTypes);
 
         var mismatchLog = new CapturingRuntimeEventLogRepository();
         var mismatchEvidence = new BranchingEvidenceRepository(failCompletedWith: "SFTP_TRANSFER_CHECKSUM_MISMATCH");
@@ -105,8 +107,8 @@ public class ExportSftpPortConsumerContractTests
         var mismatchContext = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString() });
         var mismatchEx = await Assert.ThrowsAsync<InvalidOperationException>(() => mismatchExecutor.ExecuteAsync(step, mismatchContext));
         Assert.Equal("SFTP_TRANSFER_CHECKSUM_MISMATCH", mismatchEx.Message);
-        Assert.Equal(new[] { "checksum_mismatch" }, mismatchLog.EventTypes);
-        Assert.Equal(new[] { "transfer_completed", "checksum_mismatch" }, mismatchEvidence.AppendedEventTypes);
+        Assert.Equal(new[] { "transfer_initiated", "checksum_mismatch" }, mismatchLog.EventTypes);
+        Assert.Equal(new[] { "transfer_initiated", "transfer_completed", "checksum_mismatch" }, mismatchEvidence.AppendedEventTypes);
 
         var retryLog = new CapturingRuntimeEventLogRepository();
         var retryEvidence = new BranchingEvidenceRepository();
@@ -143,6 +145,7 @@ public class ExportSftpPortConsumerContractTests
         {
             ["evidence_table_ref"] = "topology.sftp_transfer_log",
             ["projection_table_ref"] = "topology.sftp_transfer_log",
+            ["initiated_event_type"] = "transfer_initiated",
             ["completed_event_type"] = "transfer_completed",
             ["failed_event_type"] = "transfer_failed",
             ["checksum_mismatch_event_type"] = "checksum_mismatch",
