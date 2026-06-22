@@ -178,7 +178,8 @@ builder.Services.AddSingleton<IExternalPortCredentialReferenceResolver>(sp =>
     new ExternalPortCredentialReferenceResolver(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<IExternalCredentialCrypto, AesExternalCredentialCrypto>();
 builder.Services.AddSingleton<ISchedulerEnqueueBoundary>(sp =>
-    new RuntimeTimelineSchedulerEnqueueBoundary(sp.GetRequiredService<RuntimeTimelineScheduler>()));
+    new RuntimeTimelineSchedulerEnqueueBoundary(
+        new Lazy<RuntimeTimelineScheduler>(() => sp.GetRequiredService<RuntimeTimelineScheduler>())));
 builder.Services.AddSingleton<ExternalPortPolicyStepExecutor>(sp =>
     new ExternalPortPolicyStepExecutor(
         httpClient: sp.GetRequiredService<IExternalPortHttpClient>(),
