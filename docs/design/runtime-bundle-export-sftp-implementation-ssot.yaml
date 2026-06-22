@@ -61,6 +61,41 @@ runtime_bundle_export_sftp_implementation_ssot:
       portTargetRef: external-port:response_port:00000000-0000-0000-0000-000000000f08
       runtime: existing external_port_runtime generic policy steps
       provider_specific_runtime: prohibited
+    retry_scheduler_enqueue:
+      authority: policy_step_config
+      step_config_fields:
+        retry_trigger_target:
+          required: true
+          value: external-port:response_port:00000000-0000-0000-0000-000000000f08
+          note: >-
+            portTargetRef used as port_target_ref in retry hook trigger payload.
+            Must come from step_config, NOT from request payload.
+        retry_trigger_layer:
+          required: false
+          default: response_port
+        retry_trigger_action:
+          required: false
+          default: retry
+        retry_policy_ref:
+          required: false
+          value: scheduler_retry_requested
+          note: Placed in retry hook trigger payload. NOT from request payload.
+      scheduler_boundary: ISchedulerEnqueueBoundary via RuntimeTimelineSchedulerEnqueueBoundary
+      enqueue_failure_policy:
+        boundary_missing: throw EXTERNAL_PORT_SCHEDULER_ENQUEUE_BOUNDARY_MISSING
+        queue_full: throw SCHEDULER_QUEUE_FULL
+        silent_fallback: prohibited
+      retry_evidence_safe_fields:
+        - scheduler_enqueue_result
+        - scheduler_enqueue_boundary_ref
+      retry_evidence_denied_fields:
+        - credential
+        - host
+        - user
+        - private_key
+        - endpoint
+        - remote_path
+        - signed_url
     runtime_event_log:
       required_events:
         - transfer_initiated

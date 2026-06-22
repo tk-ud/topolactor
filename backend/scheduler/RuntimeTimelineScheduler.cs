@@ -230,6 +230,21 @@ public class RuntimeTimelineScheduler : BackgroundService
 }
 
 /// <summary>
+/// Thin boundary adapter connecting ExternalPortPolicyStepExecutor to RuntimeTimelineScheduler.
+/// Routes retry hook triggers through the existing scheduler substrate.
+/// </summary>
+public sealed class RuntimeTimelineSchedulerEnqueueBoundary : ISchedulerEnqueueBoundary
+{
+    private readonly RuntimeTimelineScheduler _scheduler;
+
+    public RuntimeTimelineSchedulerEnqueueBoundary(RuntimeTimelineScheduler scheduler)
+        => _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+
+    public bool TryEnqueueHookTrigger(EndpointRequestDto request) =>
+        _scheduler.EnqueueHookTrigger(request);
+}
+
+/// <summary>
 /// An item in the background runtime queue (cron/hook triggers only).
 /// </summary>
 internal record SchedulerItem(

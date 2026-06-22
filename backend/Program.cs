@@ -177,6 +177,8 @@ builder.Services.AddSingleton<IExternalPortHttpClient>(sp =>
 builder.Services.AddSingleton<IExternalPortCredentialReferenceResolver>(sp =>
     new ExternalPortCredentialReferenceResolver(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<IExternalCredentialCrypto, AesExternalCredentialCrypto>();
+builder.Services.AddSingleton<ISchedulerEnqueueBoundary>(sp =>
+    new RuntimeTimelineSchedulerEnqueueBoundary(sp.GetRequiredService<RuntimeTimelineScheduler>()));
 builder.Services.AddSingleton<ExternalPortPolicyStepExecutor>(sp =>
     new ExternalPortPolicyStepExecutor(
         httpClient: sp.GetRequiredService<IExternalPortHttpClient>(),
@@ -187,7 +189,8 @@ builder.Services.AddSingleton<ExternalPortPolicyStepExecutor>(sp =>
         dbFunctionRepository: sp.GetRequiredService<IExternalPortDbFunctionRepository>(),
         abstractFunctionExecutor: sp.GetRequiredService<AbstractFunctionExecutor>(),
         runtimeEventLogRepository: sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>(),
-        consumerEvidenceRepository: sp.GetRequiredService<IExternalPortConsumerEvidenceRepository>()));
+        consumerEvidenceRepository: sp.GetRequiredService<IExternalPortConsumerEvidenceRepository>(),
+        schedulerEnqueueBoundary: sp.GetRequiredService<ISchedulerEnqueueBoundary>()));
 
 builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
     new ExternalPortPolicyStepExecutorCompatibilityShim(
