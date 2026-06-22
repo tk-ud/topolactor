@@ -37,6 +37,7 @@ const SEED_FILES = [
   "db/aggregate_dashboard_preset_seed.sql",
   "db/file_attachment_crud_preset_seed.sql",
   "db/file_storage_export_job_preset_seed.sql",
+  "db/export_sftp_transfer_preset_seed.sql",
 ];
 
 // Regression pin: target refs that are specifically banned as observed past violations.

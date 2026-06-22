@@ -1,0 +1,89 @@
+runtime_bundle_export_sftp_implementation_ssot:
+  name: runtime_bundle_export_sftp_implementation
+  version: 0.1.0
+  status: implementation_decomposition
+  canonical_path: docs/design/runtime-bundle-export-sftp-implementation-ssot.yaml
+  source_boundary_ssot: docs/design/runtime-bundle-export-sftp-ssot.yaml
+  purpose:
+    summary: >-
+      Implementation decomposition for export_sftp_bundle only. It decomposes the
+      existing export_job → package → manifest → checksum → transfer boundary into
+      DB schema, seed wiring, generic external_port policy steps, evidence, and
+      projection checks without adding provider-specific SFTP protocol/client details.
+    non_goals:
+      - sftp_server_configuration
+      - sftp_host_value
+      - sftp_user_value
+      - sftp_private_key_value
+      - sftp_endpoint_value
+      - sftp_remote_path_value
+      - provider_specific_sftp_client_or_runtime
+  dependencies:
+    file_storage_bundle_authorities:
+      export_job: topology.export_jobs
+      artifact: topology.file_artifacts
+      manifest: topology.export_manifests
+      checksum: topology.file_checksum_records
+    port_substrate_authority: topology.external_response_ports
+  implementation_surfaces:
+    physical_table:
+      table_ref: topology.sftp_transfer_log
+      rules:
+        - export_job_id references topology.export_jobs
+        - transfer_status records pending/transfer_initiated/transfer_completed/transfer_failed/checksum_mismatch/retry_attempted
+        - failure_reason and retry_evidence_json are DB evidence fields
+        - credential_host_user_key_endpoint_remote_path_plaintext_fields_are_forbidden
+    manifest_binding:
+      authority: topology.physical_table_manifest_bindings
+      manifest_key: export_sftp.response_port.transfer.projection
+      screen_data_shape_source: seed binding_evidence_json
+      rule: table and column authority must come from manifest/seed/authority binding, not payload
+    checksum_manifest_boundary:
+      before_transfer:
+        requires:
+          - topology.export_manifests row for export_job_id
+          - topology.file_checksum_records verified for file_artifact_id
+      after_transfer:
+        records:
+          - checksum_before
+          - checksum_after
+          - transfer_status
+      explicit_failures:
+        - manifest_missing
+        - checksum_mismatch
+        - transfer_failed
+      prohibited:
+        - silent_fallback
+        - silent_retry
+        - transfer_without_manifest
+        - transfer_without_checksum
+    dispatch_lane:
+      portTargetRef: external-port:response_port:00000000-0000-0000-0000-000000000f08
+      runtime: existing external_port_runtime generic policy steps
+      provider_specific_runtime: prohibited
+    runtime_event_log:
+      required_events:
+        - transfer_initiated
+        - transfer_completed
+        - transfer_failed
+        - checksum_mismatch
+        - retry_attempted
+    projection_response:
+      safe_fields:
+        - transfer_status
+        - failure_reason
+        - checksum_before
+        - checksum_after
+        - manifest_ref
+        - response_port_ref
+        - retry_evidence_json
+      denied_fields:
+        - credential
+        - host
+        - user
+        - username
+        - private_key
+        - endpoint
+        - remote_path
+        - signed_url
+        - raw_provider_response

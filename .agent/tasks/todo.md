@@ -437,24 +437,25 @@ PR#460 完了済み: response_port (notification) seed binding / credential_requ
 
 ## Bundle `export-sftp-port-consumer`
 
-**Status:** partial
+**Status:** implemented
 **SSOT:** `docs/design/runtime-bundle-export-sftp-ssot.yaml`
+**Implementation SSOT:** `docs/design/runtime-bundle-export-sftp-implementation-ssot.yaml`
 
-PR#460 完了済み: response_port (sftp) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
-残作業は physical table / manifest / checksum / SFTP transfer wiring 接続 (file-storage-port-consumer の完了後)。SFTP provider-specific client / runtime は追加しない。
+Implemented: response_port (sftp) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提を維持し、file-storage の export_job / file_artifact / export_manifest / checksum_record 正本に依存する `topology.sftp_transfer_log`、manifest binding、checksum/manifest evidence boundary、CRUD preset 派生 `export_sftp_transfer.v1`、runtime_event_log lifecycle、safe transfer status projection を接続済み。SFTP provider-specific client / runtime は追加しない。
 既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
 
-残 todo:
-- [ ] sftp_transfer_log physical table 接続実装 (file_storage_bundle 依存)
-- [ ] physical table manifest binding (export_sftp manifest / screen_data_shape)
-- [ ] checksum 転送前後の検証境界実装 (port substrate と独立)
-- [ ] manifest 確認境界実装
-- [ ] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring: export_job → response_port 解決 → generic response_port connect（SFTP provider-specific client 新設なし）/ evidence projection
-- [ ] evidence / runtime_event_log: transfer_initiated / transfer_completed / transfer_failed / checksum_mismatch
-- [ ] projection response: transfer status projection
+完了:
+- [x] sftp_transfer_log physical table 接続実装 (file_storage_bundle 依存)
+- [x] physical table manifest binding (export_sftp manifest / screen_data_shape)
+- [x] checksum 転送前後の検証境界実装 (port substrate と独立)
+- [x] manifest 確認境界実装
+- [x] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring: export_job → response_port 解決 → generic response_port connect（SFTP provider-specific client 新設なし）/ evidence projection
+- [x] evidence / runtime_event_log: transfer_initiated / transfer_completed / transfer_failed / checksum_mismatch / retry_attempted
+- [x] projection response: transfer status projection (credential / endpoint / remote_path / raw provider response は projection deny)
 
 対応資料:
 - `docs/design/runtime-bundle-export-sftp-ssot.yaml`
+- `docs/design/runtime-bundle-export-sftp-implementation-ssot.yaml`
 - `docs/design/runtime-bundle-file-storage-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
