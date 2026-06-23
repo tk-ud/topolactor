@@ -1289,6 +1289,20 @@ export async function fetchSchedulerJobManifests(): Promise<SchedulerJobManifest
 // backend AdminRuntime. Reference keys only; no secret material is sent.
 // ---------------------------------------------------------------------------
 
+/** One ordered step in an authored scheduler job manifest. */
+export type SchedulerJobStepInput = {
+  stepOrder?: number;
+  abstractFunctionKey: string;
+  onError?: string;
+  resultContextKey?: string | null;
+  /** manifest-defined binding map (result_context_key -> { source, path }) */
+  inputBinding?: Record<string, unknown>;
+  /** manifest-defined output binding (kind/result_context_key/conflict_columns/column_map) */
+  resultBinding?: Record<string, unknown>;
+  authorityScope?: string | null;
+  active?: boolean;
+};
+
 export type SchedulerJobDraftInput = {
   jobKey: string;
   triggerKind: string;
@@ -1304,6 +1318,25 @@ export type SchedulerJobDraftInput = {
   credentialRequirementRef?: string | null;
   /** reference key only — no external port config */
   externalPortRef?: string | null;
+  // Input source / lifecycle (manifest authority; backend validates as identifiers).
+  inputTableRef?: string | null;
+  inputIdColumn?: string | null;
+  inputStatusColumn?: string | null;
+  inputDueColumn?: string | null;
+  inputStatusPendingValue?: string | null;
+  inputStatusProcessingValue?: string | null;
+  inputStatusCompletedValue?: string | null;
+  inputStatusFailedValue?: string | null;
+  inputStatusSkippedValue?: string | null;
+  inputStatusRetryWaitValue?: string | null;
+  // Output binding target.
+  outputTableRef?: string | null;
+  timezone?: string | null;
+  // Policy bodies (JSON objects).
+  retryPolicy?: Record<string, unknown>;
+  projectionPolicy?: Record<string, unknown>;
+  // Ordered step chain.
+  steps?: SchedulerJobStepInput[];
 };
 
 export type SchedulerJobAuthoringResult = {

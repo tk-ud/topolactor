@@ -100,6 +100,169 @@ public class AdminRuntimeSchedulerAuthoringTests
     }
 
     [Fact]
+    public async Task Create_FullManifest_SavesHeaderInputSourceOutputAndSteps()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var (data, error) = await runtime.ExecuteDataAsync(Vector("create", new
+        {
+            jobKey = "weather_24h",
+            triggerKind = "cron",
+            schedulePolicyKind = "interval_seconds",
+            scheduleIntervalSeconds = 3600,
+            authorityScope = "weather_job",
+            active = true,
+            inputTableRef = "weather.region_inputs",
+            inputIdColumn = "id",
+            inputStatusColumn = "status",
+            inputDueColumn = "due_at",
+            inputStatusPendingValue = "pending",
+            inputStatusProcessingValue = "processing",
+            inputStatusCompletedValue = "completed",
+            inputStatusFailedValue = "failed",
+            inputStatusSkippedValue = "skipped",
+            inputStatusRetryWaitValue = "retry_wait",
+            outputTableRef = "weather.observations",
+            retryPolicy = new { max_attempts = 3, backoff_seconds = 60 },
+            projectionPolicy = new { allowed_result_keys = new[] { "observation" } },
+            steps = new object[]
+            {
+                new
+                {
+                    stepOrder = 1,
+                    abstractFunctionKey = "weather.fetch",
+                    onError = "retry",
+                    resultContextKey = "observation",
+                    inputBinding = new { region = new { source = "input", path = "region" } },
+                    resultBinding = new { kind = "output_upsert", result_context_key = "observation", conflict_columns = new[] { "region" }, column_map = new { region = "observation" } },
+                    active = true,
+                },
+            },
+        }), default);
+
+        Assert.Null(error);
+        Assert.True(data!.Value.GetProperty("ok").GetBoolean());
+        Assert.Single(repo.Created);
+        var d = repo.Created[0];
+        Assert.Equal("weather.region_inputs", d.InputTableRef);
+        Assert.Equal("status", d.InputStatusColumn);
+        Assert.Equal("retry_wait", d.InputStatusRetryWaitValue);
+        Assert.Equal("weather.observations", d.OutputTableRef);
+        Assert.NotNull(d.RetryPolicyJson);
+        Assert.Single(d.Steps);
+        Assert.Equal("weather.fetch", d.Steps[0].AbstractFunctionKey);
+        Assert.Equal("retry", d.Steps[0].OnError);
+        Assert.Contains("output_upsert", d.Steps[0].ResultBindingJson);
+        Assert.Contains("region", d.Steps[0].InputBindingJson);
+    }
+
+    [Fact]
+    public async Task Edit_FullManifest_UpdatesHeaderAndSteps()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var id = Guid.NewGuid();
+        var (_, error) = await runtime.ExecuteDataAsync(Vector("edit", new
+        {
+            schedulerJobId = id.ToString(),
+            jobKey = "weather_24h",
+            schedulePolicyKind = "manual_only",
+            authorityScope = "weather_job",
+            steps = new object[]
+            {
+                new { abstractFunctionKey = "weather.fetch", onError = "fail_run", resultContextKey = "obs" },
+            },
+        }), default);
+
+        Assert.Null(error);
+        Assert.Single(repo.Updated);
+        Assert.Equal(id, repo.Updated[0].Id);
+        Assert.Single(repo.Updated[0].Draft.Steps);
+    }
+
+    [Fact]
+    public async Task Create_PayloadDerivedTableAuthority_FailClosed()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var (_, error) = await runtime.ExecuteDataAsync(Vector("create", new
+        {
+            jobKey = "j",
+            schedulePolicyKind = "manual_only",
+            authorityScope = "scope",
+            inputTableRef = "users; DROP TABLE x",
+        }), default);
+
+        Assert.NotNull(error);
+        Assert.Equal("SCHEDULER_JOB_TABLE_AUTHORITY_INVALID", error!.Code);
+        Assert.Empty(repo.Created);
+    }
+
+    [Fact]
+    public async Task Create_PayloadDerivedColumnAuthorityInResultBinding_FailClosed()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var (_, error) = await runtime.ExecuteDataAsync(Vector("create", new
+        {
+            jobKey = "j",
+            schedulePolicyKind = "manual_only",
+            authorityScope = "scope",
+            steps = new object[]
+            {
+                new
+                {
+                    abstractFunctionKey = "f",
+                    onError = "fail_run",
+                    resultBinding = new { kind = "output_upsert", column_map = new Dictionary<string, string> { ["bad col;"] = "x" } },
+                },
+            },
+        }), default);
+
+        Assert.NotNull(error);
+        Assert.Equal("SCHEDULER_JOB_COLUMN_AUTHORITY_INVALID", error!.Code);
+        Assert.Empty(repo.Created);
+    }
+
+    [Fact]
+    public async Task Create_InvalidStepOnError_FailClosed()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var (_, error) = await runtime.ExecuteDataAsync(Vector("create", new
+        {
+            jobKey = "j",
+            schedulePolicyKind = "manual_only",
+            authorityScope = "scope",
+            steps = new object[] { new { abstractFunctionKey = "f", onError = "skip_step" } },
+        }), default);
+
+        Assert.NotNull(error);
+        Assert.Equal("SCHEDULER_JOB_STEP_ON_ERROR_INVALID", error!.Code);
+    }
+
+    [Fact]
+    public async Task Create_SecretFieldNestedInStep_FailClosed()
+    {
+        var repo = new StubSchedulerRepo();
+        var runtime = CreateRuntime(repo);
+        var (_, error) = await runtime.ExecuteDataAsync(Vector("create", new
+        {
+            jobKey = "j",
+            schedulePolicyKind = "manual_only",
+            authorityScope = "scope",
+            steps = new object[]
+            {
+                new { abstractFunctionKey = "f", onError = "fail_run", inputBinding = new { api_key = "sk-secret" } },
+            },
+        }), default);
+
+        Assert.NotNull(error);
+        Assert.Equal("SCHEDULER_JOB_SECRET_FIELD_FORBIDDEN", error!.Code);
+        Assert.Empty(repo.Created);
+    }
+
+    [Fact]
     public async Task Create_CronPolicyWithoutCronExpression_FailClosed()
     {
         var repo = new StubSchedulerRepo();

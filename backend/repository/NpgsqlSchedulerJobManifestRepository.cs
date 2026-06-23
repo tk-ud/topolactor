@@ -133,6 +133,8 @@ public interface ISchedulerJobManifestRepository
 /// <summary>
 /// Admin/seed-authored manifest draft. Holds only references and policy data —
 /// never credential plaintext. Table/column/status authority is manifest data here.
+/// Carries the full manifest: header + input source/lifecycle + output binding +
+/// retry/projection policy + ordered steps[].
 /// </summary>
 public sealed record SchedulerJobDraft(
     string JobKey,
@@ -146,7 +148,41 @@ public sealed record SchedulerJobDraft(
     int MaxBatchSize,
     int LeaseSeconds,
     string? CredentialRequirementRef,
-    string? ExternalPortRef);
+    string? ExternalPortRef)
+{
+    // Input source / lifecycle (manifest authority; never payload-derived).
+    public string? InputTableRef { get; init; }
+    public string InputIdColumn { get; init; } = "id";
+    public string? InputStatusColumn { get; init; }
+    public string? InputStatusPendingValue { get; init; }
+    public string? InputStatusProcessingValue { get; init; }
+    public string? InputStatusCompletedValue { get; init; }
+    public string? InputStatusFailedValue { get; init; }
+    public string? InputStatusSkippedValue { get; init; }
+    public string? InputStatusRetryWaitValue { get; init; }
+    public string? InputDueColumn { get; init; }
+
+    // Output binding target.
+    public string? OutputTableRef { get; init; }
+    public string? Timezone { get; init; }
+
+    // Raw JSON policy bodies (validated as objects by the parser).
+    public string? RetryPolicyJson { get; init; }
+    public string? ProjectionPolicyJson { get; init; }
+
+    public IReadOnlyList<SchedulerJobStepDraft> Steps { get; init; } = Array.Empty<SchedulerJobStepDraft>();
+}
+
+/// <summary>One ordered step in an authored scheduler job manifest.</summary>
+public sealed record SchedulerJobStepDraft(
+    int StepOrder,
+    string AbstractFunctionKey,
+    string OnError,
+    string? ResultContextKey,
+    string InputBindingJson,
+    string ResultBindingJson,
+    string? AuthorityScope,
+    bool Active);
 
 public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifestRepository
 {
@@ -156,6 +192,12 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
         new(@"^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex ColumnPattern =
         new(@"^[a-z_][a-z0-9_]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>Schema-qualified table identifier guard (manifest authority; rejects raw SQL / injection).</summary>
+    public static bool IsValidTableRef(string? value) => value is not null && TableRefPattern.IsMatch(value);
+
+    /// <summary>Bare column identifier guard (manifest authority; rejects raw SQL / injection).</summary>
+    public static bool IsValidColumn(string? value) => value is not null && ColumnPattern.IsMatch(value);
 
     private readonly string _connectionString;
 
@@ -406,44 +448,124 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO topology.scheduler_jobs
-                (job_key, trigger_kind, schedule_policy_kind, cron_expression,
-                 schedule_interval_seconds, manual_run_allowed, active, authority_scope,
-                 max_batch_size, lease_seconds, credential_requirement_ref, external_port_ref,
-                 created_by, updated_at)
-            VALUES
-                (@jobKey, @triggerKind, @policyKind, @cron,
-                 @interval, @manual, @active, @authority,
-                 @batch, @lease, @credRef, @portRef,
-                 'admin', now())
-            RETURNING scheduler_job_id
-            """;
-        BindDraft(cmd, draft);
-        var id = await cmd.ExecuteScalarAsync(ct);
-        return (Guid)id!;
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        Guid id;
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO topology.scheduler_jobs
+                    (job_key, trigger_kind, schedule_policy_kind, cron_expression,
+                     schedule_interval_seconds, manual_run_allowed, active, authority_scope,
+                     max_batch_size, lease_seconds, credential_requirement_ref, external_port_ref,
+                     input_table_ref, input_id_column, input_status_column, input_due_column,
+                     input_status_pending_value, input_status_processing_value,
+                     input_status_completed_value, input_status_failed_value,
+                     input_status_skipped_value, input_status_retry_wait_value,
+                     output_table_ref, timezone, retry_policy, projection_policy,
+                     created_by, updated_at)
+                VALUES
+                    (@jobKey, @triggerKind, @policyKind, @cron,
+                     @interval, @manual, @active, @authority,
+                     @batch, @lease, @credRef, @portRef,
+                     @inputTable, @inputId, @inputStatusCol, @inputDueCol,
+                     @pending, @processing, @completed, @failed, @skipped, @retryWait,
+                     @outputTable, COALESCE(@timezone, 'UTC'),
+                     COALESCE(@retryPolicy::jsonb, '{"max_attempts":3,"backoff_seconds":60}'::jsonb),
+                     COALESCE(@projectionPolicy::jsonb, '{}'::jsonb),
+                     'admin', now())
+                RETURNING scheduler_job_id
+                """;
+            BindDraft(cmd, draft);
+            id = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
+        }
+
+        await InsertStepsAsync(conn, tx, id, draft.Steps, ct);
+        await tx.CommitAsync(ct);
+        return id;
     }
 
     public async Task<bool> UpdateJobAsync(Guid schedulerJobId, SchedulerJobDraft draft, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
-        // Editable only while inactive (disabled) or draft — active manifests are not edited in place.
-        cmd.CommandText = """
-            UPDATE topology.scheduler_jobs
-            SET job_key = @jobKey, trigger_kind = @triggerKind, schedule_policy_kind = @policyKind,
-                cron_expression = @cron, schedule_interval_seconds = @interval,
-                manual_run_allowed = @manual, authority_scope = @authority,
-                max_batch_size = @batch, lease_seconds = @lease,
-                credential_requirement_ref = @credRef, external_port_ref = @portRef,
-                updated_at = now()
-            WHERE scheduler_job_id = @id AND active = false
-            """;
-        cmd.Parameters.AddWithValue("id", schedulerJobId);
-        BindDraft(cmd, draft);
-        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        int affected;
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            // Editable only while inactive (disabled) — active manifests are not edited in place.
+            cmd.CommandText = """
+                UPDATE topology.scheduler_jobs
+                SET job_key = @jobKey, trigger_kind = @triggerKind, schedule_policy_kind = @policyKind,
+                    cron_expression = @cron, schedule_interval_seconds = @interval,
+                    manual_run_allowed = @manual, authority_scope = @authority,
+                    max_batch_size = @batch, lease_seconds = @lease,
+                    credential_requirement_ref = @credRef, external_port_ref = @portRef,
+                    input_table_ref = @inputTable, input_id_column = @inputId,
+                    input_status_column = @inputStatusCol, input_due_column = @inputDueCol,
+                    input_status_pending_value = @pending, input_status_processing_value = @processing,
+                    input_status_completed_value = @completed, input_status_failed_value = @failed,
+                    input_status_skipped_value = @skipped, input_status_retry_wait_value = @retryWait,
+                    output_table_ref = @outputTable, timezone = COALESCE(@timezone, 'UTC'),
+                    retry_policy = COALESCE(@retryPolicy::jsonb, retry_policy),
+                    projection_policy = COALESCE(@projectionPolicy::jsonb, projection_policy),
+                    updated_at = now()
+                WHERE scheduler_job_id = @id AND active = false
+                """;
+            cmd.Parameters.AddWithValue("id", schedulerJobId);
+            BindDraft(cmd, draft);
+            affected = await cmd.ExecuteNonQueryAsync(ct);
+        }
+
+        if (affected == 0)
+        {
+            await tx.RollbackAsync(ct);
+            return false;
+        }
+
+        // Replace the step chain atomically: clear existing steps, reinsert from the draft.
+        await using (var del = conn.CreateCommand())
+        {
+            del.Transaction = tx;
+            del.CommandText = "DELETE FROM topology.scheduler_job_steps WHERE scheduler_job_id = @id";
+            del.Parameters.AddWithValue("id", schedulerJobId);
+            await del.ExecuteNonQueryAsync(ct);
+        }
+        await InsertStepsAsync(conn, tx, schedulerJobId, draft.Steps, ct);
+        await tx.CommitAsync(ct);
+        return true;
+    }
+
+    private static async Task InsertStepsAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, Guid jobId,
+        IReadOnlyList<SchedulerJobStepDraft> steps, CancellationToken ct)
+    {
+        foreach (var step in steps)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                INSERT INTO topology.scheduler_job_steps
+                    (scheduler_job_id, step_order, abstract_function_key, input_binding,
+                     result_context_key, result_binding, on_error, authority_scope, active)
+                VALUES
+                    (@jobId, @order, @fnKey, @inputBinding::jsonb,
+                     @resultKey, @resultBinding::jsonb, @onError, @authority, @active)
+                """;
+            cmd.Parameters.AddWithValue("jobId", jobId);
+            cmd.Parameters.AddWithValue("order", step.StepOrder);
+            cmd.Parameters.AddWithValue("fnKey", step.AbstractFunctionKey);
+            cmd.Parameters.AddWithValue("inputBinding", string.IsNullOrWhiteSpace(step.InputBindingJson) ? "{}" : step.InputBindingJson);
+            cmd.Parameters.AddWithValue("resultKey", (object?)step.ResultContextKey ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("resultBinding", string.IsNullOrWhiteSpace(step.ResultBindingJson) ? "{}" : step.ResultBindingJson);
+            cmd.Parameters.AddWithValue("onError", step.OnError);
+            cmd.Parameters.AddWithValue("authority", (object?)step.AuthorityScope ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("active", step.Active);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
     }
 
     public async Task<bool> SetJobActiveAsync(Guid schedulerJobId, bool active, CancellationToken ct = default)
@@ -475,6 +597,20 @@ public sealed class NpgsqlSchedulerJobManifestRepository : ISchedulerJobManifest
         cmd.Parameters.AddWithValue("lease", draft.LeaseSeconds);
         cmd.Parameters.AddWithValue("credRef", (object?)draft.CredentialRequirementRef ?? DBNull.Value);
         cmd.Parameters.AddWithValue("portRef", (object?)draft.ExternalPortRef ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("inputTable", (object?)draft.InputTableRef ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("inputId", draft.InputIdColumn);
+        cmd.Parameters.AddWithValue("inputStatusCol", (object?)draft.InputStatusColumn ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("inputDueCol", (object?)draft.InputDueColumn ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("pending", (object?)draft.InputStatusPendingValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("processing", (object?)draft.InputStatusProcessingValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("completed", (object?)draft.InputStatusCompletedValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("failed", (object?)draft.InputStatusFailedValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("skipped", (object?)draft.InputStatusSkippedValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("retryWait", (object?)draft.InputStatusRetryWaitValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("outputTable", (object?)draft.OutputTableRef ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("timezone", (object?)draft.Timezone ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("retryPolicy", (object?)draft.RetryPolicyJson ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("projectionPolicy", (object?)draft.ProjectionPolicyJson ?? DBNull.Value);
     }
 
     private const string SelectColumns = """

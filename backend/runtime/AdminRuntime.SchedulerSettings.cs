@@ -122,13 +122,14 @@ public partial class AdminRuntime
     private static ValidationError SchedulerRepoNotConfigured() =>
         new("SCHEDULER_JOB_MANIFEST_NOT_CONFIGURED", "ISchedulerJobManifestRepository is not registered");
 
+    private static readonly string[] ValidOnError = { "fail_run", "retry", "skip_input", "mark_input_failed" };
+
     private static (SchedulerJobDraft? draft, ValidationError? error) ParseDraft(JsonElement payload)
     {
-        // Fail-close on any prohibited secret field — credential plaintext is never authored here.
-        foreach (var secret in ProhibitedSecretFields)
-            if (payload.TryGetProperty(secret, out _))
-                return (null, new ValidationError("SCHEDULER_JOB_SECRET_FIELD_FORBIDDEN",
-                    $"Field '{secret}' is forbidden in scheduler job authoring; use credentialRequirementRef / externalPortRef references only."));
+        // Fail-close on any prohibited secret field anywhere in the draft (header or steps).
+        if (ContainsSecretKey(payload, out var secretKey))
+            return (null, new ValidationError("SCHEDULER_JOB_SECRET_FIELD_FORBIDDEN",
+                $"Field '{secretKey}' is forbidden in scheduler job authoring; use credentialRequirementRef / externalPortRef references only."));
 
         var jobKey = payload.TryGetProperty("jobKey", out var jk) ? jk.GetString() : null;
         if (string.IsNullOrWhiteSpace(jobKey))
@@ -146,7 +147,7 @@ public partial class AdminRuntime
         if (!ValidSchedulePolicyKinds.Contains(policyKind))
             return (null, new ValidationError("SCHEDULER_JOB_SCHEDULE_POLICY_KIND_INVALID", "schedulePolicyKind must be cron|interval_seconds|manual_only."));
 
-        string? cron = payload.TryGetProperty("cronExpression", out var ce) && ce.ValueKind == JsonValueKind.String ? ce.GetString() : null;
+        string? cron = Str(payload, "cronExpression");
         long? interval = payload.TryGetProperty("scheduleIntervalSeconds", out var iv) && iv.ValueKind == JsonValueKind.Number ? iv.GetInt64() : null;
 
         if (policyKind == "cron" && string.IsNullOrWhiteSpace(cron))
@@ -154,15 +155,142 @@ public partial class AdminRuntime
         if (policyKind == "interval_seconds" && (interval is null || interval <= 0))
             return (null, new ValidationError("SCHEDULER_JOB_INTERVAL_REQUIRED", "scheduleIntervalSeconds (>0) is required when schedulePolicyKind=interval_seconds."));
 
-        var manual = payload.TryGetProperty("manualRunAllowed", out var mr) && (mr.ValueKind == JsonValueKind.True || mr.ValueKind == JsonValueKind.False) && mr.GetBoolean();
-        var active = payload.TryGetProperty("active", out var ac) && (ac.ValueKind == JsonValueKind.True || ac.ValueKind == JsonValueKind.False) && ac.GetBoolean();
+        var manual = Bool(payload, "manualRunAllowed");
+        var active = Bool(payload, "active");
         var batch = payload.TryGetProperty("maxBatchSize", out var bs) && bs.ValueKind == JsonValueKind.Number ? bs.GetInt32() : 10;
         var lease = payload.TryGetProperty("leaseSeconds", out var ls) && ls.ValueKind == JsonValueKind.Number ? ls.GetInt32() : 300;
-        string? credRef = payload.TryGetProperty("credentialRequirementRef", out var cr) && cr.ValueKind == JsonValueKind.String ? cr.GetString() : null;
-        string? portRef = payload.TryGetProperty("externalPortRef", out var pr) && pr.ValueKind == JsonValueKind.String ? pr.GetString() : null;
+        string? credRef = Str(payload, "credentialRequirementRef");
+        string? portRef = Str(payload, "externalPortRef");
+
+        // Input source / lifecycle. Table/column authority must be valid identifiers —
+        // this fail-closes raw SQL / payload-derived table authority at authoring time.
+        string? inputTable = Str(payload, "inputTableRef");
+        if (inputTable is not null && !NpgsqlSchedulerJobManifestRepository.IsValidTableRef(inputTable))
+            return (null, new ValidationError("SCHEDULER_JOB_TABLE_AUTHORITY_INVALID", "inputTableRef must be a schema-qualified identifier (no raw SQL)."));
+        string? outputTable = Str(payload, "outputTableRef");
+        if (outputTable is not null && !NpgsqlSchedulerJobManifestRepository.IsValidTableRef(outputTable))
+            return (null, new ValidationError("SCHEDULER_JOB_TABLE_AUTHORITY_INVALID", "outputTableRef must be a schema-qualified identifier (no raw SQL)."));
+
+        var inputIdColumn = Str(payload, "inputIdColumn") ?? "id";
+        if (!NpgsqlSchedulerJobManifestRepository.IsValidColumn(inputIdColumn))
+            return (null, new ValidationError("SCHEDULER_JOB_COLUMN_AUTHORITY_INVALID", "inputIdColumn must be a bare column identifier (no raw SQL)."));
+        var inputStatusColumn = Str(payload, "inputStatusColumn");
+        if (inputStatusColumn is not null && !NpgsqlSchedulerJobManifestRepository.IsValidColumn(inputStatusColumn))
+            return (null, new ValidationError("SCHEDULER_JOB_COLUMN_AUTHORITY_INVALID", "inputStatusColumn must be a bare column identifier (no raw SQL)."));
+        var inputDueColumn = Str(payload, "inputDueColumn");
+        if (inputDueColumn is not null && !NpgsqlSchedulerJobManifestRepository.IsValidColumn(inputDueColumn))
+            return (null, new ValidationError("SCHEDULER_JOB_COLUMN_AUTHORITY_INVALID", "inputDueColumn must be a bare column identifier (no raw SQL)."));
+
+        // retry_policy / projection_policy: accept JSON objects only.
+        string? retryPolicyJson = null;
+        if (payload.TryGetProperty("retryPolicy", out var rp))
+        {
+            if (rp.ValueKind != JsonValueKind.Object)
+                return (null, new ValidationError("SCHEDULER_JOB_RETRY_POLICY_INVALID", "retryPolicy must be a JSON object."));
+            retryPolicyJson = rp.GetRawText();
+        }
+        string? projectionPolicyJson = null;
+        if (payload.TryGetProperty("projectionPolicy", out var pp))
+        {
+            if (pp.ValueKind != JsonValueKind.Object)
+                return (null, new ValidationError("SCHEDULER_JOB_PROJECTION_POLICY_INVALID", "projectionPolicy must be a JSON object."));
+            projectionPolicyJson = pp.GetRawText();
+        }
+
+        // Steps[]
+        var steps = new List<SchedulerJobStepDraft>();
+        if (payload.TryGetProperty("steps", out var stepsEl))
+        {
+            if (stepsEl.ValueKind != JsonValueKind.Array)
+                return (null, new ValidationError("SCHEDULER_JOB_STEPS_INVALID", "steps must be an array."));
+            var order = 0;
+            foreach (var s in stepsEl.EnumerateArray())
+            {
+                order++;
+                if (s.ValueKind != JsonValueKind.Object)
+                    return (null, new ValidationError("SCHEDULER_JOB_STEPS_INVALID", "each step must be an object."));
+                var fnKey = Str(s, "abstractFunctionKey");
+                if (string.IsNullOrWhiteSpace(fnKey))
+                    return (null, new ValidationError("SCHEDULER_JOB_STEP_FUNCTION_KEY_REQUIRED", $"step {order}: abstractFunctionKey is required."));
+                var onError = Str(s, "onError") ?? "fail_run";
+                if (!ValidOnError.Contains(onError))
+                    return (null, new ValidationError("SCHEDULER_JOB_STEP_ON_ERROR_INVALID", $"step {order}: onError must be fail_run|retry|skip_input|mark_input_failed."));
+                var stepOrder = s.TryGetProperty("stepOrder", out var so) && so.ValueKind == JsonValueKind.Number ? so.GetInt32() : order;
+                var resultKey = Str(s, "resultContextKey");
+                var stepAuthority = Str(s, "authorityScope");
+                var stepActive = !s.TryGetProperty("active", out var sa) || sa.ValueKind != JsonValueKind.False;
+
+                var inputBinding = s.TryGetProperty("inputBinding", out var ib) && ib.ValueKind == JsonValueKind.Object ? ib.GetRawText() : "{}";
+                var resultBinding = s.TryGetProperty("resultBinding", out var rb) && rb.ValueKind == JsonValueKind.Object ? rb.GetRawText() : "{}";
+
+                // Guard output-binding column authority at authoring time.
+                if (s.TryGetProperty("resultBinding", out var rb2) && rb2.ValueKind == JsonValueKind.Object)
+                {
+                    if (rb2.TryGetProperty("column_map", out var cm) && cm.ValueKind == JsonValueKind.Object)
+                        foreach (var col in cm.EnumerateObject())
+                            if (!NpgsqlSchedulerJobManifestRepository.IsValidColumn(col.Name))
+                                return (null, new ValidationError("SCHEDULER_JOB_COLUMN_AUTHORITY_INVALID", $"step {order}: result_binding column '{col.Name}' must be a bare column identifier (no raw SQL)."));
+                    if (rb2.TryGetProperty("conflict_columns", out var cc) && cc.ValueKind == JsonValueKind.Array)
+                        foreach (var col in cc.EnumerateArray())
+                            if (col.ValueKind == JsonValueKind.String && !NpgsqlSchedulerJobManifestRepository.IsValidColumn(col.GetString()))
+                                return (null, new ValidationError("SCHEDULER_JOB_COLUMN_AUTHORITY_INVALID", $"step {order}: result_binding conflict column must be a bare column identifier (no raw SQL)."));
+                }
+
+                steps.Add(new SchedulerJobStepDraft(stepOrder, fnKey!, onError, resultKey, inputBinding, resultBinding, stepAuthority, stepActive));
+            }
+        }
 
         return (new SchedulerJobDraft(
             jobKey!, triggerKind, policyKind, cron, interval, manual, active,
-            authorityScope!, batch, lease, credRef, portRef), null);
+            authorityScope!, batch, lease, credRef, portRef)
+        {
+            InputTableRef = inputTable,
+            InputIdColumn = inputIdColumn,
+            InputStatusColumn = inputStatusColumn,
+            InputStatusPendingValue = Str(payload, "inputStatusPendingValue"),
+            InputStatusProcessingValue = Str(payload, "inputStatusProcessingValue"),
+            InputStatusCompletedValue = Str(payload, "inputStatusCompletedValue"),
+            InputStatusFailedValue = Str(payload, "inputStatusFailedValue"),
+            InputStatusSkippedValue = Str(payload, "inputStatusSkippedValue"),
+            InputStatusRetryWaitValue = Str(payload, "inputStatusRetryWaitValue"),
+            InputDueColumn = inputDueColumn,
+            OutputTableRef = outputTable,
+            Timezone = Str(payload, "timezone"),
+            RetryPolicyJson = retryPolicyJson,
+            ProjectionPolicyJson = projectionPolicyJson,
+            Steps = steps,
+        }, null);
+    }
+
+    private static string? Str(JsonElement el, string name) =>
+        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static bool Bool(JsonElement el, string name) =>
+        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
+
+    // Recursively scan for any prohibited secret field name (case-insensitive) anywhere in the draft.
+    private static bool ContainsSecretKey(JsonElement el, out string secretKey)
+    {
+        secretKey = string.Empty;
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var prop in el.EnumerateObject())
+                {
+                    if (ProhibitedSecretFields.Any(s => string.Equals(s, prop.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        secretKey = prop.Name;
+                        return true;
+                    }
+                    if (ContainsSecretKey(prop.Value, out secretKey)) return true;
+                }
+                return false;
+            case JsonValueKind.Array:
+                foreach (var item in el.EnumerateArray())
+                    if (ContainsSecretKey(item, out secretKey)) return true;
+                return false;
+            default:
+                return false;
+        }
     }
 }

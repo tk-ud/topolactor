@@ -6,10 +6,22 @@ import {
   disableSchedulerJob,
   fetchSchedulerJobManifests,
   type SchedulerJobManifestItem,
+  type SchedulerJobStepInput,
 } from "../api/adminApi.ts";
 
 // Authoring form draft state. Frontend holds NO runtime judgment / SQL / credential
 // authority — it submits a manifest draft to the backend admin_runtime boundary only.
+// Table/column authority is validated on the backend (identifier guards).
+type StepDraft = {
+  abstractFunctionKey: string;
+  onError: string;
+  resultContextKey: string;
+  inputBindingJson: string;
+  resultBindingJson: string;
+  authorityScope: string;
+  active: boolean;
+};
+
 type DraftState = {
   jobKey: string;
   triggerKind: string;
@@ -21,6 +33,34 @@ type DraftState = {
   authorityScope: string;
   credentialRequirementRef: string;
   externalPortRef: string;
+  maxBatchSize: string;
+  leaseSeconds: string;
+  // input source / lifecycle
+  inputTableRef: string;
+  inputIdColumn: string;
+  inputStatusColumn: string;
+  inputDueColumn: string;
+  inputStatusPendingValue: string;
+  inputStatusProcessingValue: string;
+  inputStatusCompletedValue: string;
+  inputStatusFailedValue: string;
+  inputStatusSkippedValue: string;
+  inputStatusRetryWaitValue: string;
+  // output + policies
+  outputTableRef: string;
+  retryPolicyJson: string;
+  projectionPolicyJson: string;
+  steps: StepDraft[];
+};
+
+const EMPTY_STEP: StepDraft = {
+  abstractFunctionKey: "",
+  onError: "fail_run",
+  resultContextKey: "",
+  inputBindingJson: "{}",
+  resultBindingJson: "{}",
+  authorityScope: "",
+  active: true,
 };
 
 const EMPTY_DRAFT: DraftState = {
@@ -34,7 +74,27 @@ const EMPTY_DRAFT: DraftState = {
   authorityScope: "",
   credentialRequirementRef: "",
   externalPortRef: "",
+  maxBatchSize: "10",
+  leaseSeconds: "300",
+  inputTableRef: "",
+  inputIdColumn: "id",
+  inputStatusColumn: "",
+  inputDueColumn: "",
+  inputStatusPendingValue: "",
+  inputStatusProcessingValue: "",
+  inputStatusCompletedValue: "",
+  inputStatusFailedValue: "",
+  inputStatusSkippedValue: "",
+  inputStatusRetryWaitValue: "",
+  outputTableRef: "",
+  retryPolicyJson: '{"max_attempts":3,"backoff_seconds":60}',
+  projectionPolicyJson: "{}",
+  steps: [],
 };
+
+function nonEmpty(s: string): string | undefined {
+  return s.trim().length > 0 ? s.trim() : undefined;
+}
 
 export default function SchedulerJobSettingsPanel(): JSX.Element {
   const [jobs, setJobs] = useState<SchedulerJobManifestItem[] | null>(null);
@@ -58,25 +118,65 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
 
   useEffect(reload, []);
 
+  function buildSteps(): SchedulerJobStepInput[] {
+    return draft.steps.map((s, i) => ({
+      stepOrder: i + 1,
+      abstractFunctionKey: s.abstractFunctionKey,
+      onError: s.onError,
+      resultContextKey: nonEmpty(s.resultContextKey) ?? null,
+      // The frontend only carries the manifest binding text; the backend parses/validates it.
+      inputBinding: JSON.parse(s.inputBindingJson || "{}"),
+      resultBinding: JSON.parse(s.resultBindingJson || "{}"),
+      authorityScope: nonEmpty(s.authorityScope) ?? null,
+      active: s.active,
+    }));
+  }
+
   async function onCreate(e: Event) {
     e.preventDefault();
     setBusy(true);
     setNotice(null);
     setError(null);
     try {
+      let steps: SchedulerJobStepInput[];
+      let retryPolicy: Record<string, unknown> | undefined;
+      let projectionPolicy: Record<string, unknown> | undefined;
+      try {
+        steps = buildSteps();
+        retryPolicy = draft.retryPolicyJson.trim() ? JSON.parse(draft.retryPolicyJson) : undefined;
+        projectionPolicy = draft.projectionPolicyJson.trim() ? JSON.parse(draft.projectionPolicyJson) : undefined;
+      } catch (_jsonErr) {
+        setError("Invalid JSON in a binding / policy field. Fix the JSON and retry.");
+        setBusy(false);
+        return;
+      }
       const result = await createSchedulerJob({
         jobKey: draft.jobKey,
         triggerKind: draft.triggerKind,
         schedulePolicyKind: draft.schedulePolicyKind,
-        cronExpression: draft.cronExpression || null,
-        scheduleIntervalSeconds: draft.scheduleIntervalSeconds
-          ? Number(draft.scheduleIntervalSeconds)
-          : null,
+        cronExpression: nonEmpty(draft.cronExpression) ?? null,
+        scheduleIntervalSeconds: draft.scheduleIntervalSeconds ? Number(draft.scheduleIntervalSeconds) : null,
         manualRunAllowed: draft.manualRunAllowed,
         active: draft.active,
         authorityScope: draft.authorityScope,
-        credentialRequirementRef: draft.credentialRequirementRef || null,
-        externalPortRef: draft.externalPortRef || null,
+        maxBatchSize: draft.maxBatchSize ? Number(draft.maxBatchSize) : undefined,
+        leaseSeconds: draft.leaseSeconds ? Number(draft.leaseSeconds) : undefined,
+        credentialRequirementRef: nonEmpty(draft.credentialRequirementRef) ?? null,
+        externalPortRef: nonEmpty(draft.externalPortRef) ?? null,
+        inputTableRef: nonEmpty(draft.inputTableRef) ?? null,
+        inputIdColumn: nonEmpty(draft.inputIdColumn) ?? null,
+        inputStatusColumn: nonEmpty(draft.inputStatusColumn) ?? null,
+        inputDueColumn: nonEmpty(draft.inputDueColumn) ?? null,
+        inputStatusPendingValue: nonEmpty(draft.inputStatusPendingValue) ?? null,
+        inputStatusProcessingValue: nonEmpty(draft.inputStatusProcessingValue) ?? null,
+        inputStatusCompletedValue: nonEmpty(draft.inputStatusCompletedValue) ?? null,
+        inputStatusFailedValue: nonEmpty(draft.inputStatusFailedValue) ?? null,
+        inputStatusSkippedValue: nonEmpty(draft.inputStatusSkippedValue) ?? null,
+        inputStatusRetryWaitValue: nonEmpty(draft.inputStatusRetryWaitValue) ?? null,
+        outputTableRef: nonEmpty(draft.outputTableRef) ?? null,
+        retryPolicy,
+        projectionPolicy,
+        steps,
       });
       setNotice(`Created scheduler job ${result.jobKey ?? draft.jobKey}.`);
       setDraft(EMPTY_DRAFT);
@@ -105,6 +205,35 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
 
   function set<K extends keyof DraftState>(key: K, value: DraftState[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
+  }
+
+  function setStep(idx: number, key: keyof StepDraft, value: string | boolean) {
+    setDraft((d) => ({
+      ...d,
+      steps: d.steps.map((s, i) => (i === idx ? { ...s, [key]: value } : s)),
+    }));
+  }
+
+  function addStep() {
+    setDraft((d) => ({ ...d, steps: [...d.steps, { ...EMPTY_STEP }] }));
+  }
+
+  function removeStep(idx: number) {
+    setDraft((d) => ({ ...d, steps: d.steps.filter((_, i) => i !== idx) }));
+  }
+
+  function textField(label: string, key: keyof DraftState, required = false) {
+    return (
+      <label>
+        {label}
+        <input
+          type="text"
+          value={draft[key] as string}
+          onInput={(e) => set(key, (e.target as HTMLInputElement).value as DraftState[typeof key])}
+          required={required}
+        />
+      </label>
+    );
   }
 
   if (loading) {
@@ -159,11 +288,7 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
                   <td>{job.externalPortRef ?? "—"}</td>
                   <td>
                     {job.active && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => onDisable(job.schedulerJobId)}
-                      >
+                      <button type="button" disabled={busy} onClick={() => onDisable(job.schedulerJobId)}>
                         Disable
                       </button>
                     )}
@@ -174,100 +299,111 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
           </table>
         )}
 
-      <h3>Create scheduler job</h3>
+      <h3>Create scheduler job manifest</h3>
       <form class="scheduler-create-form" onSubmit={onCreate}>
-        <label>
-          Job Key
-          <input
-            type="text"
-            value={draft.jobKey}
-            onInput={(e) => set("jobKey", (e.target as HTMLInputElement).value)}
-            required
-          />
-        </label>
-        <label>
-          Trigger Kind
-          <select
-            value={draft.triggerKind}
-            onChange={(e) => set("triggerKind", (e.target as HTMLSelectElement).value)}
-          >
-            <option value="cron">cron</option>
-            <option value="hook">hook</option>
-            <option value="client">client</option>
-          </select>
-        </label>
-        <label>
-          Schedule Policy
-          <select
-            value={draft.schedulePolicyKind}
-            onChange={(e) => set("schedulePolicyKind", (e.target as HTMLSelectElement).value)}
-          >
-            <option value="manual_only">manual_only</option>
-            <option value="cron">cron</option>
-            <option value="interval_seconds">interval_seconds</option>
-          </select>
-        </label>
-        {draft.schedulePolicyKind === "cron" && (
+        <fieldset>
+          <legend>Header</legend>
+          {textField("Job Key", "jobKey", true)}
           <label>
-            Cron Expression
-            <input
-              type="text"
-              value={draft.cronExpression}
-              onInput={(e) => set("cronExpression", (e.target as HTMLInputElement).value)}
-            />
+            Trigger Kind
+            <select value={draft.triggerKind} onChange={(e) => set("triggerKind", (e.target as HTMLSelectElement).value)}>
+              <option value="cron">cron</option>
+              <option value="hook">hook</option>
+              <option value="client">client</option>
+            </select>
           </label>
-        )}
-        {draft.schedulePolicyKind === "interval_seconds" && (
           <label>
-            Interval (seconds)
-            <input
-              type="number"
-              value={draft.scheduleIntervalSeconds}
-              onInput={(e) => set("scheduleIntervalSeconds", (e.target as HTMLInputElement).value)}
-            />
+            Schedule Policy
+            <select value={draft.schedulePolicyKind} onChange={(e) => set("schedulePolicyKind", (e.target as HTMLSelectElement).value)}>
+              <option value="manual_only">manual_only</option>
+              <option value="cron">cron</option>
+              <option value="interval_seconds">interval_seconds</option>
+            </select>
           </label>
-        )}
-        <label>
-          Authority Scope
-          <input
-            type="text"
-            value={draft.authorityScope}
-            onInput={(e) => set("authorityScope", (e.target as HTMLInputElement).value)}
-            required
-          />
-        </label>
-        <label>
-          Credential Requirement Ref (reference key only)
-          <input
-            type="text"
-            value={draft.credentialRequirementRef}
-            onInput={(e) => set("credentialRequirementRef", (e.target as HTMLInputElement).value)}
-          />
-        </label>
-        <label>
-          External Port Ref (reference key only)
-          <input
-            type="text"
-            value={draft.externalPortRef}
-            onInput={(e) => set("externalPortRef", (e.target as HTMLInputElement).value)}
-          />
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={draft.manualRunAllowed}
-            onChange={(e) => set("manualRunAllowed", (e.target as HTMLInputElement).checked)}
-          />
-          Manual run allowed
-        </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={draft.active}
-            onChange={(e) => set("active", (e.target as HTMLInputElement).checked)}
-          />
-          Active
-        </label>
+          {draft.schedulePolicyKind === "cron" && textField("Cron Expression", "cronExpression")}
+          {draft.schedulePolicyKind === "interval_seconds" && textField("Interval (seconds)", "scheduleIntervalSeconds")}
+          {textField("Authority Scope", "authorityScope", true)}
+          {textField("Max Batch Size", "maxBatchSize")}
+          {textField("Lease Seconds", "leaseSeconds")}
+          {textField("Credential Requirement Ref (reference key only)", "credentialRequirementRef")}
+          {textField("External Port Ref (reference key only)", "externalPortRef")}
+          <label>
+            <input type="checkbox" checked={draft.manualRunAllowed} onChange={(e) => set("manualRunAllowed", (e.target as HTMLInputElement).checked)} />
+            Manual run allowed
+          </label>
+          <label>
+            <input type="checkbox" checked={draft.active} onChange={(e) => set("active", (e.target as HTMLInputElement).checked)} />
+            Active
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Input source / lifecycle (optional)</legend>
+          {textField("Input Table Ref (schema.table)", "inputTableRef")}
+          {textField("Input Id Column", "inputIdColumn")}
+          {textField("Input Status Column", "inputStatusColumn")}
+          {textField("Input Due Column", "inputDueColumn")}
+          {textField("Status: pending", "inputStatusPendingValue")}
+          {textField("Status: processing", "inputStatusProcessingValue")}
+          {textField("Status: completed", "inputStatusCompletedValue")}
+          {textField("Status: failed", "inputStatusFailedValue")}
+          {textField("Status: skipped", "inputStatusSkippedValue")}
+          {textField("Status: retry_wait", "inputStatusRetryWaitValue")}
+        </fieldset>
+
+        <fieldset>
+          <legend>Output binding + policies</legend>
+          {textField("Output Table Ref (schema.table)", "outputTableRef")}
+          <label>
+            Retry policy (JSON)
+            <textarea value={draft.retryPolicyJson} onInput={(e) => set("retryPolicyJson", (e.target as HTMLTextAreaElement).value)} />
+          </label>
+          <label>
+            Projection policy (JSON)
+            <textarea value={draft.projectionPolicyJson} onInput={(e) => set("projectionPolicyJson", (e.target as HTMLTextAreaElement).value)} />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Steps (ordered abstract function chain)</legend>
+          {draft.steps.map((step, idx) => (
+            <div class="scheduler-step" key={idx}>
+              <strong>Step {idx + 1}</strong>
+              <label>
+                Abstract Function Key
+                <input type="text" value={step.abstractFunctionKey} onInput={(e) => setStep(idx, "abstractFunctionKey", (e.target as HTMLInputElement).value)} />
+              </label>
+              <label>
+                On Error
+                <select value={step.onError} onChange={(e) => setStep(idx, "onError", (e.target as HTMLSelectElement).value)}>
+                  <option value="fail_run">fail_run</option>
+                  <option value="retry">retry</option>
+                  <option value="skip_input">skip_input</option>
+                  <option value="mark_input_failed">mark_input_failed</option>
+                </select>
+              </label>
+              <label>
+                Result Context Key
+                <input type="text" value={step.resultContextKey} onInput={(e) => setStep(idx, "resultContextKey", (e.target as HTMLInputElement).value)} />
+              </label>
+              <label>
+                Input Binding (JSON)
+                <textarea value={step.inputBindingJson} onInput={(e) => setStep(idx, "inputBindingJson", (e.target as HTMLTextAreaElement).value)} />
+              </label>
+              <label>
+                Result Binding (JSON)
+                <textarea value={step.resultBindingJson} onInput={(e) => setStep(idx, "resultBindingJson", (e.target as HTMLTextAreaElement).value)} />
+              </label>
+              <label>
+                <input type="checkbox" checked={step.active} onChange={(e) => setStep(idx, "active", (e.target as HTMLInputElement).checked)} />
+                Active
+              </label>
+              <button type="button" onClick={() => removeStep(idx)}>Remove step</button>
+            </div>
+          ))}
+          <button type="button" onClick={addStep}>Add step</button>
+        </fieldset>
+
         <button type="submit" disabled={busy}>Create</button>
       </form>
     </div>

@@ -202,6 +202,59 @@ Deno.test("createSchedulerJob: dispatches scheduler_jobs:create with manifest dr
   }
 });
 
+Deno.test("createSchedulerJob: full manifest carries input source, output binding, policies, and steps[]", async () => {
+  const original = globalThis.fetch;
+  let reqBody: Record<string, unknown> = {};
+  globalThis.fetch = makeFetch(
+    200,
+    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", jobKey: "weather_24h" } } },
+    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
+  );
+  try {
+    await createSchedulerJob({
+      jobKey: "weather_24h",
+      triggerKind: "cron",
+      schedulePolicyKind: "interval_seconds",
+      scheduleIntervalSeconds: 3600,
+      authorityScope: "weather_job",
+      active: true,
+      inputTableRef: "weather.region_inputs",
+      inputStatusColumn: "status",
+      inputStatusPendingValue: "pending",
+      inputStatusProcessingValue: "processing",
+      inputStatusCompletedValue: "completed",
+      inputStatusFailedValue: "failed",
+      outputTableRef: "weather.observations",
+      retryPolicy: { max_attempts: 3, backoff_seconds: 60 },
+      projectionPolicy: { allowed_result_keys: ["observation"] },
+      steps: [
+        {
+          stepOrder: 1,
+          abstractFunctionKey: "weather.fetch",
+          onError: "retry",
+          resultContextKey: "observation",
+          inputBinding: { region: { source: "input", path: "region" } },
+          resultBinding: { kind: "output_upsert", result_context_key: "observation", conflict_columns: ["region"], column_map: { region: "observation" } },
+        },
+      ],
+    });
+    const payload = reqBody.payload as Record<string, unknown>;
+    assertEquals(payload.inputTableRef, "weather.region_inputs");
+    assertEquals(payload.outputTableRef, "weather.observations");
+    assertEquals(Array.isArray(payload.steps), true);
+    const steps = payload.steps as Record<string, unknown>[];
+    assertEquals(steps.length, 1);
+    assertEquals(steps[0].abstractFunctionKey, "weather.fetch");
+    assertEquals(steps[0].onError, "retry");
+    // No secret material anywhere in the manifest authoring body.
+    const bodyStr = JSON.stringify(reqBody);
+    assertEquals(bodyStr.includes("api_key"), false);
+    assertEquals(bodyStr.includes("client_secret"), false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("editSchedulerJob: dispatches scheduler_jobs:edit with schedulerJobId", async () => {
   const original = globalThis.fetch;
   let reqBody: Record<string, unknown> = {};

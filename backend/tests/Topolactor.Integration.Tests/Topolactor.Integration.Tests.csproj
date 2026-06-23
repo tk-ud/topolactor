@@ -44,5 +44,7 @@
     <Compile Include="../../scheduler/RuntimeTimelineScheduler.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../scheduler/SseEventBroadcaster.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../scheduler/DbNotifyListener.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../scheduler/SchedulerJobRunner.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../scheduler/CronScheduleEvaluator.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
