@@ -166,6 +166,10 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
     new HttpRequestPrimitiveAdapter(sp.GetRequiredService<IExternalPortHttpClient>()));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(
     new SchedulerEnqueuePrimitiveAdapter());
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new LogRetentionPrimitiveAdapter(
+        sp.GetRequiredService<ILogger<LogRetentionPrimitiveAdapter>>(),
+        sp.GetRequiredService<LogRetentionRuntime>()));
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
@@ -336,7 +340,10 @@ builder.Services.AddSingleton<RuntimeTimelineScheduler>();
 // Background services
 // ---------------------------------------------------------------------------
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RuntimeTimelineScheduler>());
-builder.Services.AddHostedService<RetentionScheduler>();
+// RetentionScheduler absorbed into the scheduler job manifest substrate:
+// seed job 'log_retention_sweep' (interval_seconds) dispatches the abstract function
+// system.log_retention via SchedulerJobRunner. The retention domain body remains in
+// LogRetentionRuntime behind the log_retention primitive — not in the cron driver.
 builder.Services.AddHostedService<SystemOperationCiScheduler>();
 builder.Services.AddHostedService<SqlAttentionScheduler>();
 builder.Services.AddHostedService(sp => new SchedulerJobRunner(
