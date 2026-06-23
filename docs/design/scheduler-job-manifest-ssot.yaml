@@ -1,7 +1,7 @@
 scheduler_job_manifest_ssot:
   name: scheduler_job_manifest_substrate
-  version: 0.1.0
-  status: draft_ssot_design_document
+  version: 1.0.0
+  status: implemented_substrate_design_document
   canonical_path: docs/design/scheduler-job-manifest-ssot.yaml
 
   purpose:
@@ -331,16 +331,23 @@ scheduler_job_manifest_ssot:
         - API_key_or_token_plaintext_never_appears_in_manifest_projection_seed_or_log
 
   current_change_boundary:
+    note: >-
+      The scheduler job manifest substrate is now implemented. This boundary records
+      the implemented surface; it replaces the original SSOT-only draft boundary
+      (which excluded implementation, seed, admin UI, and cron absorption).
     includes:
-      - add_scheduler_job_manifest_ssot
-      - wire_ssot_map_reference
-      - wire_system_roadmap_not_started_item
-      - wire_agent_todo_bundle
-      - add_structure_wiring_check
+      - scheduler_job_manifest_tables_and_run_ledger
+      - cron_background_driver_domain_independent_tick
+      - manifest_authorized_input_lease_and_input_row_lifecycle
+      - ordered_abstract_function_step_chain_dispatch
+      - on_error_policy_fail_run_retry_skip_input_mark_input_failed_with_retry_wait
+      - result_binding_manifest_authorized_output_upsert
+      - admin_contents_create_edit_disable_authoring_surface
+      - read_only_projection_reference_and_status_only
+      - representative_existing_cron_absorption_log_retention
+      - backend_and_frontend_tests
     excludes:
-      - implementation_code_wiring
-      - database_migration
-      - seed_sql
-      - admin_contents_ui_implementation
-      - existing_cron_absorption_implementation
-      - production_ready_or_implemented_status_claim
+      - production_ready_status_claim
+      - per_step_run_steps_ledger_population_optional_surface
+      - in_place_edit_of_active_manifests_requires_disable_first
+      - additional_existing_cron_absorptions_beyond_log_retention

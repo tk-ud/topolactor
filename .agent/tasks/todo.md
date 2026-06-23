@@ -16,7 +16,6 @@
 | `email-port-consumer` | email_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
 | `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
-| `scheduler-job-manifest-substrate-implementation` | admin-authored scheduler job manifest substrate 実装 | partial | 1 | `product.scheduler_job_manifest_substrate` | `docs/design/scheduler-job-manifest-ssot.yaml` |
 | `sql-attention-key-expansion-draft-lane-implementation` | SQL Attention key expansion draft lane 実装 | not_started | 1 | - | `docs/design/sql-attention-logs-ssot.yaml` |
 | `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
 | `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
@@ -261,62 +260,6 @@ topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に�
 
 ---
 
-## Bundle `scheduler-job-manifest-substrate-implementation`
-
-**Status:** partial
-**Roadmap/status SSOT:** `product.scheduler_job_manifest_substrate`
-**SSOT:** `docs/design/scheduler-job-manifest-ssot.yaml`
-
-問題点:
-cron / background scheduler の domain job body が C# に固定されやすく、admin.contents から作れる定期 job substrate が未実装。schedule / input source / credential reference / step chain / output upsert / retry / lease policy を data-defined にしても、現状は scheduler job manifest / run ledger / input lease / abstract function step chain を DB-backed substrate として扱う実装がない。
-
-目的:
-scheduler job manifest / steps / runs / run_steps を DB-backed substrate として実装し、cron driver を domain 非依存にする。scheduler は cron tick、due job selection、lease、queue、run ledger、step dispatch、status 更新までを扱い、domain sequence は `AbstractFunctionExecutor` の abstract function step chain へ寄せる。
-
-改善方針:
-- [ ] SSOT に従い、scheduler job manifest tables、run ledger、lease/retry、abstract function step chain、admin.contents authoring surface、representative job test を Bundle 単位で実装する。
-- [ ] `topology.scheduler_jobs` / `topology.scheduler_job_steps` / `topology.scheduler_job_runs` / 必要に応じて `topology.scheduler_job_run_steps` を canonical bootstrap DDL として追加する。
-- [ ] cron/background driver は due manifest を読むだけにし、SQL Attention / weather API / retention などの domain job body を持たせない。
-- [ ] input table / column / output table authority は seed / admin-authored manifest / registry reference / authority binding 由来に限定し、payload-derived table authority を禁止する。
-- [ ] external API 利用は external port credential reference / credential_requirement reference を参照し、credential plaintext を manifest / projection / seed / run log / admin UI に出さない。
-- [ ] representative existing cron absorption として、少なくとも 1 つの既存 cron flow を非 domain-specific scheduler body へ移す test / guard を追加する。
-
-対応資料:
-- `docs/design/scheduler-job-manifest-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/admin-console-workflow-ssot.yaml`
-- `docs/design/abstract-function-primitive-registry-ssot.yaml`
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/db-schema.yaml`
-
-対象ファイル候補:
-- `db/topology_tables.sql`
-- `db/seed_empty.sql`
-- `backend/scheduler/*`
-- `backend/runtime/AbstractFunctionRuntime.cs`
-- `backend/Program.cs`
-- `frontend/routes/admin/contents.tsx`
-- `frontend/islands/*`
-- `backend/tests/*`
-- `frontend/tests/*`
-
-対象関数/クラス候補:
-- `RuntimeTimelineScheduler`
-- `SqlAttentionScheduler`
-- `RetentionScheduler`
-- `SystemOperationCiScheduler`
-- `AbstractFunctionExecutor`
-- 新規 `SchedulerJobRunner` 相当
-- 新規 scheduler job repository 相当
-
-NG軸:
-- scheduler job substrate の domain-specific C# job body 実装
-- DB DDL / seed / admin UI / existing cron absorption をこの todo 配線 PR の完了証跡として扱うこと
-- credential plaintext を manifest / projection / seed / run log / admin UI に出すこと
-- payload-derived table / column / output authority
-- C# 関数名配列や switch を canonical step chain として増やすこと
-
----
 
 ## Bundle "sql-attention-key-expansion-draft-lane-implementation"
 

@@ -898,17 +898,25 @@ system_roadmap_ssot:
     product.scheduler_job_manifest_substrate:
       bundle_id: scheduler-job-manifest-substrate-implementation
       title: Admin-authored scheduler job manifest substrate
-      status: partial
+      status: implemented
       production_ready: false
       public_summary: >-
-        New extension roadmap item for a DB-backed scheduler job manifest substrate
-        authored from admin.contents. The SSOT is defined, but implementation is
-        not started: scheduler job manifest tables, admin.contents authoring,
-        cron/background driver wiring, input lease / run ledger, abstract
-        function step chain dispatch, external service reference boundary, and
-        representative existing cron absorption remain future work. This item
-        does not mark scheduler substrate implementation, DDL, seed, admin UI,
-        or existing cron absorption as complete.
+        DB-backed scheduler job manifest substrate. SchedulerJobRunner reads active
+        due manifests from topology.scheduler_jobs, leases manifest-authorized input
+        rows (pending -> processing) and runs each through an ordered abstract
+        function step chain via AbstractFunctionExecutor, then transitions input row
+        and run-ledger status per SSOT on_error policy (fail_run / retry /
+        skip_input / mark_input_failed) with retry/retry_wait. result_binding
+        performs manifest-authorized output upserts; table/column authority comes
+        only from the manifest (payload-derived authority is fail-closed before any
+        DB connection). admin.contents can create / edit / disable scheduler job
+        manifests through AdminRuntime (scheduler_jobs:create|edit|disable); the
+        frontend submits a manifest draft only and holds no SQL / runtime /
+        credential authority, and secret material is fail-closed in both authoring
+        and read-only projection. The former RetentionScheduler cron is absorbed:
+        seed job log_retention_sweep dispatches the system.log_retention abstract
+        function (log_retention primitive) — the retention domain body stays in
+        LogRetentionRuntime, not in the cron driver.
       scope:
         - scheduler_job_manifest_tables
         - admin_contents_authoring_surface
@@ -917,6 +925,28 @@ system_roadmap_ssot:
         - abstract_function_step_chain_dispatch
         - external_service_reference_boundary
         - representative_existing_cron_absorption
+      completion_condition: >-
+        Input lease lifecycle, result_binding output upsert, SSOT on_error policy
+        (fail_run/retry/skip_input/mark_input_failed) with retry/retry_wait,
+        admin.contents create/edit/disable authoring, credential/secret fail-close,
+        and representative existing cron absorption (log_retention) are implemented
+        and covered by backend + frontend tests.
+      evidence:
+        - backend/scheduler/SchedulerJobRunner.cs
+        - backend/repository/NpgsqlSchedulerJobManifestRepository.cs
+        - backend/runtime/SchedulerJobPrimitiveAdapters.cs
+        - backend/runtime/AdminRuntime.SchedulerSettings.cs
+        - backend/tests/Topolactor.Runtime.Tests/SchedulerJobRunnerTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeSchedulerAuthoringTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SchedulerJobManifestRepositoryGuardTests.cs
+        - frontend/tests/schedulerJobManifestProjection.test.ts
+        - db/seed_empty.sql
+      files:
+        - backend/scheduler/SchedulerJobRunner.cs
+        - backend/repository/NpgsqlSchedulerJobManifestRepository.cs
+        - backend/runtime/SchedulerJobPrimitiveAdapters.cs
+        - backend/runtime/AdminRuntime.SchedulerSettings.cs
+        - frontend/islands/SchedulerJobSettingsPanel.tsx
       detail_ref:
         - docs/design/scheduler-job-manifest-ssot.yaml
         - docs/design/runtime-orchestration-ssot.yaml
@@ -924,15 +954,17 @@ system_roadmap_ssot:
         - docs/design/abstract-function-primitive-registry-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
         - docs/design/db-schema.yaml
-        - .agent/tasks/todo.md#scheduler-job-manifest-substrate-implementation
+      closed_gap_ref:
+        - scheduler_job_manifest_tables_implemented
+        - admin_contents_scheduler_job_authoring_implemented
+        - cron_driver_manifest_reading_implemented
+        - input_lease_run_ledger_implemented
+        - abstract_function_step_chain_scheduler_dispatch_implemented
+        - external_service_reference_boundary_connected
+        - representative_existing_cron_absorption_implemented_log_retention
       known_gap_ref:
-        - scheduler_job_manifest_tables_not_implemented
-        - admin_contents_scheduler_job_authoring_not_implemented
-        - cron_driver_manifest_reading_not_implemented
-        - input_lease_run_ledger_not_implemented
-        - abstract_function_step_chain_scheduler_dispatch_not_implemented
-        - external_service_reference_boundary_not_connected
-        - representative_existing_cron_absorption_not_implemented
+        - scheduler_job_run_steps_per_step_ledger_not_yet_populated_optional_surface
+        - admin_edit_limited_to_inactive_manifests_active_edit_requires_disable_first
 
     product.audit_approval_port_consumer:
       bundle_id: audit-approval-port-consumer

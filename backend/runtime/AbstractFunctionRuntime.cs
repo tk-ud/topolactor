@@ -45,6 +45,19 @@ public sealed class SchedulerExecutionContext
     public string? InputRef { get; init; }
     public string TriggerKind { get; init; } = "cron";
     public string SchedulePolicyKind { get; init; } = "manual_only";
+
+    /// <summary>
+    /// Identifier of the leased input row for this run (null for input-less jobs).
+    /// Manifest-authorized — never derived from request payload.
+    /// </summary>
+    public string? InputId { get; init; }
+
+    /// <summary>
+    /// Manifest-authorized column values of the leased input row, resolved via the
+    /// scheduler_input binding source. Empty for input-less jobs.
+    /// </summary>
+    public IReadOnlyDictionary<string, object?> InputRow { get; init; } =
+        new Dictionary<string, object?>(StringComparer.Ordinal);
 }
 
 public sealed class AbstractFunctionExecutionContext
@@ -84,6 +97,7 @@ public sealed class AbstractFunctionExecutionContext
         if (binding.BindingSource == "external_context") return ResolveExternalContext(binding.BindingPath);
         if (binding.BindingSource == "runtime_context") return ResolveRuntimeContext(binding.BindingPath);
         if (binding.BindingSource == "scheduler_context") return ResolveSchedulerContext(binding.BindingPath);
+        if (binding.BindingSource == "scheduler_input") return ResolveSchedulerInput(binding.BindingPath);
         if (binding.BindingSource == "step_config")
         {
             if (stepConfig is null)
@@ -153,10 +167,20 @@ public sealed class AbstractFunctionExecutionContext
             "job_key" => SchedulerContext.JobKey,
             "run_id" => (object?)SchedulerContext.SchedulerJobRunId,
             "input_ref" => SchedulerContext.InputRef,
+            "input_id" => SchedulerContext.InputId,
             "trigger_kind" => SchedulerContext.TriggerKind,
             "schedule_policy_kind" => SchedulerContext.SchedulePolicyKind,
             _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_SCHEDULER_CONTEXT_BINDING_UNSUPPORTED: {key}")
         };
+    }
+
+    // scheduler_input resolves manifest-authorized leased input row columns only.
+    // Table/column authority is manifest-defined; the runtime payload cannot reach here.
+    private object? ResolveSchedulerInput(string key)
+    {
+        if (SchedulerContext is null)
+            throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingInput, "ABSTRACT_FUNCTION_SCHEDULER_CONTEXT_MISSING");
+        return SchedulerContext.InputRow.TryGetValue(key, out var value) ? value : null;
     }
 
     private static object? ResolveJsonPath(JsonElement? payload, string key)

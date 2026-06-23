@@ -2717,6 +2717,103 @@ VALUES (
 )
 ON CONFLICT (manifest_id) DO NOTHING;
 
+-- admin.contents authoring dispatch: create / edit / disable scheduler job manifests.
+-- These route through the canonical dispatch (frontend → ManifestDispatcher → admin_runtime).
+-- The frontend submits a manifest draft only; runtime judgment / SQL / credential authority
+-- stays in AdminRuntime. No secret material is carried by these mappings.
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES
+    (
+        '00000000-0000-0000-0000-0000000000f1',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"scheduler_jobs","action":"create"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000f2',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"scheduler_jobs","action":"edit"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000f3',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"scheduler_jobs","action":"disable"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    )
+ON CONFLICT (manifest_id) DO NOTHING;
+
+-- =============================================================================
+-- Representative existing cron absorption: log retention.
+-- The former RetentionScheduler BackgroundService is absorbed into the scheduler
+-- job manifest substrate. The retention domain body stays in LogRetentionRuntime
+-- behind the log_retention abstract function primitive; the scheduler substrate
+-- only ticks, dispatches, and records run status — it knows no retention policy.
+-- =============================================================================
+
+-- Abstract function manifest: system.log_retention (runtime_lane = scheduler_job_runtime)
+INSERT INTO topology.abstract_function_manifests
+    (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af12', 'system.log_retention',
+     'scheduler_job_runtime', 'system_log_retention',
+     '{"retention_status":"retention_result"}',
+     ARRAY['credential','credential_payload','decrypted_payload','plaintext_payload',
+           'decrypted_credential_payload','token_response','token_body',
+           'api_key','access_token','refresh_token','client_secret'],
+     true)
+ON CONFLICT (abstract_function_id) DO NOTHING;
+
+-- Step: log_retention primitive (no input bindings — policy loaded from function_parameters).
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf41', '00000000-0000-0000-0000-00000000af12', 1,
+     'log_retention', '{}', 'retention_result', true)
+ON CONFLICT (abstract_function_step_id) DO NOTHING;
+
+-- Authority binding (policy authority required by AbstractFunctionExecutor).
+INSERT INTO topology.abstract_function_authority_bindings
+    (abstract_function_id, authority_kind, authority_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af12', 'policy', 'system_log_retention_policy', true)
+ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
+-- Scheduler job: log_retention_sweep (interval_seconds; no input table — maintenance sweep).
+-- LogRetentionRuntime enforces the actual retention policy from function_parameters; this
+-- interval is only the dispatch cadence. MissingPolicy/MalformedPolicy fail-close explicitly.
+INSERT INTO topology.scheduler_jobs
+    (scheduler_job_id, job_key, trigger_kind, schedule_policy_kind, schedule_interval_seconds,
+     manual_run_allowed, active, authority_scope, max_batch_size, lease_seconds,
+     retry_policy, projection_policy, created_by)
+VALUES
+    ('00000000-0000-0000-0000-00000000c070', 'log_retention_sweep', 'cron', 'interval_seconds', 3600,
+     false, true, 'system_log_retention', 1, 300,
+     '{"max_attempts":1,"backoff_seconds":0}',
+     '{"allowed_result_keys":["retention_result"]}',
+     'seed')
+ON CONFLICT (scheduler_job_id) DO NOTHING;
+
+-- Scheduler job step: step 1 → system.log_retention
+INSERT INTO topology.scheduler_job_steps
+    (scheduler_job_step_id, scheduler_job_id, step_order, abstract_function_key,
+     input_binding, result_context_key, result_binding, on_error, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000c071',
+     '00000000-0000-0000-0000-00000000c070',
+     1, 'system.log_retention',
+     '{}', 'retention_result', '{}', 'fail_run', true)
+ON CONFLICT (scheduler_job_id, step_order) DO NOTHING;
+
 -- ---------------------------------------------------------------------------
 -- external_port_substrate consumer bundle completion physical catalog and
 -- manifest bindings. These are projection/evidence surfaces only; no provider

@@ -7,19 +7,20 @@ namespace Topolactor.Runtime;
 
 /// <summary>
 /// Package runtime for context_event log retention cleanup.
-/// Activated by the cron excitation trigger RetentionScheduler.
+/// Dispatched through the scheduler job manifest substrate via the log_retention
+/// abstract function primitive (LogRetentionPrimitiveAdapter). The former
+/// RetentionScheduler BackgroundService has been absorbed into a seed scheduler job
+/// manifest (log_retention_sweep, interval_seconds).
 /// Loads retention policy entirely from function_parameters — no production defaults in code.
 ///
 /// Design boundary:
-///   RetentionScheduler is the cron excitation trigger.
-///   LogRetentionRuntime is the package runtime selected for the retention operation.
+///   The scheduler substrate (SchedulerJobRunner) is the domain-independent cron driver.
+///   LogRetentionRuntime is the package runtime selected for the retention operation,
+///   reached only through the log_retention primitive — the scheduler knows nothing
+///   about retention policy, tables, or columns.
 ///   Package selection is trivially resolved in v1: there is one retention package.
 ///   Policy (cold_days, hot_days, batch_size, archive_strategy, enabled, schedule_interval_hours)
 ///   comes from function_parameters, not from runtime code.
-///   This is intentionally a direct cron → package runtime path and does not route
-///   through the user-facing dispatch canonical route
-///   (stored_topology_data → user_operation → … → emission_or_projection).
-///   Background maintenance operations are not user-facing dispatches.
 ///
 /// Policy source: function_parameters (function_name='context_event_retention', parameter_key='retention_policy').
 /// Supported archive_strategy values:

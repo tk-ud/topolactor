@@ -1282,3 +1282,109 @@ export async function fetchSchedulerJobManifests(): Promise<SchedulerJobManifest
   const data = emission.data as { ok: boolean; schedulerJobs: SchedulerJobManifestItem[] } | null;
   return data?.schedulerJobs ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// Scheduler Job authoring (admin.contents). The frontend submits a manifest
+// draft only — runtime judgment / SQL / credential authority stays in the
+// backend AdminRuntime. Reference keys only; no secret material is sent.
+// ---------------------------------------------------------------------------
+
+/** One ordered step in an authored scheduler job manifest. */
+export type SchedulerJobStepInput = {
+  stepOrder?: number;
+  abstractFunctionKey: string;
+  onError?: string;
+  resultContextKey?: string | null;
+  /** manifest-defined binding map (result_context_key -> { source, path }) */
+  inputBinding?: Record<string, unknown>;
+  /** manifest-defined output binding (kind/result_context_key/conflict_columns/column_map) */
+  resultBinding?: Record<string, unknown>;
+  authorityScope?: string | null;
+  active?: boolean;
+};
+
+export type SchedulerJobDraftInput = {
+  jobKey: string;
+  triggerKind: string;
+  schedulePolicyKind: string;
+  cronExpression?: string | null;
+  scheduleIntervalSeconds?: number | null;
+  manualRunAllowed?: boolean;
+  active?: boolean;
+  authorityScope: string;
+  maxBatchSize?: number;
+  leaseSeconds?: number;
+  /** reference key only — no credential plaintext */
+  credentialRequirementRef?: string | null;
+  /** reference key only — no external port config */
+  externalPortRef?: string | null;
+  // Input source / lifecycle (manifest authority; backend validates as identifiers).
+  inputTableRef?: string | null;
+  inputIdColumn?: string | null;
+  inputStatusColumn?: string | null;
+  inputDueColumn?: string | null;
+  inputStatusPendingValue?: string | null;
+  inputStatusProcessingValue?: string | null;
+  inputStatusCompletedValue?: string | null;
+  inputStatusFailedValue?: string | null;
+  inputStatusSkippedValue?: string | null;
+  inputStatusRetryWaitValue?: string | null;
+  // Output binding target.
+  outputTableRef?: string | null;
+  timezone?: string | null;
+  // Policy bodies (JSON objects).
+  retryPolicy?: Record<string, unknown>;
+  projectionPolicy?: Record<string, unknown>;
+  // Ordered step chain.
+  steps?: SchedulerJobStepInput[];
+};
+
+export type SchedulerJobAuthoringResult = {
+  ok: boolean;
+  schedulerJobId?: string;
+  jobKey?: string;
+  active?: boolean;
+};
+
+export async function createSchedulerJob(
+  input: SchedulerJobDraftInput,
+): Promise<SchedulerJobAuthoringResult> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "scheduler_jobs",
+    action: "create",
+    payload: input as unknown as Record<string, unknown>,
+  });
+  if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return emission.data as SchedulerJobAuthoringResult;
+}
+
+export async function editSchedulerJob(
+  schedulerJobId: string,
+  input: SchedulerJobDraftInput,
+): Promise<SchedulerJobAuthoringResult> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "scheduler_jobs",
+    action: "edit",
+    payload: { schedulerJobId, ...input } as unknown as Record<string, unknown>,
+  });
+  if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return emission.data as SchedulerJobAuthoringResult;
+}
+
+export async function disableSchedulerJob(
+  schedulerJobId: string,
+): Promise<SchedulerJobAuthoringResult> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "scheduler_jobs",
+    action: "disable",
+    payload: { schedulerJobId },
+  });
+  if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return emission.data as SchedulerJobAuthoringResult;
+}

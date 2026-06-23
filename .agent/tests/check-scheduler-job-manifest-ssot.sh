@@ -25,10 +25,19 @@ check_term() {
   fi
 }
 
-echo "=== Scheduler job manifest SSOT wiring check ==="
+check_absent() {
+  local path="$1" term="$2"
+  if grep -qF -- "$term" "$REPO_ROOT/$path"; then
+    fail "$path must NOT contain: $term"
+  else
+    pass "$path absent: $term"
+  fi
+}
 
+echo "=== Scheduler job manifest substrate (implemented) wiring check ==="
+
+# ── SSOT ────────────────────────────────────────────────────────────────────
 check_file "docs/design/scheduler-job-manifest-ssot.yaml"
-
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "scheduler_job_manifest_ssot"
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "scheduler_job_manifest_substrate"
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "admin.contents"
@@ -41,8 +50,9 @@ check_term "docs/design/scheduler-job-manifest-ssot.yaml" "input_status_complete
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "input_status_failed_value"
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "AbstractFunctionExecutor"
 check_term "docs/design/scheduler-job-manifest-ssot.yaml" "current_change_boundary"
-check_term "docs/design/scheduler-job-manifest-ssot.yaml" "wire_system_roadmap_not_started_item"
+check_term "docs/design/scheduler-job-manifest-ssot.yaml" "implemented_substrate_design_document"
 
+# ── ssot-map ─────────────────────────────────────────────────────────────────
 check_term ".agent/docs/ssot-map.yaml" "scheduler_job_manifest_substrate"
 check_term ".agent/docs/ssot-map.yaml" "cron/background scheduler job body"
 check_term ".agent/docs/ssot-map.yaml" "admin.contents scheduler job authoring"
@@ -53,24 +63,15 @@ check_term ".agent/docs/ssot-map.yaml" "input lease / run ledger"
 check_term ".agent/docs/ssot-map.yaml" "representative existing cron absorption"
 check_term ".agent/docs/ssot-map.yaml" "docs/design/scheduler-job-manifest-ssot.yaml"
 
+# ── roadmap (implemented) ────────────────────────────────────────────────────
 check_term "docs/system-roadmap.yaml" "product.scheduler_job_manifest_substrate"
 check_term "docs/system-roadmap.yaml" "scheduler-job-manifest-substrate-implementation"
-check_term "docs/system-roadmap.yaml" "status: not_started"
-check_term "docs/system-roadmap.yaml" "scheduler_job_manifest_tables"
 check_term "docs/system-roadmap.yaml" "input_lease_and_run_ledger"
 check_term "docs/system-roadmap.yaml" "abstract_function_step_chain_dispatch"
-check_term "docs/system-roadmap.yaml" "external_service_reference_boundary"
 check_term "docs/system-roadmap.yaml" "representative_existing_cron_absorption"
-check_term "docs/system-roadmap.yaml" "scheduler_job_manifest_tables_not_implemented"
+check_term "docs/system-roadmap.yaml" "representative_existing_cron_absorption_implemented_log_retention"
 
-check_term ".agent/tasks/todo.md" "scheduler-job-manifest-substrate-implementation"
-check_term ".agent/tasks/todo.md" "docs/design/scheduler-job-manifest-ssot.yaml"
-check_term ".agent/tasks/todo.md" "scheduler job manifest tables"
-check_term ".agent/tasks/todo.md" "admin.contents"
-check_term ".agent/tasks/todo.md" "abstract function step chain"
-check_term ".agent/tasks/todo.md" "external port credential reference"
-check_term ".agent/tasks/todo.md" "representative existing cron absorption"
-
+# Roadmap block must be implemented (not partial/not_started) and not production_ready.
 roadmap_block="$(
   awk '
     /^[[:space:]]{4}product\.scheduler_job_manifest_substrate:/ { in_block=1 }
@@ -78,14 +79,64 @@ roadmap_block="$(
     in_block { print }
   ' "$REPO_ROOT/docs/system-roadmap.yaml"
 )"
-if printf '%s\n' "$roadmap_block" | grep -Eq "status: implemented|status: production_ready|production_ready: true"; then
-  fail "scheduler job manifest roadmap item must not be marked implemented/production_ready by the wiring check"
+if printf '%s\n' "$roadmap_block" | grep -Eq "status: implemented"; then
+  pass "roadmap item is implemented"
 else
-  pass "roadmap item remains non-implemented"
+  fail "roadmap item must be implemented"
+fi
+if printf '%s\n' "$roadmap_block" | grep -Eq "production_ready: true"; then
+  fail "roadmap item must not claim production_ready"
+else
+  pass "roadmap item is not production_ready"
+fi
+if printf '%s\n' "$roadmap_block" | grep -Eq "completion_condition:|evidence:"; then
+  pass "roadmap item carries completion_condition/evidence"
+else
+  fail "implemented roadmap item must carry completion_condition or evidence"
 fi
 
+# ── TODO bundle must be removed (implemented reached) ─────────────────────────
+check_absent ".agent/tasks/todo.md" "## Bundle \`scheduler-job-manifest-substrate-implementation\`"
+
+# ── Implementation surfaces ──────────────────────────────────────────────────
+check_file "backend/scheduler/SchedulerJobRunner.cs"
+check_file "backend/repository/NpgsqlSchedulerJobManifestRepository.cs"
+check_file "backend/runtime/SchedulerJobPrimitiveAdapters.cs"
+check_file "backend/runtime/AdminRuntime.SchedulerSettings.cs"
+check_file "frontend/islands/SchedulerJobSettingsPanel.tsx"
+
+# on_error SSOT vocabulary present; legacy non-SSOT skip_step removed.
+check_term "backend/scheduler/SchedulerJobRunner.cs" "fail_run"
+check_term "backend/scheduler/SchedulerJobRunner.cs" "skip_input"
+check_term "backend/scheduler/SchedulerJobRunner.cs" "mark_input_failed"
+check_term "backend/scheduler/SchedulerJobRunner.cs" "LeaseDueInputRowsAsync"
+check_term "backend/scheduler/SchedulerJobRunner.cs" "UpsertAuthorizedOutputAsync"
+check_absent "backend/scheduler/SchedulerJobRunner.cs" "skip_step"
+
+# admin.contents authoring dispatch.
+check_term "backend/runtime/AdminRuntime.cs" "scheduler_jobs:create"
+check_term "backend/runtime/AdminRuntime.cs" "scheduler_jobs:edit"
+check_term "backend/runtime/AdminRuntime.cs" "scheduler_jobs:disable"
+check_term "backend/runtime/AdminRuntime.SchedulerSettings.cs" "SCHEDULER_JOB_SECRET_FIELD_FORBIDDEN"
+
+# Representative cron absorption: RetentionScheduler removed; seed manifest present.
+if [ -f "$REPO_ROOT/backend/scheduler/RetentionScheduler.cs" ]; then
+  fail "RetentionScheduler.cs must be removed (absorbed into scheduler job manifest substrate)"
+else
+  pass "RetentionScheduler.cs removed (absorbed)"
+fi
+check_term "db/seed_empty.sql" "log_retention_sweep"
+check_term "db/seed_empty.sql" "system.log_retention"
+check_term "db/seed_empty.sql" "scheduler_jobs\",\"action\":\"create"
+
+# Tests
+check_file "backend/tests/Topolactor.Runtime.Tests/SchedulerJobRunnerTests.cs"
+check_file "backend/tests/Topolactor.Runtime.Tests/AdminRuntimeSchedulerAuthoringTests.cs"
+check_file "backend/tests/Topolactor.Runtime.Tests/SchedulerJobManifestRepositoryGuardTests.cs"
+check_file "frontend/tests/schedulerJobManifestProjection.test.ts"
+
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== Scheduler job manifest SSOT wiring check passed ==="
+  echo "=== Scheduler job manifest substrate wiring check passed ==="
 else
   echo "=== $FAILURES scheduler job manifest wiring check(s) failed ===" >&2
   exit 1

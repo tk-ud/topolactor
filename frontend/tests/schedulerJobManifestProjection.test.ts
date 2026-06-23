@@ -1,5 +1,8 @@
 import { assertEquals, assertRejects } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
+  createSchedulerJob,
+  disableSchedulerJob,
+  editSchedulerJob,
   fetchSchedulerJobManifests,
   type SchedulerJobManifestItem,
 } from "../api/adminApi.ts";
@@ -158,6 +161,139 @@ Deno.test("fetchSchedulerJobManifests: dispatch error (non-501) must throw", asy
       Error,
       "not registered",
     );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+// ─── authoring: create / edit / disable dispatch contract ────────────────────
+
+Deno.test("createSchedulerJob: dispatches scheduler_jobs:create with manifest draft (no role)", async () => {
+  const original = globalThis.fetch;
+  let reqBody: Record<string, unknown> = {};
+  globalThis.fetch = makeFetch(
+    200,
+    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", jobKey: "weather_24h" } } },
+    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
+  );
+  try {
+    const result = await createSchedulerJob({
+      jobKey: "weather_24h",
+      triggerKind: "cron",
+      schedulePolicyKind: "cron",
+      cronExpression: "0 * * * *",
+      authorityScope: "weather_job",
+      active: true,
+    });
+    assertEquals(result.ok, true);
+    assertEquals(reqBody.layer, "scheduler_jobs");
+    assertEquals(reqBody.action, "create");
+    assertEquals(reqBody.triggerKind, "client", "admin dispatch must include triggerKind='client'");
+    assertEquals("role" in reqBody, false, "role must NOT be in frontend dispatch body");
+    const payload = reqBody.payload as Record<string, unknown>;
+    assertEquals(payload.jobKey, "weather_24h");
+    // No secret material is ever sent by the authoring surface.
+    const bodyStr = JSON.stringify(reqBody);
+    assertEquals(bodyStr.includes("api_key"), false);
+    assertEquals(bodyStr.includes("access_token"), false);
+    assertEquals(bodyStr.includes("client_secret"), false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("createSchedulerJob: full manifest carries input source, output binding, policies, and steps[]", async () => {
+  const original = globalThis.fetch;
+  let reqBody: Record<string, unknown> = {};
+  globalThis.fetch = makeFetch(
+    200,
+    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", jobKey: "weather_24h" } } },
+    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
+  );
+  try {
+    await createSchedulerJob({
+      jobKey: "weather_24h",
+      triggerKind: "cron",
+      schedulePolicyKind: "interval_seconds",
+      scheduleIntervalSeconds: 3600,
+      authorityScope: "weather_job",
+      active: true,
+      inputTableRef: "weather.region_inputs",
+      inputStatusColumn: "status",
+      inputStatusPendingValue: "pending",
+      inputStatusProcessingValue: "processing",
+      inputStatusCompletedValue: "completed",
+      inputStatusFailedValue: "failed",
+      outputTableRef: "weather.observations",
+      retryPolicy: { max_attempts: 3, backoff_seconds: 60 },
+      projectionPolicy: { allowed_result_keys: ["observation"] },
+      steps: [
+        {
+          stepOrder: 1,
+          abstractFunctionKey: "weather.fetch",
+          onError: "retry",
+          resultContextKey: "observation",
+          inputBinding: { region: { source: "input", path: "region" } },
+          resultBinding: { kind: "output_upsert", result_context_key: "observation", conflict_columns: ["region"], column_map: { region: "observation" } },
+        },
+      ],
+    });
+    const payload = reqBody.payload as Record<string, unknown>;
+    assertEquals(payload.inputTableRef, "weather.region_inputs");
+    assertEquals(payload.outputTableRef, "weather.observations");
+    assertEquals(Array.isArray(payload.steps), true);
+    const steps = payload.steps as Record<string, unknown>[];
+    assertEquals(steps.length, 1);
+    assertEquals(steps[0].abstractFunctionKey, "weather.fetch");
+    assertEquals(steps[0].onError, "retry");
+    // No secret material anywhere in the manifest authoring body.
+    const bodyStr = JSON.stringify(reqBody);
+    assertEquals(bodyStr.includes("api_key"), false);
+    assertEquals(bodyStr.includes("client_secret"), false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("editSchedulerJob: dispatches scheduler_jobs:edit with schedulerJobId", async () => {
+  const original = globalThis.fetch;
+  let reqBody: Record<string, unknown> = {};
+  globalThis.fetch = makeFetch(
+    200,
+    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", jobKey: "weather_24h" } } },
+    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
+  );
+  try {
+    await editSchedulerJob("id-1", {
+      jobKey: "weather_24h",
+      triggerKind: "cron",
+      schedulePolicyKind: "interval_seconds",
+      scheduleIntervalSeconds: 3600,
+      authorityScope: "weather_job",
+    });
+    assertEquals(reqBody.action, "edit");
+    const payload = reqBody.payload as Record<string, unknown>;
+    assertEquals(payload.schedulerJobId, "id-1");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("disableSchedulerJob: dispatches scheduler_jobs:disable with schedulerJobId", async () => {
+  const original = globalThis.fetch;
+  let reqBody: Record<string, unknown> = {};
+  globalThis.fetch = makeFetch(
+    200,
+    { success: true, emission: { data: { ok: true, schedulerJobId: "id-1", active: false } } },
+    (_u, i) => { reqBody = JSON.parse(String(i?.body ?? "{}")); },
+  );
+  try {
+    const result = await disableSchedulerJob("id-1");
+    assertEquals(result.ok, true);
+    assertEquals(result.active, false);
+    assertEquals(reqBody.action, "disable");
+    const payload = reqBody.payload as Record<string, unknown>;
+    assertEquals(payload.schedulerJobId, "id-1");
   } finally {
     globalThis.fetch = original;
   }

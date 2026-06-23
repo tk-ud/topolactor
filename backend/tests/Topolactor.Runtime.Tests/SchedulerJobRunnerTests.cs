@@ -124,8 +124,37 @@ public class SchedulerJobRunnerTests
             return Task.CompletedTask;
         }
 
+        // Input lease lifecycle (recorded for assertions).
+        public List<SchedulerInputRow> LeasableRows { get; init; } = new();
+        public List<(string InputId, string Status)> InputStatusUpdates { get; } = new();
+        public List<(SchedulerStepResultBinding Binding, IReadOnlyDictionary<string, object?> Values)> OutputUpserts { get; } = new();
+
+        public Task<IReadOnlyList<SchedulerInputRow>> LeaseDueInputRowsAsync(SchedulerJobRecord job, DateTimeOffset now, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<SchedulerInputRow>>(LeasableRows.ToList());
+
+        public Task UpdateInputRowStatusAsync(SchedulerJobRecord job, string inputId, string newStatusValue, CancellationToken ct = default)
+        {
+            InputStatusUpdates.Add((inputId, newStatusValue));
+            return Task.CompletedTask;
+        }
+
+        public Task UpsertAuthorizedOutputAsync(SchedulerJobRecord job, SchedulerStepResultBinding binding, IReadOnlyDictionary<string, object?> values, CancellationToken ct = default)
+        {
+            OutputUpserts.Add((binding, values));
+            return Task.CompletedTask;
+        }
+
         public Task<IReadOnlyList<SchedulerJobRecord>> LoadSettingsProjectionAsync(CancellationToken ct = default) =>
             Task.FromResult(_jobs);
+
+        public Task<Guid> CreateJobAsync(SchedulerJobDraft draft, CancellationToken ct = default) =>
+            Task.FromResult(Guid.NewGuid());
+
+        public Task<bool> UpdateJobAsync(Guid schedulerJobId, SchedulerJobDraft draft, CancellationToken ct = default) =>
+            Task.FromResult(true);
+
+        public Task<bool> SetJobActiveAsync(Guid schedulerJobId, bool active, CancellationToken ct = default) =>
+            Task.FromResult(true);
     }
 
     // ─── Tests ───────────────────────────────────────────────────────────────
@@ -711,6 +740,293 @@ public class SchedulerJobRunnerTests
 
         Assert.Single(fakeRepo.CreatedRuns);
         Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+    }
+
+    // ─── Input lease / lifecycle helpers ───────────────────────────────────────
+
+    private static SchedulerJobRecord MakeInputJob(
+        string authorityScope = "demo_scheduler_job",
+        int maxAttempts = 1,
+        string? outputTableRef = null,
+        string? skippedValue = "skipped",
+        string? retryWaitValue = "retry_wait")
+    {
+        var projPolicy = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["allowed_result_keys"] = "[\"scheduler_projection\"]",
+        };
+        return new SchedulerJobRecord(
+            SchedulerJobId: Guid.NewGuid(),
+            JobKey: "input_job",
+            TriggerKind: "cron",
+            SchedulePolicyKind: "interval_seconds",
+            CronExpression: null,
+            ScheduleIntervalSeconds: 300,
+            ManualRunAllowed: false,
+            Active: true,
+            InputTableRef: "demo.input_rows",
+            InputStatusColumn: "status",
+            InputStatusPendingValue: "pending",
+            InputStatusProcessingValue: "processing",
+            InputStatusCompletedValue: "completed",
+            InputStatusFailedValue: "failed",
+            MaxBatchSize: 10,
+            LeaseSeconds: 60,
+            AuthorityScope: authorityScope,
+            CredentialRequirementRef: null,
+            ExternalPortRef: null,
+            ProjectionPolicy: projPolicy)
+        {
+            InputStatusSkippedValue = skippedValue,
+            InputStatusRetryWaitValue = retryWaitValue,
+            OutputTableRef = outputTableRef,
+            RetryMaxAttempts = maxAttempts,
+        };
+    }
+
+    private static AbstractFunctionManifest EchoManifest(string resultKey = "scheduler_projection") =>
+        new(Guid.NewGuid(), "demo.scheduler_projection", "scheduler_job_runtime", "demo_scheduler_job",
+            new[] { MakeStep(1, "echo", new[] { new AbstractFunctionInputBinding("source", "constant", "ok", false, false) }, resultKey) },
+            Array.Empty<string>(), true,
+            new AbstractFunctionAuthorityBinding[] { new("policy", "demo_scheduler_job_policy", true) });
+
+    private static SchedulerInputRow Row(string id) =>
+        new(id, new Dictionary<string, object?>(StringComparer.Ordinal) { ["id"] = id, ["region"] = "tokyo" });
+
+    private sealed class FailNTimesThenEchoPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+    {
+        private int _calls;
+        private readonly int _failTimes;
+        public FailNTimesThenEchoPrimitiveAdapter(int failTimes) => _failTimes = failTimes;
+        public int Calls => _calls;
+        public string PrimitiveKey => "echo";
+        public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+        {
+            _calls++;
+            if (_calls <= _failTimes)
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "transient_fail");
+            return Task.FromResult(inputs.TryGetValue("source", out var v) ? v : "ok");
+        }
+    }
+
+    // ─── Input lease / lifecycle tests ──────────────────────────────────────────
+
+    [Fact]
+    public async Task TryExecuteJobAsync_InputLease_PendingToProcessingToCompleted()
+    {
+        // Proves: input-driven job leases due rows and transitions each to the completed
+        // manifest status value, with a per-input run reaching completed.
+        var job = MakeInputJob();
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", "scheduler_projection", true)
+        };
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps) { LeasableRows = { Row("r1") } };
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(EchoManifest()),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Single(fakeRepo.CreatedRuns);
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Contains(fakeRepo.InputStatusUpdates, u => u.InputId == "r1" && u.Status == "completed");
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_InputLease_NoDueRows_NoRunCreated()
+    {
+        var job = MakeInputJob();
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], []); // no leasable rows
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(EchoManifest()),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Empty(fakeRepo.CreatedRuns);
+        Assert.Empty(fakeRepo.InputStatusUpdates);
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_InputLease_FailRun_InputFailedAndRunFailed()
+    {
+        // on_error=fail_run → run failed AND input transitioned to failed value.
+        var job = MakeInputJob();
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", null, true)
+        };
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps) { LeasableRows = { Row("r1") } };
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(EchoManifest()),
+            new IAbstractFunctionPrimitiveAdapter[] { new FailClosePrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal("failed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Contains(fakeRepo.InputStatusUpdates, u => u.InputId == "r1" && u.Status == "failed");
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_InputLease_MarkInputFailed_RunCompletedInputFailed()
+    {
+        // on_error=mark_input_failed → run completed (handled) AND input failed.
+        var job = MakeInputJob();
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "mark_input_failed", null, true)
+        };
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps) { LeasableRows = { Row("r1") } };
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(EchoManifest()),
+            new IAbstractFunctionPrimitiveAdapter[] { new FailClosePrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Contains(fakeRepo.InputStatusUpdates, u => u.InputId == "r1" && u.Status == "failed");
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_InputLease_SkipInput_RunCompletedInputSkipped()
+    {
+        var job = MakeInputJob();
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "skip_input", null, true)
+        };
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps) { LeasableRows = { Row("r1") } };
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(EchoManifest()),
+            new IAbstractFunctionPrimitiveAdapter[] { new FailClosePrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Contains(fakeRepo.InputStatusUpdates, u => u.InputId == "r1" && u.Status == "skipped");
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_Retry_RecoversWithinMaxAttempts()
+    {
+        // on_error=retry with max_attempts=3 and a primitive that fails once then succeeds:
+        // the chain retries and reaches completed; input → completed.
+        var job = MakeInputJob(maxAttempts: 3);
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "retry", "scheduler_projection", true)
+        };
+        var failOnce = new FailNTimesThenEchoPrimitiveAdapter(1);
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps) { LeasableRows = { Row("r1") } };
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(EchoManifest()),
+            new IAbstractFunctionPrimitiveAdapter[] { failOnce });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal(2, failOnce.Calls); // first attempt failed, second succeeded
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Contains(fakeRepo.InputStatusUpdates, u => u.InputId == "r1" && u.Status == "completed");
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_Retry_Exhausted_InputRetryWait()
+    {
+        // on_error=retry with max_attempts=2 and a primitive that always fails:
+        // retries exhausted → run failed; input → retry_wait value.
+        var job = MakeInputJob(maxAttempts: 2);
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "retry", null, true)
+        };
+        var alwaysFail = new FailNTimesThenEchoPrimitiveAdapter(99);
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps) { LeasableRows = { Row("r1") } };
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(EchoManifest()),
+            new IAbstractFunctionPrimitiveAdapter[] { alwaysFail });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal(2, alwaysFail.Calls); // exactly max_attempts attempts
+        Assert.Equal("failed", fakeRepo.UpdateCalls.Last().Status);
+        Assert.Contains(fakeRepo.InputStatusUpdates, u => u.InputId == "r1" && u.Status == "retry_wait");
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_ResultBinding_OutputUpsertInvoked()
+    {
+        // result_binding kind=output_upsert maps result_context to a manifest-authorized upsert.
+        var job = MakeInputJob(outputTableRef: "demo.output_rows");
+        var binding = new SchedulerStepResultBinding(
+            "output_upsert", "scheduler_projection",
+            new[] { "region" },
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["region"] = "scheduler_projection" });
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "demo.scheduler_projection", "fail_run", "scheduler_projection", true)
+            {
+                ResultBinding = binding,
+            }
+        };
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps) { LeasableRows = { Row("r1") } };
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(EchoManifest()),
+            new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Single(fakeRepo.OutputUpserts);
+        var upsert = fakeRepo.OutputUpserts[0];
+        Assert.True(upsert.Values.ContainsKey("region"));
+        Assert.Equal("ok", upsert.Values["region"]); // echo of constant "ok" stored under scheduler_projection
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+    }
+
+    [Fact]
+    public async Task TryExecuteJobAsync_LogRetentionAbsorption_RepresentativeCron()
+    {
+        // Representative existing cron absorption: the retention cron body is dispatched
+        // as an abstract function (log_retention primitive) through the scheduler substrate.
+        // No domain-specific scheduler body — the runner only ticks and dispatches.
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "system.log_retention", "scheduler_job_runtime", "system_log_retention",
+            new[] { MakeStep(1, "log_retention", Array.Empty<AbstractFunctionInputBinding>(), "retention_result") },
+            Array.Empty<string>(), true,
+            new AbstractFunctionAuthorityBinding[] { new("policy", "system_log_retention_policy", true) });
+
+        var retentionPrimitive = new FakeLogRetentionPrimitiveAdapter();
+        var projPolicy = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["allowed_result_keys"] = "[\"retention_result\"]",
+        };
+        var job = new SchedulerJobRecord(
+            Guid.NewGuid(), "log_retention_sweep", "cron", "interval_seconds", null, 3600, false, true,
+            null, null, null, null, null, null, 1, 60, "system_log_retention", null, null, projPolicy);
+        var steps = new[]
+        {
+            new SchedulerJobStepRecord(Guid.NewGuid(), job.SchedulerJobId, 1, "system.log_retention", "fail_run", "retention_result", true)
+        };
+        var fakeRepo = new FakeSchedulerJobManifestRepository([job], steps);
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { retentionPrimitive });
+        var runner = new SchedulerJobRunner(NullLogger<SchedulerJobRunner>.Instance, fakeRepo, executor);
+
+        await runner.TryExecuteJobAsync(job, CancellationToken.None);
+
+        Assert.Equal(1, retentionPrimitive.Calls);
+        Assert.Equal("completed", fakeRepo.UpdateCalls.Last().Status);
+    }
+
+    private sealed class FakeLogRetentionPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
+    {
+        public int Calls { get; private set; }
+        public string PrimitiveKey => "log_retention";
+        public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+        {
+            Calls++;
+            return Task.FromResult<object?>(new Dictionary<string, object?>(StringComparer.Ordinal) { ["status"] = "Ok", ["rows_affected"] = 0 });
+        }
     }
 
     // ─── Spy ─────────────────────────────────────────────────────────────────
