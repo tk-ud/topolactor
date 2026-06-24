@@ -1117,6 +1117,108 @@ COMMENT ON FUNCTION topology.fs_unbind_record_file_attachment IS
     'Removes a record-to-file_artifact binding via execute_abstract_function manifest af07 / call_postgres_function primitive.';
 
 
+-- ---------------------------------------------------------------------------
+-- audit_approval_bundle domain PostgreSQL functions.
+-- Called via execute_abstract_function → abstract function manifests af13-af15
+-- → call_postgres_function primitive adapter (not via execute_db_function directly).
+-- Approval authority is ui_human_explicit_action_only per runtime-bundle-audit-approval-ssot.
+-- Prohibited: AI autonomous approval, implicit approval, silent audit log skip,
+--             CLI/MCP approval trigger, credential plaintext in evidence.
+-- ---------------------------------------------------------------------------
+
+-- idempotency_key column for audit_approval_requests (added idempotently).
+ALTER TABLE topology.audit_approval_requests
+    ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_approval_requests_idempotency_key
+    ON topology.audit_approval_requests (idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION topology.aa_record_approval_request(
+    p_idempotency_key    TEXT,
+    p_approval_subject   TEXT,
+    p_requester          TEXT,
+    p_response_port_ref  TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    INSERT INTO topology.audit_approval_requests (
+        idempotency_key, request_status, response_port_ref, evidence_json
+    ) VALUES (
+        p_idempotency_key,
+        'pending',
+        p_response_port_ref,
+        jsonb_build_object(
+            'approval_subject', p_approval_subject,
+            'requester', p_requester
+        )
+    )
+    ON CONFLICT (idempotency_key) DO UPDATE
+        SET updated_at = now()
+    RETURNING approval_request_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.aa_record_approval_request IS
+    'Records or idempotently upserts an audit_approval request. Called via execute_abstract_function manifest af13 / call_postgres_function primitive. Approval authority is UI/human explicit action only.';
+
+CREATE OR REPLACE FUNCTION topology.aa_record_approval_evidence(
+    p_approval_request_id UUID,
+    p_event_type          TEXT,
+    p_approval_status     TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    INSERT INTO topology.audit_approval_evidence (
+        approval_request_id, event_type, approval_status, evidence_json
+    ) VALUES (
+        p_approval_request_id,
+        p_event_type,
+        p_approval_status,
+        jsonb_build_object('recorded_by', 'audit_approval_bundle')
+    )
+    RETURNING approval_evidence_id INTO v_id;
+
+    UPDATE topology.audit_approval_requests
+       SET request_status = p_approval_status,
+           updated_at     = now()
+     WHERE approval_request_id = p_approval_request_id;
+
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.aa_record_approval_evidence IS
+    'Records audit_approval evidence (granted/rejected) and updates request_status. Called via execute_abstract_function manifest af14 / call_postgres_function primitive. Prohibited: AI autonomous approval, implicit approval.';
+
+CREATE OR REPLACE FUNCTION topology.aa_record_notification_evidence(
+    p_approval_request_id UUID,
+    p_notification_status TEXT,
+    p_response_port_ref   TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    INSERT INTO topology.audit_notification_evidence (
+        approval_request_id, notification_status, response_port_ref, evidence_json
+    ) VALUES (
+        p_approval_request_id,
+        p_notification_status,
+        p_response_port_ref,
+        jsonb_build_object('notification_bundle', 'audit_approval_bundle')
+    )
+    RETURNING notification_evidence_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.aa_record_notification_evidence IS
+    'Records notification dispatch evidence for an audit_approval request. Called via execute_abstract_function manifest af15 / call_postgres_function primitive. Prohibited: credential plaintext in evidence.';
+
+
 -- =============================================================================
 -- Scheduler job manifest substrate tables
 -- Canonical DB surface for scheduler_job_manifest_substrate bundle.

@@ -299,25 +299,3 @@ NG軸:
 
 ---
 
-## Bundle `audit-approval-port-consumer`
-
-**Status:** partial
-**SSOT:** `docs/design/runtime-bundle-audit-approval-ssot.yaml`
-
-PR#460 完了済み: response_port (notification) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
-残作業は physical table / approval evidence / notification evidence / projection 接続。notification provider-specific client / runtime は追加しない。
-既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
-
-残 todo:
-- [ ] approval_request / approval_evidence / notification_evidence physical table 接続実装
-- [ ] physical table manifest binding (audit_approval manifest / screen_data_shape)
-- [ ] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring (approval → response_port connect)
-- [ ] evidence / runtime_event_log: approval_requested / approval_reviewed / approval_granted / approval_rejected
-- [ ] projection response: approval status / audit evidence projection
-
-対応資料:
-- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/cli-model-context-protocols-port-ssot.yaml`
-
----
