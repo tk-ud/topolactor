@@ -121,7 +121,8 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
             _logger.LogWarning(ex, "External port dispatch failed closed.");
             if (_runtimeEventLog is not null &&
                 string.Equals(ex.Message, "EXTERNAL_SIGNATURE_VERIFICATION_FAILED", StringComparison.Ordinal) &&
-                context is not null)
+                context is not null &&
+                !context.VerificationFailureRecorded)
             {
                 try
                 {

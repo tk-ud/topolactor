@@ -17,6 +17,7 @@ on:
       - 'db/external_port_compat_absorption_seed.sql'
       - 'db/audit_approval_form_preset_seed.sql'
       - 'db/email_approval_form_preset_seed.sql'
+      - 'db/stripe_webhook_intake_preset_seed.sql'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
   push:
@@ -37,6 +38,7 @@ on:
       - 'db/external_port_compat_absorption_seed.sql'
       - 'db/audit_approval_form_preset_seed.sql'
       - 'db/email_approval_form_preset_seed.sql'
+      - 'db/stripe_webhook_intake_preset_seed.sql'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
 
@@ -89,6 +91,7 @@ jobs:
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/external_port_compat_absorption_seed.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/audit_approval_form_preset_seed.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/email_approval_form_preset_seed.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/stripe_webhook_intake_preset_seed.sql
 
       - name: Run backend tests
         run: bash .agent/tests/check-backend-tests.sh

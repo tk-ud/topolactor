@@ -12,7 +12,6 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-read-export-port` | CLI/MCP dispatch-secured read/export/import-candidate port 実装 | not_started | 1 | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
-| `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
 | `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
 | `sql-attention-key-expansion-draft-lane-implementation` | SQL Attention key expansion draft lane 実装 | not_started | 1 | - | `docs/design/sql-attention-logs-ssot.yaml` |
 
@@ -130,28 +129,6 @@ NG軸:
 - [ ] create_export_job / draft_operation / commit_candidate / audit_log / runtime_event_log 以外の system-controlled write を追加していない。
 - [ ] external_port_substrate の secure consumer dispatch lane とは関連するが同一 Bundle として混同していない。
 - [ ] 関連 backend/frontend tests または `.agent/tests/*` が追加/更新されている。
-
----
-
-## Bundle `stripe-port-consumer`
-
-**Status:** partial
-**SSOT:** `docs/design/runtime-bundle-stripe-ssot.yaml`
-
-PR#460 完了済み: hook_port (stripe) seed binding / credential_requirement / policy_steps (verify_signature_by_config / enqueue_scheduler_event)。hook consumer のため UI Builder portTargetRef 配線ではなく hook_port receive wiring を使用する。
-残作業は physical table / intake snapshot / verification evidence / projection 接続。Stripe provider-specific client / runtime は追加しない。
-既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
-
-残 todo:
-- [ ] webhook_intake_snapshot / verification_evidence / payment_state physical table 接続実装
-- [ ] physical table manifest binding (stripe manifest / screen_data_shape)
-- [ ] generic hook lane seed/wiring: hook_path / route_key resolution → port record resolution → scheduler enqueue boundary（Stripe 専用 handler/runtime 新設なし）
-- [ ] evidence / runtime_event_log: webhook_received / verification_success / verification_failure / payment_state_projected
-- [ ] projection response: payment state / verification evidence projection
-
-対応資料:
-- `docs/design/runtime-bundle-stripe-ssot.yaml`
-- `docs/design/external-port-substrate-ssot.yaml`
 
 ---
 
