@@ -87,5 +87,8 @@
 \echo '[init.sql] applying audit_approval_form_preset_seed.sql'
 \i /db/audit_approval_form_preset_seed.sql
 
+\echo '[init.sql] applying email_approval_form_preset_seed.sql'
+\i /db/email_approval_form_preset_seed.sql
+
 \echo '[init.sql] applying ui_component_registry_preset_catalog_bootstrap.sql'
 \i /db/ui_component_registry_preset_catalog_bootstrap.sql

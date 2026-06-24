@@ -1219,6 +1219,189 @@ COMMENT ON FUNCTION topology.aa_record_notification_evidence IS
     'Records notification dispatch evidence for an audit_approval request. Called via execute_abstract_function manifest af15 / call_postgres_function primitive. Prohibited: credential plaintext in evidence.';
 
 
+-- ---------------------------------------------------------------------------
+-- email_bundle domain PostgreSQL functions.
+-- Called via execute_abstract_function → abstract function manifests af40-af43
+-- → call_postgres_function primitive adapter (not via execute_db_function directly).
+-- Email send authority is ui_approval_then_backend_dispatch per
+-- runtime-bundle-email-ssot. Send is a side effect only AFTER explicit human approval.
+-- Prohibited: AI autonomous send, implicit approval, CLI/MCP send, silent failure
+--             fallback, silent retry, SMTP host/port/api key/raw provider response
+--             stored in DB/projection/log.
+-- ---------------------------------------------------------------------------
+
+-- dispatch_idempotency_key + recipient/subject reference columns (added idempotently).
+ALTER TABLE topology.email_drafts
+    ADD COLUMN IF NOT EXISTS dispatch_idempotency_key TEXT;
+ALTER TABLE topology.email_drafts
+    ADD COLUMN IF NOT EXISTS recipient_ref TEXT;
+ALTER TABLE topology.email_drafts
+    ADD COLUMN IF NOT EXISTS subject_ref TEXT;
+
+-- Plain unique index (NULLs are distinct in PostgreSQL): supports ON CONFLICT
+-- (dispatch_idempotency_key) as arbiter while still permitting null-keyed rows.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_email_drafts_dispatch_idempotency_key
+    ON topology.email_drafts (dispatch_idempotency_key);
+
+-- em_record_draft: creates or idempotently upserts an email draft.
+-- dispatch_idempotency_key prevents duplicate drafts for the same logical send.
+CREATE OR REPLACE FUNCTION topology.em_record_draft(
+    p_dispatch_idempotency_key TEXT,
+    p_recipient_ref            TEXT,
+    p_subject_ref              TEXT,
+    p_response_port_ref        TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    IF p_dispatch_idempotency_key IS NULL OR btrim(p_dispatch_idempotency_key) = '' THEN
+        RAISE EXCEPTION 'EMAIL_DISPATCH_IDEMPOTENCY_KEY_REQUIRED';
+    END IF;
+    INSERT INTO topology.email_drafts (
+        dispatch_idempotency_key, recipient_ref, subject_ref, response_port_ref,
+        delivery_status, evidence_json
+    ) VALUES (
+        p_dispatch_idempotency_key, p_recipient_ref, p_subject_ref, p_response_port_ref,
+        'draft',
+        jsonb_build_object('recipient_ref', p_recipient_ref, 'subject_ref', p_subject_ref)
+    )
+    ON CONFLICT (dispatch_idempotency_key) DO UPDATE
+        SET recipient_ref = EXCLUDED.recipient_ref,
+            subject_ref   = EXCLUDED.subject_ref,
+            updated_at    = now()
+    RETURNING email_draft_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.em_record_draft IS
+    'Records or idempotently upserts an email draft keyed by dispatch_idempotency_key. Called via execute_abstract_function manifest af40 / call_postgres_function primitive. recipient_ref/subject_ref are business content references; no SMTP credential/host/port stored.';
+
+-- em_record_approval: records an explicit human approval/rejection for a draft.
+-- approval_status='approved' is the precondition for any subsequent send.
+CREATE OR REPLACE FUNCTION topology.em_record_approval(
+    p_email_draft_id  UUID,
+    p_approval_status TEXT,
+    p_reviewed_by     TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    IF p_email_draft_id IS NULL THEN
+        RAISE EXCEPTION 'EMAIL_APPROVAL_DRAFT_ID_REQUIRED';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM topology.email_drafts WHERE email_draft_id = p_email_draft_id) THEN
+        RAISE EXCEPTION 'EMAIL_APPROVAL_DRAFT_NOT_FOUND';
+    END IF;
+    INSERT INTO topology.email_approval_records (
+        email_draft_id, approval_status, reviewed_by, reviewed_at, evidence_json
+    ) VALUES (
+        p_email_draft_id, p_approval_status, p_reviewed_by, now(),
+        jsonb_build_object('recorded_by', 'email_bundle')
+    )
+    RETURNING approval_record_id INTO v_id;
+
+    UPDATE topology.email_drafts
+       SET approval_record_id = v_id,
+           delivery_status    = CASE WHEN p_approval_status = 'approved' THEN 'approved' ELSE delivery_status END,
+           updated_at         = now()
+     WHERE email_draft_id = p_email_draft_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.em_record_approval IS
+    'Records explicit human approval/rejection for an email draft (af41 / call_postgres_function). Approval authority is UI/human explicit action only. Prohibited: AI autonomous approval, implicit approval.';
+
+-- em_record_dispatch_initiated: approval gate + double-send guard before send_http.
+-- Fail-closes (RAISE) when the draft is unapproved or already dispatched/delivered.
+CREATE OR REPLACE FUNCTION topology.em_record_dispatch_initiated(
+    p_email_draft_id UUID
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_status   TEXT;
+    v_approved BOOLEAN;
+BEGIN
+    IF p_email_draft_id IS NULL THEN
+        RAISE EXCEPTION 'EMAIL_DISPATCH_DRAFT_ID_REQUIRED';
+    END IF;
+    SELECT delivery_status INTO v_status
+      FROM topology.email_drafts WHERE email_draft_id = p_email_draft_id;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'EMAIL_DISPATCH_DRAFT_NOT_FOUND';
+    END IF;
+    -- Approval gate: explicit human approval is required before any send.
+    SELECT EXISTS (
+        SELECT 1 FROM topology.email_approval_records
+        WHERE email_draft_id = p_email_draft_id AND approval_status = 'approved'
+    ) INTO v_approved;
+    IF NOT v_approved THEN
+        RAISE EXCEPTION 'EMAIL_DISPATCH_NOT_APPROVED';
+    END IF;
+    -- Idempotency: prevent any re-dispatch of the same draft once a dispatch has
+    -- been initiated — including after a send_failure. A retry must go through a
+    -- new approval / new dispatch_idempotency_key, never a silent re-send.
+    IF v_status IN ('dispatch_initiated', 'delivered', 'failed') THEN
+        RAISE EXCEPTION 'EMAIL_DISPATCH_ALREADY_INITIATED';
+    END IF;
+    UPDATE topology.email_drafts
+       SET delivery_status = 'dispatch_initiated', updated_at = now()
+     WHERE email_draft_id = p_email_draft_id;
+    RETURN p_email_draft_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.em_record_dispatch_initiated IS
+    'Approval gate and double-send guard executed before send_http (af42 / call_postgres_function). Fail-closes when draft is unapproved (EMAIL_DISPATCH_NOT_APPROVED) or already dispatched in any terminal/in-flight state — dispatch_initiated, delivered, or failed (EMAIL_DISPATCH_ALREADY_INITIATED). Re-send after failure requires a new approval / new dispatch_idempotency_key; no silent retry or silent fallback.';
+
+-- em_record_send_evidence: records explicit send_success / send_failure delivery evidence.
+-- p_send_result is the runtime-derived call status ('sent' for 2xx, otherwise failed).
+-- Failure is recorded as an explicit failure event — never a silent fallback or retry.
+CREATE OR REPLACE FUNCTION topology.em_record_send_evidence(
+    p_email_draft_id UUID,
+    p_send_result    TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_id              UUID;
+    v_event_type      TEXT;
+    v_delivery_status TEXT;
+BEGIN
+    IF p_email_draft_id IS NULL THEN
+        RAISE EXCEPTION 'EMAIL_SEND_EVIDENCE_DRAFT_ID_REQUIRED';
+    END IF;
+    IF p_send_result = 'sent' THEN
+        v_event_type      := 'send_success';
+        v_delivery_status := 'delivered';
+    ELSE
+        v_event_type      := 'send_failure';
+        v_delivery_status := 'failed';
+    END IF;
+    INSERT INTO topology.email_delivery_evidence (
+        email_draft_id, event_type, delivery_status, evidence_json
+    ) VALUES (
+        p_email_draft_id, v_event_type, v_delivery_status,
+        jsonb_build_object('recorded_by', 'email_bundle')
+    )
+    RETURNING delivery_evidence_id INTO v_id;
+
+    -- Record the result-driven outcome to the runtime_event_log (not a static
+    -- send_dispatched substitute): send_success on 2xx, send_failure otherwise.
+    INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle)
+    VALUES (v_event_type, p_email_draft_id::text, 'email_bundle');
+
+    UPDATE topology.email_drafts
+       SET delivery_status = v_delivery_status, updated_at = now()
+     WHERE email_draft_id = p_email_draft_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.em_record_send_evidence IS
+    'Records explicit send_success/send_failure delivery evidence and the matching runtime_event_log entry after capture_response (af43 / call_postgres_function). The event_type is derived from the captured HTTP result (send_success for 2xx, send_failure otherwise) — send_dispatched is never used as a substitute. send_failure is an explicit failure record; no silent fallback or silent retry. Prohibited: raw provider response in evidence_json.';
+
+
 -- =============================================================================
 -- Scheduler job manifest substrate tables
 -- Canonical DB surface for scheduler_job_manifest_substrate bundle.
