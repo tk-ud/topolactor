@@ -277,6 +277,14 @@ public sealed class ExternalPortExecutionContext
 
     public bool SchedulerEventEnqueued { get; set; }
 
+    /// <summary>
+    /// Set true when verify_signature_by_config has already recorded an explicit
+    /// verification failure (runtime_event_log and/or consumer evidence) from its
+    /// data-defined failure config. ExternalPortDispatchRuntime uses this to avoid a
+    /// duplicate legacy signature_verification_failure event in its catch handler.
+    /// </summary>
+    public bool VerificationFailureRecorded { get; set; }
+
     public string? DecryptedCredentialPayload { get; set; }
 
     public Guid? ExportJobId { get; set; }
@@ -562,7 +570,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 context.HttpResponse = await httpClient.SendAsync(context.HttpRequest, ct);
                 context.MarkExecuted(step.OperationKey);
             },
-            ["verify_signature_by_config"] = (step, context, ct) =>
+            ["verify_signature_by_config"] = async (step, context, ct) =>
             {
                 var expected = FirstNonBlank(
                     ReadConfig(step.StepConfig, "expected_signature"),
@@ -579,11 +587,32 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
 
                 if (!string.Equals(expected, actual, StringComparison.Ordinal))
                 {
+                    // Data-defined explicit rejection: when the policy step declares a
+                    // failure event/evidence, record it here (runtime_event_log + consumer
+                    // evidence) before failing closed. No payment/state mutation occurs —
+                    // the policy aborts at this step. Generic for any hook consumer.
+                    var bundle = context.RequiredByBundle ?? context.PortRecord?.RequiredByBundle;
+                    var failureEvent = ReadConfig(step.StepConfig, "failure_event_type");
+                    var failureTable = ReadConfig(step.StepConfig, "failure_evidence_table_ref");
+                    if (failureEvent is not null && runtimeEventLogRepository is not null)
+                    {
+                        await runtimeEventLogRepository.AppendAsync(failureEvent, context.DispatchId, bundle, ct);
+                        context.VerificationFailureRecorded = true;
+                    }
+                    if (failureTable is not null && consumerEvidenceRepository is not null)
+                    {
+                        var failureConfig = new Dictionary<string, string>(step.StepConfig, StringComparer.Ordinal)
+                        {
+                            ["status_value"] = ReadConfig(step.StepConfig, "failure_status_value") ?? "verification_failed"
+                        };
+                        await consumerEvidenceRepository.AppendEvidenceAsync(
+                            failureTable, failureEvent ?? "verification_failure", context.DispatchId, bundle, context, failureConfig, ct);
+                        context.VerificationFailureRecorded = true;
+                    }
                     throw new InvalidOperationException("EXTERNAL_SIGNATURE_VERIFICATION_FAILED");
                 }
 
                 context.MarkExecuted(step.OperationKey);
-                return Task.CompletedTask;
             },
             ["enqueue_scheduler_event"] = (step, context, ct) =>
             {

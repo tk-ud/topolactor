@@ -305,7 +305,9 @@ check_content "$ROADMAP" "file_storage_physical_table_and_manifest_binding_not_c
 check_content "$ROADMAP" "file_storage_checksum_and_manifest_runtime_not_connected"
 check_content "$ROADMAP" "export_sftp_physical_table_and_manifest_binding_not_connected"
 check_content "$ROADMAP" "export_sftp_checksum_and_manifest_verification_boundary_not_connected"
-check_content "$ROADMAP" "stripe_physical_table_and_manifest_binding_not_connected"
+# stripe_port_consumer is implemented: its physical table / manifest binding gap is closed
+# (see product.stripe_port_consumer closed_gap_ref / completion_condition).
+check_content "$ROADMAP" "stripe_physical_table_and_manifest_binding_connected"
 check_absent "$ROADMAP" "external-port-substrate-design"
 check_absent "$ROADMAP" "physical_table_ddl_design_not_started"
 check_absent "$ROADMAP" "admin_role_port_write_ui_design_not_started"

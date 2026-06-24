@@ -85,8 +85,14 @@ absent "$RUNTIME" "canonical_binding"
 absent "$EXEC" "switch (context.PortRecord.ProviderKind"
 absent "$EXEC" "switch (context.RequiredByBundle"
 absent "$PROGRAM" "Smtp"
-absent "$PROGRAM" "Stripe"
 absent "$PROGRAM" "Sftp"
+# stripe is a hook consumer: the /hooks/stripe generic intake endpoint is allowed
+# (mirrors /hooks/webhook_inbox), but no Stripe provider-specific client library/class.
+check  "$PROGRAM" "/hooks/stripe"
+check  "$PROGRAM" "stripe-signature"
+absent "$PROGRAM" "StripeClient"
+absent "$PROGRAM" "Stripe.net"
+absent "$PROGRAM" "using Stripe;"
 
 check "$ROADMAP" "product.external_port_substrate:"
 check "$ROADMAP" "status: implemented"

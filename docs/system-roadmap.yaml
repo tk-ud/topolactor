@@ -722,25 +722,46 @@ system_roadmap_ssot:
     product.stripe_port_consumer:
       bundle_id: stripe-port-consumer
       title: Stripe bundle port consumer implementation
-      status: partial
-      production_ready: false
-      public_summary: Stripe Bundle as port consumer of external_port_substrate. hook_port consumer (not UI/client consumer). Seed binding (hook_port / stripe credential_requirement / policy_steps including verify_signature_by_config + enqueue_scheduler_event) implemented per PR#460. Remaining work is physical table (webhook_intake_snapshot / verification_evidence / payment_state), manifest binding, hook_port receive wiring (hook_path / route_key resolution → scheduler enqueue boundary), evidence/runtime_event_log, and projection response. Stripe provider-specific client not added.
+      status: implemented
+      production_ready: true
+      public_summary: "Stripe Bundle implemented as port consumer of external_port_substrate. hook_port consumer using the generic hook lane (hook_path/route_key → active hook_port record → credential vault reference resolution → Stripe-Signature verification → DB-driven abstract function writes → runtime_event_log → DB projection response → SSE lane). Physical tables (webhook_intake_snapshots / signature_verification_evidence / payment_state_projections) connected with stripe_event_id idempotency and manifest binding + screen_data_shape. 9-step policy chain (e7): resolve_port_record → resolve_credential_reference → verify_signature_by_config (expected from credential vault TokenHash; failure records verification_failure to runtime_event_log + signature_verification_evidence and fails closed) → execute_abstract_function stripe.record_webhook_intake (webhook_received) → stripe.record_verification_success (verification_success) → enqueue_scheduler_event → stripe.record_payment_state (payment_state_projected; verified-event authority gate STRIPE_PAYMENT_STATE_NOT_VERIFIED + ON CONFLICT idempotency) → stripe.record_ledger_binding (ledger_binding_completed) → stripe.project_payment_state (DB projection response). Physical writes are call_postgres_function → topology.stripe_* PostgreSQL functions (manifest table authority, not payload). HTTP endpoint /hooks/stripe via AlignAndDispatchAsync (no JWT; scheduler → ManifestDispatcher → external_port_runtime; synchronous result enables explicit 422 rejection on signature failure). Raw provider payload / credential / secret / endpoint never stored or projected. No Stripe provider-specific client/runtime/handler added; provider_kind is DB data only."
       scope:
         - stripe_hook_port_consumer_definition
         - stripe_credential_requirement_as_port_attachment
         - webhook_verification_required_boundary
         - payment_state_projection_boundary
+        - webhook_intake_snapshot_evidence
+        - signature_verification_evidence
+        - verification_failure_event_log_and_evidence
+        - payment_state_projected_evidence_idempotent
+        - ledger_binding_completed_evidence
+        - db_projection_response
+        - http_intake_endpoint_no_jwt
       detail_ref:
         - docs/design/runtime-bundle-stripe-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
-        - .agent/tasks/todo.md#stripe-port-consumer
+      completion_condition:
+        - hook_path_route_key_resolves_active_hook_port_record_fail_close_on_missing
+        - credential_requirement_reference_key_resolution_through_vault
+        - signature_verification_success_only_proceeds_to_scheduler_and_payment_state_projection
+        - signature_verification_failure_explicit_rejection_recorded_to_runtime_event_log_and_signature_verification_evidence
+        - payment_state_never_mutated_on_verification_failure
+        - payment_state_projection_requires_verified_event_db_fail_close_STRIPE_PAYMENT_STATE_NOT_VERIFIED
+        - same_stripe_event_id_state_projection_is_idempotent
+        - webhook_received_verification_success_payment_state_projected_ledger_binding_completed_in_runtime_event_log
+        - physical_table_manifest_binding_and_screen_data_shape_connected
+        - projection_response_returns_payment_state_and_verification_evidence_from_db_not_inline_only
+        - no_stripe_provider_specific_runtime_client_handler_added
+        - no_provider_kind_required_by_bundle_csharp_branching
+        - http_intake_endpoint_no_jwt_signature_verified_by_policy_step
+        - scheduler_align_and_dispatch_route_not_direct_runtime_execution
+        - raw_provider_payload_credential_secret_endpoint_never_stored_or_projected
       closed_gap_ref:
         - stripe_seed_binding_and_credential_requirement_implemented_per_pr460
-      known_gap_ref:
-        - stripe_physical_table_and_manifest_binding_not_connected
-        - stripe_hook_port_receive_wiring_not_connected
-        - stripe_evidence_and_runtime_event_log_not_connected
-        - stripe_payment_state_projection_not_connected
+        - stripe_physical_table_and_manifest_binding_connected
+        - stripe_hook_port_receive_wiring_connected
+        - stripe_evidence_and_runtime_event_log_connected
+        - stripe_payment_state_projection_connected_idempotent
 
     product.file_storage_port_consumer:
       bundle_id: file-storage-port-consumer

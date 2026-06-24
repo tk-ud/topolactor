@@ -499,6 +499,74 @@ app.MapPost("/hooks/webhook_inbox", async (
     return Results.Json(result, statusCode: result.Success ? 202 : 422);
 });
 
+// POST /hooks/stripe — stripe_bundle webhook intake boundary (no JWT; signature verified by policy step).
+// hook_path and route_key are fixed to match the active stripe hook_port record in seed.
+// The raw provider payload is NOT forwarded: only the stripe event id and a content payload_hash
+// are passed as dispatch_payload, plus the stripe-signature header for verify_signature_by_config.
+// Per SSOT scheduler_boundary: intake routes through RuntimeTimelineScheduler.AlignAndDispatchAsync
+// (scheduler → ManifestDispatcher → external_port_runtime). Signature verification fail-close is
+// enforced by the verify_signature_by_config policy step (explicit 422 rejection, no fallback).
+// No Stripe provider-specific client/runtime is added; provider_kind remains DB data.
+app.MapPost("/hooks/stripe", async (
+    HttpContext ctx,
+    RuntimeTimelineScheduler scheduler) =>
+{
+    var signatureHeader = ctx.Request.Headers.TryGetValue("stripe-signature", out var sig)
+        ? sig.FirstOrDefault() ?? string.Empty
+        : string.Empty;
+
+    using var bodyReader = new StreamReader(ctx.Request.Body);
+    var rawBody = await bodyReader.ReadToEndAsync(ctx.RequestAborted);
+    JsonElement bodyElement;
+    try
+    {
+        bodyElement = JsonSerializer.Deserialize<JsonElement>(rawBody);
+    }
+    catch
+    {
+        ValidationError[] parseErrors = [new ValidationError("STRIPE_INTAKE_BODY_INVALID", "Request body must be valid JSON.")];
+        return Results.Json(new EndpointResponseDto(false, null, parseErrors), statusCode: 422);
+    }
+
+    // Generic field extraction at the stripe intake port: stripe event id (id) is the
+    // idempotency key; the event type (type) is carried through as the payment_state value
+    // (passthrough — no provider_kind C# branching, no payment semantics decided here).
+    var stripeEventId = bodyElement.ValueKind == JsonValueKind.Object && bodyElement.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String
+        ? idProp.GetString()
+        : null;
+    var paymentState = bodyElement.ValueKind == JsonValueKind.Object && bodyElement.TryGetProperty("type", out var typeProp) && typeProp.ValueKind == JsonValueKind.String
+        ? typeProp.GetString()
+        : null;
+    if (string.IsNullOrWhiteSpace(stripeEventId) || string.IsNullOrWhiteSpace(paymentState))
+    {
+        ValidationError[] fieldErrors = [new ValidationError("STRIPE_INTAKE_FIELDS_MISSING", "Stripe webhook body must include id and type.")];
+        return Results.Json(new EndpointResponseDto(false, null, fieldErrors), statusCode: 422);
+    }
+
+    // Content hash of the raw body only — the raw provider payload itself is never forwarded
+    // into the runtime context, projection, log, or DB.
+    var payloadHash = "sha256:" + Convert.ToHexString(
+        System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawBody))).ToLowerInvariant();
+
+    var hookPayload = JsonSerializer.SerializeToElement(new
+    {
+        hook_path = "/hooks/stripe",
+        route_key = "stripe",
+        signature_input = new { signature = signatureHeader },
+        dispatch_payload = new
+        {
+            stripe_event_id = stripeEventId,
+            payment_state = paymentState,
+            payload_hash = payloadHash
+        }
+    });
+    var hookRequest = new EndpointRequestDto(
+        "dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort",
+        null, hookPayload, null, "hook");
+    var result = await scheduler.AlignAndDispatchAsync(hookRequest, ctx.RequestAborted);
+    return Results.Json(result, statusCode: result.Success ? 202 : 422);
+});
+
 void AppendRefreshCookie(HttpResponse response, string refreshPlain)
 {
     var maxAge = 60 * 60 * 24 * 7;

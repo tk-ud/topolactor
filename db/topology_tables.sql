@@ -816,6 +816,15 @@ CREATE TABLE IF NOT EXISTS topology.webhook_intake_snapshots (
     evidence_json              JSONB NOT NULL DEFAULT '{}'
 );
 
+-- stripe_event_id is the provider-supplied idempotency key for stripe_bundle intake.
+-- Nullable: generic webhook_inbox intake rows do not carry a stripe_event_id.
+-- Partial unique index makes the same stripe_event_id intake snapshot idempotent.
+ALTER TABLE topology.webhook_intake_snapshots
+    ADD COLUMN IF NOT EXISTS stripe_event_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_webhook_intake_snapshots_stripe_event_id
+    ON topology.webhook_intake_snapshots (stripe_event_id)
+    WHERE stripe_event_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS topology.signature_verification_evidence (
     signature_verification_evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     webhook_intake_snapshot_id         UUID,
@@ -832,6 +841,14 @@ CREATE TABLE IF NOT EXISTS topology.payment_state_projections (
     evidence_json               JSONB NOT NULL DEFAULT '{}',
     projected_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- stripe_event_id is the provider-supplied idempotency key. A unique index guarantees a
+-- single payment_state projection per stripe_event_id (verified-webhook-event authority only).
+ALTER TABLE topology.payment_state_projections
+    ADD COLUMN IF NOT EXISTS stripe_event_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_state_projections_stripe_event_id
+    ON topology.payment_state_projections (stripe_event_id)
+    WHERE stripe_event_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS topology.scheduler_external_event_evidence (
     scheduler_event_evidence_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1400,6 +1417,273 @@ $$;
 
 COMMENT ON FUNCTION topology.em_record_send_evidence IS
     'Records explicit send_success/send_failure delivery evidence and the matching runtime_event_log entry after capture_response (af43 / call_postgres_function). The event_type is derived from the captured HTTP result (send_success for 2xx, send_failure otherwise) — send_dispatched is never used as a substitute. send_failure is an explicit failure record; no silent fallback or silent retry. Prohibited: raw provider response in evidence_json.';
+
+
+-- ===========================================================================
+-- stripe_bundle webhook intake / verification / payment state functions.
+--
+-- These functions are the manifest-authorized (call_postgres_function) DB-driven
+-- operation boundary for the stripe hook consumer. Table/column authority comes
+-- from the abstract function manifests + authority bindings in
+-- db/stripe_webhook_intake_preset_seed.sql; never from request payload.
+--
+-- Boundary invariants (docs/design/runtime-bundle-stripe-ssot.yaml):
+--   - payment_state authority = verified_webhook_event_only. stripe_record_payment_state
+--     fail-closes (STRIPE_PAYMENT_STATE_NOT_VERIFIED) unless a 'verified' signature
+--     verification evidence row exists for the stripe_event_id intake snapshot.
+--   - Idempotency: same stripe_event_id yields a single intake snapshot and a single
+--     payment_state projection; the matching runtime_event_log event is appended only on
+--     the first (real) insert — never a duplicate or a MarkOnly substitute.
+--   - No raw provider payload / credential / secret / endpoint is stored. Only the
+--     stripe_event_id reference and a content payload_hash computed upstream are kept.
+-- ===========================================================================
+
+-- stripe_record_webhook_intake: idempotent intake snapshot keyed by stripe_event_id.
+-- Records webhook_received to runtime_event_log only on the first insert. Returns the
+-- (existing or new) webhook_intake_snapshot_id so downstream steps link to it.
+CREATE OR REPLACE FUNCTION topology.stripe_record_webhook_intake(
+    p_stripe_event_id TEXT,
+    p_route_key       TEXT,
+    p_hook_path       TEXT,
+    p_payload_hash    TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_id UUID;
+BEGIN
+    IF p_stripe_event_id IS NULL OR length(trim(p_stripe_event_id)) = 0 THEN
+        RAISE EXCEPTION 'STRIPE_INTAKE_EVENT_ID_REQUIRED';
+    END IF;
+
+    SELECT webhook_intake_snapshot_id INTO v_id
+      FROM topology.webhook_intake_snapshots
+     WHERE stripe_event_id = p_stripe_event_id;
+    IF FOUND THEN
+        RETURN v_id;  -- idempotent: intake already recorded for this event id
+    END IF;
+
+    INSERT INTO topology.webhook_intake_snapshots (
+        required_by_bundle, route_key, hook_path, payload_hash, stripe_event_id, evidence_json
+    ) VALUES (
+        'stripe_bundle', p_route_key, p_hook_path,
+        COALESCE(p_payload_hash, 'sha256:unset'), p_stripe_event_id,
+        jsonb_build_object('event_type', 'webhook_received', 'stripe_event_id', p_stripe_event_id, 'recorded_by', 'stripe_bundle')
+    )
+    ON CONFLICT (stripe_event_id) WHERE stripe_event_id IS NOT NULL DO NOTHING
+    RETURNING webhook_intake_snapshot_id INTO v_id;
+
+    IF v_id IS NULL THEN
+        -- Lost an idempotency race; return the existing snapshot id without re-logging.
+        SELECT webhook_intake_snapshot_id INTO v_id
+          FROM topology.webhook_intake_snapshots
+         WHERE stripe_event_id = p_stripe_event_id;
+        RETURN v_id;
+    END IF;
+
+    INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle)
+    VALUES ('webhook_received', p_stripe_event_id, 'stripe_bundle');
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.stripe_record_webhook_intake IS
+    'Idempotent stripe webhook intake snapshot keyed by stripe_event_id (af50 / call_postgres_function). Records webhook_received to runtime_event_log only on first insert. Stores only stripe_event_id + content payload_hash — never the raw provider payload, credential, or endpoint.';
+
+-- stripe_record_verification_success: records the verified signature evidence linked to
+-- the intake snapshot and appends verification_success once. Fail-closes when no intake
+-- snapshot exists for the event id.
+CREATE OR REPLACE FUNCTION topology.stripe_record_verification_success(
+    p_stripe_event_id TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_snapshot_id UUID;
+    v_id          UUID;
+BEGIN
+    IF p_stripe_event_id IS NULL OR length(trim(p_stripe_event_id)) = 0 THEN
+        RAISE EXCEPTION 'STRIPE_VERIFICATION_EVENT_ID_REQUIRED';
+    END IF;
+
+    SELECT webhook_intake_snapshot_id INTO v_snapshot_id
+      FROM topology.webhook_intake_snapshots
+     WHERE stripe_event_id = p_stripe_event_id;
+    IF v_snapshot_id IS NULL THEN
+        RAISE EXCEPTION 'STRIPE_VERIFICATION_INTAKE_SNAPSHOT_MISSING';
+    END IF;
+
+    -- Idempotent: only one verified evidence row per snapshot.
+    SELECT signature_verification_evidence_id INTO v_id
+      FROM topology.signature_verification_evidence
+     WHERE webhook_intake_snapshot_id = v_snapshot_id
+       AND verification_status = 'verified';
+    IF FOUND THEN
+        RETURN v_id;
+    END IF;
+
+    INSERT INTO topology.signature_verification_evidence (
+        webhook_intake_snapshot_id, required_by_bundle, verification_status, evidence_json
+    ) VALUES (
+        v_snapshot_id, 'stripe_bundle', 'verified',
+        jsonb_build_object('event_type', 'verification_success', 'stripe_event_id', p_stripe_event_id)
+    )
+    RETURNING signature_verification_evidence_id INTO v_id;
+
+    INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle)
+    VALUES ('verification_success', p_stripe_event_id, 'stripe_bundle');
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.stripe_record_verification_success IS
+    'Records verified signature evidence linked to the stripe intake snapshot and appends verification_success once (af51 / call_postgres_function). Fail-closes when the intake snapshot is missing. verification authority precedes any payment_state projection.';
+
+-- stripe_record_payment_state: projects payment state for a VERIFIED webhook event only.
+-- Idempotent on stripe_event_id; appends payment_state_projected only on first insert.
+CREATE OR REPLACE FUNCTION topology.stripe_record_payment_state(
+    p_stripe_event_id TEXT,
+    p_payment_state   TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_snapshot_id UUID;
+    v_verified    BOOLEAN;
+    v_id          UUID;
+BEGIN
+    IF p_stripe_event_id IS NULL OR length(trim(p_stripe_event_id)) = 0 THEN
+        RAISE EXCEPTION 'STRIPE_PAYMENT_STATE_EVENT_ID_REQUIRED';
+    END IF;
+    IF p_payment_state IS NULL OR length(trim(p_payment_state)) = 0 THEN
+        RAISE EXCEPTION 'STRIPE_PAYMENT_STATE_VALUE_REQUIRED';
+    END IF;
+
+    SELECT webhook_intake_snapshot_id INTO v_snapshot_id
+      FROM topology.webhook_intake_snapshots
+     WHERE stripe_event_id = p_stripe_event_id;
+    IF v_snapshot_id IS NULL THEN
+        RAISE EXCEPTION 'STRIPE_PAYMENT_STATE_INTAKE_SNAPSHOT_MISSING';
+    END IF;
+
+    -- payment_state authority = verified_webhook_event_only. No verified evidence → fail-close.
+    SELECT EXISTS (
+        SELECT 1 FROM topology.signature_verification_evidence
+         WHERE webhook_intake_snapshot_id = v_snapshot_id
+           AND verification_status = 'verified'
+    ) INTO v_verified;
+    IF NOT v_verified THEN
+        RAISE EXCEPTION 'STRIPE_PAYMENT_STATE_NOT_VERIFIED';
+    END IF;
+
+    INSERT INTO topology.payment_state_projections (
+        webhook_intake_snapshot_id, payment_state, stripe_event_id, evidence_json
+    ) VALUES (
+        v_snapshot_id, p_payment_state, p_stripe_event_id,
+        jsonb_build_object('event_type', 'payment_state_projected', 'stripe_event_id', p_stripe_event_id)
+    )
+    ON CONFLICT (stripe_event_id) WHERE stripe_event_id IS NOT NULL DO NOTHING
+    RETURNING payment_state_projection_id INTO v_id;
+
+    IF v_id IS NULL THEN
+        -- Idempotent: payment state already projected for this event id. No duplicate event.
+        SELECT payment_state_projection_id INTO v_id
+          FROM topology.payment_state_projections
+         WHERE stripe_event_id = p_stripe_event_id;
+        RETURN v_id;
+    END IF;
+
+    INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle)
+    VALUES ('payment_state_projected', p_stripe_event_id, 'stripe_bundle');
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.stripe_record_payment_state IS
+    'Projects payment_state for a verified stripe webhook event only (af52 / call_postgres_function). Fail-closes with STRIPE_PAYMENT_STATE_NOT_VERIFIED when no verified signature evidence exists. Idempotent on stripe_event_id; payment_state_projected runtime_event_log event is appended only on the first real insert (no duplicate, no MarkOnly).';
+
+-- stripe_record_ledger_binding: binds the verified, projected payment state to the ledger.
+-- Requires a projected payment state; idempotent; appends ledger_binding_completed once.
+CREATE OR REPLACE FUNCTION topology.stripe_record_ledger_binding(
+    p_stripe_event_id TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_id     UUID;
+    v_bound  BOOLEAN;
+BEGIN
+    IF p_stripe_event_id IS NULL OR length(trim(p_stripe_event_id)) = 0 THEN
+        RAISE EXCEPTION 'STRIPE_LEDGER_EVENT_ID_REQUIRED';
+    END IF;
+
+    SELECT payment_state_projection_id,
+           COALESCE((evidence_json->>'ledger_binding') = 'completed', false)
+      INTO v_id, v_bound
+      FROM topology.payment_state_projections
+     WHERE stripe_event_id = p_stripe_event_id;
+    IF v_id IS NULL THEN
+        RAISE EXCEPTION 'STRIPE_LEDGER_PAYMENT_STATE_MISSING';
+    END IF;
+    IF v_bound THEN
+        RETURN v_id;  -- idempotent: ledger already bound for this event id
+    END IF;
+
+    UPDATE topology.payment_state_projections
+       SET evidence_json = evidence_json || jsonb_build_object('ledger_binding', 'completed')
+     WHERE payment_state_projection_id = v_id;
+
+    INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle)
+    VALUES ('ledger_binding_completed', p_stripe_event_id, 'stripe_bundle');
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.stripe_record_ledger_binding IS
+    'Binds the verified, projected payment state to the ledger and appends ledger_binding_completed once (af53 / call_postgres_function). Requires a projected payment_state (STRIPE_LEDGER_PAYMENT_STATE_MISSING otherwise). Idempotent ledger marker on payment_state_projections.evidence_json.';
+
+-- stripe_project_payment_state: read-only projection response for a stripe_event_id.
+-- Returns a JSON text projection (payment_state + verification status + intake ref) sourced
+-- from the DB. Never returns raw provider payload, credential, secret, or endpoint values.
+CREATE OR REPLACE FUNCTION topology.stripe_project_payment_state(
+    p_stripe_event_id TEXT
+) RETURNS TEXT
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_json JSONB;
+BEGIN
+    IF p_stripe_event_id IS NULL OR length(trim(p_stripe_event_id)) = 0 THEN
+        RAISE EXCEPTION 'STRIPE_PROJECTION_EVENT_ID_REQUIRED';
+    END IF;
+
+    SELECT jsonb_build_object(
+        'responseLane', 'projection_response',
+        'bundle', 'stripe_bundle',
+        'stripeEventId', p_stripe_event_id,
+        'paymentState', (
+            SELECT jsonb_build_object(
+                'payment_state', ps.payment_state,
+                'ledger_binding', COALESCE(ps.evidence_json->>'ledger_binding', 'pending'),
+                'projected_at', ps.projected_at
+            )
+            FROM topology.payment_state_projections ps
+            WHERE ps.stripe_event_id = p_stripe_event_id
+        ),
+        'verificationEvidence', (
+            SELECT jsonb_build_object(
+                'verification_status', sve.verification_status,
+                'recorded_at', sve.recorded_at
+            )
+            FROM topology.signature_verification_evidence sve
+            JOIN topology.webhook_intake_snapshots wis
+              ON wis.webhook_intake_snapshot_id = sve.webhook_intake_snapshot_id
+            WHERE wis.stripe_event_id = p_stripe_event_id
+            ORDER BY sve.recorded_at DESC
+            LIMIT 1
+        )
+    ) INTO v_json;
+    RETURN v_json::text;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.stripe_project_payment_state IS
+    'Read-only DB projection response for a stripe_event_id (af54 / call_postgres_function). Returns payment_state + verification status + ledger binding sourced from DB rows — never an inline EndpointResponseDto substitute, raw provider payload, credential, or endpoint.';
 
 
 -- =============================================================================
