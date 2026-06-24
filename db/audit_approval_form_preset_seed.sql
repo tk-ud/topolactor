@@ -463,28 +463,37 @@ VALUES (
     $$[]$$::jsonb
 );
 
+-- ── audit_approval_bundle physical table catalog ───────────────────────────────
+-- Registers the three domain tables for approval_request / approval_evidence /
+-- notification_evidence. Idempotent: ON CONFLICT (table_ref) DO UPDATE.
+INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
+VALUES
+    ('topology.audit_approval_requests',      'topology', 'audit_approval_bundle', true),
+    ('topology.audit_approval_evidence',      'topology', 'audit_approval_bundle', true),
+    ('topology.audit_notification_evidence',  'topology', 'audit_approval_bundle', true)
+ON CONFLICT (table_ref) DO UPDATE
+    SET schema_name = EXCLUDED.schema_name,
+        category    = EXCLUDED.category,
+        active      = EXCLUDED.active;
+
 -- ── physical_table_manifest_bindings ──────────────────────────────────────────
--- Bind the three audit_approval physical tables to manifest a7 explicitly in
--- this domain seed file. topology.physical_tables rows are seeded in
--- seed_empty.sql; this upsert is the canonical audit_approval bundle evidence
--- for the physical_table_manifest_binding → screen_data_shape connection.
+-- Bind the three audit_approval tables to manifest a7
+-- (audit_approval.response_port.evidence.projection). Idempotent upsert.
 INSERT INTO topology.physical_table_manifest_bindings
     (physical_table_id, topology_manifest_id, active, binding_evidence_json)
 SELECT pt.physical_table_id,
        '00000000-0000-0000-0000-0000000000a7'::uuid,
        true,
        jsonb_build_object(
-           'source', 'external-port-consumer-completion',
-           'bundle', pt.category,
-           'uiBuilderPreset', 'physical_search_crud_aggregate.v1',
-           'portTargetRefLane', true,
-           'credentialProjection', 'reference_only')
+           'bundle',      'audit_approval_bundle',
+           'source',      'audit-approval-bundle-form-preset-seed',
+           'manifestKey', 'audit_approval.response_port.evidence.projection')
 FROM topology.physical_tables pt
 WHERE pt.table_ref IN (
     'topology.audit_approval_requests',
     'topology.audit_approval_evidence',
     'topology.audit_notification_evidence')
 ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
-    SET active = true,
+    SET active                = true,
         binding_evidence_json = EXCLUDED.binding_evidence_json,
-        updated_at = now();
+        updated_at            = now();
