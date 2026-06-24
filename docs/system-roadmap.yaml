@@ -969,9 +969,20 @@ system_roadmap_ssot:
     product.audit_approval_port_consumer:
       bundle_id: audit-approval-port-consumer
       title: Audit/Approval bundle port consumer implementation
-      status: partial
+      status: implemented
       production_ready: false
-      public_summary: Audit/Approval Bundle as port consumer of external_port_substrate. Seed binding (response_port / notification credential_requirement / policy_steps / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (approval_request / approval_evidence / notification_evidence), manifest binding, UI Builder preset, portTargetRef action wiring, evidence/runtime_event_log, and projection response. Notification provider-specific client not added.
+      public_summary: >-
+        Audit/Approval Bundle as port consumer of external_port_substrate. Implemented on the
+        generic response_port lane: topology.audit_approval_requests / topology.audit_approval_evidence /
+        topology.audit_notification_evidence physical tables are seeded and bound to manifest a7 via
+        topology.physical_table_manifest_bindings. Abstract function manifests af13–af16 cover
+        approval_request submission, grant, reject, and notification_evidence recording with
+        binding_source=external_context resolution of response_port_ref and notification_status.
+        Policy steps bf42–bf48 govern the full lifecycle. UI Builder preset wires portTargetRef
+        to response ports f07/f0d/f0e for submit/approve/reject actions. screen_data_shape on
+        manifest a7 defines projected tables and projection_deny_keys block credential /
+        approval_secret_token / raw_provider_response. Notification provider-specific client
+        and autonomous/AI approval are not added.
       scope:
         - audit_approval_response_port_consumer_definition
         - approval_notification_credential_requirement_as_port_attachment
@@ -980,12 +991,27 @@ system_roadmap_ssot:
       detail_ref:
         - docs/design/runtime-bundle-audit-approval-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
-        - .agent/tasks/todo.md#audit-approval-port-consumer
+      evidence_ref:
+        - db/audit_approval_form_preset_seed.sql
+        - db/seed_empty.sql#audit_approval_bundle
+        - backend/tests/Topolactor.Runtime.Tests/AuditApprovalPortConsumerContractTests.cs
+        - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
       closed_gap_ref:
         - audit_approval_seed_binding_and_credential_requirement_implemented_per_pr460
-      known_gap_ref:
-        - approval_request_schema_implementation_not_started
-        - approval_notification_implementation_not_started
+        - approval_request_schema_implementation_completed
+        - approval_notification_implementation_completed
+        - audit_approval_physical_table_and_manifest_binding_connected
+        - audit_approval_portTargetRef_action_wiring_connected
+        - audit_approval_evidence_and_runtime_event_log_connected
+        - audit_approval_projection_response_connected
+      known_gap_ref: []
+      completion_condition:
+        - audit_approval_requests_evidence_notification_evidence_tables_seeded_and_bound_to_manifest_a7
+        - abstract_function_manifests_af13_af16_cover_full_approval_lifecycle_with_external_context_resolution
+        - policy_steps_bf42_bf48_govern_approval_lifecycle_and_notification_evidence
+        - ui_builder_preset_wires_portTargetRef_to_response_ports_f07_f0d_f0e
+        - projection_deny_keys_block_credential_secret_token_raw_provider_response
+        - notification_provider_specific_client_and_autonomous_approval_not_added
 
     product.helper_manual_policy:
       bundle_id: helper-manual

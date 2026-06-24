@@ -462,3 +462,29 @@ VALUES (
     $$[{"nodeId":"approval_shell","styleIntent":"crud_derived_approval_shell"},{"nodeId":"approval_result_json","styleIntent":"result_projection_panel"}]$$::jsonb,
     $$[]$$::jsonb
 );
+
+-- ── physical_table_manifest_bindings ──────────────────────────────────────────
+-- Bind the three audit_approval physical tables to manifest a7 explicitly in
+-- this domain seed file. topology.physical_tables rows are seeded in
+-- seed_empty.sql; this upsert is the canonical audit_approval bundle evidence
+-- for the physical_table_manifest_binding → screen_data_shape connection.
+INSERT INTO topology.physical_table_manifest_bindings
+    (physical_table_id, topology_manifest_id, active, binding_evidence_json)
+SELECT pt.physical_table_id,
+       '00000000-0000-0000-0000-0000000000a7'::uuid,
+       true,
+       jsonb_build_object(
+           'source', 'external-port-consumer-completion',
+           'bundle', pt.category,
+           'uiBuilderPreset', 'physical_search_crud_aggregate.v1',
+           'portTargetRefLane', true,
+           'credentialProjection', 'reference_only')
+FROM topology.physical_tables pt
+WHERE pt.table_ref IN (
+    'topology.audit_approval_requests',
+    'topology.audit_approval_evidence',
+    'topology.audit_notification_evidence')
+ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
+    SET active = true,
+        binding_evidence_json = EXCLUDED.binding_evidence_json,
+        updated_at = now();
