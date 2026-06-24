@@ -322,6 +322,22 @@ public class EmailPortConsumerContractTests
     }
 
     [Fact]
+    public void DispatchGuardFunction_FailsClosed_OnAnyAlreadyDispatchedState_IncludingFailed()
+    {
+        // em_record_dispatch_initiated must block re-dispatch of the same draft once
+        // a dispatch has been initiated — including after send_failure — so a retry
+        // requires a new approval / new dispatch_idempotency_key (no silent re-send).
+        var ddl = File.ReadAllText(Path.Combine(RepoRoot(), "db", "topology_tables.sql"));
+        var fnStart = ddl.IndexOf("FUNCTION topology.em_record_dispatch_initiated", StringComparison.Ordinal);
+        Assert.True(fnStart > 0, "em_record_dispatch_initiated must exist");
+        var fnBody = ddl.Substring(fnStart, Math.Min(2000, ddl.Length - fnStart));
+        Assert.Contains("EMAIL_DISPATCH_NOT_APPROVED", fnBody);
+        Assert.Contains("EMAIL_DISPATCH_ALREADY_INITIATED", fnBody);
+        // The idempotency guard covers dispatch_initiated, delivered, AND failed.
+        Assert.Contains("'dispatch_initiated', 'delivered', 'failed'", fnBody);
+    }
+
+    [Fact]
     public void SendEvidenceFunction_RecordsResultDrivenOutcome_ToRuntimeEventLog()
     {
         // em_record_send_evidence maps the captured HTTP result to send_success/send_failure

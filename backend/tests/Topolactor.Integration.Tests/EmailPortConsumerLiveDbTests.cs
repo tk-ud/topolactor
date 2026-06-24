@@ -243,6 +243,39 @@ public class EmailPortConsumerLiveDbTests
         }
     }
 
+    [Fact]
+    public async Task EmailRedispatch_AfterSendFailure_FailsClosed_RequiringNewApprovalFlow()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatchKey = "test-email-redispatch-" + Guid.NewGuid().ToString("N");
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        try
+        {
+            var draftId = await ScalarGuidAsync(conn,
+                "SELECT topology.em_record_draft(@k, @r, @s, NULL)",
+                ("k", dispatchKey), ("r", "rcpt-ref"), ("s", "subj-ref"));
+
+            // approval → dispatch → send_failure
+            await ExecAsync(conn, "SELECT topology.em_record_approval(@id::uuid, 'approved', 'tester')", ("id", draftId.ToString()));
+            await ExecAsync(conn, "SELECT topology.em_record_dispatch_initiated(@id::uuid)", ("id", draftId.ToString()));
+            await ExecAsync(conn, "SELECT topology.em_record_send_evidence(@id::uuid, 'failed')", ("id", draftId.ToString()));
+            Assert.Equal("failed", await DraftStatusAsync(conn, draftId));
+
+            // Re-dispatch of the same approved draft after failure must fail closed.
+            var ex = await Assert.ThrowsAsync<PostgresException>(() =>
+                ExecAsync(conn, "SELECT topology.em_record_dispatch_initiated(@id::uuid)", ("id", draftId.ToString())));
+            Assert.Contains("EMAIL_DISPATCH_ALREADY_INITIATED", ex.MessageText);
+        }
+        finally
+        {
+            await CleanupAsync(conn, dispatchKey);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------

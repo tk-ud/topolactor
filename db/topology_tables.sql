@@ -1339,8 +1339,10 @@ BEGIN
     IF NOT v_approved THEN
         RAISE EXCEPTION 'EMAIL_DISPATCH_NOT_APPROVED';
     END IF;
-    -- Idempotency: prevent double send for the same draft.
-    IF v_status IN ('dispatch_initiated', 'delivered') THEN
+    -- Idempotency: prevent any re-dispatch of the same draft once a dispatch has
+    -- been initiated — including after a send_failure. A retry must go through a
+    -- new approval / new dispatch_idempotency_key, never a silent re-send.
+    IF v_status IN ('dispatch_initiated', 'delivered', 'failed') THEN
         RAISE EXCEPTION 'EMAIL_DISPATCH_ALREADY_INITIATED';
     END IF;
     UPDATE topology.email_drafts
@@ -1351,7 +1353,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION topology.em_record_dispatch_initiated IS
-    'Approval gate and double-send guard executed before send_http (af42 / call_postgres_function). Fail-closes when draft is unapproved (EMAIL_DISPATCH_NOT_APPROVED) or already dispatched (EMAIL_DISPATCH_ALREADY_INITIATED). No silent fallback.';
+    'Approval gate and double-send guard executed before send_http (af42 / call_postgres_function). Fail-closes when draft is unapproved (EMAIL_DISPATCH_NOT_APPROVED) or already dispatched in any terminal/in-flight state — dispatch_initiated, delivered, or failed (EMAIL_DISPATCH_ALREADY_INITIATED). Re-send after failure requires a new approval / new dispatch_idempotency_key; no silent retry or silent fallback.';
 
 -- em_record_send_evidence: records explicit send_success / send_failure delivery evidence.
 -- p_send_result is the runtime-derived call status ('sent' for 2xx, otherwise failed).
