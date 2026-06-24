@@ -671,9 +671,23 @@ system_roadmap_ssot:
     product.email_port_consumer:
       bundle_id: email-port-consumer
       title: Email bundle port consumer implementation
-      status: partial
+      status: implemented
       production_ready: false
-      public_summary: Email Bundle as port consumer of external_port_substrate. Seed binding (response_port / smtp credential_requirement / policy_steps / portTargetRef wiring) implemented per PR#460. Remaining work is physical table (email_draft / approval_record / delivery_evidence), manifest binding, UI Builder preset, portTargetRef action wiring, evidence/runtime_event_log, and projection response. SMTP provider-specific client not added.
+      public_summary: >-
+        Email Bundle as port consumer of external_port_substrate. Implemented on the
+        generic response_port lane: topology.email_drafts / topology.email_approval_records /
+        topology.email_delivery_evidence physical tables are seeded and bound to manifest a3 via
+        topology.physical_table_manifest_bindings. Abstract function manifests af40–af43 cover
+        draft recording, explicit human approval, an approval-gate + double-send guard
+        (em_record_dispatch_initiated fail-closes when the draft is unapproved or already
+        dispatched), and explicit send_success/send_failure delivery evidence derived from the
+        captured HTTP response (binding_source=external_context notification_status). Policy e6
+        runs the guard before send_http and records evidence after capture_response; policies
+        f2/f3 record draft and approval domain actions. UI Builder preset wires portTargetRef to
+        response ports f11/f12/f03 for create-draft/approve/send actions. screen_data_shape on
+        manifest a3 defines projected tables and forbiddenProjectionFields / projection_deny_keys
+        block credential / smtp_host / smtp_port / smtp_api_key / raw_provider_response. SMTP
+        provider-specific client and autonomous/AI/CLI/MCP send are not added.
       scope:
         - email_response_port_consumer_definition
         - smtp_credential_requirement_as_port_attachment
@@ -682,14 +696,28 @@ system_roadmap_ssot:
       detail_ref:
         - docs/design/runtime-bundle-email-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
-        - .agent/tasks/todo.md#email-port-consumer
+      evidence_ref:
+        - db/email_approval_form_preset_seed.sql
+        - db/topology_tables.sql#email_bundle_functions
+        - db/seed_empty.sql#email_bundle
+        - backend/tests/Topolactor.Runtime.Tests/EmailPortConsumerContractTests.cs
+        - backend/tests/Topolactor.Integration.Tests/EmailPortConsumerLiveDbTests.cs
+        - frontend/tests/emailPortConsumer.test.ts
       closed_gap_ref:
         - email_seed_binding_and_credential_requirement_implemented_per_pr460
-      known_gap_ref:
-        - email_physical_table_and_manifest_binding_not_connected
-        - email_portTargetRef_action_wiring_and_preset_not_connected
-        - email_evidence_and_runtime_event_log_not_connected
-        - email_projection_response_not_connected
+        - email_physical_table_and_manifest_binding_connected
+        - email_portTargetRef_action_wiring_and_preset_connected
+        - email_evidence_and_runtime_event_log_connected
+        - email_projection_response_connected
+      known_gap_ref: []
+      completion_condition:
+        - email_drafts_approval_records_delivery_evidence_tables_seeded_and_bound_to_manifest_a3
+        - abstract_function_manifests_af40_af43_cover_draft_approval_dispatch_guard_and_send_evidence
+        - policy_e6_runs_approval_gate_guard_before_send_http_and_records_evidence_after_capture_response
+        - ui_builder_preset_wires_portTargetRef_to_response_ports_f11_f12_f03
+        - forbidden_projection_fields_block_credential_smtp_endpoint_and_raw_provider_response
+        - email_send_only_after_explicit_human_approval_with_double_send_idempotency_guard
+        - smtp_provider_specific_client_and_autonomous_ai_cli_mcp_send_not_added
 
     product.stripe_port_consumer:
       bundle_id: stripe-port-consumer

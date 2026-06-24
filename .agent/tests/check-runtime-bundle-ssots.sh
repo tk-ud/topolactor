@@ -298,7 +298,9 @@ check_content "$ROADMAP" "external_port_policy_read_repository_and_consumer_runt
 check_content "$ROADMAP" "consumer_bundle_physical_table_manifest_evidence_projection_runtime_connected"
 check_content "$ROADMAP" "hook_port_receive_scheduler_enqueue_runtime_event_and_projection_guarded"
 check_content "$ROADMAP" "consumer bundle physical table / manifest binding / evidence projection surfaces"
-check_content "$ROADMAP" "email_physical_table_and_manifest_binding_not_connected"
+# email_port_consumer is implemented: its physical table / manifest binding gap is closed
+# (see product.email_port_consumer closed_gap_ref / completion_condition).
+check_content "$ROADMAP" "email_physical_table_and_manifest_binding_connected"
 check_content "$ROADMAP" "file_storage_physical_table_and_manifest_binding_not_connected"
 check_content "$ROADMAP" "file_storage_checksum_and_manifest_runtime_not_connected"
 check_content "$ROADMAP" "export_sftp_physical_table_and_manifest_binding_not_connected"
