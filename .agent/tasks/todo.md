@@ -12,15 +12,13 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-read-export-port` | CLI/MCP dispatch-secured read/export/import-candidate port 実装 | not_started | 1 | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
-| `file-storage-port-consumer` | file_storage_bundle port substrate 接続実装 | implemented | 1 | - | `docs/design/runtime-bundle-file-storage-ssot.yaml` |
 | `email-port-consumer` | email_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-email-ssot.yaml` |
 | `stripe-port-consumer` | stripe_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-stripe-ssot.yaml` |
 | `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
 | `sql-attention-key-expansion-draft-lane-implementation` | SQL Attention key expansion draft lane 実装 | not_started | 1 | - | `docs/design/sql-attention-logs-ssot.yaml` |
 | `audit-approval-port-consumer` | audit_approval_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-audit-approval-ssot.yaml` |
-| `export-sftp-port-consumer` | export_sftp_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-export-sftp-ssot.yaml` |
 
-注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (file_storage / email / audit_approval / export_sftp) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
+注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
 ---
 
@@ -134,60 +132,6 @@ NG軸:
 - [ ] create_export_job / draft_operation / commit_candidate / audit_log / runtime_event_log 以外の system-controlled write を追加していない。
 - [ ] external_port_substrate の secure consumer dispatch lane とは関連するが同一 Bundle として混同していない。
 - [ ] 関連 backend/frontend tests または `.agent/tests/*` が追加/更新されている。
-
----
-
-
-
-## Bundle `file-storage-port-consumer`
-
-**Status:** implemented
-**SSOT:** `docs/design/runtime-bundle-file-storage-ssot.yaml`
-
-PR#460 完了済み: access_port / response_port seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提。
-PR#463 で実装済み: physical table / manifest binding / checksum coupling / operation_key executor handlers / backend+frontend tests。
-provider-specific client / runtime は追加しない。
-既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
-
-実装済み:
-- [x] export_job / file_artifact / checksum_record / manifest / signed_download_authorizations physical table 接続実装 (`db/topology_tables.sql`)
-- [x] physical table manifest binding (file_storage manifest / physical_table_manifest_bindings) (`db/seed_empty.sql`)
-- [x] IFileStorageRepository + NpgsqlFileStorageRepository (後方互換のため保持)
-- [x] operation_key_allowed_values を external-port-substrate-ssot.yaml に追加
-- [x] backend tests: FileStorageBundleDispatchTests
-- [x] external_integration_completion_gate を external-port-substrate-ssot.yaml / runtime-bundle-file-storage-ssot.yaml に明記
-
-completion gate 対応 (PR#463):
-- [x] Issue 0: SSOT/todo に external_integration_completion_gate を追記 (4軸 + credential resolution)
-- [x] Issue 2b: external_credential_vault に reference_key 列追加; LoadByReferenceKeyAsync 実装; ExternalPortCredentialReferenceResolver を reference_key 経由に修正
-- [x] Issue 2a: file_storage access_port / response_port policy_steps に load_encrypted_credential_payload (3) / decrypt_for_runtime_use (4) / inject_authorization_header (6) を追加; domain steps を 9-13 に再番号付け
-- [x] Issue 4: execute_db_function operation_key + IExternalPortDbFunctionRepository + topology.fs_* PostgreSQL functions 追加; FileStorageBundleStepHandler は compute_checksum のみ保持
-- [x] Issue 3: capture_response を MarkOnly から HttpResponse.Body → context.OutputProp に変更; ExternalPortDispatchRuntime が SseEventBroadcaster 経由で SSE に broadcast
-- [x] Issue 1: fileStoragePortConsumer.test.ts に draftPreviewResultToEmission 経由の DB projection test を追加
-
-evidence / runtime_event_log 実装済み:
-- [x] topology.runtime_event_log テーブル追加 (db/topology_tables.sql)
-- [x] IExternalPortRuntimeEventLogRepository インターフェース追加 (backend/runtime/ExternalPortCredentialRefresher.cs)
-- [x] NpgsqlExternalPortRuntimeEventLogRepository 実装追加 (backend/repository/)
-- [x] append_runtime_event_log ハンドラを MarkOnly スタブから step_config 駆動の実装に変更 (event_type / entity_ref_key 解決)
-- [x] ResolveEntityId ヘルパー追加 (ExportJobId / FileArtifactId / ChecksumValue / AuthorizationKey コンテキスト解決)
-- [x] Program.cs に IExternalPortRuntimeEventLogRepository 登録 + ExternalPortPolicyStepExecutor へ注入
-- [x] e4/e5 seed pipeline を 13 ステップから 17 ステップへ更新 (4x append_runtime_event_log インターリーブ)
-- [x] FileStorageBundleDispatchTests に append_runtime_event_log テスト 5 件追加
-- [x] FileStoragePortConsumerLiveDbTests (DB projection 証明) 追加
-- [x] frontend Test 4 を unit test scope に明確化 (DB 証明は backend integration test)
-
-残 todo:
-- [x] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring (export_job → access/response port connect)
-      (db/file_storage_export_job_preset_seed.sql 追加; SEED_FILES に登録; 全 6 contract pass)
-- [x] projection response: signed download authorization / file artifact projection
-      (af02/af04 に projection step 2 追加: bf0a/bf0b, c022-c026; output_shape 更新; backend+frontend tests pass)
-- [x] record ↔ file_artifact attachment binding surface: bind / list / unbind は execute_abstract_function 経由 topology.fs_* DB function 実装（manifests af05-af07 / steps bf05-bf09 / input bindings c015-c021 / authority bindings for topology.record_file_attachments; record_table_ref は step_config binding source 経由の manifest authority であり payload 由来ではない; standalone attachments table 新設なし・既存 file_artifacts を artifact 正本として維持; signed URL / storage path / credential は projection_deny_keys により拒否; NpgsqlExternalPortDbFunctionRepository は stub に縮退済み）
-
-対応資料:
-- `docs/design/runtime-bundle-file-storage-ssot.yaml`
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/cli-model-context-protocols-port-ssot.yaml`
 
 ---
 
@@ -377,28 +321,3 @@ PR#460 完了済み: response_port (notification) seed binding / credential_requ
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
 
 ---
-
-## Bundle `export-sftp-port-consumer`
-
-**Status:** implemented
-**SSOT:** `docs/design/runtime-bundle-export-sftp-ssot.yaml`
-**Implementation SSOT:** `docs/design/runtime-bundle-export-sftp-implementation-ssot.yaml`
-
-Implemented: response_port (sftp) seed binding / credential_requirement / policy_steps / UI Builder portTargetRef 配線前提を維持し、file-storage の export_job / file_artifact / export_manifest / checksum_record 正本に依存する `topology.sftp_transfer_log`、manifest binding、checksum/manifest evidence boundary、CRUD preset 派生 `export_sftp_transfer.v1`、conditional runtime_event_log lifecycle (success/failure/mismatch/retry are mutually exclusive branches)、safe transfer status projection を接続済み。SFTP provider-specific client / runtime は追加しない。
-既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
-
-完了:
-- [x] sftp_transfer_log physical table 接続実装 (file_storage_bundle 依存)
-- [x] physical table manifest binding (export_sftp manifest / screen_data_shape)
-- [x] checksum 転送前後の検証境界実装 (port substrate と独立)
-- [x] manifest 確認境界実装
-- [x] UI Builder form preset seed（CRUD preset 派生）/ portTargetRef action wiring: export_job → response_port 解決 → generic response_port connect（SFTP provider-specific client 新設なし）/ evidence projection
-- [x] evidence / runtime_event_log: conditional transfer_completed / transfer_failed / checksum_mismatch / retry_attempted branches (同一dispatchで直列全appendしない)
-- [x] projection response: transfer status projection (credential / endpoint / remote_path / raw provider response は projection deny)
-
-対応資料:
-- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
-- `docs/design/runtime-bundle-export-sftp-implementation-ssot.yaml`
-- `docs/design/runtime-bundle-file-storage-ssot.yaml`
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/cli-model-context-protocols-port-ssot.yaml`
