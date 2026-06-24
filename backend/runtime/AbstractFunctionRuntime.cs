@@ -148,6 +148,13 @@ public sealed class AbstractFunctionExecutionContext
         "checksum_value" => ExternalPortContext?.ChecksumValue,
         "credential_vault_id" => ExternalPortContext?.CredentialVaultRecord?.CredentialVaultId,
         "decrypted_credential_payload" => ExternalPortContext?.DecryptedCredentialPayload,
+        // Opaque UUID ref of the response port record — stored as text in audit evidence tables.
+        "response_port_ref" => ExternalPortContext?.PortRecord?.PortId?.ToString(),
+        // Derived from the HTTP response captured after send_http/capture_response steps.
+        // "sent" for 2xx, "failed" for non-2xx, null when no response is available yet.
+        "notification_status" => ExternalPortContext?.HttpResponse is ExternalPortHttpResponse r
+            ? (r.StatusCode >= 200 && r.StatusCode < 300 ? "sent" : "failed")
+            : null,
         _ => throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidInputBinding, $"ABSTRACT_FUNCTION_EXTERNAL_CONTEXT_BINDING_UNSUPPORTED: {key}")
     };
 

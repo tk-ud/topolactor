@@ -159,6 +159,77 @@ VALUES
 ON CONFLICT (policy_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
+-- Update topology_manifest a7 (audit_approval.response_port.evidence.projection)
+-- to include screen_data_shape binding for approval_request / approval_evidence /
+-- notification_evidence tables. This satisfies the SSOT requirement for
+-- physical_table_manifest_binding / audit_approval manifest / screen_data_shape
+-- projection connection beyond the UI preset seed alone.
+-- forbiddenProjectionFields blocks credential / approval_secret_token /
+-- raw_provider_response from any SSE/projection output.
+-- ---------------------------------------------------------------------------
+UPDATE hubs.topology_manifests
+SET topology_jsonb = topology_jsonb || jsonb_build_object(
+    'screen_data_shape', '{
+        "type": "screen_data_shape",
+        "topologySystemName": "audit-approval-form-seed",
+        "userFacingTopologyLabel": "Audit Approval",
+        "tableRef": "topology.audit_approval_requests",
+        "dbTableName": "topology.audit_approval_requests",
+        "displayColumnMode": "selected",
+        "forbiddenProjectionFields": ["credential", "approval_secret_token", "raw_provider_response"],
+        "displayColumns": [
+            "audit_approval_requests.idempotency_key",
+            "audit_approval_requests.request_status",
+            "audit_approval_requests.created_at",
+            "audit_approval_requests.updated_at",
+            "audit_approval_evidence.event_type",
+            "audit_approval_evidence.approval_status",
+            "audit_notification_evidence.notification_status"
+        ],
+        "logicalTables": [
+            {"tableName": "audit_approval_requests", "columns": [
+                {"name": "approval_request_id", "dataType": "uuid", "nullable": false},
+                {"name": "idempotency_key", "dataType": "text", "nullable": true},
+                {"name": "request_status", "dataType": "text", "nullable": false},
+                {"name": "response_port_ref", "dataType": "text", "nullable": true},
+                {"name": "evidence_json", "dataType": "jsonb", "nullable": true},
+                {"name": "created_at", "dataType": "timestamptz", "nullable": false},
+                {"name": "updated_at", "dataType": "timestamptz", "nullable": false}
+            ]},
+            {"tableName": "audit_approval_evidence", "columns": [
+                {"name": "approval_evidence_id", "dataType": "uuid", "nullable": false},
+                {"name": "approval_request_id", "dataType": "uuid", "nullable": false},
+                {"name": "event_type", "dataType": "text", "nullable": false},
+                {"name": "approval_status", "dataType": "text", "nullable": false},
+                {"name": "evidence_json", "dataType": "jsonb", "nullable": true},
+                {"name": "created_at", "dataType": "timestamptz", "nullable": false}
+            ]},
+            {"tableName": "audit_notification_evidence", "columns": [
+                {"name": "notification_evidence_id", "dataType": "uuid", "nullable": false},
+                {"name": "approval_request_id", "dataType": "uuid", "nullable": false},
+                {"name": "notification_status", "dataType": "text", "nullable": false},
+                {"name": "response_port_ref", "dataType": "text", "nullable": true},
+                {"name": "created_at", "dataType": "timestamptz", "nullable": false}
+            ]}
+        ],
+        "relationIntents": [
+            {"localTableRef": "audit_approval_requests", "joinTableRef": "audit_approval_evidence",
+             "localKey": "approval_request_id", "remoteKey": "approval_request_id"},
+            {"localTableRef": "audit_approval_requests", "joinTableRef": "audit_notification_evidence",
+             "localKey": "approval_request_id", "remoteKey": "approval_request_id"}
+        ],
+        "operationEntityBindings": [
+            {"operationKind": "approval_requested",  "function": "topology.aa_record_approval_request",      "entityTargetColumns": ["idempotency_key", "approval_subject", "requester", "response_port_ref"]},
+            {"operationKind": "approval_granted",    "function": "topology.aa_record_approval_evidence",     "entityTargetColumns": ["approval_request_id", "event_type", "approval_status"]},
+            {"operationKind": "approval_rejected",   "function": "topology.aa_record_approval_evidence",     "entityTargetColumns": ["approval_request_id", "event_type", "approval_status"]},
+            {"operationKind": "notification_sent",   "function": "topology.aa_record_notification_evidence", "entityTargetColumns": ["approval_request_id", "notification_status", "response_port_ref"]}
+        ]
+    }'::jsonb
+),
+    updated_at = now()
+WHERE topology_manifest_id = '00000000-0000-0000-0000-0000000000a7';
+
+-- ---------------------------------------------------------------------------
 -- Re-seed policy ea (audit_approval_response_port_generic): expand 9 → 12 steps.
 -- Inserts before notification send:
 --   step 3: execute_abstract_function → af13 (record_request)
