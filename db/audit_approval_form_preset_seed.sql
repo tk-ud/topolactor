@@ -152,7 +152,7 @@ ON CONFLICT (response_port_id) DO NOTHING;
 -- required_by_bundle matches f0d/f0e response ports for canonical resolution.
 -- ---------------------------------------------------------------------------
 INSERT INTO topology.external_port_policies
-    (policy_id, policy_name, port_kind, required_by_bundle, active)
+    (policy_id, policy_key, port_kind, required_by_bundle, active)
 VALUES
     ('00000000-0000-0000-0000-0000000000f0', 'audit_approval_grant_action_generic',  'response_port', 'audit_approval_grant_action',  true),
     ('00000000-0000-0000-0000-0000000000f1', 'audit_approval_reject_action_generic', 'response_port', 'audit_approval_reject_action', true)
