@@ -13,6 +13,9 @@ on:
       - 'db/manifest_tables.sql'
       - 'db/mock_preset_tables.sql'
       - 'db/team_markdown_tables.sql'
+      - 'db/seed_empty.sql'
+      - 'db/external_port_compat_absorption_seed.sql'
+      - 'db/audit_approval_form_preset_seed.sql'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
   push:
@@ -29,6 +32,9 @@ on:
       - 'db/manifest_tables.sql'
       - 'db/mock_preset_tables.sql'
       - 'db/team_markdown_tables.sql'
+      - 'db/seed_empty.sql'
+      - 'db/external_port_compat_absorption_seed.sql'
+      - 'db/audit_approval_form_preset_seed.sql'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
 
@@ -76,6 +82,10 @@ jobs:
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/topology_cross_table_wiring.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/mock_preset_tables.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/team_markdown_tables.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/promotion_tables.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/seed_empty.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/external_port_compat_absorption_seed.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/audit_approval_form_preset_seed.sql
 
       - name: Run backend tests
         run: bash .agent/tests/check-backend-tests.sh
