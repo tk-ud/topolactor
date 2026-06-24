@@ -1384,6 +1384,11 @@ BEGIN
     )
     RETURNING delivery_evidence_id INTO v_id;
 
+    -- Record the result-driven outcome to the runtime_event_log (not a static
+    -- send_dispatched substitute): send_success on 2xx, send_failure otherwise.
+    INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle)
+    VALUES (v_event_type, p_email_draft_id::text, 'email_bundle');
+
     UPDATE topology.email_drafts
        SET delivery_status = v_delivery_status, updated_at = now()
      WHERE email_draft_id = p_email_draft_id;
@@ -1392,7 +1397,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION topology.em_record_send_evidence IS
-    'Records explicit send_success/send_failure delivery evidence after capture_response (af43 / call_postgres_function). send_failure is an explicit failure record; no silent fallback or silent retry. Prohibited: raw provider response in evidence_json.';
+    'Records explicit send_success/send_failure delivery evidence and the matching runtime_event_log entry after capture_response (af43 / call_postgres_function). The event_type is derived from the captured HTTP result (send_success for 2xx, send_failure otherwise) — send_dispatched is never used as a substitute. send_failure is an explicit failure record; no silent fallback or silent retry. Prohibited: raw provider response in evidence_json.';
 
 
 -- =============================================================================

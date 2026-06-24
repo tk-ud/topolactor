@@ -202,10 +202,12 @@ public class EmailPortConsumerLiveDbTests
                 ExecAsync(conn, "SELECT topology.em_record_dispatch_initiated(@id::uuid)", ("id", draftId.ToString())));
             Assert.Contains("EMAIL_DISPATCH_ALREADY_INITIATED", ex2.MessageText);
 
-            // 5. Explicit send_success evidence recorded; draft delivered.
+            // 5. Explicit send_success evidence recorded; draft delivered; the
+            //    result-driven outcome lands in runtime_event_log (not send_dispatched).
             await ExecAsync(conn, "SELECT topology.em_record_send_evidence(@id::uuid, 'sent')", ("id", draftId.ToString()));
             Assert.Equal("delivered", await DraftStatusAsync(conn, draftId));
             Assert.True(await EvidenceExistsAsync(conn, draftId, "send_success", "delivered"));
+            Assert.True(await RuntimeEventLogExistsAsync(conn, draftId, "send_success"));
         }
         finally
         {
@@ -232,6 +234,8 @@ public class EmailPortConsumerLiveDbTests
             await ExecAsync(conn, "SELECT topology.em_record_send_evidence(@id::uuid, 'failed')", ("id", draftId.ToString()));
             Assert.Equal("failed", await DraftStatusAsync(conn, draftId));
             Assert.True(await EvidenceExistsAsync(conn, draftId, "send_failure", "failed"));
+            // Explicit failure is recorded to runtime_event_log — no silent fallback.
+            Assert.True(await RuntimeEventLogExistsAsync(conn, draftId, "send_failure"));
         }
         finally
         {
@@ -280,10 +284,25 @@ public class EmailPortConsumerLiveDbTests
         return await cmd.ExecuteScalarAsync() is not null;
     }
 
+    private static async Task<bool> RuntimeEventLogExistsAsync(NpgsqlConnection conn, Guid draftId, string eventType)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT 1 FROM topology.runtime_event_log
+            WHERE entity_id = @id AND event_type = @e AND required_by_bundle = 'email_bundle' LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("id", draftId.ToString());
+        cmd.Parameters.AddWithValue("e", eventType);
+        return await cmd.ExecuteScalarAsync() is not null;
+    }
+
     private static async Task CleanupAsync(NpgsqlConnection conn, string dispatchKey)
     {
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
+            DELETE FROM topology.runtime_event_log
+             WHERE required_by_bundle = 'email_bundle'
+               AND entity_id IN (SELECT email_draft_id::text FROM topology.email_drafts WHERE dispatch_idempotency_key = @k);
             DELETE FROM topology.email_delivery_evidence
              WHERE email_draft_id IN (SELECT email_draft_id FROM topology.email_drafts WHERE dispatch_idempotency_key = @k);
             DELETE FROM topology.email_approval_records

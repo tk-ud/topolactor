@@ -322,6 +322,28 @@ public class EmailPortConsumerContractTests
     }
 
     [Fact]
+    public void SendEvidenceFunction_RecordsResultDrivenOutcome_ToRuntimeEventLog()
+    {
+        // em_record_send_evidence maps the captured HTTP result to send_success/send_failure
+        // and writes the outcome to BOTH email_delivery_evidence and runtime_event_log,
+        // never a static send_dispatched substitute.
+        var ddl = File.ReadAllText(Path.Combine(RepoRoot(), "db", "topology_tables.sql"));
+        var fnStart = ddl.IndexOf("FUNCTION topology.em_record_send_evidence", StringComparison.Ordinal);
+        Assert.True(fnStart > 0, "em_record_send_evidence must exist");
+        var fnBody = ddl.Substring(fnStart, Math.Min(2000, ddl.Length - fnStart));
+        Assert.Contains("INSERT INTO topology.runtime_event_log", fnBody);
+        Assert.Contains("'send_success'", fnBody);
+        Assert.Contains("'send_failure'", fnBody);
+        Assert.Contains("v_event_type", fnBody);
+
+        // af43 is authorized for runtime_event_log; the send lane emits no static
+        // send_dispatched runtime_event_log event (explanatory comments may name it).
+        var seed = File.ReadAllText(Path.Combine(RepoRoot(), "db", "email_approval_form_preset_seed.sql"));
+        Assert.Contains("'table',  'topology.runtime_event_log'", seed);
+        Assert.DoesNotContain("\"event_type\":\"send_dispatched\"", seed);
+    }
+
+    [Fact]
     public void SeedLane_AbstractFunctionAuthority_IsManifestDefined_NotPayloadDerived()
     {
         var seed = File.ReadAllText(Path.Combine(RepoRoot(), "db", "email_approval_form_preset_seed.sql"));

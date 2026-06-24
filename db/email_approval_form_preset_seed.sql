@@ -128,7 +128,8 @@ VALUES
     -- af43: called from email_response_port_generic send lane (e6)
     ('00000000-0000-0000-0000-00000000af43', 'policy', 'email_response_port_generic',   true),
     ('00000000-0000-0000-0000-00000000af43', 'table',  'topology.email_delivery_evidence', true),
-    ('00000000-0000-0000-0000-00000000af43', 'table',  'topology.email_drafts',         true)
+    ('00000000-0000-0000-0000-00000000af43', 'table',  'topology.email_drafts',         true),
+    ('00000000-0000-0000-0000-00000000af43', 'table',  'topology.runtime_event_log',    true)
 ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
@@ -237,8 +238,11 @@ WHERE topology_manifest_id = '00000000-0000-0000-0000-0000000000a3';
 --            — fail-closes when the draft is unapproved or already dispatched.
 --   step  4: append_runtime_event_log  → dispatch_initiated (+ delivery evidence)
 --   step 11: execute_abstract_function → af43 (record_send_evidence)
---            — records send_success/send_failure derived from the HTTP response.
---   step 12: append_runtime_event_log  → send_dispatched (+ delivery projection)
+--            — records the result-driven send_success/send_failure into BOTH
+--              topology.email_delivery_evidence and topology.runtime_event_log,
+--              derived from the captured HTTP response. There is intentionally no
+--              static send_dispatched step: send_dispatched must never substitute
+--              for the actual send_success/send_failure outcome.
 -- Preserves the compat abstract_function_key values for steps 423/424/425 set by
 -- external_port_compat_absorption_seed.sql (which ran before this file).
 -- Send only ever occurs AFTER explicit human approval (af42 gate before send_http).
@@ -259,8 +263,7 @@ VALUES
     ('00000000-0000-0000-0000-000000000426', '00000000-0000-0000-0000-0000000000e6',  8, 'inject_authorization_header',       '{}',                NULL,                                          true),
     ('00000000-0000-0000-0000-000000000427', '00000000-0000-0000-0000-0000000000e6',  9, 'send_http',                         '{}',                NULL,                                          true),
     ('00000000-0000-0000-0000-000000000428', '00000000-0000-0000-0000-0000000000e6', 10, 'capture_response',                  '{}',                NULL,                                          true),
-    ('00000000-0000-0000-0000-00000000042c', '00000000-0000-0000-0000-0000000000e6', 11, 'execute_abstract_function',         '{}',                'email.record_send_evidence',                  true),
-    ('00000000-0000-0000-0000-000000000429', '00000000-0000-0000-0000-0000000000e6', 12, 'append_runtime_event_log',          '{"event_type":"send_dispatched","projection_table_ref":"topology.email_delivery_evidence","status_value":"send_dispatched"}', NULL, true)
+    ('00000000-0000-0000-0000-00000000042c', '00000000-0000-0000-0000-0000000000e6', 11, 'execute_abstract_function',         '{}',                'email.record_send_evidence',                  true)
 ON CONFLICT (policy_id, step_order) DO UPDATE
     SET operation_key         = EXCLUDED.operation_key,
         step_config           = EXCLUDED.step_config,
