@@ -207,10 +207,10 @@ instance_port_substrate_ssot:
   generic_consumer_example:
     status: example_only_not_provider_specific_design
     example_manifest:
-      abstract_function_key: external_instance.reply_step
+      abstract_function_key: external_instance.allowed_operation
       runtime_lane: instance_port_runtime
       primitive: call_instance_postgres_function
-      function: response_engine.reply_step
+      function: integration_schema.allowed_operation
       instance_authority_key: primary_external_db
       credential_requirement:
         reference_key: primary_external_db_secret
