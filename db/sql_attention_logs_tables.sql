@@ -986,6 +986,45 @@ COMMENT ON FUNCTION logs.extract_sql_attention_high_pressure_keys(TEXT, TEXT, TE
   'Depends on logs.attention SQLAT evidence; no SQLAT evidence yields no Keys (no full-space schema mining without evidence).';
 
 -- ---------------------------------------------------------------------------
+-- logs.sql_attention_enum_group_matches
+-- Resilient enum group / discrete-value metadata lookup for the draft lane.
+-- The enum dictionary (enum.groups / enum.group_items / enum.items) is an optional
+-- search surface ("enum group or discrete value metadata when available"). When the
+-- enum schema is absent, this returns zero rows via a to_regclass guard instead of
+-- raising relation-does-not-exist. Dynamic SQL keeps the enum references unresolved
+-- at function-creation time (load-order / optional-schema safe).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.sql_attention_enum_group_matches(
+    p_key_name TEXT,
+    p_key_value TEXT
+)
+RETURNS TABLE (group_id UUID, group_name TEXT)
+LANGUAGE plpgsql
+STABLE
+AS $$
+BEGIN
+    IF to_regclass('enum.groups') IS NULL THEN
+        RETURN;  -- enum dictionary not present in this database; no matches available
+    END IF;
+
+    RETURN QUERY EXECUTE
+        'SELECT g.group_id, g.group_name
+           FROM enum.groups g
+          WHERE g.group_name ILIKE ''%'' || $1 || ''%''
+             OR EXISTS (
+                  SELECT 1
+                    FROM enum.group_items gi
+                    JOIN enum.items it ON it.index_num = gi.enum_index_num
+                   WHERE gi.group_id = g.group_id
+                     AND it.name = $2)'
+        USING p_key_name, p_key_value;
+END;
+$$;
+
+COMMENT ON FUNCTION logs.sql_attention_enum_group_matches(TEXT, TEXT) IS
+  'Optional enum group / discrete-value metadata match for the draft lane. Returns zero rows when the enum dictionary schema is absent (to_regclass guard) rather than raising.';
+
+-- ---------------------------------------------------------------------------
 -- logs.compile_sql_attention_manifest_topology_draft_candidates
 -- Full-space expansion + hit-set re-aggregation + scoring.
 -- Reads extracted high-pressure Keys and expands them across the FULL registered
@@ -1107,18 +1146,17 @@ BEGIN
          GROUP BY k.key_name
     ),
     enum_agg AS (
+        -- enum group / discrete-value metadata is searched "when available": the match is
+        -- resolved through logs.sql_attention_enum_group_matches, which returns no rows when the
+        -- enum dictionary schema is absent (to_regclass guard) instead of hard-failing.
         SELECT k.key_name, k.key_value,
-               COUNT(DISTINCT g.group_id) AS enum_group_match,
-               jsonb_agg(DISTINCT jsonb_build_object('group_id', g.group_id, 'group_name', g.group_name)) AS enum_groups
+               COUNT(DISTINCT m.group_id) AS enum_group_match,
+               COALESCE(
+                 jsonb_agg(DISTINCT jsonb_build_object('group_id', m.group_id, 'group_name', m.group_name))
+                   FILTER (WHERE m.group_id IS NOT NULL),
+                 '[]'::jsonb) AS enum_groups
           FROM keys k
-          JOIN enum.groups g
-            ON g.group_name ILIKE '%' || k.key_name || '%'
-            OR EXISTS (
-                 SELECT 1
-                   FROM enum.group_items gi
-                   JOIN enum.items it ON it.index_num = gi.enum_index_num
-                  WHERE gi.group_id = g.group_id
-                    AND it.name = k.key_value)
+          LEFT JOIN LATERAL logs.sql_attention_enum_group_matches(k.key_name, k.key_value) m ON true
          GROUP BY k.key_name, k.key_value
     ),
     table_agg AS (

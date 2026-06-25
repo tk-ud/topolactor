@@ -223,6 +223,11 @@ public class SqlAttentionLogsFunctionContractTests
         // logical tables/columns + enum metadata + physical bindings searched
         Assert.Contains("topology.schema_registry", sql);
         Assert.Contains("topology.physical_table_manifest_bindings", sql);
+        // enum metadata is searched "when available" via a to_regclass-guarded helper, so a
+        // database without the optional enum dictionary does not hard-fail the lane.
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.sql_attention_enum_group_matches", sql);
+        Assert.Contains("to_regclass('enum.groups') IS NULL", sql);
+        Assert.Contains("logs.sql_attention_enum_group_matches(k.key_name, k.key_value)", sql);
         Assert.Contains("enum.groups", sql);
         // re-aggregation axes
         foreach (var axis in new[]
