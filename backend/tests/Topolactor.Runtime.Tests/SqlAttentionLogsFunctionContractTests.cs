@@ -143,4 +143,143 @@ public class SqlAttentionLogsFunctionContractTests
         Assert.DoesNotContain("UPDATE hubs.hub_relations", sql);
     }
 
+    // =========================================================================
+    // manifest_topology_key_expansion_draft_lane contract
+    // =========================================================================
+
+    [Fact]
+    public void DraftLane_DefinesInsertOnlyAuthorityAndMarkdownProjectionTables()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE TABLE IF NOT EXISTS logs.sql_attention_draft_candidate", sql);
+        Assert.Contains("CREATE TABLE IF NOT EXISTS logs.sql_attention_draft_markdown_projection", sql);
+        // authority constants enforced by CHECK constraints
+        Assert.Contains("CHECK (source = 'sql_attention')", sql);
+        Assert.Contains("CHECK (candidate_lane = 'manifest_topology_key_expansion_draft_lane')", sql);
+        Assert.Contains("CHECK (status = 'draft')", sql);
+        Assert.Contains("CHECK (candidate_type IN ('relationship_axis_candidate', 'meaning_projection_candidate', 'aggregate_projection_candidate'))", sql);
+        // required draft payload fields
+        foreach (var field in new[]
+        {
+            "source_evidence_refs", "high_pressure_key", "hit_manifest_refs", "hit_table_refs",
+            "common_axis_candidates", "candidate_columns", "score", "candidate_payload_json"
+        })
+        {
+            Assert.Contains(field, sql);
+        }
+    }
+
+    [Fact]
+    public void DraftLane_IsInsertOnly_NoUpdateOrDeleteOnDraftOrAttentionTables()
+    {
+        var sql = LoadSql();
+        Assert.DoesNotContain("UPDATE logs.sql_attention_draft_candidate", sql);
+        Assert.DoesNotContain("DELETE FROM logs.sql_attention_draft_candidate", sql);
+        Assert.DoesNotContain("UPDATE logs.sql_attention_draft_markdown_projection", sql);
+        Assert.DoesNotContain("DELETE FROM logs.sql_attention_draft_markdown_projection", sql);
+        // the draft lane never mutates the SQLAT evidence it consumes
+        Assert.DoesNotContain("UPDATE logs.attention", sql);
+        Assert.DoesNotContain("DELETE FROM logs.attention", sql);
+    }
+
+    [Fact]
+    public void DraftLane_KeyExtraction_DependsOnSqlAttentionEvidence_NotFullSpaceMining()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.extract_sql_attention_high_pressure_keys", sql);
+        // extraction reads SQLAT evidence rows (no SQLAT evidence => no keys => no candidates)
+        Assert.Contains("FROM logs.attention a", sql);
+        Assert.Contains("a.evidence_kind = 'sql_attention_hit'", sql);
+        // neighborhood (hub_relation) is the key-extraction space
+        Assert.Contains("hit_hub_relation_ids", sql);
+        Assert.Contains("JOIN hubs.hub_relations hr ON hr.hub_relation_id = rel", sql);
+        // discrete key patterns are data-defined policy, not hidden literals
+        Assert.Contains("v_policy->'discrete_key_name_patterns'", sql);
+    }
+
+    [Fact]
+    public void DraftLane_Compile_ExpandsAcrossFullManifestTopologySpace_NotNeighborhoodOnly()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.compile_sql_attention_manifest_topology_draft_candidates", sql);
+        // full registered manifest topology space (not limited to the SQLAT neighborhood)
+        Assert.Contains("FROM hubs.topology_manifests tm", sql);
+        Assert.Contains("WHERE tm.status = 'active'", sql);
+        // logical tables/columns + enum metadata + physical bindings searched
+        Assert.Contains("topology.schema_registry", sql);
+        Assert.Contains("topology.physical_table_manifest_bindings", sql);
+        Assert.Contains("enum.groups", sql);
+        // re-aggregation axes
+        foreach (var axis in new[]
+        {
+            "same_name_axis", "same_type_axis", "same_name_and_same_type_common_axis",
+            "enum_group_match", "value_overlap", "logs_diff_pressure", "logs_attention_pressure",
+            "table_ref_reuse", "manifest_reuse"
+        })
+        {
+            Assert.Contains(axis, sql);
+        }
+    }
+
+    [Fact]
+    public void DraftLane_Scoring_IsNotRawCount_HasDampeningLiftAndIdHandling()
+    {
+        var sql = LoadSql();
+        // weights, dampening, and lift are data-defined policy
+        Assert.Contains("logs.resolve_sql_attention_key_expansion_policy", sql);
+        Assert.Contains("routine_value_dampen_factor", sql);
+        Assert.Contains("generic_column_dampen_factor", sql);
+        Assert.Contains("v_lift_min", sql);
+        Assert.Contains("'raw_count_only', false", sql);
+        // ID columns are axis/dimension candidates, not primary display text
+        Assert.Contains("'relationship_axis_candidate'", sql);
+        Assert.Contains("id_axis_treated_as_dimension", sql);
+        // policy fail-close (no hidden magic numbers / silent fallback)
+        Assert.Contains("SQL Attention key expansion policy missing", sql);
+        Assert.Contains("SQL Attention key expansion policy keys missing", sql);
+    }
+
+    [Fact]
+    public void DraftLane_MarkdownRender_HasNoHtmlIslandCssScriptOrPromotionAuthority()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.render_sql_attention_draft_candidate_markdown", sql);
+        // body is plain markdown only — no markup/script/css-class/placement authority generated by SQL
+        Assert.DoesNotContain("<script", sql);
+        Assert.DoesNotContain("<div", sql);
+        Assert.DoesNotContain("<span", sql);
+        Assert.DoesNotContain("class=", sql);
+        Assert.DoesNotContain("<iframe", sql);
+        // authority disclaimer present in rendered body
+        Assert.Contains("Authority is the draft candidate JSONB record", sql);
+    }
+
+    [Fact]
+    public void DraftLane_Notify_EmitsStructuredJsonPayload_NoUiPlacement()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.notify_sql_attention_draft_candidate_created", sql);
+        Assert.Contains("AFTER INSERT ON logs.sql_attention_draft_markdown_projection", sql);
+        Assert.Contains("'event_type', 'sql_attention_draft_candidate_created'", sql);
+        Assert.Contains("'source', 'sql_attention'", sql);
+        Assert.Contains("'candidate_id', NEW.candidate_id", sql);
+        Assert.Contains("'candidate_lane', NEW.candidate_lane", sql);
+        Assert.Contains("'markdown_projection_id', NEW.markdown_projection_id", sql);
+        Assert.Contains("pg_notify('sql_attention_draft_candidate'", sql);
+    }
+
+    [Fact]
+    public void DraftLane_HasNoAutoApplyAutoPromoteOrActiveTopologyMutation()
+    {
+        var sql = LoadSql();
+        // the draft lane functions must not mutate active manifests / topology registry / hub relations / routes
+        Assert.DoesNotContain("UPDATE hubs.topology_manifests", sql);
+        Assert.DoesNotContain("UPDATE hubs.hub_relations", sql);
+        Assert.DoesNotContain("UPDATE topology.structure_maps", sql);
+        Assert.DoesNotContain("INSERT INTO topology.structure_maps", sql);
+        // run-lane orchestrator only compiles + inserts draft candidates
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.run_sql_attention_manifest_topology_key_expansion_draft_lane", sql);
+        Assert.Contains("logs.insert_sql_attention_draft_candidate", sql);
+    }
+
 }

@@ -26,20 +26,33 @@ namespace Topolactor.Scheduler;
 public class DbNotifyListener : BackgroundService
 {
     private const string NotifyChannel = "topolactor_topology_changed";
+
+    /// <summary>
+    /// Dedicated structured-signal channel for the manifest_topology_key_expansion draft lane.
+    /// Emitted by SQL trigger logs.notify_sql_attention_draft_candidate_created on insert.
+    /// </summary>
+    internal const string SqlAttentionDraftCandidateChannel = "sql_attention_draft_candidate";
+
+    /// <summary>SSE event type used when relaying the draft-candidate-created signal to clients.</summary>
+    internal const string SqlAttentionDraftCandidateSseEventType = "sql_attention_draft_candidate";
+
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
 
     private readonly ILogger<DbNotifyListener> _logger;
     private readonly string _connectionString;
     private readonly RuntimeTimelineScheduler _scheduler;
+    private readonly SseEventBroadcaster? _broadcaster;
 
     public DbNotifyListener(
         ILogger<DbNotifyListener> logger,
         string connectionString,
-        RuntimeTimelineScheduler scheduler)
+        RuntimeTimelineScheduler scheduler,
+        SseEventBroadcaster? broadcaster = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+        _broadcaster = broadcaster;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -55,11 +68,15 @@ public class DbNotifyListener : BackgroundService
 
                 conn.Notification += OnNotification;
 
-                await using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"LISTEN {NotifyChannel}";
-                await cmd.ExecuteNonQueryAsync(stoppingToken);
+                await using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = $"LISTEN {NotifyChannel}; LISTEN {SqlAttentionDraftCandidateChannel}";
+                    await cmd.ExecuteNonQueryAsync(stoppingToken);
+                }
 
-                _logger.LogDebug("DbNotifyListener: LISTEN established.");
+                _logger.LogDebug(
+                    "DbNotifyListener: LISTEN established on '{TopologyChannel}' and '{DraftChannel}'.",
+                    NotifyChannel, SqlAttentionDraftCandidateChannel);
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
@@ -89,8 +106,82 @@ public class DbNotifyListener : BackgroundService
             "DbNotifyListener: received notification channel={Channel}.",
             e.Channel);
 
+        if (string.Equals(e.Channel, SqlAttentionDraftCandidateChannel, StringComparison.Ordinal))
+        {
+            HandleSqlAttentionDraftCandidatePayload(e.Payload ?? "{}");
+            return;
+        }
+
         HandleNotificationPayload(e.Payload ?? "{}");
     }
+
+    /// <summary>
+    /// Bridges a structured sql_attention_draft_candidate DB NOTIFY payload onto the SSE projection
+    /// lane as a render-only signal. This is a notification bridge only: it carries no candidate
+    /// inference, no topology promotion, and no UI placement authority — the UI decides display surface.
+    ///
+    /// Required structured payload fields (explicit failure on any missing/invalid, no silent fallback):
+    ///   event_type = "sql_attention_draft_candidate_created"
+    ///   source     = "sql_attention"
+    ///   candidate_id (guid), candidate_lane (non-empty), markdown_projection_id (guid)
+    ///
+    /// Extracted for testability — callers can invoke this directly without a live DB connection.
+    /// </summary>
+    internal protected virtual void HandleSqlAttentionDraftCandidatePayload(string payload)
+    {
+        JsonElement parsed;
+        try
+        {
+            parsed = JsonDocument.Parse(payload).RootElement.Clone();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex,
+                "DbNotifyListener: SQL_ATTENTION_DRAFT_CANDIDATE_PAYLOAD_INVALID — failed to parse payload as JSON. payload={Payload}",
+                payload);
+            return;
+        }
+
+        if (!TryGetStringEquals(parsed, "event_type", "sql_attention_draft_candidate_created")
+            || !TryGetStringEquals(parsed, "source", "sql_attention")
+            || !TryGetGuid(parsed, "candidate_id")
+            || !TryGetNonEmptyString(parsed, "candidate_lane")
+            || !TryGetGuid(parsed, "markdown_projection_id"))
+        {
+            _logger.LogError(
+                "DbNotifyListener: SQL_ATTENTION_DRAFT_CANDIDATE_PAYLOAD_INVALID_FIELDS — payload missing/invalid required structured fields. payload={Payload}",
+                payload);
+            return;
+        }
+
+        if (_broadcaster is null)
+        {
+            _logger.LogWarning(
+                "DbNotifyListener: SQL_ATTENTION_DRAFT_CANDIDATE_NO_BROADCASTER — structured draft signal received but no SSE broadcaster is wired. payload={Payload}",
+                payload);
+            return;
+        }
+
+        _broadcaster.Broadcast(new SseEvent(SqlAttentionDraftCandidateSseEventType, payload));
+        _logger.LogDebug(
+            "DbNotifyListener: relayed sql_attention_draft_candidate signal to {Count} SSE subscriber(s).",
+            _broadcaster.SubscriberCount);
+    }
+
+    private static bool TryGetStringEquals(JsonElement obj, string key, string expected) =>
+        obj.TryGetProperty(key, out var el)
+        && el.ValueKind == JsonValueKind.String
+        && string.Equals(el.GetString(), expected, StringComparison.Ordinal);
+
+    private static bool TryGetNonEmptyString(JsonElement obj, string key) =>
+        obj.TryGetProperty(key, out var el)
+        && el.ValueKind == JsonValueKind.String
+        && !string.IsNullOrWhiteSpace(el.GetString());
+
+    private static bool TryGetGuid(JsonElement obj, string key) =>
+        obj.TryGetProperty(key, out var el)
+        && el.ValueKind == JsonValueKind.String
+        && Guid.TryParse(el.GetString(), out _);
 
     /// <summary>
     /// Handles a db_notify payload by enqueuing it into RuntimeTimelineScheduler as a hook trigger.

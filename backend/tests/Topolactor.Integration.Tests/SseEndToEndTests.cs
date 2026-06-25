@@ -195,10 +195,11 @@ public class DbNotifyListenerPayloadTests
 {
     private sealed class TestableDbNotifyListener : DbNotifyListener
     {
-        public TestableDbNotifyListener(RuntimeTimelineScheduler scheduler)
-            : base(NullLogger<DbNotifyListener>.Instance, "test-double", scheduler) { }
+        public TestableDbNotifyListener(RuntimeTimelineScheduler scheduler, SseEventBroadcaster? broadcaster = null)
+            : base(NullLogger<DbNotifyListener>.Instance, "test-double", scheduler, broadcaster) { }
 
         public void SimulateNotification(string payload) => HandleNotificationPayload(payload);
+        public void SimulateDraftCandidate(string payload) => HandleSqlAttentionDraftCandidatePayload(payload);
     }
 
     private static (TestableDbNotifyListener listener, SseEventBroadcaster broadcaster)
@@ -255,7 +256,7 @@ public class DbNotifyListenerPayloadTests
         scheduler = new RuntimeTimelineScheduler(
             NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
 
-        return (new TestableDbNotifyListener(scheduler), broadcaster);
+        return (new TestableDbNotifyListener(scheduler, broadcaster), broadcaster);
     }
 
     [Fact]
@@ -394,6 +395,38 @@ public class DbNotifyListenerPayloadTests
         {
             await scheduler.StopAsync(CancellationToken.None);
         }
+    }
+
+    [Fact]
+    public void HandleSqlAttentionDraftCandidatePayload_ValidStructuredPayload_BroadcastsRenderOnlySignal()
+    {
+        var (listener, broadcaster) = BuildListenerWithFullChain(out _);
+        var ch = broadcaster.Subscribe();
+
+        // Structured DB NOTIFY payload as emitted by logs.notify_sql_attention_draft_candidate_created.
+        listener.SimulateDraftCandidate(
+            """{"event_type":"sql_attention_draft_candidate_created","source":"sql_attention","candidate_id":"00000000-0000-0000-0000-0000000000aa","candidate_lane":"manifest_topology_key_expansion_draft_lane","markdown_projection_id":"00000000-0000-0000-0000-0000000000bb","source_set_id":"ss1"}""");
+
+        Assert.True(ch.Reader.TryRead(out var evt));
+        Assert.Equal("sql_attention_draft_candidate", evt.EventType);
+        Assert.Contains("sql_attention_draft_candidate_created", evt.Data);
+        Assert.Contains("manifest_topology_key_expansion_draft_lane", evt.Data);
+    }
+
+    [Theory]
+    [InlineData("not-json{{")]
+    [InlineData("""{"event_type":"wrong","source":"sql_attention","candidate_id":"00000000-0000-0000-0000-0000000000aa","candidate_lane":"l","markdown_projection_id":"00000000-0000-0000-0000-0000000000bb"}""")]
+    [InlineData("""{"event_type":"sql_attention_draft_candidate_created","source":"other","candidate_id":"00000000-0000-0000-0000-0000000000aa","candidate_lane":"l","markdown_projection_id":"00000000-0000-0000-0000-0000000000bb"}""")]
+    [InlineData("""{"event_type":"sql_attention_draft_candidate_created","source":"sql_attention","candidate_id":"not-a-guid","candidate_lane":"l","markdown_projection_id":"00000000-0000-0000-0000-0000000000bb"}""")]
+    [InlineData("""{"event_type":"sql_attention_draft_candidate_created","source":"sql_attention","candidate_id":"00000000-0000-0000-0000-0000000000aa","markdown_projection_id":"00000000-0000-0000-0000-0000000000bb"}""")]
+    public void HandleSqlAttentionDraftCandidatePayload_MalformedOrMissingFields_NoBroadcast(string payload)
+    {
+        var (listener, broadcaster) = BuildListenerWithFullChain(out _);
+        var ch = broadcaster.Subscribe();
+
+        listener.SimulateDraftCandidate(payload);
+
+        Assert.False(ch.Reader.TryRead(out _));
     }
 
     private static async Task WaitUntilChannelHasItem<T>(

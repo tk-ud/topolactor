@@ -213,6 +213,14 @@ public class SqlAttentionScheduler : BackgroundService
                 _logger.LogInformation(
                     "SqlAttentionScheduler: {RowsWritten} attention row(s) written for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
                     rowsWritten, sourceSetId, basisWindow);
+
+                // Post-stage: manifest_topology_key_expansion draft lane.
+                // SQL-only evidence consumer. Candidate inference (Key extraction, full-space
+                // manifest topology expansion, scoring) lives entirely in the SQL function
+                // logs.run_sql_attention_manifest_topology_key_expansion_draft_lane. This scheduler
+                // only invokes it after SQLAT evidence was appended — it performs no candidate
+                // inference and writes no draft candidate logic in C#.
+                await RunDraftLaneAsync(sourceSetId, basisWindow, ct);
                 break;
 
             case HubAttractorExplorationStatus.NoChange:
@@ -231,6 +239,47 @@ public class SqlAttentionScheduler : BackgroundService
                     result.Status, result.Detail);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Invokes the SQL-only manifest_topology_key_expansion draft lane after SQLAT evidence has
+    /// been appended for this run. Orchestration / bridge only:
+    ///   - candidate inference is owned by the SQL function (extract -> compile -> insert -> notify);
+    ///   - this method holds no scoring, Key extraction, or candidate heuristic;
+    ///   - failure is explicit (LogError), never a silent fallback;
+    ///   - the lane is insert-only and never auto-applies/auto-promotes.
+    /// </summary>
+    private async Task RunDraftLaneAsync(string sourceSetId, string basisWindow, CancellationToken ct)
+    {
+        IReadOnlyList<SqlAttentionDraftCandidateRef> drafts;
+        try
+        {
+            drafts = await _sqlAttentionLogsRepository.CompileManifestTopologyDraftCandidatesAsync(
+                sourceSetId, basisWindow, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "SqlAttentionScheduler: manifest_topology_key_expansion draft lane failed for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                sourceSetId, basisWindow);
+            return;
+        }
+
+        if (drafts.Count == 0)
+        {
+            _logger.LogDebug(
+                "SqlAttentionScheduler: draft lane produced no candidates for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                sourceSetId, basisWindow);
+            return;
+        }
+
+        _logger.LogInformation(
+            "SqlAttentionScheduler: {DraftCount} draft candidate(s) inserted by manifest_topology_key_expansion lane for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+            drafts.Count, sourceSetId, basisWindow);
     }
 
     internal static TimeSpan ParseEnvSeconds(string envVar, TimeSpan fallback)

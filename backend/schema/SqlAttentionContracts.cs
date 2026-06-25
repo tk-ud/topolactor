@@ -413,6 +413,42 @@ public record LogsDiffAppendRequest(
 );
 
 /// <summary>
+/// Reference to one inserted manifest_topology_key_expansion_draft_lane draft candidate.
+///
+/// Returned by the SQL-only draft lane orchestrator
+/// (logs.run_sql_attention_manifest_topology_key_expansion_draft_lane). The draft candidate
+/// JSONB record is the authority; the Markdown projection is a derived human-readable view.
+///
+/// Boundary: this is a thin bridge DTO. Candidate inference happens entirely in SQL; this
+/// record carries no scoring or inference logic and must not be used to re-derive candidates
+/// in C#.
+/// </summary>
+public record SqlAttentionDraftCandidateRef(
+    Guid CandidateId,
+    Guid MarkdownProjectionId,
+    string CandidateType,
+    string CandidateLane,
+    double Score,
+    string Source = "sql_attention",
+    string Status = "draft"
+);
+
+/// <summary>
+/// Structured DB NOTIFY payload emitted by the SQL trigger
+/// logs.notify_sql_attention_draft_candidate_created on the sql_attention_draft_candidate channel.
+///
+/// The notification bridge (DbNotifyListener) parses this and forwards it to the SSE projection
+/// lane as a render-only signal. UI placement is never decided by SQL or by this payload.
+/// </summary>
+public record SqlAttentionDraftCandidateNotification(
+    string EventType,
+    string Source,
+    Guid CandidateId,
+    string CandidateLane,
+    Guid MarkdownProjectionId
+);
+
+/// <summary>
 /// Read-only physical record history entry loaded from logs.diff.
 /// This contract is deliberately scoped to physical_table_id + record_id and must not
 /// be synthesized from topology_edit_log or UI operation audit events.

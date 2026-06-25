@@ -1828,6 +1828,35 @@ ON CONFLICT (function_name, parameter_key) DO UPDATE
 
 
 -- ---------------------------------------------------------------------------
+-- sql_attention_manifest_topology_key_expansion default_policy
+-- Data-defined scoring/dampening policy for the manifest_topology_key_expansion
+-- draft lane (logs.compile_sql_attention_manifest_topology_draft_candidates).
+-- No hidden literals: discrete Key name patterns, generic column names, id column
+-- suffixes, dampening factors, lift floor, candidate caps, and per-axis score
+-- weights are all resolved from this row. Policy-missing or required-key-missing
+-- triggers RAISE EXCEPTION fail-close in logs.resolve_sql_attention_key_expansion_policy.
+--
+-- Scoring is NOT raw count:
+--   - routine high-frequency values (value present in > routine_value_manifest_fraction_dampen
+--     of active manifests) are dampened by routine_value_dampen_factor (lift/pressure delta).
+--   - generic columns (generic_column_names) are dampened by generic_column_dampen_factor.
+--   - ID columns (id_column_suffixes) are treated as relationship axis / dimension candidates
+--     with id_axis weight, never as primary display text.
+--   - lift contributes only when lift >= lift_min.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
+VALUES (
+    'sql_attention_manifest_topology_key_expansion',
+    'default_policy',
+    '{"max_keys":25,"min_key_pressure":1,"max_candidates":50,"min_candidate_score":0.5,"discrete_key_name_patterns":["status","state","category","type","kind","enum","flag","bool","level","mode","stage","phase","priority","severity","role","group","class","tag","label","currency","country","lang","locale","unit"],"generic_column_names":["name","title","description","label","value","data","json","payload","note","comment","text","content","meta"],"id_column_suffixes":["_id","_ids","_ref","_key","_uuid"],"routine_value_manifest_fraction_dampen":0.6,"routine_value_dampen_factor":0.4,"generic_column_dampen_factor":0.5,"lift_min":1.0,"score_weights":{"same_name_axis":1.0,"same_type_axis":0.4,"common_axis":1.5,"enum_group_match":1.2,"value_overlap":0.8,"logs_diff_pressure":0.5,"logs_attention_pressure":0.6,"table_ref_reuse":0.5,"manifest_reuse":0.7,"id_axis":0.9,"lift":0.8}}',
+    true
+)
+ON CONFLICT (function_name, parameter_key) DO UPDATE
+    SET parameter_value = EXCLUDED.parameter_value,
+        active          = EXCLUDED.active;
+
+
+-- ---------------------------------------------------------------------------
 -- manifest — user login UI (ID 090)
 -- SSOT: docs/design/auth-db-session-credential-ssot.yaml
 -- Submit delegates to auth_runtime.login — no credentials in topology.

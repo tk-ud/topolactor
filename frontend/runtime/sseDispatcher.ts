@@ -14,6 +14,10 @@
  */
 
 import type { ProjectionRuntime } from "./projectionRuntime.ts";
+import {
+  extractSqlAttentionDraftCandidatePayload,
+  type SqlAttentionDraftCandidatePayload,
+} from "./sseReceiver.ts";
 
 export type SseEventHandler = (data: string) => void;
 
@@ -84,4 +88,29 @@ export function createSseDispatcherWithProjectionRuntime(
     projectionRuntime.handleProjectionEvent(data);
   });
   return dispatcher;
+}
+
+/**
+ * Registers a render-only handler for the manifest_topology_key_expansion draft lane signal
+ * ("sql_attention_draft_candidate") on an existing dispatcher.
+ *
+ * The handler only forwards the validated structured payload to a render callback. It performs
+ * no SQL Attention / recommendation / promotion judgment and decides no UI placement; authority
+ * stays in the backend draft candidate JSONB. Malformed payloads are dropped via the dispatcher's
+ * explicit unhandled-data path (the render callback is simply not invoked) — never silently "fixed".
+ */
+export function registerSqlAttentionDraftCandidateRenderHandler(
+  dispatcher: SseDispatcher,
+  onSignal: (payload: SqlAttentionDraftCandidatePayload, rawData: string) => void,
+): void {
+  dispatcher.register("sql_attention_draft_candidate", (data) => {
+    const payload = extractSqlAttentionDraftCandidatePayload(data);
+    if (payload === null) {
+      console.warn(
+        "[sseDispatcher] SQL_ATTENTION_DRAFT_CANDIDATE_PAYLOAD_INVALID: dropping malformed draft candidate signal",
+      );
+      return;
+    }
+    onSignal(payload, data);
+  });
 }

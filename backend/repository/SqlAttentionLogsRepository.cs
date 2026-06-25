@@ -180,6 +180,33 @@ public class SqlAttentionLogsRepository
         return Task.FromResult<IReadOnlyList<AttentionEvidenceRecord>>([]);
     }
 
+    /// <summary>
+    /// Runs the SQL-only manifest_topology_key_expansion draft lane and returns references to the
+    /// inserted insert-only draft candidates. Candidate inference (Key extraction, full-space
+    /// manifest topology expansion, hit-set aggregation, scoring) happens entirely inside
+    /// logs.run_sql_attention_manifest_topology_key_expansion_draft_lane — this method is an
+    /// orchestration bridge only and must not re-derive candidates in C#.
+    ///
+    /// No SQLAT evidence for the source set yields zero candidates (explicit empty result, never a
+    /// silent fallback). The lane is insert-only; it does not mutate active manifests, topology
+    /// registry, hub relations, or runtime routes, and it does not auto-apply or auto-promote.
+    ///
+    /// In-memory test double: validates inputs and returns an empty list.
+    /// Production: override in NpgsqlSqlAttentionLogsRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<SqlAttentionDraftCandidateRef>> CompileManifestTopologyDraftCandidatesAsync(
+        string sourceSetId,
+        string basisWindow,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceSetId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(basisWindow);
+        _logger.LogDebug(
+            "SqlAttentionLogsRepository.CompileManifestTopologyDraftCandidatesAsync: no DB connection (test double) — returning empty list for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+            sourceSetId, basisWindow);
+        return Task.FromResult<IReadOnlyList<SqlAttentionDraftCandidateRef>>([]);
+    }
+
     public virtual Task AppendLogsDiffAsync(
         LogsDiffAppendRequest request,
         CancellationToken ct = default)

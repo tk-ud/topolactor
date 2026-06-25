@@ -354,7 +354,8 @@ builder.Services.AddHostedService(sp => new SchedulerJobRunner(
 builder.Services.AddHostedService(sp => new DbNotifyListener(
     sp.GetRequiredService<ILogger<DbNotifyListener>>(),
     connectionString,
-    sp.GetRequiredService<RuntimeTimelineScheduler>()));
+    sp.GetRequiredService<RuntimeTimelineScheduler>(),
+    sp.GetRequiredService<SseEventBroadcaster>()));
 
 // ---------------------------------------------------------------------------
 // HTTP layer
