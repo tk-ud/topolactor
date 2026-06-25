@@ -14,8 +14,8 @@ This file preserves future implementation work. It is not evidence of implemente
 - [ ] Keep existing `call_postgres_function` limited to Topolactor DB `topology.*` functions and fixed Topolactor connectionString.
 - [ ] Reuse the DB guarded vault / runtime secret reference model by `reference_key`; do not create a standalone credential runtime or admin UI.
 - [ ] Add fail-close tests for missing credential, missing instance policy, missing function/schema binding, timeout, secret projection denial, provider selector attempts, and unauthorized function names.
-- [ ] Add guards proving `provider_kind`, `required_by_bundle`, and Wave labels are data only and do not select C# handlers.
-- [ ] Treat Wave Main DB / Mirror DB as example consumer instance_authority_key rows only; do not add `WaveRuntimeHandler`, `wave_*` schemas, or Wave semantic authority to the Topolactor DB.
+- [ ] Add guards proving `provider_kind`, `required_by_bundle`, and provider labels are data only and do not select C# handlers.
+- [ ] Treat multiple external DB/runtime instances as consumer-agnostic `instance_authority_key` rows only; do not add provider-specific runtime handlers, provider-specific schemas, or external instance semantic authority to the Topolactor DB.
 
 ## Explicitly out of scope for the SSOT wiring PR
 
@@ -23,5 +23,5 @@ This file preserves future implementation work. It is not evidence of implemente
 - `InstancePortDispatchRuntime`
 - `CallInstancePostgresFunctionPrimitiveAdapter`
 - instance port DDL / seed rows
-- Wave SQL function implementation
-- Wave integration runtime
+- external instance SQL function implementation
+- provider-specific integration runtime

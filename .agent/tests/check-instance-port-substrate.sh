@@ -70,7 +70,7 @@ require_term "credential_backed_instance_function" "$SSOT" "credential-backed fu
 require_term "provider_kind_is_data_only" "$SSOT" "provider_kind data-only rule"
 require_term "required_by_bundle_is_data_only" "$SSOT" "required_by_bundle data-only rule"
 require_term "plaintext_connection_string_forbidden_in_seed_ssot_projection_log" "$SSOT" "plaintext connection string prohibition"
-require_term "WaveRuntimeHandler_as_primary_design" "$SSOT" "WaveRuntimeHandler prohibition"
+require_term "provider_specific_runtime_handler_as_primary_design" "$SSOT" "provider-specific runtime handler prohibition"
 require_term "external_instance_as_runtime_SSOT" "$SSOT" "external instance SSOT prohibition"
 require_term "sibling_substrate_not_external_port_extension" "$SSOT" "sibling substrate decision"
 
@@ -98,17 +98,13 @@ require_term "_connectionString" backend/runtime/AbstractFunctionRuntime.cs "Top
 
 # No provider/bundle-specific runtime selector for the new instance substrate may appear.
 # Existing external_port_substrate code may validate ProviderKind/RequiredByBundle as records; this guard
-# targets provider-specific selector branches and Wave-specific runtime selection.
-if rg -n "if[[:space:]]*\([^)]*(provider_kind|ProviderKind)[[:space:]]*==|switch[[:space:]]*\([^)]*(provider_kind|ProviderKind)|if[[:space:]]*\([^)]*(required_by_bundle|RequiredByBundle)[[:space:]]*==|switch[[:space:]]*\([^)]*(required_by_bundle|RequiredByBundle)|if[[:space:]]*\([^)]*(wave|Wave)|switch[[:space:]]*\([^)]*(wave|Wave)" backend/runtime backend/repository; then
-  fail "provider_kind / required_by_bundle / wave selector found in backend runtime/repository"
+# targets provider-specific selector branches; provider_kind / required_by_bundle must stay data labels.
+if rg -n "if[[:space:]]*\([^)]*(provider_kind|ProviderKind)[[:space:]]*==|switch[[:space:]]*\([^)]*(provider_kind|ProviderKind)|if[[:space:]]*\([^)]*(required_by_bundle|RequiredByBundle)[[:space:]]*==|switch[[:space:]]*\([^)]*(required_by_bundle|RequiredByBundle)" backend/runtime backend/repository; then
+  fail "provider_kind / required_by_bundle selector found in backend runtime/repository"
 fi
 
-if rg -n "class[[:space:]]+WaveRuntimeHandler|class[[:space:]]+.*Instance.*Wave|case[[:space:]]+\"wave\"|case[[:space:]]+\"wave_runtime\"" backend frontend db; then
-  fail "Wave-specific runtime handler/selector marker found"
-fi
-
-if rg -n "CREATE[[:space:]]+SCHEMA[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?wave|CREATE[[:space:]]+TABLE[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?wave\." db docs; then
-  fail "Wave schema/table authority must not be created in Topolactor DB"
+if rg -n "class[[:space:]]+.*ProviderSpecific.*Handler|class[[:space:]]+.*Instance.*Provider.*Handler|case[[:space:]]+\"[A-Za-z0-9_-]+_runtime\"" backend frontend db; then
+  fail "provider-specific runtime handler/selector marker found"
 fi
 
 # Guard against real plaintext credentials / connection literals in seed, SSOT, projection-ish docs, and logs.

@@ -702,7 +702,7 @@ system_roadmap_ssot:
         - instance_port_runtime_not_started
         - call_instance_postgres_function_adapter_not_started
         - authority_binding_runtime_tests_not_started
-        - Wave_integration_not_started
+        - generic_instance_integration_not_started
 
     product.email_port_consumer:
       bundle_id: email-port-consumer

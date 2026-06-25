@@ -957,7 +957,7 @@ mapping:
       - credential_backed_instance_function
       - instance_connection_policy
       - instance_function_authority_binding
-      - Wave as example instance consumer
+      - generic external instance consumer example
     required_docs:
       - docs/design/instance-port-substrate-ssot.yaml
       - docs/design/runtime-orchestration-ssot.yaml

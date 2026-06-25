@@ -393,7 +393,7 @@ bundles:
         cases:
           - "SSOT exists and declares call_instance_postgres_function / credential_backed_instance_function"
           - "provider_kind / required_by_bundle remain data only"
-          - "plaintext connection strings and WaveRuntimeHandler-first design are forbidden"
+          - "plaintext connection strings and provider-specific handler-first design are forbidden"
           - "call_postgres_function topology-only boundary is preserved"
     proves:
       - design SSOT and roadmap/TODO wiring exist for the planned substrate
@@ -403,4 +403,4 @@ bundles:
       - instance port DDL implementation
       - instance_port_runtime implementation
       - call_instance_postgres_function runtime behavior
-      - Wave integration
+      - generic instance integration

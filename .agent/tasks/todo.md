@@ -47,9 +47,9 @@ NG軸:
 - external_port_substrate の access_port / response_port / hook_port へ DB/runtime instance connection を混入する
 - `call_postgres_function` の `^topology\.` / Topolactor DB connectionString 制限を汎用化する
 - frontend payload / seed payload / projection / log に DB connection string, endpoint 実値, raw SQL, table authority, function authority を入れる
-- provider_kind / required_by_bundle / wave 文字列で C# if/switch 分岐する
-- `WaveRuntimeHandler` または provider-specific runtime handler を第一候補にする
-- Wave schema / Wave semantic authority を Topolactor DB に作る
+- provider_kind / required_by_bundle / provider label 文字列で C# if/switch 分岐する
+- provider-specific runtime handler を第一候補にする
+- provider-specific schema / external instance semantic authority を Topolactor DB に作る
 - external instance を Topolactor runtime SSOT として扱う
 
 受入条件:
@@ -58,7 +58,7 @@ NG軸:
 - [ ] `call_postgres_function` は Topolactor DB 内 `topology.*` 専用のまま保持されている。
 - [ ] credential は `reference_key` / DB guarded vault / runtime secret resolver 経由で runtime-only 解決され、plaintext connection string は SSOT / seed / UI / projection / log に出ない。
 - [ ] provider_kind / required_by_bundle は data only で C# selector ではない。
-- [ ] Wave は example consumer であり、Wave 専用 handler / schema / semantic authority を追加していない。
+- [ ] 特定 consumer 専用 handler / schema / semantic authority を追加していない。
 - [ ] `.agent/tests/check-instance-port-substrate.sh` と必要な runtime/backend tests が追加・通過している。
 
 ---
