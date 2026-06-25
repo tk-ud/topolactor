@@ -162,6 +162,19 @@ else
   fail "[FRONTEND_ALL_TESTS] full frontend test suite failed"
 fi
 
+
+# ─── INSTANCE_PORT_SUBSTRATE_DESIGN ──────────────────────────────────────────
+
+echo ""
+echo "=== [INSTANCE_PORT_SUBSTRATE_DESIGN] Credential-backed instance port SSOT wiring ==="
+echo "    Scope: design-only guard for instance_port_substrate / call_instance_postgres_function"
+
+if bash .agent/tests/check-instance-port-substrate.sh; then
+  echo "OK  [INSTANCE_PORT_SUBSTRATE_DESIGN] instance port substrate design guard passed"
+else
+  fail "[INSTANCE_PORT_SUBSTRATE_DESIGN] instance port substrate design guard failed"
+fi
+
 # ─── NOT_COVERED ──────────────────────────────────────────────────────────────
 
 echo ""

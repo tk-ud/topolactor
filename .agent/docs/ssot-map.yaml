@@ -947,6 +947,30 @@ mapping:
       - docs/design/topolactor-phase-model.md
     protocols: []
 
+  - work_type: instance_port_substrate
+    change_surfaces:
+      - credential-backed instance connection
+      - db_instance_port
+      - runtime_instance_port
+      - call_instance_postgres_function
+      - call_bound_instance_function
+      - credential_backed_instance_function
+      - instance_connection_policy
+      - instance_function_authority_binding
+      - generic external instance consumer example
+    required_docs:
+      - docs/design/instance-port-substrate-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/abstract-function-primitive-registry-ssot.yaml
+    supporting_docs:
+      - docs/design/external-port-substrate-ssot.yaml
+      - docs/design/runtime-bundle-secret-credential-ssot.yaml
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
 worktypes:
   ids:
     - audit

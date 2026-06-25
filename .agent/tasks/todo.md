@@ -8,14 +8,58 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
+| `instance-port-substrate` | credential-backed instance connection / instance function call substrate | not_started | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-read-export-port` | CLI/MCP dispatch-secured read/export/import-candidate port 実装 | not_started | 1 | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
-| `job-scheduler-port-consumer` | job_scheduler_bundle port substrate 接続実装 | partial | 1 | - | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
+| `job-scheduler-port-consumer` | external scheduler ingress receiver port substrate 接続実装 | partial | 1 | `product.job_scheduler_port_consumer` | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
 | `sql-attention-key-expansion-draft-lane-implementation` | SQL Attention key expansion draft lane 実装 | not_started | 1 | - | `docs/design/sql-attention-logs-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
+
+---
+
+## Bundle `instance-port-substrate`
+
+**Status:** not_started
+**Roadmap/status SSOT:** `product.instance_port_substrate`
+**Primary SSOT:** `docs/design/instance-port-substrate-ssot.yaml`
+
+目的:
+credential-backed instance connection / instance function call を external_port_substrate と混同せず、sibling substrate として設計・実装する。今回の設計配線では実装本体は未着手のまま残す。
+
+対応資料:
+- `docs/design/instance-port-substrate-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/abstract-function-primitive-registry-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `.agent/tasks/instance-port-substrate-implementation-todo.md`
+- `.agent/tests/check-instance-port-substrate.sh`
+
+対象ファイル名候補:
+- `db/topology_tables.sql` (future DDL only; current PR does not add instance tables)
+- `backend/runtime/AbstractFunctionRuntime.cs` (future primitive adapter only)
+- `backend/runtime/*InstancePort*` (future runtime lane only)
+- `backend/repository/*InstancePort*` (future policy repository only)
+
+NG軸:
+- external_port_substrate の access_port / response_port / hook_port へ DB/runtime instance connection を混入する
+- `call_postgres_function` の `^topology\.` / Topolactor DB connectionString 制限を汎用化する
+- frontend payload / seed payload / projection / log に DB connection string, endpoint 実値, raw SQL, table authority, function authority を入れる
+- provider_kind / required_by_bundle / provider label 文字列で C# if/switch 分岐する
+- provider-specific runtime handler を第一候補にする
+- provider-specific schema / external instance semantic authority を Topolactor DB に作る
+- external instance を Topolactor runtime SSOT として扱う
+
+受入条件:
+- [ ] instance port DDL / seed / repository / runtime lane が SSOT に従って追加されている。
+- [ ] `call_instance_postgres_function` は manifest-authorized function のみ実行し、function/schema allowlist / instance authority binding / timeout / result sanitize / fail-close を持つ。
+- [ ] `call_postgres_function` は Topolactor DB 内 `topology.*` 専用のまま保持されている。
+- [ ] credential は `reference_key` / DB guarded vault / runtime secret resolver 経由で runtime-only 解決され、plaintext connection string は SSOT / seed / UI / projection / log に出ない。
+- [ ] provider_kind / required_by_bundle は data only で C# selector ではない。
+- [ ] 特定 consumer 専用 handler / schema / semantic authority を追加していない。
+- [ ] `.agent/tests/check-instance-port-substrate.sh` と必要な runtime/backend tests が追加・通過している。
 
 ---
 
@@ -135,25 +179,31 @@ NG軸:
 ## Bundle `job-scheduler-port-consumer`
 
 **Status:** partial
+**Roadmap/status SSOT:** `product.job_scheduler_port_consumer`
 **SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
 
-PR#460 完了済み: access_port (external_scheduler, credential_kind=none) / hook_port (built_in_scheduler, credential_kind=none) seed binding / policy_steps。
-topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に依存しない。
-残作業は scheduler evidence / job status projection surface / cron trigger wiring 接続。runtime_timeline_scheduler の in-memory queue は変更しない。外部スケジューラー provider-specific client は追加しない。
-既存レーン参照: `docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane`
+PR#460 完了済み: external scheduler access_port / hook_port seed binding と、built-in scheduler の credential_kind=none seed row。
+この TODO は **external scheduler ingress receiver** に縮退する。
+RuntimeTimelineScheduler 本体、cron driver、run ledger、job execution lifecycle、job status projection は `product.scheduler_job_manifest_substrate` / SchedulerJobManifestSubstrate の責務であり、この port consumer TODO では扱わない。
 
 残 todo:
-- [ ] scheduler evidence / job status projection surface 接続実装 (DB queue 新設ではない。runtime queue authority は既存 RuntimeTimelineScheduler)
-- [ ] cron trigger boundary 接続整理・evidence/projection 接続 (RuntimeTimelineScheduler 本体・in-memory queue は変更しない; built-in scheduler は port substrate に依存しないこと)
-- [ ] hook trigger intake wiring (外部スケジューラー hook のみ port substrate 使用)
-- [ ] evidence / runtime_event_log: trigger_received / scheduler_enqueued / execution_started / execution_completed / execution_failed
-- [ ] projection response: job status projection
-- [ ] built-in scheduler path が port substrate に依存しないことの test / guard 追加
+- [ ] external scheduler hook/access receiver が active port record と credential_requirement を解決し、scheduler enqueue boundary へ渡すことを実装・検証する。
+- [ ] external scheduler provider credential は external_port_substrate の port record attachment として扱い、provider-specific client / handler / selector を追加しない。
+- [ ] built-in RuntimeTimelineScheduler path が port substrate に依存しないことの guard を維持する。
+- [ ] external receiver failure は silent fallback せず、missing port / missing credential / invalid policy を explicit fail-close として記録する。
+
+再分類済み / この TODO から除外:
+- cron trigger driver loop: SchedulerJobManifestSubstrate / RuntimeTimelineScheduler side
+- run ledger / input lease / job execution lifecycle: SchedulerJobManifestSubstrate
+- scheduler evidence / job status projection: SchedulerJobManifestSubstrate projection/evidence surface
+- execution_started / execution_completed / execution_failed lifecycle: job manifest run ledger / runtime_event_log side
 
 対応資料:
 - `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/scheduler-job-manifest-ssot.yaml`
+
 
 ---
 
