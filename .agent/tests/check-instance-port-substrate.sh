@@ -85,6 +85,12 @@ require_term "docs/design/instance-port-substrate-ssot.yaml" .agent/docs/ssot-ma
 require_term "docs/design/instance-port-substrate-ssot.yaml" .agent/docs/required-paths.yaml "required path entry"
 require_term "instance_port_substrate_design_wiring" .agent/docs/test-bundles.yaml "test bundle entry"
 
+PRIMITIVE_REGISTRY="docs/design/abstract-function-primitive-registry-ssot.yaml"
+require_term "call_instance_postgres_function" "$PRIMITIVE_REGISTRY" "primitive registry instance postgres primitive vocabulary"
+require_term "call_bound_instance_function" "$PRIMITIVE_REGISTRY" "primitive registry bound instance primitive vocabulary"
+require_term "credential_backed_instance_function" "$PRIMITIVE_REGISTRY" "primitive registry credential-backed instance function vocabulary"
+require_term "planned_future_vocabulary" "$PRIMITIVE_REGISTRY" "primitive registry planned/future vocabulary marker"
+
 # Existing Topolactor DB primitive must stay topology-only and fixed to the Topolactor connection string.
 require_term 'PrimitiveKey => "call_postgres_function"' backend/runtime/AbstractFunctionRuntime.cs "existing postgres primitive"
 require_term 'AllowedFunctionName = new(@"^topology\.' backend/runtime/AbstractFunctionRuntime.cs "topology-only function allowlist"

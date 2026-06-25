@@ -1010,6 +1010,40 @@ backend_abstract_function_runtime_substrate:
         - provider_kind_runtime_branching
         - required_by_bundle_runtime_branching
         - csharp_default_http_method_or_lease_duration_or_expiry_key
+    instance_port_future:
+      availability: planned_future_vocabulary
+      ssot_ref: docs/design/instance-port-substrate-ssot.yaml
+      primitives:
+        - call_instance_postgres_function
+        - call_bound_instance_function
+        - credential_backed_instance_function
+      owns:
+        - credential_backed_instance_connection
+        - manifest_authorized_instance_function_call
+        - instance_function_authority_binding
+      boundary: >
+        Future instance-port primitives are vocabulary reservations for the
+        sibling instance_port_substrate. They do not make the current
+        call_postgres_function primitive generic and do not authorize runtime
+        implementation until the instance-port DDL, repository, runtime lane,
+        authority binding, and secret-deny projection gates are implemented.
+      required_authority:
+        - instance_connection_policy
+        - instance_function_authority_binding
+        - function_name_allowlist
+        - schema_allowlist
+        - output_shape_authority
+      credential_boundary:
+        reference_key_only: true
+        runtime_only_secret_resolution: true
+        plaintext_connection_string_in_seed_ssot_projection_log: prohibited
+      prohibited:
+        - weakening_call_postgres_function_topology_only_boundary
+        - provider_kind_runtime_branching
+        - required_by_bundle_runtime_branching
+        - provider_specific_runtime_handler
+        - arbitrary_external_db_function_execution
+        - external_instance_as_topolactor_runtime_ssot
     external_and_event:
       primitives:
         - http_request

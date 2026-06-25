@@ -397,6 +397,7 @@ bundles:
           - "call_postgres_function topology-only boundary is preserved"
     proves:
       - design SSOT and roadmap/TODO wiring exist for the planned substrate
+      - primitive registry vocabulary wiring exists for call_instance_postgres_function / call_bound_instance_function / credential_backed_instance_function
       - lightweight guard checks the major prohibited design directions
     does_not_prove:
       - instance port DDL implementation
