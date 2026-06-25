@@ -5,6 +5,54 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
 
 fail() { echo "FAIL $*" >&2; exit 1; }
+
+if ! command -v rg >/dev/null 2>&1; then
+  rg() {
+    local fixed=0
+    local line_numbers=0
+    local pattern=""
+
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -n)
+          line_numbers=1
+          shift
+          ;;
+        --fixed-strings|-F)
+          fixed=1
+          shift
+          ;;
+        --glob|-g)
+          shift
+          [ "$#" -gt 0 ] && shift
+          ;;
+        --)
+          shift
+          break
+          ;;
+        -*)
+          shift
+          ;;
+        *)
+          pattern="$1"
+          shift
+          break
+          ;;
+      esac
+    done
+
+    [ -n "$pattern" ] || return 2
+
+    local args=(-R)
+    [ "$line_numbers" -eq 1 ] && args+=(-n)
+    if [ "$fixed" -eq 1 ]; then
+      grep "${args[@]}" -F -- "$pattern" "$@"
+    else
+      grep "${args[@]}" -E -- "$pattern" "$@"
+    fi
+  }
+fi
+
 require_term() {
   local term="$1" file="$2" desc="$3"
   rg -n --fixed-strings "$term" "$file" >/dev/null || fail "missing ${desc}: ${term} in ${file}"
@@ -39,28 +87,27 @@ require_term "instance_port_substrate_design_wiring" .agent/docs/test-bundles.ya
 
 # Existing Topolactor DB primitive must stay topology-only and fixed to the Topolactor connection string.
 require_term 'PrimitiveKey => "call_postgres_function"' backend/runtime/AbstractFunctionRuntime.cs "existing postgres primitive"
-rg -n 'AllowedFunctionName = new\(@"\^topology\\\.' backend/runtime/AbstractFunctionRuntime.cs >/dev/null || \
-  fail "call_postgres_function no longer visibly restricts function names to topology.*"
+require_term 'AllowedFunctionName = new(@"^topology\.' backend/runtime/AbstractFunctionRuntime.cs "topology-only function allowlist"
 require_term "_connectionString" backend/runtime/AbstractFunctionRuntime.cs "Topolactor DB connection string field"
 
 # No provider/bundle-specific runtime selector for the new instance substrate may appear.
 # Existing external_port_substrate code may validate ProviderKind/RequiredByBundle as records; this guard
 # targets provider-specific selector branches and Wave-specific runtime selection.
-if rg -n "if\s*\([^)]*(provider_kind|ProviderKind)\s*==|switch\s*\([^)]*(provider_kind|ProviderKind)|if\s*\([^)]*(required_by_bundle|RequiredByBundle)\s*==|switch\s*\([^)]*(required_by_bundle|RequiredByBundle)|if\s*\([^)]*(wave|Wave)|switch\s*\([^)]*(wave|Wave)" backend/runtime backend/repository; then
+if rg -n "if[[:space:]]*\([^)]*(provider_kind|ProviderKind)[[:space:]]*==|switch[[:space:]]*\([^)]*(provider_kind|ProviderKind)|if[[:space:]]*\([^)]*(required_by_bundle|RequiredByBundle)[[:space:]]*==|switch[[:space:]]*\([^)]*(required_by_bundle|RequiredByBundle)|if[[:space:]]*\([^)]*(wave|Wave)|switch[[:space:]]*\([^)]*(wave|Wave)" backend/runtime backend/repository; then
   fail "provider_kind / required_by_bundle / wave selector found in backend runtime/repository"
 fi
 
-if rg -n "class\s+WaveRuntimeHandler|class\s+.*Instance.*Wave|case\s+\"wave\"|case\s+\"wave_runtime\"" backend frontend db; then
+if rg -n "class[[:space:]]+WaveRuntimeHandler|class[[:space:]]+.*Instance.*Wave|case[[:space:]]+\"wave\"|case[[:space:]]+\"wave_runtime\"" backend frontend db; then
   fail "Wave-specific runtime handler/selector marker found"
 fi
 
-if rg -n "CREATE\s+SCHEMA\s+(IF\s+NOT\s+EXISTS\s+)?wave|CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?wave\." db docs; then
+if rg -n "CREATE[[:space:]]+SCHEMA[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?wave|CREATE[[:space:]]+TABLE[[:space:]]+(IF[[:space:]]+NOT[[:space:]]+EXISTS[[:space:]]+)?wave\." db docs; then
   fail "Wave schema/table authority must not be created in Topolactor DB"
 fi
 
 # Guard against real plaintext credentials / connection literals in seed, SSOT, projection-ish docs, and logs.
 if rg -n "(Host=|Server=|Username=|User Id=|Password=|postgres(ql)?://|jdbc:postgresql://|Endpoint=|AccountKey=|BEGIN (RSA|OPENSSH) PRIVATE KEY|sk_live_|AKIA[0-9A-Z]{16})" \
-  docs/design/instance-port-substrate-ssot.yaml docs/design/external-port-substrate-ssot.yaml db/seed_empty.sql db/topology_tables.sql frontend backend/runtime backend/repository .agent/tasks --glob '!backend/obj/**' --glob '!backend/bin/**'; then
+  docs/design/instance-port-substrate-ssot.yaml docs/design/external-port-substrate-ssot.yaml db/seed_empty.sql db/topology_tables.sql frontend backend/runtime backend/repository .agent/tasks; then
   fail "plaintext credential, endpoint, or connection string literal marker found"
 fi
 
@@ -70,7 +117,7 @@ if rg -n "call_instance_postgres_function|instance_function_authority_binding|in
 fi
 
 # The new primitive is design-only in this PR; require absence of a runtime implementation claim.
-if rg -n 'PrimitiveKey\s*=>\s*"call_instance_postgres_function"|class\s+CallInstancePostgresFunctionPrimitiveAdapter|class\s+InstancePortDispatchRuntime' backend; then
+if rg -n 'PrimitiveKey[[:space:]]*=>[[:space:]]*"call_instance_postgres_function"|class[[:space:]]+CallInstancePostgresFunctionPrimitiveAdapter|class[[:space:]]+InstancePortDispatchRuntime' backend; then
   fail "instance port runtime implementation/stub found; this PR should remain SSOT/CI wiring only"
 fi
 
