@@ -26,7 +26,6 @@ for table in \
   topology.webhook_intake_snapshots \
   topology.signature_verification_evidence \
   topology.payment_state_projections \
-  topology.scheduler_external_event_evidence \
   topology.audit_approval_requests \
   topology.audit_approval_evidence \
   topology.audit_notification_evidence \
@@ -39,7 +38,6 @@ for bundle in \
   email_bundle \
   stripe_bundle \
   webhook_inbox_bundle \
-  job_scheduler_bundle \
   audit_approval_bundle \
   export_sftp_bundle; do
   check "$SEED" "$bundle"

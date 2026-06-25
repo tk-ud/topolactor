@@ -959,27 +959,6 @@ system_roadmap_ssot:
         - projection_response_implemented
         - sse_sanitized_projection_verified
 
-    product.job_scheduler_port_consumer:
-      bundle_id: job-scheduler-port-consumer
-      title: Job/Scheduler bundle port consumer implementation
-      status: partial
-      production_ready: false
-      public_summary: Job/Scheduler port consumer is reclassified to the external scheduler ingress receiver only. Seed binding (external_scheduler access_port / hook_port and built-in scheduler credential_kind=none seed row) is present per PR#460. Built-in RuntimeTimelineScheduler, cron driver, run ledger, job execution lifecycle, and job status projection belong to SchedulerJobManifestSubstrate / RuntimeTimelineScheduler, not this external_port_substrate consumer. Remaining work is limited to external scheduler hook/access receiver wiring, credential_requirement resolution, scheduler enqueue boundary evidence, and explicit fail-close guards. External scheduler provider-specific client not added.
-      scope:
-        - job_scheduler_access_and_hook_port_consumer_definition
-        - scheduler_provider_credential_requirement_as_port_attachment
-        - trigger_alignment_and_runtime_queue_boundary
-        - manifest_dispatcher_owns_destination_selection
-      detail_ref:
-        - docs/design/runtime-bundle-job-scheduler-ssot.yaml
-        - docs/design/external-port-substrate-ssot.yaml
-        - .agent/tasks/todo.md#job-scheduler-port-consumer
-      closed_gap_ref:
-        - job_scheduler_seed_binding_and_credential_requirement_implemented_per_pr460
-      known_gap_ref:
-        - external_scheduler_receiver_hook_access_wiring_not_connected
-        - external_scheduler_receiver_credential_requirement_fail_close_guard_not_connected
-        - built_in_runtime_timeline_scheduler_port_substrate_independence_guard_not_connected
 
     product.scheduler_job_manifest_substrate:
       bundle_id: scheduler-job-manifest-substrate-implementation

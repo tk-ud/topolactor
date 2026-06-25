@@ -58,28 +58,6 @@ runtime_bundle_job_scheduler_ssot:
       - failure_policy_definition
     prohibited_in_public_ssot:
       - cron_schedule_values_for_specific_environments
-      - external_scheduler_provider_credentials
-      - scheduler_provider_endpoint
-
-  secret_credential_boundary:
-    location: runtime_secret_store_not_in_public_ssot
-    policy: >-
-      外部スケジューラーprovider credential（endpoint / API key等）は
-      公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
-      topolactor内蔵schedulerの場合はcredentialは不要。
-
-  port_substrate_relation:
-    substrate_ssot: docs/design/external-port-substrate-ssot.yaml
-    classification: port_consumer_bundle
-    port_consumer:
-      - access_port
-      - hook_port
-    credential_kind: external
-    note: >-
-      外部スケジューラー provider credential は external_port_substrate の
-      access_port / hook_port に付属する credential_requirement として管理する。
-      topolactor 内蔵 scheduler 利用時は credential_kind: none。
-      credential の standalone 管理 plane は作らない。
 
   scheduler_contract:
     role: trigger_alignment_and_runtime_queue
@@ -166,72 +144,50 @@ runtime_bundle_job_scheduler_ssot:
       cron/hook/client trigger統合境界の詳細設計はこのSSOTが担う。
       runtime destination selection は manifest_dispatcher が所有する（変更なし）。
 
-  secure_consumer_dispatch_lane_ref:
-    lane_definition: docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane
-    note: >-
-      topolactor 内蔵 scheduler は port substrate に依存しない。
-      external scheduler access_port / hook_port receiver のみが external_port_substrate の consumer となる。
-      seed binding (built-in scheduler: credential_kind=none / 外部スケジューラー: access_port + hook_port) は PR#460 で完了済み。
-      残作業は external scheduler ingress receiver wiring と credential_requirement fail-close guard に限定する。
-      cron driver / run ledger / job execution lifecycle / job status projection は SchedulerJobManifestSubstrate または RuntimeTimelineScheduler 側の責務であり、この port consumer の remaining_scope ではない。
-      外部スケジューラー provider-specific client を追加しない。
-      built-in scheduler 本体 (runtime_timeline_scheduler) は port substrate とは独立している。
-    seed_binding_completion: pr460
-    built_in_scheduler_independence:
-      rule: >-
-        topolactor 内蔵 scheduler (runtime_timeline_scheduler) は port substrate に依存しない。
-        内蔵 scheduler path が port record を参照することは禁止。
-    remaining_scope:
-      runtime_timeline_scheduler:
-        owner: docs/design/runtime-orchestration-ssot.yaml
-        classification: out_of_scope_for_job_scheduler_port_consumer
-        owns:
-          - built_in_scheduler_queue
-          - cron_trigger_driver_loop
-          - scheduler_alignment
-        rule: RuntimeTimelineScheduler must not depend on external_port_substrate port records.
-      scheduler_job_manifest_substrate:
-        owner: docs/design/scheduler-job-manifest-ssot.yaml
-        classification: out_of_scope_for_job_scheduler_port_consumer
-        owns:
-          - run_ledger
-          - input_lease
-          - job_execution_lifecycle
-          - job_status_projection
-          - execution_started_completed_failed_events
-      external_scheduler_receiver:
-        owner: docs/design/external-port-substrate-ssot.yaml
-        classification: remaining_scope_for_job_scheduler_port_consumer
-        owns:
-          - external_scheduler_access_port_receiver
-          - external_scheduler_hook_port_receiver
-          - credential_requirement_resolution
-          - scheduler_enqueue_boundary_handoff
-          - explicit_fail_close_for_missing_port_or_credential_or_policy
-        prohibited:
-          - provider_specific_scheduler_client
-          - direct_runtime_execution_without_scheduler
-          - built_in_scheduler_dependency_on_port_substrate
+  runtime_timeline_scheduler_independence:
+    rule: >-
+      built-in RuntimeTimelineScheduler is independent from external_port_substrate.
+      RuntimeTimelineScheduler must not depend on external_port_substrate port records.
+
+  responsibility_split:
+    runtime_timeline_scheduler:
+      owner: docs/design/runtime-orchestration-ssot.yaml
+      owns:
+        - built_in_scheduler_queue
+        - cron_trigger_driver_loop
+        - scheduler_alignment
+        - trigger_alignment
+        - scheduler_queue
+        - causal_order
+        - collision_control
+    scheduler_job_manifest_substrate:
+      owner: docs/design/scheduler-job-manifest-ssot.yaml
+      owns:
+        - run_ledger
+        - input_lease
+        - job_execution_lifecycle
+        - job_status_projection
+    manifest_dispatcher:
+      owner: docs/design/runtime-orchestration-ssot.yaml
+      owns:
+        - runtime_destination_selection
 
   explicitly_out_of_scope:
     - runtime_destination_selection
     - manifest_dispatcher_responsibility
     - topology_meaning_definition
     - role_semantics_definition
-    - external_scheduler_provider_selection
     - polling_primary_pattern
 
   implementation_boundary_requirements:
     items:
-      - external_scheduler_receiver_access_hook_intake_design
-      - external_scheduler_receiver_credential_requirement_fail_close_design
-      - external_scheduler_receiver_scheduler_enqueue_boundary_design
-      - built_in_runtime_timeline_scheduler_port_substrate_independence_guard
+      - built_in_runtime_timeline_scheduler_independence_guard
+      - scheduler_contract_trigger_alignment_guard
+      - scheduler_job_manifest_substrate_responsibility_split_guard
     note: >-
       cron_trigger_driver_loop_design / run_ledger / job_execution_log_schema_design /
       scheduler_evidence_job_status_projection_surface_design は SchedulerJobManifestSubstrate または
       RuntimeTimelineScheduler 側の責務に再分類済み。
-      この port consumer SSOT は external scheduler ingress receiver のみを remaining implementation scope とする。
     policy: >-
       実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
       runtime_orchestration_ssotのscheduler_contractとの整合を維持する。
