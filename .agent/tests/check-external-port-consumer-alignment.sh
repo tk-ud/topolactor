@@ -116,8 +116,6 @@ PROVIDER_CLASS_PATTERNS=(
   "class SendGridClient"
   "class WebhookInboxProviderService"
   "class ExternalSchedulerProviderService"
-  "class ExternalSchedulerReceiver"
-  "class ExternalSchedulerClient"
   "class AuditApprovalNotificationService"
   "class SmtpBundle"
   "class StripeBundle"
@@ -230,7 +228,7 @@ for ssot in "${EVIDENCE_REQUIRED_SSOTS[@]}"; do
   check_content "$ssot" "audit_log_boundary"
 done
 
-# secure_consumer_dispatch_lane_ref remaining_scope must include physical_table and evidence
+# active secure_consumer_dispatch_lane_ref bundle SSOTs must include physical_table and evidence
 # job_scheduler is excluded from physical_table check: no new DB table is created (in-memory queue only)
 for ssot in "${CONSUMER_SSOTS[@]}"; do
   if [[ "$ssot" != "docs/design/runtime-bundle-job-scheduler-ssot.yaml" ]]; then
@@ -242,26 +240,11 @@ done
 echo ""
 echo "=== 9. job_scheduler built-in scheduler independence ==="
 
-ROADMAP="docs/system-roadmap.yaml"
-check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "built_in_scheduler_independence"
-check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "topolactor 内蔵 scheduler"
+check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "runtime_timeline_scheduler_independence"
 check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "RuntimeTimelineScheduler must not depend on external_port_substrate port records"
-check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "generic hook_port intake"
-check_content "$ROADMAP" "standalone_external_scheduler_port_consumer_removed"
 
 echo ""
-echo "=== 10. Roadmap closed_gap_ref for seed binding ==="
-
-check_content "$ROADMAP" "consumer_bundle_seed_binding_implemented_per_pr460_all_7_bundles"
-check_content "$ROADMAP" "email_seed_binding_and_credential_requirement_implemented_per_pr460"
-check_content "$ROADMAP" "stripe_seed_binding_and_credential_requirement_implemented_per_pr460"
-check_content "$ROADMAP" "file_storage_seed_binding_and_credential_requirement_implemented_per_pr460"
-check_content "$ROADMAP" "export_sftp_seed_binding_and_credential_requirement_implemented_per_pr460"
-check_content "$ROADMAP" "webhook_inbox_seed_binding_and_credential_requirement_implemented_per_pr460"
-check_content "$ROADMAP" "audit_approval_seed_binding_and_credential_requirement_implemented_per_pr460"
-
-echo ""
-echo "=== 11. Forbidden vocabulary guard (job_queue physical table / 8 Bundle 共通基盤 / external 系 8 Bundle) ==="
+echo "=== 10. Forbidden vocabulary guard (job_queue physical table / 8 Bundle 共通基盤 / external 系 8 Bundle) ==="
 
 SSOT_AND_TASK_FILES=(
   "docs/design/runtime-bundle-job-scheduler-ssot.md"

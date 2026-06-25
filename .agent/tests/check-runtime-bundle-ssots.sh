@@ -277,7 +277,7 @@ for yaml in \
 done
 
 echo ""
-echo "=== Roadmap: all 8 consumer bundle entries present ==="
+echo "=== Roadmap: active external port consumer bundle entries present ==="
 
 ROADMAP="docs/system-roadmap.yaml"
 check_content "$ROADMAP" "product.external_port_substrate"
@@ -286,7 +286,6 @@ check_content "$ROADMAP" "product.stripe_port_consumer"
 check_content "$ROADMAP" "product.file_storage_port_consumer"
 check_content "$ROADMAP" "product.export_sftp_port_consumer"
 check_content "$ROADMAP" "product.webhook_inbox_port_consumer"
-check_content "$ROADMAP" "standalone_external_scheduler_port_consumer_removed"
 check_content "$ROADMAP" "product.audit_approval_port_consumer"
 
 check_content "$ROADMAP" "external-port-substrate-implementation"

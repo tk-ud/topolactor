@@ -15,9 +15,7 @@
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-port` | CLI/MCP read/export/import-candidate port 親境界 | not_started | 5 subBundles | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
 
-注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
-
-注: 将来、外部 scheduler 由来の occurrence metadata が必要になった場合も、standalone receiver ではなく既存 hook_port intake path の任意 evidence/projection extension としてのみ検討する。
+注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
 ---
 
@@ -145,7 +143,6 @@ NG軸:
 - raw tableRef 動的 SQL を許可する
 - manifest authority / seed-defined mapping を迂回する
 - credential plaintext / endpoint 実体 / signed URL / bucket / storage path を frontend payload / seed payload / projection / log に露出する
-- standalone external scheduler receiver / second queue authority を追加する
 
 受入条件:
 - [ ] `record_transfer_lifecycle_evidence` が generic executor から退避され、Export/SFTP lifecycle 意味は `execute_abstract_function` + manifest-authorized PostgreSQL function / evidence projection mapping 等の data-defined route へ寄っている。
@@ -160,7 +157,7 @@ NG軸:
 out_of_scope:
 - Roadmap 更新
 - 外部連携基板 parent completion の再判定・未実装化
-- scheduler 本体 / standalone external scheduler receiver / second queue authority の追加
+- scheduler 本体の変更
 - provider-specific scheduler/client/runtime 実装
 - DB schema / backend runtime / frontend / test の今回実装
 

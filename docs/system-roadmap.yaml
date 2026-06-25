@@ -959,31 +959,6 @@ system_roadmap_ssot:
         - projection_response_implemented
         - sse_sanitized_projection_verified
 
-    product.job_scheduler_port_consumer:
-      bundle_id: job-scheduler-port-consumer
-      title: Job/Scheduler external port consumer removed
-      status: implemented
-      production_ready: false
-      public_summary: >-
-        Standalone external scheduler port consumer remaining work is removed. Generic hook_port consumers already cover external trigger intake, and built-in RuntimeTimelineScheduler remains independent from external_port_substrate port records. No second queue authority, provider-specific scheduler client/handler, standalone receiver, or direct runtime execution path is introduced. RuntimeTimelineScheduler owns built-in queue / cron trigger driver loop / scheduler alignment; SchedulerJobManifestSubstrate owns run ledger / input lease / job execution lifecycle / job status projection; ManifestDispatcher owns runtime destination selection.
-      scope:
-        - removed_standalone_external_scheduler_port_consumer
-        - generic_hook_port_intake_covers_external_trigger_intake
-        - runtime_timeline_scheduler_port_substrate_independence_preserved
-      completion_condition:
-        - standalone_scheduler_receiver_not_active_todo
-        - generic_hook_port_intake_covers_external_trigger_intake
-        - no_second_queue_authority_or_provider_specific_scheduler_client
-        - runtime_timeline_scheduler_independence_documented
-      detail_ref:
-        - docs/design/runtime-bundle-job-scheduler-ssot.yaml
-        - docs/design/external-port-substrate-ssot.yaml
-      closed_gap_ref:
-        - standalone_external_scheduler_port_consumer_removed
-        - generic_hook_port_consumers_cover_external_trigger_intake
-        - no_second_queue_authority
-        - no_provider_specific_scheduler_client_or_handler
-
 
     product.scheduler_job_manifest_substrate:
       bundle_id: scheduler-job-manifest-substrate-implementation

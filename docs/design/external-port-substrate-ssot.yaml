@@ -315,6 +315,7 @@ external_port_substrate_ssot:
       - credential_release_lease
       - credential_fail_lease
       - compute_checksum
+      - record_transfer_lifecycle_evidence
     abstract_function_key_surface:
       purpose: >-
         topology.external_port_policy_steps.abstract_function_key is a TEXT column
@@ -412,6 +413,7 @@ external_port_substrate_ssot:
         handler_class: FileStorageBundleStepHandler
         operation_keys:
           - compute_checksum
+      - record_transfer_lifecycle_evidence
         note: >-
           record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download
           / bind_record_file_attachment / list_record_file_attachments / unbind_record_file_attachment
@@ -480,13 +482,6 @@ external_port_substrate_ssot:
     webhook_inbox_bundle:
       port_consumer: [hook_port]
       detail_ref: docs/design/runtime-bundle-webhook-inbox-ssot.yaml
-    job_scheduler_bundle:
-      classification: removed_as_standalone_external_port_consumer
-      note: >-
-        Standalone external scheduler port consumer remaining work is removed.
-        External trigger intake is covered by generic hook_port consumers;
-        RuntimeTimelineScheduler remains independent from external_port_substrate port records.
-      detail_ref: docs/design/runtime-bundle-job-scheduler-ssot.yaml
     audit_approval_bundle:
       port_consumer: [response_port]
       detail_ref: docs/design/runtime-bundle-audit-approval-ssot.yaml

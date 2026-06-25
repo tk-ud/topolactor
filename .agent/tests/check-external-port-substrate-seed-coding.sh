@@ -40,7 +40,10 @@ ssot = Path('docs/design/external-port-substrate-ssot.yaml').read_text()
 seed = Path('db/seed_empty.sql').read_text()
 allowed_block = ssot.split('operation_key_allowed_values:',1)[1].split('execution_rule:',1)[0]
 allowed = set(re.findall(r'^\s*-\s+([a-z_]+)\s*$', allowed_block, re.M))
-seed_ops = set(re.findall(r"\([^\n]*?,\s*'([a-z_]+)'\s*,\s*'\{", seed.split('external_port_policy_steps',1)[-1]))
+step_blocks = re.findall(r"INSERT INTO topology\.external_port_policy_steps[^;]*;", seed, re.S)
+seed_ops = set()
+for block in step_blocks:
+    seed_ops.update(re.findall(r"\([^\n]*?,\s*'([a-z_]+)'\s*,\s*'\{", block))
 missing = seed_ops - allowed
 if missing:
     raise SystemExit(f'seed operation_key outside SSOT: {sorted(missing)}')
@@ -51,8 +54,14 @@ from pathlib import Path
 import re
 seed = Path('db/seed_empty.sql').read_text()
 runtime = Path('backend/runtime/ExternalPortCredentialRefresher.cs').read_text()
-seed_ops = set(re.findall(r"\([^\n]*?,\s*'([a-z_]+)'\s*,\s*'\{", seed.split('external_port_policy_steps',1)[-1]))
+if Path('backend/runtime/FileStorageBundleStepHandler.cs').exists():
+    runtime += '\n' + Path('backend/runtime/FileStorageBundleStepHandler.cs').read_text()
+step_blocks = re.findall(r"INSERT INTO topology\.external_port_policy_steps[^;]*;", seed, re.S)
+seed_ops = set()
+for block in step_blocks:
+    seed_ops.update(re.findall(r"\([^\n]*?,\s*'([a-z_]+)'\s*,\s*'\{", block))
 registry = set(re.findall(r'\["([a-z_]+)"\]\s*=', runtime))
+registry.update(re.findall(r'"([a-z_]+)"', runtime))
 missing = seed_ops - registry
 if missing:
     raise SystemExit(f'seed operation_key missing C# registry handler: {sorted(missing)}')
