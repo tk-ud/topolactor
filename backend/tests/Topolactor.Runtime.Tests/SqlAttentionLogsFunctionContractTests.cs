@@ -148,6 +148,21 @@ public class SqlAttentionLogsFunctionContractTests
     // =========================================================================
 
     [Fact]
+    public void DraftLane_JsonbLeavesWalker_FeedsGuardedInputsToSetReturningFunctions()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.sql_attention_jsonb_leaves", sql);
+        // Scalar-safe: jsonb_each / jsonb_array_elements must receive a CASE-guarded container,
+        // never the raw recursive node (which raises on scalar leaves regardless of planner ordering).
+        Assert.Contains("jsonb_each(", sql);
+        Assert.Contains("CASE WHEN jsonb_typeof(walk.v) = 'object' THEN walk.v ELSE '{}'::jsonb END", sql);
+        Assert.Contains("CASE WHEN jsonb_typeof(walk.v) = 'array' THEN walk.v ELSE '[]'::jsonb END", sql);
+        // The fragile form (raw node fed to the SRF, guarded only by a WHERE qual) must not return.
+        Assert.DoesNotContain("FROM jsonb_each(walk.v)", sql);
+        Assert.DoesNotContain("FROM jsonb_array_elements(walk.v)", sql);
+    }
+
+    [Fact]
     public void DraftLane_DefinesInsertOnlyAuthorityAndMarkdownProjectionTables()
     {
         var sql = LoadSql();

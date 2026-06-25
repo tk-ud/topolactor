@@ -795,6 +795,13 @@ CREATE INDEX IF NOT EXISTS idx_sql_attention_draft_markdown_source_set
 -- Recursive scalar-leaf walker for topology / relation JSONB. Returns each
 -- scalar leaf as (key_name, key_value, value_kind). Used to discover discrete
 -- Keys and to search the manifest topology space. Builtins only (load-order safe).
+--
+-- Scalar-safe by construction: jsonb_each / jsonb_array_elements are set-returning
+-- functions that raise on non-object / non-array input. The recursive term feeds
+-- each SRF a guarded input via CASE (empty object/array when the node is not the
+-- matching container type), so scalar leaves that re-enter the walk never trigger
+-- an SRF error regardless of planner qual ordering. Scalar nodes simply expand to
+-- zero children, terminating the recursion.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION logs.sql_attention_jsonb_leaves(p_doc JSONB)
 RETURNS TABLE (key_name TEXT, key_value TEXT, value_kind TEXT)
@@ -807,13 +814,17 @@ AS $$
         SELECT child.k, child.v
         FROM walk
         CROSS JOIN LATERAL (
+            -- jsonb_each is only ever fed an object; non-objects expand to zero rows.
             SELECT e.key AS k, e.value AS v
-              FROM jsonb_each(walk.v) e
-             WHERE jsonb_typeof(walk.v) = 'object'
+              FROM jsonb_each(
+                     CASE WHEN jsonb_typeof(walk.v) = 'object' THEN walk.v ELSE '{}'::jsonb END
+                   ) e
           UNION ALL
+            -- jsonb_array_elements is only ever fed an array; non-arrays expand to zero rows.
             SELECT walk.k AS k, a.value AS v
-              FROM jsonb_array_elements(walk.v) a
-             WHERE jsonb_typeof(walk.v) = 'array'
+              FROM jsonb_array_elements(
+                     CASE WHEN jsonb_typeof(walk.v) = 'array' THEN walk.v ELSE '[]'::jsonb END
+                   ) a
         ) child
     )
     SELECT k AS key_name,
