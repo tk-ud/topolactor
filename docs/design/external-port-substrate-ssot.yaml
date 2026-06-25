@@ -9,7 +9,7 @@ external_port_substrate_ssot:
       外部連携 Bundle 共通基盤 SSOT。
       access_port / response_port / hook_port / credential_requirement を
       物理テーブル + seed projection + admin role write policy で定義する。
-      7 consumer bundles (file_storage / email / stripe / webhook_inbox / job_scheduler / audit_approval / export_sftp) + credential_requirement substrate の共通基盤として機能し、
+      6 active consumer bundles (file_storage / email / stripe / webhook_inbox / audit_approval / export_sftp) + credential_requirement substrate の共通基盤として機能し、
       credential は独立した管理 plane にしない。
       credential 管理は行うが、admin 権限の projection 側管理画面で
       port record context 内に統合し、provider 別・bundle 別の
@@ -481,7 +481,11 @@ external_port_substrate_ssot:
       port_consumer: [hook_port]
       detail_ref: docs/design/runtime-bundle-webhook-inbox-ssot.yaml
     job_scheduler_bundle:
-      port_consumer: [access_port, hook_port]
+      classification: removed_as_standalone_external_port_consumer
+      note: >-
+        Standalone external scheduler port consumer remaining work is removed.
+        External trigger intake is covered by generic hook_port consumers;
+        RuntimeTimelineScheduler remains independent from external_port_substrate port records.
       detail_ref: docs/design/runtime-bundle-job-scheduler-ssot.yaml
     audit_approval_bundle:
       port_consumer: [response_port]
@@ -656,6 +660,5 @@ external_port_substrate_ssot:
       - email_bundle
       - stripe_bundle
       - webhook_inbox_bundle
-      - job_scheduler_bundle
       - audit_approval_bundle
       - export_sftp_bundle

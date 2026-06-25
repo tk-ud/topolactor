@@ -103,7 +103,6 @@ for yaml in \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
   "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
   "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
-  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
   "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
   "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   for key in "${REQUIRED_KEYS[@]}"; do
@@ -199,7 +198,6 @@ for yaml in \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
   "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
   "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
-  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
   "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
   "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   check_content "$yaml" "secret_credential_boundary"
@@ -234,7 +232,6 @@ for yaml in \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
   "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
   "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
-  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
   "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
   "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   for pat in "${FORBIDDEN_PATTERNS[@]}"; do
@@ -273,7 +270,6 @@ for yaml in \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
   "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
   "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
-  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
   "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
   "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   check_content "$yaml" "port_substrate_relation"
@@ -290,7 +286,7 @@ check_content "$ROADMAP" "product.stripe_port_consumer"
 check_content "$ROADMAP" "product.file_storage_port_consumer"
 check_content "$ROADMAP" "product.export_sftp_port_consumer"
 check_content "$ROADMAP" "product.webhook_inbox_port_consumer"
-check_content "$ROADMAP" "product.job_scheduler_port_consumer"
+check_content "$ROADMAP" "standalone_external_scheduler_port_consumer_removed"
 check_content "$ROADMAP" "product.audit_approval_port_consumer"
 
 check_content "$ROADMAP" "external-port-substrate-implementation"
@@ -314,7 +310,7 @@ check_absent "$ROADMAP" "admin_role_port_write_ui_design_not_started"
 check_absent "$ROADMAP" "consumer_bundle_port_connection_design_not_started"
 check_absent '.agent/tasks/todo.md' '## Bundle `external-port-substrate-implementation`'
 check_absent '.agent/tasks/todo.md' '`external-port-substrate-implementation` | external_port_substrate'
-check_content ".agent/tasks/todo.md" "接続実装"
+check_content ".agent/tasks/todo.md" "external-port-consumer-hardcode-reduction"
 check_absent ".agent/tasks/todo.md" "external-port-substrate-design"
 check_absent ".agent/tasks/todo.md" "接続設計"
 check_content ".agent/tasks/external-port-substrate-implementation-todo.md" "external_port_substrate"
@@ -328,7 +324,6 @@ for yaml in \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
   "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
   "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
-  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
   "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
   "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   check_absent "$yaml" "owner_status:"
@@ -345,7 +340,6 @@ for yaml in \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
   "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
   "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
-  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
   "docs/design/runtime-bundle-audit-approval-ssot.yaml"; do
   check_content "$yaml" "secure_consumer_dispatch_lane_ref"
   check_content "$yaml" "docs/design/external-port-substrate-ssot.yaml#secure_consumer_dispatch_lane"

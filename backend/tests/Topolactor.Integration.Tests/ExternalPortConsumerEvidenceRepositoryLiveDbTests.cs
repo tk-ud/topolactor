@@ -20,7 +20,6 @@ public class ExternalPortConsumerEvidenceRepositoryLiveDbTests
         yield return ["topology.webhook_intake_snapshots", "webhook_received", "received"];
         yield return ["topology.signature_verification_evidence", "signature_verification_success", "verified"];
         yield return ["topology.payment_state_projections", "payment_state_projected", "projected"];
-        yield return ["topology.scheduler_external_event_evidence", "scheduler_enqueued", "scheduler_enqueued"];
         yield return ["topology.audit_approval_evidence", "approval_reviewed", "reviewed"];
         yield return ["topology.audit_notification_evidence", "notification_recorded", "notified"];
         yield return ["topology.sftp_transfer_log", "transfer_initiated", "transfer_initiated"];
@@ -127,7 +126,6 @@ public class ExternalPortConsumerEvidenceRepositoryLiveDbTests
             "topology.webhook_intake_snapshots" => "DELETE FROM topology.webhook_intake_snapshots WHERE evidence_json->>'dispatch_id' = @dispatchId",
             "topology.signature_verification_evidence" => "DELETE FROM topology.signature_verification_evidence WHERE evidence_json->>'dispatch_id' = @dispatchId",
             "topology.payment_state_projections" => "DELETE FROM topology.payment_state_projections WHERE evidence_json->>'dispatch_id' = @dispatchId",
-            "topology.scheduler_external_event_evidence" => "DELETE FROM topology.scheduler_external_event_evidence WHERE evidence_json->>'dispatch_id' = @dispatchId",
             "topology.audit_approval_evidence" => "DELETE FROM topology.audit_approval_evidence WHERE evidence_json->>'dispatch_id' = @dispatchId",
             "topology.audit_notification_evidence" => "DELETE FROM topology.audit_notification_evidence WHERE evidence_json->>'dispatch_id' = @dispatchId",
             "topology.sftp_transfer_log" => "DELETE FROM topology.sftp_transfer_log WHERE evidence_json->>'dispatch_id' = @dispatchId",

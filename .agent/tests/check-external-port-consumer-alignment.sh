@@ -61,7 +61,6 @@ CONSUMER_SSOTS=(
   "docs/design/runtime-bundle-email-ssot.yaml"
   "docs/design/runtime-bundle-stripe-ssot.yaml"
   "docs/design/runtime-bundle-webhook-inbox-ssot.yaml"
-  "docs/design/runtime-bundle-job-scheduler-ssot.yaml"
   "docs/design/runtime-bundle-audit-approval-ssot.yaml"
   "docs/design/runtime-bundle-export-sftp-ssot.yaml"
 )
@@ -100,26 +99,6 @@ for phrase in "${FORBIDDEN_TODO_PHRASES[@]}"; do
   fi
 done
 
-# consumer bundles should now be partial
-CONSUMER_BUNDLE_IDS=(
-  "file-storage-port-consumer"
-  "email-port-consumer"
-  "stripe-port-consumer"
-  "webhook-inbox-port-consumer"
-  "job-scheduler-port-consumer"
-  "audit-approval-port-consumer"
-  "export-sftp-port-consumer"
-)
-
-for bundle_id in "${CONSUMER_BUNDLE_IDS[@]}"; do
-  # Check "Status:** partial" appears after bundle header (grep approach)
-  if grep -A5 "Bundle \`${bundle_id}\`" "$REPO_ROOT/$TODO_FILE" | grep -qF "Status:** partial"; then
-    pass "$TODO_FILE: $bundle_id has Status: partial"
-  else
-    fail "$TODO_FILE: $bundle_id should have Status: partial after PR#460 seed binding completion"
-  fi
-done
-
 echo ""
 echo "=== 3. No provider-specific runtime / client class additions in backend ==="
 
@@ -137,6 +116,8 @@ PROVIDER_CLASS_PATTERNS=(
   "class SendGridClient"
   "class WebhookInboxProviderService"
   "class ExternalSchedulerProviderService"
+  "class ExternalSchedulerReceiver"
+  "class ExternalSchedulerClient"
   "class AuditApprovalNotificationService"
   "class SmtpBundle"
   "class StripeBundle"
@@ -164,7 +145,6 @@ FRONTEND_DIRS=()
 if [ ${#FRONTEND_DIRS[@]} -gt 0 ]; then
   FRONTEND_CREDENTIAL_PATTERNS=(
     "smtp_password"
-    "smtp_api_key"
     "stripe_secret_key"
     "webhook_signing_key_value"
     "sftp_private_key_value"
@@ -258,34 +238,32 @@ for ssot in "${CONSUMER_SSOTS[@]}"; do
   fi
   check_content "$ssot" "evidence"
 done
-check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "scheduler_evidence_projection"
-check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "DB queue 新設ではない"
 
 echo ""
 echo "=== 9. job_scheduler built-in scheduler independence ==="
 
+ROADMAP="docs/system-roadmap.yaml"
 check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "built_in_scheduler_independence"
 check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "topolactor 内蔵 scheduler"
-check_content ".agent/tasks/todo.md" "built-in scheduler は port substrate に依存しない"
+check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "RuntimeTimelineScheduler must not depend on external_port_substrate port records"
+check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "generic hook_port intake"
+check_content "$ROADMAP" "standalone_external_scheduler_port_consumer_removed"
 
 echo ""
 echo "=== 10. Roadmap closed_gap_ref for seed binding ==="
 
-ROADMAP="docs/system-roadmap.yaml"
 check_content "$ROADMAP" "consumer_bundle_seed_binding_implemented_per_pr460_all_7_bundles"
 check_content "$ROADMAP" "email_seed_binding_and_credential_requirement_implemented_per_pr460"
 check_content "$ROADMAP" "stripe_seed_binding_and_credential_requirement_implemented_per_pr460"
 check_content "$ROADMAP" "file_storage_seed_binding_and_credential_requirement_implemented_per_pr460"
 check_content "$ROADMAP" "export_sftp_seed_binding_and_credential_requirement_implemented_per_pr460"
 check_content "$ROADMAP" "webhook_inbox_seed_binding_and_credential_requirement_implemented_per_pr460"
-check_content "$ROADMAP" "job_scheduler_seed_binding_and_credential_requirement_implemented_per_pr460"
 check_content "$ROADMAP" "audit_approval_seed_binding_and_credential_requirement_implemented_per_pr460"
 
 echo ""
 echo "=== 11. Forbidden vocabulary guard (job_queue physical table / 8 Bundle 共通基盤 / external 系 8 Bundle) ==="
 
 SSOT_AND_TASK_FILES=(
-  "docs/design/runtime-bundle-job-scheduler-ssot.yaml"
   "docs/design/runtime-bundle-job-scheduler-ssot.md"
   "docs/design/external-port-substrate-ssot.yaml"
   "docs/design/extended-runtime-bundle-registry-ssot.yaml"

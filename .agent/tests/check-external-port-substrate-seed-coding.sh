@@ -86,7 +86,7 @@ fi
 rg -n "ExecutePolicyAsync_HookSeedOperations_VerifiesSignatureAndReachesSchedulerBoundary" backend/tests/Topolactor.Runtime.Tests/ExternalPortCredentialRefresherTests.cs >/dev/null || fail "missing hook seeded policy scheduler-boundary test"
 
 # Guard: consumer bundle seed binding rows must be present (required_by_bundle).
-for bundle in file_storage_bundle email_bundle stripe_bundle webhook_inbox_bundle job_scheduler_bundle audit_approval_bundle export_sftp_bundle; do
+for bundle in file_storage_bundle email_bundle stripe_bundle webhook_inbox_bundle audit_approval_bundle export_sftp_bundle; do
   rg -n "'${bundle}'" db/seed_empty.sql >/dev/null || fail "consumer bundle seed binding missing: ${bundle}"
 done
 
@@ -100,7 +100,6 @@ required = {
     'email_bundle':          ['response_port'],
     'stripe_bundle':         ['hook_port'],
     'webhook_inbox_bundle':  ['hook_port'],
-    'job_scheduler_bundle':  ['access_port', 'hook_port'],
     'audit_approval_bundle': ['response_port'],
     'export_sftp_bundle':    ['response_port'],
 }

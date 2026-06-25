@@ -14,9 +14,10 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-port` | CLI/MCP read/export/import-candidate port 親境界 | not_started | 5 subBundles | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
-| `external-scheduler-ingress-receiver-port` | external scheduler ingress receiver port substrate 接続実装 | not_started | 1 | `product.job_scheduler_port_consumer` | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
+
+注: 将来、外部 scheduler 由来の occurrence metadata が必要になった場合も、standalone receiver ではなく既存 hook_port intake path の任意 evidence/projection extension としてのみ検討する。
 
 ---
 
@@ -144,7 +145,7 @@ NG軸:
 - raw tableRef 動的 SQL を許可する
 - manifest authority / seed-defined mapping を迂回する
 - credential plaintext / endpoint 実体 / signed URL / bucket / storage path を frontend payload / seed payload / projection / log に露出する
-- `job-scheduler-port-consumer` / scheduler ingress TODO をこの作業で再分類・編集する
+- standalone external scheduler receiver / second queue authority を追加する
 
 受入条件:
 - [ ] `record_transfer_lifecycle_evidence` が generic executor から退避され、Export/SFTP lifecycle 意味は `execute_abstract_function` + manifest-authorized PostgreSQL function / evidence projection mapping 等の data-defined route へ寄っている。
@@ -159,7 +160,7 @@ NG軸:
 out_of_scope:
 - Roadmap 更新
 - 外部連携基板 parent completion の再判定・未実装化
-- scheduler 本体 / `job-scheduler-port-consumer` / `external-scheduler-ingress-receiver-port` の再分類
+- scheduler 本体 / standalone external scheduler receiver / second queue authority の追加
 - provider-specific scheduler/client/runtime 実装
 - DB schema / backend runtime / frontend / test の今回実装
 
@@ -427,70 +428,5 @@ out_of_scope:
 - approval / commit / delete / payment / email send
 
 ---
-
-## Bundle `external-scheduler-ingress-receiver-port`
-
-**Status:** not_started
-**Roadmap/status SSOT:** `product.job_scheduler_port_consumer` (`docs/system-roadmap.yaml`)
-**Primary SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
-**Referenced SSOT:** `docs/design/external-port-substrate-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml`
-**対応SSOTセクション名:** `authority_boundary` / `port_substrate_relation` / `scheduler_contract` / `scheduler_boundary` / `secret_credential_boundary` / `secure_consumer_dispatch_lane_ref`
-
-履歴名:
-旧 `job-scheduler-port-consumer`。PR#460 で完了済みの external scheduler access_port / hook_port seed binding と built-in scheduler `credential_kind=none` seed row は未処理項目として復活させない。旧広範囲 bundle の `partial` 状態はここで縮退し、残作業は `external-scheduler-ingress-receiver-port` の `not_started` として扱う。
-
-目的:
-- external scheduler ingress receiver wiring
-- external scheduler hook/access receiver が active port record を解決する
-- credential_requirement fail-close guard
-- scheduler enqueue boundary への handoff
-- missing port / missing credential / invalid policy を explicit fail-close として記録する
-- built-in RuntimeTimelineScheduler path が port substrate に依存しない guard を維持する
-
-対象ファイル名候補:
-- `backend/runtime/ExternalPortDispatchRuntime.cs`
-- `backend/runtime/ExternalPortPolicyStepExecutor.cs`
-- `backend/runtime/RuntimeTimelineScheduler.cs` (port substrate 非依存 guard のみ)
-- `backend/runtime/ManifestDispatcher.cs`
-- `backend/Program.cs` (external scheduler hook/access receiver entry only)
-- `backend/repository/*ExternalPort*`
-- `backend/repository/*Scheduler*`
-- `db/seed_empty.sql` (既存 seed binding の復活追加は不可。必要時は receiver metadata の最小調整のみ)
-
-NG軸:
-- scheduler 本体実装をこの Bundle に戻す
-- cron driver / run ledger / job execution lifecycle / job status projection をこの Bundle に含める
-- PR#460 完了済み seed binding を未処理 todo として復活させる
-- provider-specific scheduler client / handler / selector を追加する
-- built-in RuntimeTimelineScheduler が external_port_substrate port record に依存する
-- direct runtime execution without scheduler
-- silent fallback on missing port / missing credential / invalid policy
-- external scheduler provider credential を public SSOT / seed / UI / projection / log に plaintext 露出する
-
-受入条件:
-- [ ] external scheduler hook/access receiver が active port record を解決し、credential_requirement を fail-close 解決して scheduler enqueue boundary へ渡す。
-- [ ] missing port / missing credential / invalid policy は silent fallback せず explicit fail-close と runtime_event_log 等の記録対象になる。
-- [ ] external scheduler provider credential は external_port_substrate の port record attachment として扱い、standalone credential plane を作らない。
-- [ ] provider_kind / required_by_bundle は data only で、provider-specific scheduler client / handler / C# selector を追加しない。
-- [ ] built-in RuntimeTimelineScheduler path は external_port_substrate port record を参照しない guard/tests を持つ。
-- [ ] cron driver / run ledger / lifecycle / status projection は SchedulerJobManifestSubstrate または RuntimeTimelineScheduler 側の責務として、この Bundle の実装/受入条件に含めない。
-
-out_of_scope:
-- built-in scheduler 本体
-- cron trigger driver loop
-- run ledger / input lease
-- job execution lifecycle
-- job status projection / scheduler evidence projection
-- `execution_started` / `execution_completed` / `execution_failed` lifecycle 実装
-- runtime destination selection / manifest dispatcher responsibility の変更
-- external scheduler provider selection
-- provider-specific scheduler client
-
-再分類済み / この TODO から除外:
-- cron trigger driver loop: SchedulerJobManifestSubstrate / RuntimeTimelineScheduler side
-- run ledger / input lease / job execution lifecycle: SchedulerJobManifestSubstrate
-- scheduler evidence / job status projection: SchedulerJobManifestSubstrate projection/evidence surface
-- execution_started / execution_completed / execution_failed lifecycle: job manifest run ledger / runtime_event_log side
-- PR#460 完了済み seed binding: current TODO の未処理項目として復活させない
 
 ---
