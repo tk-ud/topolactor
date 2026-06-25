@@ -10,10 +10,11 @@
 |-----------|------|--------|------|----------------|---------|
 | `instance-port-substrate` | credential-backed instance connection / instance function call substrate | not_started | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
+| `external-port-consumer-hardcode-reduction` | 外部連携 consumer hardcode reduction / abstract function・seed 拡張 | not_started | 1 | - | `docs/design/external-port-substrate-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `cli-mcp-dispatch-secured-read-export-port` | CLI/MCP dispatch-secured read/export/import-candidate port 実装 | not_started | 1 | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
-| `job-scheduler-port-consumer` | external scheduler ingress receiver port substrate 接続実装 | partial | 1 | `product.job_scheduler_port_consumer` | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
+| `cli-mcp-dispatch-secured-port` | CLI/MCP read/export/import-candidate port 親境界 | not_started | 5 subBundles | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
+| `external-scheduler-ingress-receiver-port` | external scheduler ingress receiver port substrate 接続実装 | not_started | 1 | `product.job_scheduler_port_consumer` | `docs/design/runtime-bundle-job-scheduler-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。scheduler consumer (job_scheduler) は built-in/external port seed binding が完了済み (内蔵 scheduler は port substrate 非依存)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -71,6 +72,99 @@ NG軸:
 
 ---
 
+## Bundle `external-port-consumer-hardcode-reduction`
+
+**Status:** not_started
+**Roadmap bundle:** `-`
+**Primary SSOT:** `docs/design/external-port-substrate-ssot.yaml`
+
+問題点:
+外部連携基板は Gate0 / parent completion として実装済みだが、generic executor / evidence repository / abstract function external context 周辺に、次 Bundle 追加時に C# 意味が増えやすい hardcode reduction 候補が残っている。
+
+- `record_transfer_lifecycle_evidence` が `ExternalPortPolicyStepExecutor` にあり、Export/SFTP lifecycle 意味が generic executor 内へ混入している。
+- `ExportJobId` / `FileArtifactId` / `ChecksumValue` / `AuthorizationKey` / `OutputProp` などの entity/result context key が C# switch として残っている。
+- `NpgsqlExternalPortConsumerEvidenceRepository` に `AllowedTableRefs` / `InsertSql` / `SelectSql` の tableRef switch があり、manifest-bound validation はあるが projection constructor mapping が C# 側に残っている。
+- compatibility operation は `abstract_function_key` absorption seed で吸収済みだが、active policy step の `operation_key` が legacy compatibility 名のまま残っている箇所があるため、可能なら `execute_abstract_function` への完全寄せを検討できる。
+- credential refresh は canonical abstract primitive chain が存在する一方、compatibility path に lease duration 等の実装側値が残らないか確認・整理余地がある。
+
+目的:
+外部連携基板の runtime skeleton は維持しつつ、bundle lifecycle 意味・projection mapping 意味・entity ref 意味を seed / abstract function / DB function mapping に寄せ、今後の consumer bundle 追加で provider/bundle-specific C# hardcode が増えるのを防ぐ。
+
+改善方針:
+- `record_transfer_lifecycle_evidence` を generic `ExternalPortPolicyStepExecutor` から退避する。第一候補は `execute_abstract_function` + manifest-authorized PostgreSQL function / evidence projection mapping。純計算のみ handler に残す方針と整合させる。
+- compatibility operation rows を、可能な範囲で active seed 上 `execute_abstract_function` + `abstract_function_key` へ寄せる。shim は旧 row 互換の fail-close adapter として縮小する。
+- `event_log` / `append_runtime_event_log` の `entity_ref_key` は PascalCase runtime field 名 switch ではなく、abstract function input binding / external_context binding に寄せる。
+- `ApplyResultToExternalContext` の固定 key switch は、manifest 側の result-to-external-context mapping へ寄せられるか検討する。
+- evidence table append/load は C# table switch を増やさず、DB function または seed-defined mapping row + manifest binding validation へ寄せる。raw tableRef 動的 SQL は禁止する。
+- credential refresh compatibility path は canonical primitive chain と矛盾しないよう整理し、method / lease duration / expires_at response key 等の C# default を増やさない。
+- provider_kind / required_by_bundle による C# if/switch 分岐は禁止する。
+- frontend payload / seed payload / projection / log に credential plaintext、endpoint 実体、signed URL、bucket、storage path 等を出さない。
+
+対応資料:
+- `docs/design/external-port-substrate-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/abstract-function-primitive-registry-ssot.yaml`
+- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
+- `docs/design/runtime-bundle-file-storage-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+
+対象ファイル名:
+- `.agent/tasks/todo.md`
+- `backend/runtime/ExternalPortCredentialRefresher.cs`
+- `backend/runtime/ExternalPortPolicyStepExecutorCompatibilityShim.cs`
+- `backend/runtime/AbstractFunctionRuntime.cs`
+- `backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs`
+- `db/seed_empty.sql`
+- `db/external_port_compat_absorption_seed.sql`
+- `db/topology_tables.sql`
+- `.agent/tests/check-external-port-compat-absorption.sh`
+- `.agent/tests/check-external-port-parent-completion.sh`
+
+対象関数名・境界:
+- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
+- `ExternalPortPolicyStepExecutor.ExecuteAsync`
+- `ExternalPortPolicyStepExecutor.ResolveEntityId`
+- `ExternalPortPolicyStepExecutor.BuildRetrySchedulerRequest`
+- `ExternalPortPolicyStepExecutor` の `record_transfer_lifecycle_evidence`
+- `ExternalPortPolicyStepExecutorCompatibilityShim.ExecuteCompatibilityAsync`
+- `AbstractFunctionExecutionContext.ApplyResultToExternalContext`
+- `AbstractFunctionExecutionContext.ResolveExternalContext`
+- `EventLogPrimitiveAdapter.ResolveEntityRef`
+- `NpgsqlExternalPortConsumerEvidenceRepository.AppendEvidenceAsync`
+- `NpgsqlExternalPortConsumerEvidenceRepository.LoadProjectionAsync`
+- `NpgsqlExternalPortConsumerEvidenceRepository.InsertSql`
+- `NpgsqlExternalPortConsumerEvidenceRepository.SelectSql`
+- `NpgsqlExternalPortConsumerEvidenceRepository.ValidateTableRefBoundToActiveManifestAsync`
+
+NG軸:
+- 外部連携 parent completion / Gate0 implemented 状態を未実装扱いに戻す
+- Roadmap (`docs/system-roadmap.yaml`) をこの Bundle 追加で更新する
+- provider_kind / required_by_bundle による C# if/switch 分岐を増やす
+- provider/bundle-specific runtime handler / client / repository method を追加する
+- raw tableRef 動的 SQL を許可する
+- manifest authority / seed-defined mapping を迂回する
+- credential plaintext / endpoint 実体 / signed URL / bucket / storage path を frontend payload / seed payload / projection / log に露出する
+- `job-scheduler-port-consumer` / scheduler ingress TODO をこの作業で再分類・編集する
+
+受入条件:
+- [ ] `record_transfer_lifecycle_evidence` が generic executor から退避され、Export/SFTP lifecycle 意味は `execute_abstract_function` + manifest-authorized PostgreSQL function / evidence projection mapping 等の data-defined route へ寄っている。
+- [ ] active compatibility policy steps は可能な範囲で `execute_abstract_function` + `abstract_function_key` に寄り、shim は旧 row 互換の fail-close adapter として縮小されている。
+- [ ] `ExportJobId` / `FileArtifactId` / `ChecksumValue` / `AuthorizationKey` / `OutputProp` などの entity/result context key が C# 固定 switch ではなく manifest / abstract function binding / external_context mapping で解決される。
+- [ ] evidence append/load は C# table switch を増やさず、DB function または seed-defined mapping row + manifest binding validation で処理され、raw tableRef 動的 SQL は導入されていない。
+- [ ] credential refresh compatibility path は canonical primitive chain と矛盾せず、method / lease duration / expires_at response key 等の C# default を増やしていない。
+- [ ] provider_kind / required_by_bundle による C# if/switch 分岐、provider-specific client、bundle-specific runtime handler を追加していない。
+- [ ] credential plaintext / endpoint 実体 / signed URL / bucket / storage path が frontend payload / seed payload / projection / log に出ない。
+- [ ] `.agent/tests/check-external-port-compat-absorption.sh` / `.agent/tests/check-external-port-parent-completion.sh` / 必要な runtime tests が追加・更新され通過している。
+
+out_of_scope:
+- Roadmap 更新
+- 外部連携基板 parent completion の再判定・未実装化
+- scheduler 本体 / `job-scheduler-port-consumer` / `external-scheduler-ingress-receiver-port` の再分類
+- provider-specific scheduler/client/runtime 実装
+- DB schema / backend runtime / frontend / test の今回実装
+
+---
+
 ## Bundle `helper-manual`
 
 **Status:** not_started
@@ -94,114 +188,309 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ---
 
-## Bundle `cli-mcp-dispatch-secured-read-export-port`
+## Bundle `cli-mcp-dispatch-secured-port`
 
 **Status:** not_started
 **Roadmap/status SSOT:** `product.external_port_substrate` / `product.core_runtime_route`
-**SSOT:** `docs/design/cli-model-context-protocols-port-ssot.yaml` / `docs/design/cli-mcp-port-implementation-ssot.yaml`
+**Primary SSOT:** `docs/design/cli-model-context-protocols-port-ssot.yaml`
+**Referenced SSOT:** `docs/design/external-port-substrate-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml` / `docs/system-roadmap.yaml`
 
-問題点:
-CLI/MCP Port の read/export 境界、Context API、Data Reader、export_job、audit_log は定義済みだが、MCP/CLI access が必ず runtime dispatch 解決を通る security-critical lane として弱い。Core API 直叩き、未認証アクセス、dispatch 迂回、AI/CLI/MCP による DB 直接改変、外部AI構造化結果の正本扱いを閉じる必要がある。
+役割:
+MCP/CLI read/export/import-candidate port 全体の親境界。実装対象ではなく、SSOT セクション単位の subBundle 索引と共通 NG 軸を持つ。旧 `cli-mcp-dispatch-secured-read-export-port` は単一巨大実装 Bundle としては扱わない。
+
+共通NG軸:
+- direct DB connection / direct SQL execution
+- Core API 直叩き / dedicated backend handler / dispatch bypass
+- 未認証 CLI/MCP access / unauthorized scope expansion
+- credential read/export / plaintext credential response
+- AI/CLI/MCP による DB commit / approval / delete / payment / email send 実行
+- 外部AI構造化出力の正本扱い
+- read/export と import-candidate を同一実装 Bundle に混ぜる
+
+推奨実装順序:
+1. `cli-mcp-read-scope-port`
+2. `cli-mcp-export-job-port`
+3. `cli-mcp-file-stream-port`
+4. `cli-mcp-import-candidate-port`
+5. `cli-mcp-surface-metadata-port`
+
+順序理由:
+read/export は比較的安全な read-side boundary。import-candidate は external AI structured output を扱うため、正本化禁止・approval 前 commit 禁止・preview diff/evidence 境界を先に閉じる必要がある。そのため read/export と import-candidate を同一実装 Bundle に混ぜない。
+
+### SubBundle `cli-mcp-read-scope-port`
+
+**Status:** not_started
+**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml`
+**対応SSOTセクション名:** `core_invariant.canonical_read_export_lane` / `api_responsibility` / `data_reader_responsibility` / `admin_ui_configuration`
 
 目的:
-MCP/CLI client → MCP API port → user auth/authz → cli_reader_port scope resolution → credential/capability requirement resolution → ManifestDispatcher/runtime dispatch → Data Reader/authorized read model → physical DB read/export job/audit log → CLI/MCP response を正本レーンとして固定する。さらに External AI structured output → MCP API port → user auth/authz → import_candidate scope resolution → credential/capability requirement resolution → ManifestDispatcher/runtime dispatch → business object assignment → draft_operation/commit_candidate creation → preview diff → user approval → canonical commit dispatch → DB commit → audit/runtime_event_log を draft/candidate lane として実装する。
+- user auth/authz fail-close
+- `cli_reader_port` scope resolution
+- allowed tables / columns / filters / periods / roles / users の解決
+- credential/capability requirement resolution
+- ManifestDispatcher/runtime dispatch 解決済み request のみ Data Reader へ受け入れる
+- read/search/aggregate/analyze/validate の authorized read model 化
 
-実装方針:
-- [ ] MCP API port 入口で user auth/authz を fail-close し、response 後 validation や downstream 任せにしない。
-- [ ] cli_reader_port / import_candidate scope resolution を Context API だけで完了扱いにせず、ManifestDispatcher/runtime dispatch 解決済み request のみ Data Reader / business object assignment へ渡す。
-- [ ] credential/capability requirement resolution は plaintext credential 渡しではなく、credential requirement / capability availability / policy step requirement の解決として実装する。
-- [ ] create_export_job / audit_log / runtime_event_log / draft_operation / commit_candidate creation は system-controlled DB operation として限定許可し、record commit/delete/approval/payment/email send/arbitrary mutation は CLI/MCP out_of_scope として閉じる。
-- [ ] 外部AI構造化出力は evidence/input として扱い、root utterance / source transcript / confidence / unresolved fields / preview diff を保持した draft_operation / commit_candidate だけを作成する。
-- [ ] user approval 前の DB mutation を禁止し、approval 自体を AI/MCP/CLI から実行できないようにする。approval 後のみ canonical commit dispatch 経由で DB commit へ進める。
-- [ ] external_port_substrate と混同せず、外部連携出入口と AI/CLI 安全 read/export/import-candidate 出入口を別 Bundle 境界として扱う。
-
-対応資料:
-- `docs/design/cli-model-context-protocols-port-ssot.yaml`
-- `docs/design/cli-mcp-port-implementation-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/runtime-bundle-file-storage-ssot.yaml`
-- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
-- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
-
-対象ファイル名:
+対象ファイル名候補:
 - `backend/runtime/ManifestDispatcher.cs`
 - `backend/runtime/RuntimeExecutor.cs`
 - `backend/runtime/TopologyFunctionBinder.cs`
-- `backend/runtime/ExternalPortDispatchRuntime.cs`
-- `backend/repository/*`
-- `backend/Program.cs`
-- `db/topology_tables.sql`
-- `db/seed_empty.sql`
-- `frontend/api/adminApi.ts`
-- `frontend/islands/ContentsScreenDesignPanel.tsx`
-- `frontend/islands/ProjectionShell.tsx`
-
-対象関数名またはruntime境界名:
-- `ManifestDispatcher.DispatchAsync`
-- `RuntimeExecutor.ExecuteAsync`
-- `TopologyFunctionBinder.Bind`
-- `ScreenDataShapeQueryRuntime.TryExecuteAsync`
-- `ExternalPortDispatchRuntime.ExecuteAsync`
-- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
-- `Data Reader / authorized read model boundary`
-- `MCP API port entry gate`
-- `business object assignment candidate boundary`
-- `draft_operation / commit_candidate creation boundary`
-- `canonical commit dispatch boundary`
+- `backend/repository/*Cli*` / `backend/repository/*Reader*`
+- `backend/Program.cs` (MCP/API port entry only; dedicated dispatch bypass route は不可)
+- `db/topology_tables.sql` (port config/audit surface only when SSOT-backed)
+- `db/seed_empty.sql` (admin config projection seed only when SSOT-backed)
 
 NG軸:
-- Core API 直叩き / direct API wrapper / dedicated backend handler route による dispatch bypass
-- 未認証 CLI/MCP access
-- dispatch 解決なし Data Reader / Context API / import candidate assignment
-- AI/CLI/MCP DB直接改変 / direct SQL / direct DB connection
-- approval / commit / delete / payment / email send の CLI/MCP 実行
-- credential read/export / plaintext credential response
-- audit log skip / runtime_event_log skip
-- scope外 table / column / period / row / business object assignment
-- 外部AI構造化結果の正本扱い / 根拠発話・source・confidence なし自動割当
-- 未確定項目の勝手な確定値化
+- direct DB connection
+- direct SQL execution
+- dispatch bypass
+- unauthorized read scope expansion
+- Context API / Data Reader を dispatch 解決なしで実行
+- credential/capability requirement を plaintext credential 渡しにする
+
+受入条件:
+- [ ] read/search/aggregate/analyze/validate は user auth/authz → scope resolution → credential/capability requirement resolution → ManifestDispatcher/runtime dispatch → Data Reader/authorized read model を必ず通る。
+- [ ] Data Reader は dispatch resolved request のみ受け付け、未解決 request を fail-close する。
+- [ ] allowed tables / columns / filters / periods / roles / users / row scope が admin config 由来で解決される。
+- [ ] direct DB connection / direct SQL / Core API direct call / dedicated handler bypass の guard または tests がある。
+- [ ] audit_log / runtime_event_log 境界を skip しない。
+
+out_of_scope:
+- export_job 生成 / file generation / manifest/checksum 生成
+- file stream / direct file download
+- import_structured_output / draft_operation / commit_candidate
+- DB commit / approval / delete / payment / email send
+- browser UI automation
+
+### SubBundle `cli-mcp-export-job-port`
+
+**Status:** not_started
+**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml`
+**対応SSOTセクション名:** `export_job` / `manifest` / `data_reader_responsibility`
+
+目的:
+- `create_export_job`
+- export ledger 記録
+- manifest generation
+- csv/json/pdf/zip generation
+- checksum generation
+- `source_record_ids` capture
+
+対象ファイル名候補:
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/runtime/RuntimeExecutor.cs`
+- `backend/repository/*Export*`
+- `backend/repository/*Reader*`
+- `db/topology_tables.sql` (export_job / manifest ledger only when SSOT-backed)
+- `db/seed_empty.sql` (export format/admin projection only when SSOT-backed)
+
+NG軸:
+- export without export_job
+- export without manifest/checksum
+- unauthorized bulk export
+- source_record_ids なしの搬出
+- export_job / audit_log / runtime_event_log skip
+
+受入条件:
+- [ ] export は必ず authorized read scope に基づく `export_job` として記録される。
+- [ ] manifest_version / export_job_id / generated_at / generated_by / period / source_tables / source_record_ids / files / checksum を持つ manifest が生成される。
+- [ ] csv/json/pdf/zip generation は Data Reader authorized request 由来の record set のみを対象にする。
+- [ ] checksum と generated_files が export ledger に残る。
+- [ ] unauthorized bulk export を fail-close する tests/guards がある。
+
+out_of_scope:
+- file stream permission / download API
+- import-candidate / draft_operation / commit_candidate
+- approval / DB commit / arbitrary mutation
+- provider-specific external export runtime
+
+### SubBundle `cli-mcp-file-stream-port`
+
+**Status:** not_started
+**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml`
+**対応SSOTセクション名:** `file_stream` / `mcp_surface.resources`
+
+目的:
+- `download_export_file`
+- `get_export_status`
+- export resource URI (`topolactor://exports/{export_job_id}/manifest.json`, `topolactor://exports/{export_job_id}/file`)
+- file stream permission
+
+対象ファイル名候補:
+- `backend/Program.cs` (MCP/API file stream entry only; direct path exposure 不可)
+- `backend/repository/*Export*`
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/runtime/RuntimeExecutor.cs`
+- `frontend/api/adminApi.ts` (admin projection metadata only if needed)
+
+NG軸:
+- stream without export_job
+- permission bypass
+- direct file path exposure
+- checksum/manifest metadata なしの stream
+
+受入条件:
+- [ ] file stream は API が許可した export_job に対してのみ開放される。
+- [ ] export_job_id / source_record_ids / generated_by / generated_at / period / checksum / manifest_version を検証する。
+- [ ] direct filesystem path や secret-bearing location を response/resource metadata に露出しない。
+- [ ] `get_export_status` と resource URI は unauthorized user に fail-close する。
+
+out_of_scope:
+- export_job 作成 / csv/json/pdf/zip generation 本体
+- read/search/aggregate/analyze/validate 本体
+- import-candidate / approval / DB commit
+- browser UI automation
+
+### SubBundle `cli-mcp-import-candidate-port`
+
+**Status:** not_started
+**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml` / `docs/design/runtime-bundle-audit-approval-ssot.yaml`
+**対応SSOTセクション名:** `core_invariant.canonical_structured_input_lane` / `structured_input_import` / `core_invariant.dispatch_and_approval_boundary`
+
+目的:
+- `import_structured_output`
+- `assign_business_object_candidate`
+- `create_draft_operation`
+- `create_commit_candidate`
+- `preview_diff`
+- `source_transcript_ref` / `root_utterance` / `confidence` / `unresolved_fields` / evidence handling
+
+対象ファイル名候補:
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/runtime/RuntimeExecutor.cs`
+- `backend/runtime/TopologyFunctionBinder.cs`
+- `backend/repository/*Draft*` / `backend/repository/*CommitCandidate*`
+- `backend/Program.cs` (MCP/API import-candidate entry only; approval execution route は不可)
+- `db/topology_tables.sql` (draft_operation / commit_candidate tables only when SSOT-backed)
+- `db/seed_empty.sql` (import_candidate admin config only when SSOT-backed)
+
+NG軸:
+- external AI structured output as SSOT
+- DB commit by AI/MCP/CLI
+- user approval bypass
+- auto-confirming unresolved fields
+- delete/payment/email send execution
 - commit_candidate から canonical dispatch を迂回した DB 更新
 
 受入条件:
-- [ ] read/export は必ず user auth/authz → scope resolution → credential/capability requirement resolution → ManifestDispatcher/runtime dispatch → Data Reader/authorized read model を通る。
-- [ ] Context API / Data Reader / import candidate assignment の dispatch bypass test / guard がある。
-- [ ] AI/MCP/CLI は draft_operation / commit_candidate 作成までで、DB commit / approval execution / arbitrary mutation を実行できない。
-- [ ] commit_candidate は source transcript / root utterance / confidence / unresolved fields / preview diff を保持する。
-- [ ] user approval 後のみ canonical commit dispatch 経由で DB commit へ進む。
-- [ ] create_export_job / draft_operation / commit_candidate / audit_log / runtime_event_log 以外の system-controlled write を追加していない。
-- [ ] external_port_substrate の secure consumer dispatch lane とは関連するが同一 Bundle として混同していない。
-- [ ] 関連 backend/frontend tests または `.agent/tests/*` が追加/更新されている。
+- [ ] External AI structured output は evidence/input として扱われ、正本化されない。
+- [ ] draft_operation / commit_candidate は source_transcript_ref / root_utterance / confidence / unresolved_fields / assigned_business_object_candidate / preview_diff を保持する。
+- [ ] AI/MCP/CLI は draft_operation / commit_candidate 作成までで、approval execution / DB commit / arbitrary mutation を実行できない。
+- [ ] user approval 後のみ canonical commit dispatch 経由で DB commit に進む境界が明記・検証される。
+- [ ] unresolved_fields を自動確定せず、preview diff/evidence なし candidate を fail-close する。
+
+out_of_scope:
+- read/export/file stream 実装
+- approval UI 実装
+- canonical commit dispatch 本体の新規実装
+- delete/payment/email send
+- browser UI automation
+
+### SubBundle `cli-mcp-surface-metadata-port`
+
+**Status:** not_started
+**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml`
+**対応SSOTセクション名:** `mcp_surface` / `admin_ui_configuration` / `explicitly_out_of_scope`
+
+目的:
+- MCP tools/resources generation
+- admin config projection
+- exposed resources/tools metadata
+- out_of_scope operation を surface metadata から除外する
+
+対象ファイル名候補:
+- `backend/Program.cs` (MCP metadata entry only; dedicated runtime bypass 不可)
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/repository/*Mcp*` / `backend/repository/*Cli*`
+- `db/seed_empty.sql` (MCP/admin config projection seed only when SSOT-backed)
+- `frontend/islands/ContentsScreenDesignPanel.tsx` (admin config projection only if needed)
+- `frontend/islands/ProjectionShell.tsx` (metadata projection only if needed)
+
+NG軸:
+- browser UI automation
+- dedicated backend handler bypassing dispatch
+- core API direct call
+- operation execution beyond declared read/export/import-candidate surface
+- out_of_scope operation の tool/resource 公開
+
+受入条件:
+- [ ] MCP tools/resources は admin config から生成される。
+- [ ] tools は get_monthly_context / search_records / aggregate_records / validate_export / create_export_job / download_export_file / get_export_status / import_structured_output / assign_business_object_candidate / create_draft_operation / create_commit_candidate / get_preview_diff に限定される。
+- [ ] resources は SSOT の `mcp_surface.resources` に沿い、permission/scope metadata と対応する。
+- [ ] explicitly_out_of_scope operations が tools/resources として公開されない guard/tests がある。
+
+out_of_scope:
+- read/export/import-candidate の runtime body 実装
+- backend route dedicated handler bypass
+- core API direct call
+- UI browser automation
+- approval / commit / delete / payment / email send
 
 ---
 
-## Bundle `job-scheduler-port-consumer`
+## Bundle `external-scheduler-ingress-receiver-port`
 
-**Status:** partial
-**Roadmap/status SSOT:** `product.job_scheduler_port_consumer`
-**SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
+**Status:** not_started
+**Roadmap/status SSOT:** `product.job_scheduler_port_consumer` (`docs/system-roadmap.yaml`)
+**Primary SSOT:** `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
+**Referenced SSOT:** `docs/design/external-port-substrate-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml`
+**対応SSOTセクション名:** `authority_boundary` / `port_substrate_relation` / `scheduler_contract` / `scheduler_boundary` / `secret_credential_boundary` / `secure_consumer_dispatch_lane_ref`
 
-PR#460 完了済み: external scheduler access_port / hook_port seed binding と、built-in scheduler の credential_kind=none seed row。
-この TODO は **external scheduler ingress receiver** に縮退する。
-RuntimeTimelineScheduler 本体、cron driver、run ledger、job execution lifecycle、job status projection は `product.scheduler_job_manifest_substrate` / SchedulerJobManifestSubstrate の責務であり、この port consumer TODO では扱わない。
+履歴名:
+旧 `job-scheduler-port-consumer`。PR#460 で完了済みの external scheduler access_port / hook_port seed binding と built-in scheduler `credential_kind=none` seed row は未処理項目として復活させない。旧広範囲 bundle の `partial` 状態はここで縮退し、残作業は `external-scheduler-ingress-receiver-port` の `not_started` として扱う。
 
-残 todo:
-- [ ] external scheduler hook/access receiver が active port record と credential_requirement を解決し、scheduler enqueue boundary へ渡すことを実装・検証する。
-- [ ] external scheduler provider credential は external_port_substrate の port record attachment として扱い、provider-specific client / handler / selector を追加しない。
-- [ ] built-in RuntimeTimelineScheduler path が port substrate に依存しないことの guard を維持する。
-- [ ] external receiver failure は silent fallback せず、missing port / missing credential / invalid policy を explicit fail-close として記録する。
+目的:
+- external scheduler ingress receiver wiring
+- external scheduler hook/access receiver が active port record を解決する
+- credential_requirement fail-close guard
+- scheduler enqueue boundary への handoff
+- missing port / missing credential / invalid policy を explicit fail-close として記録する
+- built-in RuntimeTimelineScheduler path が port substrate に依存しない guard を維持する
+
+対象ファイル名候補:
+- `backend/runtime/ExternalPortDispatchRuntime.cs`
+- `backend/runtime/ExternalPortPolicyStepExecutor.cs`
+- `backend/runtime/RuntimeTimelineScheduler.cs` (port substrate 非依存 guard のみ)
+- `backend/runtime/ManifestDispatcher.cs`
+- `backend/Program.cs` (external scheduler hook/access receiver entry only)
+- `backend/repository/*ExternalPort*`
+- `backend/repository/*Scheduler*`
+- `db/seed_empty.sql` (既存 seed binding の復活追加は不可。必要時は receiver metadata の最小調整のみ)
+
+NG軸:
+- scheduler 本体実装をこの Bundle に戻す
+- cron driver / run ledger / job execution lifecycle / job status projection をこの Bundle に含める
+- PR#460 完了済み seed binding を未処理 todo として復活させる
+- provider-specific scheduler client / handler / selector を追加する
+- built-in RuntimeTimelineScheduler が external_port_substrate port record に依存する
+- direct runtime execution without scheduler
+- silent fallback on missing port / missing credential / invalid policy
+- external scheduler provider credential を public SSOT / seed / UI / projection / log に plaintext 露出する
+
+受入条件:
+- [ ] external scheduler hook/access receiver が active port record を解決し、credential_requirement を fail-close 解決して scheduler enqueue boundary へ渡す。
+- [ ] missing port / missing credential / invalid policy は silent fallback せず explicit fail-close と runtime_event_log 等の記録対象になる。
+- [ ] external scheduler provider credential は external_port_substrate の port record attachment として扱い、standalone credential plane を作らない。
+- [ ] provider_kind / required_by_bundle は data only で、provider-specific scheduler client / handler / C# selector を追加しない。
+- [ ] built-in RuntimeTimelineScheduler path は external_port_substrate port record を参照しない guard/tests を持つ。
+- [ ] cron driver / run ledger / lifecycle / status projection は SchedulerJobManifestSubstrate または RuntimeTimelineScheduler 側の責務として、この Bundle の実装/受入条件に含めない。
+
+out_of_scope:
+- built-in scheduler 本体
+- cron trigger driver loop
+- run ledger / input lease
+- job execution lifecycle
+- job status projection / scheduler evidence projection
+- `execution_started` / `execution_completed` / `execution_failed` lifecycle 実装
+- runtime destination selection / manifest dispatcher responsibility の変更
+- external scheduler provider selection
+- provider-specific scheduler client
 
 再分類済み / この TODO から除外:
 - cron trigger driver loop: SchedulerJobManifestSubstrate / RuntimeTimelineScheduler side
 - run ledger / input lease / job execution lifecycle: SchedulerJobManifestSubstrate
 - scheduler evidence / job status projection: SchedulerJobManifestSubstrate projection/evidence surface
 - execution_started / execution_completed / execution_failed lifecycle: job manifest run ledger / runtime_event_log side
-
-対応資料:
-- `docs/design/runtime-bundle-job-scheduler-ssot.yaml`
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/scheduler-job-manifest-ssot.yaml`
-
+- PR#460 完了済み seed binding: current TODO の未処理項目として復活させない
 
 ---
