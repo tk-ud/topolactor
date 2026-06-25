@@ -86,7 +86,7 @@ public class ExportSftpPortConsumerContractTests
 
         var successLog = new CapturingRuntimeEventLogRepository();
         var successEvidence = new BranchingEvidenceRepository();
-        var successExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: successLog, consumerEvidenceRepository: successEvidence);
+        var successExecutor = NewSftpExecutor(successLog, successEvidence);
         var successContext = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString() });
         await successExecutor.ExecuteAsync(step, successContext);
         Assert.Equal(new[] { "transfer_initiated", "transfer_completed" }, successLog.EventTypes);
@@ -95,7 +95,7 @@ public class ExportSftpPortConsumerContractTests
 
         var missingLog = new CapturingRuntimeEventLogRepository();
         var missingEvidence = new BranchingEvidenceRepository(failCompletedWith: "SFTP_TRANSFER_EXPORT_JOB_MANIFEST_CHECKSUM_REQUIRED");
-        var missingExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: missingLog, consumerEvidenceRepository: missingEvidence);
+        var missingExecutor = NewSftpExecutor(missingLog, missingEvidence);
         var missingContext = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString() });
         var missingEx = await Assert.ThrowsAsync<InvalidOperationException>(() => missingExecutor.ExecuteAsync(step, missingContext));
         Assert.Equal("SFTP_TRANSFER_EXPORT_JOB_MANIFEST_CHECKSUM_REQUIRED", missingEx.Message);
@@ -104,7 +104,7 @@ public class ExportSftpPortConsumerContractTests
 
         var mismatchLog = new CapturingRuntimeEventLogRepository();
         var mismatchEvidence = new BranchingEvidenceRepository(failCompletedWith: "SFTP_TRANSFER_CHECKSUM_MISMATCH");
-        var mismatchExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: mismatchLog, consumerEvidenceRepository: mismatchEvidence);
+        var mismatchExecutor = NewSftpExecutor(mismatchLog, mismatchEvidence);
         var mismatchContext = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString() });
         var mismatchEx = await Assert.ThrowsAsync<InvalidOperationException>(() => mismatchExecutor.ExecuteAsync(step, mismatchContext));
         Assert.Equal("SFTP_TRANSFER_CHECKSUM_MISMATCH", mismatchEx.Message);
@@ -114,7 +114,7 @@ public class ExportSftpPortConsumerContractTests
         var retryLog = new CapturingRuntimeEventLogRepository();
         var retryEvidence = new BranchingEvidenceRepository();
         var retryScheduler = new CapturingSchedulerEnqueueBoundary();
-        var retryExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: retryLog, consumerEvidenceRepository: retryEvidence, schedulerEnqueueBoundary: retryScheduler);
+        var retryExecutor = NewSftpExecutor(retryLog, retryEvidence, retryScheduler);
         var retryContext = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
         await retryExecutor.ExecuteAsync(step, retryContext);
         Assert.True(retryContext.SchedulerEventEnqueued);
@@ -130,7 +130,7 @@ public class ExportSftpPortConsumerContractTests
         var step = NewLifecycleStep();
         var log = new CapturingRuntimeEventLogRepository();
         var evidence = new BranchingEvidenceRepository();
-        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence);
+        var executor = NewSftpExecutor(log, evidence);
         var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
         Assert.Equal("EXTERNAL_PORT_SCHEDULER_ENQUEUE_BOUNDARY_MISSING", ex.Message);
@@ -144,7 +144,7 @@ public class ExportSftpPortConsumerContractTests
         var log = new CapturingRuntimeEventLogRepository();
         var evidence = new BranchingEvidenceRepository();
         var fullScheduler = new CapturingSchedulerEnqueueBoundary(queueFull: true);
-        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: fullScheduler);
+        var executor = NewSftpExecutor(log, evidence, fullScheduler);
         var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
         Assert.Equal("SCHEDULER_QUEUE_FULL", ex.Message);
@@ -158,7 +158,7 @@ public class ExportSftpPortConsumerContractTests
         var log = new CapturingRuntimeEventLogRepository();
         var evidence = new BranchingEvidenceRepository();
         var scheduler = new CapturingSchedulerEnqueueBoundary();
-        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: scheduler);
+        var executor = NewSftpExecutor(log, evidence, scheduler);
         var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
         await executor.ExecuteAsync(step, context);
         Assert.True(context.SchedulerEventEnqueued);
@@ -179,7 +179,7 @@ public class ExportSftpPortConsumerContractTests
         var retryLog = new CapturingRuntimeEventLogRepository();
         var retryEvidence = new BranchingEvidenceRepository();
         var scheduler = new CapturingSchedulerEnqueueBoundary();
-        var retryExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: retryLog, consumerEvidenceRepository: retryEvidence, schedulerEnqueueBoundary: scheduler);
+        var retryExecutor = NewSftpExecutor(retryLog, retryEvidence, scheduler);
         var retryContext = NewLifecycleContext(new { export_job_id = exportJobId.ToString(), retry_requested = true });
         Assert.Null(retryContext.ExportJobId); // ExportJobId not manually set — RequestPayload is the only source
 
@@ -199,7 +199,7 @@ public class ExportSftpPortConsumerContractTests
         var reDispatchPayload = dispatchPayload.Clone();
         var reDispatchLog = new CapturingRuntimeEventLogRepository();
         var reDispatchEvidence = new BranchingEvidenceRepository();
-        var reDispatchExecutor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: reDispatchLog, consumerEvidenceRepository: reDispatchEvidence);
+        var reDispatchExecutor = NewSftpExecutor(reDispatchLog, reDispatchEvidence);
         var reDispatchContext = new ExternalPortExecutionContext
         {
             DispatchId = Guid.NewGuid().ToString("N"),
@@ -225,7 +225,7 @@ public class ExportSftpPortConsumerContractTests
         var log = new CapturingRuntimeEventLogRepository();
         var evidence = new BranchingEvidenceRepository();
         var scheduler = new CapturingSchedulerEnqueueBoundary();
-        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: scheduler);
+        var executor = NewSftpExecutor(log, evidence, scheduler);
         var context = NewLifecycleContext(new { retry_requested = true }); // no export_job_id in payload
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
         Assert.Equal("SFTP_RETRY_EXPORT_JOB_ID_REQUIRED", ex.Message);
@@ -239,7 +239,7 @@ public class ExportSftpPortConsumerContractTests
         var log = new CapturingRuntimeEventLogRepository();
         var evidence = new BranchingEvidenceRepository();
         var scheduler = new CapturingSchedulerEnqueueBoundary();
-        var executor = new ExternalPortPolicyStepExecutor(runtimeEventLogRepository: log, consumerEvidenceRepository: evidence, schedulerEnqueueBoundary: scheduler);
+        var executor = NewSftpExecutor(log, evidence, scheduler);
         var context = NewLifecycleContext(new { export_job_id = Guid.NewGuid().ToString(), retry_requested = true });
         context.ExportJobId = Guid.NewGuid(); // different value: mismatch → fail-close
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(step, context));
@@ -262,6 +262,21 @@ public class ExportSftpPortConsumerContractTests
         }
         return dir ?? throw new InvalidOperationException("repo root not found");
     }
+
+    // record_transfer_lifecycle_evidence is owned by ExportSftpBundleStepHandler; the generic
+    // executor resolves it via the IExternalPortBundleStepHandler fallthrough. This helper wires
+    // the handler the same way Program.cs does, exercising dispatch + handler together.
+    private static ExternalPortPolicyStepExecutor NewSftpExecutor(
+        IExternalPortRuntimeEventLogRepository runtimeEventLogRepository,
+        IExternalPortConsumerEvidenceRepository consumerEvidenceRepository,
+        ISchedulerEnqueueBoundary? schedulerEnqueueBoundary = null) =>
+        new(bundleHandlers: new[]
+        {
+            new ExportSftpBundleStepHandler(
+                runtimeEventLogRepository,
+                consumerEvidenceRepository,
+                schedulerEnqueueBoundary)
+        });
 
     private static ExternalPortPolicyStep NewLifecycleStep() => new(
         Guid.NewGuid(),

@@ -1004,19 +1004,10 @@ public sealed class EventLogPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
         return null;
     }
 
-    private static string? ResolveEntityRef(string refKey, AbstractFunctionExecutionContext context)
-    {
-        var ext = context.ExternalPortContext;
-        if (ext is null) return null;
-        return refKey switch
-        {
-            "ExportJobId" => ext.ExportJobId?.ToString(),
-            "FileArtifactId" => ext.FileArtifactId?.ToString(),
-            "ChecksumValue" => ext.ChecksumValue,
-            "AuthorizationKey" => ext.AuthorizationKey,
-            _ => null
-        };
-    }
+    private static string? ResolveEntityRef(string refKey, AbstractFunctionExecutionContext context) =>
+        // Single canonical entity-ref vocabulary lives on ExternalPortExecutionContext
+        // (ResolveReferenceValue); no duplicated PascalCase switch here.
+        context.ExternalPortContext?.ResolveReferenceValue(refKey);
 }
 
 /// <summary>

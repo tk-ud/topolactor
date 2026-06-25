@@ -578,6 +578,10 @@ COMMENT ON TABLE topology.external_port_policies IS 'Seed-driven policy surface 
 -- execute_db_function remains in the constraint for schema compatibility; NpgsqlExternalPortDbFunctionRepository
 -- is now a compatibility stub (no concrete fs_* methods); no new operations should use this path.
 -- compute_checksum is a bundle-specific key handled by FileStorageBundleStepHandler.
+-- record_transfer_lifecycle_evidence is a bundle-specific key handled by
+-- ExportSftpBundleStepHandler (evacuated from the generic ExternalPortPolicyStepExecutor);
+-- it remains a valid operation_key here because the generic executor dispatches it through the
+-- IExternalPortBundleStepHandler fallthrough, not the core registry.
 ALTER TABLE topology.external_port_policy_steps
     DROP CONSTRAINT IF EXISTS external_port_policy_steps_operation_key_check;
 

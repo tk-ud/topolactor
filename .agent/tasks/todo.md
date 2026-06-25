@@ -10,7 +10,7 @@
 |-----------|------|--------|------|----------------|---------|
 | `instance-port-substrate` | credential-backed instance connection / instance function call substrate | not_started | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
-| `external-port-consumer-hardcode-reduction` | 外部連携 consumer hardcode reduction / abstract function・seed 拡張 | not_started | 1 | - | `docs/design/external-port-substrate-ssot.yaml` |
+| `external-port-consumer-hardcode-reduction` | 外部連携 consumer hardcode reduction / abstract function・seed 拡張 | partial | 1 | - | `docs/design/external-port-substrate-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-port` | CLI/MCP read/export/import-candidate port 親境界 | not_started | 5 subBundles | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
@@ -73,9 +73,29 @@ NG軸:
 
 ## Bundle `external-port-consumer-hardcode-reduction`
 
-**Status:** not_started
+**Status:** partial
 **Roadmap bundle:** `-`
 **Primary SSOT:** `docs/design/external-port-substrate-ssot.yaml`
+
+進捗メモ (この PR):
+- `record_transfer_lifecycle_evidence` を generic `ExternalPortPolicyStepExecutor` から
+  専用 `ExportSftpBundleStepHandler`（`IExternalPortBundleStepHandler` / SSOT
+  consumer_bundle_step_handler_surface）へ退避済み。generic executor の
+  `AllowedOperationKeys` / registry / lifecycle helper / 旧 dead `MarkOnly` を削減。
+- entity_ref PascalCase switch の重複（executor `ResolveEntityId` +
+  `EventLogPrimitiveAdapter.ResolveEntityRef`）を context 単一の
+  `ResolveReferenceValue` へ統合。
+- credential refresh compatibility path（`ExternalTokenRefresher.RefreshIfNeededAsync`）の
+  hardcoded lease duration default (`TimeSpan.FromMinutes(5)`) を削除し、canonical
+  `credential_acquire_lease` と同じく step/request config から解決・fail-close 化。
+- compat absorption + shim（fail-close adapter）は既存どおり維持し regress させていない。
+- evidence repository の tableRef allowlist は増やさず、raw dynamic SQL も導入していない。
+- 残: `ApplyResultToExternalContext` 書き込み側 switch と entity_ref vocabulary の
+  完全 data-defined 化（seed の PascalCase `entity_ref_key` を external_context snake_case
+  binding へ寄せる）は未対応。`record_transfer_lifecycle_evidence` の分岐
+  （success/mismatch/failed/retry + scheduler enqueue）を PostgreSQL function へ完全
+  data 化する案は、AF manifest が条件分岐/scheduler enqueue を表現できないため bundle
+  handler 境界として保留。
 
 問題点:
 外部連携基板は Gate0 / parent completion として実装済みだが、generic executor / evidence repository / abstract function external context 周辺に、次 Bundle 追加時に C# 意味が増えやすい hardcode reduction 候補が残っている。
@@ -145,14 +165,14 @@ NG軸:
 - credential plaintext / endpoint 実体 / signed URL / bucket / storage path を frontend payload / seed payload / projection / log に露出する
 
 受入条件:
-- [ ] `record_transfer_lifecycle_evidence` が generic executor から退避され、Export/SFTP lifecycle 意味は `execute_abstract_function` + manifest-authorized PostgreSQL function / evidence projection mapping 等の data-defined route へ寄っている。
-- [ ] active compatibility policy steps は可能な範囲で `execute_abstract_function` + `abstract_function_key` に寄り、shim は旧 row 互換の fail-close adapter として縮小されている。
-- [ ] `ExportJobId` / `FileArtifactId` / `ChecksumValue` / `AuthorizationKey` / `OutputProp` などの entity/result context key が C# 固定 switch ではなく manifest / abstract function binding / external_context mapping で解決される。
-- [ ] evidence append/load は C# table switch を増やさず、DB function または seed-defined mapping row + manifest binding validation で処理され、raw tableRef 動的 SQL は導入されていない。
-- [ ] credential refresh compatibility path は canonical primitive chain と矛盾せず、method / lease duration / expires_at response key 等の C# default を増やしていない。
-- [ ] provider_kind / required_by_bundle による C# if/switch 分岐、provider-specific client、bundle-specific runtime handler を追加していない。
-- [ ] credential plaintext / endpoint 実体 / signed URL / bucket / storage path が frontend payload / seed payload / projection / log に出ない。
-- [ ] `.agent/tests/check-external-port-compat-absorption.sh` / `.agent/tests/check-external-port-parent-completion.sh` / 必要な runtime tests が追加・更新され通過している。
+- [x] `record_transfer_lifecycle_evidence` が generic executor から退避され（専用 `ExportSftpBundleStepHandler`）、Export/SFTP lifecycle 意味は generic executor から除去。evidence/event_log 書込は seed-directed・manifest-binding-validated repository 境界経由、event type / table ref / retry target は step_config（seed）由来の data-defined。AF manifest が条件分岐/scheduler enqueue を表現できないため、純 PostgreSQL function 化ではなく per-bundle handler 境界を採用（理由を SSOT/handler doc に明記）。
+- [x] active compatibility policy steps は `abstract_function_key` 吸収 + shim 経由で `execute_abstract_function` に寄っており、shim は `abstract_function_key` 必須の fail-close adapter として維持（regress なし）。operation_key 文字列の完全 flip は未実施。
+- [~] entity/result context key: 重複していた entity_ref PascalCase switch を context 単一 `ResolveReferenceValue` へ統合（削減）。`ApplyResultToExternalContext` 書込側 switch と seed `entity_ref_key` の external_context binding への完全 data-defined 化は残課題。
+- [x] evidence append/load は C# table switch を増やさず（変更なし）、DB function/seed-defined mapping + manifest binding validation を維持、raw tableRef 動的 SQL は導入していない。
+- [x] credential refresh compatibility path は canonical chain と整合（lease duration の C# default を削除し config 由来 fail-close 化）、method / expires_at response key の C# default も増やしていない。
+- [x] provider_kind / required_by_bundle の C# if/switch 分岐、provider-specific client、bundle-specific runtime handler（generic executor 内）を追加していない。`ExportSftpBundleStepHandler` は operation_key 駆動の SSOT 公認 consumer handler であり provider_kind 分岐ではない。
+- [x] credential plaintext / endpoint 実体 / signed URL / bucket / storage path を frontend payload / seed payload / projection / log に出していない（変更なし）。
+- [x] `.agent/tests/check-external-port-compat-absorption.sh` / `.agent/tests/check-external-port-parent-completion.sh`（stale 化していた lifecycle assertion を canonical shape へ更新 + 退避 guard 追加）/ runtime tests（`ExportSftpPortConsumerContractTests` 更新, full external-port runtime suite 168 件）/ live-DB integration が通過。
 
 out_of_scope:
 - Roadmap 更新

@@ -112,6 +112,11 @@ builder.Services.AddSingleton<IFileStorageRepository>(sp =>
         sp.GetRequiredService<ILogger<NpgsqlFileStorageRepository>>(),
         connectionString));
 builder.Services.AddSingleton<IExternalPortBundleStepHandler>(_ => new FileStorageBundleStepHandler());
+builder.Services.AddSingleton<IExternalPortBundleStepHandler>(sp =>
+    new ExportSftpBundleStepHandler(
+        sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>(),
+        sp.GetRequiredService<IExternalPortConsumerEvidenceRepository>(),
+        sp.GetRequiredService<ISchedulerEnqueueBoundary>()));
 builder.Services.AddSingleton<IExternalPortDbFunctionRepository, NpgsqlExternalPortDbFunctionRepository>();
 builder.Services.AddSingleton<IAbstractFunctionManifestRepository>(_ =>
     new NpgsqlAbstractFunctionManifestRepository(connectionString));

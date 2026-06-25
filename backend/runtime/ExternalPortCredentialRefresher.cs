@@ -158,7 +158,15 @@ public sealed class ExternalTokenRefresher : IExternalTokenRefresher
             return record;
         }
 
-        var lease = await _repository.AcquireRefreshLeaseAsync(credentialVaultId, leaseOwner, TimeSpan.FromMinutes(5), now, ct)
+        // Lease duration is data-defined (requestConfig), matching the canonical
+        // credential_acquire_lease primitive (lease_duration_minutes from step_config).
+        // No C# default — fail-close when absent/invalid (SSOT config_defaulting_policy:
+        // lease_duration_default prohibited).
+        if (!requestConfig.TryGetValue("lease_duration_minutes", out var leaseDurationRaw) ||
+            !int.TryParse(leaseDurationRaw, out var leaseDurationMinutes) || leaseDurationMinutes <= 0)
+            throw new InvalidOperationException("EXTERNAL_CREDENTIAL_REFRESH_LEASE_DURATION_MISSING");
+
+        var lease = await _repository.AcquireRefreshLeaseAsync(credentialVaultId, leaseOwner, TimeSpan.FromMinutes(leaseDurationMinutes), now, ct)
             ?? throw new InvalidOperationException("EXTERNAL_CREDENTIAL_REFRESH_LEASE_UNAVAILABLE");
 
         try
@@ -298,6 +306,24 @@ public sealed class ExternalPortExecutionContext
     public IReadOnlyList<string> ExecutedOperationKeys => _executedOperationKeys;
 
     public void MarkExecuted(string operationKey) => _executedOperationKeys.Add(operationKey);
+
+    /// <summary>
+    /// Single canonical resolver for entity reference keys used by event-log / evidence steps.
+    /// Consolidates the previously duplicated PascalCase entity_ref switches (executor
+    /// append_runtime_event_log and EventLogPrimitiveAdapter) into one place. The keys are the
+    /// same identifiers exposed by the external_context binding vocabulary
+    /// (export_job_id / file_artifact_id / checksum_value), kept here in their context-property
+    /// form so seed step_config entity_ref_key values resolve through a single map rather than
+    /// repeated C# switches. Returns null for unknown keys so callers can fail-close explicitly.
+    /// </summary>
+    public string? ResolveReferenceValue(string refKey) => refKey switch
+    {
+        "ExportJobId" => ExportJobId?.ToString(),
+        "FileArtifactId" => FileArtifactId?.ToString(),
+        "ChecksumValue" => ChecksumValue,
+        "AuthorizationKey" => AuthorizationKey,
+        _ => null
+    };
 }
 
 public interface IExternalPortResolver
@@ -473,7 +499,6 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         "verify_signature_by_config",
         "enqueue_scheduler_event",
         "append_runtime_event_log",
-        "record_transfer_lifecycle_evidence",
         "fail_close"
     };
 
@@ -689,72 +714,6 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
                 context.MarkExecuted(step.OperationKey);
                 return Task.CompletedTask;
             },
-            ["record_transfer_lifecycle_evidence"] = async (step, context, ct) =>
-            {
-                if (runtimeEventLogRepository is null)
-                    throw new InvalidOperationException("EXTERNAL_PORT_RUNTIME_EVENT_LOG_REPOSITORY_MISSING");
-                if (consumerEvidenceRepository is null)
-                    throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_REPOSITORY_MISSING");
-
-                var tableRef = ReadConfig(step.StepConfig, "evidence_table_ref")
-                    ?? throw new InvalidOperationException("TRANSFER_LIFECYCLE_EVIDENCE_TABLE_REF_MISSING");
-                var projectionTableRef = ReadConfig(step.StepConfig, "projection_table_ref");
-                var bundle = context.RequiredByBundle ?? context.PortRecord?.RequiredByBundle;
-                var entityId = context.DispatchId;
-
-                async Task AppendLifecycleAsync(string eventType, IReadOnlyDictionary<string, string> config)
-                {
-                    await consumerEvidenceRepository.AppendEvidenceAsync(tableRef, eventType, entityId, bundle, context, config, ct);
-                    await runtimeEventLogRepository.AppendAsync(eventType, entityId, bundle, ct);
-                }
-
-                if (ReadBoolProperty(context.RequestPayload, "retry_requested"))
-                {
-                    if (schedulerEnqueueBoundary is null)
-                        throw new InvalidOperationException("EXTERNAL_PORT_SCHEDULER_ENQUEUE_BOUNDARY_MISSING");
-                    var retryRequest = BuildRetrySchedulerRequest(step.StepConfig, context);
-                    if (!schedulerEnqueueBoundary.TryEnqueueHookTrigger(retryRequest))
-                        throw new InvalidOperationException("SCHEDULER_QUEUE_FULL");
-                    context.SchedulerEventEnqueued = true;
-                    var retryEvent = ReadConfig(step.StepConfig, "retry_event_type") ?? "retry_attempted";
-                    var retryConfig = new Dictionary<string, string>(step.StepConfig, StringComparer.Ordinal)
-                    {
-                        ["event_type"] = retryEvent,
-                        ["status_value"] = "retry_attempted",
-                        ["scheduler_enqueue_result"] = "enqueued",
-                        ["scheduler_enqueue_boundary_ref"] = ReadConfig(step.StepConfig, "retry_trigger_target") ?? "scheduler_enqueue_boundary"
-                    };
-                    await AppendLifecycleAsync(retryEvent, retryConfig);
-                    await LoadLifecycleProjectionAsync(consumerEvidenceRepository, projectionTableRef, bundle, entityId, context, ct);
-                    context.MarkExecuted(step.OperationKey);
-                    return;
-                }
-
-                var initiatedEvent = ReadConfig(step.StepConfig, "initiated_event_type") ?? "transfer_initiated";
-                var completedEvent = ReadConfig(step.StepConfig, "completed_event_type") ?? "transfer_completed";
-                try
-                {
-                    await AppendLifecycleAsync(initiatedEvent, MergeConfig(step.StepConfig, initiatedEvent, "transfer_initiated"));
-                    await AppendLifecycleAsync(completedEvent, MergeConfig(step.StepConfig, completedEvent, "transfer_completed"));
-                    await LoadLifecycleProjectionAsync(consumerEvidenceRepository, projectionTableRef, bundle, entityId, context, ct);
-                    context.MarkExecuted(step.OperationKey);
-                }
-                catch (InvalidOperationException ex) when (string.Equals(ex.Message, "SFTP_TRANSFER_CHECKSUM_MISMATCH", StringComparison.Ordinal))
-                {
-                    var mismatchEvent = ReadConfig(step.StepConfig, "checksum_mismatch_event_type") ?? "checksum_mismatch";
-                    await AppendLifecycleAsync(mismatchEvent, MergeConfig(step.StepConfig, mismatchEvent, "checksum_mismatch", "checksum_mismatch"));
-                    context.MarkExecuted(step.OperationKey);
-                    throw;
-                }
-                catch (InvalidOperationException ex) when (string.Equals(ex.Message, "SFTP_TRANSFER_EXPORT_JOB_MANIFEST_CHECKSUM_REQUIRED", StringComparison.Ordinal) ||
-                                                   string.Equals(ex.Message, "SFTP_TRANSFER_EXPORT_JOB_ID_REQUIRED", StringComparison.Ordinal))
-                {
-                    var failedEvent = ReadConfig(step.StepConfig, "failed_event_type") ?? "transfer_failed";
-                    await AppendLifecycleAsync(failedEvent, MergeConfig(step.StepConfig, failedEvent, "transfer_failed", ex.Message));
-                    context.MarkExecuted(step.OperationKey);
-                    throw;
-                }
-            },
             ["execute_db_function"] = async (step, context, ct) =>
             {
                 if (dbFunctionRepository is null)
@@ -902,53 +861,6 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
         }
     }
 
-    private static async Task LoadLifecycleProjectionAsync(
-        IExternalPortConsumerEvidenceRepository consumerEvidenceRepository,
-        string? projectionTableRef,
-        string? bundle,
-        string? entityId,
-        ExternalPortExecutionContext context,
-        CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(projectionTableRef)) return;
-        var projection = await consumerEvidenceRepository.LoadProjectionAsync(projectionTableRef, bundle, entityId, limit: 20, ct);
-        context.OutputProp = JsonSerializer.Serialize(new
-        {
-            projectionTableRef,
-            responseLane = "projection_response",
-            rows = projection
-        });
-    }
-
-    private static IReadOnlyDictionary<string, string> MergeConfig(
-        IReadOnlyDictionary<string, string> config,
-        string eventType,
-        string statusValue,
-        string? failureReason = null)
-    {
-        var merged = new Dictionary<string, string>(config, StringComparer.Ordinal)
-        {
-            ["event_type"] = eventType,
-            ["status_value"] = statusValue
-        };
-        if (!string.IsNullOrWhiteSpace(failureReason))
-            merged["failure_reason"] = failureReason;
-        return merged;
-    }
-
-    private static bool ReadBoolProperty(JsonElement? payload, string name)
-    {
-        if (payload is not { ValueKind: JsonValueKind.Object } element) return false;
-        if (!element.TryGetProperty(name, out var prop)) return false;
-        return prop.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.String => bool.TryParse(prop.GetString(), out var parsed) && parsed,
-            _ => false
-        };
-    }
-
     private static string? ReadStringFromPayload(JsonElement? payload, string name)
     {
         if (payload is not { ValueKind: JsonValueKind.Object } element) return null;
@@ -957,24 +869,11 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
             : null;
     }
 
-    private static Task MarkOnly(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct)
-    {
-        context.MarkExecuted(step.OperationKey);
-        return Task.CompletedTask;
-    }
-
     private static string? ResolveEntityId(IReadOnlyDictionary<string, string> stepConfig, ExternalPortExecutionContext context)
     {
         if (!stepConfig.TryGetValue("entity_ref_key", out var refKey) || string.IsNullOrWhiteSpace(refKey))
             return null;
-        return refKey switch
-        {
-            "ExportJobId" => context.ExportJobId?.ToString(),
-            "FileArtifactId" => context.FileArtifactId?.ToString(),
-            "ChecksumValue" => context.ChecksumValue,
-            "AuthorizationKey" => context.AuthorizationKey,
-            _ => null
-        };
+        return context.ResolveReferenceValue(refKey);
     }
 
     private static string? FirstNonBlank(params string?[] values) =>
@@ -983,7 +882,7 @@ public sealed class ExternalPortPolicyStepExecutor : IExternalPortPolicyStepExec
     private static string? ReadConfig(IReadOnlyDictionary<string, string> config, string key) =>
         config.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 
-    private static EndpointRequestDto BuildRetrySchedulerRequest(
+    internal static EndpointRequestDto BuildRetrySchedulerRequest(
         IReadOnlyDictionary<string, string> stepConfig,
         ExternalPortExecutionContext context)
     {
