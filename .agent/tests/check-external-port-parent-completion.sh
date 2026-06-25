@@ -88,7 +88,12 @@ absent "$EXEC" "record_transfer_lifecycle_evidence"
 check "$PROGRAM" "IExternalPortRuntimeEventLogRepository"
 check "$PROGRAM" "IExternalPortConsumerEvidenceRepository"
 check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "physical_table_manifest_bindings"
-check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "evidence_json->>'dispatch_id' = @entityId"
+# Evidence append/load SQL shape (incl. the dispatch_id correlation / anti-leakage predicate)
+# moved from a C# tableRef switch into the topology.epce_* DB functions (hardcode-reduction).
+# The repository delegates to them while keeping the allowlist + manifest-binding fail-close guard.
+check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "topology.epce_append_evidence"
+check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "topology.epce_load_projection"
+check "db/topology_tables.sql" "evidence_json->>'dispatch_id' = p_entity_id"
 check "$PROGRAM" "ExternalPortDispatchRuntime"
 check "$PROGRAM" "RuntimeTimelineScheduler"
 

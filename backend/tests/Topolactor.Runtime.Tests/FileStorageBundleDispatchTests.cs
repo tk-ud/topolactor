@@ -222,7 +222,7 @@ public class FileStorageBundleDispatchTests
             new Dictionary<string, string>
             {
                 ["event_type"] = "checksum_verified",
-                ["entity_ref_key"] = "ChecksumValue"
+                ["entity_ref_key"] = "checksum_value"
             }, true);
 
         await executor.ExecuteAsync(step, context);
@@ -245,7 +245,7 @@ public class FileStorageBundleDispatchTests
             new Dictionary<string, string>
             {
                 ["event_type"] = "export_job_initiated",
-                ["entity_ref_key"] = "ExportJobId"
+                ["entity_ref_key"] = "export_job_id"
             }, true);
 
         await executor.ExecuteAsync(step, context);
@@ -317,7 +317,7 @@ public class FileStorageBundleDispatchTests
             new Dictionary<string, string>
             {
                 ["event_type"] = "checksum_verified",
-                ["entity_ref_key"] = "ChecksumValue"
+                ["entity_ref_key"] = "checksum_value"
             }, true);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(

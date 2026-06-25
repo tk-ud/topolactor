@@ -116,25 +116,10 @@ public sealed class AbstractFunctionExecutionContext
 
     public void ApplyResultToExternalContext(string? key, object? value)
     {
+        // The external-port reference vocabulary is owned by ExternalPortExecutionContext;
+        // delegate the result→property mirror there instead of a duplicate switch here.
         if (ExternalPortContext is null || string.IsNullOrWhiteSpace(key) || value is null) return;
-        switch (key)
-        {
-            case "ExportJobId" when value is Guid exportJobId:
-                ExternalPortContext.ExportJobId = exportJobId;
-                break;
-            case "FileArtifactId" when value is Guid fileArtifactId:
-                ExternalPortContext.FileArtifactId = fileArtifactId;
-                break;
-            case "ChecksumValue" when value is string checksum:
-                ExternalPortContext.ChecksumValue = checksum;
-                break;
-            case "AuthorizationKey" when value is string authorizationKey:
-                ExternalPortContext.AuthorizationKey = authorizationKey;
-                break;
-            case "OutputProp":
-                ExternalPortContext.OutputProp = value is string s ? s : JsonSerializer.Serialize(value);
-                break;
-        }
+        ExternalPortContext.ApplyResultMirror(key, value);
     }
 
     private object? ResolveExternalContext(string key) => key switch
@@ -146,6 +131,7 @@ public sealed class AbstractFunctionExecutionContext
         "export_job_id" => ExternalPortContext?.ExportJobId,
         "file_artifact_id" => ExternalPortContext?.FileArtifactId,
         "checksum_value" => ExternalPortContext?.ChecksumValue,
+        "authorization_key" => ExternalPortContext?.AuthorizationKey,
         "credential_vault_id" => ExternalPortContext?.CredentialVaultRecord?.CredentialVaultId,
         "decrypted_credential_payload" => ExternalPortContext?.DecryptedCredentialPayload,
         // Opaque UUID ref of the response port record — stored as text in audit evidence tables.
@@ -971,8 +957,11 @@ public sealed class CredentialFailLeaseAdapter : IAbstractFunctionPrimitiveAdapt
 /// <summary>
 /// Primitive adapter for event_log (external_and_event category).
 /// Appends an append-only runtime event log entry for the current bundle.
-/// event_type is required from step_config. entity_ref_key is optional; when present,
-/// it is resolved from ExternalPortContext fields (ExportJobId, FileArtifactId, ChecksumValue, AuthorizationKey).
+/// event_type is required from step_config. entity_ref_key is optional; when present, it is
+/// resolved through the external_context reference vocabulary
+/// (export_job_id, file_artifact_id, checksum_value, authorization_key) via
+/// ExternalPortExecutionContext.ResolveReferenceValue — the same identifiers used by
+/// abstract function external_context input bindings.
 /// Missing entity_ref_key → null entityId (not fail-close). Unresolvable entity_ref_key → fail-close.
 /// Prohibited: provider-specific branching, bundle-specific branching, mutable event overwrite.
 /// </summary>

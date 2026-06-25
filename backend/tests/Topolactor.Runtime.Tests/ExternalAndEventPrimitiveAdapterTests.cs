@@ -30,7 +30,7 @@ public class ExternalAndEventPrimitiveAdapterTests
     {
         var repo = new CapturingEventLogRepository();
         var adapter = new EventLogPrimitiveAdapter(repo);
-        var step = MakeStep(new Dictionary<string, string> { ["event_type"] = "export_done", ["entity_ref_key"] = "ExportJobId" });
+        var step = MakeStep(new Dictionary<string, string> { ["event_type"] = "export_done", ["entity_ref_key"] = "export_job_id" });
         var jobId = Guid.NewGuid();
         var context = MakeContext(extCtx: new ExternalPortExecutionContext { RequiredByBundle = "file_storage", ExportJobId = jobId });
 

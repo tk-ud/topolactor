@@ -46,8 +46,14 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
             ? await ResolveSftpTransferSourceRefsAsync(conn, eventType, context, ct)
             : null;
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = InsertSql(tableRef);
-        AddCommonParameters(cmd, eventType, entityId, requiredByBundle, context, stepConfig, evidenceJson, sftpRefs);
+        // Per-table INSERT shape is owned by the topology.epce_append_evidence DB function
+        // (static CASE over fixed statements), not a C# tableRef switch. The allowlist +
+        // active-manifest-binding validation above remain the fail-close guard.
+        cmd.CommandText =
+            "SELECT topology.epce_append_evidence(@tableRef, @eventType, @entityId, @requiredByBundle, " +
+            "@statusValue, @routeKey, @hookPath, @payloadHash, @checksumBefore, @checksumAfter, @manifestRef, " +
+            "@failureReason, @retryEvidenceJson, @evidenceJson, @exportJobId, @fileArtifactId, @manifestId, @checksumRecordId)";
+        AddAppendParameters(cmd, tableRef, eventType, entityId, requiredByBundle, context, stepConfig, evidenceJson, sftpRefs);
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -66,7 +72,12 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         await conn.OpenAsync(ct);
         await ValidateTableRefBoundToActiveManifestAsync(conn, tableRef, ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = SelectSql(tableRef);
+        // Per-table SELECT shape is owned by the topology.epce_load_projection DB function
+        // (static CASE over fixed statements), not a C# tableRef switch.
+        cmd.CommandText =
+            "SELECT event_type, entity_id, status, evidence_json " +
+            "FROM topology.epce_load_projection(@tableRef, @requiredByBundle, @entityId, @limit)";
+        cmd.Parameters.AddWithValue("tableRef", tableRef);
         cmd.Parameters.AddWithValue("requiredByBundle", (object?)requiredByBundle ?? DBNull.Value);
         cmd.Parameters.AddWithValue("entityId", (object?)entityId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("limit", Math.Clamp(limit, 1, 100));
@@ -91,34 +102,9 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
             throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_UNSUPPORTED");
     }
 
-    private static string InsertSql(string tableRef) => tableRef switch
+    private static void AddAppendParameters(NpgsqlCommand cmd, string tableRef, string eventType, string? entityId, string? requiredByBundle, ExternalPortExecutionContext context, IReadOnlyDictionary<string, string> stepConfig, string evidenceJson, SftpTransferSourceRefs? sftpRefs = null)
     {
-        "topology.email_delivery_evidence" => "INSERT INTO topology.email_delivery_evidence (email_draft_id, event_type, delivery_status, evidence_json) VALUES (NULL, @eventType, @statusValue, @evidenceJson)",
-        "topology.webhook_intake_snapshots" => "INSERT INTO topology.webhook_intake_snapshots (required_by_bundle, route_key, hook_path, payload_hash, scheduler_event_ref, evidence_json) VALUES (@requiredByBundle, @routeKey, @hookPath, @payloadHash, @entityId, @evidenceJson)",
-        "topology.signature_verification_evidence" => "INSERT INTO topology.signature_verification_evidence (required_by_bundle, verification_status, evidence_json) VALUES (@requiredByBundle, @statusValue, @evidenceJson)",
-        "topology.payment_state_projections" => "INSERT INTO topology.payment_state_projections (payment_state, evidence_json) VALUES (@statusValue, @evidenceJson)",
-        "topology.scheduler_external_event_evidence" => "INSERT INTO topology.scheduler_external_event_evidence (required_by_bundle, trigger_ref, scheduler_status, evidence_json) VALUES (@requiredByBundle, @entityId, @statusValue, @evidenceJson)",
-        "topology.audit_approval_evidence" => "INSERT INTO topology.audit_approval_evidence (event_type, approval_status, evidence_json) VALUES (@eventType, @statusValue, @evidenceJson)",
-        "topology.audit_notification_evidence" => "INSERT INTO topology.audit_notification_evidence (notification_status, response_port_ref, evidence_json) VALUES (@statusValue, @entityId, @evidenceJson)",
-        "topology.sftp_transfer_log" => "INSERT INTO topology.sftp_transfer_log (export_job_id, file_artifact_id, manifest_id, checksum_record_id, transfer_status, failure_reason, checksum_before, checksum_after, manifest_ref, response_port_ref, retry_evidence_json, evidence_json) VALUES (@exportJobId, @fileArtifactId, @manifestId, @checksumRecordId, @statusValue, @failureReason, @checksumBefore, @checksumAfter, @manifestRef, @entityId, @retryEvidenceJson, @evidenceJson)",
-        _ => throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_UNSUPPORTED")
-    };
-
-    private static string SelectSql(string tableRef) => tableRef switch
-    {
-        "topology.email_delivery_evidence" => "SELECT event_type, evidence_json->>'dispatch_id' AS entity_id, delivery_status AS status, evidence_json::text FROM topology.email_delivery_evidence WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.webhook_intake_snapshots" => "SELECT 'webhook_received' AS event_type, evidence_json->>'dispatch_id' AS entity_id, 'received' AS status, evidence_json::text FROM topology.webhook_intake_snapshots WHERE evidence_json->>'dispatch_id' = @entityId AND (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY received_at DESC LIMIT @limit",
-        "topology.signature_verification_evidence" => "SELECT 'signature_verification' AS event_type, evidence_json->>'dispatch_id' AS entity_id, verification_status AS status, evidence_json::text FROM topology.signature_verification_evidence WHERE evidence_json->>'dispatch_id' = @entityId AND (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.payment_state_projections" => "SELECT 'payment_state_projected' AS event_type, evidence_json->>'dispatch_id' AS entity_id, payment_state AS status, evidence_json::text FROM topology.payment_state_projections WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY projected_at DESC LIMIT @limit",
-        "topology.scheduler_external_event_evidence" => "SELECT 'scheduler_enqueued' AS event_type, evidence_json->>'dispatch_id' AS entity_id, scheduler_status AS status, evidence_json::text FROM topology.scheduler_external_event_evidence WHERE evidence_json->>'dispatch_id' = @entityId AND (@requiredByBundle IS NULL OR required_by_bundle = @requiredByBundle) ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.audit_approval_evidence" => "SELECT event_type, evidence_json->>'dispatch_id' AS entity_id, approval_status AS status, evidence_json::text FROM topology.audit_approval_evidence WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.audit_notification_evidence" => "SELECT 'notification_recorded' AS event_type, evidence_json->>'dispatch_id' AS entity_id, notification_status AS status, evidence_json::text FROM topology.audit_notification_evidence WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY recorded_at DESC LIMIT @limit",
-        "topology.sftp_transfer_log" => "SELECT 'transfer_projected' AS event_type, evidence_json->>'dispatch_id' AS entity_id, transfer_status AS status, evidence_json::text FROM topology.sftp_transfer_log WHERE evidence_json->>'dispatch_id' = @entityId ORDER BY recorded_at DESC LIMIT @limit",
-        _ => throw new InvalidOperationException("EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_UNSUPPORTED")
-    };
-
-    private static void AddCommonParameters(NpgsqlCommand cmd, string eventType, string? entityId, string? requiredByBundle, ExternalPortExecutionContext context, IReadOnlyDictionary<string, string> stepConfig, string evidenceJson, SftpTransferSourceRefs? sftpRefs = null)
-    {
+        cmd.Parameters.AddWithValue("tableRef", tableRef);
         cmd.Parameters.AddWithValue("eventType", eventType);
         cmd.Parameters.AddWithValue("entityId", (object?)entityId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("requiredByBundle", (object?)requiredByBundle ?? DBNull.Value);
@@ -129,10 +115,10 @@ public sealed class NpgsqlExternalPortConsumerEvidenceRepository : IExternalPort
         cmd.Parameters.AddWithValue("checksumBefore", (object?)sftpRefs?.ChecksumValue ?? (object?)context.ChecksumValue ?? DBNull.Value);
         cmd.Parameters.AddWithValue("checksumAfter", (object?)Read(stepConfig, "checksum_after_ref") ?? (object?)sftpRefs?.ChecksumValue ?? DBNull.Value);
         cmd.Parameters.AddWithValue("manifestRef", (object?)sftpRefs?.ManifestId.ToString() ?? (object?)Read(stepConfig, "manifest_ref") ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("exportJobId", sftpRefs is not null ? sftpRefs.ExportJobId : DBNull.Value);
-        cmd.Parameters.AddWithValue("fileArtifactId", sftpRefs?.FileArtifactId is not null ? sftpRefs.FileArtifactId.Value : DBNull.Value);
-        cmd.Parameters.AddWithValue("manifestId", sftpRefs?.ManifestId is not null ? sftpRefs.ManifestId.Value : DBNull.Value);
-        cmd.Parameters.AddWithValue("checksumRecordId", sftpRefs?.ChecksumRecordId is not null ? sftpRefs.ChecksumRecordId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("exportJobId", NpgsqlDbType.Uuid, sftpRefs is not null ? sftpRefs.ExportJobId : DBNull.Value);
+        cmd.Parameters.AddWithValue("fileArtifactId", NpgsqlDbType.Uuid, sftpRefs?.FileArtifactId is not null ? sftpRefs.FileArtifactId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("manifestId", NpgsqlDbType.Uuid, sftpRefs?.ManifestId is not null ? sftpRefs.ManifestId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("checksumRecordId", NpgsqlDbType.Uuid, sftpRefs?.ChecksumRecordId is not null ? sftpRefs.ChecksumRecordId.Value : DBNull.Value);
         cmd.Parameters.AddWithValue("failureReason", (object?)Read(stepConfig, "failure_reason") ?? DBNull.Value);
         cmd.Parameters.AddWithValue("retryEvidenceJson", NpgsqlDbType.Jsonb, BuildRetryEvidenceJson(eventType, stepConfig));
         cmd.Parameters.AddWithValue("evidenceJson", NpgsqlDbType.Jsonb, evidenceJson);

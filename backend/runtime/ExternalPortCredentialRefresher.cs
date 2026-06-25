@@ -309,21 +309,54 @@ public sealed class ExternalPortExecutionContext
 
     /// <summary>
     /// Single canonical resolver for entity reference keys used by event-log / evidence steps.
-    /// Consolidates the previously duplicated PascalCase entity_ref switches (executor
-    /// append_runtime_event_log and EventLogPrimitiveAdapter) into one place. The keys are the
-    /// same identifiers exposed by the external_context binding vocabulary
-    /// (export_job_id / file_artifact_id / checksum_value), kept here in their context-property
-    /// form so seed step_config entity_ref_key values resolve through a single map rather than
-    /// repeated C# switches. Returns null for unknown keys so callers can fail-close explicitly.
+    /// Keys are the SAME snake_case identifiers as the external_context binding vocabulary
+    /// (AbstractFunctionExecutionContext.ResolveExternalContext): export_job_id / file_artifact_id
+    /// / checksum_value / authorization_key. This removes the previously duplicated PascalCase
+    /// switch so seed step_config entity_ref_key values are data-defined in the same vocabulary as
+    /// abstract function external_context input bindings. Returns null for unknown keys so callers
+    /// can fail-close explicitly.
     /// </summary>
     public string? ResolveReferenceValue(string refKey) => refKey switch
     {
-        "ExportJobId" => ExportJobId?.ToString(),
-        "FileArtifactId" => FileArtifactId?.ToString(),
-        "ChecksumValue" => ChecksumValue,
-        "AuthorizationKey" => AuthorizationKey,
+        "export_job_id" => ExportJobId?.ToString(),
+        "file_artifact_id" => FileArtifactId?.ToString(),
+        "checksum_value" => ChecksumValue,
+        "authorization_key" => AuthorizationKey,
         _ => null
     };
+
+    /// <summary>
+    /// Mirrors an abstract-function step result into the corresponding external-context property
+    /// so non-abstract-function downstream code (retry scheduler request builder, evidence repository
+    /// binding) can read it. This is the write-side counterpart of ResolveReferenceValue and lives on
+    /// the property owner (this context) rather than inside AbstractFunctionExecutionContext, so the
+    /// external-port reference vocabulary has a single owner. The mirror key is the manifest
+    /// result_context_key; unknown keys are ignored (not all results mirror to the external context).
+    /// Deeper step (tracked): drive the result→external-context key set from a manifest-declared
+    /// mapping instead of this fixed set.
+    /// </summary>
+    public void ApplyResultMirror(string key, object? value)
+    {
+        if (value is null) return;
+        switch (key)
+        {
+            case "ExportJobId" when value is Guid exportJobId:
+                ExportJobId = exportJobId;
+                break;
+            case "FileArtifactId" when value is Guid fileArtifactId:
+                FileArtifactId = fileArtifactId;
+                break;
+            case "ChecksumValue" when value is string checksum:
+                ChecksumValue = checksum;
+                break;
+            case "AuthorizationKey" when value is string authorizationKey:
+                AuthorizationKey = authorizationKey;
+                break;
+            case "OutputProp":
+                OutputProp = value is string s ? s : System.Text.Json.JsonSerializer.Serialize(value);
+                break;
+        }
+    }
 }
 
 public interface IExternalPortResolver
