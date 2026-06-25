@@ -56,6 +56,20 @@ external_port_substrate_ssot:
         - credential_kind
         - required_by_bundle
 
+  sibling_substrate_boundary:
+    instance_port_substrate_ref: docs/design/instance-port-substrate-ssot.yaml
+    decision: instance_port_substrate_is_a_sibling_not_an_external_port_extension
+    rationale: >-
+      external_port_substrate owns HTTP/service access_port, response_port, hook_port,
+      and their credential_requirement attachments. Credential-backed DB/runtime instance
+      connections need instance authority bindings, instance connection policy, and
+      manifest-authorized function allowlists, so they are defined in the sibling
+      instance_port_substrate SSOT instead of growing external_port_substrate.
+    lane_distinction:
+      secure_consumer_dispatch_lane: external_port_runtime for HTTP/hook/access/response port policy steps.
+      instance_dispatch_lane: instance_port_runtime for db_instance_port/runtime_instance_port credential-backed function calls.
+    non_mix_rule: Do not add db_instance_port, runtime_instance_port, or call_instance_postgres_function as external_port_substrate port kinds or core policy operations.
+
   credential_kind:
     allowed_values:
       - auth

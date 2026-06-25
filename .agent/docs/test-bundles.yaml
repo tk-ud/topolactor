@@ -380,3 +380,26 @@ bundles:
       - EMA score integration (null by explicit boundary; separate implementation task)
       - SSE projection pipeline (M4 boundary; separate test surface)
       - multi-instance horizontal scale behavior
+  - bundle_id: instance_port_substrate_design_wiring
+    roadmap_bundle_refs:
+      - product.instance_port_substrate
+    ssot_refs:
+      - docs/design/instance-port-substrate-ssot.yaml
+      - docs/design/external-port-substrate-ssot.yaml
+    test_files:
+      - .agent/tests/check-instance-port-substrate.sh
+    test_cases:
+      - file: .agent/tests/check-instance-port-substrate.sh
+        cases:
+          - "SSOT exists and declares call_instance_postgres_function / credential_backed_instance_function"
+          - "provider_kind / required_by_bundle remain data only"
+          - "plaintext connection strings and WaveRuntimeHandler-first design are forbidden"
+          - "call_postgres_function topology-only boundary is preserved"
+    proves:
+      - design SSOT and roadmap/TODO wiring exist for the planned substrate
+      - lightweight guard checks the major prohibited design directions
+    does_not_prove:
+      - instance port DDL implementation
+      - instance_port_runtime implementation
+      - call_instance_postgres_function runtime behavior
+      - Wave integration

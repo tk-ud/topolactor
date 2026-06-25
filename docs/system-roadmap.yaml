@@ -668,6 +668,42 @@ system_roadmap_ssot:
         - consumer_bundle_physical_table_manifest_evidence_projection_runtime_connected
         - hook_port_receive_scheduler_enqueue_runtime_event_and_projection_guarded
 
+    product.instance_port_substrate:
+      bundle_id: instance-port-substrate
+      title: Credential-backed instance port substrate
+      status: not_started
+      production_ready: false
+      public_summary: Design SSOT and lightweight CI guard are introduced for credential-backed DB/runtime instance connections and manifest-authorized instance function calls. Runtime/DDL/seed/adapter implementation is intentionally not started. The substrate is a sibling of external_port_substrate, not an extension of access_port/response_port/hook_port.
+      scope:
+        - instance_port_substrate_design
+        - db_instance_port
+        - runtime_instance_port
+        - credential_backed_instance_function
+        - call_instance_postgres_function_primitive_contract
+        - instance_connection_policy
+        - instance_function_authority_binding
+      detail_ref:
+        - docs/design/instance-port-substrate-ssot.yaml
+        - docs/design/external-port-substrate-ssot.yaml
+        - .agent/tasks/instance-port-substrate-implementation-todo.md
+      completion_condition:
+        - instance_connection_is_credential_backed_and_runtime_only
+        - call_instance_postgres_function_does_not_weaken_topology_only_call_postgres_function
+        - provider_kind_and_required_by_bundle_remain_data_only
+        - no_plaintext_credential_or_connection_string_in_ssot_seed_projection_log
+        - no_dedicated_provider_specific_runtime_handler
+        - abstract_function_authority_binding_controls_function_table_output_authority
+        - external_instance_is_not_topolactor_runtime_ssot
+      evidence_ref:
+        - docs/design/instance-port-substrate-ssot.yaml
+        - .agent/tests/check-instance-port-substrate.sh
+      known_gap_ref:
+        - instance_port_DDL_not_started
+        - instance_port_runtime_not_started
+        - call_instance_postgres_function_adapter_not_started
+        - authority_binding_runtime_tests_not_started
+        - Wave_integration_not_started
+
     product.email_port_consumer:
       bundle_id: email-port-consumer
       title: Email bundle port consumer implementation
@@ -928,7 +964,7 @@ system_roadmap_ssot:
       title: Job/Scheduler bundle port consumer implementation
       status: partial
       production_ready: false
-      public_summary: Job/Scheduler Bundle as port consumer of external_port_substrate. Seed binding (access_port external_scheduler / hook_port built_in_scheduler credential_kind=none / policy_steps) implemented per PR#460. topolactor built-in scheduler (runtime_timeline_scheduler) does not depend on port substrate; its in-memory queue is not changed. Remaining work is scheduler evidence / job status projection surface (DB queue 新設ではない), cron trigger driver loop, external scheduler hook intake wiring, evidence/runtime_event_log, and projection response. External scheduler provider-specific client not added.
+      public_summary: Job/Scheduler port consumer is reclassified to the external scheduler ingress receiver only. Seed binding (external_scheduler access_port / hook_port and built-in scheduler credential_kind=none seed row) is present per PR#460. Built-in RuntimeTimelineScheduler, cron driver, run ledger, job execution lifecycle, and job status projection belong to SchedulerJobManifestSubstrate / RuntimeTimelineScheduler, not this external_port_substrate consumer. Remaining work is limited to external scheduler hook/access receiver wiring, credential_requirement resolution, scheduler enqueue boundary evidence, and explicit fail-close guards. External scheduler provider-specific client not added.
       scope:
         - job_scheduler_access_and_hook_port_consumer_definition
         - scheduler_provider_credential_requirement_as_port_attachment
@@ -941,8 +977,9 @@ system_roadmap_ssot:
       closed_gap_ref:
         - job_scheduler_seed_binding_and_credential_requirement_implemented_per_pr460
       known_gap_ref:
-        - scheduler_evidence_job_status_projection_surface_not_connected
-        - cron_trigger_driver_loop_implementation_not_started
+        - external_scheduler_receiver_hook_access_wiring_not_connected
+        - external_scheduler_receiver_credential_requirement_fail_close_guard_not_connected
+        - built_in_runtime_timeline_scheduler_port_substrate_independence_guard_not_connected
 
     product.scheduler_job_manifest_substrate:
       bundle_id: scheduler-job-manifest-substrate-implementation
