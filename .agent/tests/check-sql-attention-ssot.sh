@@ -161,6 +161,89 @@ grep -qF "LoadHubRelationExplorationCandidatesAsync" backend/repository/NpgsqlSq
 grep -qF "source_attention_id" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: append-only generation lineage source_attention_id missing" >&2; exit 1; }
 grep -qF "draft_projection" backend/runtime/SqlAttentionEvidencePromotionRuntime.cs || { echo "FAIL: explicit Draft promotion runtime missing" >&2; exit 1; }
 echo "OK: write_logs_attention and canonical generation-line implementation boundary checks passed"
+
+# ---------------------------------------------------------------------------
+# manifest_topology_key_expansion_draft_lane guards
+# SQL-only evidence consumer: SQLAT evidence -> Key extraction (neighborhood only)
+# -> full-space manifest topology expansion -> insert-only draft candidate JSONB
+# + Markdown projection -> structured DB NOTIFY. C# is orchestration / bridge only.
+# ---------------------------------------------------------------------------
+DRAFT_SQL="db/sql_attention_logs_tables.sql"
+
+# SSOT contains the draft lane definition
+grep -qF "manifest_topology_key_expansion_draft_lane" "$SSOT_YAML" || { echo "FAIL: SSOT yaml missing manifest_topology_key_expansion_draft_lane" >&2; exit 1; }
+grep -qF "SQL Attention manifest topology key expansion draft lane" "$SSOT_MD" || { echo "FAIL: SSOT md missing draft lane section" >&2; exit 1; }
+
+# Insert-only authority + markdown projection tables exist
+grep -qF "CREATE TABLE IF NOT EXISTS logs.sql_attention_draft_candidate" "$DRAFT_SQL" || { echo "FAIL: draft candidate authority table missing" >&2; exit 1; }
+grep -qF "CREATE TABLE IF NOT EXISTS logs.sql_attention_draft_markdown_projection" "$DRAFT_SQL" || { echo "FAIL: draft markdown projection table missing" >&2; exit 1; }
+
+# Authority constants enforced
+grep -qF "CHECK (source = 'sql_attention')" "$DRAFT_SQL" || { echo "FAIL: source=sql_attention CHECK missing" >&2; exit 1; }
+grep -qF "CHECK (candidate_lane = 'manifest_topology_key_expansion_draft_lane')" "$DRAFT_SQL" || { echo "FAIL: candidate_lane CHECK missing" >&2; exit 1; }
+grep -qF "CHECK (status = 'draft')" "$DRAFT_SQL" || { echo "FAIL: status=draft CHECK missing" >&2; exit 1; }
+
+# Required draft payload fields
+for field in source_evidence_refs high_pressure_key hit_manifest_refs hit_table_refs common_axis_candidates candidate_columns candidate_payload_json; do
+  grep -qF "$field" "$DRAFT_SQL" || { echo "FAIL: draft payload field missing: $field" >&2; exit 1; }
+done
+
+# SQL function family present
+for fn in extract_sql_attention_high_pressure_keys compile_sql_attention_manifest_topology_draft_candidates insert_sql_attention_draft_candidate run_sql_attention_manifest_topology_key_expansion_draft_lane notify_sql_attention_draft_candidate_created render_sql_attention_draft_candidate_markdown; do
+  grep -qF "logs.$fn" "$DRAFT_SQL" || { echo "FAIL: SQL draft lane function missing: logs.$fn" >&2; exit 1; }
+done
+
+# Key extraction depends on SQLAT evidence (no schema mining without evidence)
+grep -qF "a.evidence_kind = 'sql_attention_hit'" "$DRAFT_SQL" || { echo "FAIL: key extraction not bound to SQLAT evidence" >&2; exit 1; }
+
+# Full-space expansion: compile must search the full active manifest topology space (not neighborhood-only completion)
+grep -qF "FROM hubs.topology_manifests tm" "$DRAFT_SQL" || { echo "FAIL: compile must search full manifest topology space" >&2; exit 1; }
+grep -qF "topology.schema_registry" "$DRAFT_SQL" || { echo "FAIL: compile must search logical table/column space (schema_registry)" >&2; exit 1; }
+grep -qF "enum.groups" "$DRAFT_SQL" || { echo "FAIL: compile must search enum group/discrete metadata" >&2; exit 1; }
+
+# Scoring is not raw count: dampening + lift + id-axis handling are present and data-defined
+grep -qF "logs.resolve_sql_attention_key_expansion_policy" "$DRAFT_SQL" || { echo "FAIL: draft lane scoring policy resolver missing (data-defined scoring)" >&2; exit 1; }
+grep -qF "routine_value_dampen_factor" "$DRAFT_SQL" || { echo "FAIL: routine high-frequency value dampening missing" >&2; exit 1; }
+grep -qF "generic_column_dampen_factor" "$DRAFT_SQL" || { echo "FAIL: generic column dampening missing" >&2; exit 1; }
+grep -qF "'raw_count_only', false" "$DRAFT_SQL" || { echo "FAIL: scoring must not be raw count only" >&2; exit 1; }
+grep -qF "id_axis_treated_as_dimension" "$DRAFT_SQL" || { echo "FAIL: ID column axis/dimension handling missing" >&2; exit 1; }
+grep -qF "SQL Attention key expansion policy missing" "$DRAFT_SQL" || { echo "FAIL: draft lane policy fail-close missing" >&2; exit 1; }
+grep -qF "'sql_attention_manifest_topology_key_expansion'" db/seed_empty.sql || { echo "FAIL: draft lane scoring policy seed missing" >&2; exit 1; }
+
+# Insert-only: no UPDATE/DELETE on draft tables, no UPDATE/DELETE of consumed logs.attention
+if find_pattern_matches "UPDATE\\s+logs\\.sql_attention_draft|DELETE\\s+FROM\\s+logs\\.sql_attention_draft" "$DRAFT_SQL" >/dev/null; then
+  echo "FAIL: draft candidate / markdown projection tables must be insert-only" >&2; exit 1
+fi
+
+# No auto-apply / auto-promote / active topology mutation from the draft lane
+if find_pattern_matches "UPDATE\\s+hubs\\.topology_manifests|UPDATE\\s+hubs\\.hub_relations|INSERT\\s+INTO\\s+topology\\.structure_maps|UPDATE\\s+topology\\.structure_maps" "$DRAFT_SQL" >/dev/null; then
+  echo "FAIL: draft lane must not mutate active manifest / hub_relation / structure_map (no auto-apply/auto-promote)" >&2; exit 1
+fi
+
+# Markdown is human-readable only: SQL must not generate HTML / island markup / CSS class authority / script
+if find_pattern_matches "<script|<div|<span|<iframe|class=" "$DRAFT_SQL" >/dev/null; then
+  echo "FAIL: SQL must not generate HTML / island markup / CSS class authority" >&2; exit 1
+fi
+
+# Structured NOTIFY payload + dedicated channel
+grep -qF "'event_type', 'sql_attention_draft_candidate_created'" "$DRAFT_SQL" || { echo "FAIL: structured notify event_type missing" >&2; exit 1; }
+grep -qF "pg_notify('sql_attention_draft_candidate'" "$DRAFT_SQL" || { echo "FAIL: dedicated NOTIFY channel missing" >&2; exit 1; }
+grep -qF "'markdown_projection_id', NEW.markdown_projection_id" "$DRAFT_SQL" || { echo "FAIL: notify payload missing markdown_projection_id" >&2; exit 1; }
+
+# C# is orchestration / bridge only — candidate inference is SQL (no scoring/heuristic in scheduler)
+grep -qF "CompileManifestTopologyDraftCandidatesAsync" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: repository draft lane bridge missing" >&2; exit 1; }
+grep -qF "run_sql_attention_manifest_topology_key_expansion_draft_lane" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: Npgsql draft lane invocation missing" >&2; exit 1; }
+grep -qF "RunDraftLaneAsync" backend/scheduler/SqlAttentionScheduler.cs || { echo "FAIL: scheduler draft lane orchestration missing" >&2; exit 1; }
+# scheduler must not contain candidate scoring heuristics
+if grep -qiE "score_weights|routine_value_dampen|high_pressure_key\s*=" backend/scheduler/SqlAttentionScheduler.cs; then
+  echo "FAIL: candidate inference / scoring must not be hardcoded in the C# scheduler" >&2; exit 1
+fi
+
+# Notification bridge wires structured channel to SSE (render-only on frontend)
+grep -qF "sql_attention_draft_candidate" backend/scheduler/DbNotifyListener.cs || { echo "FAIL: DbNotifyListener missing sql_attention_draft_candidate channel bridge" >&2; exit 1; }
+grep -qF "extractSqlAttentionDraftCandidatePayload" frontend/runtime/sseReceiver.ts || { echo "FAIL: frontend sse receiver missing draft candidate payload extractor" >&2; exit 1; }
+echo "OK: manifest_topology_key_expansion_draft_lane boundary checks passed"
+
 # phase_vector TODO requirement is conditional:
 # - implementation boundary complete -> TODO is not required
 # - implementation boundary incomplete -> TODO entry is required

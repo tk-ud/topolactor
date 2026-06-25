@@ -693,3 +693,826 @@ BEGIN
        AND rs.reason <> 'no_change';
 END;
 $$;
+
+-- =============================================================================
+-- manifest_topology_key_expansion_draft_lane
+-- SSOT: docs/design/sql-attention-logs-ssot.yaml#manifest_topology_key_expansion_draft_lane
+--       docs/design/sql-attention-logs-ssot.md (SQL Attention manifest topology key expansion draft lane)
+--
+-- SQL-only evidence consumer lane. It consumes logs.attention SQLAT evidence
+-- (source=sql_attention), extracts high-pressure discrete Keys from the
+-- SQL-Attention-explored hub_relation neighborhood (Key extraction space only),
+-- expands those Keys across the FULL registered manifest topology space, and
+-- inserts insert-only draft candidate JSONB (authority) + a human-readable
+-- Markdown projection. An AFTER INSERT trigger emits a structured DB NOTIFY.
+--
+-- Boundary invariants (enforced by CHECK constraints + guard tests):
+--   - draft candidate JSONB is the authority record (Markdown is not authority).
+--   - insert-only: no UPDATE / DELETE on these tables, no UPDATE/DELETE on logs.attention.
+--   - candidate inference is SQL-driven; C# is orchestration / notification bridge only.
+--   - no active manifest / topology registry / hub_relation / runtime route mutation.
+--   - no auto-apply / auto-promote.
+--   - Markdown body is plain human-readable text: no raw HTML / island markup /
+--     CSS class authority / executable script / promotion instruction as authority.
+--   - SQL does not generate UI placement; the UI decides display surface.
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- logs.sql_attention_draft_candidate
+-- Insert-only draft candidate authority record. The JSONB payload is canonical;
+-- Markdown projection is a derived human-readable view only.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS logs.sql_attention_draft_candidate (
+    candidate_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_set_id          TEXT        NOT NULL,
+    basis_window           TEXT,
+    candidate_type         TEXT        NOT NULL
+        CHECK (candidate_type IN ('relationship_axis_candidate', 'meaning_projection_candidate', 'aggregate_projection_candidate')),
+    source                 TEXT        NOT NULL DEFAULT 'sql_attention'
+        CHECK (source = 'sql_attention'),
+    candidate_lane         TEXT        NOT NULL DEFAULT 'manifest_topology_key_expansion_draft_lane'
+        CHECK (candidate_lane = 'manifest_topology_key_expansion_draft_lane'),
+    status                 TEXT        NOT NULL DEFAULT 'draft'
+        CHECK (status = 'draft'),
+    source_evidence_refs   JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    high_pressure_key      JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    hit_manifest_refs      JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    hit_table_refs         JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    common_axis_candidates JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    candidate_columns      JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    score                  DOUBLE PRECISION NOT NULL DEFAULT 0,
+    candidate_payload_json JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    archive_policy         TEXT        NOT NULL DEFAULT 'required'
+);
+
+COMMENT ON TABLE logs.sql_attention_draft_candidate IS
+  'Insert-only manifest_topology_key_expansion_draft_lane draft candidate authority record. '
+  'source=sql_attention, candidate_lane=manifest_topology_key_expansion_draft_lane, status=draft. '
+  'JSONB payload is the authority; Markdown projection is a derived human-readable view. '
+  'No auto-apply / auto-promote; adoption/promotion/placement remain explicit operations.';
+
+CREATE INDEX IF NOT EXISTS idx_sql_attention_draft_candidate_source_set
+  ON logs.sql_attention_draft_candidate (source_set_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sql_attention_draft_candidate_lane
+  ON logs.sql_attention_draft_candidate (candidate_lane, status);
+CREATE INDEX IF NOT EXISTS idx_sql_attention_draft_candidate_type
+  ON logs.sql_attention_draft_candidate (candidate_type);
+
+-- ---------------------------------------------------------------------------
+-- logs.sql_attention_draft_markdown_projection
+-- Insert-only human-readable Markdown projection of a draft candidate.
+-- Authority remains the draft candidate JSONB. Recommended display surface is
+-- the Markdown viewer / team markdown dashboard saved-view; placement is a UI
+-- decision, never decided by SQL.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS logs.sql_attention_draft_markdown_projection (
+    markdown_projection_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    candidate_id           UUID        NOT NULL REFERENCES logs.sql_attention_draft_candidate (candidate_id) ON DELETE RESTRICT,
+    source_set_id          TEXT        NOT NULL,
+    candidate_lane         TEXT        NOT NULL DEFAULT 'manifest_topology_key_expansion_draft_lane'
+        CHECK (candidate_lane = 'manifest_topology_key_expansion_draft_lane'),
+    rendered_markdown      TEXT        NOT NULL DEFAULT '',
+    markdown_meta_json     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    recommended_surface    TEXT        NOT NULL DEFAULT 'team_markdown_dashboard_saved_view',
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    archive_policy         TEXT        NOT NULL DEFAULT 'required'
+);
+
+COMMENT ON TABLE logs.sql_attention_draft_markdown_projection IS
+  'Insert-only human-readable Markdown projection for a SQL Attention draft candidate. '
+  'Authority is logs.sql_attention_draft_candidate JSONB, not this rendered_markdown body. '
+  'Markdown is review/search/dashboard projection only; it is not runtime SSOT, topology '
+  'promotion authority, event wiring authority, or UI placement authority.';
+
+CREATE INDEX IF NOT EXISTS idx_sql_attention_draft_markdown_candidate
+  ON logs.sql_attention_draft_markdown_projection (candidate_id);
+CREATE INDEX IF NOT EXISTS idx_sql_attention_draft_markdown_source_set
+  ON logs.sql_attention_draft_markdown_projection (source_set_id, created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- logs.sql_attention_jsonb_leaves
+-- Recursive scalar-leaf walker for topology / relation JSONB. Returns each
+-- scalar leaf as (key_name, key_value, value_kind). Used to discover discrete
+-- Keys and to search the manifest topology space. Builtins only (load-order safe).
+--
+-- Scalar-safe by construction: jsonb_each / jsonb_array_elements are set-returning
+-- functions that raise on non-object / non-array input. The recursive term feeds
+-- each SRF a guarded input via CASE (empty object/array when the node is not the
+-- matching container type), so scalar leaves that re-enter the walk never trigger
+-- an SRF error regardless of planner qual ordering. Scalar nodes simply expand to
+-- zero children, terminating the recursion.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.sql_attention_jsonb_leaves(p_doc JSONB)
+RETURNS TABLE (key_name TEXT, key_value TEXT, value_kind TEXT)
+LANGUAGE sql
+IMMUTABLE
+AS $$
+    WITH RECURSIVE walk(k, v) AS (
+        SELECT NULL::text, COALESCE(p_doc, '{}'::jsonb)
+      UNION ALL
+        SELECT child.k, child.v
+        FROM walk
+        CROSS JOIN LATERAL (
+            -- jsonb_each is only ever fed an object; non-objects expand to zero rows.
+            SELECT e.key AS k, e.value AS v
+              FROM jsonb_each(
+                     CASE WHEN jsonb_typeof(walk.v) = 'object' THEN walk.v ELSE '{}'::jsonb END
+                   ) e
+          UNION ALL
+            -- jsonb_array_elements is only ever fed an array; non-arrays expand to zero rows.
+            SELECT walk.k AS k, a.value AS v
+              FROM jsonb_array_elements(
+                     CASE WHEN jsonb_typeof(walk.v) = 'array' THEN walk.v ELSE '[]'::jsonb END
+                   ) a
+        ) child
+    )
+    SELECT k AS key_name,
+           (v #>> '{}') AS key_value,
+           jsonb_typeof(v) AS value_kind
+      FROM walk
+     WHERE k IS NOT NULL
+       AND jsonb_typeof(v) IN ('string', 'number', 'boolean');
+$$;
+
+COMMENT ON FUNCTION logs.sql_attention_jsonb_leaves(JSONB) IS
+  'Recursive scalar-leaf walker for JSONB. Returns (key_name, key_value, value_kind) for each scalar leaf, descending objects and arrays.';
+
+-- ---------------------------------------------------------------------------
+-- logs.resolve_sql_attention_key_expansion_policy
+-- Data-defined scoring/dampening policy resolver. Fail-close on missing policy
+-- or missing required keys. No hidden literals in the lane scoring path.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.resolve_sql_attention_key_expansion_policy(
+    p_policy_function_name TEXT DEFAULT 'sql_attention_manifest_topology_key_expansion',
+    p_policy_parameter_key TEXT DEFAULT 'default_policy'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_policy JSONB;
+BEGIN
+    SELECT fp.parameter_value
+      INTO v_policy
+      FROM topology.function_parameters fp
+     WHERE fp.function_name = p_policy_function_name
+       AND fp.parameter_key = p_policy_parameter_key
+       AND fp.active = true
+     ORDER BY fp.created_at DESC
+     LIMIT 1;
+
+    IF v_policy IS NULL THEN
+        RAISE EXCEPTION
+            'SQL Attention key expansion policy missing: function_name=% parameter_key=%',
+            p_policy_function_name, p_policy_parameter_key;
+    END IF;
+
+    IF NOT (
+        v_policy ? 'max_keys'
+        AND v_policy ? 'max_candidates'
+        AND v_policy ? 'min_candidate_score'
+        AND v_policy ? 'discrete_key_name_patterns'
+        AND v_policy ? 'generic_column_names'
+        AND v_policy ? 'id_column_suffixes'
+        AND v_policy ? 'score_weights'
+    ) THEN
+        RAISE EXCEPTION
+            'SQL Attention key expansion policy keys missing. required=[max_keys, max_candidates, min_candidate_score, discrete_key_name_patterns, generic_column_names, id_column_suffixes, score_weights], value=%',
+            v_policy;
+    END IF;
+
+    RETURN v_policy;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- logs.extract_sql_attention_high_pressure_keys
+-- Key extraction space = SQL-Attention-explored hub_relation neighborhood only.
+-- Reads logs.attention SQLAT evidence (source=sql_attention), resolves the
+-- neighborhood manifests, and extracts high-pressure discrete Keys from the
+-- neighborhood manifest topology JSONB and hub_relation config JSONB.
+-- This function never mines the full schema space; full-space expansion is a
+-- separate compile step that depends on these extracted Keys (no SQLAT evidence
+-- => no Keys => no candidates).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.extract_sql_attention_high_pressure_keys(
+    p_source_set_id TEXT,
+    p_basis_window TEXT DEFAULT NULL,
+    p_policy_function_name TEXT DEFAULT 'sql_attention_manifest_topology_key_expansion',
+    p_policy_parameter_key TEXT DEFAULT 'default_policy'
+)
+RETURNS TABLE (
+    key_name TEXT,
+    key_type TEXT,
+    key_value TEXT,
+    key_pressure DOUBLE PRECISION,
+    neighborhood_manifest_ids UUID[],
+    source_evidence_refs JSONB
+)
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_policy JSONB := logs.resolve_sql_attention_key_expansion_policy(p_policy_function_name, p_policy_parameter_key);
+    v_max_keys INT := (v_policy->>'max_keys')::int;
+    v_min_pressure DOUBLE PRECISION := COALESCE((v_policy->>'min_key_pressure')::double precision, 1.0);
+    v_patterns TEXT := array_to_string(ARRAY(SELECT jsonb_array_elements_text(v_policy->'discrete_key_name_patterns')), '|');
+BEGIN
+    RETURN QUERY
+    WITH sqlat AS (
+        SELECT a.attention_id,
+               a.source_topology_manifest_ids,
+               a.expanded_topology_manifest_ids,
+               a.hit_hub_relation_ids
+          FROM logs.attention a
+         WHERE a.source_set_id = p_source_set_id
+           AND a.evidence_kind = 'sql_attention_hit'
+    ),
+    nbhd AS (
+        SELECT DISTINCT s.attention_id, m AS topology_manifest_id
+          FROM sqlat s,
+               unnest(s.source_topology_manifest_ids || s.expanded_topology_manifest_ids) AS m
+         WHERE m IS NOT NULL
+        UNION
+        SELECT DISTINCT s.attention_id, hr.topology_manifest_id
+          FROM sqlat s,
+               unnest(s.hit_hub_relation_ids) AS rel
+          JOIN hubs.hub_relations hr ON hr.hub_relation_id = rel
+    ),
+    nbhd_docs AS (
+        SELECT n.attention_id, n.topology_manifest_id, tm.topology_jsonb AS doc
+          FROM nbhd n
+          JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = n.topology_manifest_id
+        UNION ALL
+        SELECT n.attention_id, n.topology_manifest_id, hr.relation_config AS doc
+          FROM nbhd n
+          JOIN hubs.hub_relations hr ON hr.topology_manifest_id = n.topology_manifest_id
+    ),
+    leaves AS (
+        SELECT d.attention_id, d.topology_manifest_id, l.key_name, l.key_value, l.value_kind
+          FROM nbhd_docs d
+          CROSS JOIN LATERAL logs.sql_attention_jsonb_leaves(d.doc) l
+         WHERE l.key_name IS NOT NULL
+           AND l.key_value IS NOT NULL
+           AND length(l.key_value) <= 128
+           AND (
+                 (v_patterns <> '' AND l.key_name ~* v_patterns)
+                 OR l.value_kind = 'boolean'
+               )
+    ),
+    agg AS (
+        SELECT l.key_name,
+               l.value_kind AS key_type,
+               l.key_value,
+               COUNT(*)::double precision AS key_pressure,
+               array_agg(DISTINCT l.topology_manifest_id) AS neighborhood_manifest_ids,
+               jsonb_agg(DISTINCT l.attention_id) AS source_evidence_refs
+          FROM leaves l
+         GROUP BY l.key_name, l.value_kind, l.key_value
+    )
+    SELECT a.key_name, a.key_type, a.key_value, a.key_pressure,
+           a.neighborhood_manifest_ids, a.source_evidence_refs
+      FROM agg a
+     WHERE a.key_pressure >= v_min_pressure
+     ORDER BY a.key_pressure DESC, a.key_name
+     LIMIT v_max_keys;
+END;
+$$;
+
+COMMENT ON FUNCTION logs.extract_sql_attention_high_pressure_keys(TEXT, TEXT, TEXT, TEXT) IS
+  'Extracts high-pressure discrete Keys from the SQL-Attention-explored hub_relation neighborhood only. '
+  'Depends on logs.attention SQLAT evidence; no SQLAT evidence yields no Keys (no full-space schema mining without evidence).';
+
+-- ---------------------------------------------------------------------------
+-- logs.sql_attention_enum_group_matches
+-- Resilient enum group / discrete-value metadata lookup for the draft lane.
+-- The enum dictionary (enum.groups / enum.group_items / enum.items) is an optional
+-- search surface ("enum group or discrete value metadata when available"). When the
+-- enum schema is absent, this returns zero rows via a to_regclass guard instead of
+-- raising relation-does-not-exist. Dynamic SQL keeps the enum references unresolved
+-- at function-creation time (load-order / optional-schema safe).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.sql_attention_enum_group_matches(
+    p_key_name TEXT,
+    p_key_value TEXT
+)
+RETURNS TABLE (group_id UUID, group_name TEXT)
+LANGUAGE plpgsql
+STABLE
+AS $$
+BEGIN
+    IF to_regclass('enum.groups') IS NULL THEN
+        RETURN;  -- enum dictionary not present in this database; no matches available
+    END IF;
+
+    RETURN QUERY EXECUTE
+        'SELECT g.group_id, g.group_name
+           FROM enum.groups g
+          WHERE g.group_name ILIKE ''%'' || $1 || ''%''
+             OR EXISTS (
+                  SELECT 1
+                    FROM enum.group_items gi
+                    JOIN enum.items it ON it.index_num = gi.enum_index_num
+                   WHERE gi.group_id = g.group_id
+                     AND it.name = $2)'
+        USING p_key_name, p_key_value;
+END;
+$$;
+
+COMMENT ON FUNCTION logs.sql_attention_enum_group_matches(TEXT, TEXT) IS
+  'Optional enum group / discrete-value metadata match for the draft lane. Returns zero rows when the enum dictionary schema is absent (to_regclass guard) rather than raising.';
+
+-- ---------------------------------------------------------------------------
+-- logs.compile_sql_attention_manifest_topology_draft_candidates
+-- Full-space expansion + hit-set re-aggregation + scoring.
+-- Reads extracted high-pressure Keys and expands them across the FULL registered
+-- manifest topology space (topology manifest JSONB, screen data shape JSONB
+-- embedded in topology_jsonb, logical tables/columns via schema_registry +
+-- physical_tables, enum group/discrete-value metadata, physical_table_manifest
+-- bindings). Re-aggregates same-name / same-type / common axis, enum group match,
+-- value overlap, logs.diff pressure, logs.attention pressure, table-ref reuse,
+-- and manifest reuse. Scoring is NOT raw count: it applies routine high-frequency
+-- value dampening, lift / pressure delta, ID-column axis handling, and generic
+-- column dampening from the data-defined policy. Read-only (no insert).
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.compile_sql_attention_manifest_topology_draft_candidates(
+    p_source_set_id TEXT,
+    p_basis_window TEXT DEFAULT NULL,
+    p_policy_function_name TEXT DEFAULT 'sql_attention_manifest_topology_key_expansion',
+    p_policy_parameter_key TEXT DEFAULT 'default_policy'
+)
+RETURNS TABLE (
+    candidate_type TEXT,
+    high_pressure_key JSONB,
+    source_evidence_refs JSONB,
+    hit_manifest_refs JSONB,
+    hit_table_refs JSONB,
+    common_axis_candidates JSONB,
+    candidate_columns JSONB,
+    score DOUBLE PRECISION,
+    candidate_payload_json JSONB
+)
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_policy JSONB := logs.resolve_sql_attention_key_expansion_policy(p_policy_function_name, p_policy_parameter_key);
+    v_w JSONB := v_policy->'score_weights';
+    v_generic TEXT := array_to_string(ARRAY(SELECT '(^|[_.])' || x || '($|[_.])' FROM jsonb_array_elements_text(v_policy->'generic_column_names') x), '|');
+    v_idsfx TEXT := array_to_string(ARRAY(SELECT regexp_replace(x, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g') || '$' FROM jsonb_array_elements_text(v_policy->'id_column_suffixes') x), '|');
+    v_min_score DOUBLE PRECISION := (v_policy->>'min_candidate_score')::double precision;
+    v_max_candidates INT := (v_policy->>'max_candidates')::int;
+    v_routine_fraction DOUBLE PRECISION := COALESCE((v_policy->>'routine_value_manifest_fraction_dampen')::double precision, 0.6);
+    v_routine_dampen DOUBLE PRECISION := COALESCE((v_policy->>'routine_value_dampen_factor')::double precision, 0.4);
+    v_generic_dampen DOUBLE PRECISION := COALESCE((v_policy->>'generic_column_dampen_factor')::double precision, 0.5);
+    v_lift_min DOUBLE PRECISION := COALESCE((v_policy->>'lift_min')::double precision, 1.0);
+    v_total_manifests DOUBLE PRECISION;
+    -- score weights (data-defined; fail-soft to 0 weight when absent)
+    w_same_name DOUBLE PRECISION := COALESCE((v_w->>'same_name_axis')::double precision, 0);
+    w_same_type DOUBLE PRECISION := COALESCE((v_w->>'same_type_axis')::double precision, 0);
+    w_common DOUBLE PRECISION := COALESCE((v_w->>'common_axis')::double precision, 0);
+    w_enum DOUBLE PRECISION := COALESCE((v_w->>'enum_group_match')::double precision, 0);
+    w_value_overlap DOUBLE PRECISION := COALESCE((v_w->>'value_overlap')::double precision, 0);
+    w_diff DOUBLE PRECISION := COALESCE((v_w->>'logs_diff_pressure')::double precision, 0);
+    w_attn DOUBLE PRECISION := COALESCE((v_w->>'logs_attention_pressure')::double precision, 0);
+    w_table_reuse DOUBLE PRECISION := COALESCE((v_w->>'table_ref_reuse')::double precision, 0);
+    w_manifest_reuse DOUBLE PRECISION := COALESCE((v_w->>'manifest_reuse')::double precision, 0);
+    w_id_axis DOUBLE PRECISION := COALESCE((v_w->>'id_axis')::double precision, 0);
+    w_lift DOUBLE PRECISION := COALESCE((v_w->>'lift')::double precision, 0);
+BEGIN
+    SELECT GREATEST(COUNT(*), 1)::double precision
+      INTO v_total_manifests
+      FROM hubs.topology_manifests
+     WHERE status = 'active';
+
+    RETURN QUERY
+    WITH keys AS (
+        SELECT * FROM logs.extract_sql_attention_high_pressure_keys(
+            p_source_set_id, p_basis_window, p_policy_function_name, p_policy_parameter_key)
+    ),
+    -- FULL-space manifest topology leaves (topology manifest + screen data shape JSONB).
+    manifest_leaves AS (
+        SELECT tm.topology_manifest_id, tm.manifest_key, l.key_name, l.key_value, l.value_kind
+          FROM hubs.topology_manifests tm
+          CROSS JOIN LATERAL logs.sql_attention_jsonb_leaves(tm.topology_jsonb) l
+         WHERE tm.status = 'active'
+    ),
+    -- FULL-space logical column space (schema_registry schema_def leaves).
+    schema_leaves AS (
+        SELECT sr.schema_id, sr.name AS schema_name, l.key_name
+          FROM topology.schema_registry sr
+          CROSS JOIN LATERAL logs.sql_attention_jsonb_leaves(sr.schema_def) l
+         WHERE sr.active = true
+           AND l.key_name IS NOT NULL
+    ),
+    -- per-key manifest hit set (same-name OR value overlap across full space)
+    mhit AS (
+        SELECT k.key_name, k.key_value,
+               ml.topology_manifest_id, ml.manifest_key,
+               bool_or(ml.key_name = k.key_name) AS same_name,
+               bool_or(ml.value_kind = k.key_type) AS same_type,
+               bool_or(ml.key_name = k.key_name AND ml.value_kind = k.key_type) AS common_axis,
+               bool_or(ml.key_value = k.key_value) AS value_overlap
+          FROM keys k
+          JOIN manifest_leaves ml
+            ON ml.key_name = k.key_name OR ml.key_value = k.key_value
+         GROUP BY k.key_name, k.key_value, ml.topology_manifest_id, ml.manifest_key
+    ),
+    mhit_agg AS (
+        SELECT key_name, key_value,
+               COUNT(*) FILTER (WHERE same_name)    AS same_name_axis_count,
+               COUNT(*) FILTER (WHERE same_type)    AS same_type_axis_count,
+               COUNT(*) FILTER (WHERE common_axis)  AS common_axis_count,
+               COUNT(*) FILTER (WHERE value_overlap) AS value_overlap_count,
+               COUNT(*)                              AS manifest_reuse,
+               jsonb_agg(DISTINCT jsonb_build_object(
+                   'topology_manifest_id', topology_manifest_id,
+                   'manifest_key', manifest_key)) AS hit_manifest_refs,
+               array_agg(DISTINCT topology_manifest_id) AS manifest_ids
+          FROM mhit
+         GROUP BY key_name, key_value
+    ),
+    schema_agg AS (
+        SELECT k.key_name,
+               COUNT(DISTINCT sl.schema_id) AS schema_hit_count,
+               jsonb_agg(DISTINCT jsonb_build_object(
+                   'schema_id', sl.schema_id,
+                   'schema_name', sl.schema_name,
+                   'column', sl.key_name)) AS candidate_columns
+          FROM keys k
+          JOIN schema_leaves sl ON sl.key_name = k.key_name
+         GROUP BY k.key_name
+    ),
+    enum_agg AS (
+        -- enum group / discrete-value metadata is searched "when available": the match is
+        -- resolved through logs.sql_attention_enum_group_matches, which returns no rows when the
+        -- enum dictionary schema is absent (to_regclass guard) instead of hard-failing.
+        SELECT k.key_name, k.key_value,
+               COUNT(DISTINCT m.group_id) AS enum_group_match,
+               COALESCE(
+                 jsonb_agg(DISTINCT jsonb_build_object('group_id', m.group_id, 'group_name', m.group_name))
+                   FILTER (WHERE m.group_id IS NOT NULL),
+                 '[]'::jsonb) AS enum_groups
+          FROM keys k
+          LEFT JOIN LATERAL logs.sql_attention_enum_group_matches(k.key_name, k.key_value) m ON true
+         GROUP BY k.key_name, k.key_value
+    ),
+    table_agg AS (
+        SELECT ma.key_name, ma.key_value,
+               COUNT(DISTINCT b.physical_table_id) AS table_ref_reuse,
+               jsonb_agg(DISTINCT jsonb_build_object(
+                   'physical_table_id', b.physical_table_id,
+                   'table_ref', pt.table_ref)) AS hit_table_refs,
+               COALESCE(SUM(dpr.diff_pressure), 0)::double precision AS logs_diff_pressure
+          FROM mhit_agg ma
+          JOIN topology.physical_table_manifest_bindings b
+            ON b.topology_manifest_id = ANY(ma.manifest_ids) AND b.active = true
+          JOIN topology.physical_tables pt ON pt.physical_table_id = b.physical_table_id
+          LEFT JOIN LATERAL (
+              SELECT COUNT(*)::double precision AS diff_pressure
+                FROM logs.diff d
+               WHERE d.physical_table_id = pt.physical_table_id::text
+                  OR d.physical_table_name = pt.table_ref
+          ) dpr ON true
+         GROUP BY ma.key_name, ma.key_value
+    ),
+    attn_agg AS (
+        SELECT ma.key_name, ma.key_value,
+               COUNT(*)::double precision AS logs_attention_pressure
+          FROM mhit_agg ma
+          JOIN logs.attention a
+            ON a.source_topology_manifest_ids && ma.manifest_ids
+         GROUP BY ma.key_name, ma.key_value
+    ),
+    scored AS (
+        SELECT
+            k.key_name, k.key_type, k.key_value, k.key_pressure, k.source_evidence_refs,
+            COALESCE(ma.same_name_axis_count, 0)  AS same_name_axis_count,
+            COALESCE(ma.same_type_axis_count, 0)  AS same_type_axis_count,
+            COALESCE(ma.common_axis_count, 0)     AS common_axis_count,
+            COALESCE(ma.value_overlap_count, 0)   AS value_overlap_count,
+            COALESCE(ma.manifest_reuse, 0)        AS manifest_reuse,
+            COALESCE(ma.hit_manifest_refs, '[]'::jsonb) AS hit_manifest_refs,
+            COALESCE(sa.candidate_columns, '[]'::jsonb) AS candidate_columns,
+            COALESCE(sa.schema_hit_count, 0)      AS schema_hit_count,
+            COALESCE(ea.enum_group_match, 0)      AS enum_group_match,
+            COALESCE(ea.enum_groups, '[]'::jsonb) AS enum_groups,
+            COALESCE(ta.table_ref_reuse, 0)       AS table_ref_reuse,
+            COALESCE(ta.hit_table_refs, '[]'::jsonb) AS hit_table_refs,
+            COALESCE(ta.logs_diff_pressure, 0)    AS logs_diff_pressure,
+            COALESCE(an.logs_attention_pressure, 0) AS logs_attention_pressure,
+            (k.key_name ~* v_idsfx)               AS is_id_axis,
+            (v_generic <> '' AND k.key_name ~* v_generic) AS is_generic,
+            (COALESCE(ma.value_overlap_count, 0)::double precision / v_total_manifests) AS routine_fraction,
+            (k.key_pressure / (1.0 + COALESCE(ma.value_overlap_count, 0)::double precision)) AS lift
+          FROM keys k
+          LEFT JOIN mhit_agg ma ON ma.key_name = k.key_name AND ma.key_value = k.key_value
+          LEFT JOIN schema_agg sa ON sa.key_name = k.key_name
+          LEFT JOIN enum_agg ea ON ea.key_name = k.key_name AND ea.key_value = k.key_value
+          LEFT JOIN table_agg ta ON ta.key_name = k.key_name AND ta.key_value = k.key_value
+          LEFT JOIN attn_agg an ON an.key_name = k.key_name AND an.key_value = k.key_value
+    ),
+    final AS (
+        SELECT s.*,
+            -- ID columns are axis / dimension candidates, never primary display text.
+            CASE
+                WHEN s.is_id_axis THEN 'relationship_axis_candidate'
+                WHEN s.enum_group_match > 0 OR s.value_overlap_count > 0 THEN 'meaning_projection_candidate'
+                ELSE 'aggregate_projection_candidate'
+            END AS candidate_type,
+            (
+              (
+                w_same_name      * s.same_name_axis_count
+              + w_same_type      * s.same_type_axis_count
+              + w_common         * s.common_axis_count
+              + w_enum           * s.enum_group_match
+              + w_value_overlap  * s.value_overlap_count
+              + w_diff           * ln(1.0 + s.logs_diff_pressure)
+              + w_attn           * ln(1.0 + s.logs_attention_pressure)
+              + w_table_reuse    * s.table_ref_reuse
+              + w_manifest_reuse * s.manifest_reuse
+              + (CASE WHEN s.is_id_axis THEN w_id_axis ELSE 0 END)
+              + (CASE WHEN s.lift >= v_lift_min THEN w_lift * s.lift ELSE 0 END)
+              )
+              -- routine high-frequency value dampening
+              * (CASE WHEN s.routine_fraction > v_routine_fraction THEN v_routine_dampen ELSE 1.0 END)
+              -- generic column dampening
+              * (CASE WHEN s.is_generic THEN v_generic_dampen ELSE 1.0 END)
+            ) AS score
+          FROM scored s
+    )
+    SELECT
+        f.candidate_type,
+        jsonb_build_object(
+            'key_name', f.key_name,
+            'key_type', f.key_type,
+            'key_value', f.key_value,
+            'key_pressure', f.key_pressure,
+            'is_id_axis', f.is_id_axis,
+            'is_generic', f.is_generic) AS high_pressure_key,
+        f.source_evidence_refs,
+        f.hit_manifest_refs,
+        f.hit_table_refs,
+        (CASE WHEN f.common_axis_count > 0 OR f.same_name_axis_count > 0
+              THEN f.hit_manifest_refs ELSE '[]'::jsonb END) AS common_axis_candidates,
+        f.candidate_columns,
+        f.score,
+        jsonb_build_object(
+            'source', 'sql_attention',
+            'candidate_lane', 'manifest_topology_key_expansion_draft_lane',
+            'status', 'draft',
+            'candidate_type', f.candidate_type,
+            'high_pressure_key', jsonb_build_object(
+                'key_name', f.key_name, 'key_type', f.key_type, 'key_value', f.key_value,
+                'key_pressure', f.key_pressure, 'is_id_axis', f.is_id_axis, 'is_generic', f.is_generic),
+            'source_evidence_refs', f.source_evidence_refs,
+            'hit_manifest_refs', f.hit_manifest_refs,
+            'hit_table_refs', f.hit_table_refs,
+            'common_axis_candidates', (CASE WHEN f.common_axis_count > 0 OR f.same_name_axis_count > 0
+                                            THEN f.hit_manifest_refs ELSE '[]'::jsonb END),
+            'candidate_columns', f.candidate_columns,
+            'enum_groups', f.enum_groups,
+            'aggregation', jsonb_build_object(
+                'same_name_axis', f.same_name_axis_count,
+                'same_type_axis', f.same_type_axis_count,
+                'same_name_and_same_type_common_axis', f.common_axis_count,
+                'enum_group_match', f.enum_group_match,
+                'value_overlap', f.value_overlap_count,
+                'logs_diff_pressure', f.logs_diff_pressure,
+                'logs_attention_pressure', f.logs_attention_pressure,
+                'table_ref_reuse', f.table_ref_reuse,
+                'manifest_reuse', f.manifest_reuse,
+                'schema_hit_count', f.schema_hit_count),
+            'scoring', jsonb_build_object(
+                'score', f.score,
+                'lift', f.lift,
+                'routine_fraction', f.routine_fraction,
+                'routine_dampened', (f.routine_fraction > v_routine_fraction),
+                'generic_dampened', f.is_generic,
+                'id_axis_treated_as_dimension', f.is_id_axis,
+                'raw_count_only', false),
+            'score', f.score,
+            'status_note', 'draft candidate JSONB is authority; markdown is human-readable projection only') AS candidate_payload_json
+      FROM final f
+     WHERE f.score >= v_min_score
+     ORDER BY f.score DESC, f.key_name
+     LIMIT v_max_candidates;
+END;
+$$;
+
+COMMENT ON FUNCTION logs.compile_sql_attention_manifest_topology_draft_candidates(TEXT, TEXT, TEXT, TEXT) IS
+  'Expands extracted high-pressure Keys across the FULL registered manifest topology space and re-aggregates common-axis / column-pressure hit sets with dampening + lift scoring. Read-only candidate inference (SQL-driven, not C# hardcoded).';
+
+-- ---------------------------------------------------------------------------
+-- logs.render_sql_attention_draft_candidate_markdown
+-- SQL-generated human-readable Markdown projection body. PLAIN markdown only:
+-- headings, bullet lists, inline code. No raw HTML, no island markup, no CSS
+-- class authority, no executable script, no promotion instruction as authority.
+-- The UI decides display surface; this body is review/search text only.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.render_sql_attention_draft_candidate_markdown(
+    p_candidate_id UUID,
+    p_candidate_type TEXT,
+    p_high_pressure_key JSONB,
+    p_hit_manifest_refs JSONB,
+    p_common_axis_candidates JSONB,
+    p_candidate_columns JSONB,
+    p_score DOUBLE PRECISION
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+    v_md TEXT;
+    v_manifest_lines TEXT;
+    v_column_lines TEXT;
+BEGIN
+    SELECT string_agg('- manifest `' || COALESCE(e->>'manifest_key', e->>'topology_manifest_id') || '`', E'\n')
+      INTO v_manifest_lines
+      FROM jsonb_array_elements(COALESCE(p_hit_manifest_refs, '[]'::jsonb)) e;
+
+    SELECT string_agg('- column `' || COALESCE(e->>'column', '') || '` (' || COALESCE(e->>'schema_name', '') || ')', E'\n')
+      INTO v_column_lines
+      FROM jsonb_array_elements(COALESCE(p_candidate_columns, '[]'::jsonb)) e;
+
+    v_md :=
+        '# SQL Attention draft candidate' || E'\n\n'
+     || '- Candidate type: ' || COALESCE(p_candidate_type, '') || E'\n'
+     || '- Source: sql_attention' || E'\n'
+     || '- Candidate lane: manifest_topology_key_expansion_draft_lane' || E'\n'
+     || '- Status: draft (review only — not adopted, not promoted, not placed)' || E'\n'
+     || '- Candidate id: ' || p_candidate_id::text || E'\n'
+     || '- Score: ' || round(p_score::numeric, 4)::text || E'\n\n'
+     || '## High-pressure key' || E'\n\n'
+     || '- Key name: `' || COALESCE(p_high_pressure_key->>'key_name', '') || '`' || E'\n'
+     || '- Key type: ' || COALESCE(p_high_pressure_key->>'key_type', '') || E'\n'
+     || '- Key value: `' || COALESCE(p_high_pressure_key->>'key_value', '') || '`' || E'\n\n'
+     || '## Hit manifest topology' || E'\n\n'
+     || COALESCE(v_manifest_lines, '- (none)') || E'\n\n'
+     || '## Candidate columns' || E'\n\n'
+     || COALESCE(v_column_lines, '- (none)') || E'\n\n'
+     || '> Authority is the draft candidate JSONB record. This Markdown is a human-readable '
+     || 'review/search projection only; it does not decide topology promotion or UI placement.';
+
+    RETURN v_md;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- logs.insert_sql_attention_draft_candidate
+-- Insert-only writer for one compiled draft candidate. Inserts the authority
+-- JSONB record, renders + inserts the Markdown projection, and (via AFTER INSERT
+-- trigger on the projection) emits the structured DB NOTIFY. No mutation of
+-- active manifests / topology registry / hub_relations / runtime routes.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.insert_sql_attention_draft_candidate(
+    p_source_set_id TEXT,
+    p_basis_window TEXT,
+    p_candidate_type TEXT,
+    p_source_evidence_refs JSONB,
+    p_high_pressure_key JSONB,
+    p_hit_manifest_refs JSONB,
+    p_hit_table_refs JSONB,
+    p_common_axis_candidates JSONB,
+    p_candidate_columns JSONB,
+    p_score DOUBLE PRECISION,
+    p_candidate_payload_json JSONB
+)
+RETURNS TABLE (candidate_id UUID, markdown_projection_id UUID)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_candidate_id UUID := gen_random_uuid();
+    v_markdown_id UUID;
+    v_markdown TEXT;
+BEGIN
+    INSERT INTO logs.sql_attention_draft_candidate (
+        candidate_id, source_set_id, basis_window, candidate_type,
+        source, candidate_lane, status,
+        source_evidence_refs, high_pressure_key, hit_manifest_refs, hit_table_refs,
+        common_axis_candidates, candidate_columns, score, candidate_payload_json,
+        archive_policy
+    ) VALUES (
+        v_candidate_id, p_source_set_id, p_basis_window, p_candidate_type,
+        'sql_attention', 'manifest_topology_key_expansion_draft_lane', 'draft',
+        COALESCE(p_source_evidence_refs, '[]'::jsonb),
+        COALESCE(p_high_pressure_key, '{}'::jsonb),
+        COALESCE(p_hit_manifest_refs, '[]'::jsonb),
+        COALESCE(p_hit_table_refs, '[]'::jsonb),
+        COALESCE(p_common_axis_candidates, '[]'::jsonb),
+        COALESCE(p_candidate_columns, '[]'::jsonb),
+        COALESCE(p_score, 0),
+        COALESCE(p_candidate_payload_json, '{}'::jsonb),
+        'required'
+    );
+
+    v_markdown := logs.render_sql_attention_draft_candidate_markdown(
+        v_candidate_id, p_candidate_type, p_high_pressure_key,
+        p_hit_manifest_refs, p_common_axis_candidates, p_candidate_columns, p_score);
+
+    INSERT INTO logs.sql_attention_draft_markdown_projection (
+        candidate_id, source_set_id, candidate_lane, rendered_markdown,
+        markdown_meta_json, recommended_surface, archive_policy
+    ) VALUES (
+        v_candidate_id, p_source_set_id, 'manifest_topology_key_expansion_draft_lane', v_markdown,
+        jsonb_build_object(
+            'authority_record', 'logs.sql_attention_draft_candidate',
+            'markdown_is_authority', false,
+            'rendered_by', 'sql'),
+        'team_markdown_dashboard_saved_view', 'required'
+    )
+    RETURNING logs.sql_attention_draft_markdown_projection.markdown_projection_id
+    INTO v_markdown_id;
+
+    candidate_id := v_candidate_id;
+    markdown_projection_id := v_markdown_id;
+    RETURN NEXT;
+END;
+$$;
+
+COMMENT ON FUNCTION logs.insert_sql_attention_draft_candidate(TEXT, TEXT, TEXT, JSONB, JSONB, JSONB, JSONB, JSONB, JSONB, DOUBLE PRECISION, JSONB) IS
+  'Insert-only writer: inserts draft candidate authority JSONB + rendered Markdown projection. AFTER INSERT trigger emits structured DB NOTIFY. No auto-apply/auto-promote/active-manifest mutation.';
+
+-- ---------------------------------------------------------------------------
+-- logs.run_sql_attention_manifest_topology_key_expansion_draft_lane
+-- Orchestrating SQL entry point invoked by the C# scheduler bridge. Compiles
+-- candidates (SQL-driven inference) and inserts each one insert-only. C# never
+-- performs candidate inference; it only calls this function and bridges NOTIFY.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.run_sql_attention_manifest_topology_key_expansion_draft_lane(
+    p_source_set_id TEXT,
+    p_basis_window TEXT DEFAULT NULL,
+    p_policy_function_name TEXT DEFAULT 'sql_attention_manifest_topology_key_expansion',
+    p_policy_parameter_key TEXT DEFAULT 'default_policy'
+)
+RETURNS TABLE (
+    candidate_id UUID,
+    markdown_projection_id UUID,
+    candidate_type TEXT,
+    candidate_lane TEXT,
+    score DOUBLE PRECISION
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    r RECORD;
+    ins RECORD;
+BEGIN
+    FOR r IN
+        SELECT * FROM logs.compile_sql_attention_manifest_topology_draft_candidates(
+            p_source_set_id, p_basis_window, p_policy_function_name, p_policy_parameter_key)
+    LOOP
+        SELECT * INTO ins
+          FROM logs.insert_sql_attention_draft_candidate(
+            p_source_set_id, p_basis_window, r.candidate_type,
+            r.source_evidence_refs, r.high_pressure_key, r.hit_manifest_refs,
+            r.hit_table_refs, r.common_axis_candidates, r.candidate_columns,
+            r.score, r.candidate_payload_json);
+
+        candidate_id := ins.candidate_id;
+        markdown_projection_id := ins.markdown_projection_id;
+        candidate_type := r.candidate_type;
+        candidate_lane := 'manifest_topology_key_expansion_draft_lane';
+        score := r.score;
+        RETURN NEXT;
+    END LOOP;
+END;
+$$;
+
+COMMENT ON FUNCTION logs.run_sql_attention_manifest_topology_key_expansion_draft_lane(TEXT, TEXT, TEXT, TEXT) IS
+  'C#-invoked orchestrating entry point: SQLAT evidence -> Key extraction -> full-space expansion -> insert-only draft candidate + Markdown projection + DB NOTIFY. Candidate inference is fully SQL.';
+
+-- ---------------------------------------------------------------------------
+-- logs.notify_sql_attention_draft_candidate_created (AFTER INSERT trigger)
+-- Emits structured-JSON DB NOTIFY on the dedicated sql_attention_draft_candidate
+-- channel. UI placement is never decided here; the payload is a signal only.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.notify_sql_attention_draft_candidate_created()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_payload JSONB;
+BEGIN
+    v_payload := jsonb_build_object(
+        'event_type', 'sql_attention_draft_candidate_created',
+        'source', 'sql_attention',
+        'candidate_id', NEW.candidate_id,
+        'candidate_lane', NEW.candidate_lane,
+        'markdown_projection_id', NEW.markdown_projection_id,
+        'source_set_id', NEW.source_set_id);
+
+    PERFORM pg_notify('sql_attention_draft_candidate', v_payload::text);
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_notify_sql_attention_draft_candidate_created
+    ON logs.sql_attention_draft_markdown_projection;
+CREATE TRIGGER trg_notify_sql_attention_draft_candidate_created
+    AFTER INSERT ON logs.sql_attention_draft_markdown_projection
+    FOR EACH ROW
+    EXECUTE FUNCTION logs.notify_sql_attention_draft_candidate_created();

@@ -79,6 +79,61 @@ export function extractCiAttentionFragmentPayload(
   }
 }
 
+/**
+ * Structured render-only payload for the manifest_topology_key_expansion draft lane signal.
+ *
+ * Emitted by the backend notification bridge (DbNotifyListener) after the SQL trigger
+ * logs.notify_sql_attention_draft_candidate_created fires. The frontend renders this as a
+ * "a draft candidate was created" signal only. It holds NO SQL Attention judgment, NO
+ * recommendation judgment, and NO promotion judgment: the draft candidate JSONB is the
+ * backend authority, and adoption / promotion / placement remain explicit backend operations.
+ * The UI decides only its own display surface.
+ */
+export type SqlAttentionDraftCandidatePayload = {
+  eventType: "sql_attention_draft_candidate_created";
+  source: "sql_attention";
+  candidateId: string;
+  candidateLane: string;
+  markdownProjectionId: string;
+  sourceSetId?: string;
+};
+
+/**
+ * Attempts to extract a SqlAttentionDraftCandidatePayload from a raw SSE event data string.
+ * Returns the payload only when the structured contract is satisfied; otherwise null.
+ * Never throws; parse errors and contract mismatches return null.
+ *
+ * The frontend never infers or completes missing fields — a malformed signal is dropped,
+ * not "fixed up" into a judgment.
+ */
+export function extractSqlAttentionDraftCandidatePayload(
+  rawData: string,
+): SqlAttentionDraftCandidatePayload | null {
+  try {
+    const parsed = JSON.parse(rawData) as Record<string, unknown>;
+    if (parsed.event_type !== "sql_attention_draft_candidate_created") return null;
+    if (parsed.source !== "sql_attention") return null;
+    if (typeof parsed.candidate_id !== "string" || parsed.candidate_id.length === 0) return null;
+    if (typeof parsed.candidate_lane !== "string" || parsed.candidate_lane.length === 0) return null;
+    if (
+      typeof parsed.markdown_projection_id !== "string" ||
+      parsed.markdown_projection_id.length === 0
+    ) {
+      return null;
+    }
+    return {
+      eventType: "sql_attention_draft_candidate_created",
+      source: "sql_attention",
+      candidateId: parsed.candidate_id,
+      candidateLane: parsed.candidate_lane,
+      markdownProjectionId: parsed.markdown_projection_id,
+      sourceSetId: typeof parsed.source_set_id === "string" ? parsed.source_set_id : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export type SseReceiverOptions = {
   /** URL to connect to. Defaults to /api/sse. */
   url?: string;
@@ -96,6 +151,13 @@ export type SseReceiverOptions = {
   onProjectionHookTrigger?: (trigger: ProjectionHookTrigger) => void;
   /** Called for non-projection events (ping, message, etc.). */
   onEvent?: SseEventHandler;
+  /**
+   * Called when a sql_attention_draft_candidate signal is received.
+   * Render-only: the frontend displays that a draft candidate was created. It must not
+   * convert this into a topology/promotion/placement decision — authority stays in the backend
+   * draft candidate JSONB record.
+   */
+  onSqlAttentionDraftCandidate?: (payload: SqlAttentionDraftCandidatePayload, rawData: string) => void;
   /** Called when an explicit SSE error state is encountered. */
   onError?: (state: SseErrorState) => void;
 };
@@ -160,6 +222,23 @@ export function createSseReceiver(options: SseReceiverOptions): SseReceiver {
         });
       } else {
         options.onEvent?.("projection", e.data);
+      }
+    });
+
+    source.addEventListener("sql_attention_draft_candidate", (e: MessageEvent) => {
+      if (options.onSqlAttentionDraftCandidate) {
+        const payload = extractSqlAttentionDraftCandidatePayload(e.data);
+        if (payload === null) {
+          options.onError?.({
+            kind: "parse_error",
+            rawData: e.data,
+            error: "SQL_ATTENTION_DRAFT_CANDIDATE_PAYLOAD_INVALID",
+          });
+          return;
+        }
+        options.onSqlAttentionDraftCandidate(payload, e.data);
+      } else {
+        options.onEvent?.("sql_attention_draft_candidate", e.data);
       }
     });
 

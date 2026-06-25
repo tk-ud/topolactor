@@ -430,6 +430,42 @@ SELECT attention_id, current_id, source_set_id,
         return rows;
     }
 
+    public override async Task<IReadOnlyList<SqlAttentionDraftCandidateRef>> CompileManifestTopologyDraftCandidatesAsync(
+        string sourceSetId,
+        string basisWindow,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceSetId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(basisWindow);
+
+        const string sql = @"
+SELECT candidate_id, markdown_projection_id, candidate_type, candidate_lane, score
+  FROM logs.run_sql_attention_manifest_topology_key_expansion_draft_lane(@p_source_set_id, @p_basis_window)";
+
+        var rows = new List<SqlAttentionDraftCandidateRef>();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("p_source_set_id", sourceSetId);
+        cmd.Parameters.AddWithValue("p_basis_window", basisWindow);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new SqlAttentionDraftCandidateRef(
+                CandidateId: reader.GetGuid(reader.GetOrdinal("candidate_id")),
+                MarkdownProjectionId: reader.GetGuid(reader.GetOrdinal("markdown_projection_id")),
+                CandidateType: reader.GetString(reader.GetOrdinal("candidate_type")),
+                CandidateLane: reader.GetString(reader.GetOrdinal("candidate_lane")),
+                Score: reader.GetDouble(reader.GetOrdinal("score"))));
+        }
+
+        _npgsqlLogger.LogInformation(
+            "CompileManifestTopologyDraftCandidatesAsync: inserted {Count} draft candidate(s) for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+            rows.Count, sourceSetId, basisWindow);
+        return rows;
+    }
+
     public override async Task<IReadOnlyList<PhysicalRecordHistoryEntry>> LoadPhysicalRecordHistoryAsync(
         string tableId,
         string recordId,
