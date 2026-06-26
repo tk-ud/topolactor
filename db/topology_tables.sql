@@ -1990,7 +1990,7 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
     config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT cli_reader_ports_no_plaintext_secret CHECK (config_json::text !~* '(password|secret|plaintext|connection_string|api_key|token)')
+    CONSTRAINT cli_reader_ports_no_plaintext_secret_value CHECK (config_json::text !~* '(password|plaintext_secret|secret_value|connection_string|api_key|access_token|refresh_token)')
 );
 
 CREATE TABLE IF NOT EXISTS topology.cli_reader_port_runtime_events (

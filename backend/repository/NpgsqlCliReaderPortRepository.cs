@@ -30,6 +30,7 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             reader.IsDBNull(2) ? null : reader.GetFieldValue<DateTimeOffset>(2),
             ReadSet(reader.GetString(3)),
             ReadSet(reader.GetString(4)),
+            ReadSet(reader.GetString(5)),
             ReadColumns(allowedColumnsJson),
             ReadSet(reader.GetString(7)),
             ReadSet(reader.GetString(8)),
@@ -39,16 +40,60 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             reader.IsDBNull(12) ? null : reader.GetInt32(12));
     }
 
-    public Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
     {
-        // The initial SubBundle provides the authorized read model boundary only.
-        // Table data extraction remains repository-authorized and query-shaping only;
-        // direct SQL/raw SQL from caller is never accepted.
-        IReadOnlyList<Dictionary<string, object?>> rows =
-        [
-            query.Columns.ToDictionary(column => column, column => (object?)$"authorized:{query.Table}:{column}")
-        ];
-        return Task.FromResult(rows);
+        var tableSql = QuoteQualifiedIdentifier(query.Table);
+        var columnSql = query.Columns.Select(QuoteIdentifier).ToArray();
+        var where = new List<string>();
+        var parameters = new List<NpgsqlParameter>();
+        var index = 0;
+
+        foreach (var (filter, value) in query.Filters)
+        {
+            where.Add($"{QuoteIdentifier(filter)} = @p{index}");
+            parameters.Add(new NpgsqlParameter($"p{index}", value));
+            index++;
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Period))
+        {
+            // Period authority is resolved by the runtime. The repository keeps the value
+            // as metadata for future snapshot windows and does not interpolate it into SQL.
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.RowScope))
+        {
+            var parts = query.RowScope.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+                throw new InvalidOperationException("CLI_READER_ROW_SCOPE_INVALID");
+            where.Add($"{QuoteIdentifier(parts[0])} = @p{index}");
+            parameters.Add(new NpgsqlParameter($"p{index}", parts[1]));
+            index++;
+        }
+
+        var whereSql = where.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", where);
+        var sql = query.Operation.ToLowerInvariant() switch
+        {
+            "aggregate" => $"SELECT COUNT(*)::bigint AS count FROM {tableSql}{whereSql}",
+            "analyze" => $"SELECT COUNT(*)::bigint AS row_count FROM {tableSql}{whereSql}",
+            "validate" => $"SELECT 1 AS valid FROM {tableSql}{whereSql} LIMIT 1",
+            _ => $"SELECT {string.Join(", ", columnSql)} FROM {tableSql}{whereSql} LIMIT 100"
+        };
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddRange(parameters.ToArray());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var rows = new List<Dictionary<string, object?>>();
+        while (await reader.ReadAsync(ct))
+        {
+            var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < reader.FieldCount; i++)
+                row[reader.GetName(i)] = await reader.IsDBNullAsync(i, ct) ? null : reader.GetValue(i);
+            rows.Add(row);
+        }
+        return rows;
     }
 
     public async Task AppendRuntimeEventAsync(CliReaderPortRuntimeEvent runtimeEvent, CancellationToken ct = default)
@@ -73,6 +118,20 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         cmd.Parameters.AddWithValue("scope_summary", runtimeEvent.ScopeSummary);
         cmd.Parameters.AddWithValue("observed_at", runtimeEvent.ObservedAt);
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static string QuoteQualifiedIdentifier(string value)
+    {
+        var parts = value.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length is < 1 or > 2) throw new InvalidOperationException("CLI_READER_TABLE_IDENTIFIER_INVALID");
+        return string.Join(".", parts.Select(QuoteIdentifier));
+    }
+
+    private static string QuoteIdentifier(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z_][A-Za-z0-9_]*$"))
+            throw new InvalidOperationException("CLI_READER_IDENTIFIER_INVALID");
+        return $"\"{value}\"";
     }
 
     private static IReadOnlySet<string> ReadSet(string json) => JsonSerializer.Deserialize<string[]>(json)?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);

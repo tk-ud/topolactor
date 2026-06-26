@@ -2942,7 +2942,7 @@ INSERT INTO topology.cli_reader_ports (
     '{"topology.entity":["entity_id","entity_jsonb","state_id"]}'::jsonb,
     '["state_id","entity_id"]'::jsonb,
     '["today","last_7_days","last_30_days"]'::jsonb,
-    '{"admin-user":"tenant:default","reader-user":"tenant:default"}'::jsonb,
+    '{"admin-user":"state_id=active","reader-user":"state_id=active"}'::jsonb,
     '["cli_reader_port.read"]'::jsonb,
     60,
     true,

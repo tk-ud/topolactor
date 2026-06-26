@@ -8,7 +8,8 @@ namespace Topolactor.Runtime;
 /// <summary>
 /// Authorized CLI/MCP read-side runtime. This handler is intentionally usable only
 /// after ManifestDispatcher resolves a manifest/runtime mapping (manifestId required).
-/// It resolves cli_reader_port scope and executes only read/search/aggregate/analyze/validate
+/// It resolves authenticated user/role/capability from server-side dispatch context,
+/// resolves cli_reader_port scope, and executes only read/search/aggregate/analyze/validate
 /// inside the repository-authorized read model. It never accepts direct SQL, direct DB
 /// connection strings, Core API URLs, plaintext credentials, export jobs, file streams,
 /// imports, commit candidates, or mutation operations.
@@ -22,7 +23,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
 
     private static readonly string[] SecretFieldNames =
     [
-        "credential", "credentials", "secret", "password", "token", "api_key", "connection_string", "sql", "raw_sql", "core_api_url"
+        "credential", "credentials", "secret", "password", "token", "api_key", "connection_string", "sql", "raw_sql", "core_api_url", "user_id", "userId", "roles", "capabilities"
     ];
 
     private readonly ILogger<AuthorizedCliReaderPortRuntime> _logger;
@@ -58,7 +59,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
             return await FailAsync(seed, "CLI_READER_OPERATION_UNSUPPORTED", "CLI/MCP Data Reader operation must be read/search/aggregate/analyze/validate.", ct);
 
         if (request.Payload.HasValue && ContainsForbiddenBypassOrSecretField(request.Payload.Value))
-            return await FailAsync(seed, "CLI_READER_BYPASS_OR_SECRET_FIELD", "Direct SQL/DB/Core API bypass and plaintext credential fields are forbidden.", ct);
+            return await FailAsync(seed, "CLI_READER_BYPASS_OR_SECRET_FIELD", "Direct SQL/DB/Core API bypass, client-supplied auth authority, and plaintext credential fields are forbidden.", ct);
 
         if (string.IsNullOrWhiteSpace(parsed.UserId))
             return await FailAsync(seed, "CLI_READER_AUTH_REQUIRED", "Authenticated user id is required.", ct);
@@ -88,8 +89,11 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
                 return await FailAsync(seed, "CLI_READER_CAPABILITY_UNRESOLVED", "Required credential/capability reference could not be resolved.", ct);
         }
 
-        if (!config.AllowedColumnsByTable.TryGetValue(parsed.Table!, out var allowedColumns))
+        if (!config.AllowedTables.Contains(parsed.Table!))
             return await FailAsync(seed, "CLI_READER_TABLE_DENIED", "Requested table is not allowed for this cli_reader_port.", ct);
+
+        if (!config.AllowedColumnsByTable.TryGetValue(parsed.Table!, out var allowedColumns))
+            return await FailAsync(seed, "CLI_READER_TABLE_SCOPE_UNRESOLVED", "Requested table column scope is unresolved for this cli_reader_port.", ct);
 
         if (parsed.Columns.Count == 0 || parsed.Columns.Any(column => !allowedColumns.Contains(column)))
             return await FailAsync(seed, "CLI_READER_COLUMN_DENIED", "Requested columns exceed cli_reader_port scope.", ct);
@@ -104,7 +108,15 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
             return await FailAsync(seed, "CLI_READER_ROW_SCOPE_UNRESOLVED", "Row scope must resolve explicitly for the authenticated user.", ct);
 
         var query = new AuthorizedCliReaderQuery(parsed.PortKey!, parsed.Operation!, parsed.UserId!, parsed.Roles, parsed.Table!, parsed.Columns, parsed.Filters, parsed.Period, rowScope, parsed.RequestId, parsed.IdempotencyKey);
-        var rows = await _repository.ReadRowsAsync(query, ct);
+        IReadOnlyList<Dictionary<string, object?>> rows;
+        try
+        {
+            rows = await _repository.ReadRowsAsync(query, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("CLI_READER_", StringComparison.Ordinal))
+        {
+            return await FailAsync(seed, ex.Message, "Authorized read query validation failed.", ct);
+        }
         var shaped = ShapeResult(parsed.Operation!, rows, parsed.Columns);
 
         await AppendAsync(seed with { Status = "success", Code = "CLI_READER_OK", ScopeSummary = BuildScopeSummary(query) }, ct);
@@ -114,11 +126,17 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
     private static object ShapeResult(string operation, IReadOnlyList<Dictionary<string, object?>> rows, IReadOnlyList<string> columns) =>
         operation.ToLowerInvariant() switch
         {
-            "aggregate" => new { operation, count = rows.Count, columns },
-            "analyze" => new { operation, rowCount = rows.Count, columnCount = columns.Count },
-            "validate" => new { operation, valid = true, rowCount = rows.Count },
+            "aggregate" => new { operation, count = ReadLong(rows, "count"), columns },
+            "analyze" => new { operation, rowCount = ReadLong(rows, "row_count"), columnCount = columns.Count },
+            "validate" => new { operation, valid = rows.Count > 0, rowCount = rows.Count },
             _ => new { operation, rows }
         };
+
+    private static long ReadLong(IReadOnlyList<Dictionary<string, object?>> rows, string key)
+    {
+        if (rows.Count == 0 || !rows[0].TryGetValue(key, out var value) || value is null) return 0;
+        return Convert.ToInt64(value);
+    }
 
     private async Task<EndpointResponseDto> FailAsync(CliReaderPortRuntimeEvent seed, string code, string message, CancellationToken ct)
     {
@@ -171,13 +189,14 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         var payload = request.Payload.Value;
         var portKey = ReadString(payload, "port_key") ?? ReadString(payload, "portKey");
         var operation = request.Action ?? request.OperationType ?? ReadString(payload, "operation");
-        var userId = ReadString(payload, "user_id") ?? ReadString(payload, "userId");
-        var roles = ReadStringArray(payload, "roles").DefaultIfEmpty(request.Role).Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var userId = ReadContextValue(request.Context, "authenticated_user_id", "user_id");
+        var roles = ReadContextSet(request.Context, "authenticated_roles", "roles");
+        if (!string.IsNullOrWhiteSpace(request.Role)) roles.Add(request.Role!);
         var table = ReadString(payload, "table");
         var columns = ReadStringArray(payload, "columns");
         var filters = ReadStringMap(payload, "filters");
         var period = ReadString(payload, "period");
-        var capabilities = ReadStringArray(payload, "capabilities").ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var capabilities = ReadContextSet(request.Context, "resolved_capabilities", "capabilities");
         var requestId = ReadString(payload, "request_id") ?? ReadString(payload, "requestId");
         var idempotencyKey = ReadString(payload, "idempotency_key") ?? ReadString(payload, "idempotencyKey");
 
@@ -185,6 +204,27 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         if (string.IsNullOrWhiteSpace(portKey)) return new(eventSeed, null, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, new ValidationError("CLI_READER_PORT_REQUIRED", "port_key is required."));
         if (string.IsNullOrWhiteSpace(table)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, new ValidationError("CLI_READER_TABLE_REQUIRED", "table is required."));
         return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, null);
+    }
+
+    private static string? ReadContextValue(Dictionary<string, string>? context, params string[] names)
+    {
+        if (context is null) return null;
+        foreach (var name in names)
+            if (context.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value)) return value;
+        return null;
+    }
+
+    private static HashSet<string> ReadContextSet(Dictionary<string, string>? context, params string[] names)
+    {
+        var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in names)
+        {
+            var raw = ReadContextValue(context, name);
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            foreach (var value in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                values.Add(value);
+        }
+        return values;
     }
 
     private static string? ReadString(JsonElement obj, string name) => obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;

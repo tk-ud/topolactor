@@ -6,6 +6,7 @@ public sealed record CliReaderPortConfig(
     DateTimeOffset? ExpiresAt,
     IReadOnlySet<string> AllowedRoles,
     IReadOnlySet<string> AllowedUsers,
+    IReadOnlySet<string> AllowedTables,
     IReadOnlyDictionary<string, IReadOnlySet<string>> AllowedColumnsByTable,
     IReadOnlySet<string> AllowedFilters,
     IReadOnlySet<string> AllowedPeriods,

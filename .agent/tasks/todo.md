@@ -179,7 +179,7 @@ NG軸:
 - [ ] direct DB connection / direct SQL / Core API direct call / dedicated handler bypass の guard または tests がある。
 - [x] audit_log / runtime_event_log 境界を skip しない。
 
-Partial evidence update (2026-06-26): initial authorized read scope runtime substrate exists for read/search/aggregate/analyze/validate with fail-close auth/scope/capability checks, dispatch-resolved request guard, sanitized runtime event append, DDL/seed surfaces, and guard/unit tests. Remaining gap before implemented: repository-backed authorized read model must replace placeholder row shaping with SSOT-authorized table read projection, and full manifest/admin contents projection mapping evidence must be completed. Parent bundle remains not_started/partial by subBundle index and export/import/file-stream subBundles remain out of scope.
+Partial evidence update (2026-06-26): initial authorized read scope runtime substrate exists for read/search/aggregate/analyze/validate with fail-close auth/scope/capability checks, dispatch-resolved request guard, sanitized runtime event append, DDL/seed surfaces, and guard/unit tests. Remaining gap before implemented: full manifest/admin contents projection mapping evidence must be completed; do not treat this partial SubBundle as merge-ready solely from runtime/read-model coverage. Parent bundle remains not_started/partial by subBundle index and export/import/file-stream subBundles remain out of scope.
 
 out_of_scope:
 - export_job 生成 / file generation / manifest/checksum 生成

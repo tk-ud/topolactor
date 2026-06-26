@@ -252,6 +252,7 @@ runtime_orchestration_ssot:
       - admin_runtime
       - sse_projection_runtime
       - external_port_runtime
+      - cli_reader_port_runtime
       - auth_runtime
     auth_command_lane:
       reference: docs/design/auth-db-session-credential-ssot.yaml

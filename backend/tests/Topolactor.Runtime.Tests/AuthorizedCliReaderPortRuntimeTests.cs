@@ -24,7 +24,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
 
         Assert.True(response.Success);
         Assert.Equal(operation, repo.Queries.Single().Operation);
-        Assert.Equal("tenant:default", repo.Queries.Single().RowScope);
+        Assert.Equal("state_id=active", repo.Queries.Single().RowScope);
         Assert.DoesNotContain(repo.Events, e => e.ScopeSummary.Contains("secret", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(repo.Events, e => e.Status == "success" && e.Operation == operation);
     }
@@ -101,19 +101,35 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.DoesNotContain(repo.Events, e => e.ScopeSummary.Contains("password", StringComparison.OrdinalIgnoreCase) || e.ScopeSummary.Contains("raw_sql", StringComparison.OrdinalIgnoreCase));
     }
 
+
+    [Fact]
+    public async Task Rejects_client_supplied_user_role_and_capability_authority_in_payload()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+        var request = Request("read", extra: new Dictionary<string, object?> { ["user_id"] = "payload-user", ["roles"] = new[] { "admin" }, ["capabilities"] = new[] { "cli_reader_port.read" } });
+
+        var response = await runtime.ExecuteAsync(request, Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_BYPASS_OR_SECRET_FIELD");
+        Assert.Empty(repo.Queries);
+    }
+
     private static CliReaderPortConfig DefaultConfig() => new(
         "cli_reader_port.default",
         true,
         DateTimeOffset.UtcNow.AddHours(1),
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader-user" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "topology.entity" },
         new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase)
         {
             ["topology.entity"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "entity_id", "entity_jsonb", "state_id" }
         },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "state_id" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "today" },
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["reader-user"] = "tenant:default" },
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["reader-user"] = "state_id=active" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cli_reader_port.read" },
         true,
         60);
@@ -123,9 +139,6 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         var payload = new Dictionary<string, object?>
         {
             ["port_key"] = "cli_reader_port.default",
-            ["user_id"] = userId,
-            ["roles"] = roles ?? ["reader"],
-            ["capabilities"] = capabilities ?? ["cli_reader_port.read"],
             ["table"] = table,
             ["columns"] = columns ?? ["entity_id", "state_id"],
             ["filters"] = filters ?? new Dictionary<string, string> { ["state_id"] = "active" },
@@ -135,7 +148,13 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         };
         if (extra is not null)
             foreach (var (key, value) in extra) payload[key] = value;
-        return new EndpointRequestDto(operation, "cli_reader_port", "reader", operation, null, JsonSerializer.SerializeToElement(payload), null, "client", "reader");
+        var context = new Dictionary<string, string>();
+        if (userId is not null) context["authenticated_user_id"] = userId;
+        if (roles is not null) context["authenticated_roles"] = string.Join(",", roles);
+        if (capabilities is not null) context["resolved_capabilities"] = string.Join(",", capabilities);
+        if (roles is null) context["authenticated_roles"] = "reader";
+        if (capabilities is null) context["resolved_capabilities"] = "cli_reader_port.read";
+        return new EndpointRequestDto(operation, "cli_reader_port", "reader", operation, null, JsonSerializer.SerializeToElement(payload), context, "client", roles is null ? "reader" : null);
     }
 
     private sealed class InMemoryCliReaderPortRepository(CliReaderPortConfig? config) : CliReaderPortRepository
@@ -146,7 +165,13 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         public Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
         {
             Queries.Add(query);
-            IReadOnlyList<Dictionary<string, object?>> rows = [query.Columns.ToDictionary(c => c, c => (object?)$"value:{c}")];
+            IReadOnlyList<Dictionary<string, object?>> rows = query.Operation switch
+            {
+                "aggregate" => [new Dictionary<string, object?> { ["count"] = 1L }],
+                "analyze" => [new Dictionary<string, object?> { ["row_count"] = 1L }],
+                "validate" => [new Dictionary<string, object?> { ["valid"] = 1 }],
+                _ => [query.Columns.ToDictionary(c => c, c => (object?)$"value:{c}")]
+            };
             return Task.FromResult(rows);
         }
         public Task AppendRuntimeEventAsync(CliReaderPortRuntimeEvent runtimeEvent, CancellationToken ct = default)
