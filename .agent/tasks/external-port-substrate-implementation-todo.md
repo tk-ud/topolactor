@@ -13,8 +13,10 @@ generic external_port runtime skeleton の hardcode reduction を別 bundle で�
 - `record_transfer_lifecycle_evidence` を generic executor から専用 `ExportSftpBundleStepHandler` へ退避（export_sftp lifecycle 意味は generic executor 外）。
 - entity_ref vocabulary を external_context binding（snake_case: export_job_id / file_artifact_id / checksum_value / authorization_key）へ統合し、PascalCase 並行 switch を除去。
 - evidence append/load の C# tableRef switch を DB function（`topology.epce_append_evidence` / `topology.epce_load_projection`）へ退避（allowlist + active-manifest-binding guard は維持、raw dynamic SQL なし）。
+- write-side result→external_context mapping を manifest-declared 化（`topology.abstract_function_steps.external_context_key` + CHECK + mapping seed、runtime authority 検証 + fail-close）。
 - credential refresh compatibility path の lease duration C# default を除去。
-残（hardcode-reduction 側）: 既知の sftp evidence live test gap（test payload に export_job_id 不在のため `ExternalPortConsumerEvidenceRepositoryLiveDbTests` の sftp ケースは export_job 未生成で fail-close。これは PR#460 以前からの test-data gap であり、本 hardcode reduction による regression ではない）。
+- `ExternalPortConsumerEvidenceRepositoryLiveDbTests` の sftp ケースは SFTP 前提行（completed export_job + manifest + verified checksum）を seed するよう修正し 7/7 通過（旧 test-data gap 解消、新 DB function sftp 分岐も検証）。
+残（hardcode-reduction 側）: `record_transfer_lifecycle_evidence` の分岐 + scheduler enqueue は AF manifest 非対応のため bundle handler 境界として保留。
 
 PR#460 完了済み:
 - access_port / response_port / hook_port records / policies / policy_steps の seed binding (全 7 consumer bundle)

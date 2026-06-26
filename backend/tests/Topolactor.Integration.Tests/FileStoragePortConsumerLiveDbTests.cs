@@ -62,7 +62,7 @@ public class FileStoragePortConsumerLiveDbTests
         var step10 = steps[9];
         Assert.Equal("append_runtime_event_log", step10.OperationKey);
         Assert.Equal("checksum_verified", step10.StepConfig["event_type"]);
-        Assert.Equal("ChecksumValue", step10.StepConfig["entity_ref_key"]);
+        Assert.Equal("checksum_value", step10.StepConfig["entity_ref_key"]);
 
         var step11 = steps[10];
         Assert.Equal("execute_abstract_function", step11.OperationKey);
@@ -72,7 +72,7 @@ public class FileStoragePortConsumerLiveDbTests
         var step12 = steps[11];
         Assert.Equal("append_runtime_event_log", step12.OperationKey);
         Assert.Equal("export_job_initiated", step12.StepConfig["event_type"]);
-        Assert.Equal("ExportJobId", step12.StepConfig["entity_ref_key"]);
+        Assert.Equal("export_job_id", step12.StepConfig["entity_ref_key"]);
 
         var step13 = steps[12];
         Assert.Equal("execute_abstract_function", step13.OperationKey);
@@ -82,7 +82,7 @@ public class FileStoragePortConsumerLiveDbTests
         var step14 = steps[13];
         Assert.Equal("append_runtime_event_log", step14.OperationKey);
         Assert.Equal("file_write_completed", step14.StepConfig["event_type"]);
-        Assert.Equal("FileArtifactId", step14.StepConfig["entity_ref_key"]);
+        Assert.Equal("file_artifact_id", step14.StepConfig["entity_ref_key"]);
 
         var step16 = steps[15];
         Assert.Equal("execute_abstract_function", step16.OperationKey);
@@ -92,7 +92,7 @@ public class FileStoragePortConsumerLiveDbTests
         var step17 = steps[16];
         Assert.Equal("append_runtime_event_log", step17.OperationKey);
         Assert.Equal("signed_url_generated", step17.StepConfig["event_type"]);
-        Assert.Equal("AuthorizationKey", step17.StepConfig["entity_ref_key"]);
+        Assert.Equal("authorization_key", step17.StepConfig["entity_ref_key"]);
     }
 
     [Fact]

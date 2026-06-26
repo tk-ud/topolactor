@@ -26,7 +26,7 @@ public sealed class AbstractFunctionFailCloseException : InvalidOperationExcepti
 
 public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active, IReadOnlyList<AbstractFunctionAuthorityBinding>? AuthorityBindings = null, IReadOnlyDictionary<string, string>? OutputShape = null);
 
-public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active, bool IsCompensationStep = false);
+public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active, bool IsCompensationStep = false, string? ExternalContextKey = null);
 
 public sealed record AbstractFunctionInputBinding(string InputKey, string BindingSource, string BindingPath, bool Required, bool Secret);
 
@@ -283,7 +283,9 @@ public sealed class AbstractFunctionExecutor
                 }
                 var result = await primitive.ExecuteAsync(step, inputs, context, ct);
                 context.StoreResult(step.ResultContextKey, result);
-                context.ApplyResultToExternalContext(step.ResultContextKey, result);
+                // Result→external-context mirror is manifest-declared per step (external_context_key),
+                // decoupled from result_context_key, and authority-checked / fail-closed on write.
+                context.ApplyResultToExternalContext(step.ExternalContextKey, result);
                 context.MarkExecuted(step.PrimitiveKey);
             }
         }

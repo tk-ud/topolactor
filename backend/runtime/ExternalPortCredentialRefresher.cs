@@ -325,38 +325,65 @@ public sealed class ExternalPortExecutionContext
         _ => null
     };
 
+    // External-context keys that must never be written from an abstract-function result mirror.
+    // Secret/material-bearing targets fail closed (SecretProjectionDenied) rather than being written.
+    private static readonly IReadOnlySet<string> SecretExternalContextWriteKeys = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "decrypted_credential_payload", "credential", "credential_payload", "decrypted_payload",
+        "plaintext_payload", "token_response", "token_body", "access_token", "refresh_token",
+        "client_secret", "signed_url", "bucket", "endpoint", "storage_path", "storage_ref", "raw_storage_ref"
+    };
+
     /// <summary>
-    /// Mirrors an abstract-function step result into the corresponding external-context property
-    /// so non-abstract-function downstream code (retry scheduler request builder, evidence repository
-    /// binding) can read it. This is the write-side counterpart of ResolveReferenceValue and lives on
-    /// the property owner (this context) rather than inside AbstractFunctionExecutionContext, so the
-    /// external-port reference vocabulary has a single owner. The mirror key is the manifest
-    /// result_context_key; unknown keys are ignored (not all results mirror to the external context).
-    /// Deeper step (tracked): drive the result→external-context key set from a manifest-declared
-    /// mapping instead of this fixed set.
+    /// Mirrors an abstract-function step result into a declared, authority-checked external-context
+    /// property. The target key is the per-step manifest-declared external_context_key
+    /// (topology.abstract_function_steps.external_context_key), NOT result_context_key, so the
+    /// result-context storage vocabulary and the external-context write vocabulary are decoupled.
+    ///
+    /// This is a fixed, authorized writable allowlist (export_job_id / file_artifact_id /
+    /// checksum_value / authorization_key / output_prop) owned by the property owner — not a generic
+    /// projection engine. Writes fail closed on:
+    ///   - secret-bearing target key   → SecretProjectionDenied
+    ///   - unknown / unauthorized key  → InvalidProjection
+    ///   - declared key / value type mismatch → InvalidProjection
+    /// A null result is a no-op (the step produced nothing to mirror).
     /// </summary>
-    public void ApplyResultMirror(string key, object? value)
+    public void ApplyResultMirror(string externalContextKey, object? value)
     {
         if (value is null) return;
-        switch (key)
+
+        if (SecretExternalContextWriteKeys.Contains(externalContextKey))
+            throw new AbstractFunctionFailCloseException(
+                AbstractFunctionFailCloseStatus.SecretProjectionDenied,
+                $"EXTERNAL_CONTEXT_WRITE_SECRET_DENIED: {externalContextKey}");
+
+        switch (externalContextKey)
         {
-            case "ExportJobId" when value is Guid exportJobId:
-                ExportJobId = exportJobId;
+            case "export_job_id":
+                ExportJobId = value as Guid? ?? throw TypeMismatch(externalContextKey, "guid");
                 break;
-            case "FileArtifactId" when value is Guid fileArtifactId:
-                FileArtifactId = fileArtifactId;
+            case "file_artifact_id":
+                FileArtifactId = value as Guid? ?? throw TypeMismatch(externalContextKey, "guid");
                 break;
-            case "ChecksumValue" when value is string checksum:
-                ChecksumValue = checksum;
+            case "checksum_value":
+                ChecksumValue = value as string ?? throw TypeMismatch(externalContextKey, "string");
                 break;
-            case "AuthorizationKey" when value is string authorizationKey:
-                AuthorizationKey = authorizationKey;
+            case "authorization_key":
+                AuthorizationKey = value as string ?? throw TypeMismatch(externalContextKey, "string");
                 break;
-            case "OutputProp":
-                OutputProp = value is string s ? s : System.Text.Json.JsonSerializer.Serialize(value);
+            case "output_prop":
+                OutputProp = value as string ?? System.Text.Json.JsonSerializer.Serialize(value);
                 break;
+            default:
+                throw new AbstractFunctionFailCloseException(
+                    AbstractFunctionFailCloseStatus.InvalidProjection,
+                    $"EXTERNAL_CONTEXT_WRITE_KEY_UNSUPPORTED: {externalContextKey}");
         }
     }
+
+    private static AbstractFunctionFailCloseException TypeMismatch(string key, string expected) =>
+        new(AbstractFunctionFailCloseStatus.InvalidProjection,
+            $"EXTERNAL_CONTEXT_WRITE_TYPE_MISMATCH: {key} expected {expected}");
 }
 
 public interface IExternalPortResolver

@@ -514,12 +514,29 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_steps (
     primitive_key             TEXT NOT NULL,
     step_config               JSONB NOT NULL DEFAULT '{}'::jsonb,
     result_context_key        TEXT,
+    -- Manifest-declared, authority-checked result→external_context mirror target.
+    -- Decoupled from result_context_key. NULL = no mirror. The allowed set is a fixed
+    -- writable allowlist (no secret-bearing keys); the runtime fail-closes on any value
+    -- not in this list. This is a constrained mapping, not a generic projection engine.
+    external_context_key      TEXT
+        CHECK (external_context_key IS NULL OR external_context_key IN
+            ('export_job_id','file_artifact_id','checksum_value','authorization_key','output_prop')),
     active                    BOOLEAN NOT NULL DEFAULT true,
     is_compensation_step      BOOLEAN NOT NULL DEFAULT false,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (abstract_function_id, step_order)
 );
+
+-- Idempotent add for existing databases (column + authority CHECK).
+ALTER TABLE topology.abstract_function_steps
+    ADD COLUMN IF NOT EXISTS external_context_key TEXT;
+ALTER TABLE topology.abstract_function_steps
+    DROP CONSTRAINT IF EXISTS abstract_function_steps_external_context_key_check;
+ALTER TABLE topology.abstract_function_steps
+    ADD CONSTRAINT abstract_function_steps_external_context_key_check
+    CHECK (external_context_key IS NULL OR external_context_key IN
+        ('export_job_id','file_artifact_id','checksum_value','authorization_key','output_prop'));
 
 CREATE TABLE IF NOT EXISTS topology.abstract_function_input_bindings (
     input_binding_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),

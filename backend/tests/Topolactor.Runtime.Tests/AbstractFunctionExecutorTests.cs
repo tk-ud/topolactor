@@ -313,7 +313,7 @@ public class AbstractFunctionExecutorTests
         {
             Step(1, "projection",
                 new[] { new AbstractFunctionInputBinding("attachment_binding_id", "constant", "some-guid-value", false, false) },
-                "OutputProp")
+                "OutputProp", externalContextKey: "output_prop")
         }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.test", true) });
         var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new ProjectionPrimitiveAdapter() });
 
@@ -332,13 +332,88 @@ public class AbstractFunctionExecutorTests
         {
             Step(1, "echo",
                 new[] { new AbstractFunctionInputBinding("source", "constant", "[{\"id\":\"1\"}]", false, false) },
-                "OutputProp")
+                "OutputProp", externalContextKey: "output_prop")
         }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.test", true) });
         var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
 
         await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope", null, externalCtx));
 
         Assert.Equal("[{\"id\":\"1\"}]", externalCtx.OutputProp);
+    }
+
+    [Fact]
+    public async Task ApplyResultToExternalContext_UnknownKey_FailsClose()
+    {
+        var externalCtx = new ExternalPortExecutionContext { RequiredByBundle = "test_scope" };
+        var manifest = new AbstractFunctionManifest(Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope", new[]
+        {
+            Step(1, "echo",
+                new[] { new AbstractFunctionInputBinding("source", "constant", "value", false, false) },
+                "Result", externalContextKey: "not_a_real_external_context_key")
+        }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.test", true) });
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope", null, externalCtx)));
+        Assert.Equal(AbstractFunctionFailCloseStatus.InvalidProjection, ex.Status);
+        Assert.Contains("EXTERNAL_CONTEXT_WRITE_KEY_UNSUPPORTED", ex.Message);
+    }
+
+    [Fact]
+    public async Task ApplyResultToExternalContext_SecretBearingKey_FailsClose()
+    {
+        var externalCtx = new ExternalPortExecutionContext { RequiredByBundle = "test_scope" };
+        var manifest = new AbstractFunctionManifest(Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope", new[]
+        {
+            Step(1, "echo",
+                new[] { new AbstractFunctionInputBinding("source", "constant", "tok", false, false) },
+                "Result", externalContextKey: "decrypted_credential_payload")
+        }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.test", true) });
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope", null, externalCtx)));
+        Assert.Equal(AbstractFunctionFailCloseStatus.SecretProjectionDenied, ex.Status);
+        Assert.Contains("EXTERNAL_CONTEXT_WRITE_SECRET_DENIED", ex.Message);
+    }
+
+    [Fact]
+    public async Task ApplyResultToExternalContext_DeclaredKeyTypeMismatch_FailsClose()
+    {
+        // export_job_id expects a Guid; echo returns a string → fail-close.
+        var externalCtx = new ExternalPortExecutionContext { RequiredByBundle = "test_scope" };
+        var manifest = new AbstractFunctionManifest(Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope", new[]
+        {
+            Step(1, "echo",
+                new[] { new AbstractFunctionInputBinding("source", "constant", "not-a-guid", false, false) },
+                "Result", externalContextKey: "export_job_id")
+        }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.test", true) });
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(
+            () => executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope", null, externalCtx)));
+        Assert.Equal(AbstractFunctionFailCloseStatus.InvalidProjection, ex.Status);
+        Assert.Contains("EXTERNAL_CONTEXT_WRITE_TYPE_MISMATCH", ex.Message);
+    }
+
+    [Fact]
+    public async Task ApplyResultToExternalContext_NoDeclaredKey_DoesNotMirror()
+    {
+        var externalCtx = new ExternalPortExecutionContext { RequiredByBundle = "test_scope" };
+        var manifest = new AbstractFunctionManifest(Guid.NewGuid(), "test.function", "external_port_runtime", "test_scope", new[]
+        {
+            // result_context_key set, but no external_context_key → no mirror to external context.
+            Step(1, "echo",
+                new[] { new AbstractFunctionInputBinding("source", "constant", "value", false, false) },
+                "Result")
+        }, Array.Empty<string>(), true, new AbstractFunctionAuthorityBinding[] { new("policy", "test_policy", true), new("table", "topology.test", true) });
+        var executor = new AbstractFunctionExecutor(new StaticManifestRepository(manifest), new IAbstractFunctionPrimitiveAdapter[] { new EchoPrimitiveAdapter() });
+
+        var result = await executor.ExecuteAsync("test.function", new AbstractFunctionExecutionContext("test_scope", null, externalCtx));
+
+        Assert.Null(externalCtx.OutputProp);
+        Assert.Null(externalCtx.ExportJobId);
+        Assert.Equal("value", result.ResultContext["Result"]);
     }
 
     [Fact]
@@ -351,7 +426,7 @@ public class AbstractFunctionExecutorTests
         Assert.DoesNotContain("functionName switch", source, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static AbstractFunctionStep Step(int order, string primitive, IReadOnlyList<AbstractFunctionInputBinding> bindings, string? resultKey, IReadOnlyDictionary<string, string>? stepConfig = null) => new(Guid.NewGuid(), order, primitive, stepConfig ?? new Dictionary<string, string>(), bindings, resultKey, true);
+    private static AbstractFunctionStep Step(int order, string primitive, IReadOnlyList<AbstractFunctionInputBinding> bindings, string? resultKey, IReadOnlyDictionary<string, string>? stepConfig = null, string? externalContextKey = null) => new(Guid.NewGuid(), order, primitive, stepConfig ?? new Dictionary<string, string>(), bindings, resultKey, true, false, externalContextKey);
 
     private sealed class StaticManifestRepository : IAbstractFunctionManifestRepository
     {

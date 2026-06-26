@@ -91,22 +91,25 @@ NG軸:
 - compat absorption + shim（fail-close adapter）は既存どおり維持し regress させていない。
 - evidence repository の tableRef allowlist は増やさず、raw dynamic SQL も導入していない。
 - PR#513 audit 追従 (同一 PR 追加 scope):
-  - entity_ref vocabulary を external_context binding（snake_case）へ統合し、seed
+  - (read側) entity_ref vocabulary を external_context binding（snake_case）へ統合し、seed
     `entity_ref_key`（seed_empty + absorption seed）を PascalCase→snake_case 移行、
-    並行 PascalCase switch を除去。`ApplyResultToExternalContext` 書込側を
-    `ExternalPortExecutionContext.ApplyResultMirror` へ集約。
+    並行 PascalCase switch を除去。
+  - (write側) result→external_context mapping を manifest-declared 化:
+    `topology.abstract_function_steps.external_context_key`（CHECK 制約 +
+    `db/external_port_result_context_mapping_seed.sql`）を runtime が authority 検証して適用、
+    unknown / unauthorized / secret-bearing / type-mismatch を fail-close。
+    `ApplyResultMirror` は固定 writable allowlist のみで generic projection engine ではない。
   - evidence append/load の C# tableRef switch を DB function
     （`topology.epce_append_evidence` / `topology.epce_load_projection`）へ退避。
     allowlist + active manifest binding validation は fail-close guard として維持、
     raw tableRef 動的 SQL なし。
+  - `ExternalPortConsumerEvidenceRepositoryLiveDbTests` の sftp ケースは SFTP 前提
+    （completed export_job + manifest + verified checksum）を seed するよう修正し 7/7 通過。
+    新 DB function の sftp 分岐も end-to-end 検証済み（旧 pre-existing test-data gap は解消）。
   - 詳細 todo `.agent/tasks/external-port-substrate-implementation-todo.md` と整合済み。
-- 残: (1) 書込側 result→external_context mapping の manifest-declared 完全 data 化、
-  (2) `record_transfer_lifecycle_evidence` の分岐（success/mismatch/failed/retry +
-  scheduler enqueue）の PostgreSQL function 完全 data 化は、AF manifest が条件分岐/
-  scheduler enqueue を表現できないため bundle handler 境界として保留、
-  (3) 既知 pre-existing test gap: `ExternalPortConsumerEvidenceRepositoryLiveDbTests` の
-  sftp ケースは test payload に export_job_id 不在のため fail-close（本 reduction による
-  regression ではない）。
+- 残: `record_transfer_lifecycle_evidence` の分岐（success/mismatch/failed/retry +
+  scheduler enqueue）の純 PostgreSQL function 完全 data 化は、AF manifest が条件分岐/
+  scheduler enqueue を表現できないため bundle handler 境界として保留（理由を SSOT/handler doc に明記）。
 
 問題点:
 外部連携基板は Gate0 / parent completion として実装済みだが、generic executor / evidence repository / abstract function external context 周辺に、次 Bundle 追加時に C# 意味が増えやすい hardcode reduction 候補が残っている。
@@ -178,7 +181,7 @@ NG軸:
 受入条件:
 - [x] `record_transfer_lifecycle_evidence` が generic executor から退避され（専用 `ExportSftpBundleStepHandler`）、Export/SFTP lifecycle 意味は generic executor から除去。evidence/event_log 書込は seed-directed・manifest-binding-validated repository 境界経由、event type / table ref / retry target は step_config（seed）由来の data-defined。AF manifest が条件分岐/scheduler enqueue を表現できないため、純 PostgreSQL function 化ではなく per-bundle handler 境界を採用（理由を SSOT/handler doc に明記）。
 - [x] active compatibility policy steps は `abstract_function_key` 吸収 + shim 経由で `execute_abstract_function` に寄っており、shim は `abstract_function_key` 必須の fail-close adapter として維持（regress なし）。operation_key 文字列の完全 flip は未実施。
-- [x] entity/result context key: entity_ref vocabulary を external_context binding（snake_case: export_job_id / file_artifact_id / checksum_value / authorization_key）へ統合し、seed entity_ref_key（seed_empty + absorption seed）も snake_case へ移行、並行 PascalCase switch を除去。`ApplyResultToExternalContext` 書込側は property owner（`ExternalPortExecutionContext.ApplyResultMirror`）へ集約。残（深掘り）: 書込側 result→external_context mapping の manifest-declared 完全 data 化。
+- [x] entity/result context key: (read側) entity_ref vocabulary を external_context binding（snake_case: export_job_id / file_artifact_id / checksum_value / authorization_key）へ統合し、seed entity_ref_key（seed_empty + absorption seed）も snake_case へ移行、並行 PascalCase switch を除去。(write側) result→external_context mapping を manifest-declared 化: `topology.abstract_function_steps.external_context_key`（CHECK 制約 + `db/external_port_result_context_mapping_seed.sql`）を runtime が authority 検証して適用し、unknown / unauthorized / secret-bearing / type-mismatch を fail-close（`ApplyResultMirror` は固定 writable allowlist のみ、generic projection engine ではない）。result_context_key とは decouple。
 - [x] evidence append/load は C# tableRef switch を DB function（`topology.epce_append_evidence` / `topology.epce_load_projection`）へ退避し、allowlist + active manifest binding validation を fail-close guard として維持、raw tableRef 動的 SQL は導入していない。
 - [x] credential refresh compatibility path は canonical chain と整合（lease duration の C# default を削除し config 由来 fail-close 化）、method / expires_at response key の C# default も増やしていない。
 - [x] provider_kind / required_by_bundle の C# if/switch 分岐、provider-specific client、bundle-specific runtime handler（generic executor 内）を追加していない。`ExportSftpBundleStepHandler` は operation_key 駆動の SSOT 公認 consumer handler であり provider_kind 分岐ではない。

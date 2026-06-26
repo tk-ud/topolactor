@@ -50,7 +50,7 @@ public sealed class NpgsqlAbstractFunctionManifestRepository : IAbstractFunction
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
-                SELECT abstract_function_step_id, step_order, primitive_key, step_config, result_context_key, active, is_compensation_step
+                SELECT abstract_function_step_id, step_order, primitive_key, step_config, result_context_key, active, is_compensation_step, external_context_key
                 FROM topology.abstract_function_steps
                 WHERE abstract_function_id = @manifestId
                 ORDER BY step_order ASC
@@ -69,7 +69,8 @@ public sealed class NpgsqlAbstractFunctionManifestRepository : IAbstractFunction
                     bindingsByStep.TryGetValue(stepId, out var bindings) ? bindings : Array.Empty<AbstractFunctionInputBinding>(),
                     reader.IsDBNull(reader.GetOrdinal("result_context_key")) ? null : reader.GetString(reader.GetOrdinal("result_context_key")),
                     reader.GetBoolean(reader.GetOrdinal("active")),
-                    reader.GetBoolean(reader.GetOrdinal("is_compensation_step"))));
+                    reader.GetBoolean(reader.GetOrdinal("is_compensation_step")),
+                    reader.IsDBNull(reader.GetOrdinal("external_context_key")) ? null : reader.GetString(reader.GetOrdinal("external_context_key"))));
             }
         }
 

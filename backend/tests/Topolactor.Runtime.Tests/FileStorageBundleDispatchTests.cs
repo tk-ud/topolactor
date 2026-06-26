@@ -456,7 +456,7 @@ public class FileStorageBundleDispatchTests
                 new AbstractFunctionInputBinding("file_name",        "payload",        "file_name",       true,  false),
                 new AbstractFunctionInputBinding("file_type",        "payload",        "file_type",       false, false),
             ],
-            "OutputProp", true);
+            "OutputProp", true, false, "output_prop");
 
         var manifest = new AbstractFunctionManifest(
             Guid.NewGuid(), "file_storage.test_projection", "external_port_runtime", "file_storage_bundle",
