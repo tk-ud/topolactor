@@ -2,7 +2,7 @@
 
 ## purpose
 PR/diff semantic audit and merge-readiness judgment with implementation-meaning alignment.
-Approve判断は「完全実装済みか」ではなく、PR scope の実装意味と SSOT状態分類（implemented/partial/remaining gaps）が整合しているかで行う。
+Approve判断は「完全実装済みか」だけではなく、PR scope の実装意味と SSOT状態分類（implemented/partial/remaining gaps）が整合しているかを必要条件として確認する。ただし、状態分類の正確性だけで同一Bundle未達PRの main merge を許可してはならない。main merge-readiness は completion Bundle として main に入れてよい整合境界を満たすことを要求する。Bundle途中状態の checkpoint clear is not main merge approval; checkpoint clear は同一PR内で次checkpointへ進む許可である。
 
 ## trigger_condition
 Worktype is `audit`, including any of:
@@ -43,7 +43,8 @@ Worktype is `audit`, including any of:
 ## completion_judgment_axis
 - audit の implemented / partial / carry-over / Request Changes の詳細判定は .agent/protocols/audit.md の approve_judgment_axis に従う。
 - prompt 側では completion 判定本文を重複定義しない。
-- `implemented` 判定可否、partial Approve 条件、implemented 未達時の TODO細分化 / carry-over 必須条件は protocol 側を正本とする。
+- `implemented` 判定可否、PR-internal checkpoint clear、main merge approval 条件、implemented 未達時の TODO細分化 / carry-over 必須条件は protocol 側を正本とする。
+- PR merge unit is completion Bundle; Bundle途中状態の監査clearは同一PR内で次checkpointへ進む許可であり、main merge approval ではない。
 
 ## output_shape
 - Diff reviewed: yes/no

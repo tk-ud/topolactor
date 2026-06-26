@@ -92,6 +92,13 @@ Forbidden for implementation agents:
 - Do not wire UI Events trigger without independent targetNodeId wiring; do not wire targetNodeId without independent trigger wiring — they are separate concepts.
 - Do not add a small TODO when bundle boundary is unclear — use follow-up prompt or investigation item instead.
 
+## PR / Bundle / checkpoint boundary
+- PR merge unit is completion Bundle; implementation scope definition must distinguish PR-internal checkpoints from main merge readiness.
+- 小粒な実装進行や途中checkpointは、同一PR内でBundle completionへ進むための作業単位であり、Bundle未達PRを merge する根拠ではない。
+- checkpoint clear is not main merge approval; audit clear during a partial Bundle state only permits the next checkpoint inside the same PR.
+- implementation atom を別PR化して、同一Bundle未達を main へ分割投入してはならない。
+- commit granularity is not a governance requirement; commit粒度を governance 主語にしない。
+
 ## output_shape
 scope, implementation delta, protocol decisions, foundation_ssot_read_judgment, todo_granularity_judgment, check results
 legacy_minimum_shape: scope, implementation delta, protocol decisions, todo_granularity_judgment, check results
