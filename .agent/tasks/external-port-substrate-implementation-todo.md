@@ -8,6 +8,16 @@
 
 partial / seed binding implemented per PR#460; consumer bundle generic lane connection residue (physical table / manifest / preset seed / evidence / checksum / projection) not yet connected.
 
+hardcode-reduction 整合メモ (`.agent/tasks/todo.md` bundle `external-port-consumer-hardcode-reduction`):
+generic external_port runtime skeleton の hardcode reduction を別 bundle で進行中。これは consumer 接続 residue（physical table / preset / projection 接続）とは別軸の地ならしであり、parent completion / Gate0 を未実装化しない。完了済みの reduction:
+- `record_transfer_lifecycle_evidence` を generic executor から専用 `ExportSftpBundleStepHandler` へ退避（export_sftp lifecycle 意味は generic executor 外）。
+- entity_ref vocabulary を external_context binding（snake_case: export_job_id / file_artifact_id / checksum_value / authorization_key）へ統合し、PascalCase 並行 switch を除去。
+- evidence append/load の C# tableRef switch を DB function（`topology.epce_append_evidence` / `topology.epce_load_projection`）へ退避（allowlist + active-manifest-binding guard は維持、raw dynamic SQL なし）。
+- write-side result→external_context mapping を manifest-declared 化（`topology.abstract_function_steps.external_context_key` + CHECK + mapping seed、runtime authority 検証 + fail-close）。
+- credential refresh compatibility path の lease duration C# default を除去。
+- `ExternalPortConsumerEvidenceRepositoryLiveDbTests` の sftp ケースは SFTP 前提行（completed export_job + manifest + verified checksum）を seed するよう修正し 7/7 通過（旧 test-data gap 解消、新 DB function sftp 分岐も検証）。
+残（hardcode-reduction 側）: `record_transfer_lifecycle_evidence` の分岐 + scheduler enqueue は AF manifest 非対応のため bundle handler 境界として保留。
+
 PR#460 完了済み:
 - access_port / response_port / hook_port records / policies / policy_steps の seed binding (全 7 consumer bundle)
 - credential_requirement (credential_kind: external / none) の port record 付属
@@ -150,6 +160,7 @@ consumer dispatch path は `port_target_ref` lane のみ。PR#458/#459 で `cano
 ### export_sftp_bundle
 
 - [x] response_port (provider_kind: sftp) binding を seed / DB record として追加した (credential_kind: external, reference_key: vault:ref:export_sftp_credential).
+- [x] transfer lifecycle (`record_transfer_lifecycle_evidence`) は generic executor ではなく専用 `ExportSftpBundleStepHandler`（`IExternalPortBundleStepHandler`）が所有する（hardcode-reduction bundle）。event type / table ref / retry target は policy step_config 由来 data-defined; provider-specific SFTP client 新設なし。
 - [ ] export_job → response_port 解決 → generic response_port connect の evidence/projection 接続は未着手（SFTP provider-specific client 新設なし; checksum 境界は port substrate と独立すること）.
 
 ### credential requirement substrate

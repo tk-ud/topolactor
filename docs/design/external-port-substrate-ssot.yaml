@@ -413,7 +413,6 @@ external_port_substrate_ssot:
         handler_class: FileStorageBundleStepHandler
         operation_keys:
           - compute_checksum
-      - record_transfer_lifecycle_evidence
         note: >-
           record_export_job / record_file_artifact / write_manifest_record / authorize_signed_download
           / bind_record_file_attachment / list_record_file_attachments / unbind_record_file_attachment
@@ -423,6 +422,25 @@ external_port_substrate_ssot:
           NpgsqlExternalPortDbFunctionRepository is a compatibility placeholder stub (all concrete
           fs_* methods deleted); execute_db_function route is a shell with no active file-storage use.
         detail_ref: docs/design/runtime-bundle-file-storage-ssot.yaml#operation_key_surface
+      export_sftp_bundle:
+        handler_class: ExportSftpBundleStepHandler
+        operation_keys:
+          - record_transfer_lifecycle_evidence
+        note: >-
+          record_transfer_lifecycle_evidence owns the Export/SFTP transfer lifecycle
+          (transfer_initiated / transfer_completed / checksum_mismatch / transfer_failed /
+          retry_attempted) plus the retry scheduler enqueue. It was evacuated from the generic
+          ExternalPortPolicyStepExecutor into this dedicated bundle handler so bundle lifecycle
+          meaning does not accrue in the generic executor. Event types, evidence/projection table
+          refs, and the retry trigger target are data-defined via policy step_config; evidence and
+          runtime_event_log writes go through the seed-directed, manifest-binding-validated
+          IExternalPortConsumerEvidenceRepository / IExternalPortRuntimeEventLogRepository
+          boundaries (no raw tableRef dynamic SQL, no provider-specific SFTP client). The residual
+          C# is the irreducible runtime branching (success / checksum_mismatch / failed / retry plus
+          scheduler enqueue), which an abstract function manifest cannot express (no conditionals;
+          scheduler enqueue is not a PostgreSQL function) and which therefore stays scoped to this
+          per-bundle handler rather than the generic executor.
+        detail_ref: docs/design/runtime-bundle-export-sftp-ssot.yaml#secure_consumer_dispatch_lane_ref
     prohibited:
       - adding_bundle_specific_repository_or_handler_directly_to_generic_executor
       - bundle_specific_constructor_parameter_on_ExternalPortPolicyStepExecutor

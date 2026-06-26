@@ -54,10 +54,16 @@ for event_type in \
   send_success \
   scheduler_enqueued \
   trigger_received \
-  approval_reviewed \
-  transfer_initiated; do
+  approval_reviewed; do
   check "$SEED" "\"event_type\":\"$event_type\""
 done
+
+# export_sftp transfer lifecycle is seeded as a single record_transfer_lifecycle_evidence
+# step whose event types are data-defined via step_config (initiated/completed/failed/
+# checksum_mismatch/retry), owned by ExportSftpBundleStepHandler — not per-event
+# append_runtime_event_log rows.
+check "$SEED" "record_transfer_lifecycle_evidence"
+check "$SEED" "\"initiated_event_type\":\"transfer_initiated\""
 
 check "$RUNTIME" "TryReadPortTargetRef"
 check "$RUNTIME" "TryReadHookRoute"
@@ -71,10 +77,23 @@ check "$EXEC" "inject_authorization_header"
 check "$EXEC" "verify_signature_by_config"
 check "$EXEC" "enqueue_scheduler_event"
 check "$EXEC" "append_runtime_event_log"
+
+# Bundle lifecycle evacuation: record_transfer_lifecycle_evidence is owned by the dedicated
+# ExportSftpBundleStepHandler (IExternalPortBundleStepHandler), not the generic executor.
+HANDLER=backend/runtime/ExportSftpBundleStepHandler.cs
+check  "$HANDLER" "IExternalPortBundleStepHandler"
+check  "$HANDLER" "record_transfer_lifecycle_evidence"
+absent "$EXEC" "record_transfer_lifecycle_evidence"
+
 check "$PROGRAM" "IExternalPortRuntimeEventLogRepository"
 check "$PROGRAM" "IExternalPortConsumerEvidenceRepository"
 check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "physical_table_manifest_bindings"
-check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "evidence_json->>'dispatch_id' = @entityId"
+# Evidence append/load SQL shape (incl. the dispatch_id correlation / anti-leakage predicate)
+# moved from a C# tableRef switch into the topology.epce_* DB functions (hardcode-reduction).
+# The repository delegates to them while keeping the allowlist + manifest-binding fail-close guard.
+check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "topology.epce_append_evidence"
+check "backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs" "topology.epce_load_projection"
+check "db/topology_tables.sql" "evidence_json->>'dispatch_id' = p_entity_id"
 check "$PROGRAM" "ExternalPortDispatchRuntime"
 check "$PROGRAM" "RuntimeTimelineScheduler"
 
@@ -83,7 +102,13 @@ absent "$RUNTIME" "canonical_binding"
 absent "$EXEC" "switch (context.PortRecord.ProviderKind"
 absent "$EXEC" "switch (context.RequiredByBundle"
 absent "$PROGRAM" "Smtp"
-absent "$PROGRAM" "Sftp"
+# export_sftp is a response_port consumer: the ExportSftpBundleStepHandler registration
+# (SSOT consumer_bundle_step_handler_surface) is allowed, but no SFTP provider-specific
+# client library/class (mirrors the stripe exception below).
+check  "$PROGRAM" "ExportSftpBundleStepHandler"
+absent "$PROGRAM" "SftpClient"
+absent "$PROGRAM" "Renci.SshNet"
+absent "$PROGRAM" "using Renci"
 # stripe is a hook consumer: the /hooks/stripe generic intake endpoint is allowed
 # (mirrors /hooks/webhook_inbox), but no Stripe provider-specific client library/class.
 check  "$PROGRAM" "/hooks/stripe"

@@ -38,12 +38,31 @@ public class ExternalPortConsumerEvidenceRepositoryLiveDbTests
         var dispatchId = Guid.NewGuid().ToString("N");
         var bundle = "external-port-evidence-live-test";
         var repo = new NpgsqlExternalPortConsumerEvidenceRepository(cs);
-        var payload = JsonSerializer.SerializeToElement(new
+
+        // topology.sftp_transfer_log append resolves canonical export_job/manifest/checksum refs
+        // (ResolveSftpTransferSourceRefsAsync) before insert and requires export_job_id in the
+        // payload. Seed a completed export_job + matching manifest/checksum so the SFTP branch of
+        // topology.epce_append_evidence is exercised end-to-end.
+        Guid? sftpExportJobId = null;
+        object payloadObject = new
         {
             customer = "cus_test",
             token = "should-not-be-projected",
             endpoint = "https://secret.example.invalid"
-        });
+        };
+        if (tableRef == "topology.sftp_transfer_log")
+        {
+            sftpExportJobId = Guid.NewGuid();
+            await SeedSftpTransferPrerequisitesAsync(cs, sftpExportJobId.Value);
+            payloadObject = new
+            {
+                customer = "cus_test",
+                token = "should-not-be-projected",
+                endpoint = "https://secret.example.invalid",
+                export_job_id = sftpExportJobId.Value.ToString()
+            };
+        }
+        var payload = JsonSerializer.SerializeToElement(payloadObject);
         var context = new ExternalPortExecutionContext
         {
             DispatchId = dispatchId,
@@ -98,7 +117,43 @@ public class ExternalPortConsumerEvidenceRepositoryLiveDbTests
         finally
         {
             await CleanupDispatchAsync(cs, tableRef, dispatchId);
+            if (sftpExportJobId is not null)
+                await CleanupExportJobAsync(cs, sftpExportJobId.Value);
         }
+    }
+
+    private static async Task SeedSftpTransferPrerequisitesAsync(string cs, Guid exportJobId)
+    {
+        const string checksum = "sha256:live-test-sftp-checksum";
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO topology.export_jobs (export_job_id, requested_by, status, idempotency_key, checksum)
+            VALUES (@id, 'live-test', 'completed', @idem, @checksum);
+            INSERT INTO topology.file_artifacts (file_artifact_id, export_job_id, file_name, file_type, storage_ref, checksum_value)
+            VALUES (@artifactId, @id, 'package.zip', 'zip', 'env:LIVE_TEST_STORAGE_REF', @checksum);
+            INSERT INTO topology.file_checksum_records (export_job_id, file_artifact_id, checksum_value, verification_status)
+            VALUES (@id, @artifactId, @checksum, 'verified');
+            INSERT INTO topology.export_manifests (export_job_id, generated_by, checksum)
+            VALUES (@id, 'live-test', @checksum);
+            """;
+        cmd.Parameters.AddWithValue("id", exportJobId);
+        cmd.Parameters.AddWithValue("artifactId", Guid.NewGuid());
+        cmd.Parameters.AddWithValue("idem", $"live-test-{exportJobId:N}");
+        cmd.Parameters.AddWithValue("checksum", checksum);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task CleanupExportJobAsync(string cs, Guid exportJobId)
+    {
+        // export_jobs children (file_artifacts / file_checksum_records / export_manifests) cascade.
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM topology.export_jobs WHERE export_job_id = @id";
+        cmd.Parameters.AddWithValue("id", exportJobId);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static string? GetConnectionString()

@@ -26,7 +26,7 @@ public sealed class AbstractFunctionFailCloseException : InvalidOperationExcepti
 
 public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active, IReadOnlyList<AbstractFunctionAuthorityBinding>? AuthorityBindings = null, IReadOnlyDictionary<string, string>? OutputShape = null);
 
-public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active, bool IsCompensationStep = false);
+public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active, bool IsCompensationStep = false, string? ExternalContextKey = null);
 
 public sealed record AbstractFunctionInputBinding(string InputKey, string BindingSource, string BindingPath, bool Required, bool Secret);
 
@@ -116,25 +116,10 @@ public sealed class AbstractFunctionExecutionContext
 
     public void ApplyResultToExternalContext(string? key, object? value)
     {
+        // The external-port reference vocabulary is owned by ExternalPortExecutionContext;
+        // delegate the result→property mirror there instead of a duplicate switch here.
         if (ExternalPortContext is null || string.IsNullOrWhiteSpace(key) || value is null) return;
-        switch (key)
-        {
-            case "ExportJobId" when value is Guid exportJobId:
-                ExternalPortContext.ExportJobId = exportJobId;
-                break;
-            case "FileArtifactId" when value is Guid fileArtifactId:
-                ExternalPortContext.FileArtifactId = fileArtifactId;
-                break;
-            case "ChecksumValue" when value is string checksum:
-                ExternalPortContext.ChecksumValue = checksum;
-                break;
-            case "AuthorizationKey" when value is string authorizationKey:
-                ExternalPortContext.AuthorizationKey = authorizationKey;
-                break;
-            case "OutputProp":
-                ExternalPortContext.OutputProp = value is string s ? s : JsonSerializer.Serialize(value);
-                break;
-        }
+        ExternalPortContext.ApplyResultMirror(key, value);
     }
 
     private object? ResolveExternalContext(string key) => key switch
@@ -146,6 +131,7 @@ public sealed class AbstractFunctionExecutionContext
         "export_job_id" => ExternalPortContext?.ExportJobId,
         "file_artifact_id" => ExternalPortContext?.FileArtifactId,
         "checksum_value" => ExternalPortContext?.ChecksumValue,
+        "authorization_key" => ExternalPortContext?.AuthorizationKey,
         "credential_vault_id" => ExternalPortContext?.CredentialVaultRecord?.CredentialVaultId,
         "decrypted_credential_payload" => ExternalPortContext?.DecryptedCredentialPayload,
         // Opaque UUID ref of the response port record — stored as text in audit evidence tables.
@@ -297,7 +283,9 @@ public sealed class AbstractFunctionExecutor
                 }
                 var result = await primitive.ExecuteAsync(step, inputs, context, ct);
                 context.StoreResult(step.ResultContextKey, result);
-                context.ApplyResultToExternalContext(step.ResultContextKey, result);
+                // Result→external-context mirror is manifest-declared per step (external_context_key),
+                // decoupled from result_context_key, and authority-checked / fail-closed on write.
+                context.ApplyResultToExternalContext(step.ExternalContextKey, result);
                 context.MarkExecuted(step.PrimitiveKey);
             }
         }
@@ -971,8 +959,11 @@ public sealed class CredentialFailLeaseAdapter : IAbstractFunctionPrimitiveAdapt
 /// <summary>
 /// Primitive adapter for event_log (external_and_event category).
 /// Appends an append-only runtime event log entry for the current bundle.
-/// event_type is required from step_config. entity_ref_key is optional; when present,
-/// it is resolved from ExternalPortContext fields (ExportJobId, FileArtifactId, ChecksumValue, AuthorizationKey).
+/// event_type is required from step_config. entity_ref_key is optional; when present, it is
+/// resolved through the external_context reference vocabulary
+/// (export_job_id, file_artifact_id, checksum_value, authorization_key) via
+/// ExternalPortExecutionContext.ResolveReferenceValue — the same identifiers used by
+/// abstract function external_context input bindings.
 /// Missing entity_ref_key → null entityId (not fail-close). Unresolvable entity_ref_key → fail-close.
 /// Prohibited: provider-specific branching, bundle-specific branching, mutable event overwrite.
 /// </summary>
@@ -1004,19 +995,10 @@ public sealed class EventLogPrimitiveAdapter : IAbstractFunctionPrimitiveAdapter
         return null;
     }
 
-    private static string? ResolveEntityRef(string refKey, AbstractFunctionExecutionContext context)
-    {
-        var ext = context.ExternalPortContext;
-        if (ext is null) return null;
-        return refKey switch
-        {
-            "ExportJobId" => ext.ExportJobId?.ToString(),
-            "FileArtifactId" => ext.FileArtifactId?.ToString(),
-            "ChecksumValue" => ext.ChecksumValue,
-            "AuthorizationKey" => ext.AuthorizationKey,
-            _ => null
-        };
-    }
+    private static string? ResolveEntityRef(string refKey, AbstractFunctionExecutionContext context) =>
+        // Single canonical entity-ref vocabulary lives on ExternalPortExecutionContext
+        // (ResolveReferenceValue); no duplicated PascalCase switch here.
+        context.ExternalPortContext?.ResolveReferenceValue(refKey);
 }
 
 /// <summary>

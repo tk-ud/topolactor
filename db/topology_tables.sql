@@ -514,12 +514,29 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_steps (
     primitive_key             TEXT NOT NULL,
     step_config               JSONB NOT NULL DEFAULT '{}'::jsonb,
     result_context_key        TEXT,
+    -- Manifest-declared, authority-checked result→external_context mirror target.
+    -- Decoupled from result_context_key. NULL = no mirror. The allowed set is a fixed
+    -- writable allowlist (no secret-bearing keys); the runtime fail-closes on any value
+    -- not in this list. This is a constrained mapping, not a generic projection engine.
+    external_context_key      TEXT
+        CHECK (external_context_key IS NULL OR external_context_key IN
+            ('export_job_id','file_artifact_id','checksum_value','authorization_key','output_prop')),
     active                    BOOLEAN NOT NULL DEFAULT true,
     is_compensation_step      BOOLEAN NOT NULL DEFAULT false,
     created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (abstract_function_id, step_order)
 );
+
+-- Idempotent add for existing databases (column + authority CHECK).
+ALTER TABLE topology.abstract_function_steps
+    ADD COLUMN IF NOT EXISTS external_context_key TEXT;
+ALTER TABLE topology.abstract_function_steps
+    DROP CONSTRAINT IF EXISTS abstract_function_steps_external_context_key_check;
+ALTER TABLE topology.abstract_function_steps
+    ADD CONSTRAINT abstract_function_steps_external_context_key_check
+    CHECK (external_context_key IS NULL OR external_context_key IN
+        ('export_job_id','file_artifact_id','checksum_value','authorization_key','output_prop'));
 
 CREATE TABLE IF NOT EXISTS topology.abstract_function_input_bindings (
     input_binding_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -578,6 +595,10 @@ COMMENT ON TABLE topology.external_port_policies IS 'Seed-driven policy surface 
 -- execute_db_function remains in the constraint for schema compatibility; NpgsqlExternalPortDbFunctionRepository
 -- is now a compatibility stub (no concrete fs_* methods); no new operations should use this path.
 -- compute_checksum is a bundle-specific key handled by FileStorageBundleStepHandler.
+-- record_transfer_lifecycle_evidence is a bundle-specific key handled by
+-- ExportSftpBundleStepHandler (evacuated from the generic ExternalPortPolicyStepExecutor);
+-- it remains a valid operation_key here because the generic executor dispatches it through the
+-- IExternalPortBundleStepHandler fallthrough, not the core registry.
 ALTER TABLE topology.external_port_policy_steps
     DROP CONSTRAINT IF EXISTS external_port_policy_steps_operation_key_check;
 
@@ -1820,3 +1841,133 @@ COMMENT ON TABLE topology.scheduler_job_run_steps IS
     'run_step_status: queued|running|succeeded|failed|skipped. '
     'result_context_delta stores sanitized delta allowed by projection_policy. '
     'Secret material must not appear in result_context_delta or last_error.';
+
+-- ---------------------------------------------------------------------------
+-- External-port consumer evidence append/load DB functions.
+--
+-- These own the per-table INSERT/SELECT shape for the generic
+-- external_port_substrate consumer evidence boundary, replacing the C# tableRef
+-- switch (InsertSql/SelectSql) in NpgsqlExternalPortConsumerEvidenceRepository.
+-- The repository keeps the allowlist + active-manifest-binding validation as a
+-- fail-close guard, computes the sanitized evidence_json, and resolves SFTP source
+-- refs; it then delegates the SQL shape here. table_ref routing is a static CASE
+-- over fixed per-table statements — NOT raw/dynamic tableRef SQL. Unknown table_ref
+-- fails closed. No secret/endpoint/URL/bucket/storage values are written here.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION topology.epce_append_evidence(
+    p_table_ref           TEXT,
+    p_event_type          TEXT,
+    p_entity_id           TEXT,
+    p_required_by_bundle  TEXT,
+    p_status_value        TEXT,
+    p_route_key           TEXT,
+    p_hook_path           TEXT,
+    p_payload_hash        TEXT,
+    p_checksum_before     TEXT,
+    p_checksum_after      TEXT,
+    p_manifest_ref        TEXT,
+    p_failure_reason      TEXT,
+    p_retry_evidence_json JSONB,
+    p_evidence_json       JSONB,
+    p_export_job_id       UUID,
+    p_file_artifact_id    UUID,
+    p_manifest_id         UUID,
+    p_checksum_record_id  UUID
+) RETURNS VOID
+LANGUAGE plpgsql AS $$
+BEGIN
+    CASE p_table_ref
+      WHEN 'topology.email_delivery_evidence' THEN
+        INSERT INTO topology.email_delivery_evidence (email_draft_id, event_type, delivery_status, evidence_json)
+        VALUES (NULL, p_event_type, p_status_value, p_evidence_json);
+      WHEN 'topology.webhook_intake_snapshots' THEN
+        INSERT INTO topology.webhook_intake_snapshots (required_by_bundle, route_key, hook_path, payload_hash, scheduler_event_ref, evidence_json)
+        VALUES (p_required_by_bundle, p_route_key, p_hook_path, p_payload_hash, p_entity_id, p_evidence_json);
+      WHEN 'topology.signature_verification_evidence' THEN
+        INSERT INTO topology.signature_verification_evidence (required_by_bundle, verification_status, evidence_json)
+        VALUES (p_required_by_bundle, p_status_value, p_evidence_json);
+      WHEN 'topology.payment_state_projections' THEN
+        INSERT INTO topology.payment_state_projections (payment_state, evidence_json)
+        VALUES (p_status_value, p_evidence_json);
+      WHEN 'topology.scheduler_external_event_evidence' THEN
+        INSERT INTO topology.scheduler_external_event_evidence (required_by_bundle, trigger_ref, scheduler_status, evidence_json)
+        VALUES (p_required_by_bundle, p_entity_id, p_status_value, p_evidence_json);
+      WHEN 'topology.audit_approval_evidence' THEN
+        INSERT INTO topology.audit_approval_evidence (event_type, approval_status, evidence_json)
+        VALUES (p_event_type, p_status_value, p_evidence_json);
+      WHEN 'topology.audit_notification_evidence' THEN
+        INSERT INTO topology.audit_notification_evidence (notification_status, response_port_ref, evidence_json)
+        VALUES (p_status_value, p_entity_id, p_evidence_json);
+      WHEN 'topology.sftp_transfer_log' THEN
+        INSERT INTO topology.sftp_transfer_log (export_job_id, file_artifact_id, manifest_id, checksum_record_id, transfer_status, failure_reason, checksum_before, checksum_after, manifest_ref, response_port_ref, retry_evidence_json, evidence_json)
+        VALUES (p_export_job_id, p_file_artifact_id, p_manifest_id, p_checksum_record_id, p_status_value, p_failure_reason, p_checksum_before, p_checksum_after, p_manifest_ref, p_entity_id, p_retry_evidence_json, p_evidence_json);
+      ELSE
+        RAISE EXCEPTION 'EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_UNSUPPORTED';
+    END CASE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION topology.epce_load_projection(
+    p_table_ref          TEXT,
+    p_required_by_bundle  TEXT,
+    p_entity_id           TEXT,
+    p_limit               INTEGER
+) RETURNS TABLE(event_type TEXT, entity_id TEXT, status TEXT, evidence_json TEXT)
+LANGUAGE plpgsql AS $$
+BEGIN
+    CASE p_table_ref
+      WHEN 'topology.email_delivery_evidence' THEN
+        RETURN QUERY SELECT e.event_type, e.evidence_json->>'dispatch_id', e.delivery_status, e.evidence_json::text
+          FROM topology.email_delivery_evidence e
+          WHERE e.evidence_json->>'dispatch_id' = p_entity_id
+          ORDER BY e.recorded_at DESC LIMIT p_limit;
+      WHEN 'topology.webhook_intake_snapshots' THEN
+        RETURN QUERY SELECT 'webhook_received'::text, e.evidence_json->>'dispatch_id', 'received'::text, e.evidence_json::text
+          FROM topology.webhook_intake_snapshots e
+          WHERE e.evidence_json->>'dispatch_id' = p_entity_id
+            AND (p_required_by_bundle IS NULL OR e.required_by_bundle = p_required_by_bundle)
+          ORDER BY e.received_at DESC LIMIT p_limit;
+      WHEN 'topology.signature_verification_evidence' THEN
+        RETURN QUERY SELECT 'signature_verification'::text, e.evidence_json->>'dispatch_id', e.verification_status, e.evidence_json::text
+          FROM topology.signature_verification_evidence e
+          WHERE e.evidence_json->>'dispatch_id' = p_entity_id
+            AND (p_required_by_bundle IS NULL OR e.required_by_bundle = p_required_by_bundle)
+          ORDER BY e.recorded_at DESC LIMIT p_limit;
+      WHEN 'topology.payment_state_projections' THEN
+        RETURN QUERY SELECT 'payment_state_projected'::text, e.evidence_json->>'dispatch_id', e.payment_state, e.evidence_json::text
+          FROM topology.payment_state_projections e
+          WHERE e.evidence_json->>'dispatch_id' = p_entity_id
+          ORDER BY e.projected_at DESC LIMIT p_limit;
+      WHEN 'topology.scheduler_external_event_evidence' THEN
+        RETURN QUERY SELECT 'scheduler_enqueued'::text, e.evidence_json->>'dispatch_id', e.scheduler_status, e.evidence_json::text
+          FROM topology.scheduler_external_event_evidence e
+          WHERE e.evidence_json->>'dispatch_id' = p_entity_id
+            AND (p_required_by_bundle IS NULL OR e.required_by_bundle = p_required_by_bundle)
+          ORDER BY e.recorded_at DESC LIMIT p_limit;
+      WHEN 'topology.audit_approval_evidence' THEN
+        RETURN QUERY SELECT e.event_type, e.evidence_json->>'dispatch_id', e.approval_status, e.evidence_json::text
+          FROM topology.audit_approval_evidence e
+          WHERE e.evidence_json->>'dispatch_id' = p_entity_id
+          ORDER BY e.recorded_at DESC LIMIT p_limit;
+      WHEN 'topology.audit_notification_evidence' THEN
+        RETURN QUERY SELECT 'notification_recorded'::text, e.evidence_json->>'dispatch_id', e.notification_status, e.evidence_json::text
+          FROM topology.audit_notification_evidence e
+          WHERE e.evidence_json->>'dispatch_id' = p_entity_id
+          ORDER BY e.recorded_at DESC LIMIT p_limit;
+      WHEN 'topology.sftp_transfer_log' THEN
+        RETURN QUERY SELECT 'transfer_projected'::text, e.evidence_json->>'dispatch_id', e.transfer_status, e.evidence_json::text
+          FROM topology.sftp_transfer_log e
+          WHERE e.evidence_json->>'dispatch_id' = p_entity_id
+          ORDER BY e.recorded_at DESC LIMIT p_limit;
+      ELSE
+        RAISE EXCEPTION 'EXTERNAL_PORT_CONSUMER_EVIDENCE_TABLE_REF_UNSUPPORTED';
+    END CASE;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.epce_append_evidence IS
+    'Static per-table INSERT routing for external_port_substrate consumer evidence. '
+    'Replaces the C# InsertSql tableRef switch. Unknown table_ref fails closed.';
+COMMENT ON FUNCTION topology.epce_load_projection IS
+    'Static per-table SELECT routing for external_port_substrate consumer evidence projection. '
+    'Replaces the C# SelectSql tableRef switch. Unknown table_ref fails closed.';

@@ -95,3 +95,6 @@
 
 \echo '[init.sql] applying ui_component_registry_preset_catalog_bootstrap.sql'
 \i /db/ui_component_registry_preset_catalog_bootstrap.sql
+
+\echo '[init.sql] applying external_port_result_context_mapping_seed.sql'
+\i /db/external_port_result_context_mapping_seed.sql

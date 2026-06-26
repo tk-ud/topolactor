@@ -309,7 +309,6 @@ check_absent "$ROADMAP" "admin_role_port_write_ui_design_not_started"
 check_absent "$ROADMAP" "consumer_bundle_port_connection_design_not_started"
 check_absent '.agent/tasks/todo.md' '## Bundle `external-port-substrate-implementation`'
 check_absent '.agent/tasks/todo.md' '`external-port-substrate-implementation` | external_port_substrate'
-check_content ".agent/tasks/todo.md" "external-port-consumer-hardcode-reduction"
 check_absent ".agent/tasks/todo.md" "external-port-substrate-design"
 check_absent ".agent/tasks/todo.md" "接続設計"
 check_content ".agent/tasks/external-port-substrate-implementation-todo.md" "external_port_substrate"

@@ -10,7 +10,6 @@
 |-----------|------|--------|------|----------------|---------|
 | `instance-port-substrate` | credential-backed instance connection / instance function call substrate | not_started | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
-| `external-port-consumer-hardcode-reduction` | 外部連携 consumer hardcode reduction / abstract function・seed 拡張 | not_started | 1 | - | `docs/design/external-port-substrate-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `cli-mcp-dispatch-secured-port` | CLI/MCP read/export/import-candidate port 親境界 | not_started | 5 subBundles | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
@@ -68,98 +67,6 @@ NG軸:
 **SSOT:** `docs/design/extended-runtime-bundle-registry-ssot.yaml`
 
 - [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhooks / external REST API connectors は、個別 SSOT と connector adapter contract が揃うまで optional external surface として実装しない（CSV/JSON admin import と M6 self-hosted no-code loop とは別 bundle）
-
----
-
-## Bundle `external-port-consumer-hardcode-reduction`
-
-**Status:** not_started
-**Roadmap bundle:** `-`
-**Primary SSOT:** `docs/design/external-port-substrate-ssot.yaml`
-
-問題点:
-外部連携基板は Gate0 / parent completion として実装済みだが、generic executor / evidence repository / abstract function external context 周辺に、次 Bundle 追加時に C# 意味が増えやすい hardcode reduction 候補が残っている。
-
-- `record_transfer_lifecycle_evidence` が `ExternalPortPolicyStepExecutor` にあり、Export/SFTP lifecycle 意味が generic executor 内へ混入している。
-- `ExportJobId` / `FileArtifactId` / `ChecksumValue` / `AuthorizationKey` / `OutputProp` などの entity/result context key が C# switch として残っている。
-- `NpgsqlExternalPortConsumerEvidenceRepository` に `AllowedTableRefs` / `InsertSql` / `SelectSql` の tableRef switch があり、manifest-bound validation はあるが projection constructor mapping が C# 側に残っている。
-- compatibility operation は `abstract_function_key` absorption seed で吸収済みだが、active policy step の `operation_key` が legacy compatibility 名のまま残っている箇所があるため、可能なら `execute_abstract_function` への完全寄せを検討できる。
-- credential refresh は canonical abstract primitive chain が存在する一方、compatibility path に lease duration 等の実装側値が残らないか確認・整理余地がある。
-
-目的:
-外部連携基板の runtime skeleton は維持しつつ、bundle lifecycle 意味・projection mapping 意味・entity ref 意味を seed / abstract function / DB function mapping に寄せ、今後の consumer bundle 追加で provider/bundle-specific C# hardcode が増えるのを防ぐ。
-
-改善方針:
-- `record_transfer_lifecycle_evidence` を generic `ExternalPortPolicyStepExecutor` から退避する。第一候補は `execute_abstract_function` + manifest-authorized PostgreSQL function / evidence projection mapping。純計算のみ handler に残す方針と整合させる。
-- compatibility operation rows を、可能な範囲で active seed 上 `execute_abstract_function` + `abstract_function_key` へ寄せる。shim は旧 row 互換の fail-close adapter として縮小する。
-- `event_log` / `append_runtime_event_log` の `entity_ref_key` は PascalCase runtime field 名 switch ではなく、abstract function input binding / external_context binding に寄せる。
-- `ApplyResultToExternalContext` の固定 key switch は、manifest 側の result-to-external-context mapping へ寄せられるか検討する。
-- evidence table append/load は C# table switch を増やさず、DB function または seed-defined mapping row + manifest binding validation へ寄せる。raw tableRef 動的 SQL は禁止する。
-- credential refresh compatibility path は canonical primitive chain と矛盾しないよう整理し、method / lease duration / expires_at response key 等の C# default を増やさない。
-- provider_kind / required_by_bundle による C# if/switch 分岐は禁止する。
-- frontend payload / seed payload / projection / log に credential plaintext、endpoint 実体、signed URL、bucket、storage path 等を出さない。
-
-対応資料:
-- `docs/design/external-port-substrate-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/abstract-function-primitive-registry-ssot.yaml`
-- `docs/design/runtime-bundle-export-sftp-ssot.yaml`
-- `docs/design/runtime-bundle-file-storage-ssot.yaml`
-- `docs/design/pipeline-continuity-ssot.yaml`
-
-対象ファイル名:
-- `.agent/tasks/todo.md`
-- `backend/runtime/ExternalPortCredentialRefresher.cs`
-- `backend/runtime/ExternalPortPolicyStepExecutorCompatibilityShim.cs`
-- `backend/runtime/AbstractFunctionRuntime.cs`
-- `backend/repository/NpgsqlExternalPortConsumerEvidenceRepository.cs`
-- `db/seed_empty.sql`
-- `db/external_port_compat_absorption_seed.sql`
-- `db/topology_tables.sql`
-- `.agent/tests/check-external-port-compat-absorption.sh`
-- `.agent/tests/check-external-port-parent-completion.sh`
-
-対象関数名・境界:
-- `ExternalPortPolicyStepExecutor.ExecutePolicyAsync`
-- `ExternalPortPolicyStepExecutor.ExecuteAsync`
-- `ExternalPortPolicyStepExecutor.ResolveEntityId`
-- `ExternalPortPolicyStepExecutor.BuildRetrySchedulerRequest`
-- `ExternalPortPolicyStepExecutor` の `record_transfer_lifecycle_evidence`
-- `ExternalPortPolicyStepExecutorCompatibilityShim.ExecuteCompatibilityAsync`
-- `AbstractFunctionExecutionContext.ApplyResultToExternalContext`
-- `AbstractFunctionExecutionContext.ResolveExternalContext`
-- `EventLogPrimitiveAdapter.ResolveEntityRef`
-- `NpgsqlExternalPortConsumerEvidenceRepository.AppendEvidenceAsync`
-- `NpgsqlExternalPortConsumerEvidenceRepository.LoadProjectionAsync`
-- `NpgsqlExternalPortConsumerEvidenceRepository.InsertSql`
-- `NpgsqlExternalPortConsumerEvidenceRepository.SelectSql`
-- `NpgsqlExternalPortConsumerEvidenceRepository.ValidateTableRefBoundToActiveManifestAsync`
-
-NG軸:
-- 外部連携 parent completion / Gate0 implemented 状態を未実装扱いに戻す
-- Roadmap (`docs/system-roadmap.yaml`) をこの Bundle 追加で更新する
-- provider_kind / required_by_bundle による C# if/switch 分岐を増やす
-- provider/bundle-specific runtime handler / client / repository method を追加する
-- raw tableRef 動的 SQL を許可する
-- manifest authority / seed-defined mapping を迂回する
-- credential plaintext / endpoint 実体 / signed URL / bucket / storage path を frontend payload / seed payload / projection / log に露出する
-
-受入条件:
-- [ ] `record_transfer_lifecycle_evidence` が generic executor から退避され、Export/SFTP lifecycle 意味は `execute_abstract_function` + manifest-authorized PostgreSQL function / evidence projection mapping 等の data-defined route へ寄っている。
-- [ ] active compatibility policy steps は可能な範囲で `execute_abstract_function` + `abstract_function_key` に寄り、shim は旧 row 互換の fail-close adapter として縮小されている。
-- [ ] `ExportJobId` / `FileArtifactId` / `ChecksumValue` / `AuthorizationKey` / `OutputProp` などの entity/result context key が C# 固定 switch ではなく manifest / abstract function binding / external_context mapping で解決される。
-- [ ] evidence append/load は C# table switch を増やさず、DB function または seed-defined mapping row + manifest binding validation で処理され、raw tableRef 動的 SQL は導入されていない。
-- [ ] credential refresh compatibility path は canonical primitive chain と矛盾せず、method / lease duration / expires_at response key 等の C# default を増やしていない。
-- [ ] provider_kind / required_by_bundle による C# if/switch 分岐、provider-specific client、bundle-specific runtime handler を追加していない。
-- [ ] credential plaintext / endpoint 実体 / signed URL / bucket / storage path が frontend payload / seed payload / projection / log に出ない。
-- [ ] `.agent/tests/check-external-port-compat-absorption.sh` / `.agent/tests/check-external-port-parent-completion.sh` / 必要な runtime tests が追加・更新され通過している。
-
-out_of_scope:
-- Roadmap 更新
-- 外部連携基板 parent completion の再判定・未実装化
-- scheduler 本体の変更
-- provider-specific scheduler/client/runtime 実装
-- DB schema / backend runtime / frontend / test の今回実装
 
 ---
 
