@@ -2928,3 +2928,33 @@ ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
     SET active = true,
         binding_evidence_json = EXCLUDED.binding_evidence_json,
         updated_at = now();
+
+-- CLI/MCP reader port seed-defined admin/runtime surface.
+INSERT INTO topology.cli_reader_ports (
+    port_key, enabled, expires_at, allowed_roles, allowed_users, allowed_tables,
+    allowed_columns, allowed_filters, allowed_periods, row_scope, required_capabilities,
+    rate_limit_per_minute, audit_required, config_json
+) VALUES (
+    'cli_reader_port.default', true, NULL,
+    '["admin","reader"]'::jsonb,
+    '[]'::jsonb,
+    '["topology.entity"]'::jsonb,
+    '{"topology.entity":["entity_id","entity_jsonb","state_id"]}'::jsonb,
+    '["state_id","entity_id"]'::jsonb,
+    '["today","last_7_days","last_30_days"]'::jsonb,
+    '{"admin-user":"tenant:default","reader-user":"tenant:default"}'::jsonb,
+    '["cli_reader_port.read"]'::jsonb,
+    60,
+    true,
+    '{"admin_projection":"contents","surface":"cli_reader_port","secret_projection":"denied","dispatch_runtime_destination":"cli_reader_port_runtime"}'::jsonb
+) ON CONFLICT (port_key) DO UPDATE SET
+    enabled = EXCLUDED.enabled,
+    allowed_roles = EXCLUDED.allowed_roles,
+    allowed_tables = EXCLUDED.allowed_tables,
+    allowed_columns = EXCLUDED.allowed_columns,
+    allowed_filters = EXCLUDED.allowed_filters,
+    allowed_periods = EXCLUDED.allowed_periods,
+    row_scope = EXCLUDED.row_scope,
+    required_capabilities = EXCLUDED.required_capabilities,
+    config_json = EXCLUDED.config_json,
+    updated_at = now();

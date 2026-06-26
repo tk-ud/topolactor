@@ -1971,3 +1971,39 @@ COMMENT ON FUNCTION topology.epce_append_evidence IS
 COMMENT ON FUNCTION topology.epce_load_projection IS
     'Static per-table SELECT routing for external_port_substrate consumer evidence projection. '
     'Replaces the C# SelectSql tableRef switch. Unknown table_ref fails closed.';
+
+-- CLI/MCP authorized reader port substrate (read-scope only; no export/import/file stream).
+CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
+    port_key TEXT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    expires_at TIMESTAMPTZ NULL,
+    allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb,
+    allowed_users JSONB NOT NULL DEFAULT '[]'::jsonb,
+    allowed_tables JSONB NOT NULL DEFAULT '[]'::jsonb,
+    allowed_columns JSONB NOT NULL DEFAULT '{}'::jsonb,
+    allowed_filters JSONB NOT NULL DEFAULT '[]'::jsonb,
+    allowed_periods JSONB NOT NULL DEFAULT '[]'::jsonb,
+    row_scope JSONB NOT NULL DEFAULT '{}'::jsonb,
+    required_capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
+    rate_limit_per_minute INTEGER NULL CHECK (rate_limit_per_minute IS NULL OR rate_limit_per_minute > 0),
+    audit_required BOOLEAN NOT NULL DEFAULT TRUE,
+    config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT cli_reader_ports_no_plaintext_secret CHECK (config_json::text !~* '(password|secret|plaintext|connection_string|api_key|token)')
+);
+
+CREATE TABLE IF NOT EXISTS topology.cli_reader_port_runtime_events (
+    event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    port_key TEXT NOT NULL REFERENCES topology.cli_reader_ports(port_key),
+    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate')),
+    user_id TEXT NULL,
+    roles JSONB NOT NULL DEFAULT '[]'::jsonb,
+    status TEXT NOT NULL CHECK (status IN ('success','fail_close')),
+    code TEXT NOT NULL,
+    request_id TEXT NULL,
+    idempotency_key TEXT NULL,
+    scope_summary TEXT NOT NULL,
+    observed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT cli_reader_port_runtime_events_no_secret_leak CHECK (scope_summary !~* '(password|secret|plaintext|connection_string|api_key|token|raw_sql)')
+);

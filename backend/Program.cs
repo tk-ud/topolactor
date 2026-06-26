@@ -65,6 +65,8 @@ builder.Services.AddSingleton<AuthMasterRepository>(_ =>
     new NpgsqlAuthMasterRepository(connectionString));
 builder.Services.AddSingleton<AuthRepository>(_ =>
     new NpgsqlAuthRepository(connectionString));
+builder.Services.AddSingleton<CliReaderPortRepository>(_ =>
+    new NpgsqlCliReaderPortRepository(connectionString));
 builder.Services.AddSingleton<MockPresetRepository>(sp =>
     new NpgsqlMockPresetRepository(
         sp.GetRequiredService<ILogger<NpgsqlMockPresetRepository>>(),
@@ -207,6 +209,7 @@ builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
         sp.GetRequiredService<ExternalPortPolicyStepExecutor>(),
         sp.GetRequiredService<AbstractFunctionExecutor>()));
 
+builder.Services.AddSingleton<AuthorizedCliReaderPortRuntime>();
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
     new ExternalPortDispatchRuntime(
         sp.GetRequiredService<ILogger<ExternalPortDispatchRuntime>>(),
@@ -285,6 +288,7 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         ["sse_projection_runtime"]      = sp.GetRequiredService<SseProjectionRuntime>(),
         ["registry_attractor_runtime"]  = sp.GetRequiredService<RegistryAttractorDispatchRuntime>(),
         ["external_port_runtime"]      = sp.GetRequiredService<ExternalPortDispatchRuntime>(),
+        ["cli_reader_port_runtime"]   = sp.GetRequiredService<AuthorizedCliReaderPortRuntime>(),
     };
     return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
