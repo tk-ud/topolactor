@@ -8,7 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
-| `instance-port-substrate` | credential-backed instance connection / instance function call substrate | not_started | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
+| `instance-port-substrate` | credential-backed instance connection / instance function call substrate | not_started | 2 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -27,11 +27,20 @@
 目的:
 credential-backed instance connection / instance function call を external_port_substrate と混同せず、sibling substrate として設計・実装する。今回の設計配線では実装本体は未着手のまま残す。
 
+監査追記: admin projection / authoring wiring 設計不足:
+- 問題点: 現行 `instance-port-substrate` SSOT / roadmap / todo は runtime lane・DDL・primitive・authority binding には触れているが、admin contents / UI Builder / PackageWiringEditor / admin action candidate / targetRef / projection registration の接続方針を閉じていない。Gate 0 上、admin surface registration・form/table projection・action buttons・action wiring・dispatch payload mapping は seed/data-defined required であり、runtime 実装だけでは Bundle completion にできない。
+- 目的: instance connection / instance function call の管理・選択・wiring を既存 admin authoring substrate に接続し、手書き admin UI や dedicated credential/admin plane を生やさず、secret / endpoint / connection string を projection しない authoring boundary を確定する。
+- 改善方針: 実装前に design_change で `docs/design/instance-port-substrate-ssot.yaml` と `docs/design/admin-console-workflow-ssot.yaml` を突き合わせ、admin contents で扱う設定範囲、UI Builder / PackageWiringEditor の target surface / targetRef 語彙、instance function authoring candidates、credential reference 選択、projection deny、admin action から `instance_port_runtime` へ至る manifest / dispatcher mapping を Bundle 単位で定義する。
+- 対応資料: `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `.agent/protocols/audit.md` Gate 0 / admin_authoring_completion_gate, `.agent/docs/ssot-map.yaml` `admin_authoring_completion_gate` / `instance_port_substrate`
+- 対象ファイル名: `docs/design/instance-port-substrate-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `.agent/docs/ssot-map.yaml`, `.agent/tests/check-instance-port-substrate.sh`, `frontend/lib/packageWiringOptions.ts`, `frontend/lib/packageWiringPicker.ts`, `frontend/islands/UiBuilderAdmin.tsx`, `backend/runtime/AdminRuntime.cs`, `backend/repository/UiTopologyRepository.cs`, `backend/repository/NpgsqlUiTopologyRepository.cs`, `backend/tests/Topolactor.Runtime.Tests/AdminRuntimePackageWiringTests.cs`
+- 対象関数名: `PackageWiringEditor`, `DataListExternalPortAuthoringCandidatesAsync`, `DataUpdatePackageWiringAsync`, `ListExternalPortAuthoringCandidatesAsync`, `UpdatePackageWiringAsync`, `isPackageWiringTargetSurface`, `encodeManifestPackageTargetRef`, `parseManifestPackageTargetRef`
+
 対応資料:
 - `docs/design/instance-port-substrate-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/abstract-function-primitive-registry-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
 - `.agent/tasks/instance-port-substrate-implementation-todo.md`
 - `.agent/tests/check-instance-port-substrate.sh`
 
@@ -40,6 +49,11 @@ credential-backed instance connection / instance function call を external_port
 - `backend/runtime/AbstractFunctionRuntime.cs` (future primitive adapter only)
 - `backend/runtime/*InstancePort*` (future runtime lane only)
 - `backend/repository/*InstancePort*` (future policy repository only)
+- `frontend/lib/packageWiringOptions.ts` (future admin/UI Builder target surface vocabulary only after SSOT is updated)
+- `frontend/lib/packageWiringPicker.ts` (future admin/UI Builder targetRef helper only after SSOT is updated)
+- `frontend/islands/UiBuilderAdmin.tsx` (future PackageWiringEditor candidate/wiring surface only after SSOT is updated)
+- `backend/runtime/AdminRuntime.cs` (future admin action candidate/wiring read surface only after SSOT is updated)
+- `backend/repository/UiTopologyRepository.cs` / `backend/repository/NpgsqlUiTopologyRepository.cs` (future candidate read/update repository surface only after SSOT is updated)
 
 NG軸:
 - external_port_substrate の access_port / response_port / hook_port へ DB/runtime instance connection を混入する
@@ -49,6 +63,9 @@ NG軸:
 - provider-specific runtime handler を第一候補にする
 - provider-specific schema / external instance semantic authority を Topolactor DB に作る
 - external instance を Topolactor runtime SSOT として扱う
+- admin contents / UI Builder / PackageWiringEditor / action wiring を未設計のまま runtime lane / primitive だけ実装して implemented 扱いにする
+- dedicated credential admin UI / standalone credential plane を作る
+- 手書き admin UI / hardcoded targetRef / hardcoded action button で Gate 0 の seed/data-defined surface を迂回する
 
 受入条件:
 - [ ] instance port DDL / seed / repository / runtime lane が SSOT に従って追加されている。
@@ -57,7 +74,9 @@ NG軸:
 - [ ] credential は `reference_key` / DB guarded vault / runtime secret resolver 経由で runtime-only 解決され、plaintext connection string は SSOT / seed / UI / projection / log に出ない。
 - [ ] provider_kind / required_by_bundle は data only で C# selector ではない。
 - [ ] 特定 consumer 専用 handler / schema / semantic authority を追加していない。
-- [ ] `.agent/tests/check-instance-port-substrate.sh` と必要な runtime/backend tests が追加・通過している。
+- [ ] admin contents / UI Builder / PackageWiringEditor / admin action candidate / targetRef / projection registration の接続方針が SSOT 上で定義され、Gate 0 の admin_authoring_completion_gate を満たす。
+- [ ] admin projection は credential reference / policy / authority binding を data-defined に扱い、secret / endpoint / connection string / raw SQL / function authority を projection しない。
+- [ ] `.agent/tests/check-instance-port-substrate.sh` と必要な runtime/backend/frontend/admin wiring tests が追加・通過している。
 
 ---
 
@@ -198,139 +217,3 @@ NG軸:
 
 受入条件:
 - [ ] export は必ず authorized read scope に基づく `export_job` として記録される。
-- [ ] manifest_version / export_job_id / generated_at / generated_by / period / source_tables / source_record_ids / files / checksum を持つ manifest が生成される。
-- [ ] csv/json/pdf/zip generation は Data Reader authorized request 由来の record set のみを対象にする。
-- [ ] checksum と generated_files が export ledger に残る。
-- [ ] unauthorized bulk export を fail-close する tests/guards がある。
-
-out_of_scope:
-- file stream permission / download API
-- import-candidate / draft_operation / commit_candidate
-- approval / DB commit / arbitrary mutation
-- provider-specific external export runtime
-
-### SubBundle `cli-mcp-file-stream-port`
-
-**Status:** not_started
-**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml`
-**対応SSOTセクション名:** `file_stream` / `mcp_surface.resources`
-
-目的:
-- `download_export_file`
-- `get_export_status`
-- export resource URI (`topolactor://exports/{export_job_id}/manifest.json`, `topolactor://exports/{export_job_id}/file`)
-- file stream permission
-
-対象ファイル名候補:
-- `backend/Program.cs` (MCP/API file stream entry only; direct path exposure 不可)
-- `backend/repository/*Export*`
-- `backend/runtime/ManifestDispatcher.cs`
-- `backend/runtime/RuntimeExecutor.cs`
-- `frontend/api/adminApi.ts` (admin projection metadata only if needed)
-
-NG軸:
-- stream without export_job
-- permission bypass
-- direct file path exposure
-- checksum/manifest metadata なしの stream
-
-受入条件:
-- [ ] file stream は API が許可した export_job に対してのみ開放される。
-- [ ] export_job_id / source_record_ids / generated_by / generated_at / period / checksum / manifest_version を検証する。
-- [ ] direct filesystem path や secret-bearing location を response/resource metadata に露出しない。
-- [ ] `get_export_status` と resource URI は unauthorized user に fail-close する。
-
-out_of_scope:
-- export_job 作成 / csv/json/pdf/zip generation 本体
-- read/search/aggregate/analyze/validate 本体
-- import-candidate / approval / DB commit
-- browser UI automation
-
-### SubBundle `cli-mcp-import-candidate-port`
-
-**Status:** not_started
-**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml` / `docs/design/runtime-bundle-audit-approval-ssot.yaml`
-**対応SSOTセクション名:** `core_invariant.canonical_structured_input_lane` / `structured_input_import` / `core_invariant.dispatch_and_approval_boundary`
-
-目的:
-- `import_structured_output`
-- `assign_business_object_candidate`
-- `create_draft_operation`
-- `create_commit_candidate`
-- `preview_diff`
-- `source_transcript_ref` / `root_utterance` / `confidence` / `unresolved_fields` / evidence handling
-
-対象ファイル名候補:
-- `backend/runtime/ManifestDispatcher.cs`
-- `backend/runtime/RuntimeExecutor.cs`
-- `backend/runtime/TopologyFunctionBinder.cs`
-- `backend/repository/*Draft*` / `backend/repository/*CommitCandidate*`
-- `backend/Program.cs` (MCP/API import-candidate entry only; approval execution route は不可)
-- `db/topology_tables.sql` (draft_operation / commit_candidate tables only when SSOT-backed)
-- `db/seed_empty.sql` (import_candidate admin config only when SSOT-backed)
-
-NG軸:
-- external AI structured output as SSOT
-- DB commit by AI/MCP/CLI
-- user approval bypass
-- auto-confirming unresolved fields
-- delete/payment/email send execution
-- commit_candidate から canonical dispatch を迂回した DB 更新
-
-受入条件:
-- [ ] External AI structured output は evidence/input として扱われ、正本化されない。
-- [ ] draft_operation / commit_candidate は source_transcript_ref / root_utterance / confidence / unresolved_fields / assigned_business_object_candidate / preview_diff を保持する。
-- [ ] AI/MCP/CLI は draft_operation / commit_candidate 作成までで、approval execution / DB commit / arbitrary mutation を実行できない。
-- [ ] user approval 後のみ canonical commit dispatch 経由で DB commit に進む境界が明記・検証される。
-- [ ] unresolved_fields を自動確定せず、preview diff/evidence なし candidate を fail-close する。
-
-out_of_scope:
-- read/export/file stream 実装
-- approval UI 実装
-- canonical commit dispatch 本体の新規実装
-- delete/payment/email send
-- browser UI automation
-
-### SubBundle `cli-mcp-surface-metadata-port`
-
-**Status:** not_started
-**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml`
-**対応SSOTセクション名:** `mcp_surface` / `admin_ui_configuration` / `explicitly_out_of_scope`
-
-目的:
-- MCP tools/resources generation
-- admin config projection
-- exposed resources/tools metadata
-- out_of_scope operation を surface metadata から除外する
-
-対象ファイル名候補:
-- `backend/Program.cs` (MCP metadata entry only; dedicated runtime bypass 不可)
-- `backend/runtime/ManifestDispatcher.cs`
-- `backend/repository/*Mcp*` / `backend/repository/*Cli*`
-- `db/seed_empty.sql` (MCP/admin config projection seed only when SSOT-backed)
-- `frontend/islands/ContentsScreenDesignPanel.tsx` (admin config projection only if needed)
-- `frontend/islands/ProjectionShell.tsx` (metadata projection only if needed)
-
-NG軸:
-- browser UI automation
-- dedicated backend handler bypassing dispatch
-- core API direct call
-- operation execution beyond declared read/export/import-candidate surface
-- out_of_scope operation の tool/resource 公開
-
-受入条件:
-- [ ] MCP tools/resources は admin config から生成される。
-- [ ] tools は get_monthly_context / search_records / aggregate_records / validate_export / create_export_job / download_export_file / get_export_status / import_structured_output / assign_business_object_candidate / create_draft_operation / create_commit_candidate / get_preview_diff に限定される。
-- [ ] resources は SSOT の `mcp_surface.resources` に沿い、permission/scope metadata と対応する。
-- [ ] explicitly_out_of_scope operations が tools/resources として公開されない guard/tests がある。
-
-out_of_scope:
-- read/export/import-candidate の runtime body 実装
-- backend route dedicated handler bypass
-- core API direct call
-- UI browser automation
-- approval / commit / delete / payment / email send
-
----
-
----
