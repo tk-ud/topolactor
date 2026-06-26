@@ -70,6 +70,12 @@ Forbidden for implementation agents:
 - Do not confuse hardcode-allowed runtime ports with UI/action/mapping surfaces that must be seed/data-defined.
 - Do not proliferate narrow dedicated helpers that future bundles cannot reuse.
 
+## PR / Bundle boundary
+- `specific` は局所修正 / hotfix / PR内checkpoint の作業には使える。
+- specific route must not carve unresolved scope out of an active completion Bundle to justify merging a Bundle未達PR into `main`.
+- checkpoint clear is not main merge approval; local checkpoint progress remains inside the active PR/Bundle until completion.
+- 複数surfaceの意味整合やBundle completion判断が必要な場合は `specific` ではなく適切な worktype（audit / implementation_change / design_change / existing_pr_update）へ戻す。
+
 ## output_shape
 local scope statement, touched targets, decisions, foundation_ssot_read_judgment, checks
 

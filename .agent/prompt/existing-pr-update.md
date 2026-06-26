@@ -78,6 +78,12 @@ Forbidden for implementation agents:
 - Do not confuse hardcode-allowed runtime ports with UI/action/mapping surfaces that must be seed/data-defined.
 - Do not proliferate narrow dedicated helpers that future bundles cannot reuse.
 
+## PR / Bundle residue handling
+- PR merge unit is completion Bundle; merge前の残課題が同一Bundle内の未達なら、existing PR update として同一PRへ追加修正する。
+- follow-up PR へ逃がして partial merge することは禁止。carry-over is not an approval substitute for unresolved work inside the same Bundle.
+- merge後の残ズレ修正と、merge前の同一Bundle blocking residue を混同しない。
+- checkpoint clear is not main merge approval; Bundle途中状態の監査clear後は、同一PR内で次checkpointへ進めるだけであり、main merge readiness は completion Bundle completion で判定する。
+
 ## output_shape
 follow-up delta, foundation_ssot_read_judgment, checks, output sink state
 

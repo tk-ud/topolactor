@@ -148,24 +148,32 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 `全部読むな` は維持するが、これは `.agent/docs` 全読みに対する制約であり、audit baseline 4SSOT の省略を許可しない。
 
 ## approve_judgment_axis
-- Approve requires semantic consistency between PR diff, TODO, roadmap, and relevant SSOT completion_condition classification.
-- audit 判定基準は常に implemented 到達基準に揃える。partial 状態そのものは禁止しないが、implemented 未達のまま無条件 Approve は禁止する。
-- implemented 未達時は、implemented 到達可能な TODO 単位への細分化、または canonical TODO への carry-over 指示（remaining scope / next TODO）を Approve 前に必須とする。
+- PR merge unit is completion Bundle: PR approval / main merge readiness is judged at the completion Bundle boundary, not at an implementation atom, checkpoint, or commit boundary.
+- A completion Bundle is the coherent boundary that may enter `main`: relevant completion_condition / SSOT / seed / runtime / tests / TODO state must close together.
+- checkpoint clear is not main merge approval: audit clear for a Bundle途中状態 means only that the same PR may proceed to the next work checkpoint; it must not be treated as approval to merge that PR to `main`.
+- small implementation progress may continue within the same PR after audit clear; small progress and PR-internal checkpoints are allowed as work units for reaching Bundle completion.
+- partial / scoped-progress / non-closing progress states are allowed as PR-internal work progress, audit checkpoint evidence, and state classification, but they are not merge-ready while same-Bundle residue remains.
+- partial Bundle state is not mergeable while same-Bundle residue remains: if concrete implementation / design / SSOT / seed / runtime / test-authoring residue remains inside the active completion Bundle, Approve / main merge is forbidden and Request Changes is required for merge judgment.
+- State classification accuracy is necessary evidence, but it is not sufficient for main merge approval unless the PR has reached the completion Bundle boundary.
+- audit 判定基準は常に implemented 到達基準に揃える。partial 状態そのものは禁止しないが、completion Bundle 未達のまま main merge Approve は禁止する。
+- implemented 未達時は、implemented 到達可能な roadmap completion bundle 単位への再編、または canonical TODO への carry-over 指示（remaining scope / next TODO）を judgment 前に必須とする。
   - ここでの「TODO 単位への細分化」は implementation atom 分割を意味せず、roadmap entry（docs/system-roadmap.yaml）を正本とした completion bundle 単位への再編を意味する。
 - implemented 未達 + TODO細分化なし + carry-over 指示なし + Approve は禁止（Request Changes）。
   - TODO細分化は roadmap completion bundle 化を指し、implementation atom の小TODO分割を指さない。
-- 親 Issue / TODO が大きすぎる場合、対象を implemented 到達可能な小TODOへ分割し、Approve 根拠は今回PR対象の細分化TODO単位 completion_condition 充足に限定する。
+- 親 Issue / TODO が大きすぎる場合、対象を implemented 到達可能な roadmap completion bundle へ分割し、Approve 根拠は今回PR対象の completion Bundle completion_condition 充足に限定する。
   - 小TODO分割とは implementation atom ではなく、roadmap `completion_condition` / `known_gap_ref` を閉じる completion bundle への再編を意味する。
-- 「未達が残っているが partial として整合」は Approve 理由にしない。
-- 「未達が残っているが、残TODOが roadmap completion bundle として canonical に明示されている」場合のみ carry-over 整合として扱う。
-- partial Approve は、PR purpose / Issue目的 / user依頼が明示的に partial / scoped progress / non-closing progress の場合に限定して許可する。
-- 上記 partial purpose に該当する場合のみ、未達SSOT条件が TODO / roadmap / `known_gap_ref` / `remaining_todo` に明示維持されていることを Approve 条件として扱える。
+- 「未達が残っているが partial として整合」は main merge Approve 理由にしない。
+- carry-over is not an approval substitute for unresolved work inside the same Bundle.
+- Carry-over can count as approval alignment only when remaining work is outside the current Bundle and is separated as another canonical completion Bundle with an isolated conflict surface.
+- 「未達が残っているが、残TODOが roadmap completion bundle として canonical に明示されている」場合でも、同一Bundle内の未達であれば carry-over 整合として扱わない。現在Bundle外で衝突面が分離された別 canonical completion Bundle の場合に限り carry-over 整合として扱う。
+- partial Approve という語を使う場合でも、それは main merge approval ではなく、PR-internal checkpoint clear / scoped-progress acknowledgment を指す。main merge Approve は completion Bundle completion を要求する。
 - PR本文・Issue目的・user依頼・TODO項目のいずれかが implemented / close / completion / TODO `[x]` を目指す場合、`completion_condition` 未達、remaining `known_gap_ref`、concrete `remaining_todo` が1つでもあれば Request Changes とする。
 - TODO/roadmap に未達が明示されている事実は partial 分類の正しさの証拠であり、implemented-target PR の Approve 根拠にはならない。
 - Issue は入口・作業チケットであり、closed / aggregated / not_planned であっても implemented 判定根拠にしない。implemented 判定の正本は SSOT（`docs/design/*` 意味契約）・実装ファイル・テストとする。ロードマップの `completion_condition` / `known_gap_ref` は判定参照として使うが、ロードマップの status 記述のみを implemented 根拠にしない。ロードマップとTODOは動的な進捗参照面であり、実装実態の権威ソースではない。
 - 既存の「TODO細分化」「小TODOへ分割」という語は、implementation atom 分割ではなく roadmap completion bundle への再編を意味する。
 - relevant SSOT completion_condition が未達のまま implemented / complete / closed を示す、または示唆する PR は Approve 禁止。
 - representative route、ACK-only intake、skeleton wiring、partial wiring は、SSOT completion_condition が許容しない限り implemented 根拠にしない。
+- commit granularity is not a governance requirement: commit粒度を PR merge 可否、Bundle completion、checkpoint clear の判定主語にしない。小粒commitを必須化しない。
 - Remote CI / tests passing は証拠の一部であり、単体では semantic completion 根拠にしない。
 
 ## required_output_contract

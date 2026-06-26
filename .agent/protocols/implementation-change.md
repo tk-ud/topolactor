@@ -28,6 +28,11 @@ Do not treat this as always-read for unrelated typo/format-only edits. When skip
 - Required checks were executed or explicitly NOT_EXECUTED/REQUIRED_NOT_EXECUTED.
 
 ## todo_granularity_guard
+- PR merge unit is completion Bundle: implementation agents may make small implementation progress, but main merge readiness is judged only after the active completion Bundle closes.
+- small implementation progress may continue within the same PR after audit clear; Bundle途中状態で監査clearされた場合は、同一PR内で次checkpointへ進める。
+- checkpoint clear is not main merge approval; PR-internal checkpoint clear must not be used to merge a Bundle未達PR into `main`.
+- implementation atom を別PR化して、同一Bundle未達を main へ分割投入してはならない。
+- commit granularity is not a governance requirement; commit粒度を Bundle completion / PR merge 可否の判定主語にしない。
 - 実装差分の小粒進捗は PR summary の completed sub-scope に記載してよい。
 - `.agent/tasks/todo.md` へ新規 TODO を追加する場合、roadmap completion bundle 単位で追加する。
 - implementation atom（例: alias追加/adapter接続/emit追加/単体test1件）単位の canonical TODO 追加は禁止。
