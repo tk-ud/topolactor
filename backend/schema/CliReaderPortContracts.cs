@@ -4,6 +4,7 @@ namespace Topolactor.Schema;
 
 public sealed record CliReaderPortConfig(
     string PortKey,
+    Guid PortId,
     bool Enabled,
     DateTimeOffset? ExpiresAt,
     IReadOnlySet<string> AllowedRoles,

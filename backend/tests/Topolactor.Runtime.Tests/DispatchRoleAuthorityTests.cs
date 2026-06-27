@@ -268,6 +268,7 @@ public class DispatchRoleAuthorityTests
 
     private static CliReaderPortConfig CliReaderConfig() => new(
         "cli_reader_port.default",
+        Guid.Parse("22222222-2222-2222-2222-222222222222"),
         true,
         DateTimeOffset.UtcNow.AddHours(1),
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader" },

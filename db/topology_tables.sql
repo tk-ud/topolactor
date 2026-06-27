@@ -2011,6 +2011,7 @@ COMMENT ON FUNCTION topology.epce_load_projection IS
 -- CLI/MCP authorized reader port substrate (read-scope only; no export/import/file stream).
 CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
     port_key TEXT PRIMARY KEY,
+    port_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
     expires_at TIMESTAMPTZ NULL,
     allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -2032,7 +2033,7 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
 CREATE TABLE IF NOT EXISTS topology.cli_reader_port_runtime_events (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     port_key TEXT NOT NULL REFERENCES topology.cli_reader_ports(port_key),
-    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate')),
+    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job')),
     user_id TEXT NULL,
     roles JSONB NOT NULL DEFAULT '[]'::jsonb,
     status TEXT NOT NULL CHECK (status IN ('success','fail_close')),
@@ -2043,3 +2044,29 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_port_runtime_events (
     observed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT cli_reader_port_runtime_events_no_secret_leak CHECK (scope_summary !~* '(password|secret|plaintext|connection_string|api_key|token|raw_sql)')
 );
+
+-- Existing-database migration guard for system-side CLI reader port identity and
+-- create_export_job runtime event append support.
+ALTER TABLE topology.cli_reader_ports
+    ADD COLUMN IF NOT EXISTS port_id UUID NOT NULL DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cli_reader_ports_port_id
+    ON topology.cli_reader_ports (port_id);
+
+DO $$
+DECLARE
+    constraint_name TEXT;
+BEGIN
+    FOR constraint_name IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'topology.cli_reader_port_runtime_events'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%operation%'
+    LOOP
+        EXECUTE format('ALTER TABLE topology.cli_reader_port_runtime_events DROP CONSTRAINT IF EXISTS %I', constraint_name);
+    END LOOP;
+
+    ALTER TABLE topology.cli_reader_port_runtime_events
+        ADD CONSTRAINT cli_reader_port_runtime_events_operation_check
+        CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job'));
+END $$;

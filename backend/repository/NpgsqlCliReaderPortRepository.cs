@@ -14,7 +14,7 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
     public async Task<CliReaderPortConfig?> LoadPortAsync(string portKey, CancellationToken ct = default)
     {
         const string sql = """
-            SELECT port_key, enabled, expires_at, allowed_roles, allowed_users, allowed_tables, allowed_columns,
+            SELECT port_key, port_id, enabled, expires_at, allowed_roles, allowed_users, allowed_tables, allowed_columns,
                    allowed_filters, allowed_periods, row_scope, required_capabilities, audit_required, rate_limit_per_minute
             FROM topology.cli_reader_ports
             WHERE port_key = @port_key
@@ -25,21 +25,22 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         cmd.Parameters.AddWithValue("port_key", portKey);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
-        var allowedColumnsJson = reader.GetString(6);
+        var allowedColumnsJson = reader.GetString(7);
         return new CliReaderPortConfig(
             reader.GetString(0),
-            reader.GetBoolean(1),
-            reader.IsDBNull(2) ? null : reader.GetFieldValue<DateTimeOffset>(2),
-            ReadSet(reader.GetString(3)),
+            reader.GetGuid(1),
+            reader.GetBoolean(2),
+            reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3),
             ReadSet(reader.GetString(4)),
             ReadSet(reader.GetString(5)),
+            ReadSet(reader.GetString(6)),
             ReadColumns(allowedColumnsJson),
-            ReadSet(reader.GetString(7)),
             ReadSet(reader.GetString(8)),
-            ReadMap(reader.GetString(9)),
-            ReadSet(reader.GetString(10)),
-            reader.GetBoolean(11),
-            reader.IsDBNull(12) ? null : reader.GetInt32(12));
+            ReadSet(reader.GetString(9)),
+            ReadMap(reader.GetString(10)),
+            ReadSet(reader.GetString(11)),
+            reader.GetBoolean(12),
+            reader.IsDBNull(13) ? null : reader.GetInt32(13));
     }
 
     public async Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
