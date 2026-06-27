@@ -38,7 +38,7 @@ Parent bundle: `instance-port-substrate`
 - 既存 fixed-form projection / `screen_data_shape` / relationIntents / validate-preview-apply 境界を再利用し、UI は可能な限り user/auth・external と同型にする。
 - JSON template download / JSON import / registered Runtime-DB list-edit / operation list-edit / validate-preview-apply を credential management projection の instance settings category として定義する。
 - seed-aligned JSON template は構造情報漏洩を防ぐため、secret / endpoint実値 / connection string / raw SQL / private key / runtime-only decrypted payload / executable authority を出さない。
-- UI Builder / Design Inspector は approved instance operation の `trigger` / `payloadFrom` / `outputProp` 割当だけに限定する。
+- Admin UI Builder / Design Inspector は新画面やinstance設定editorではなく、既存 Event 設定語彙に `dispatchInstanceOperation` / `instanceTargetRef` を追加し、approved instance operation の `trigger` / `payloadFrom` / `outputProp` 割当だけに限定する。
 
 対応資料:
 - `docs/design/instance-port-substrate-ssot.yaml`
@@ -77,16 +77,16 @@ NG軸:
 - standalone credential management plane / dedicated credential route / dedicated panel を追加する
 - provider_kind / required_by_bundle で C# if/switch selector を作る
 - secret / endpoint実値 / connection string / raw SQL / private key / runtime-only decrypted payload を seed / projection / log / JSON download に出す
-- UI Builder に instance function definition / address edit / schema edit / raw SQL edit / credential edit を持たせる
+- Admin UI Builder / Design Inspector の Event 設定に instance function definition / address edit / schema edit / raw SQL edit / credential edit を持たせる
 
 受入条件:
 - [ ] existing credential management projection 系で `user_auth` / `external` / `instance_settings` を select / mode / category 切替できる。
-- [ ] instance は external_port `credential_kind` ではなく instance settings category として扱う。
+- [ ] `instance` は external_port `credential_kind` ではなく instance settings category として扱う。
 - [ ] `db_instance_port` / `runtime_instance_port` / operation binding / connection policy が seed/data-defined に扱われる。
 - [ ] JSON template download/import が secret・endpoint実値・connection string・raw SQL・executable authority を出さない。
-- [ ] approved operation 以外は UI Builder candidate に出ない。
+- [ ] approved operation 以外は Admin UI Builder Design Inspector の Event action candidate に出ない。
 - [ ] dedicated credential route / standalone credential plane / provider-specific handler を追加していない。
-- [ ] `.agent/tests/check-instance-port-substrate.sh` が existing credential management projection extension / instance_settings category / JSON template leak guard / UI Builder scope boundary を検出する。
+- [ ] `.agent/tests/check-instance-port-substrate.sh` が existing credential management projection extension / instance_settings category / JSON template leak guard / Design Inspector event-authoring scope boundary を検出する。
 
 ## Explicitly out of scope for the SSOT wiring PR
 
