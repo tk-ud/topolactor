@@ -8,7 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
-| `instance-port-substrate` | credential-backed instance connection / instance function call substrate | not_started | 2 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
+| `instance-port-substrate` | credential-backed instance connection / instance function call substrate | not_started | 3 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -25,15 +25,15 @@
 **Primary SSOT:** `docs/design/instance-port-substrate-ssot.yaml`
 
 目的:
-credential-backed instance connection / instance function call を external_port_substrate と混同せず、sibling substrate として設計・実装する。今回の設計配線では実装本体は未着手のまま残す。
+credential-backed instance connection / instance function call を external_port_substrate と混同せず、sibling substrate として設計・実装する。SSOT 上の設計判断は閉じており、残作業は Bundle 単位の実装・guard 整合。
 
-監査追記: admin projection / authoring wiring 設計不足:
-- 問題点: 現行 `instance-port-substrate` SSOT / roadmap / todo は runtime lane・DDL・primitive・authority binding には触れているが、admin contents / UI Builder / PackageWiringEditor / admin action candidate / targetRef / projection registration の接続方針を閉じていない。Gate 0 上、admin surface registration・form/table projection・action buttons・action wiring・dispatch payload mapping は seed/data-defined required であり、runtime 実装だけでは Bundle completion にできない。
-- 目的: instance connection / instance function call の管理・選択・wiring を既存 admin authoring substrate に接続し、手書き admin UI や dedicated credential/admin plane を生やさず、secret / endpoint / connection string を projection しない authoring boundary を確定する。
-- 改善方針: 実装前に design_change で `docs/design/instance-port-substrate-ssot.yaml` と `docs/design/admin-console-workflow-ssot.yaml` を突き合わせ、admin contents で扱う設定範囲、UI Builder / PackageWiringEditor の target surface / targetRef 語彙、instance function authoring candidates、credential reference 選択、projection deny、admin action から `instance_port_runtime` へ至る manifest / dispatcher mapping を Bundle 単位で定義する。
-- 対応資料: `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `.agent/protocols/audit.md` Gate 0 / admin_authoring_completion_gate, `.agent/docs/ssot-map.yaml` `admin_authoring_completion_gate` / `instance_port_substrate`
-- 対象ファイル名: `docs/design/instance-port-substrate-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `.agent/docs/ssot-map.yaml`, `.agent/tests/check-instance-port-substrate.sh`, `frontend/lib/packageWiringOptions.ts`, `frontend/lib/packageWiringPicker.ts`, `frontend/islands/UiBuilderAdmin.tsx`, `backend/runtime/AdminRuntime.cs`, `backend/repository/UiTopologyRepository.cs`, `backend/repository/NpgsqlUiTopologyRepository.cs`, `backend/tests/Topolactor.Runtime.Tests/AdminRuntimePackageWiringTests.cs`
-- 対象関数名: `PackageWiringEditor`, `DataListExternalPortAuthoringCandidatesAsync`, `DataUpdatePackageWiringAsync`, `ListExternalPortAuthoringCandidatesAsync`, `UpdatePackageWiringAsync`, `isPackageWiringTargetSurface`, `encodeManifestPackageTargetRef`, `parseManifestPackageTargetRef`
+監査追記: credential management instance settings topology 未実装:
+- 問題点: `auth.external.credential_management.projection` は manifest `00000000-0000-0000-0000-000000000092` として `db/seed_empty.sql` に seed 済みで、user/auth boundary manifest `00000000-0000-0000-0000-000000000091` と external credential context / policy template selection は fixed-form projection として存在する。しかし `instance_settings` は同 credential management projection / topology に未接続。
+- 目的: 既存 credential management projection を拡張し、`user_auth` / `external` / `instance_settings` を select / mode / category で切り替える。instance settings では `db_instance_port` / `runtime_instance_port` / `instance_connection_policy` / `instance_operation_authority_binding`、JSON template download/import、registered Runtime/DB list-edit、operation list-edit、validate-preview-apply を扱う。
+- 改善方針: implementation_change で hub relation / projection topology / `screen_data_shape` / relationIntents / admin action wiring / guard を追加する。新規 standalone credential plane / dedicated credential route/panel / provider-specific UI は作らない。JSON template は owner-reviewed decision に従い public-safe shape を出してよいが、secret / endpoint実値 / connection string / raw SQL / runtime-only material / approval bypass authority を出さない。
+- 対応資料: `docs/design/instance-port-substrate-ssot.yaml`, `docs/design/external-port-substrate-ssot.yaml`, `docs/design/runtime-bundle-secret-credential-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `.agent/tasks/instance-port-substrate-implementation-todo.md`, `.agent/tests/check-instance-port-substrate.sh`, `.agent/tests/check-auth-external-credential-projection.sh`
+- 対象ファイル名: `db/seed_empty.sql`, `db/topology_tables.sql`, `.agent/tests/check-instance-port-substrate.sh`, `backend/runtime/AdminRuntime.cs`, `backend/repository/UiTopologyRepository.cs`, `backend/repository/NpgsqlUiTopologyRepository.cs`, `frontend/api/adminApi.ts`, `frontend/lib/packageWiringOptions.ts`, `frontend/lib/packageWiringPicker.ts`, `frontend/islands/UiBuilderAdmin.tsx`
+- 対象関数名: `AdminRuntime.ExecuteDataAsync`, `DataUpdatePackageWiringAsync`, `DataListExternalPortAuthoringCandidatesAsync`, `UpdatePackageWiringAsync`, `ListExternalPortAuthoringCandidatesAsync`, future `ListInstanceSettingsCandidatesAsync`, future `ValidateInstanceSettingsImportAsync`, future `ApplyInstanceSettingsImportAsync`
 
 対応資料:
 - `docs/design/instance-port-substrate-ssot.yaml`
@@ -46,6 +46,7 @@ credential-backed instance connection / instance function call を external_port
 
 対象ファイル名候補:
 - `db/topology_tables.sql` (future DDL only; current PR does not add instance tables)
+- `db/seed_empty.sql` (credential management projection extension / instance_settings category seed)
 - `backend/runtime/AbstractFunctionRuntime.cs` (future primitive adapter only)
 - `backend/runtime/*InstancePort*` (future runtime lane only)
 - `backend/repository/*InstancePort*` (future policy repository only)
@@ -57,18 +58,22 @@ credential-backed instance connection / instance function call を external_port
 
 NG軸:
 - external_port_substrate の access_port / response_port / hook_port へ DB/runtime instance connection を混入する
+- `instance` を external_port `credential_kind` に追加する
 - `call_postgres_function` の `^topology\.` / Topolactor DB connectionString 制限を汎用化する
-- frontend payload / seed payload / projection / log に DB connection string, endpoint 実値, raw SQL, table authority, function authority を入れる
+- frontend payload / seed payload / projection / log / JSON download に DB connection string, endpoint 実値, raw SQL, secret, runtime-only material, table authority, function authority を入れる
 - provider_kind / required_by_bundle / provider label 文字列で C# if/switch 分岐する
 - provider-specific runtime handler を第一候補にする
 - provider-specific schema / external instance semantic authority を Topolactor DB に作る
 - external instance を Topolactor runtime SSOT として扱う
 - admin contents / UI Builder / PackageWiringEditor / action wiring を未設計のまま runtime lane / primitive だけ実装して implemented 扱いにする
-- dedicated credential admin UI / standalone credential plane を作る
+- dedicated credential admin UI / standalone credential plane / dedicated credential route/panel を作る
 - 手書き admin UI / hardcoded targetRef / hardcoded action button で Gate 0 の seed/data-defined surface を迂回する
 
 受入条件:
 - [ ] instance port DDL / seed / repository / runtime lane が SSOT に従って追加されている。
+- [ ] 既存 credential management projection 系で `user_auth` / `external` / `instance_settings` を select / mode / category 切替できる。
+- [ ] `instance` は external_port `credential_kind` ではなく instance settings category として扱われる。
+- [ ] JSON template download/import は public-safe shape のみを扱い、secret・endpoint実値・connection string・raw SQL・runtime-only material・approval bypass authority を出さない。
 - [ ] `call_instance_postgres_function` は manifest-authorized function のみ実行し、function/schema allowlist / instance authority binding / timeout / result sanitize / fail-close を持つ。
 - [ ] `call_postgres_function` は Topolactor DB 内 `topology.*` 専用のまま保持されている。
 - [ ] credential は `reference_key` / DB guarded vault / runtime secret resolver 経由で runtime-only 解決され、plaintext connection string は SSOT / seed / UI / projection / log に出ない。
@@ -76,6 +81,7 @@ NG軸:
 - [ ] 特定 consumer 専用 handler / schema / semantic authority を追加していない。
 - [ ] admin contents / UI Builder / PackageWiringEditor / admin action candidate / targetRef / projection registration の接続方針が SSOT 上で定義され、Gate 0 の admin_authoring_completion_gate を満たす。
 - [ ] admin projection は credential reference / policy / authority binding を data-defined に扱い、secret / endpoint / connection string / raw SQL / function authority を projection しない。
+- [ ] UI Builder / Design Inspector は approved instance operation の `trigger` / `payloadFrom` / `outputProp` 割当だけを扱い、instance function definition / address edit / schema edit / raw SQL edit / credential edit を持たない。
 - [ ] `.agent/tests/check-instance-port-substrate.sh` と必要な runtime/backend/frontend/admin wiring tests が追加・通過している。
 
 ---
@@ -221,43 +227,3 @@ NG軸:
 - [x] export は必ず authorized read scope に基づく `export_job` として記録される。
 
 Implemented evidence update (2026-06-27): `create_export_job` is handled inside `AuthorizedCliReaderPortRuntime` only after ManifestDispatcher supplies a manifest id and the existing cli_reader_port auth/scope/capability checks pass. The runtime reads through `AuthorizedCliReaderQuery`, requires config-resolved port_id, idempotency key, and csv/json/pdf/zip format, rejects missing source_record_ids, generates csv/json/pdf/zip format-distinct packages with file-byte checksums, and persists export job ledger/manifest/checksum/generated_files plus one-time `runtime_event_log` evidence through `CliReaderPortRepository`. Npgsql/DDL guard coverage verifies config-derived `port_id`, `create_export_job` runtime-event CHECK support, export_job_id-based manifest URI, package-byte checksum semantics, idempotent retry via existing job/manifest/checksum/evidence, and existing-DB ALTER safeguards for generated_files/approval/status fields. Guard/unit tests cover manifest/checksum/source ids and detect import-candidate/approval scope creep. Parent bundle remains partial because import-candidate and surface-metadata subBundles remain out of scope.
-
-### SubBundle `cli-mcp-file-stream-port`
-
-**Status:** implemented
-**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml` / `docs/design/cli-mcp-port-implementation-ssot.yaml` / `docs/design/runtime-bundle-file-storage-ssot.yaml`
-**対応SSOTセクション名:** `file_stream` / `file_stream_contract` / `mcp_tool_contract.download_export_file` / `mcp_resource_contract` / `cli_mcp_file_stream_policy` / `audit_log_boundary`
-
-目的:
-- `download_export_file`
-- `topolactor://exports/{export_job_id}/file` / `topolactor://exports/{export_job_id}/manifest.json` resource 境界
-- authorized export job 検証（既存 export_job_id を入口にし、新規 export job を作らない）
-- generated_files / checksum / source_record_ids / manifest_jsonb の突き合わせ
-- checksum mismatch fail-close
-- success/failure の audit/runtime evidence
-
-対象ファイル名候補:
-- `backend/runtime/AuthorizedCliReaderPortRuntime.cs`
-- `backend/repository/CliReaderPortRepository.cs`
-- `backend/repository/NpgsqlCliReaderPortRepository.cs`
-- `backend/schema/CliReaderPortContracts.cs`
-- `db/topology_tables.sql` (file_stream_enabled scope field / download_export_file runtime-event CHECK only)
-- `db/seed_empty.sql` (file_stream_enabled projection only)
-
-NG軸:
-- export job 外 file stream / unauthenticated file stream
-- dispatch bypass / Core API 直叩き / dedicated handler / dedicated route
-- 新規 export job 作成 / ReadRowsAsync 再実行による export package 再生成
-- client payload の generated_files / checksum / source_record_ids / port_id を正本扱い
-- checksum 未検証 stream / audit/runtime evidence skip
-- credential / bucket / endpoint / actual signed URL / plaintext storage URL を response/log/projection に出す
-- import_structured_output / draft_operation / commit_candidate / approval execution / DB commit / delete
-
-受入条件:
-- [x] `download_export_file` は `/dispatch` → `ManifestDispatcher` → `cli_reader_port_runtime` を通り、未解決 dispatch / 未認証 / 未認可 / scope 違反を fail-close する。
-- [x] file stream は既存 `export_job_id` のみを入口にし、新規 export job を作らない。
-- [x] `export_jobs.generated_files` / `export_jobs.checksum` / `export_jobs.source_record_ids` / `export_manifests.manifest_jsonb` を突き合わせ、checksum/source mismatch を明示拒否する。
-- [x] success 時に `checksum_verified` / `download_completed` 相当の audit/runtime evidence を残す。
-- [x] response は MCP resource/tool response 境界に限定し、credential / bucket / endpoint / actual signed URL を含めない。
-
-Implemented evidence update (2026-06-27): `download_export_file` is handled inside `AuthorizedCliReaderPortRuntime` only after ManifestDispatcher supplies a manifest id and the shared cli_reader_port auth/role/user/capability checks pass; it then branches into `DownloadExportFileAsync`, which fail-closes on `file_stream_enabled=false` (`CLI_READER_FILE_STREAM_DISABLED`), missing export_job_id, an export job not owned by the dispatch-resolved port_id + authenticated user (`CLI_READER_FILE_JOB_UNAUTHORIZED`), non-completed status, and unapproved approval-gated jobs (approval is read-only; CLI/MCP never executes approval). `CliReaderPortRepository.LoadAuthorizedExportFileAsync` reads only the canonical `topology.export_jobs` ledger joined with `topology.export_manifests` (port_id + requested_by authorization in the WHERE clause), and `VerifyExportChecksum` cross-checks job checksum vs manifest checksum vs every generated file checksum and the source_record_ids set captured at export time, with checksum/source mismatch fail-closing (`CLI_READER_FILE_CHECKSUM_MISMATCH` / `CLI_READER_FILE_SOURCE_IDS_MISMATCH`). On checksum/source/manifest/artifact mismatch the runtime rejects the file explicitly and records `cli_mcp_file_checksum_mismatch_rejected` / `cli_mcp_file_source_ids_mismatch_rejected` / `cli_mcp_file_manifest_missing_rejected` / `cli_mcp_file_artifact_missing_rejected` `runtime_event_log` evidence before returning fail-close; on success the runtime records `CLI_READER_FILE_CHECKSUM_VERIFIED` + `CLI_READER_FILE_DOWNLOAD_COMPLETED` runtime events and `cli_mcp_file_checksum_verified` / `cli_mcp_file_download_completed` `runtime_event_log` evidence, then returns an MCP resource/tool projection (`topolactor://exports/{id}/file` + `manifest.json` URIs, source_record_ids, generated_files, checksum, manifest_jsonb) that excludes credential / bucket / endpoint / actual signed URL. The path never calls `CreateExportJobAsync` or re-reads rows. `.agent/tests/check-cli-mcp-file-stream-port.sh` plus runtime tests assert the dispatch/auth/scope fail-close paths, checksum/source mismatch refusal, evidence emission, and credential/bucket/endpoint/signed-url-free response. The sibling read-scope / export-job guards were updated to treat file streaming as a sibling subBundle concern (their positive implemented evidence is unchanged). Parent bundle remains partial because import-candidate and surface-metadata subBundles remain out of scope.
