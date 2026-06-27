@@ -63,6 +63,9 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         if (request.Payload.HasValue && ContainsForbiddenBypassOrSecretField(request.Payload.Value))
             return await FailAsync(seed, "CLI_READER_BYPASS_OR_SECRET_FIELD", "Direct SQL/DB/Core API bypass, client-supplied auth authority, and plaintext credential fields are forbidden.", ct);
 
+        if (request.Payload.HasValue && IsImportCandidateOperation(parsed.Operation!) && ContainsApprovalAuthorityField(request.Payload.Value))
+            return await FailAsync(seed, "CLI_READER_IMPORT_APPROVAL_STATUS_FORBIDDEN", "CLI/MCP import candidates cannot supply or update approval_status; approval is UI/Human only.", ct);
+
         if (string.IsNullOrWhiteSpace(parsed.UserId))
             return await FailAsync(seed, "CLI_READER_AUTH_REQUIRED", "Authenticated user id is required.", ct);
 
@@ -264,7 +267,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
             config.PortId, parsed.PortKey!, parsed.Operation!, candidateKind, parsed.UserId!, parsed.SourceTranscriptRef,
             parsed.RootUtterance, parsed.StructuredOutputPayload!.Value, parsed.Confidence,
             parsed.UnresolvedFields!.Value, previewDiff, parsed.AssignedBusinessObjectCandidate!.Value, parsed.DraftOperationId,
-            parsed.AssignedBusinessObject, parsed.AssignmentTargetScope, parsed.EvidenceRefs!.Value, parsed.ApprovalStatus ?? "not_requested",
+            parsed.AssignedBusinessObject, parsed.AssignmentTargetScope, parsed.EvidenceRefs!.Value, "not_requested",
             "candidate_created", parsed.IdempotencyKey!, _timeProvider.GetUtcNow()), ct);
         await AppendAsync(seed with { Status = "success", Code = result.WasCreated ? "CLI_READER_IMPORT_CANDIDATE_CREATED" : "CLI_READER_IMPORT_CANDIDATE_REPLAYED", ScopeSummary = $"candidate_id={result.CandidateId};candidate_kind={result.CandidateKind};commit=false;approval=false" }, ct);
         var response = new { parsed.Operation, result.CandidateId, result.CandidateKind, result.Status, result.EvidenceUri, result.PreviewDiff, result.UnresolvedFields, result.AssignedBusinessObjectCandidate, result.DraftOperationId, result.AssignedBusinessObject, result.AssignmentTargetScope, result.EvidenceRefs, result.Confidence, result.SourceTranscriptRef, result.RootUtterance, result.ApprovalStatus, ssotConfirmed = false, committed = false, approvalUpdated = false };
@@ -437,6 +440,26 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         return sanitized;
     }
 
+    private static bool ContainsApprovalAuthorityField(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(property.Name, "approval_status", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(property.Name, "approvalStatus", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (ContainsApprovalAuthorityField(property.Value)) return true;
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+                if (ContainsApprovalAuthorityField(item)) return true;
+        }
+        return false;
+    }
+
     private static bool ContainsForbiddenBypassOrSecretField(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Object)
@@ -494,7 +517,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         JsonElement? assignedBusinessObject = payload.TryGetProperty("assigned_business_object", out var abo) ? abo.Clone() : payload.TryGetProperty("assignedBusinessObject", out var abo2) ? abo2.Clone() : null;
         JsonElement? assignmentTargetScope = payload.TryGetProperty("assignment_target_scope", out var ats) ? ats.Clone() : payload.TryGetProperty("assignmentTargetScope", out var ats2) ? ats2.Clone() : null;
         JsonElement? evidenceRefs = payload.TryGetProperty("evidence_refs", out var er) ? er.Clone() : payload.TryGetProperty("evidenceRefs", out var er2) ? er2.Clone() : null;
-        var approvalStatus = ReadString(payload, "approval_status") ?? ReadString(payload, "approvalStatus") ?? "not_requested";
+        var approvalStatus = "not_requested";
         eventSeed = eventSeed with { PortKey = portKey ?? "unknown", Operation = operation ?? "unknown", UserId = userId, Roles = roles.ToArray(), RequestId = requestId, IdempotencyKey = idempotencyKey, ScopeSummary = $"table={table ?? "unknown"}" };
         if (string.IsNullOrWhiteSpace(portKey)) return new(eventSeed, null, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, new ValidationError("CLI_READER_PORT_REQUIRED", "port_key is required."));
         // File stream port is keyed by an existing export_job_id, not by a table/column read.

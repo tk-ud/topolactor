@@ -365,6 +365,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.Equal("reader-user", command.RequestedBy);
         Assert.Equal("transcript-1", command.SourceTranscriptRef);
         Assert.Equal("root utterance", command.RootUtterance);
+        Assert.Equal("not_requested", command.ApprovalStatus);
         Assert.Contains("needs_human", JsonSerializer.Serialize(command.UnresolvedFields));
         var serialized = JsonSerializer.Serialize(response.Emission!.Data!.Value);
         Assert.Contains("ssotConfirmed\":false", serialized);
@@ -506,6 +507,24 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.Empty(repo.ImportCandidates);
     }
 
+
+    [Theory]
+    [InlineData("approval_status")]
+    [InlineData("approvalStatus")]
+    public async Task Import_candidate_rejects_payload_approval_status_authority(string field)
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+        var extra = ImportCandidateExtra();
+        extra[field] = "approved";
+
+        var response = await runtime.ExecuteAsync(Request("create_commit_candidate", extra: extra), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_IMPORT_APPROVAL_STATUS_FORBIDDEN");
+        Assert.Empty(repo.ImportCandidates);
+    }
+
     [Fact]
     public async Task Import_candidate_rejects_forbidden_payload_fields_fail_close()
     {
@@ -541,7 +560,6 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         ["assigned_business_object"] = new Dictionary<string, object?> { ["business_object"] = "account" },
         ["assignment_target_scope"] = new Dictionary<string, object?> { ["table"] = "topology.entity" },
         ["evidence_refs"] = new[] { "topolactor://commit-candidates/evidence.json" },
-        ["approval_status"] = "not_requested",
         ["candidate_id"] = candidateId?.ToString()
     };
 

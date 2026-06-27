@@ -781,6 +781,26 @@ CREATE INDEX IF NOT EXISTS idx_record_file_attachment_artifact
 COMMENT ON TABLE topology.record_file_attachment_bindings IS
     'Binding surface that attaches arbitrary records to existing file_artifacts. '
     'This is not a standalone attachment artifact store and contains no credential, storage path, bucket, endpoint, or signed URL values.';
+
+CREATE TABLE IF NOT EXISTS topology.file_checksum_records (
+    checksum_record_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    export_job_id       UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
+    file_artifact_id    UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
+    algorithm           TEXT        NOT NULL DEFAULT 'sha256',
+    checksum_value      TEXT        NOT NULL,
+    verified_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    verification_status TEXT        NOT NULL DEFAULT 'pending'
+                                    CHECK (verification_status IN ('pending', 'verified', 'failed')),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_checksum_export_job
+    ON topology.file_checksum_records (export_job_id);
+
+COMMENT ON TABLE topology.file_checksum_records IS
+    'Checksum integrity records for file_storage_bundle. Required for all export_job file artifacts.';
+
 COMMENT ON TABLE topology.external_port_policy_steps IS 'Ordered operation_key steps. operation_key values are constrained to external-port SSOT allowed values.';
 
 -- ---------------------------------------------------------------------------
@@ -2079,7 +2099,7 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_import_candidates (
     idempotency_key TEXT NOT NULL UNIQUE,
     runtime_audit_ref UUID NULL REFERENCES topology.runtime_event_log (event_log_id),
     approval_required BOOLEAN NOT NULL DEFAULT FALSE,
-    approval_status TEXT NOT NULL DEFAULT 'not_requested' CHECK (approval_status IN ('not_requested','required','approved','rejected')),
+    approval_status TEXT NOT NULL DEFAULT 'not_requested' CHECK (approval_status IN ('not_requested','required')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT cli_reader_import_candidates_no_secret_payload CHECK ((structured_output_payload::text || unresolved_fields::text || preview_diff::text || assigned_business_object_candidate::text || COALESCE(assigned_business_object::text, '') || COALESCE(assignment_target_scope::text, '') || evidence_refs::text) !~* '(credential|secret|password|raw_sql|core_api_url|api_key|access_token|refresh_token|bucket|endpoint|signed_url)'),
@@ -2098,24 +2118,22 @@ ALTER TABLE topology.cli_reader_import_candidates
     ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
     ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'not_requested',
     ADD COLUMN IF NOT EXISTS runtime_audit_ref UUID NULL;
+DO $$
+DECLARE
+    constraint_name TEXT;
+BEGIN
+    FOR constraint_name IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'topology.cli_reader_import_candidates'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%approval_status%'
+    LOOP
+        EXECUTE format('ALTER TABLE topology.cli_reader_import_candidates DROP CONSTRAINT IF EXISTS %I', constraint_name);
+    END LOOP;
 
+    ALTER TABLE topology.cli_reader_import_candidates
+        ADD CONSTRAINT cli_reader_import_candidates_approval_status_check
+        CHECK (approval_status IN ('not_requested','required'));
+END $$;
 
-
-CREATE TABLE IF NOT EXISTS topology.file_checksum_records (
-    checksum_record_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    export_job_id       UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
-    file_artifact_id    UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
-    algorithm           TEXT        NOT NULL DEFAULT 'sha256',
-    checksum_value      TEXT        NOT NULL,
-    verified_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    verification_status TEXT        NOT NULL DEFAULT 'pending'
-                                    CHECK (verification_status IN ('pending', 'verified', 'failed')),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_file_checksum_export_job
-    ON topology.file_checksum_records (export_job_id);
-
-COMMENT ON TABLE topology.file_checksum_records IS
-    'Checksum integrity records for file_storage_bundle. Required for all export_job file artifacts.';
