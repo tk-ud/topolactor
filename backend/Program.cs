@@ -65,6 +65,8 @@ builder.Services.AddSingleton<AuthMasterRepository>(_ =>
     new NpgsqlAuthMasterRepository(connectionString));
 builder.Services.AddSingleton<AuthRepository>(_ =>
     new NpgsqlAuthRepository(connectionString));
+builder.Services.AddSingleton<CliReaderPortRepository>(_ =>
+    new NpgsqlCliReaderPortRepository(connectionString));
 builder.Services.AddSingleton<MockPresetRepository>(sp =>
     new NpgsqlMockPresetRepository(
         sp.GetRequiredService<ILogger<NpgsqlMockPresetRepository>>(),
@@ -207,6 +209,7 @@ builder.Services.AddSingleton<IExternalPortPolicyStepExecutor>(sp =>
         sp.GetRequiredService<ExternalPortPolicyStepExecutor>(),
         sp.GetRequiredService<AbstractFunctionExecutor>()));
 
+builder.Services.AddSingleton<AuthorizedCliReaderPortRuntime>();
 builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
     new ExternalPortDispatchRuntime(
         sp.GetRequiredService<ILogger<ExternalPortDispatchRuntime>>(),
@@ -285,6 +288,7 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         ["sse_projection_runtime"]      = sp.GetRequiredService<SseProjectionRuntime>(),
         ["registry_attractor_runtime"]  = sp.GetRequiredService<RegistryAttractorDispatchRuntime>(),
         ["external_port_runtime"]      = sp.GetRequiredService<ExternalPortDispatchRuntime>(),
+        ["cli_reader_port_runtime"]   = sp.GetRequiredService<AuthorizedCliReaderPortRuntime>(),
     };
     return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
@@ -414,10 +418,22 @@ app.MapPost("/dispatch", async (
         var errors = new[] { new ValidationError("AUTH_CAPABILITY_DENIED", "Token role insufficient for requested role.") };
         return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 403);
     }
+    var jwtSubject = jwtGuard.TryGetSubject(token);
+    if (string.IsNullOrWhiteSpace(jwtSubject))
+    {
+        var errors = new[] { new ValidationError("AUTH_TOKEN_SUB_MISSING", "Token is missing required sub claim.") };
+        return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 401);
+    }
+
     // Use body role for axes resolution (routing); fall back to JWT role when not set.
-    // Capability gate in ManifestDispatcher enforces runtime-level requirements against routing role.
+    // Auth/capability context is always server-side and overwrites any client Context keys.
     var routingRole = bodyRole ?? jwtRole;
-    var authoritativeRequest = request with { Role = routingRole };
+    var authoritativeRequest = DispatchAuthContext.ApplyJwtAuthority(
+        request,
+        jwtSubject,
+        jwtRole,
+        jwtGuard.TryGetCapabilities(token),
+        routingRole);
     var result = await dispatch.HandleAsync(authoritativeRequest, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });

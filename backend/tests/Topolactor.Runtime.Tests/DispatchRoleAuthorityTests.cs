@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Topolactor.Endpoint;
 using Topolactor.Guard;
 using Topolactor.Repository;
 using Topolactor.Schema;
@@ -151,6 +152,77 @@ public class DispatchRoleAuthorityTests
         Assert.True(response.Success);
     }
 
+
+    [Fact]
+    public void DispatchAuthContext_Overwrites_ClientSuppliedAuthAndCapabilityContext()
+    {
+        var forged = new EndpointRequestDto(
+            "read", "cli_reader_port", "reader", "read",
+            null, null,
+            new Dictionary<string, string>
+            {
+                ["authenticated_user_id"] = "forged-user",
+                ["authenticated_roles"] = "admin",
+                ["resolved_capabilities"] = "cli_reader_port.read",
+                ["safe_correlation_id"] = "corr-1"
+            },
+            "client",
+            Role: "admin");
+
+        var authoritative = DispatchAuthContext.ApplyJwtAuthority(
+            forged,
+            jwtSubject: "jwt-user",
+            jwtRole: "reader",
+            jwtCapabilities: [],
+            routingRole: "reader");
+
+        Assert.Equal("reader", authoritative.Role);
+        Assert.Equal("jwt-user", authoritative.Context!["authenticated_user_id"]);
+        Assert.Equal("reader", authoritative.Context!["authenticated_roles"]);
+        Assert.False(authoritative.Context!.ContainsKey("resolved_capabilities"));
+        Assert.Equal("corr-1", authoritative.Context!["safe_correlation_id"]);
+    }
+
+
+    [Fact]
+    public void JwtGuard_ReadsCapabilityClaims_ForDispatchServerContext()
+    {
+        const string secret = "dispatch-capability-claim-test";
+        using var env = new EnvScope("DEMO_JWT_SECRET", secret);
+        var token = BuildToken(secret, subject: "reader-user", role: "reader", capabilities: ["cli_reader_port.read"]);
+        var guard = new JwtGuard();
+
+        Assert.Empty(guard.Validate(token));
+        Assert.Equal(["cli_reader_port.read"], guard.TryGetCapabilities(token));
+    }
+
+    [Fact]
+    public async Task ForgedClientContext_DoesNotSatisfyCliReaderCapability_ButJwtResolvedContextDoes()
+    {
+        var repo = new InMemoryCliReaderPortRepository(CliReaderConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AuthorizedCliReaderPortRuntime>.Instance,
+            repo);
+        var forged = CliReaderRequest(new Dictionary<string, string>
+        {
+            ["authenticated_user_id"] = "reader-user",
+            ["authenticated_roles"] = "reader",
+            ["resolved_capabilities"] = "cli_reader_port.read"
+        });
+
+        var stripped = DispatchAuthContext.ApplyJwtAuthority(forged, "reader-user", "reader", [], "reader");
+        var denied = await runtime.ExecuteAsync(stripped, Guid.NewGuid());
+
+        Assert.False(denied.Success);
+        Assert.Contains(denied.Errors, e => e.Code == "CLI_READER_CAPABILITY_UNRESOLVED");
+
+        var authorized = DispatchAuthContext.ApplyJwtAuthority(forged, "reader-user", "reader", ["cli_reader_port.read"], "reader");
+        var allowed = await runtime.ExecuteAsync(authorized, Guid.NewGuid());
+
+        Assert.True(allowed.Success);
+        Assert.Contains(repo.Queries, q => q.UserId == "reader-user");
+    }
+
     private sealed class EnvScope : IDisposable
     {
         private readonly string _name;
@@ -164,11 +236,11 @@ public class DispatchRoleAuthorityTests
         public void Dispose() => Environment.SetEnvironmentVariable(_name, _prev);
     }
 
-    private static string BuildToken(string secret, string subject, string role)
+    private static string BuildToken(string secret, string subject, string role, string[]? capabilities = null)
     {
         var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
         var header = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new { alg = "HS256", typ = "JWT" }));
-        var payload = Base64UrlEncode(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { sub = subject, role, exp })));
+        var payload = Base64UrlEncode(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { sub = subject, role, capabilities = capabilities ?? [], exp })));
         var signingInput = Encoding.UTF8.GetBytes($"{header}.{payload}");
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
         var sig = Base64UrlEncode(hmac.ComputeHash(signingInput));
@@ -177,6 +249,58 @@ public class DispatchRoleAuthorityTests
 
     private static string Base64UrlEncode(byte[] data) =>
         Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+
+    private static EndpointRequestDto CliReaderRequest(Dictionary<string, string> context)
+    {
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            port_key = "cli_reader_port.default",
+            table = "topology.entity",
+            columns = new[] { "entity_id", "state_id" },
+            filters = new Dictionary<string, string> { ["state_id"] = "active" },
+            period = "today",
+            request_id = "req-1",
+            idempotency_key = "idem-1"
+        });
+        return new EndpointRequestDto("read", "cli_reader_port", "reader", "read", null, payload, context, "client", "reader");
+    }
+
+    private static CliReaderPortConfig CliReaderConfig() => new(
+        "cli_reader_port.default",
+        true,
+        DateTimeOffset.UtcNow.AddHours(1),
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader-user" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "topology.entity" },
+        new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["topology.entity"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "entity_id", "entity_jsonb", "state_id" }
+        },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "state_id" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "today" },
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["reader-user"] = "state_id=active" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cli_reader_port.read" },
+        true,
+        60);
+
+    private sealed class InMemoryCliReaderPortRepository(CliReaderPortConfig? config) : CliReaderPortRepository
+    {
+        public List<AuthorizedCliReaderQuery> Queries { get; } = [];
+        public List<CliReaderPortRuntimeEvent> Events { get; } = [];
+        public Task<CliReaderPortConfig?> LoadPortAsync(string portKey, CancellationToken ct = default) => Task.FromResult(config);
+        public Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
+        {
+            Queries.Add(query);
+            IReadOnlyList<Dictionary<string, object?>> rows = [query.Columns.ToDictionary(c => c, c => (object?)$"value:{c}")];
+            return Task.FromResult(rows);
+        }
+        public Task AppendRuntimeEventAsync(CliReaderPortRuntimeEvent runtimeEvent, CancellationToken ct = default)
+        {
+            Events.Add(runtimeEvent);
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class RoleFilteredManifestRepository(string expectedRole, ManifestRecord manifest)
         : ManifestRepository(Microsoft.Extensions.Logging.Abstractions.NullLogger<ManifestRepository>.Instance)

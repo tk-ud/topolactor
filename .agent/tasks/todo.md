@@ -143,7 +143,7 @@ read/export は比較的安全な read-side boundary。import-candidate は exte
 
 ### SubBundle `cli-mcp-read-scope-port`
 
-**Status:** not_started
+**Status:** partial
 **対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml`
 **対応SSOTセクション名:** `core_invariant.canonical_read_export_lane` / `api_responsibility` / `data_reader_responsibility` / `admin_ui_configuration`
 
@@ -177,7 +177,9 @@ NG軸:
 - [ ] Data Reader は dispatch resolved request のみ受け付け、未解決 request を fail-close する。
 - [ ] allowed tables / columns / filters / periods / roles / users / row scope が admin config 由来で解決される。
 - [ ] direct DB connection / direct SQL / Core API direct call / dedicated handler bypass の guard または tests がある。
-- [ ] audit_log / runtime_event_log 境界を skip しない。
+- [x] audit_log / runtime_event_log 境界を skip しない。
+
+Partial evidence update (2026-06-26): initial authorized read scope runtime substrate exists for read/search/aggregate/analyze/validate with fail-close auth/scope/capability checks, dispatch-resolved request guard, sanitized runtime event append, DDL/seed surfaces, and guard/unit tests. Remaining gap before implemented: full manifest/admin contents projection mapping evidence must be completed; do not treat this partial SubBundle as merge-ready solely from runtime/read-model coverage. Parent bundle remains not_started/partial by subBundle index and export/import/file-stream subBundles remain out of scope.
 
 out_of_scope:
 - export_job 生成 / file generation / manifest/checksum 生成
