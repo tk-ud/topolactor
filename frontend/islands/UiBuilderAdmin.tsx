@@ -565,6 +565,12 @@ export type ComponentEventWiring = {
    * SSOT: docs/design/external-port-substrate-ssot.yaml admin_setting_projection
    */
   portTargetRef?: string;
+  /**
+   * Authoring-only: approved instance operation targetRef (`instance-port:<portKind>:<instancePortId>:<operationBindingKey>`).
+   * Design Inspector may assign trigger/payloadFrom/outputProp only; it must not edit instance definitions, addresses, schemas, SQL, or credentials.
+   * SSOT: docs/design/instance-port-substrate-ssot.yaml admin_event_authoring_boundary
+   */
+  instanceTargetRef?: string;
 };
 
 export const COMPONENT_EVENT_TYPES = [
@@ -591,6 +597,7 @@ export const COMPONENT_ACTION_TYPES = [
   "toggleDialog",
   "setActiveKey",
   "dispatchExternalPort",
+  "dispatchInstanceOperation",
 ] as const;
 
 function bucketKindIcon(componentKind: string): string {
@@ -9225,6 +9232,7 @@ function PackageDesignPanel({
                             payloadFromEntries.map(([field, source]) => ({ field, source })),
                           );
                           const isPortDispatch = w.actionType === "dispatchExternalPort";
+                          const isInstanceDispatch = w.actionType === "dispatchInstanceOperation";
                           return (
                             <div key={i} class="rounded border border-blue-100 bg-white p-2 space-y-2">
                               <div class="grid gap-2 md:grid-cols-4">
@@ -9366,6 +9374,24 @@ function PackageDesignPanel({
                                       value={w.outputProp ?? ""}
                                       placeholder="例: result / value"
                                       onInput={(e) => updateInteraction(i, { outputProp: (e.target as HTMLInputElement).value || undefined })}
+                                    />
+                                  </label>
+                                </div>
+                              )}
+
+                              {isInstanceDispatch && (
+                                <div class="rounded border border-emerald-100 bg-emerald-50/40 p-2 space-y-2 text-[0.65rem]">
+                                  <div class="font-semibold text-emerald-900">Instance operation dispatch（オーサリング）</div>
+                                  <p class="text-[0.6rem] text-emerald-700">
+                                    approved instance operation の trigger / payloadFrom / outputProp 割当のみを保存します。function 定義・address・schema・raw SQL・credential 編集は扱いません。
+                                  </p>
+                                  <label class="block">
+                                    instanceTargetRef（approved instance operation）
+                                    <input
+                                      class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+                                      value={w.instanceTargetRef ?? ""}
+                                      placeholder="instance-port:<portKind>:<instancePortId>:<operationBindingKey>"
+                                      onInput={(e) => updateInteraction(i, { instanceTargetRef: (e.target as HTMLInputElement).value || undefined })}
                                     />
                                   </label>
                                 </div>

@@ -711,16 +711,24 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                     : null;
                 if (string.IsNullOrWhiteSpace(actionType))
                     return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED";
-                // dispatchExternalPort: authoring-only binding; uses portTargetRef instead of targetNodeId.
-                if (actionType == "dispatchExternalPort")
+                // dispatchExternalPort / dispatchInstanceOperation: authoring-only bindings; use targetRef fields instead of targetNodeId.
+                if (actionType is "dispatchExternalPort" or "dispatchInstanceOperation")
                 {
-                    var portTargetRef = interaction.TryGetProperty("portTargetRef", out var ptrEl) && ptrEl.ValueKind == JsonValueKind.String
-                        ? ptrEl.GetString()?.Trim()
+                    var targetRefProperty = actionType == "dispatchExternalPort" ? "portTargetRef" : "instanceTargetRef";
+                    var requiredCode = actionType == "dispatchExternalPort"
+                        ? "RUNTIME_INTERACTION_PORT_TARGET_REF_REQUIRED"
+                        : "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_REQUIRED";
+                    var invalidCode = actionType == "dispatchExternalPort"
+                        ? "RUNTIME_INTERACTION_PORT_TARGET_REF_INVALID"
+                        : "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID";
+                    var expectedPrefix = actionType == "dispatchExternalPort" ? "external-port:" : "instance-port:";
+                    var targetRef = interaction.TryGetProperty(targetRefProperty, out var targetRefEl) && targetRefEl.ValueKind == JsonValueKind.String
+                        ? targetRefEl.GetString()?.Trim()
                         : null;
-                    if (string.IsNullOrWhiteSpace(portTargetRef))
-                        return "RUNTIME_INTERACTION_PORT_TARGET_REF_REQUIRED";
-                    if (!portTargetRef!.StartsWith("external-port:", StringComparison.Ordinal))
-                        return $"RUNTIME_INTERACTION_PORT_TARGET_REF_INVALID:{portTargetRef}";
+                    if (string.IsNullOrWhiteSpace(targetRef))
+                        return requiredCode;
+                    if (!targetRef!.StartsWith(expectedPrefix, StringComparison.Ordinal))
+                        return $"{invalidCode}:{targetRef}";
                     if (interaction.TryGetProperty("payloadFrom", out var payloadFromEl))
                     {
                         if (payloadFromEl.ValueKind != JsonValueKind.Object)

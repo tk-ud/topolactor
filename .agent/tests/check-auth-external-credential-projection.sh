@@ -26,7 +26,7 @@ need "policy_step_editing\":\"template_selection_only" "$SEED"
 
 projection_block="$(sed -n '/auth\/external credential management topology projection/,/external_port_substrate generic policy seed/p' "$SEED")"
 for bad in "plaintext_secret" "access_token" "refresh_token" "encrypted_payload"; do
-  if printf '%s\n' "$projection_block" | rg -n --fixed-strings "$bad" | rg -v "secret_fields_forbidden" >/dev/null; then
+  if printf '%s\n' "$projection_block" | rg -n --fixed-strings "$bad" | rg -v "secret_fields_forbidden|forbidden_template_fields|forbidden_fields" >/dev/null; then
     fail "credential projection leaks forbidden field outside forbidden marker: $bad"
   fi
 done

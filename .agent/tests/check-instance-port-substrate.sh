@@ -79,6 +79,54 @@ require_term "instance_port_runtime" docs/design/external-port-substrate-ssot.ya
 require_term "product.instance_port_substrate" docs/system-roadmap.yaml "roadmap bundle"
 require_term "instance-port-substrate" .agent/tasks/todo.md "TODO bundle index"
 require_term "instance-port-substrate" .agent/tasks/instance-port-substrate-implementation-todo.md "future implementation TODO"
+require_term "credential-management-instance-settings-topology" .agent/tasks/instance-port-substrate-implementation-todo.md "credential management increment"
+require_term "Status: implemented_in_current_branch" .agent/tasks/instance-port-substrate-implementation-todo.md "credential management increment status"
+
+CREDENTIAL_SEED_BLOCK=$(sed -n '/auth\/external credential management topology projection/,/external_port_substrate canonical physical binding catalog/p' db/seed_empty.sql)
+for term in \
+  'auth.external.credential_management.projection' \
+  'credential_management_categories' \
+  'user_auth' \
+  'external' \
+  'instance_settings' \
+  'select_mode_category' \
+  'db_instance_port' \
+  'runtime_instance_port' \
+  'instance_connection_policy' \
+  'instance_operation_authority_binding' \
+  'instance_settings_json_template' \
+  'download_json_template' \
+  'import_json_template' \
+  'validate_preview_apply_required' \
+  'public_safe_shape_only' \
+  'dispatchInstanceOperation' \
+  'instanceTargetRef' \
+  'approved_instance_operation_only'; do
+  printf '%s\n' "$CREDENTIAL_SEED_BLOCK" | rg -n --fixed-strings "$term" >/dev/null || fail "credential projection extension missing term: $term"
+done
+
+for forbidden in '"credential_kind":"instance"' 'dedicated_credential_route":true' 'standalone_credential_management_plane' 'instance_function_definition' 'address_edit' 'schema_edit' 'raw_sql_edit' 'credential_edit'; do
+  case "$forbidden" in
+    'instance_function_definition'|'address_edit'|'schema_edit'|'raw_sql_edit'|'credential_edit')
+      printf '%s\n' "$CREDENTIAL_SEED_BLOCK" | rg -n --fixed-strings '"forbiddenEditors":["instance_function_definition","address_edit","schema_edit","raw_sql_edit","credential_edit"]' >/dev/null || fail "missing Design Inspector forbidden editor boundary"
+      ;;
+    *)
+      if printf '%s\n' "$CREDENTIAL_SEED_BLOCK" | rg -n --fixed-strings "$forbidden" >/dev/null; then
+        fail "forbidden credential projection marker found: $forbidden"
+      fi
+      ;;
+  esac
+done
+
+for leak in 'connection_string' 'endpoint_real_value' 'raw_sql' 'private_key' 'runtime_only_decrypted_payload' 'approval_bypass_authority'; do
+  printf '%s\n' "$CREDENTIAL_SEED_BLOCK" | rg -n --fixed-strings "$leak" | rg -n --fixed-strings 'forbidden' >/dev/null || fail "JSON template leak guard missing forbidden marker: $leak"
+done
+
+require_term '"dispatchInstanceOperation"' frontend/islands/UiBuilderAdmin.tsx "Design Inspector instance operation action vocabulary"
+require_term "instanceTargetRef" frontend/islands/UiBuilderAdmin.tsx "Design Inspector instance target ref field"
+require_term 'approved instance operation の trigger / payloadFrom / outputProp' frontend/islands/UiBuilderAdmin.tsx "Design Inspector scope copy"
+require_term 'actionType is "dispatchExternalPort" or "dispatchInstanceOperation"' backend/repository/NpgsqlUiTopologyRepository.cs "backend runtime interaction validation for instance dispatch"
+require_term '"instance-port:"' backend/repository/NpgsqlUiTopologyRepository.cs "backend instance targetRef prefix guard"
 require_term ".agent/tests/check-instance-port-substrate.sh" .github/workflows/unified-test-gate.yml "CI path trigger"
 require_term ".agent/tests/check-instance-port-substrate.sh" .agent/tests/check-unified-test-gate.sh "unified gate design check"
 require_term "docs/design/instance-port-substrate-ssot.yaml" .agent/docs/ssot-map.yaml "SSOT map entry"
