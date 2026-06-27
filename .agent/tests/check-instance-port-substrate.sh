@@ -128,7 +128,12 @@ require_term '"allowedAssignments":["trigger","payloadFrom","outputProp"]' db/se
 require_term 'list_instance_operation_authoring_candidates' frontend/islands/UiBuilderAdmin.tsx "Design Inspector approved candidate loading"
 require_term 'instanceOperationCandidates.map' frontend/islands/UiBuilderAdmin.tsx "Design Inspector select-only instance candidate options"
 require_term 'RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED' backend/repository/NpgsqlUiTopologyRepository.cs "backend unapproved instance targetRef rejection"
-require_term 'ListSeedDefinedApprovedInstanceOperationCandidates' backend/repository/NpgsqlUiTopologyRepository.cs "seed/data-defined approved instance operation source"
+require_term 'jsonb_path_query' backend/repository/NpgsqlUiTopologyRepository.cs "DB manifest-record approved instance operation source"
+require_term 'RUNTIME_INTERACTION_INSTANCE_CANDIDATE_SOURCE_UNAVAILABLE' backend/repository/NpgsqlUiTopologyRepository.cs "explicit candidate source failure"
+require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_CandidateSourceUnavailable_FailsClose' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "candidate source unavailable negative test"
+if rg -n 'ListSeedDefinedApprovedInstanceOperationCandidates|FindRepositoryFile\("db", "seed_empty.sql"\)|File\.ReadAllText\([^)]*seed_empty\.sql' backend/repository/NpgsqlUiTopologyRepository.cs; then
+  fail "instance operation candidates must come from DB/manifest records, not runtime seed file scanning"
+fi
 require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_ApprovedCandidate_Passes' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "approved instance operation positive test"
 require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_MissingInstanceTargetRef_FailsClose' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "missing instance targetRef negative test"
 require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_InvalidPrefix_FailsClose' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "invalid instance targetRef prefix negative test"

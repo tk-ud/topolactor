@@ -18,8 +18,7 @@ namespace Topolactor.Repository;
 public class NpgsqlUiTopologyRepository : UiTopologyRepository
 {
     private static readonly Regex CssTokenYamlRegex = new(@"^\s{4}([a-z0-9_.-]+):\s*$", RegexOptions.Compiled | RegexOptions.Multiline);
-    private static readonly Regex ApprovedInstanceTargetRefRegex = new(@"""instanceTargetRef""\s*:\s*""(?<target>instance-port:(?<portKind>[^:""]+):(?<instancePortId>[^:""]+):(?<operationBindingKey>[^:""]+))""", RegexOptions.Compiled);
-    private static readonly Regex OperationKeyRegex = new(@"""operation_key""\s*:\s*""(?<operationKey>[^""]+)""", RegexOptions.Compiled);
+    private static readonly Regex InstanceTargetRefPartsRegex = new(@"^instance-port:(?<portKind>[^:]+):(?<instancePortId>[^:]+):(?<operationBindingKey>[^:]+)$", RegexOptions.Compiled);
     private readonly ILogger<NpgsqlUiTopologyRepository> _npgsqlLogger;
 
     public NpgsqlUiTopologyRepository(
@@ -677,59 +676,51 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     }
 
 
-    internal static IReadOnlyList<InstanceOperationAuthoringCandidateDto> ListSeedDefinedApprovedInstanceOperationCandidates()
+    private static bool ContainsDispatchInstanceOperation(JsonElement nodes)
     {
-        var seedPath = FindRepositoryFile("db", "seed_empty.sql");
-        if (seedPath is null) return Array.Empty<InstanceOperationAuthoringCandidateDto>();
-        var seed = File.ReadAllText(seedPath);
-        var operationKey = OperationKeyRegex.Match(seed) is { Success: true } opMatch
-            ? opMatch.Groups["operationKey"].Value
-            : "operation-reference-only";
-        var candidates = new Dictionary<string, InstanceOperationAuthoringCandidateDto>(StringComparer.Ordinal);
-        foreach (Match match in ApprovedInstanceTargetRefRegex.Matches(seed))
+        foreach (var sourceNode in nodes.EnumerateArray())
         {
-            var targetRef = match.Groups["target"].Value;
-            if (!seed.Contains($"\"instanceTargetRef\":\"{targetRef}\"", StringComparison.Ordinal)) continue;
-            if (!seed.Contains("\"approval_status\":\"approved\"", StringComparison.Ordinal)) continue;
-            candidates[targetRef] = new InstanceOperationAuthoringCandidateDto(
-                match.Groups["portKind"].Value,
-                match.Groups["instancePortId"].Value,
-                match.Groups["operationBindingKey"].Value,
-                operationKey,
-                "approved",
-                targetRef);
+            if (sourceNode.ValueKind != JsonValueKind.Object) continue;
+            if (!sourceNode.TryGetProperty("runtimeInteractions", out var interactions) || interactions.ValueKind != JsonValueKind.Array) continue;
+            foreach (var interaction in interactions.EnumerateArray())
+            {
+                if (interaction.ValueKind == JsonValueKind.Object &&
+                    interaction.TryGetProperty("actionType", out var actionEl) &&
+                    actionEl.ValueKind == JsonValueKind.String &&
+                    actionEl.GetString()?.Trim() == "dispatchInstanceOperation")
+                    return true;
+            }
         }
-        return candidates.Values.OrderBy(c => c.PortKind, StringComparer.Ordinal)
-            .ThenBy(c => c.InstancePortId, StringComparer.Ordinal)
-            .ThenBy(c => c.OperationBindingKey, StringComparer.Ordinal)
-            .ToList();
+        return false;
     }
 
-    private static string? FindRepositoryFile(params string[] relativeParts)
+    private static string? ValidateRuntimeInteractions(
+        JsonElement nodes,
+        IReadOnlySet<string>? approvedInstanceTargetRefs = null,
+        string? instanceCandidateSourceError = null)
     {
-        var relativePath = Path.Combine(relativeParts);
-        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
-        while (dir is not null)
+        var requiresApprovedInstanceCandidates = false;
+        foreach (var sourceNode in nodes.EnumerateArray())
         {
-            var candidate = Path.Combine(dir.FullName, relativePath);
-            if (File.Exists(candidate)) return candidate;
-            dir = dir.Parent;
+            if (sourceNode.ValueKind != JsonValueKind.Object) continue;
+            if (!sourceNode.TryGetProperty("runtimeInteractions", out var interactions) || interactions.ValueKind != JsonValueKind.Array) continue;
+            foreach (var interaction in interactions.EnumerateArray())
+            {
+                if (interaction.ValueKind == JsonValueKind.Object &&
+                    interaction.TryGetProperty("actionType", out var actionEl) &&
+                    actionEl.ValueKind == JsonValueKind.String &&
+                    actionEl.GetString()?.Trim() == "dispatchInstanceOperation")
+                {
+                    requiresApprovedInstanceCandidates = true;
+                    break;
+                }
+            }
+            if (requiresApprovedInstanceCandidates) break;
         }
-        dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir.FullName, relativePath);
-            if (File.Exists(candidate)) return candidate;
-            dir = dir.Parent;
-        }
-        return null;
-    }
 
-    private static string? ValidateRuntimeInteractions(JsonElement nodes)
-    {
-        var approvedInstanceTargetRefs = ListSeedDefinedApprovedInstanceOperationCandidates()
-            .Select(c => c.TargetRef)
-            .ToHashSet(StringComparer.Ordinal);
+        if (requiresApprovedInstanceCandidates && !string.IsNullOrWhiteSpace(instanceCandidateSourceError))
+            return instanceCandidateSourceError;
+
         var componentKindsByNodeId = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (var node in nodes.EnumerateArray())
         {
@@ -782,7 +773,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                         return requiredCode;
                     if (!targetRef!.StartsWith(expectedPrefix, StringComparison.Ordinal))
                         return $"{invalidCode}:{targetRef}";
-                    if (actionType == "dispatchInstanceOperation" && !approvedInstanceTargetRefs.Contains(targetRef))
+                    if (actionType == "dispatchInstanceOperation" && (approvedInstanceTargetRefs is null || !approvedInstanceTargetRefs.Contains(targetRef)))
                         return $"RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED:{targetRef}";
                     if (interaction.TryGetProperty("payloadFrom", out var payloadFromEl))
                     {
@@ -937,47 +928,63 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
         => Task.FromResult(NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs));
 
-    public override Task<LayoutPatchResult> ValidateLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
+    public override async Task<LayoutPatchResult> ValidateLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
     {
         var normalized = NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs);
         try
         {
             if (ContainsDraftOnlyNode(normalized.TensorPatchJson))
-                return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED" });
+                return normalized with { Ok = false, Valid = false, Message = "DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED" };
         }
         catch (JsonException)
         {
-            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" });
+            return normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" };
         }
         var layoutClassVocab = LoadTopologyLayoutClassVocabulary();
         if (layoutClassVocab.Count == 0)
-            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TOPOLOGY_LAYOUT_CLASS_VOCABULARY_UNAVAILABLE" });
+            return normalized with { Ok = false, Valid = false, Message = "TOPOLOGY_LAYOUT_CLASS_VOCABULARY_UNAVAILABLE" };
         try
         {
             var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson);
             if (nodeError is not null)
-                return Task.FromResult(normalized with { Ok = false, Valid = false, Message = nodeError });
+                return normalized with { Ok = false, Valid = false, Message = nodeError };
             using (var runtimeInteractionDoc = JsonDocument.Parse(normalized.TensorPatchJson))
             {
                 if (runtimeInteractionDoc.RootElement.TryGetProperty("nodes", out var runtimeNodes) && runtimeNodes.ValueKind == JsonValueKind.Array)
                 {
-                    var runtimeInteractionError = ValidateRuntimeInteractions(runtimeNodes);
+                    IReadOnlySet<string>? approvedInstanceTargetRefs = null;
+                    string? instanceCandidateSourceError = null;
+                    if (ContainsDispatchInstanceOperation(runtimeNodes))
+                    {
+                        try
+                        {
+                            approvedInstanceTargetRefs = (await ListInstanceOperationAuthoringCandidatesAsync(ct))
+                                .Select(c => c.TargetRef)
+                                .ToHashSet(StringComparer.Ordinal);
+                        }
+                        catch (Exception ex)
+                        {
+                            _npgsqlLogger.LogError(ex, "ListInstanceOperationAuthoringCandidatesAsync failed during layout patch validation.");
+                            instanceCandidateSourceError = "RUNTIME_INTERACTION_INSTANCE_CANDIDATE_SOURCE_UNAVAILABLE";
+                        }
+                    }
+                    var runtimeInteractionError = ValidateRuntimeInteractions(runtimeNodes, approvedInstanceTargetRefs, instanceCandidateSourceError);
                     if (runtimeInteractionError is not null)
-                        return Task.FromResult(normalized with { Ok = false, Valid = false, Message = runtimeInteractionError });
+                        return normalized with { Ok = false, Valid = false, Message = runtimeInteractionError };
                 }
             }
 
             foreach (var classRef in ExtractLayoutClassRefs(normalized.TensorPatchJson))
             {
                 if (!layoutClassVocab.Contains(classRef))
-                    return Task.FromResult(normalized with { Ok = false, Valid = false, Message = $"TOPOLOGY_LAYOUT_CLASS_REF_UNKNOWN:{classRef}" });
+                    return normalized with { Ok = false, Valid = false, Message = $"TOPOLOGY_LAYOUT_CLASS_REF_UNKNOWN:{classRef}" };
             }
         }
         catch (JsonException)
         {
-            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" });
+            return normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" };
         }
-        return Task.FromResult(normalized with { Message = "Layout patch validation passed." });
+        return normalized with { Message = "Layout patch validation passed." };
     }
 
     public override async Task<ValidationError?> VerifyLayoutPatchPackageBindingAsync(
@@ -1418,9 +1425,48 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     }
 
 
-    public override Task<IReadOnlyList<InstanceOperationAuthoringCandidateDto>> ListInstanceOperationAuthoringCandidatesAsync(
+    public override async Task<IReadOnlyList<InstanceOperationAuthoringCandidateDto>> ListInstanceOperationAuthoringCandidatesAsync(
         CancellationToken ct = default)
-        => Task.FromResult(ListSeedDefinedApprovedInstanceOperationCandidates());
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT binding->>'instanceTargetRef' AS target_ref,
+                   COALESCE(binding->>'operation_binding_key', '') AS operation_binding_key,
+                   COALESCE(binding->>'operation_key', '') AS operation_key,
+                   COALESCE(binding->>'approval_status', '') AS approval_status
+            FROM hubs.topology_manifests tm
+            CROSS JOIN LATERAL jsonb_path_query(
+                tm.topology_jsonb,
+                '$[*] ? (@.type == "screen_data_shape").jsonTemplateShape.instance_operation_authority_binding[*]'
+            ) AS binding
+            WHERE tm.status = 'active'
+              AND tm.manifest_key = 'auth.external.credential_management.projection'
+              AND binding->>'approval_status' = 'approved'
+              AND binding->>'event_action_type' = 'dispatchInstanceOperation'
+              AND binding ? 'instanceTargetRef'
+            ORDER BY binding->>'instanceTargetRef' ASC
+            """;
+
+        var candidates = new List<InstanceOperationAuthoringCandidateDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var targetRef = reader.GetString(0);
+            var match = InstanceTargetRefPartsRegex.Match(targetRef);
+            if (!match.Success) continue;
+            candidates.Add(new InstanceOperationAuthoringCandidateDto(
+                match.Groups["portKind"].Value,
+                match.Groups["instancePortId"].Value,
+                string.IsNullOrWhiteSpace(reader.GetString(1)) ? match.Groups["operationBindingKey"].Value : reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                targetRef));
+        }
+        return candidates;
+    }
 
 
     public override async Task<IReadOnlyList<ExternalPortAuthoringCandidateDto>> ListExternalPortAuthoringCandidatesAsync(

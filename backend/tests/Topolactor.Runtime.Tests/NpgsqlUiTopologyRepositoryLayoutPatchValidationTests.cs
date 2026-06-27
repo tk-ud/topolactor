@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
+using Topolactor.Schema;
 using Xunit;
 
 namespace Topolactor.Runtime.Tests;
@@ -366,7 +367,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_ApprovedCandidate_Passes()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new InstanceCandidateTestRepository([ApprovedInstanceCandidate]);
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
@@ -390,7 +391,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_MissingInstanceTargetRef_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new InstanceCandidateTestRepository([ApprovedInstanceCandidate]);
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
@@ -409,7 +410,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_InvalidPrefix_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new InstanceCandidateTestRepository([ApprovedInstanceCandidate]);
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
@@ -428,7 +429,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_UnknownOperationBinding_FailsClose()
     {
-        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var repo = new InstanceCandidateTestRepository([ApprovedInstanceCandidate]);
         var tensorPatchJson = """
         { "nodes": [
           { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
@@ -442,6 +443,50 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.False(result.Ok);
         Assert.False(result.Valid);
         Assert.Equal("RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED:instance-port:db_instance_port:public-safe-placeholder:unapproved-operation", result.Message);
+    }
+
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_CandidateSourceUnavailable_FailsClose()
+    {
+        var repo = new InstanceCandidateSourceFailureRepository();
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchInstanceOperation", "instanceTargetRef": "instance-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_INSTANCE_CANDIDATE_SOURCE_UNAVAILABLE", result.Message);
+    }
+
+    private static readonly InstanceOperationAuthoringCandidateDto ApprovedInstanceCandidate = new(
+        "db_instance_port",
+        "public-safe-placeholder",
+        "approved-operation-placeholder",
+        "operation-reference-only",
+        "approved",
+        "instance-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder");
+
+    private sealed class InstanceCandidateTestRepository(IReadOnlyList<InstanceOperationAuthoringCandidateDto> candidates)
+        : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
+    {
+        public override Task<IReadOnlyList<InstanceOperationAuthoringCandidateDto>> ListInstanceOperationAuthoringCandidatesAsync(
+            CancellationToken ct = default)
+            => Task.FromResult(candidates);
+    }
+
+    private sealed class InstanceCandidateSourceFailureRepository()
+        : NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none")
+    {
+        public override Task<IReadOnlyList<InstanceOperationAuthoringCandidateDto>> ListInstanceOperationAuthoringCandidatesAsync(
+            CancellationToken ct = default)
+            => throw new InvalidOperationException("candidate source unavailable");
     }
 
 }
