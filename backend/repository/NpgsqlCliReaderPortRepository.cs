@@ -407,6 +407,27 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         await tx.CommitAsync(ct);
     }
 
+    public async Task RecordExportDownloadFailureEvidenceAsync(Guid exportJobId, string failureCode, DateTimeOffset observedAt, CancellationToken ct = default)
+    {
+        // Append-only file-storage failure evidence for reject_file_explicitly + record_to_runtime_event_log.
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await AppendRuntimeEventLogAsync(conn, tx, MapFileStreamFailureEventType(failureCode), exportJobId, observedAt, ct);
+
+        await tx.CommitAsync(ct);
+    }
+
+    private static string MapFileStreamFailureEventType(string failureCode) => failureCode switch
+    {
+        "CLI_READER_FILE_SOURCE_IDS_MISMATCH" => "cli_mcp_file_source_ids_mismatch_rejected",
+        "CLI_READER_FILE_MANIFEST_MISSING" => "cli_mcp_file_manifest_missing_rejected",
+        "CLI_READER_FILE_ARTIFACT_MISSING" => "cli_mcp_file_artifact_missing_rejected",
+        "CLI_READER_FILE_CHECKSUM_MISSING" => "cli_mcp_file_checksum_missing_rejected",
+        _ => "cli_mcp_file_checksum_mismatch_rejected"
+    };
+
     private static async Task AppendRuntimeEventLogAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string eventType, Guid exportJobId, DateTimeOffset observedAt, CancellationToken ct)
     {
         await using var cmd = conn.CreateCommand();
