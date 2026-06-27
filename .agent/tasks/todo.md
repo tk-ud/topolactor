@@ -12,7 +12,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `cli-mcp-dispatch-secured-port` | CLI/MCP read/export/import-candidate port 親境界 | not_started | 5 subBundles | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
+| `cli-mcp-dispatch-secured-port` | CLI/MCP read/export/import-candidate port 親境界 | partial | 5 subBundles | `product.external_port_substrate` / `product.core_runtime_route` | `docs/design/cli-model-context-protocols-port-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -114,7 +114,7 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `cli-mcp-dispatch-secured-port`
 
-**Status:** not_started
+**Status:** partial
 **Roadmap/status SSOT:** `product.external_port_substrate` / `product.core_runtime_route`
 **Primary SSOT:** `docs/design/cli-model-context-protocols-port-ssot.yaml`
 **Referenced SSOT:** `docs/design/external-port-substrate-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml` / `docs/system-roadmap.yaml`
@@ -143,7 +143,7 @@ read/export は比較的安全な read-side boundary。import-candidate は exte
 
 ### SubBundle `cli-mcp-read-scope-port`
 
-**Status:** partial
+**Status:** implemented
 **対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml`
 **対応SSOTセクション名:** `core_invariant.canonical_read_export_lane` / `api_responsibility` / `data_reader_responsibility` / `admin_ui_configuration`
 
@@ -173,13 +173,13 @@ NG軸:
 - credential/capability requirement を plaintext credential 渡しにする
 
 受入条件:
-- [ ] read/search/aggregate/analyze/validate は user auth/authz → scope resolution → credential/capability requirement resolution → ManifestDispatcher/runtime dispatch → Data Reader/authorized read model を必ず通る。
-- [ ] Data Reader は dispatch resolved request のみ受け付け、未解決 request を fail-close する。
-- [ ] allowed tables / columns / filters / periods / roles / users / row scope が admin config 由来で解決される。
-- [ ] direct DB connection / direct SQL / Core API direct call / dedicated handler bypass の guard または tests がある。
+- [x] read/search/aggregate/analyze/validate は user auth/authz → scope resolution → credential/capability requirement resolution → ManifestDispatcher/runtime dispatch → Data Reader/authorized read model を必ず通る。
+- [x] Data Reader は dispatch resolved request のみ受け付け、未解決 request を fail-close する。
+- [x] allowed tables / columns / filters / periods / roles / users / row scope が admin config 由来で解決される。
+- [x] direct DB connection / direct SQL / Core API direct call / dedicated handler bypass の guard または tests がある。
 - [x] audit_log / runtime_event_log 境界を skip しない。
 
-Partial evidence update (2026-06-26): initial authorized read scope runtime substrate exists for read/search/aggregate/analyze/validate with fail-close auth/scope/capability checks, dispatch-resolved request guard, sanitized runtime event append, DDL/seed surfaces, and guard/unit tests. Remaining gap before implemented: full manifest/admin contents projection mapping evidence must be completed; do not treat this partial SubBundle as merge-ready solely from runtime/read-model coverage. Parent bundle remains not_started/partial by subBundle index and export/import/file-stream subBundles remain out of scope.
+Implemented evidence update (2026-06-27): authorized read scope runtime substrate exists for read/search/aggregate/analyze/validate with fail-close auth/scope/capability checks, dispatch-resolved request guard, sanitized runtime event append, DDL/seed admin/runtime surfaces, Program.cs ManifestDispatcher handler registration, and guard/unit tests. PR515後main監査で検出された SSOT 内整合漏れは、runtime-orchestration SSOT の `backend_runtime_destinations` と `backend_dispatchable_kinds` の両方に `cli_reader_port_runtime` を揃え、再発検出 check を追加して解消済み。Parent bundle remains partial by subBundle index because export/import/file-stream subBundles remain out of scope.
 
 out_of_scope:
 - export_job 生成 / file generation / manifest/checksum 生成
