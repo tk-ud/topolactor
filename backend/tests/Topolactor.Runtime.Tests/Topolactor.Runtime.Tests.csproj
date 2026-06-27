@@ -33,5 +33,6 @@
     <Compile Include="../../repository/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../scheduler/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../endpoint/ComponentEventAppendEndpoint.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../endpoint/DispatchAuthContext.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

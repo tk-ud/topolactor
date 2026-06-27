@@ -79,6 +79,11 @@ public class JwtGuard
 
     public string? TryGetAudience(string? token) => TryGetStringClaim(token, "aud");
 
+    public IReadOnlyList<string> TryGetCapabilities(string? token) =>
+        TryGetStringArrayClaim(token, "capabilities").Count > 0
+            ? TryGetStringArrayClaim(token, "capabilities")
+            : TryGetStringArrayClaim(token, "capability");
+
     /// <summary>Validates token and required realm/audience/role for a surface.</summary>
     public IReadOnlyList<ValidationError> ValidateForContext(
         string? token,
@@ -128,6 +133,42 @@ public class JwtGuard
             return null;
         }
     }
+
+    private IReadOnlyList<string> TryGetStringArrayClaim(string? token, string claimName)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return [];
+
+        var parts = token.Split('.');
+        if (parts.Length != 3) return [];
+
+        try
+        {
+            var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (!doc.RootElement.TryGetProperty(claimName, out var prop)) return [];
+            if (prop.ValueKind == JsonValueKind.String)
+            {
+                var value = prop.GetString();
+                return string.IsNullOrWhiteSpace(value)
+                    ? []
+                    : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+            if (prop.ValueKind == JsonValueKind.Array)
+            {
+                return prop.EnumerateArray()
+                    .Where(item => item.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(item.GetString()))
+                    .Select(item => item.GetString()!)
+                    .ToArray();
+            }
+        }
+        catch
+        {
+            return [];
+        }
+
+        return [];
+    }
+
     private static string Base64UrlEncode(byte[] data) =>
         Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 

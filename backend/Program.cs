@@ -418,10 +418,22 @@ app.MapPost("/dispatch", async (
         var errors = new[] { new ValidationError("AUTH_CAPABILITY_DENIED", "Token role insufficient for requested role.") };
         return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 403);
     }
+    var jwtSubject = jwtGuard.TryGetSubject(token);
+    if (string.IsNullOrWhiteSpace(jwtSubject))
+    {
+        var errors = new[] { new ValidationError("AUTH_TOKEN_SUB_MISSING", "Token is missing required sub claim.") };
+        return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 401);
+    }
+
     // Use body role for axes resolution (routing); fall back to JWT role when not set.
-    // Capability gate in ManifestDispatcher enforces runtime-level requirements against routing role.
+    // Auth/capability context is always server-side and overwrites any client Context keys.
     var routingRole = bodyRole ?? jwtRole;
-    var authoritativeRequest = request with { Role = routingRole };
+    var authoritativeRequest = DispatchAuthContext.ApplyJwtAuthority(
+        request,
+        jwtSubject,
+        jwtRole,
+        jwtGuard.TryGetCapabilities(token),
+        routingRole);
     var result = await dispatch.HandleAsync(authoritativeRequest, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });
