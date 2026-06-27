@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
@@ -73,6 +75,93 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.Contains(repo.Events, e => e.Status == "fail_close" && e.Code == code);
     }
 
+
+    [Fact]
+    public async Task Create_export_job_records_manifest_checksum_source_ids_and_runtime_event()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(Request("create_export_job", extra: new Dictionary<string, object?> { ["export_format"] = "json" }), Guid.NewGuid());
+
+        Assert.True(response.Success);
+        Assert.Single(repo.ExportJobs);
+        var job = repo.ExportJobs.Single();
+        Assert.Equal("json", job.ExportFormat);
+        Assert.NotEmpty(job.SourceRecordIds);
+        Assert.NotEmpty(job.GeneratedFiles);
+        Assert.False(string.IsNullOrWhiteSpace(job.Checksum));
+        Assert.Equal($"topolactor://exports/{job.ExportJobId}/manifest.json", job.ManifestPath);
+        Assert.Contains(repo.Events, e => e.Status == "success" && e.Code == "CLI_READER_EXPORT_JOB_CREATED");
+    }
+
+
+    [Fact]
+    public async Task Create_export_job_uses_config_port_id_not_payload_port_id()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(Request("create_export_job", extra: new Dictionary<string, object?> { ["export_format"] = "json", ["port_id"] = "11111111-1111-1111-1111-111111111111" }), Guid.NewGuid());
+
+        Assert.True(response.Success);
+        Assert.Single(repo.ExportJobs);
+    }
+
+    [Fact]
+    public async Task Create_export_job_rejects_missing_source_record_ids()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig()) { ReturnRowsWithoutSourceIds = true };
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(Request("create_export_job", columns: ["entity_jsonb"], extra: new Dictionary<string, object?> { ["export_format"] = "csv" }), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_EXPORT_SOURCE_RECORD_IDS_REQUIRED");
+        Assert.Empty(repo.ExportJobs);
+    }
+
+
+    [Fact]
+    public void Npgsql_export_package_generation_is_format_distinct_and_checksummed_from_file_bytes()
+    {
+        var rows = new[] { new Dictionary<string, object?> { ["entity_id"] = "entity-1", ["state_id"] = "active" } };
+        var checksums = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var format in new[] { "csv", "json", "pdf", "zip" })
+        {
+            var command = new CreateCliReaderExportJobCommand(
+                new AuthorizedCliReaderQuery("cli_reader_port.default", "read", "reader-user", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader" }, "topology.entity", ["entity_id", "state_id"], new Dictionary<string, string>(), "today", "state_id=active", "req-1", $"idem-{format}"),
+                Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                format,
+                rows,
+                ["entity-1"],
+                $"idem-{format}",
+                DateTimeOffset.UnixEpoch);
+            var package = GenerateNpgsqlPackageForTest(command);
+
+            Assert.EndsWith($".{format}", package.FileName);
+            Assert.Equal(package.Checksum, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(package.Bytes)).ToLowerInvariant());
+            checksums.Add(package.Checksum);
+            if (format == "csv") Assert.Contains("entity_id,state_id", Encoding.UTF8.GetString(package.Bytes));
+            if (format == "json") Assert.StartsWith("[", Encoding.UTF8.GetString(package.Bytes).TrimStart());
+            if (format == "pdf") Assert.StartsWith("%PDF-1.4", Encoding.UTF8.GetString(package.Bytes));
+            if (format == "zip") Assert.Equal((byte)'P', package.Bytes[0]);
+        }
+
+        Assert.Equal(4, checksums.Count);
+    }
+
+    private static (string FileName, byte[] Bytes, string Checksum) GenerateNpgsqlPackageForTest(CreateCliReaderExportJobCommand command)
+    {
+        var method = typeof(NpgsqlCliReaderPortRepository).GetMethod("GenerateExportPackage", BindingFlags.NonPublic | BindingFlags.Static) ?? throw new InvalidOperationException("GenerateExportPackage missing");
+        var package = method.Invoke(null, [command]) ?? throw new InvalidOperationException("GenerateExportPackage returned null");
+        var type = package.GetType();
+        return (
+            (string)(type.GetProperty("FileName")?.GetValue(package) ?? throw new InvalidOperationException("FileName missing")),
+            (byte[])(type.GetProperty("Bytes")?.GetValue(package) ?? throw new InvalidOperationException("Bytes missing")),
+            (string)(type.GetProperty("Checksum")?.GetValue(package) ?? throw new InvalidOperationException("Checksum missing")));
+    }
+
     [Fact]
     public async Task Rejects_non_dispatch_resolved_request()
     {
@@ -118,6 +207,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
 
     private static CliReaderPortConfig DefaultConfig() => new(
         "cli_reader_port.default",
+        Guid.Parse("22222222-2222-2222-2222-222222222222"),
         true,
         DateTimeOffset.UtcNow.AddHours(1),
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader" },
@@ -161,6 +251,8 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
     {
         public List<AuthorizedCliReaderQuery> Queries { get; } = [];
         public List<CliReaderPortRuntimeEvent> Events { get; } = [];
+        public List<CliReaderExportJobResult> ExportJobs { get; } = [];
+        public bool ReturnRowsWithoutSourceIds { get; init; }
         public Task<CliReaderPortConfig?> LoadPortAsync(string portKey, CancellationToken ct = default) => Task.FromResult(config);
         public Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
         {
@@ -170,7 +262,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
                 "aggregate" => [new Dictionary<string, object?> { ["count"] = 1L }],
                 "analyze" => [new Dictionary<string, object?> { ["row_count"] = 1L }],
                 "validate" => [new Dictionary<string, object?> { ["valid"] = 1 }],
-                _ => [query.Columns.ToDictionary(c => c, c => (object?)$"value:{c}")]
+                _ => [ReturnRowsWithoutSourceIds ? new Dictionary<string, object?> { ["entity_jsonb"] = "{}" } : query.Columns.ToDictionary(c => c, c => (object?)(c.EndsWith("_id", StringComparison.OrdinalIgnoreCase) ? "entity-1" : $"value:{c}"))]
             };
             return Task.FromResult(rows);
         }
@@ -178,6 +270,26 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         {
             Events.Add(runtimeEvent);
             return Task.CompletedTask;
+        }
+
+        public Task<CliReaderExportJobResult> CreateExportJobAsync(CreateCliReaderExportJobCommand command, CancellationToken ct = default)
+        {
+            var exportJobId = Guid.NewGuid();
+            var generatedFiles = new[] { new CliReaderGeneratedFile($"export.{command.ExportFormat}", command.ExportFormat, 2, "checksum-file", $"cli-reader-export-job://{exportJobId}/export.{command.ExportFormat}") };
+            var manifest = JsonSerializer.SerializeToElement(new
+            {
+                manifest_version = "1.0",
+                export_job_id = exportJobId,
+                generated_by = command.Query.UserId,
+                source_tables = new[] { command.Query.Table },
+                source_record_ids = command.SourceRecordIds,
+                files = generatedFiles,
+                checksum = "checksum-manifest"
+            });
+            Assert.Equal(Guid.Parse("22222222-2222-2222-2222-222222222222"), command.PortId);
+            var result = new CliReaderExportJobResult(exportJobId, "completed", command.ExportFormat, command.SourceRecordIds, generatedFiles, "checksum-manifest", $"topolactor://exports/{exportJobId}/manifest.json", manifest);
+            ExportJobs.Add(result);
+            return Task.FromResult(result);
         }
     }
 }

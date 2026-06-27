@@ -89,7 +89,7 @@ check "$TEST" "Rejects_direct_sql_db_core_api_and_plaintext_credential_bypass_fi
 check "$TEST" "Success_operations_require_dispatch_and_authorized_scope"
 check "$TEST" "Rejects_client_supplied_user_role_and_capability_authority_in_payload"
 check "backend/tests/Topolactor.Runtime.Tests/DispatchRoleAuthorityTests.cs" "ForgedClientContext_DoesNotSatisfyCliReaderCapability_ButJwtResolvedContextDoes"
-absent "$RUNTIME" "CreateExportJob|FileStream|import_structured_output|create_commit_candidate|create_draft_operation"
+absent "$RUNTIME" "FileStream|import_structured_output|create_commit_candidate|create_draft_operation"
 absent "$NPGSQL" "authorized:|placeholder"
 
 echo "cli-mcp read scope port guard passed"

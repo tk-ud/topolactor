@@ -2931,11 +2931,11 @@ ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
 
 -- CLI/MCP reader port seed-defined admin/runtime surface.
 INSERT INTO topology.cli_reader_ports (
-    port_key, enabled, expires_at, allowed_roles, allowed_users, allowed_tables,
+    port_key, port_id, enabled, expires_at, allowed_roles, allowed_users, allowed_tables,
     allowed_columns, allowed_filters, allowed_periods, row_scope, required_capabilities,
     rate_limit_per_minute, audit_required, config_json
 ) VALUES (
-    'cli_reader_port.default', true, NULL,
+    'cli_reader_port.default', '00000000-0000-0000-0000-00000000c100', true, NULL,
     '["admin","reader"]'::jsonb,
     '[]'::jsonb,
     '["topology.entity"]'::jsonb,
@@ -2948,6 +2948,7 @@ INSERT INTO topology.cli_reader_ports (
     true,
     '{"admin_projection":"contents","surface":"cli_reader_port","secret_projection":"denied","dispatch_runtime_destination":"cli_reader_port_runtime"}'::jsonb
 ) ON CONFLICT (port_key) DO UPDATE SET
+    port_id = EXCLUDED.port_id,
     enabled = EXCLUDED.enabled,
     allowed_roles = EXCLUDED.allowed_roles,
     allowed_tables = EXCLUDED.allowed_tables,

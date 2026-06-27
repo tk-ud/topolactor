@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Npgsql;
 using Topolactor.Schema;
@@ -12,7 +15,7 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
     public async Task<CliReaderPortConfig?> LoadPortAsync(string portKey, CancellationToken ct = default)
     {
         const string sql = """
-            SELECT port_key, enabled, expires_at, allowed_roles, allowed_users, allowed_tables, allowed_columns,
+            SELECT port_key, port_id, enabled, expires_at, allowed_roles, allowed_users, allowed_tables, allowed_columns,
                    allowed_filters, allowed_periods, row_scope, required_capabilities, audit_required, rate_limit_per_minute
             FROM topology.cli_reader_ports
             WHERE port_key = @port_key
@@ -23,21 +26,22 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         cmd.Parameters.AddWithValue("port_key", portKey);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
-        var allowedColumnsJson = reader.GetString(6);
+        var allowedColumnsJson = reader.GetString(7);
         return new CliReaderPortConfig(
             reader.GetString(0),
-            reader.GetBoolean(1),
-            reader.IsDBNull(2) ? null : reader.GetFieldValue<DateTimeOffset>(2),
-            ReadSet(reader.GetString(3)),
+            reader.GetGuid(1),
+            reader.GetBoolean(2),
+            reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3),
             ReadSet(reader.GetString(4)),
             ReadSet(reader.GetString(5)),
+            ReadSet(reader.GetString(6)),
             ReadColumns(allowedColumnsJson),
-            ReadSet(reader.GetString(7)),
             ReadSet(reader.GetString(8)),
-            ReadMap(reader.GetString(9)),
-            ReadSet(reader.GetString(10)),
-            reader.GetBoolean(11),
-            reader.IsDBNull(12) ? null : reader.GetInt32(12));
+            ReadSet(reader.GetString(9)),
+            ReadMap(reader.GetString(10)),
+            ReadSet(reader.GetString(11)),
+            reader.GetBoolean(12),
+            reader.IsDBNull(13) ? null : reader.GetInt32(13));
     }
 
     public async Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
@@ -95,6 +99,207 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         }
         return rows;
     }
+
+
+    public async Task<CliReaderExportJobResult> CreateExportJobAsync(CreateCliReaderExportJobCommand command, CancellationToken ct = default)
+    {
+        var package = GenerateExportPackage(command);
+        IReadOnlyList<CliReaderGeneratedFile> generatedFiles = [];
+        var sourceRecordIdsJson = JsonSerializer.Serialize(command.SourceRecordIds);
+        var targetScope = $"table={command.Query.Table};columns={string.Join(',', command.Query.Columns)};filters={string.Join(',', command.Query.Filters.Keys)};period={command.Query.Period ?? "none"};row_scope=resolved";
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = """
+            WITH inserted AS (
+                INSERT INTO topology.export_jobs
+                    (export_job_id, port_id, port_kind, requested_by, requested_at, period, target_scope,
+                     export_format, status, source_record_ids, generated_files, idempotency_key,
+                     checksum, manifest_path, completed_at, approval_required, approval_status)
+                VALUES
+                    (gen_random_uuid(), @port_id, 'access_port', @requested_by, @requested_at, @period, @target_scope,
+                     @export_format, 'completed', @source_record_ids::jsonb, '[]'::jsonb, @idempotency_key,
+                     @checksum, '', @completed_at, false, 'not_required')
+                ON CONFLICT (idempotency_key) DO NOTHING
+                RETURNING export_job_id, status, export_format, source_record_ids, generated_files, checksum, manifest_path, true AS inserted
+            )
+            SELECT export_job_id, status, export_format, source_record_ids, generated_files, checksum, manifest_path, inserted FROM inserted
+            UNION ALL
+            SELECT export_job_id, status, export_format, source_record_ids, generated_files, checksum, manifest_path, false AS inserted
+            FROM topology.export_jobs
+            WHERE idempotency_key = @idempotency_key
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("port_id", command.PortId);
+        cmd.Parameters.AddWithValue("requested_by", command.Query.UserId);
+        cmd.Parameters.AddWithValue("requested_at", command.RequestedAt);
+        cmd.Parameters.AddWithValue("period", command.Query.Period is not null ? (object)command.Query.Period : DBNull.Value);
+        cmd.Parameters.AddWithValue("target_scope", targetScope);
+        cmd.Parameters.AddWithValue("export_format", command.ExportFormat);
+        cmd.Parameters.AddWithValue("source_record_ids", sourceRecordIdsJson);
+        cmd.Parameters.AddWithValue("idempotency_key", command.IdempotencyKey);
+        cmd.Parameters.AddWithValue("checksum", package.Checksum);
+        cmd.Parameters.AddWithValue("completed_at", command.RequestedAt);
+
+        Guid exportJobId;
+        string status;
+        string exportFormatDb;
+        string sourceIdsDb;
+        string filesDb;
+        string checksumDb;
+        string manifestPathDb;
+        bool inserted;
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            await reader.ReadAsync(ct);
+            exportJobId = reader.GetGuid(0);
+            status = reader.GetString(1);
+            exportFormatDb = reader.GetString(2);
+            sourceIdsDb = reader.GetString(3);
+            filesDb = reader.GetString(4);
+            checksumDb = reader.GetString(5);
+            manifestPathDb = reader.GetString(6);
+            inserted = reader.GetBoolean(7);
+        }
+
+        if (inserted)
+        {
+            manifestPathDb = $"topolactor://exports/{exportJobId}/manifest.json";
+            generatedFiles = [new CliReaderGeneratedFile(package.FileName, command.ExportFormat, package.Bytes.LongLength, package.Checksum, $"cli-reader-export-job://{exportJobId}/{package.FileName}")];
+            filesDb = JsonSerializer.Serialize(generatedFiles);
+
+            await using var updateJobCmd = conn.CreateCommand();
+            updateJobCmd.Transaction = tx;
+            updateJobCmd.CommandText = "UPDATE topology.export_jobs SET generated_files = @generated_files::jsonb, manifest_path = @manifest_path, updated_at = now() WHERE export_job_id = @export_job_id";
+            updateJobCmd.Parameters.AddWithValue("generated_files", filesDb);
+            updateJobCmd.Parameters.AddWithValue("manifest_path", manifestPathDb);
+            updateJobCmd.Parameters.AddWithValue("export_job_id", exportJobId);
+            await updateJobCmd.ExecuteNonQueryAsync(ct);
+
+            var finalManifest = new
+            {
+                manifest_version = "1.0",
+                export_job_id = exportJobId,
+                generated_at = command.RequestedAt,
+                generated_by = command.Query.UserId,
+                period = command.Query.Period,
+                source_tables = new[] { command.Query.Table },
+                source_record_ids = command.SourceRecordIds,
+                files = generatedFiles,
+                checksum = checksumDb
+            };
+            var finalManifestJson = JsonSerializer.Serialize(finalManifest);
+            await using var manifestCmd = conn.CreateCommand();
+            manifestCmd.Transaction = tx;
+            manifestCmd.CommandText = """
+                INSERT INTO topology.export_manifests
+                    (export_job_id, manifest_version, generated_at, generated_by, period, export_format,
+                     checksum, file_artifact_ids, manifest_jsonb)
+                VALUES
+                    (@export_job_id, '1.0', @generated_at, @generated_by, @period, @export_format,
+                     @checksum, '[]'::jsonb, @manifest_jsonb::jsonb)
+                """;
+            manifestCmd.Parameters.AddWithValue("export_job_id", exportJobId);
+            manifestCmd.Parameters.AddWithValue("generated_at", command.RequestedAt);
+            manifestCmd.Parameters.AddWithValue("generated_by", command.Query.UserId);
+            manifestCmd.Parameters.AddWithValue("period", command.Query.Period is not null ? (object)command.Query.Period : DBNull.Value);
+            manifestCmd.Parameters.AddWithValue("export_format", command.ExportFormat);
+            manifestCmd.Parameters.AddWithValue("checksum", checksumDb);
+            manifestCmd.Parameters.AddWithValue("manifest_jsonb", finalManifestJson);
+            await manifestCmd.ExecuteNonQueryAsync(ct);
+
+            await using var eventCmd = conn.CreateCommand();
+            eventCmd.Transaction = tx;
+            eventCmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES ('cli_mcp_export_job_created', @entity_id, 'cli_mcp_export_job_port', @logged_at)";
+            eventCmd.Parameters.AddWithValue("entity_id", exportJobId.ToString());
+            eventCmd.Parameters.AddWithValue("logged_at", command.RequestedAt);
+            await eventCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        string manifestJsonDb;
+        await using (var loadManifestCmd = conn.CreateCommand())
+        {
+            loadManifestCmd.Transaction = tx;
+            loadManifestCmd.CommandText = "SELECT manifest_jsonb FROM topology.export_manifests WHERE export_job_id = @export_job_id";
+            loadManifestCmd.Parameters.AddWithValue("export_job_id", exportJobId);
+            manifestJsonDb = (string)(await loadManifestCmd.ExecuteScalarAsync(ct) ?? "{}");
+        }
+
+        await tx.CommitAsync(ct);
+
+        return new CliReaderExportJobResult(
+            exportJobId,
+            status,
+            exportFormatDb,
+            JsonSerializer.Deserialize<string[]>(sourceIdsDb) ?? [],
+            JsonSerializer.Deserialize<CliReaderGeneratedFile[]>(filesDb) ?? [],
+            checksumDb,
+            manifestPathDb,
+            JsonSerializer.Deserialize<JsonElement>(manifestJsonDb));
+    }
+
+
+    private static GeneratedExportPackage GenerateExportPackage(CreateCliReaderExportJobCommand command)
+    {
+        var format = command.ExportFormat.ToLowerInvariant();
+        var fileName = $"cli-reader-export-{command.IdempotencyKey}.{format}";
+        var bytes = format switch
+        {
+            "csv" => ToCsvBytes(command.Rows),
+            "json" => JsonSerializer.SerializeToUtf8Bytes(command.Rows, new JsonSerializerOptions { WriteIndented = true }),
+            "pdf" => ToPdfBytes(command.Rows),
+            "zip" => ToZipBytes(command.Rows),
+            _ => throw new InvalidOperationException("CLI_READER_EXPORT_FORMAT_DENIED")
+        };
+        var checksum = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        return new GeneratedExportPackage(fileName, bytes, checksum);
+    }
+
+    private static byte[] ToCsvBytes(IReadOnlyList<Dictionary<string, object?>> rows)
+    {
+        var columns = rows.SelectMany(row => row.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var builder = new StringBuilder();
+        builder.AppendLine(string.Join(',', columns.Select(EscapeCsv)));
+        foreach (var row in rows)
+            builder.AppendLine(string.Join(',', columns.Select(column => EscapeCsv(row.TryGetValue(column, out var value) ? Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) : string.Empty))));
+        return Encoding.UTF8.GetBytes(builder.ToString());
+    }
+
+    private static string EscapeCsv(string? value)
+    {
+        var text = value ?? string.Empty;
+        return text.Contains(',') || text.Contains('"') || text.Contains('\n') || text.Contains('\r')
+            ? $"\"{text.Replace("\"", "\"\"")}\""
+            : text;
+    }
+
+    private static byte[] ToPdfBytes(IReadOnlyList<Dictionary<string, object?>> rows)
+    {
+        // Minimal deterministic PDF-like package. The file-stream bundle may replace this
+        // with rich rendering later, but create_export_job must produce format-distinct bytes now.
+        var escapedText = JsonSerializer.Serialize(rows).Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
+        var pdf = $"%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >> endobj\n4 0 obj << /Length {escapedText.Length + 36} >> stream\nBT /F1 10 Tf 36 756 Td ({escapedText}) Tj ET\nendstream endobj\n%%EOF\n";
+        return Encoding.UTF8.GetBytes(pdf);
+    }
+
+    private static byte[] ToZipBytes(IReadOnlyList<Dictionary<string, object?>> rows)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = archive.CreateEntry("export.json");
+            using var entryStream = entry.Open();
+            var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(rows, new JsonSerializerOptions { WriteIndented = true });
+            entryStream.Write(jsonBytes, 0, jsonBytes.Length);
+        }
+        return stream.ToArray();
+    }
+
+    private sealed record GeneratedExportPackage(string FileName, byte[] Bytes, string Checksum);
 
     public async Task AppendRuntimeEventAsync(CliReaderPortRuntimeEvent runtimeEvent, CancellationToken ct = default)
     {

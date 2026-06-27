@@ -268,6 +268,7 @@ public class DispatchRoleAuthorityTests
 
     private static CliReaderPortConfig CliReaderConfig() => new(
         "cli_reader_port.default",
+        Guid.Parse("22222222-2222-2222-2222-222222222222"),
         true,
         DateTimeOffset.UtcNow.AddHours(1),
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader" },
@@ -300,6 +301,9 @@ public class DispatchRoleAuthorityTests
             Events.Add(runtimeEvent);
             return Task.CompletedTask;
         }
+
+        public Task<CliReaderExportJobResult> CreateExportJobAsync(CreateCliReaderExportJobCommand command, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class RoleFilteredManifestRepository(string expectedRole, ManifestRecord manifest)

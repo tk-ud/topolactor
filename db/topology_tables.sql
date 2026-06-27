@@ -634,14 +634,18 @@ CREATE TABLE IF NOT EXISTS topology.export_jobs (
     target_scope      TEXT,
     export_format     TEXT,
     status            TEXT        NOT NULL DEFAULT 'initiated'
-                                  CHECK (status IN ('initiated', 'in_progress', 'completed', 'failed')),
+                                  CHECK (status IN ('pending', 'processing', 'awaiting_approval', 'approved', 'rejected', 'completed', 'failed', 'initiated', 'in_progress')),
     source_record_ids JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    generated_files   JSONB       NOT NULL DEFAULT '[]'::jsonb,
     idempotency_key   TEXT        NOT NULL UNIQUE,
     checksum          TEXT,
     manifest_path     TEXT,
     completed_at      TIMESTAMPTZ,
     failed_at         TIMESTAMPTZ,
     failure_code      TEXT,
+    approval_required BOOLEAN     NOT NULL DEFAULT false,
+    approval_status   TEXT        NOT NULL DEFAULT 'not_required'
+                                  CHECK (approval_status IN ('not_required', 'pending', 'approved', 'rejected')),
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -654,9 +658,41 @@ CREATE INDEX IF NOT EXISTS idx_export_jobs_requested_at
     ON topology.export_jobs (requested_at DESC);
 
 COMMENT ON TABLE topology.export_jobs IS
-    'File storage bundle export job tracking. storage_ref and authorization_key are '
+    'File storage bundle and CLI/MCP export job tracking; CLI/MCP create_export_job requires authorized read scope, source_record_ids, generated_files, checksum, manifest_path, and runtime_event_log evidence.  storage_ref and authorization_key are '
     'env-var reference identifiers only; plaintext credentials, bucket names, and '
     'actual signed URLs are prohibited.';
+
+-- Existing-database migration guard for CLI/MCP export_job fields added after the
+-- original file_storage_bundle export_jobs table was introduced. CREATE TABLE IF
+-- NOT EXISTS does not alter already-created databases, so keep these ALTERs here.
+ALTER TABLE topology.export_jobs
+    ADD COLUMN IF NOT EXISTS generated_files JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE topology.export_jobs
+    ADD COLUMN IF NOT EXISTS approval_required BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE topology.export_jobs
+    ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'not_required';
+
+DO $$
+DECLARE
+    constraint_name TEXT;
+BEGIN
+    FOR constraint_name IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'topology.export_jobs'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%status%'
+    LOOP
+        EXECUTE format('ALTER TABLE topology.export_jobs DROP CONSTRAINT IF EXISTS %I', constraint_name);
+    END LOOP;
+
+    ALTER TABLE topology.export_jobs
+        ADD CONSTRAINT export_jobs_status_check
+        CHECK (status IN ('pending', 'processing', 'awaiting_approval', 'approved', 'rejected', 'completed', 'failed', 'initiated', 'in_progress'));
+    ALTER TABLE topology.export_jobs
+        ADD CONSTRAINT export_jobs_approval_status_check
+        CHECK (approval_status IN ('not_required', 'pending', 'approved', 'rejected'));
+END $$;
 
 CREATE TABLE IF NOT EXISTS topology.file_artifacts (
     file_artifact_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1975,6 +2011,7 @@ COMMENT ON FUNCTION topology.epce_load_projection IS
 -- CLI/MCP authorized reader port substrate (read-scope only; no export/import/file stream).
 CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
     port_key TEXT PRIMARY KEY,
+    port_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
     expires_at TIMESTAMPTZ NULL,
     allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -1996,7 +2033,7 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
 CREATE TABLE IF NOT EXISTS topology.cli_reader_port_runtime_events (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     port_key TEXT NOT NULL REFERENCES topology.cli_reader_ports(port_key),
-    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate')),
+    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job')),
     user_id TEXT NULL,
     roles JSONB NOT NULL DEFAULT '[]'::jsonb,
     status TEXT NOT NULL CHECK (status IN ('success','fail_close')),
@@ -2007,3 +2044,29 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_port_runtime_events (
     observed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT cli_reader_port_runtime_events_no_secret_leak CHECK (scope_summary !~* '(password|secret|plaintext|connection_string|api_key|token|raw_sql)')
 );
+
+-- Existing-database migration guard for system-side CLI reader port identity and
+-- create_export_job runtime event append support.
+ALTER TABLE topology.cli_reader_ports
+    ADD COLUMN IF NOT EXISTS port_id UUID NOT NULL DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cli_reader_ports_port_id
+    ON topology.cli_reader_ports (port_id);
+
+DO $$
+DECLARE
+    constraint_name TEXT;
+BEGIN
+    FOR constraint_name IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'topology.cli_reader_port_runtime_events'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%operation%'
+    LOOP
+        EXECUTE format('ALTER TABLE topology.cli_reader_port_runtime_events DROP CONSTRAINT IF EXISTS %I', constraint_name);
+    END LOOP;
+
+    ALTER TABLE topology.cli_reader_port_runtime_events
+        ADD CONSTRAINT cli_reader_port_runtime_events_operation_check
+        CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job'));
+END $$;
