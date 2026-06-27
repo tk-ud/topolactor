@@ -39,6 +39,46 @@ check "$DISPATCH_AUTH" "ReservedAuthContextKeys"
 check "$DISPATCH_AUTH" "authenticated_user_id"
 check "$PROGRAM" "cli_reader_port_runtime"
 check "$SSOT" "cli_reader_port_runtime"
+python3 - <<'PY'
+from pathlib import Path
+
+ssot = Path("docs/design/runtime-orchestration-ssot.yaml").read_text().splitlines()
+program = Path("backend/Program.cs").read_text()
+
+def read_yaml_list(key: str) -> list[str]:
+    for idx, line in enumerate(ssot):
+        if line.strip() == f"{key}:":
+            base_indent = len(line) - len(line.lstrip())
+            items: list[str] = []
+            for candidate in ssot[idx + 1:]:
+                stripped = candidate.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                indent = len(candidate) - len(candidate.lstrip())
+                if indent <= base_indent:
+                    break
+                if stripped.startswith("- "):
+                    items.append(stripped[2:].strip())
+            return items
+    raise SystemExit(f"missing {key} in runtime-orchestration SSOT")
+
+backend_runtime_destinations = set(read_yaml_list("backend_runtime_destinations"))
+backend_dispatchable_kinds = set(read_yaml_list("backend_dispatchable_kinds"))
+expected_dispatchable = backend_runtime_destinations - {"auth_runtime"}
+
+if backend_dispatchable_kinds != expected_dispatchable:
+    missing = sorted(expected_dispatchable - backend_dispatchable_kinds)
+    extra = sorted(backend_dispatchable_kinds - expected_dispatchable)
+    raise SystemExit(
+        "backend_dispatchable_kinds must match backend_runtime_destinations minus auth_runtime; "
+        f"missing={missing} extra={extra}"
+    )
+
+for runtime_destination in sorted(backend_dispatchable_kinds):
+    needle = f'["{runtime_destination}"]'
+    if needle not in program:
+        raise SystemExit(f"Program.cs handler registry missing {runtime_destination}")
+PY
 check "$DB" "topology.cli_reader_ports"
 check "$DB" "topology.cli_reader_port_runtime_events"
 check "$DB" "no_plaintext_secret_value"
