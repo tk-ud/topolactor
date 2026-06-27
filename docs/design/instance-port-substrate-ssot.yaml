@@ -1,6 +1,6 @@
 instance_port_substrate_ssot:
   name: instance_port_substrate
-  version: 0.2.0
+  version: 0.3.0
   status: ssot_design_document
   canonical_path: docs/design/instance-port-substrate-ssot.yaml
 
@@ -34,6 +34,8 @@ instance_port_substrate_ssot:
       - runtime_instance_port
       - runtime_only_secret_resolution_by_reference_key
       - template_import_driven_binding_authoring
+      - seed_aligned_json_template_generation
+      - existing_credential_management_projection_extension
       - admin_approved_instance_operation_binding
       - instance_connection_policy
       - instance_function_authority_binding
@@ -44,6 +46,8 @@ instance_port_substrate_ssot:
       - discovery_driven_runtime_or_db_introspection
       - binary_scan_or_source_scan_inside_topolactor
       - runtime_manifest_endpoint_requirement
+      - standalone_credential_management_plane
+      - new_dedicated_credential_management_route_or_panel
       - arbitrary_external_db_function_execution
       - direct_DB_write_from_external_tool
       - external_instance_as_topolactor_runtime_ssot
@@ -73,6 +77,31 @@ instance_port_substrate_ssot:
       - runtime_source_tree_scan
       - OpenAPI_or_gRPC_or_CLI_discovery_requirement
       - automatic_authority_from_discovery_result
+
+  seed_aligned_json_template_boundary:
+    purpose: >-
+      Generate JSON templates aligned with Topolactor seed/projection record shapes so an operator
+      or outside AI/Agent can fill instance address and operation drafts without granting Topolactor
+      discovery authority over the legacy DB/runtime.
+    template_kind:
+      - instance_address_import_template_json
+      - instance_operation_import_template_json
+      - legacy_instance_binding_import_bundle_json
+    structural_information_leakage_risk:
+      risk: >-
+        A seed-aligned JSON template can reveal Topolactor-side structure if it exports internal table ids,
+        private topology ids, private schema/function names, endpoint values, or credential material.
+      mitigation:
+        - export_public_safe_shape_only
+        - use_reference_keys_and_display_labels_instead_of_real_values
+        - use_placeholders_for_instance_authority_key_address_ref_and_operation_binding_key
+        - omit_secret_material_connection_strings_endpoint_real_values_raw_SQL_private_keys_and_runtime_only_decrypted_payload
+        - omit_internal_topology_authority_as_executable_payload
+        - never_make_downloaded_template_or_imported_draft_callable_without_validate_and_admin_approval
+    import_download_rule: >-
+      JSON download exports a sanitized template/draft artifact. JSON import validates shape and rejects prohibited
+      material before records can be reviewed. Import/download never exposes runtime-only material and never creates
+      execution authority by itself.
 
   import_contracts:
     legacy_instance_binding_import:
@@ -190,8 +219,93 @@ instance_port_substrate_ssot:
         - no_provider_kind_or_required_by_bundle_CSharp_if_switch_selector
         - no_dedicated_credential_runtime_or_admin_ui
         - plaintext_connection_string_forbidden_in_seed_ssot_projection_log
+    credential_kind_relation:
+      rule: Do not add instance as an external_port credential_kind.
+      existing_external_port_values:
+        - auth
+        - external
+        - none
+      instance_handling: instance settings are a credential management projection mode/category backed by instance_port_substrate records, not a credential_kind value on external_port records.
+
+  existing_credential_management_projection_extension:
+    confirmed_existing_seed:
+      manifest_key: auth.external.credential_management.projection
+      manifest_id: 00000000-0000-0000-0000-000000000092
+      user_auth_boundary_manifest_id: 00000000-0000-0000-0000-000000000091
+      seed_file: db/seed_empty.sql
+      existing_shape:
+        - fixed_form_projection
+        - physical_binding_seed_projection_marker_only
+        - screen_data_shape
+        - relationIntents_to_auth_user_boundary
+        - policy_template_selection
+      existing_modes:
+        user_auth: represented by auth.user.boundary and joined from the credential management projection.
+        external: represented by external_port_context and policy_template_selection.
+      missing_mode:
+        instance_settings: not yet represented and must be added by this substrate before implemented can be claimed.
+    selected_shape: extend_existing_credential_management_projection
+    rule: >-
+      Instance settings extend the existing credential management screen/projection. Do not create a new
+      standalone credential plane, dedicated credential route/panel, or UI Builder CRUD product surface.
+      The user/auth, external, and instance categories should be switched by select/mode/category while
+      preserving the same fixed-form projection structure where possible.
+    projection_categories:
+      user_auth:
+        role: Existing user/auth credential boundary; instance-port must not mix external or instance secrets into auth credentials.
+      external:
+        role: Existing external port credential context for access_port / response_port / hook_port records.
+      instance_settings:
+        role: New category for db_instance_port / runtime_instance_port address and operation binding drafts.
+        owns:
+          - seed_aligned_json_template_download
+          - json_import
+          - registered_runtime_or_db_list
+          - registered_runtime_or_db_edit
+          - instance_operation_list
+          - instance_operation_edit
+          - validate_preview_apply_for_instance_settings
+        projected_metadata_only:
+          - instance_authority_key
+          - instance_display_name
+          - port_kind
+          - provider_kind
+          - required_by_bundle
+          - address_ref
+          - credential_reference_key
+          - connection_policy_key
+          - operation_binding_key
+          - display_label
+          - operation_protocol
+          - input_schema_key
+          - output_shape_key
+          - sanitize_policy_key
+          - callable
+        prohibited_projection_fields:
+          - plaintext_secret
+          - connection_string
+          - endpoint_real_value
+          - raw_SQL
+          - credential_plaintext
+          - private_key_material
+          - runtime_only_decrypted_payload
+    same_form_ui_rule: >-
+      The credential management screen may use a select/mode/category switch for user_auth / external /
+      instance_settings. The UI should remain same-form where possible; instance-only additions are allowed
+      for JSON template download/import, Runtime/DB registration, and operation binding list/edit.
+    seed_rule: >-
+      Instance settings may be backed by seed-created topology/projection records that extend the existing
+      credential management projection. Seed may register the instance category, list/edit forms, JSON import/download
+      actions, validation/preview/apply wiring, and relation intents, but must not add a standalone route or raw
+      physical table row editor.
+    guard_rule: >-
+      check-instance-port-substrate.sh should verify the instance_settings category is wired to the existing
+      credential management projection and should forbid instance_as_external_port_credential_kind,
+      standalone credential planes, dedicated routes/panels, plaintext credentials, endpoint real values,
+      raw SQL, and UI Builder function definition authoring.
 
   admin_authoring_boundary:
+    preferred_vocabulary: existing_credential_management_projection_extension
     admin_import_surface:
       owns:
         - generate_instance_address_import_template
@@ -229,6 +343,7 @@ instance_port_substrate_ssot:
 
   ui_builder_wiring_contract:
     selected_shape: dispatchInstanceOperation_as_dispatchExternalPort_sibling
+    scope_rule: UI Builder only extends approved instance operation assignment; it does not own instance setting registration, JSON import/download, or credential/address editing.
     runtime_interaction_shape:
       actionType: dispatchInstanceOperation
       trigger: existing runtimeInteractions.trigger
@@ -391,8 +506,13 @@ instance_port_substrate_ssot:
       - no_external_instance_semantic_authority_in_topolactor_db
 
   impact_map:
+    external_port_substrate_ssot: >-
+      Instance settings do not extend external_port port kinds and do not add instance as credential_kind.
+      They extend the existing credential management projection as an instance settings category backed by instance_port_substrate records.
+    secret_credential_ssot: >-
+      Dedicated credential admin UI remains prohibited. Instance settings reuse the existing credential management projection and guarded vault/reference-key model.
     admin_console_workflow_ssot: >-
-      Future implementation must expose template import, validation, and approval as admin data-defined surfaces; Design Inspector only selects approved functions and maps trigger/payloadFrom/outputProp.
+      Future implementation must expose instance JSON template import/download, list/edit, validation, preview, and approval through the existing credential management projection extension; Design Inspector only selects approved functions and maps trigger/payloadFrom/outputProp.
     runtime_orchestration_ssot: >-
       Future implementation must add instance_port_runtime as a sibling lane without mixing it into external_port_runtime.
     abstract_function_primitive_registry_ssot: >-
@@ -400,7 +520,7 @@ instance_port_substrate_ssot:
     frontend_runtime: >-
       Existing runtimeInteractions trigger/payloadFrom/outputProp are reused; only instanceTargetRef/actionType/dispatch sibling are added.
     ci_guard: >-
-      check-instance-port-substrate.sh should be updated by the CI-fix agent to guard template/import-driven vocabulary and prohibit discovery/runtime scanning assumptions.
+      check-instance-port-substrate.sh should guard template/import-driven vocabulary, existing credential management projection extension, and discovery/runtime scanning prohibitions.
 
   prohibited_patterns:
     - provider_specific_schema_in_topolactor_db
@@ -422,6 +542,10 @@ instance_port_substrate_ssot:
     - DB_catalog_introspection_as_authoring_path
     - runtime_manifest_endpoint_required_for_legacy_instance
     - UI_builder_function_definition_authoring
+    - instance_as_external_port_credential_kind
+    - standalone_credential_management_plane
+    - new_dedicated_credential_management_route_or_panel
+    - seed_aligned_template_exporting_structure_authority_or_secret_material
 
   completion_gate:
     required_before_implemented_claim:
@@ -432,6 +556,7 @@ instance_port_substrate_ssot:
       - no plaintext credential, connection string, endpoint real value, raw SQL, table authority, or executable function authority appears in seed, projection, logs, or SSOT examples.
       - abstract_function_authority_bindings or successor manifest binding controls instance/function/schema/output authority.
       - external instance is documented and tested as a call target, not Topolactor runtime SSOT.
-      - Admin import/validate/approve surfaces are implemented before UI Builder can select instance operations.
+      - The existing credential management projection is extended with instance_settings for JSON template download/import, registered Runtime/DB list/edit, operation list/edit, validate, preview, and explicit apply before UI Builder can select instance operations.
+      - Seed-aligned JSON template generation is sanitized against structural information leakage.
       - UI Builder uses existing runtimeInteractions trigger/payloadFrom/outputProp and only selects approved instance operations.
       - Topolactor does not implement discovery-driven analysis of legacy DB/runtime targets for this substrate.
