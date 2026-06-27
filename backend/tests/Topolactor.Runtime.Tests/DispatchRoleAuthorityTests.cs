@@ -282,6 +282,8 @@ public class DispatchRoleAuthorityTests
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "today" },
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["reader-user"] = "state_id=active" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cli_reader_port.read" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "account" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "topology.entity" },
         true,
         60);
 
@@ -312,6 +314,15 @@ public class DispatchRoleAuthorityTests
             => Task.CompletedTask;
 
         public Task RecordExportDownloadFailureEvidenceAsync(Guid exportJobId, string failureCode, DateTimeOffset observedAt, CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task<CliReaderImportCandidateResult> CreateImportCandidateAsync(CreateCliReaderImportCandidateCommand command, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
+        public Task<CliReaderImportCandidateResult?> LoadImportCandidateAsync(LoadCliReaderImportCandidateQuery query, CancellationToken ct = default)
+            => Task.FromResult<CliReaderImportCandidateResult?>(null);
+
+        public Task RecordImportCandidateEvidenceAsync(Guid candidateId, string eventType, DateTimeOffset observedAt, CancellationToken ct = default)
             => Task.CompletedTask;
     }
 
