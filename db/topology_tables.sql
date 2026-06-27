@@ -2024,6 +2024,7 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
     required_capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
     rate_limit_per_minute INTEGER NULL CHECK (rate_limit_per_minute IS NULL OR rate_limit_per_minute > 0),
     audit_required BOOLEAN NOT NULL DEFAULT TRUE,
+    file_stream_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -2033,7 +2034,7 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
 CREATE TABLE IF NOT EXISTS topology.cli_reader_port_runtime_events (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     port_key TEXT NOT NULL REFERENCES topology.cli_reader_ports(port_key),
-    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job')),
+    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job','download_export_file')),
     user_id TEXT NULL,
     roles JSONB NOT NULL DEFAULT '[]'::jsonb,
     status TEXT NOT NULL CHECK (status IN ('success','fail_close')),
@@ -2051,6 +2052,10 @@ ALTER TABLE topology.cli_reader_ports
     ADD COLUMN IF NOT EXISTS port_id UUID NOT NULL DEFAULT gen_random_uuid();
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cli_reader_ports_port_id
     ON topology.cli_reader_ports (port_id);
+-- File stream port scope control field (cli-mcp-file-stream-port subBundle). A port without
+-- this flag must fail-close on download_export_file even when read scope checks pass.
+ALTER TABLE topology.cli_reader_ports
+    ADD COLUMN IF NOT EXISTS file_stream_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 
 DO $$
 DECLARE
@@ -2068,5 +2073,5 @@ BEGIN
 
     ALTER TABLE topology.cli_reader_port_runtime_events
         ADD CONSTRAINT cli_reader_port_runtime_events_operation_check
-        CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job'));
+        CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job','download_export_file'));
 END $$;

@@ -304,6 +304,15 @@ public class DispatchRoleAuthorityTests
 
         public Task<CliReaderExportJobResult> CreateExportJobAsync(CreateCliReaderExportJobCommand command, CancellationToken ct = default)
             => throw new NotSupportedException();
+
+        public Task<AuthorizedExportFile?> LoadAuthorizedExportFileAsync(LoadAuthorizedExportFileQuery query, CancellationToken ct = default)
+            => Task.FromResult<AuthorizedExportFile?>(null);
+
+        public Task RecordExportDownloadEvidenceAsync(Guid exportJobId, bool checksumVerified, DateTimeOffset observedAt, CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task RecordExportDownloadFailureEvidenceAsync(Guid exportJobId, string failureCode, DateTimeOffset observedAt, CancellationToken ct = default)
+            => Task.CompletedTask;
     }
 
     private sealed class RoleFilteredManifestRepository(string expectedRole, ManifestRecord manifest)

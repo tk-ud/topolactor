@@ -2933,7 +2933,7 @@ ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
 INSERT INTO topology.cli_reader_ports (
     port_key, port_id, enabled, expires_at, allowed_roles, allowed_users, allowed_tables,
     allowed_columns, allowed_filters, allowed_periods, row_scope, required_capabilities,
-    rate_limit_per_minute, audit_required, config_json
+    rate_limit_per_minute, audit_required, file_stream_enabled, config_json
 ) VALUES (
     'cli_reader_port.default', '00000000-0000-0000-0000-00000000c100', true, NULL,
     '["admin","reader"]'::jsonb,
@@ -2946,6 +2946,7 @@ INSERT INTO topology.cli_reader_ports (
     '["cli_reader_port.read"]'::jsonb,
     60,
     true,
+    true,
     '{"admin_projection":"contents","surface":"cli_reader_port","secret_projection":"denied","dispatch_runtime_destination":"cli_reader_port_runtime"}'::jsonb
 ) ON CONFLICT (port_key) DO UPDATE SET
     port_id = EXCLUDED.port_id,
@@ -2957,5 +2958,6 @@ INSERT INTO topology.cli_reader_ports (
     allowed_periods = EXCLUDED.allowed_periods,
     row_scope = EXCLUDED.row_scope,
     required_capabilities = EXCLUDED.required_capabilities,
+    file_stream_enabled = EXCLUDED.file_stream_enabled,
     config_json = EXCLUDED.config_json,
     updated_at = now();

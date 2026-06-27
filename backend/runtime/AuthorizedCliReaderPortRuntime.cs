@@ -9,16 +9,17 @@ namespace Topolactor.Runtime;
 /// Authorized CLI/MCP read-side runtime. This handler is intentionally usable only
 /// after ManifestDispatcher resolves a manifest/runtime mapping (manifestId required).
 /// It resolves authenticated user/role/capability from server-side dispatch context,
-/// resolves cli_reader_port scope, and executes only read/search/aggregate/analyze/validate/create_export_job
-/// inside the repository-authorized read model. It never accepts direct SQL, direct DB
-/// connection strings, Core API URLs, plaintext credentials, file streams,
-/// imports, commit candidates, or mutation operations.
+/// resolves cli_reader_port scope, and executes only read/search/aggregate/analyze/validate/create_export_job/download_export_file
+/// inside the repository-authorized read model. File streaming is limited to already-authorized
+/// export_job ledger artifacts. It never accepts direct SQL, direct DB connection strings,
+/// Core API URLs, plaintext credentials, direct file streams outside export jobs, imports,
+/// commit candidates, or mutation operations.
 /// </summary>
 public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
 {
     private static readonly HashSet<string> AllowedOperations = new(StringComparer.OrdinalIgnoreCase)
     {
-        "read", "search", "aggregate", "analyze", "validate", "create_export_job"
+        "read", "search", "aggregate", "analyze", "validate", "create_export_job", "download_export_file"
     };
 
     private static readonly string[] SecretFieldNames =
@@ -56,7 +57,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
             return await FailAsync(seed, "CLI_READER_TARGET_INVALID", "CLI/MCP Data Reader target must be cli_reader_port.", ct);
 
         if (!AllowedOperations.Contains(parsed.Operation!))
-            return await FailAsync(seed, "CLI_READER_OPERATION_UNSUPPORTED", "CLI/MCP Data Reader operation must be read/search/aggregate/analyze/validate/create_export_job.", ct);
+            return await FailAsync(seed, "CLI_READER_OPERATION_UNSUPPORTED", "CLI/MCP Data Reader operation must be read/search/aggregate/analyze/validate/create_export_job/download_export_file.", ct);
 
         if (request.Payload.HasValue && ContainsForbiddenBypassOrSecretField(request.Payload.Value))
             return await FailAsync(seed, "CLI_READER_BYPASS_OR_SECRET_FIELD", "Direct SQL/DB/Core API bypass, client-supplied auth authority, and plaintext credential fields are forbidden.", ct);
@@ -88,6 +89,12 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
             if (parsed.Capabilities.Count == 0 || !config.RequiredCapabilities.All(required => parsed.Capabilities.Contains(required)))
                 return await FailAsync(seed, "CLI_READER_CAPABILITY_UNRESOLVED", "Required credential/capability reference could not be resolved.", ct);
         }
+
+        // File stream port: keyed by an existing authorized export_job_id, not by a fresh
+        // table/column/period read. It never re-runs create_export_job or re-reads rows; the
+        // canonical export_jobs / export_manifests ledger is the only source of truth.
+        if (string.Equals(parsed.Operation, "download_export_file", StringComparison.OrdinalIgnoreCase))
+            return await DownloadExportFileAsync(parsed, config, seed, ct);
 
         if (!config.AllowedTables.Contains(parsed.Table!))
             return await FailAsync(seed, "CLI_READER_TABLE_DENIED", "Requested table is not allowed for this cli_reader_port.", ct);
@@ -164,6 +171,91 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         };
     }
 
+    private async Task<EndpointResponseDto> DownloadExportFileAsync(ParsedCliReaderRequest parsed, CliReaderPortConfig config, CliReaderPortRuntimeEvent seed, CancellationToken ct)
+    {
+        // file_stream_enabled is a port-level scope control field. A port without file
+        // stream permission must fail-close even when every other read scope check passes.
+        if (!config.FileStreamEnabled)
+            return await FailAsync(seed, "CLI_READER_FILE_STREAM_DISABLED", "cli_reader_port does not permit file streaming.", ct);
+
+        if (parsed.ExportJobId is not Guid exportJobId)
+            return await FailAsync(seed, "CLI_READER_FILE_EXPORT_JOB_ID_REQUIRED", "download_export_file requires an export_job_id.", ct);
+
+        var fileSeed = seed with { ScopeSummary = $"export_job_id={exportJobId};operation=download_export_file" };
+
+        var file = await _repository.LoadAuthorizedExportFileAsync(new LoadAuthorizedExportFileQuery(config.PortId, parsed.UserId!, exportJobId), ct);
+        if (file is null)
+            return await FailAsync(fileSeed, "CLI_READER_FILE_JOB_UNAUTHORIZED", "Export job is not authorized for this port and user, or does not exist.", ct);
+
+        if (!string.Equals(file.Status, "completed", StringComparison.OrdinalIgnoreCase))
+            return await FailAsync(fileSeed, "CLI_READER_FILE_JOB_NOT_READY", "Export job is not in a completed state.", ct);
+
+        // approval_required / approval_status are read-only here. CLI/MCP never executes
+        // approval; it only refuses to stream an unapproved approval-gated export job.
+        if (file.ApprovalRequired && !string.Equals(file.ApprovalStatus, "approved", StringComparison.OrdinalIgnoreCase))
+            return await FailAsync(fileSeed, "CLI_READER_FILE_APPROVAL_REQUIRED", "Export job requires UI/Human approval before file streaming.", ct);
+
+        var checksumError = VerifyExportChecksum(file);
+        if (checksumError is not null)
+        {
+            await _repository.RecordExportDownloadFailureEvidenceAsync(exportJobId, checksumError, _timeProvider.GetUtcNow(), ct);
+            await AppendAsync(fileSeed with { Status = "fail_close", Code = checksumError, ScopeSummary = $"export_job_id={exportJobId};checksum_verified=false" }, ct);
+            return new EndpointResponseDto(false, null, [new ValidationError(checksumError, "Export file checksum/source/manifest/artifact verification failed; file stream refused.")]);
+        }
+
+        await _repository.RecordExportDownloadEvidenceAsync(exportJobId, checksumVerified: true, _timeProvider.GetUtcNow(), ct);
+        await AppendAsync(fileSeed with { Status = "success", Code = "CLI_READER_FILE_CHECKSUM_VERIFIED", ScopeSummary = $"export_job_id={exportJobId};checksum_verified=true" }, ct);
+        await AppendAsync(fileSeed with { Status = "success", Code = "CLI_READER_FILE_DOWNLOAD_COMPLETED", ScopeSummary = $"export_job_id={exportJobId};checksum_verified=true" }, ct);
+
+        var response = BuildExportResourceResponse(file);
+        return new EndpointResponseDto(true, new Emission(null, null, null, [], JsonSerializer.SerializeToElement(response), []), []);
+    }
+
+    // Cross-checks the canonical export_jobs ledger against the export_manifests record:
+    // job checksum vs manifest checksum, every generated file checksum, and the
+    // source_record_ids set captured at export time. Any mismatch fails closed.
+    private static string? VerifyExportChecksum(AuthorizedExportFile file)
+    {
+        if (!file.ManifestPresent)
+            return "CLI_READER_FILE_MANIFEST_MISSING";
+        if (string.IsNullOrWhiteSpace(file.JobChecksum))
+            return "CLI_READER_FILE_CHECKSUM_MISSING";
+        if (string.IsNullOrWhiteSpace(file.ManifestChecksum) || !string.Equals(file.JobChecksum, file.ManifestChecksum, StringComparison.OrdinalIgnoreCase))
+            return "CLI_READER_FILE_CHECKSUM_MISMATCH";
+        if (file.GeneratedFiles.Count == 0)
+            return "CLI_READER_FILE_ARTIFACT_MISSING";
+        if (file.GeneratedFiles.Any(generated => !string.Equals(generated.Checksum, file.JobChecksum, StringComparison.OrdinalIgnoreCase)))
+            return "CLI_READER_FILE_CHECKSUM_MISMATCH";
+
+        var jobIds = new HashSet<string>(file.SourceRecordIds, StringComparer.OrdinalIgnoreCase);
+        var manifestIds = new HashSet<string>(file.ManifestSourceRecordIds, StringComparer.OrdinalIgnoreCase);
+        if (jobIds.Count == 0 || !jobIds.SetEquals(manifestIds))
+            return "CLI_READER_FILE_SOURCE_IDS_MISMATCH";
+
+        return null;
+    }
+
+    // MCP resource/tool response boundary. Projects only ledger-derived safe metadata.
+    // No credential, bucket, endpoint, plaintext storage URL, or actual signed URL.
+    private static object BuildExportResourceResponse(AuthorizedExportFile file) => new
+    {
+        operation = "download_export_file",
+        resourceUri = $"topolactor://exports/{file.ExportJobId}/file",
+        manifestResourceUri = $"topolactor://exports/{file.ExportJobId}/manifest.json",
+        exportJobId = file.ExportJobId,
+        status = file.Status,
+        exportFormat = file.ExportFormat,
+        period = file.Period,
+        generatedBy = file.GeneratedBy,
+        generatedAt = file.GeneratedAt,
+        sourceRecordIds = file.SourceRecordIds,
+        generatedFiles = file.GeneratedFiles,
+        checksum = file.JobChecksum,
+        checksumVerified = true,
+        manifestVersion = file.ManifestVersion,
+        manifest = file.ManifestJsonb
+    };
+
     private static IReadOnlyList<string> ExtractSourceRecordIds(IReadOnlyList<Dictionary<string, object?>> rows)
     {
         var ids = new List<string>();
@@ -236,7 +328,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
     {
         var eventSeed = new CliReaderPortRuntimeEvent("unknown", request.Action ?? request.OperationType ?? "unknown", null, [], "fail_close", "CLI_READER_PARSE_PENDING", null, null, "parse", DateTimeOffset.UnixEpoch);
         if (!request.Payload.HasValue || request.Payload.Value.ValueKind != JsonValueKind.Object)
-            return new(eventSeed, null, null, null, new HashSet<string>(StringComparer.OrdinalIgnoreCase), null, [], new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, [], null, null, null, new ValidationError("CLI_READER_PAYLOAD_REQUIRED", "CLI/MCP reader payload object is required."));
+            return new(eventSeed, null, null, null, new HashSet<string>(StringComparer.OrdinalIgnoreCase), null, [], new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, [], null, null, null, null, new ValidationError("CLI_READER_PAYLOAD_REQUIRED", "CLI/MCP reader payload object is required."));
 
         var payload = request.Payload.Value;
         var portKey = ReadString(payload, "port_key") ?? ReadString(payload, "portKey");
@@ -252,15 +344,23 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         var requestId = ReadString(payload, "request_id") ?? ReadString(payload, "requestId");
         var idempotencyKey = ReadString(payload, "idempotency_key") ?? ReadString(payload, "idempotencyKey");
         var exportFormat = ReadString(payload, "export_format") ?? ReadString(payload, "exportFormat");
+        var exportJobIdRaw = ReadString(payload, "export_job_id") ?? ReadString(payload, "exportJobId");
+        Guid? exportJobId = Guid.TryParse(exportJobIdRaw, out var parsedExportJobId) ? parsedExportJobId : null;
         eventSeed = eventSeed with { PortKey = portKey ?? "unknown", Operation = operation ?? "unknown", UserId = userId, Roles = roles.ToArray(), RequestId = requestId, IdempotencyKey = idempotencyKey, ScopeSummary = $"table={table ?? "unknown"}" };
-        if (string.IsNullOrWhiteSpace(portKey)) return new(eventSeed, null, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, null, new ValidationError("CLI_READER_PORT_REQUIRED", "port_key is required."));
-        if (string.IsNullOrWhiteSpace(table)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, new ValidationError("CLI_READER_TABLE_REQUIRED", "table is required."));
+        if (string.IsNullOrWhiteSpace(portKey)) return new(eventSeed, null, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, null, exportJobId, new ValidationError("CLI_READER_PORT_REQUIRED", "port_key is required."));
+        // File stream port is keyed by an existing export_job_id, not by a table/column read.
+        if (string.Equals(operation, "download_export_file", StringComparison.OrdinalIgnoreCase))
+        {
+            if (exportJobId is null) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, null, new ValidationError("CLI_READER_FILE_EXPORT_JOB_ID_REQUIRED", "download_export_file requires a valid export_job_id."));
+            return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, null);
+        }
+        if (string.IsNullOrWhiteSpace(table)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, new ValidationError("CLI_READER_TABLE_REQUIRED", "table is required."));
         if (string.Equals(operation, "create_export_job", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.IsNullOrWhiteSpace(idempotencyKey)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, new ValidationError("CLI_READER_EXPORT_IDEMPOTENCY_KEY_REQUIRED", "create_export_job requires idempotency_key."));
-            if (string.IsNullOrWhiteSpace(exportFormat) || !new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "csv", "json", "pdf", "zip" }.Contains(exportFormat)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, new ValidationError("CLI_READER_EXPORT_FORMAT_DENIED", "export_format must be csv/json/pdf/zip."));
+            if (string.IsNullOrWhiteSpace(idempotencyKey)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, new ValidationError("CLI_READER_EXPORT_IDEMPOTENCY_KEY_REQUIRED", "create_export_job requires idempotency_key."));
+            if (string.IsNullOrWhiteSpace(exportFormat) || !new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "csv", "json", "pdf", "zip" }.Contains(exportFormat)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, new ValidationError("CLI_READER_EXPORT_FORMAT_DENIED", "export_format must be csv/json/pdf/zip."));
         }
-        return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, null);
+        return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, null);
     }
 
     private static string? ReadContextValue(Dictionary<string, string>? context, params string[] names)
@@ -288,5 +388,5 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
     private static IReadOnlyList<string> ReadStringArray(JsonElement obj, string name) => obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array ? value.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray() : [];
     private static IReadOnlyDictionary<string, string> ReadStringMap(JsonElement obj, string name) => obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Object ? value.EnumerateObject().Where(x => x.Value.ValueKind == JsonValueKind.String).ToDictionary(x => x.Name, x => x.Value.GetString()!, StringComparer.OrdinalIgnoreCase) : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-    private sealed record ParsedCliReaderRequest(CliReaderPortRuntimeEvent EventSeed, string? PortKey, string? Operation, string? UserId, IReadOnlySet<string> Roles, string? Table, IReadOnlyList<string> Columns, IReadOnlySet<string> Capabilities, IReadOnlyDictionary<string, string> Filters, string? Period, IReadOnlyList<string> RowScope, string? RequestId, string? IdempotencyKey, string? ExportFormat, ValidationError? Error);
+    private sealed record ParsedCliReaderRequest(CliReaderPortRuntimeEvent EventSeed, string? PortKey, string? Operation, string? UserId, IReadOnlySet<string> Roles, string? Table, IReadOnlyList<string> Columns, IReadOnlySet<string> Capabilities, IReadOnlyDictionary<string, string> Filters, string? Period, IReadOnlyList<string> RowScope, string? RequestId, string? IdempotencyKey, string? ExportFormat, Guid? ExportJobId, ValidationError? Error);
 }

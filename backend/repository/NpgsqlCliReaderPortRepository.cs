@@ -16,7 +16,8 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
     {
         const string sql = """
             SELECT port_key, port_id, enabled, expires_at, allowed_roles, allowed_users, allowed_tables, allowed_columns,
-                   allowed_filters, allowed_periods, row_scope, required_capabilities, audit_required, rate_limit_per_minute
+                   allowed_filters, allowed_periods, row_scope, required_capabilities, audit_required, rate_limit_per_minute,
+                   file_stream_enabled
             FROM topology.cli_reader_ports
             WHERE port_key = @port_key
             """;
@@ -41,7 +42,8 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             ReadMap(reader.GetString(10)),
             ReadSet(reader.GetString(11)),
             reader.GetBoolean(12),
-            reader.IsDBNull(13) ? null : reader.GetInt32(13));
+            reader.IsDBNull(13) ? null : reader.GetInt32(13),
+            !reader.IsDBNull(14) && reader.GetBoolean(14));
     }
 
     public async Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
@@ -323,6 +325,129 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         cmd.Parameters.AddWithValue("scope_summary", runtimeEvent.ScopeSummary);
         cmd.Parameters.AddWithValue("observed_at", runtimeEvent.ObservedAt);
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<AuthorizedExportFile?> LoadAuthorizedExportFileAsync(LoadAuthorizedExportFileQuery query, CancellationToken ct = default)
+    {
+        // Authorization is enforced in the WHERE clause: the export job must belong to the
+        // dispatch-resolved port_id AND have been requested by the authenticated user. The
+        // canonical export_jobs ledger and export_manifests record are the only source of truth.
+        const string sql = """
+            SELECT j.status, j.export_format, j.period, j.requested_by, j.completed_at, j.requested_at,
+                   j.approval_required, j.approval_status, j.source_record_ids, j.generated_files, j.checksum,
+                   (m.manifest_id IS NOT NULL) AS manifest_present,
+                   COALESCE(m.manifest_version, '') AS manifest_version,
+                   COALESCE(m.checksum, '') AS manifest_checksum,
+                   COALESCE(m.manifest_jsonb, '{}'::jsonb) AS manifest_jsonb
+            FROM topology.export_jobs j
+            LEFT JOIN topology.export_manifests m ON m.export_job_id = j.export_job_id
+            WHERE j.export_job_id = @export_job_id
+              AND j.port_id = @port_id
+              AND j.requested_by = @requested_by
+            """;
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("export_job_id", query.ExportJobId);
+        cmd.Parameters.AddWithValue("port_id", query.PortId);
+        cmd.Parameters.AddWithValue("requested_by", query.UserId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+
+        var status = reader.GetString(0);
+        var exportFormat = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+        var period = reader.IsDBNull(2) ? null : reader.GetString(2);
+        var generatedBy = reader.GetString(3);
+        var generatedAt = reader.IsDBNull(4)
+            ? reader.GetFieldValue<DateTimeOffset>(5)
+            : reader.GetFieldValue<DateTimeOffset>(4);
+        var approvalRequired = reader.GetBoolean(6);
+        var approvalStatus = reader.IsDBNull(7) ? "not_required" : reader.GetString(7);
+        var sourceRecordIds = JsonSerializer.Deserialize<string[]>(reader.GetString(8)) ?? [];
+        var generatedFiles = JsonSerializer.Deserialize<CliReaderGeneratedFile[]>(reader.GetString(9)) ?? [];
+        var jobChecksum = reader.IsDBNull(10) ? string.Empty : reader.GetString(10);
+        var manifestPresent = reader.GetBoolean(11);
+        var manifestVersion = reader.GetString(12);
+        // Manifest-side checksum read directly into the projection so it can be cross-checked
+        // against the job checksum at the runtime (manifest and job checksum must be identical).
+        var manifestLedgerChecksum = reader.GetString(13);
+        var manifestJsonb = JsonSerializer.Deserialize<JsonElement>(reader.GetString(14));
+        var manifestSourceRecordIds = ExtractManifestSourceRecordIds(manifestJsonb);
+
+        return new AuthorizedExportFile(
+            query.ExportJobId,
+            status,
+            exportFormat,
+            period,
+            generatedBy,
+            generatedAt,
+            approvalRequired,
+            approvalStatus,
+            sourceRecordIds,
+            generatedFiles,
+            jobChecksum,
+            manifestPresent,
+            manifestVersion,
+            manifestLedgerChecksum,
+            manifestSourceRecordIds,
+            manifestJsonb);
+    }
+
+    public async Task RecordExportDownloadEvidenceAsync(Guid exportJobId, bool checksumVerified, DateTimeOffset observedAt, CancellationToken ct = default)
+    {
+        // Append-only file-storage runtime evidence (no credential / bucket / endpoint / signed URL).
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        if (checksumVerified)
+            await AppendRuntimeEventLogAsync(conn, tx, "cli_mcp_file_checksum_verified", exportJobId, observedAt, ct);
+        await AppendRuntimeEventLogAsync(conn, tx, "cli_mcp_file_download_completed", exportJobId, observedAt, ct);
+
+        await tx.CommitAsync(ct);
+    }
+
+    public async Task RecordExportDownloadFailureEvidenceAsync(Guid exportJobId, string failureCode, DateTimeOffset observedAt, CancellationToken ct = default)
+    {
+        // Append-only file-storage failure evidence for reject_file_explicitly + record_to_runtime_event_log.
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await AppendRuntimeEventLogAsync(conn, tx, MapFileStreamFailureEventType(failureCode), exportJobId, observedAt, ct);
+
+        await tx.CommitAsync(ct);
+    }
+
+    private static string MapFileStreamFailureEventType(string failureCode) => failureCode switch
+    {
+        "CLI_READER_FILE_SOURCE_IDS_MISMATCH" => "cli_mcp_file_source_ids_mismatch_rejected",
+        "CLI_READER_FILE_MANIFEST_MISSING" => "cli_mcp_file_manifest_missing_rejected",
+        "CLI_READER_FILE_ARTIFACT_MISSING" => "cli_mcp_file_artifact_missing_rejected",
+        "CLI_READER_FILE_CHECKSUM_MISSING" => "cli_mcp_file_checksum_missing_rejected",
+        _ => "cli_mcp_file_checksum_mismatch_rejected"
+    };
+
+    private static async Task AppendRuntimeEventLogAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string eventType, Guid exportJobId, DateTimeOffset observedAt, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES (@event_type, @entity_id, 'cli_mcp_file_stream_port', @logged_at)";
+        cmd.Parameters.AddWithValue("event_type", eventType);
+        cmd.Parameters.AddWithValue("entity_id", exportJobId.ToString());
+        cmd.Parameters.AddWithValue("logged_at", observedAt);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    private static IReadOnlyList<string> ExtractManifestSourceRecordIds(JsonElement manifest)
+    {
+        if (manifest.ValueKind != JsonValueKind.Object) return [];
+        if (!manifest.TryGetProperty("source_record_ids", out var ids) || ids.ValueKind != JsonValueKind.Array) return [];
+        return ids.EnumerateArray()
+            .Where(x => x.ValueKind == JsonValueKind.String)
+            .Select(x => x.GetString()!)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToArray();
     }
 
     private static string QuoteQualifiedIdentifier(string value)

@@ -16,7 +16,8 @@ public sealed record CliReaderPortConfig(
     IReadOnlyDictionary<string, string> RowScopeByUser,
     IReadOnlySet<string> RequiredCapabilities,
     bool AuditRequired,
-    int? RateLimitPerMinute = null);
+    int? RateLimitPerMinute = null,
+    bool FileStreamEnabled = false);
 
 public sealed record AuthorizedCliReaderQuery(
     string PortKey,
@@ -69,3 +70,32 @@ public sealed record CliReaderGeneratedFile(
     long ByteSize,
     string Checksum,
     string ContentRef);
+
+// File stream port: lookup key for an already-authorized export job file.
+// Authorization is enforced server-side by matching the dispatch-resolved port_id
+// and the authenticated requesting user against the existing export_jobs ledger.
+public sealed record LoadAuthorizedExportFileQuery(
+    Guid PortId,
+    string UserId,
+    Guid ExportJobId);
+
+// Authorized export file projection assembled from the canonical export_jobs ledger
+// joined with the export_manifests record. Never carries credential / bucket /
+// endpoint / actual signed URL values.
+public sealed record AuthorizedExportFile(
+    Guid ExportJobId,
+    string Status,
+    string ExportFormat,
+    string? Period,
+    string GeneratedBy,
+    DateTimeOffset GeneratedAt,
+    bool ApprovalRequired,
+    string ApprovalStatus,
+    IReadOnlyList<string> SourceRecordIds,
+    IReadOnlyList<CliReaderGeneratedFile> GeneratedFiles,
+    string JobChecksum,
+    bool ManifestPresent,
+    string ManifestVersion,
+    string ManifestChecksum,
+    IReadOnlyList<string> ManifestSourceRecordIds,
+    JsonElement ManifestJsonb);
