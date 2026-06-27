@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -102,25 +103,8 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
 
     public async Task<CliReaderExportJobResult> CreateExportJobAsync(CreateCliReaderExportJobCommand command, CancellationToken ct = default)
     {
-        var payloadJson = JsonSerializer.Serialize(command.Rows);
-        var payloadBytes = Encoding.UTF8.GetBytes(payloadJson);
-        var payloadChecksum = Convert.ToHexString(SHA256.HashData(payloadBytes)).ToLowerInvariant();
-        var fileName = $"cli-reader-export-{command.IdempotencyKey}.{command.ExportFormat.ToLowerInvariant()}";
-        var generatedFiles = new[] { new CliReaderGeneratedFile(fileName, command.ExportFormat, payloadBytes.LongLength, payloadChecksum, "pending-export-job-id") };
-        var manifestObject = new
-        {
-            manifest_version = "1.0",
-            export_job_id = (Guid?)null,
-            generated_at = command.RequestedAt,
-            generated_by = command.Query.UserId,
-            period = command.Query.Period,
-            source_tables = new[] { command.Query.Table },
-            source_record_ids = command.SourceRecordIds,
-            files = generatedFiles,
-            checksum = payloadChecksum
-        };
-        var manifestJson = JsonSerializer.Serialize(manifestObject);
-        var manifestChecksum = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(manifestJson))).ToLowerInvariant();
+        var package = GenerateExportPackage(command);
+        IReadOnlyList<CliReaderGeneratedFile> generatedFiles = [];
         var sourceRecordIdsJson = JsonSerializer.Serialize(command.SourceRecordIds);
         var targetScope = $"table={command.Query.Table};columns={string.Join(',', command.Query.Columns)};filters={string.Join(',', command.Query.Filters.Keys)};period={command.Query.Period ?? "none"};row_scope=resolved";
 
@@ -141,11 +125,11 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
                      @export_format, 'completed', @source_record_ids::jsonb, '[]'::jsonb, @idempotency_key,
                      @checksum, '', @completed_at, false, 'not_required')
                 ON CONFLICT (idempotency_key) DO NOTHING
-                RETURNING export_job_id, status, source_record_ids, generated_files, checksum, manifest_path, true AS inserted
+                RETURNING export_job_id, status, export_format, source_record_ids, generated_files, checksum, manifest_path, true AS inserted
             )
-            SELECT export_job_id, status, source_record_ids, generated_files, checksum, manifest_path, inserted FROM inserted
+            SELECT export_job_id, status, export_format, source_record_ids, generated_files, checksum, manifest_path, inserted FROM inserted
             UNION ALL
-            SELECT export_job_id, status, source_record_ids, generated_files, checksum, manifest_path, false AS inserted
+            SELECT export_job_id, status, export_format, source_record_ids, generated_files, checksum, manifest_path, false AS inserted
             FROM topology.export_jobs
             WHERE idempotency_key = @idempotency_key
             LIMIT 1
@@ -158,11 +142,12 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         cmd.Parameters.AddWithValue("export_format", command.ExportFormat);
         cmd.Parameters.AddWithValue("source_record_ids", sourceRecordIdsJson);
         cmd.Parameters.AddWithValue("idempotency_key", command.IdempotencyKey);
-        cmd.Parameters.AddWithValue("checksum", manifestChecksum);
+        cmd.Parameters.AddWithValue("checksum", package.Checksum);
         cmd.Parameters.AddWithValue("completed_at", command.RequestedAt);
 
         Guid exportJobId;
         string status;
+        string exportFormatDb;
         string sourceIdsDb;
         string filesDb;
         string checksumDb;
@@ -173,17 +158,18 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             await reader.ReadAsync(ct);
             exportJobId = reader.GetGuid(0);
             status = reader.GetString(1);
-            sourceIdsDb = reader.GetString(2);
-            filesDb = reader.GetString(3);
-            checksumDb = reader.GetString(4);
-            manifestPathDb = reader.GetString(5);
-            inserted = reader.GetBoolean(6);
+            exportFormatDb = reader.GetString(2);
+            sourceIdsDb = reader.GetString(3);
+            filesDb = reader.GetString(4);
+            checksumDb = reader.GetString(5);
+            manifestPathDb = reader.GetString(6);
+            inserted = reader.GetBoolean(7);
         }
 
         if (inserted)
         {
             manifestPathDb = $"topolactor://exports/{exportJobId}/manifest.json";
-            generatedFiles = [new CliReaderGeneratedFile(fileName, command.ExportFormat, payloadBytes.LongLength, payloadChecksum, $"cli-reader-export-job://{exportJobId}/{fileName}")];
+            generatedFiles = [new CliReaderGeneratedFile(package.FileName, command.ExportFormat, package.Bytes.LongLength, package.Checksum, $"cli-reader-export-job://{exportJobId}/{package.FileName}")];
             filesDb = JsonSerializer.Serialize(generatedFiles);
 
             await using var updateJobCmd = conn.CreateCommand();
@@ -248,13 +234,72 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         return new CliReaderExportJobResult(
             exportJobId,
             status,
-            command.ExportFormat,
+            exportFormatDb,
             JsonSerializer.Deserialize<string[]>(sourceIdsDb) ?? [],
             JsonSerializer.Deserialize<CliReaderGeneratedFile[]>(filesDb) ?? [],
             checksumDb,
             manifestPathDb,
             JsonSerializer.Deserialize<JsonElement>(manifestJsonDb));
     }
+
+
+    private static GeneratedExportPackage GenerateExportPackage(CreateCliReaderExportJobCommand command)
+    {
+        var format = command.ExportFormat.ToLowerInvariant();
+        var fileName = $"cli-reader-export-{command.IdempotencyKey}.{format}";
+        var bytes = format switch
+        {
+            "csv" => ToCsvBytes(command.Rows),
+            "json" => JsonSerializer.SerializeToUtf8Bytes(command.Rows, new JsonSerializerOptions { WriteIndented = true }),
+            "pdf" => ToPdfBytes(command.Rows),
+            "zip" => ToZipBytes(command.Rows),
+            _ => throw new InvalidOperationException("CLI_READER_EXPORT_FORMAT_DENIED")
+        };
+        var checksum = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        return new GeneratedExportPackage(fileName, bytes, checksum);
+    }
+
+    private static byte[] ToCsvBytes(IReadOnlyList<Dictionary<string, object?>> rows)
+    {
+        var columns = rows.SelectMany(row => row.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var builder = new StringBuilder();
+        builder.AppendLine(string.Join(',', columns.Select(EscapeCsv)));
+        foreach (var row in rows)
+            builder.AppendLine(string.Join(',', columns.Select(column => EscapeCsv(row.TryGetValue(column, out var value) ? Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) : string.Empty))));
+        return Encoding.UTF8.GetBytes(builder.ToString());
+    }
+
+    private static string EscapeCsv(string? value)
+    {
+        var text = value ?? string.Empty;
+        return text.Contains(',') || text.Contains('"') || text.Contains('\n') || text.Contains('\r')
+            ? $"\"{text.Replace("\"", "\"\"")}\""
+            : text;
+    }
+
+    private static byte[] ToPdfBytes(IReadOnlyList<Dictionary<string, object?>> rows)
+    {
+        // Minimal deterministic PDF-like package. The file-stream bundle may replace this
+        // with rich rendering later, but create_export_job must produce format-distinct bytes now.
+        var escapedText = JsonSerializer.Serialize(rows).Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
+        var pdf = $"%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >> endobj\n4 0 obj << /Length {escapedText.Length + 36} >> stream\nBT /F1 10 Tf 36 756 Td ({escapedText}) Tj ET\nendstream endobj\n%%EOF\n";
+        return Encoding.UTF8.GetBytes(pdf);
+    }
+
+    private static byte[] ToZipBytes(IReadOnlyList<Dictionary<string, object?>> rows)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = archive.CreateEntry("export.json");
+            using var entryStream = entry.Open();
+            var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(rows, new JsonSerializerOptions { WriteIndented = true });
+            entryStream.Write(jsonBytes, 0, jsonBytes.Length);
+        }
+        return stream.ToArray();
+    }
+
+    private sealed record GeneratedExportPackage(string FileName, byte[] Bytes, string Checksum);
 
     public async Task AppendRuntimeEventAsync(CliReaderPortRuntimeEvent runtimeEvent, CancellationToken ct = default)
     {

@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
@@ -117,6 +119,47 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "CLI_READER_EXPORT_SOURCE_RECORD_IDS_REQUIRED");
         Assert.Empty(repo.ExportJobs);
+    }
+
+
+    [Fact]
+    public void Npgsql_export_package_generation_is_format_distinct_and_checksummed_from_file_bytes()
+    {
+        var rows = new[] { new Dictionary<string, object?> { ["entity_id"] = "entity-1", ["state_id"] = "active" } };
+        var checksums = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var format in new[] { "csv", "json", "pdf", "zip" })
+        {
+            var command = new CreateCliReaderExportJobCommand(
+                new AuthorizedCliReaderQuery("cli_reader_port.default", "read", "reader-user", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "reader" }, "topology.entity", ["entity_id", "state_id"], new Dictionary<string, string>(), "today", "state_id=active", "req-1", $"idem-{format}"),
+                Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                format,
+                rows,
+                ["entity-1"],
+                $"idem-{format}",
+                DateTimeOffset.UnixEpoch);
+            var package = GenerateNpgsqlPackageForTest(command);
+
+            Assert.EndsWith($".{format}", package.FileName);
+            Assert.Equal(package.Checksum, Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(package.Bytes)).ToLowerInvariant());
+            checksums.Add(package.Checksum);
+            if (format == "csv") Assert.Contains("entity_id,state_id", Encoding.UTF8.GetString(package.Bytes));
+            if (format == "json") Assert.StartsWith("[", Encoding.UTF8.GetString(package.Bytes).TrimStart());
+            if (format == "pdf") Assert.StartsWith("%PDF-1.4", Encoding.UTF8.GetString(package.Bytes));
+            if (format == "zip") Assert.Equal((byte)'P', package.Bytes[0]);
+        }
+
+        Assert.Equal(4, checksums.Count);
+    }
+
+    private static (string FileName, byte[] Bytes, string Checksum) GenerateNpgsqlPackageForTest(CreateCliReaderExportJobCommand command)
+    {
+        var method = typeof(NpgsqlCliReaderPortRepository).GetMethod("GenerateExportPackage", BindingFlags.NonPublic | BindingFlags.Static) ?? throw new InvalidOperationException("GenerateExportPackage missing");
+        var package = method.Invoke(null, [command]) ?? throw new InvalidOperationException("GenerateExportPackage returned null");
+        var type = package.GetType();
+        return (
+            (string)(type.GetProperty("FileName")?.GetValue(package) ?? throw new InvalidOperationException("FileName missing")),
+            (byte[])(type.GetProperty("Bytes")?.GetValue(package) ?? throw new InvalidOperationException("Bytes missing")),
+            (string)(type.GetProperty("Checksum")?.GetValue(package) ?? throw new InvalidOperationException("Checksum missing")));
     }
 
     [Fact]
