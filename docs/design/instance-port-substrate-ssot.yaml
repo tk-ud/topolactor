@@ -1,6 +1,6 @@
 instance_port_substrate_ssot:
   name: instance_port_substrate
-  version: 0.1.0
+  version: 0.3.2
   status: ssot_design_document
   canonical_path: docs/design/instance-port-substrate-ssot.yaml
 
@@ -9,52 +9,203 @@ instance_port_substrate_ssot:
     rejected_shape: external_port_substrate_instance_port_extension
     rationale:
       - external_port_substrate owns HTTP/hook/access/response port records for external service ingress and egress.
-      - instance_port_substrate owns credential-backed runtime connections to DB/runtime instances and manifest-authorized instance function calls.
-      - DB/runtime instance connection authority, SQL function allowlists, timeout policy, and result sanitization require a separate authority boundary from HTTP/hook port dispatch.
+      - instance_port_substrate owns credential-backed runtime connections to DB/runtime instances and manifest-authorized instance operation calls.
+      - DB/runtime instance connection authority, operation allowlists, timeout policy, and result sanitization require a separate authority boundary from HTTP/hook port dispatch.
       - Keeping this as a sibling prevents external_port_substrate operation_key growth and prevents weakening call_postgres_function's Topolactor-DB-only topology function boundary.
-      - The substrate is intentionally consumer-agnostic and must support peer Topolactor instances and external PostgreSQL instances without provider-specific C# handlers.
+      - The substrate is intentionally consumer-agnostic and must support peer Topolactor instances and legacy DB/runtime instances without provider-specific C# handlers.
     external_port_relationship:
       external_port_substrate_ref: docs/design/external-port-substrate-ssot.yaml
       relationship: sibling_substrate_with_shared_credential_requirement_vocabulary
       distinction:
         external_http_hook_ports: access_port / response_port / hook_port dispatch HTTP/service edges and hook intake through external_port_runtime policy steps.
-        instance_ports: db_instance_port / runtime_instance_port resolve runtime-only credentials and call manifest-authorized instance functions through instance_port_runtime.
+        instance_ports: db_instance_port / runtime_instance_port resolve runtime-only credentials and call approved instance operations through instance_port_runtime.
       non_extension_rule: Do not add db_instance_port or runtime_instance_port to external_port_substrate port_kinds.
 
   purpose:
     summary: >-
-      Credential-backed instance connection and instance function call substrate.
+      Credential-backed instance connection and approved instance operation substrate.
       It lets Topolactor resolve a runtime-only credential reference, connect to an authorized
-      external DB/runtime instance, and invoke a manifest-authorized abstract function such as
-      call_instance_postgres_function without making the external instance a Topolactor runtime SSOT.
+      legacy DB/runtime instance, and invoke an admin-approved operation binding such as
+      call_instance_postgres_function or call_bound_instance_function without making the external
+      instance a Topolactor runtime SSOT.
     goals:
       - credential_backed_instance_function
       - db_instance_port
       - runtime_instance_port
       - runtime_only_secret_resolution_by_reference_key
-      - manifest_authorized_instance_function_call
+      - template_import_driven_binding_authoring
+      - seed_aligned_json_template_generation
+      - existing_credential_management_projection_extension
+      - admin_approved_instance_operation_binding
       - instance_connection_policy
       - instance_function_authority_binding
+      - existing_runtime_interactions_reuse
     non_goals:
       - provider_specific_runtime_handler
       - provider_specific_runtime_selector
+      - discovery_driven_runtime_or_db_introspection
+      - binary_scan_or_source_scan_inside_topolactor
+      - runtime_manifest_endpoint_requirement
+      - standalone_credential_management_plane
+      - new_dedicated_credential_management_route_or_panel
       - arbitrary_external_db_function_execution
       - direct_DB_write_from_external_tool
       - external_instance_as_topolactor_runtime_ssot
       - plaintext_connection_string_in_seed_ssot_projection_or_log
       - weakening_call_postgres_function_topology_only_boundary
 
+  authoring_model:
+    selected_shape: template_import_driven_not_discovery_driven
+    rule: >-
+      Topolactor does not introspect, scan, or analyze legacy DB / Runtime targets.
+      It issues import templates, validates imported artifacts, blocks prohibited material,
+      and promotes admin-approved draft bindings into execution authority.
+    legacy_target_assumption:
+      - legacy_DB_or_runtime_is_non_extensible
+      - no_required_manifest_endpoint
+      - no_required_agent_installation
+      - no_required_stored_procedure_addition
+      - no_required_runtime_code_change
+    permitted_outside_topolactor_assistance:
+      - AI_or_Agent_may_read_external_repository_docs_sql_migrations_tests_to_fill_import_template
+      - outside_analysis_output_is_draft_evidence_only
+      - imported_draft_must_be_validated_and_admin_approved_before_callable
+    prohibited_inside_topolactor:
+      - DB_catalog_introspection_as_authoring_runtime
+      - information_schema_discovery_as_authoring_runtime
+      - runtime_binary_scan
+      - runtime_source_tree_scan
+      - OpenAPI_or_gRPC_or_CLI_discovery_requirement
+      - automatic_authority_from_discovery_result
+
+  seed_aligned_json_template_boundary:
+    purpose: >-
+      Generate JSON templates aligned with Topolactor seed/projection record shapes so an operator
+      or outside AI/Agent can fill instance address and operation drafts without granting Topolactor
+      discovery authority over the legacy DB/runtime.
+    template_kind:
+      - instance_address_import_template_json
+      - instance_operation_import_template_json
+      - legacy_instance_binding_import_bundle_json
+    owner_reviewed_decision:
+      status: owner_reviewed
+      decision: public_safe_template_shape_is_allowed_and_required
+      rationale: >-
+        Public-safe seed/projection structure is an authoring contract, not a secret. JSON templates must expose
+        enough field names, draft keys, reference-key slots, and schema/output reference slots for a human or outside
+        AI/Agent to fill the import artifact. The protected boundary is not structural secrecy; it is secret material,
+        runtime-only values, raw SQL, and executable authority.
+    allowed_template_information:
+      - public_safe_seed_projection_shape
+      - field_names
+      - draft_reference_key_slots
+      - instance_authority_key_placeholder
+      - operation_binding_key_placeholder
+      - provider_kind_and_required_by_bundle_labels
+      - input_schema_key_and_output_shape_key_references
+    protected_boundary:
+      - plaintext_secret
+      - connection_string
+      - endpoint_real_value
+      - credential_plaintext
+      - private_key_material
+      - runtime_only_decrypted_payload
+      - raw_SQL
+      - unapproved_executable_function_or_schema_authority
+    template_authority_and_secret_leakage_boundary:
+      rule: >-
+        The risk is not exposing public-safe structure itself. The risk is mixing that structure with real endpoint
+        values, credential material, raw SQL, runtime-only decrypted payload, or approval-bypassing executable
+        authority.
+      mitigation:
+        - export_public_safe_shape_only
+        - use_reference_keys_and_display_labels_instead_of_real_values
+        - use_placeholders_for_instance_authority_key_address_ref_and_operation_binding_key
+        - omit_secret_material_connection_strings_endpoint_real_values_raw_SQL_private_keys_and_runtime_only_decrypted_payload
+        - omit_internal_topology_authority_as_executable_payload
+        - never_make_downloaded_template_or_imported_draft_callable_without_validate_and_admin_approval
+    import_download_rule: >-
+      JSON download exports a sanitized template/draft artifact. JSON import validates shape and rejects prohibited
+      material before records can be reviewed. Import/download never exposes runtime-only material and never creates
+      execution authority by itself.
+
+  import_contracts:
+    legacy_instance_binding_import:
+      role: Topolactor-owned import envelope for address and operation draft bindings.
+      statuses:
+        imported: draft evidence only
+        validated: shape and prohibition checks passed but not callable
+        approved: admin-approved execution authority candidate
+      authority_rule: AI-filled or operator-filled import artifacts are never execution authority until validated and approved by admin.
+      prohibited_material:
+        - plaintext_secret
+        - connection_string
+        - endpoint_real_value
+        - raw_SQL
+        - credential_plaintext
+        - private_key_material
+    instance_address_import:
+      role: Bind a registered DB/runtime name to a credential reference and connection policy reference.
+      required_fields:
+        - instance_authority_key
+        - instance_display_name
+        - port_kind
+        - provider_kind
+        - required_by_bundle
+        - address_ref
+        - credential_reference_key
+        - connection_policy_key
+        - active
+      constraints:
+        - address_ref_is_identifier_not_endpoint_value
+        - credential_reference_key_is_identifier_not_secret_material
+        - provider_kind_is_data_only
+        - required_by_bundle_is_data_only
+        - no_provider_kind_or_required_by_bundle_CSharp_if_switch_selector
+    instance_operation_import:
+      role: Bind approved operation/function names to a registered instance without authoring execution from the frontend.
+      required_fields:
+        - instance_authority_key
+        - operation_binding_key
+        - display_label
+        - operation_protocol
+        - function_name
+        - input_schema_key
+        - output_shape_key
+        - sanitize_policy_key
+        - idempotency_policy_key
+        - callable
+      optional_guarded_fields:
+        - schema_name
+        - function_signature_label
+        - operation_profile_label
+      constraints:
+        - function_name_is_imported_metadata_not_frontend_payload_authority
+        - schema_name_is_imported_metadata_not_frontend_payload_authority
+        - operation_profile_label_is_filter_or_display_only
+        - callable_false_until_admin_approved
+        - no_raw_SQL_or_table_authority_in_import
+      profile_labels:
+        purpose: Candidate filtering and display grouping only; never a runtime selector.
+        examples:
+          - topolactor
+          - example
+          - legacy_db
+          - private_runtime
+
   port_kinds:
     db_instance_port:
       role: credential_backed_connection_to_database_instance
       examples:
-        - primary_external_db
-        - reporting_external_db
-        - peer_topolactor_reporting_db
+        - registered_legacy_database
+        - reporting_database
+        - peer_topolactor_database
       required_fields:
         - instance_authority_key
+        - instance_display_name
         - provider_kind
         - required_by_bundle
+        - address_ref
         - credential_requirement
         - connection_policy_key
         - active
@@ -63,12 +214,14 @@ instance_port_substrate_ssot:
       role: credential_backed_connection_to_remote_runtime_instance
       required_fields:
         - instance_authority_key
+        - instance_display_name
         - provider_kind
         - required_by_bundle
+        - address_ref
         - credential_requirement
         - connection_policy_key
         - active
-      rule: Runtime instance calls use manifest-authorized functions or commands only; the remote instance is never canonical Topolactor runtime authority.
+      rule: Runtime instance calls use admin-approved operations only; the remote instance is never canonical Topolactor runtime authority.
 
   credential_requirement:
     fields:
@@ -92,46 +245,201 @@ instance_port_substrate_ssot:
         - no_provider_kind_or_required_by_bundle_CSharp_if_switch_selector
         - no_dedicated_credential_runtime_or_admin_ui
         - plaintext_connection_string_forbidden_in_seed_ssot_projection_log
+    credential_kind_relation:
+      rule: Do not add instance as an external_port credential_kind.
+      existing_external_port_values:
+        - auth
+        - external
+        - none
+      instance_handling: instance settings are a credential management projection mode/category backed by instance_port_substrate records, not a credential_kind value on external_port records.
+
+  existing_credential_management_projection_extension:
+    confirmed_existing_seed:
+      manifest_key: auth.external.credential_management.projection
+      manifest_id: 00000000-0000-0000-0000-000000000092
+      user_auth_boundary_manifest_id: 00000000-0000-0000-0000-000000000091
+      seed_file: db/seed_empty.sql
+      existing_shape:
+        - fixed_form_projection
+        - physical_binding_seed_projection_marker_only
+        - screen_data_shape
+        - relationIntents_to_auth_user_boundary
+        - policy_template_selection
+      existing_modes:
+        user_auth: represented by auth.user.boundary and joined from the credential management projection.
+        external: represented by external_port_context and policy_template_selection.
+      missing_mode:
+        instance_settings: not yet represented and must be added by this substrate before implemented can be claimed.
+    selected_shape: extend_existing_credential_management_projection
+    rule: >-
+      Instance settings extend the existing credential management screen/projection. Do not create a new
+      standalone credential plane, dedicated credential route/panel, or UI Builder CRUD product surface.
+      The user/auth, external, and instance categories should be switched by select/mode/category while
+      preserving the same fixed-form projection structure where possible.
+    projection_categories:
+      user_auth:
+        role: Existing user/auth credential boundary; instance-port must not mix external or instance secrets into auth credentials.
+      external:
+        role: Existing external port credential context for access_port / response_port / hook_port records.
+      instance_settings:
+        role: New category for db_instance_port / runtime_instance_port address and operation binding drafts.
+        owns:
+          - seed_aligned_json_template_download
+          - json_import
+          - registered_runtime_or_db_list
+          - registered_runtime_or_db_edit
+          - instance_operation_list
+          - instance_operation_edit
+          - validate_preview_apply_for_instance_settings
+        projected_metadata_only:
+          - instance_authority_key
+          - instance_display_name
+          - port_kind
+          - provider_kind
+          - required_by_bundle
+          - address_ref
+          - credential_reference_key
+          - connection_policy_key
+          - operation_binding_key
+          - display_label
+          - operation_protocol
+          - input_schema_key
+          - output_shape_key
+          - sanitize_policy_key
+          - callable
+        prohibited_projection_fields:
+          - plaintext_secret
+          - connection_string
+          - endpoint_real_value
+          - raw_SQL
+          - credential_plaintext
+          - private_key_material
+          - runtime_only_decrypted_payload
+    same_form_ui_rule: >-
+      The credential management screen may use a select/mode/category switch for user_auth / external /
+      instance_settings. The UI should remain same-form where possible; instance-only additions are allowed
+      for JSON template download/import, Runtime/DB registration, and operation binding list/edit.
+    seed_rule: >-
+      Instance settings may be backed by seed-created topology/projection records that extend the existing
+      credential management projection. Seed may register the instance category, list/edit forms, JSON import/download
+      actions, validation/preview/apply wiring, and relation intents, but must not add a standalone route or raw
+      physical table row editor.
+    guard_rule: >-
+      check-instance-port-substrate.sh should verify the instance_settings category is wired to the existing
+      credential management projection and should forbid instance_as_external_port_credential_kind,
+      standalone credential planes, dedicated routes/panels, plaintext credentials, endpoint real values,
+      raw SQL, and UI Builder function definition authoring.
+
+  admin_authoring_boundary:
+    preferred_vocabulary: existing_credential_management_projection_extension
+    admin_import_surface:
+      owns:
+        - generate_instance_address_import_template
+        - generate_instance_operation_import_template
+        - validate_import_artifact_shape
+        - reject_prohibited_secret_or_endpoint_material
+        - admin_review_and_approve_operation_bindings
+      does_not_own:
+        - legacy_DB_or_runtime_analysis
+        - secret_material_collection
+        - direct_runtime_execution
+        - arbitrary_SQL_authoring
+    design_inspector_surface:
+      role: Extend existing Admin UI Builder Design Inspector event authoring so approved instance operations can be assigned to UI events; do not define functions.
+      reuse_existing_runtime_interactions:
+        trigger: runtimeInteractions.trigger is the UI firing trigger.
+        data_scope: runtimeInteractions.payloadFrom is the data scope / payload binding map.
+        result_capture: runtimeInteractions.outputProp is the result capture key.
+      allowed_authoring:
+        - select_approved_instance_operation_candidate
+        - select_event_action_dispatchInstanceOperation
+        - select_trigger
+        - map_payloadFrom
+        - select_outputProp
+      prohibited_authoring:
+        - actual_address_edit
+        - actual_schema_edit
+        - actual_function_edit
+        - raw_SQL_edit
+        - credential_material_edit
+        - unapproved_operation_free_text
+    package_wiring_target_surface:
+      future_target_surface: instance_port
+      candidate_source: admin-approved instance_operation_authority_binding records only.
+      no_free_text_rule: Design Inspector / PackageWiringEditor must not accept address, schema, function, SQL, or credential free-text as executable authority.
+
+  design_inspector_event_wiring_contract:
+    selected_shape: design_inspector_event_authoring_extends_existing_runtimeInteractions
+    scope_rule: >-
+      This is an Admin UI Builder Design Inspector event-authoring extension. It is not a new frontend screen,
+      not a UI Builder rebuild, and not an instance settings editor. Instance settings registration, JSON import/download,
+      and credential/address editing belong to the credential management projection. The Design Inspector only lets an
+      existing UI event choose an approved instance operation action and bind trigger / payloadFrom / outputProp.
+    runtime_interaction_shape:
+      actionType: dispatchInstanceOperation
+      trigger: existing runtimeInteractions.trigger
+      instanceTargetRef: instance-port:<portKind>:<instancePortId>:<operationBindingKey>
+      payloadFrom: existing runtimeInteractions.payloadFrom
+      outputProp: existing runtimeInteractions.outputProp
+    dispatch_payload_shape:
+      instance_target_ref: instance-port:<portKind>:<instancePortId>:<operationBindingKey>
+      dispatch_payload: {}
+      output_prop: optional string
+    target_ref_rules:
+      - instanceTargetRef uses instance-port prefix and must not reuse manifest target_ref.
+      - instanceTargetRef must not be accepted as external port_target_ref.
+      - route target_ref and manifest target_ref remain separate contracts.
+    design_inspector_existing_surface_alignment:
+      - Existing Admin UI Builder Design Inspector event settings already use runtimeInteractions trigger / payloadFrom / outputProp concepts.
+      - dispatchInstanceOperation is an additional event action choice beside existing dispatchExternalPort-style event wiring, not a standalone frontend feature.
+      - frontend/runtime/renderEmission.ts should add dispatchInstanceOperation as an event binding sibling without changing the trigger/data-scope/result concepts.
+      - frontend/runtime/frontendScheduler.ts should enqueue the approved instance operation dispatch command after Design Inspector event binding resolves instanceTargetRef.
+      - frontend/lib/packageWiringOptions.ts should expose instance_port only as an event target surface candidate for approved instance operations after this SSOT vocabulary is implemented.
 
   runtime_boundary:
     runtime_lane:
       selected_lane: instance_port_runtime
       rationale:
         - external_port_runtime remains the HTTP/hook/access/response port dispatch lane.
-        - instance_port_runtime is a sibling lane for credential-backed DB/runtime instance calls.
-        - Sharing the external_port_runtime lane would mix hook/HTTP policy operations with instance connection and SQL function authority.
+        - instance_port_runtime is a sibling lane for credential-backed DB/runtime instance operation calls.
+        - Sharing the external_port_runtime lane would mix hook/HTTP policy operations with instance connection and function authority.
       required_route:
         - manifest_dispatcher
         - abstract_function_runtime
         - instance_port_runtime
         - credential_reference_resolution
         - instance_connection_policy
-        - instance_function_authority_binding
+        - instance_operation_authority_binding
         - call_instance_postgres_function_or_call_bound_instance_function
         - result_sanitize_and_secret_deny
       fail_close_statuses:
+        - INSTANCE_PORT_TARGET_REF_INVALID
         - INSTANCE_PORT_RECORD_MISSING
         - INSTANCE_CREDENTIAL_REFERENCE_MISSING
         - INSTANCE_CONNECTION_POLICY_MISSING
+        - INSTANCE_OPERATION_AUTHORITY_MISSING
         - INSTANCE_FUNCTION_AUTHORITY_MISSING
         - INSTANCE_FUNCTION_NOT_ALLOWLISTED
         - INSTANCE_FUNCTION_SCHEMA_NOT_ALLOWLISTED
+        - INSTANCE_OPERATION_NOT_APPROVED
         - INSTANCE_RESULT_SECRET_DENIED
         - INSTANCE_TIMEOUT_EXCEEDED
         - INSTANCE_PROVIDER_SELECTOR_FORBIDDEN
+        - INSTANCE_IMPORT_SECRET_MATERIAL_DENIED
 
   abstract_function_primitives:
     selected_shape: abstract_function_primitive_not_external_port_policy_operation_key
     rationale:
-      - call_instance_postgres_function needs manifest, authority binding, input binding, output shape, timeout, and secret-deny enforcement.
+      - call_instance_postgres_function needs approved operation binding, input binding, output shape, timeout, and secret-deny enforcement.
       - External port policy operation_key is for port-record policy sequencing and must not become a generic external DB execution surface.
       - call_postgres_function remains limited to Topolactor DB topology.* functions and fixed Topolactor connectionString.
     primitives:
       call_instance_postgres_function:
-        role: Invoke a PostgreSQL function on a credential-backed db_instance_port.
+        role: Invoke an approved PostgreSQL function binding on a credential-backed db_instance_port.
         mandatory_authority:
+          - admin-approved operation binding
           - function name allowlist
-          - schema allowlist
+          - schema allowlist when schema is required by protocol
           - instance authority binding
           - required instance_connection_policy
           - required output_shape and secret-deny projection
@@ -147,7 +455,7 @@ instance_port_substrate_ssot:
       call_bound_instance_function:
         role: Generic instance-bound abstract function call wrapper used when the target is not PostgreSQL-specific.
         mandatory_authority:
-          - instance_function_authority_binding
+          - instance_operation_authority_binding
           - function_key_binding
           - output_shape
           - secret_deny_projection
@@ -158,7 +466,7 @@ instance_port_substrate_ssot:
           - resolve_credential_reference_by_reference_key
           - materialize_runtime_only_connection
           - verify_instance_connection_policy
-          - verify_instance_function_authority_binding
+          - verify_instance_operation_authority_binding
           - execute_allowed_function
           - sanitize_result
           - append_audit_without_secret_material
@@ -175,25 +483,30 @@ instance_port_substrate_ssot:
         - allowed_function_names
         - result_sanitize_policy_key
       rule: Policy is data-defined and loaded by manifest/runtime; provider_kind and required_by_bundle remain data labels, not C# selectors.
-    instance_function_authority_binding:
-      selected_shape: extend_abstract_function_authority_bindings_with_instance_authority_kinds
+    instance_operation_authority_binding:
+      selected_shape: successor_or_extension_of_abstract_function_authority_bindings_for_instance_operations
       required_authority_kinds:
         - instance
         - instance_function
         - instance_schema
+        - instance_operation
         - output
       note: Existing table/policy/output bindings are not enough because external instance authority is not a Topolactor physical table authority.
-      binding_rule: The manifest must bind function_key to instance_authority_key plus schema/function allowlist before execution.
+      binding_rule: The manifest/runtime must bind operation_binding_key to instance_authority_key plus allowed function/schema metadata before execution.
+      approval_rule: Imported operation bindings remain callable=false until admin approval persists authority.
+    instance_function_authority_binding:
+      compatibility_name: instance_operation_authority_binding
+      note: Existing guard vocabulary may still use instance_function_authority_binding; new SSOT language prefers operation binding because runtime_instance_port may call non-SQL operation protocols later.
     multiple_instance_connections:
       rule: Multiple connection targets are represented by distinct instance_authority_key values, not provider-specific runtime classes.
       examples:
-        - instance_authority_key: primary_external_db
+        - instance_authority_key: registered_legacy_db
           provider_kind: external_postgres
           required_by_bundle: generic_instance_integration
           data_only: true
-        - instance_authority_key: reporting_external_db
-          provider_kind: external_postgres
-          required_by_bundle: analytics_instance_integration
+        - instance_authority_key: registered_peer_runtime
+          provider_kind: peer_runtime
+          required_by_bundle: generic_instance_integration
           data_only: true
 
   call_postgres_function_boundary:
@@ -202,18 +515,18 @@ instance_port_substrate_ssot:
       call_postgres_function remains Topolactor DB only and must keep the ^topology\. function-name boundary plus the Topolactor DB connectionString.
       It must not be generalized for external DB connections.
     new_primitive: call_instance_postgres_function
-    separation_rule: call_instance_postgres_function uses instance_port_runtime, instance_connection_policy, reference_key credential resolution, and instance_function_authority_binding.
+    separation_rule: call_instance_postgres_function uses instance_port_runtime, instance_connection_policy, reference_key credential resolution, and instance_operation_authority_binding.
 
   generic_consumer_example:
     status: example_only_not_provider_specific_design
     example_manifest:
-      abstract_function_key: external_instance.allowed_operation
+      abstract_function_key: registered_instance.approved_operation
       runtime_lane: instance_port_runtime
       primitive: call_instance_postgres_function
-      function: integration_schema.allowed_operation
-      instance_authority_key: primary_external_db
+      operation_binding_key: approved_operation_key
+      instance_authority_key: registered_instance_key
       credential_requirement:
-        reference_key: primary_external_db_secret
+        reference_key: registered_instance_secret_ref
       result_projection:
         output_shape_required: true
         secret_deny_required: true
@@ -223,6 +536,23 @@ instance_port_substrate_ssot:
       - no_provider_specific_runtime_handler
       - no_provider_specific_schema_in_topolactor_db
       - no_external_instance_semantic_authority_in_topolactor_db
+
+  impact_map:
+    external_port_substrate_ssot: >-
+      Instance settings do not extend external_port port kinds and do not add instance as credential_kind.
+      They extend the existing credential management projection as an instance settings category backed by instance_port_substrate records.
+    secret_credential_ssot: >-
+      Dedicated credential admin UI remains prohibited. Instance settings reuse the existing credential management projection and guarded vault/reference-key model.
+    admin_console_workflow_ssot: >-
+      Future implementation must expose instance JSON template import/download, list/edit, validation, preview, and approval through the existing credential management projection extension; Design Inspector event authoring only selects approved functions and maps trigger/payloadFrom/outputProp.
+    runtime_orchestration_ssot: >-
+      Future implementation must add instance_port_runtime as a sibling lane without mixing it into external_port_runtime.
+    abstract_function_primitive_registry_ssot: >-
+      Existing planned vocabulary remains; implementation should treat call_instance_postgres_function as an adapter under approved instance operation authority.
+    frontend_runtime: >-
+      Existing runtimeInteractions trigger/payloadFrom/outputProp are reused by Admin UI Builder Design Inspector event authoring; only the event action vocabulary and instanceTargetRef dispatch binding are extended for approved instance operations.
+    ci_guard: >-
+      check-instance-port-substrate.sh should guard template/import-driven vocabulary, existing credential management projection extension, Design Inspector event-authoring scope, and discovery/runtime scanning prohibitions.
 
   prohibited_patterns:
     - provider_specific_schema_in_topolactor_db
@@ -239,6 +569,15 @@ instance_port_substrate_ssot:
     - webhook_direct_runtime_execution_without_scheduler
     - arbitrary_external_DB_function_execution
     - external_instance_as_runtime_SSOT
+    - discovery_driven_instance_authority
+    - runtime_binary_scan_as_authoring_path
+    - DB_catalog_introspection_as_authoring_path
+    - runtime_manifest_endpoint_required_for_legacy_instance
+    - UI_builder_function_definition_authoring
+    - instance_as_external_port_credential_kind
+    - standalone_credential_management_plane
+    - new_dedicated_credential_management_route_or_panel
+    - seed_aligned_template_exporting_structure_authority_or_secret_material
 
   completion_gate:
     required_before_implemented_claim:
@@ -246,6 +585,10 @@ instance_port_substrate_ssot:
       - check-instance-port-substrate.sh passes.
       - call_instance_postgres_function tests prove it does not weaken call_postgres_function.
       - provider_kind and required_by_bundle have no C# if/switch selector.
-      - no plaintext credential, connection string, endpoint real value, raw SQL, table authority, or function authority appears in seed, projection, logs, or SSOT examples.
+      - no plaintext credential, connection string, endpoint real value, raw SQL, table authority, or executable function authority appears in seed, projection, logs, or SSOT examples.
       - abstract_function_authority_bindings or successor manifest binding controls instance/function/schema/output authority.
       - external instance is documented and tested as a call target, not Topolactor runtime SSOT.
+      - The existing credential management projection is extended with instance_settings for JSON template download/import, registered Runtime/DB list/edit, operation list/edit, validate, preview, and explicit apply before UI Builder can select instance operations.
+      - Seed-aligned JSON template generation is sanitized against structural information leakage.
+      - Admin UI Builder Design Inspector event authoring uses existing runtimeInteractions trigger/payloadFrom/outputProp and only adds dispatchInstanceOperation / instanceTargetRef as approved instance operation event choices.
+      - Topolactor does not implement discovery-driven analysis of legacy DB/runtime targets for this substrate.
