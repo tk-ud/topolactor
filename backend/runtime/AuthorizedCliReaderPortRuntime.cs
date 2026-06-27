@@ -184,6 +184,48 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         return null;
     }
 
+
+    private async Task<EndpointResponseDto?> ValidateImportCandidateScopeAsync(ParsedCliReaderRequest parsed, CliReaderPortConfig config, CliReaderPortRuntimeEvent seed, CancellationToken ct)
+    {
+        if (string.Equals(parsed.Operation, "get_preview_diff", StringComparison.OrdinalIgnoreCase)) return null;
+        if (!RequiresAssignmentScope(parsed.Operation!)) return null;
+
+        var candidateObject = ExtractScopeValue(parsed.AssignedBusinessObjectCandidate, "candidate", "business_object", "businessObject", "object_type", "objectType");
+        var assignedObject = ExtractScopeValue(parsed.AssignedBusinessObject, "business_object", "businessObject", "object_type", "objectType", "name");
+        var targetScope = ExtractScopeValue(parsed.AssignmentTargetScope, "scope", "target_scope", "targetScope", "table", "target", "target_table", "targetTable");
+
+        if (config.AllowedBusinessObjects.Count > 0)
+        {
+            if (string.IsNullOrWhiteSpace(candidateObject) || !config.AllowedBusinessObjects.Contains(candidateObject) ||
+                string.IsNullOrWhiteSpace(assignedObject) || !config.AllowedBusinessObjects.Contains(assignedObject))
+                return await FailAsync(seed, "CLI_READER_IMPORT_BUSINESS_OBJECT_SCOPE_DENIED", "Business object assignment candidate is outside the dispatch-resolved cli_reader_port scope.", ct);
+        }
+
+        if (config.AllowedAssignmentTargetScopes.Count > 0)
+        {
+            if (string.IsNullOrWhiteSpace(targetScope) || !config.AllowedAssignmentTargetScopes.Contains(targetScope))
+                return await FailAsync(seed, "CLI_READER_IMPORT_ASSIGNMENT_TARGET_SCOPE_DENIED", "Assignment target scope is outside the dispatch-resolved cli_reader_port scope.", ct);
+        }
+
+        return null;
+    }
+
+    private static bool RequiresAssignmentScope(string operation) =>
+        string.Equals(operation, "assign_business_object_candidate", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(operation, "create_draft_operation", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(operation, "create_commit_candidate", StringComparison.OrdinalIgnoreCase);
+
+    private static string? ExtractScopeValue(JsonElement? element, params string[] names)
+    {
+        if (element is null) return null;
+        if (element.Value.ValueKind == JsonValueKind.String) return element.Value.GetString();
+        if (element.Value.ValueKind != JsonValueKind.Object) return null;
+        foreach (var name in names)
+            if (element.Value.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
+                return value.GetString();
+        return null;
+    }
+
     private async Task<EndpointResponseDto> ExecuteImportCandidateAsync(ParsedCliReaderRequest parsed, CliReaderPortConfig config, CliReaderPortRuntimeEvent seed, CancellationToken ct)
     {
         if (!config.AuditRequired)
@@ -191,6 +233,8 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
 
         var requiredFieldError = await ValidateImportCandidateRequiredFieldsAsync(parsed, seed, ct);
         if (requiredFieldError is not null) return requiredFieldError;
+        var scopeError = await ValidateImportCandidateScopeAsync(parsed, config, seed, ct);
+        if (scopeError is not null) return scopeError;
 
         if (string.Equals(parsed.Operation, "get_preview_diff", StringComparison.OrdinalIgnoreCase))
         {
@@ -222,8 +266,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
             parsed.UnresolvedFields!.Value, previewDiff, parsed.AssignedBusinessObjectCandidate!.Value, parsed.DraftOperationId,
             parsed.AssignedBusinessObject, parsed.AssignmentTargetScope, parsed.EvidenceRefs!.Value, parsed.ApprovalStatus ?? "not_requested",
             "candidate_created", parsed.IdempotencyKey!, _timeProvider.GetUtcNow()), ct);
-        await _repository.RecordImportCandidateEvidenceAsync(result.CandidateId, "cli_mcp_import_candidate_created", _timeProvider.GetUtcNow(), ct);
-        await AppendAsync(seed with { Status = "success", Code = "CLI_READER_IMPORT_CANDIDATE_CREATED", ScopeSummary = $"candidate_id={result.CandidateId};candidate_kind={result.CandidateKind};commit=false;approval=false" }, ct);
+        await AppendAsync(seed with { Status = "success", Code = result.WasCreated ? "CLI_READER_IMPORT_CANDIDATE_CREATED" : "CLI_READER_IMPORT_CANDIDATE_REPLAYED", ScopeSummary = $"candidate_id={result.CandidateId};candidate_kind={result.CandidateKind};commit=false;approval=false" }, ct);
         var response = new { parsed.Operation, result.CandidateId, result.CandidateKind, result.Status, result.EvidenceUri, result.PreviewDiff, result.UnresolvedFields, result.AssignedBusinessObjectCandidate, result.DraftOperationId, result.AssignedBusinessObject, result.AssignmentTargetScope, result.EvidenceRefs, result.Confidence, result.SourceTranscriptRef, result.RootUtterance, result.ApprovalStatus, ssotConfirmed = false, committed = false, approvalUpdated = false };
         return new EndpointResponseDto(true, new Emission(null, null, null, [], JsonSerializer.SerializeToElement(response), []), []);
     }

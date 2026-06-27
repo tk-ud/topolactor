@@ -412,6 +412,59 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
     }
 
 
+
+    [Theory]
+    [InlineData("assigned_business_object_candidate", "other")]
+    [InlineData("assigned_business_object", "other")]
+    public async Task Candidate_operations_fail_close_when_business_object_is_outside_dispatch_scope(string field, string deniedValue)
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+        var extra = ImportCandidateExtra();
+        extra[field] = field == "assigned_business_object_candidate"
+            ? new Dictionary<string, object?> { ["candidate"] = deniedValue }
+            : new Dictionary<string, object?> { ["business_object"] = deniedValue };
+
+        var response = await runtime.ExecuteAsync(Request("create_commit_candidate", extra: extra), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_IMPORT_BUSINESS_OBJECT_SCOPE_DENIED");
+        Assert.Empty(repo.ImportCandidates);
+    }
+
+    [Fact]
+    public async Task Candidate_operations_fail_close_when_assignment_target_scope_is_outside_dispatch_scope()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+        var extra = ImportCandidateExtra();
+        extra["assignment_target_scope"] = new Dictionary<string, object?> { ["table"] = "topology.denied" };
+
+        var response = await runtime.ExecuteAsync(Request("create_commit_candidate", extra: extra), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_IMPORT_ASSIGNMENT_TARGET_SCOPE_DENIED");
+        Assert.Empty(repo.ImportCandidates);
+    }
+
+    [Fact]
+    public async Task Idempotent_replay_reuses_existing_candidate_id_for_runtime_evidence()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var first = await runtime.ExecuteAsync(ImportCandidateRequest("create_commit_candidate"), Guid.NewGuid());
+        var second = await runtime.ExecuteAsync(ImportCandidateRequest("create_commit_candidate"), Guid.NewGuid());
+
+        Assert.True(first.Success);
+        Assert.True(second.Success);
+        Assert.Single(repo.ImportCandidates);
+        var candidateId = repo.ImportCandidateResults.Values.Single().CandidateId;
+        Assert.Contains(repo.ImportCandidateEvidence, e => e.CandidateId == candidateId && e.EventType == "cli_mcp_import_candidate_created");
+        Assert.Contains(repo.ImportCandidateEvidence, e => e.CandidateId == candidateId && e.EventType == "cli_mcp_import_candidate_replayed");
+        Assert.DoesNotContain(repo.ImportCandidateEvidence, e => e.CandidateId != candidateId);
+    }
+
     [Theory]
     [InlineData("source_transcript_ref")]
     [InlineData("root_utterance")]
@@ -483,7 +536,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         ["confidence"] = 0.73m,
         ["unresolved_fields"] = new[] { "needs_human" },
         ["preview_diff"] = new Dictionary<string, object?> { ["changes"] = new[] { "draft_only" } },
-        ["assigned_business_object_candidate"] = new Dictionary<string, object?> { ["candidate"] = "Acme" },
+        ["assigned_business_object_candidate"] = new Dictionary<string, object?> { ["candidate"] = "account" },
         ["draft_operation_id"] = "33333333-3333-3333-3333-333333333333",
         ["assigned_business_object"] = new Dictionary<string, object?> { ["business_object"] = "account" },
         ["assignment_target_scope"] = new Dictionary<string, object?> { ["table"] = "topology.entity" },
@@ -503,7 +556,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         $"topolactor://commit-candidates/{candidateId}/evidence.json",
         JsonSerializer.SerializeToElement(new { changes = new[] { "draft_only" }, commit = false }),
         JsonSerializer.SerializeToElement(new[] { "needs_human" }),
-        JsonSerializer.SerializeToElement(new { candidate = "Acme" }),
+        JsonSerializer.SerializeToElement(new { candidate = "account" }),
         Guid.Parse("33333333-3333-3333-3333-333333333333"),
         JsonSerializer.SerializeToElement(new { business_object = "account" }),
         JsonSerializer.SerializeToElement(new { table = "topology.entity" }),
@@ -559,6 +612,8 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "today" },
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["reader-user"] = "state_id=active" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cli_reader_port.read" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "account" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "topology.entity" },
         true,
         60,
         true);
@@ -596,6 +651,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         public List<(Guid ExportJobId, string FailureCode)> DownloadFailureEvidence { get; } = [];
         public List<CreateCliReaderImportCandidateCommand> ImportCandidates { get; } = [];
         public Dictionary<Guid, CliReaderImportCandidateResult> ImportCandidateResults { get; } = [];
+        private Dictionary<string, Guid> ImportCandidateIdsByIdempotencyKey { get; } = new(StringComparer.OrdinalIgnoreCase);
         public List<(Guid CandidateId, string EventType)> ImportCandidateEvidence { get; } = [];
         public bool ReturnRowsWithoutSourceIds { get; init; }
         public Task<CliReaderPortConfig?> LoadPortAsync(string portKey, CancellationToken ct = default) => Task.FromResult(config);
@@ -660,10 +716,18 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
 
         public Task<CliReaderImportCandidateResult> CreateImportCandidateAsync(CreateCliReaderImportCandidateCommand command, CancellationToken ct = default)
         {
+            if (ImportCandidateIdsByIdempotencyKey.TryGetValue(command.IdempotencyKey, out var existingCandidateId))
+            {
+                var existing = ImportCandidateResults[existingCandidateId] with { WasCreated = false };
+                ImportCandidateEvidence.Add((existingCandidateId, "cli_mcp_import_candidate_replayed"));
+                return Task.FromResult(existing);
+            }
             ImportCandidates.Add(command);
             var candidateId = Guid.NewGuid();
-            var result = new CliReaderImportCandidateResult(candidateId, command.CandidateKind, command.Status, command.RequestedBy, command.RequestedAt, command.IdempotencyKey, $"topolactor://commit-candidates/{candidateId}/evidence.json", command.PreviewDiff, command.UnresolvedFields, command.AssignedBusinessObjectCandidate, command.DraftOperationId, command.AssignedBusinessObject, command.AssignmentTargetScope, command.EvidenceRefs, command.Confidence, command.SourceTranscriptRef, command.RootUtterance, command.ApprovalStatus);
+            ImportCandidateIdsByIdempotencyKey[command.IdempotencyKey] = candidateId;
+            var result = new CliReaderImportCandidateResult(candidateId, command.CandidateKind, command.Status, command.RequestedBy, command.RequestedAt, command.IdempotencyKey, $"topolactor://commit-candidates/{candidateId}/evidence.json", command.PreviewDiff, command.UnresolvedFields, command.AssignedBusinessObjectCandidate, command.DraftOperationId, command.AssignedBusinessObject, command.AssignmentTargetScope, command.EvidenceRefs, command.Confidence, command.SourceTranscriptRef, command.RootUtterance, command.ApprovalStatus, true);
             ImportCandidateResults[candidateId] = result;
+            ImportCandidateEvidence.Add((candidateId, "cli_mcp_import_candidate_created"));
             return Task.FromResult(result);
         }
 

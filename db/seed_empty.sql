@@ -2948,7 +2948,7 @@ INSERT INTO topology.cli_reader_ports (
     60,
     true,
     true,
-    '{"admin_projection":"contents","surface":"cli_reader_port","secret_projection":"denied","dispatch_runtime_destination":"cli_reader_port_runtime"}'::jsonb
+    '{"admin_projection":"contents","surface":"cli_reader_port","secret_projection":"denied","dispatch_runtime_destination":"cli_reader_port_runtime","allowed_business_objects":["account"],"allowed_assignment_target_scopes":["topology.entity"]}'::jsonb
 ) ON CONFLICT (port_key) DO UPDATE SET
     port_id = EXCLUDED.port_id,
     enabled = EXCLUDED.enabled,

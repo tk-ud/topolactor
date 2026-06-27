@@ -17,7 +17,7 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         const string sql = """
             SELECT port_key, port_id, enabled, expires_at, allowed_roles, allowed_users, allowed_tables, allowed_columns,
                    allowed_filters, allowed_periods, row_scope, required_capabilities, audit_required, rate_limit_per_minute,
-                   file_stream_enabled
+                   file_stream_enabled, config_json
             FROM topology.cli_reader_ports
             WHERE port_key = @port_key
             """;
@@ -41,6 +41,8 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             ReadSet(reader.GetString(9)),
             ReadMap(reader.GetString(10)),
             ReadSet(reader.GetString(11)),
+            ReadConfigSet(reader.GetString(15), "allowed_business_objects"),
+            ReadConfigSet(reader.GetString(15), "allowed_assignment_target_scopes"),
             reader.GetBoolean(12),
             reader.IsDBNull(13) ? null : reader.GetInt32(13),
             !reader.IsDBNull(14) && reader.GetBoolean(14));
@@ -434,12 +436,12 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
                     (candidate_id, port_id, port_key, operation, candidate_kind, source_transcript_ref, root_utterance,
                      structured_output_payload, confidence, unresolved_fields, preview_diff, assigned_business_object_candidate,
                      draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, approval_status, requested_by, requested_at,
-                     status, idempotency_key, runtime_audit_ref)
+                     status, idempotency_key)
                 VALUES
                     (@candidate_id, @port_id, @port_key, @operation, @candidate_kind, @source_transcript_ref, @root_utterance,
                      @structured_output_payload::jsonb, @confidence, @unresolved_fields::jsonb, @preview_diff::jsonb, @assigned_business_object_candidate::jsonb,
                      @draft_operation_id, @assigned_business_object::jsonb, @assignment_target_scope::jsonb, @evidence_refs::jsonb, @approval_status, @requested_by, @requested_at,
-                     @status, @idempotency_key, @runtime_audit_ref)
+                     @status, @idempotency_key)
                 ON CONFLICT (idempotency_key) DO NOTHING
                 RETURNING candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
                           assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, true AS inserted
@@ -471,13 +473,20 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         cmd.Parameters.AddWithValue("assignment_target_scope", command.AssignmentTargetScope is null ? DBNull.Value : JsonSerializer.Serialize(command.AssignmentTargetScope.Value));
         cmd.Parameters.AddWithValue("evidence_refs", JsonSerializer.Serialize(command.EvidenceRefs));
         cmd.Parameters.AddWithValue("approval_status", command.ApprovalStatus);
-        var runtimeAuditRef = await AppendRuntimeEventLogAsync(conn, tx, "cli_mcp_import_candidate_created", candidateId, command.RequestedAt, ct);
-        cmd.Parameters.AddWithValue("runtime_audit_ref", runtimeAuditRef);
         cmd.Parameters.AddWithValue("requested_by", command.RequestedBy);
         cmd.Parameters.AddWithValue("requested_at", command.RequestedAt);
         cmd.Parameters.AddWithValue("status", command.Status);
         cmd.Parameters.AddWithValue("idempotency_key", command.IdempotencyKey);
         var result = await ReadCandidateResultAsync(cmd, ct);
+        var auditRef = await AppendRuntimeEventLogAsync(conn, tx, result.WasCreated ? "cli_mcp_import_candidate_created" : "cli_mcp_import_candidate_replayed", result.CandidateId, command.RequestedAt, ct);
+        await using (var updateAuditCmd = conn.CreateCommand())
+        {
+            updateAuditCmd.Transaction = tx;
+            updateAuditCmd.CommandText = "UPDATE topology.cli_reader_import_candidates SET runtime_audit_ref = COALESCE(runtime_audit_ref, @runtime_audit_ref), updated_at = now() WHERE candidate_id = @candidate_id";
+            updateAuditCmd.Parameters.AddWithValue("runtime_audit_ref", auditRef);
+            updateAuditCmd.Parameters.AddWithValue("candidate_id", result.CandidateId);
+            await updateAuditCmd.ExecuteNonQueryAsync(ct);
+        }
         await tx.CommitAsync(ct);
         return result;
     }
@@ -538,7 +547,8 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             reader.IsDBNull(13) ? null : reader.GetDecimal(13),
             reader.IsDBNull(14) ? null : reader.GetString(14),
             reader.IsDBNull(15) ? null : reader.GetString(15),
-            reader.IsDBNull(16) ? "not_requested" : reader.GetString(16));
+            reader.IsDBNull(16) ? "not_requested" : reader.GetString(16),
+            !reader.IsDBNull(17) && reader.GetBoolean(17));
     }
 
     private static string MapFileStreamFailureEventType(string failureCode) => failureCode switch
@@ -588,6 +598,13 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
     }
 
     private static IReadOnlySet<string> ReadSet(string json) => JsonSerializer.Deserialize<string[]>(json)?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private static IReadOnlySet<string> ReadConfigSet(string json, string propertyName)
+    {
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+        if (!doc.RootElement.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Array)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return value.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
     private static IReadOnlyDictionary<string, string> ReadMap(string json) => JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
     private static IReadOnlyDictionary<string, IReadOnlySet<string>> ReadColumns(string json) => (JsonSerializer.Deserialize<Dictionary<string, string[]>>(json) ?? new()).ToDictionary(kvp => kvp.Key, kvp => (IReadOnlySet<string>)kvp.Value.ToHashSet(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
 }

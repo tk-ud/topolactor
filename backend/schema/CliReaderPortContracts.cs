@@ -15,6 +15,8 @@ public sealed record CliReaderPortConfig(
     IReadOnlySet<string> AllowedPeriods,
     IReadOnlyDictionary<string, string> RowScopeByUser,
     IReadOnlySet<string> RequiredCapabilities,
+    IReadOnlySet<string> AllowedBusinessObjects,
+    IReadOnlySet<string> AllowedAssignmentTargetScopes,
     bool AuditRequired,
     int? RateLimitPerMinute = null,
     bool FileStreamEnabled = false);
@@ -141,7 +143,8 @@ public sealed record CliReaderImportCandidateResult(
     decimal? Confidence,
     string? SourceTranscriptRef,
     string? RootUtterance,
-    string ApprovalStatus = "not_requested");
+    string ApprovalStatus = "not_requested",
+    bool WasCreated = true);
 
 public sealed record LoadCliReaderImportCandidateQuery(
     Guid PortId,

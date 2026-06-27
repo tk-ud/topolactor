@@ -282,6 +282,8 @@ public class DispatchRoleAuthorityTests
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "today" },
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["reader-user"] = "state_id=active" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cli_reader_port.read" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "account" },
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "topology.entity" },
         true,
         60);
 
