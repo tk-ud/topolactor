@@ -18,6 +18,8 @@ namespace Topolactor.Repository;
 public class NpgsqlUiTopologyRepository : UiTopologyRepository
 {
     private static readonly Regex CssTokenYamlRegex = new(@"^\s{4}([a-z0-9_.-]+):\s*$", RegexOptions.Compiled | RegexOptions.Multiline);
+    private static readonly Regex ApprovedInstanceTargetRefRegex = new(@"""instanceTargetRef""\s*:\s*""(?<target>instance-port:(?<portKind>[^:""]+):(?<instancePortId>[^:""]+):(?<operationBindingKey>[^:""]+))""", RegexOptions.Compiled);
+    private static readonly Regex OperationKeyRegex = new(@"""operation_key""\s*:\s*""(?<operationKey>[^""]+)""", RegexOptions.Compiled);
     private readonly ILogger<NpgsqlUiTopologyRepository> _npgsqlLogger;
 
     public NpgsqlUiTopologyRepository(
@@ -675,8 +677,59 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     }
 
 
+    internal static IReadOnlyList<InstanceOperationAuthoringCandidateDto> ListSeedDefinedApprovedInstanceOperationCandidates()
+    {
+        var seedPath = FindRepositoryFile("db", "seed_empty.sql");
+        if (seedPath is null) return Array.Empty<InstanceOperationAuthoringCandidateDto>();
+        var seed = File.ReadAllText(seedPath);
+        var operationKey = OperationKeyRegex.Match(seed) is { Success: true } opMatch
+            ? opMatch.Groups["operationKey"].Value
+            : "operation-reference-only";
+        var candidates = new Dictionary<string, InstanceOperationAuthoringCandidateDto>(StringComparer.Ordinal);
+        foreach (Match match in ApprovedInstanceTargetRefRegex.Matches(seed))
+        {
+            var targetRef = match.Groups["target"].Value;
+            if (!seed.Contains($"\"instanceTargetRef\":\"{targetRef}\"", StringComparison.Ordinal)) continue;
+            if (!seed.Contains("\"approval_status\":\"approved\"", StringComparison.Ordinal)) continue;
+            candidates[targetRef] = new InstanceOperationAuthoringCandidateDto(
+                match.Groups["portKind"].Value,
+                match.Groups["instancePortId"].Value,
+                match.Groups["operationBindingKey"].Value,
+                operationKey,
+                "approved",
+                targetRef);
+        }
+        return candidates.Values.OrderBy(c => c.PortKind, StringComparer.Ordinal)
+            .ThenBy(c => c.InstancePortId, StringComparer.Ordinal)
+            .ThenBy(c => c.OperationBindingKey, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static string? FindRepositoryFile(params string[] relativeParts)
+    {
+        var relativePath = Path.Combine(relativeParts);
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate)) return candidate;
+            dir = dir.Parent;
+        }
+        dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate)) return candidate;
+            dir = dir.Parent;
+        }
+        return null;
+    }
+
     private static string? ValidateRuntimeInteractions(JsonElement nodes)
     {
+        var approvedInstanceTargetRefs = ListSeedDefinedApprovedInstanceOperationCandidates()
+            .Select(c => c.TargetRef)
+            .ToHashSet(StringComparer.Ordinal);
         var componentKindsByNodeId = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (var node in nodes.EnumerateArray())
         {
@@ -729,6 +782,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                         return requiredCode;
                     if (!targetRef!.StartsWith(expectedPrefix, StringComparison.Ordinal))
                         return $"{invalidCode}:{targetRef}";
+                    if (actionType == "dispatchInstanceOperation" && !approvedInstanceTargetRefs.Contains(targetRef))
+                        return $"RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED:{targetRef}";
                     if (interaction.TryGetProperty("payloadFrom", out var payloadFromEl))
                     {
                         if (payloadFromEl.ValueKind != JsonValueKind.Object)
@@ -1361,6 +1416,11 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         }
         return list;
     }
+
+
+    public override Task<IReadOnlyList<InstanceOperationAuthoringCandidateDto>> ListInstanceOperationAuthoringCandidatesAsync(
+        CancellationToken ct = default)
+        => Task.FromResult(ListSeedDefinedApprovedInstanceOperationCandidates());
 
 
     public override async Task<IReadOnlyList<ExternalPortAuthoringCandidateDto>> ListExternalPortAuthoringCandidatesAsync(

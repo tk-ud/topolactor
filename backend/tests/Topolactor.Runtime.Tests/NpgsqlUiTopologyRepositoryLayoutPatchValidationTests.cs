@@ -363,4 +363,85 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.Equal("RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:entityId", result.Message);
     }
 
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_ApprovedCandidate_Passes()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            {
+              "trigger": "click",
+              "actionType": "dispatchInstanceOperation",
+              "instanceTargetRef": "instance-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder",
+              "payloadFrom": { "entityId": "event.item.id" },
+              "outputProp": "result"
+            }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_MissingInstanceTargetRef_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchInstanceOperation" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_INSTANCE_TARGET_REF_REQUIRED", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_InvalidPrefix_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchInstanceOperation", "instanceTargetRef": "external-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:external-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_DispatchInstanceOperation_UnknownOperationBinding_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "dispatchInstanceOperation", "instanceTargetRef": "instance-port:db_instance_port:public-safe-placeholder:unapproved-operation" }
+          ] }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal("RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED:instance-port:db_instance_port:public-safe-placeholder:unapproved-operation", result.Message);
+    }
+
 }

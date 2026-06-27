@@ -124,9 +124,21 @@ done
 
 require_term '"dispatchInstanceOperation"' frontend/islands/UiBuilderAdmin.tsx "Design Inspector instance operation action vocabulary"
 require_term "instanceTargetRef" frontend/islands/UiBuilderAdmin.tsx "Design Inspector instance target ref field"
-require_term 'approved instance operation の trigger / payloadFrom / outputProp' frontend/islands/UiBuilderAdmin.tsx "Design Inspector scope copy"
+require_term '"allowedAssignments":["trigger","payloadFrom","outputProp"]' db/seed_empty.sql "Design Inspector allowed assignment seed boundary"
+require_term 'list_instance_operation_authoring_candidates' frontend/islands/UiBuilderAdmin.tsx "Design Inspector approved candidate loading"
+require_term 'instanceOperationCandidates.map' frontend/islands/UiBuilderAdmin.tsx "Design Inspector select-only instance candidate options"
+require_term 'RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED' backend/repository/NpgsqlUiTopologyRepository.cs "backend unapproved instance targetRef rejection"
+require_term 'ListSeedDefinedApprovedInstanceOperationCandidates' backend/repository/NpgsqlUiTopologyRepository.cs "seed/data-defined approved instance operation source"
+require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_ApprovedCandidate_Passes' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "approved instance operation positive test"
+require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_MissingInstanceTargetRef_FailsClose' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "missing instance targetRef negative test"
+require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_InvalidPrefix_FailsClose' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "invalid instance targetRef prefix negative test"
+require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_UnknownOperationBinding_FailsClose' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "unknown instance operation negative test"
 require_term 'actionType is "dispatchExternalPort" or "dispatchInstanceOperation"' backend/repository/NpgsqlUiTopologyRepository.cs "backend runtime interaction validation for instance dispatch"
 require_term '"instance-port:"' backend/repository/NpgsqlUiTopologyRepository.cs "backend instance targetRef prefix guard"
+
+if rg -n 'placeholder="instance-port:<portKind>:<instancePortId>:<operationBindingKey>"|onInput=\{\(e\) => updateInteraction\(i, \{ instanceTargetRef' frontend/islands/UiBuilderAdmin.tsx; then
+  fail "Design Inspector instanceTargetRef must not be free-text authored"
+fi
 require_term ".agent/tests/check-instance-port-substrate.sh" .github/workflows/unified-test-gate.yml "CI path trigger"
 require_term ".agent/tests/check-instance-port-substrate.sh" .agent/tests/check-unified-test-gate.sh "unified gate design check"
 require_term "docs/design/instance-port-substrate-ssot.yaml" .agent/docs/ssot-map.yaml "SSOT map entry"

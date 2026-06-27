@@ -332,6 +332,15 @@ public record ExternalPortAuthoringCandidateDto(
     [property: JsonPropertyName("targetRef")] string TargetRef
 );
 
+public record InstanceOperationAuthoringCandidateDto(
+    [property: JsonPropertyName("portKind")] string PortKind,
+    [property: JsonPropertyName("instancePortId")] string InstancePortId,
+    [property: JsonPropertyName("operationBindingKey")] string OperationBindingKey,
+    [property: JsonPropertyName("operationKey")] string OperationKey,
+    [property: JsonPropertyName("approvalStatus")] string ApprovalStatus,
+    [property: JsonPropertyName("targetRef")] string TargetRef
+);
+
 public record PackageWiringUpdateRequestDto(
     [property: JsonPropertyName("packageId")] string PackageId,
     [property: JsonPropertyName("wiringId")] string WiringId,

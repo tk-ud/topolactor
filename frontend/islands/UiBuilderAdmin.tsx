@@ -6832,6 +6832,15 @@ type ExternalPortAuthoringCandidate = {
   targetRef: string;
 };
 
+type InstanceOperationAuthoringCandidate = {
+  portKind: string;
+  instancePortId: string;
+  operationBindingKey: string;
+  operationKey: string;
+  approvalStatus: string;
+  targetRef: string;
+};
+
 type AdminPackageWiringRow = {
   wiringId: string;
   wiringKey: string;
@@ -6869,6 +6878,41 @@ function useExternalPortAuthoringCandidates(active: boolean): {
       } else {
         setCandidates([]);
         setError(body?.errors?.[0]?.message ?? "external port 候補を取得できませんでした。");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [active]);
+  return { candidates, error };
+}
+
+/**
+ * Reusable hook: loads seed/data-defined approved instance operation candidates through admin_runtime.
+ * Candidates are derived from the credential management projection's approved operation binding metadata.
+ * SSOT: docs/design/instance-port-substrate-ssot.yaml admin_event_authoring_boundary
+ */
+function useInstanceOperationAuthoringCandidates(active: boolean): {
+  candidates: InstanceOperationAuthoringCandidate[];
+  error: string | null;
+} {
+  const [candidates, setCandidates] = useState<InstanceOperationAuthoringCandidate[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!active) {
+      setCandidates([]);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const body = await dispatchAdminOp("ui_topology", "list_instance_operation_authoring_candidates");
+      if (cancelled) return;
+      const data = body?.emission?.data as { candidates?: InstanceOperationAuthoringCandidate[] } | undefined;
+      if (Array.isArray(data?.candidates)) {
+        setCandidates(data.candidates);
+        setError(null);
+      } else {
+        setCandidates([]);
+        setError(body?.errors?.[0]?.message ?? "instance operation 候補を取得できませんでした。");
       }
     })();
     return () => { cancelled = true; };
@@ -8381,8 +8425,13 @@ function PackageDesignPanel({
   const hasDispatchPortInteraction = (selectedCanvasNode?.runtimeInteractions ?? []).some(
     (w) => w.actionType === "dispatchExternalPort",
   );
+  const hasDispatchInstanceInteraction = (selectedCanvasNode?.runtimeInteractions ?? []).some(
+    (w) => w.actionType === "dispatchInstanceOperation",
+  );
   const { candidates: externalPortCandidates, error: externalPortCandidateError } =
     useExternalPortAuthoringCandidates(Boolean(selectedCanvasNode) && hasDispatchPortInteraction);
+  const { candidates: instanceOperationCandidates, error: instanceOperationCandidateError } =
+    useInstanceOperationAuthoringCandidates(Boolean(selectedCanvasNode) && hasDispatchInstanceInteraction);
 
   const componentKind = selectedCanvasNode?.componentKind ?? "";
   const acceptsArrayProps = COMPONENT_ARRAY_PROP_CAPABILITIES[componentKind] ?? [];
@@ -9383,16 +9432,30 @@ function PackageDesignPanel({
                                 <div class="rounded border border-emerald-100 bg-emerald-50/40 p-2 space-y-2 text-[0.65rem]">
                                   <div class="font-semibold text-emerald-900">Instance operation dispatch（オーサリング）</div>
                                   <p class="text-[0.6rem] text-emerald-700">
-                                    approved instance operation の trigger / payloadFrom / outputProp 割当のみを保存します。function 定義・address・schema・raw SQL・credential 編集は扱いません。
+                                    approved instance operation のイベント起点と入出力割当のみを保存します。接続設定本体や権限定義の編集は扱いません。
                                   </p>
                                   <label class="block">
                                     instanceTargetRef（approved instance operation）
-                                    <input
-                                      class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+                                    {instanceOperationCandidateError && (
+                                      <p class="mt-0.5 text-[0.55rem] text-amber-700">{instanceOperationCandidateError}</p>
+                                    )}
+                                    <select
+                                      class="input mt-0.5 w-full px-1 py-0.5 text-xs"
                                       value={w.instanceTargetRef ?? ""}
-                                      placeholder="instance-port:<portKind>:<instancePortId>:<operationBindingKey>"
-                                      onInput={(e) => updateInteraction(i, { instanceTargetRef: (e.target as HTMLInputElement).value || undefined })}
-                                    />
+                                      onChange={(e) => updateInteraction(i, { instanceTargetRef: (e.target as HTMLSelectElement).value || undefined })}
+                                    >
+                                      <option value="">— 選択なし —</option>
+                                      {instanceOperationCandidates.map((c) => (
+                                        <option key={c.targetRef} value={c.targetRef}>
+                                          {c.portKind} / {c.operationBindingKey} / {c.approvalStatus}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {w.instanceTargetRef && !instanceOperationCandidates.some((c) => c.targetRef === w.instanceTargetRef) && instanceOperationCandidates.length > 0 && (
+                                      <p class="mt-0.5 text-[0.55rem] text-amber-700">
+                                        現在の instanceTargetRef は approved 候補にありません。候補から選択し直してください。
+                                      </p>
+                                    )}
                                   </label>
                                 </div>
                               )}
