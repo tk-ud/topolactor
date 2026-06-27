@@ -258,6 +258,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "CLI_READER_FILE_CHECKSUM_MISMATCH");
         Assert.Empty(repo.DownloadEvidence);
+        Assert.Contains(repo.DownloadFailureEvidence, e => e.ExportJobId == jobId && e.FailureCode == "CLI_READER_FILE_CHECKSUM_MISMATCH");
         Assert.Contains(repo.Events, e => e.Status == "fail_close" && e.Code == "CLI_READER_FILE_CHECKSUM_MISMATCH");
     }
 
@@ -274,6 +275,29 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "CLI_READER_FILE_SOURCE_IDS_MISMATCH");
         Assert.Empty(repo.DownloadEvidence);
+        Assert.Contains(repo.DownloadFailureEvidence, e => e.ExportJobId == jobId && e.FailureCode == "CLI_READER_FILE_SOURCE_IDS_MISMATCH");
+    }
+
+
+    [Theory]
+    [InlineData("manifest", "CLI_READER_FILE_MANIFEST_MISSING")]
+    [InlineData("artifact", "CLI_READER_FILE_ARTIFACT_MISSING")]
+    public async Task Download_export_file_records_failure_evidence_for_manifest_and_artifact_mismatch(string scenario, string code)
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var jobId = Guid.NewGuid();
+        var file = scenario == "manifest"
+            ? AuthorizedFile(jobId, manifestPresent: false)
+            : AuthorizedFile(jobId, generatedFiles: []);
+        repo.AuthorizedFiles.Add((ConfigPortId, "reader-user", file));
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(DownloadRequest(jobId), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == code);
+        Assert.Empty(repo.DownloadEvidence);
+        Assert.Contains(repo.DownloadFailureEvidence, e => e.ExportJobId == jobId && e.FailureCode == code);
     }
 
     [Fact]
@@ -334,12 +358,13 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         bool manifestPresent = true,
         string status = "completed",
         bool approvalRequired = false,
-        string approvalStatus = "not_required")
+        string approvalStatus = "not_required",
+        CliReaderGeneratedFile[]? generatedFiles = null)
     {
         manifestChecksum ??= checksum;
         sourceIds ??= ["entity-1"];
         manifestSourceIds ??= sourceIds;
-        var files = new[] { new CliReaderGeneratedFile("export.json", "json", 2, checksum, $"cli-reader-export-job://{exportJobId}/export.json") };
+        var files = generatedFiles ?? [new CliReaderGeneratedFile("export.json", "json", 2, checksum, $"cli-reader-export-job://{exportJobId}/export.json")];
         var manifest = JsonSerializer.SerializeToElement(new
         {
             manifest_version = "1.0",
@@ -407,6 +432,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         public List<CliReaderExportJobResult> ExportJobs { get; } = [];
         public List<(Guid PortId, string UserId, AuthorizedExportFile File)> AuthorizedFiles { get; } = [];
         public List<(Guid ExportJobId, bool ChecksumVerified)> DownloadEvidence { get; } = [];
+        public List<(Guid ExportJobId, string FailureCode)> DownloadFailureEvidence { get; } = [];
         public bool ReturnRowsWithoutSourceIds { get; init; }
         public Task<CliReaderPortConfig?> LoadPortAsync(string portKey, CancellationToken ct = default) => Task.FromResult(config);
         public Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
@@ -459,6 +485,12 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         public Task RecordExportDownloadEvidenceAsync(Guid exportJobId, bool checksumVerified, DateTimeOffset observedAt, CancellationToken ct = default)
         {
             DownloadEvidence.Add((exportJobId, checksumVerified));
+            return Task.CompletedTask;
+        }
+
+        public Task RecordExportDownloadFailureEvidenceAsync(Guid exportJobId, string failureCode, DateTimeOffset observedAt, CancellationToken ct = default)
+        {
+            DownloadFailureEvidence.Add((exportJobId, failureCode));
             return Task.CompletedTask;
         }
     }

@@ -9,10 +9,11 @@ namespace Topolactor.Runtime;
 /// Authorized CLI/MCP read-side runtime. This handler is intentionally usable only
 /// after ManifestDispatcher resolves a manifest/runtime mapping (manifestId required).
 /// It resolves authenticated user/role/capability from server-side dispatch context,
-/// resolves cli_reader_port scope, and executes only read/search/aggregate/analyze/validate/create_export_job
-/// inside the repository-authorized read model. It never accepts direct SQL, direct DB
-/// connection strings, Core API URLs, plaintext credentials, file streams,
-/// imports, commit candidates, or mutation operations.
+/// resolves cli_reader_port scope, and executes only read/search/aggregate/analyze/validate/create_export_job/download_export_file
+/// inside the repository-authorized read model. File streaming is limited to already-authorized
+/// export_job ledger artifacts. It never accepts direct SQL, direct DB connection strings,
+/// Core API URLs, plaintext credentials, direct file streams outside export jobs, imports,
+/// commit candidates, or mutation operations.
 /// </summary>
 public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
 {
@@ -56,7 +57,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
             return await FailAsync(seed, "CLI_READER_TARGET_INVALID", "CLI/MCP Data Reader target must be cli_reader_port.", ct);
 
         if (!AllowedOperations.Contains(parsed.Operation!))
-            return await FailAsync(seed, "CLI_READER_OPERATION_UNSUPPORTED", "CLI/MCP Data Reader operation must be read/search/aggregate/analyze/validate/create_export_job.", ct);
+            return await FailAsync(seed, "CLI_READER_OPERATION_UNSUPPORTED", "CLI/MCP Data Reader operation must be read/search/aggregate/analyze/validate/create_export_job/download_export_file.", ct);
 
         if (request.Payload.HasValue && ContainsForbiddenBypassOrSecretField(request.Payload.Value))
             return await FailAsync(seed, "CLI_READER_BYPASS_OR_SECRET_FIELD", "Direct SQL/DB/Core API bypass, client-supplied auth authority, and plaintext credential fields are forbidden.", ct);
@@ -197,8 +198,9 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         var checksumError = VerifyExportChecksum(file);
         if (checksumError is not null)
         {
+            await _repository.RecordExportDownloadFailureEvidenceAsync(exportJobId, checksumError, _timeProvider.GetUtcNow(), ct);
             await AppendAsync(fileSeed with { Status = "fail_close", Code = checksumError, ScopeSummary = $"export_job_id={exportJobId};checksum_verified=false" }, ct);
-            return new EndpointResponseDto(false, null, [new ValidationError(checksumError, "Export file checksum/source verification failed; file stream refused.")]);
+            return new EndpointResponseDto(false, null, [new ValidationError(checksumError, "Export file checksum/source/manifest/artifact verification failed; file stream refused.")]);
         }
 
         await _repository.RecordExportDownloadEvidenceAsync(exportJobId, checksumVerified: true, _timeProvider.GetUtcNow(), ct);
