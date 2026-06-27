@@ -227,3 +227,52 @@ NG軸:
 - [x] export は必ず authorized read scope に基づく `export_job` として記録される。
 
 Implemented evidence update (2026-06-27): `create_export_job` is handled inside `AuthorizedCliReaderPortRuntime` only after ManifestDispatcher supplies a manifest id and the existing cli_reader_port auth/scope/capability checks pass. The runtime reads through `AuthorizedCliReaderQuery`, requires config-resolved port_id, idempotency key, and csv/json/pdf/zip format, rejects missing source_record_ids, generates csv/json/pdf/zip format-distinct packages with file-byte checksums, and persists export job ledger/manifest/checksum/generated_files plus one-time `runtime_event_log` evidence through `CliReaderPortRepository`. Npgsql/DDL guard coverage verifies config-derived `port_id`, `create_export_job` runtime-event CHECK support, export_job_id-based manifest URI, package-byte checksum semantics, idempotent retry via existing job/manifest/checksum/evidence, and existing-DB ALTER safeguards for generated_files/approval/status fields. Guard/unit tests cover manifest/checksum/source ids and detect import-candidate/approval scope creep. Parent bundle remains partial because import-candidate and surface-metadata subBundles remain out of scope.
+
+### SubBundle `cli-mcp-file-stream-port`
+
+**Status:** implemented
+**対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml` / `docs/design/cli-mcp-port-implementation-ssot.yaml` / `docs/design/runtime-bundle-file-storage-ssot.yaml`
+**対応SSOTセクション名:** `file_stream` / `file_stream_contract` / `mcp_tool_contract.download_export_file` / `mcp_resource_contract` / `cli_mcp_file_stream_policy` / `audit_log_boundary`
+
+目的:
+- `download_export_file`
+- `topolactor://exports/{export_job_id}/file` / `topolactor://exports/{export_job_id}/manifest.json` resource 境界
+- authorized export job 検証（既存 export_job_id を入口にし、新規 export job を作らない）
+- generated_files / checksum / source_record_ids / manifest_jsonb の突き合わせ
+- checksum mismatch fail-close
+- success/failure の audit/runtime evidence
+
+対象ファイル名候補:
+- `backend/runtime/AuthorizedCliReaderPortRuntime.cs`
+- `backend/repository/CliReaderPortRepository.cs`
+- `backend/repository/NpgsqlCliReaderPortRepository.cs`
+- `backend/schema/CliReaderPortContracts.cs`
+- `db/topology_tables.sql` (file_stream_enabled scope field / download_export_file runtime-event CHECK only)
+- `db/seed_empty.sql` (file_stream_enabled projection only)
+
+NG軸:
+- export job 外 file stream / unauthenticated file stream
+- dispatch bypass / Core API 直叩き / dedicated handler / dedicated route
+- 新規 export job 作成 / ReadRowsAsync 再実行による export package 再生成
+- client payload の generated_files / checksum / source_record_ids / port_id を正本扱い
+- checksum 未検証 stream / audit/runtime evidence skip
+- credential / bucket / endpoint / actual signed URL / plaintext storage URL を response/log/projection に出す
+- import_structured_output / draft_operation / commit_candidate / approval execution / DB commit / delete
+
+受入条件:
+- [x] `download_export_file` は `/dispatch` → `ManifestDispatcher` → `cli_reader_port_runtime` を通り、未解決 dispatch / 未認証 / 未認可 / scope 違反を fail-close する。
+- [x] file stream は既存 `export_job_id` のみを入口にし、新規 export job を作らない。
+- [x] `export_jobs.generated_files` / `export_jobs.checksum` / `export_jobs.source_record_ids` / `export_manifests.manifest_jsonb` を突き合わせ、checksum/source mismatch を明示拒否する。
+- [x] success 時に `checksum_verified` / `download_completed` 相当の audit/runtime evidence を残す。
+- [x] checksum/source/manifest/artifact mismatch 時は explicit rejection evidence を runtime_event_log に残し、fail-close response を返す。
+- [x] response は MCP resource/tool response 境界に限定し、credential / bucket / endpoint / actual signed URL を含めない。
+
+Implemented evidence update (2026-06-27): `download_export_file` is handled inside `AuthorizedCliReaderPortRuntime` only after ManifestDispatcher supplies a manifest id and the shared cli_reader_port auth/role/user/capability checks pass; it then branches into `DownloadExportFileAsync`, which fail-closes on `file_stream_enabled=false` (`CLI_READER_FILE_STREAM_DISABLED`), missing export_job_id, an export job not owned by the dispatch-resolved port_id + authenticated user (`CLI_READER_FILE_JOB_UNAUTHORIZED`), non-completed status, and unapproved approval-gated jobs (approval is read-only; CLI/MCP never executes approval). `CliReaderPortRepository.LoadAuthorizedExportFileAsync` reads only the canonical `topology.export_jobs` ledger joined with `topology.export_manifests` (port_id + requested_by authorization in the WHERE clause), and `VerifyExportChecksum` cross-checks job checksum vs manifest checksum vs every generated file checksum and the source_record_ids set captured at export time, with checksum/source mismatch fail-closing (`CLI_READER_FILE_CHECKSUM_MISMATCH` / `CLI_READER_FILE_SOURCE_IDS_MISMATCH`). On checksum/source/manifest/artifact mismatch the runtime rejects the file explicitly and records `cli_mcp_file_checksum_mismatch_rejected` / `cli_mcp_file_source_ids_mismatch_rejected` / `cli_mcp_file_manifest_missing_rejected` / `cli_mcp_file_artifact_missing_rejected` `runtime_event_log` evidence before returning fail-close; on success the runtime records `CLI_READER_FILE_CHECKSUM_VERIFIED` + `CLI_READER_FILE_DOWNLOAD_COMPLETED` runtime events and `cli_mcp_file_checksum_verified` / `cli_mcp_file_download_completed` `runtime_event_log` evidence, then returns an MCP resource/tool projection (`topolactor://exports/{id}/file` + `manifest.json` URIs, source_record_ids, generated_files, checksum, manifest_jsonb) that excludes credential / bucket / endpoint / actual signed URL. The path never calls `CreateExportJobAsync` or re-reads rows. `.agent/tests/check-cli-mcp-file-stream-port.sh` plus runtime tests assert the dispatch/auth/scope fail-close paths, checksum/source mismatch refusal, evidence emission, and credential/bucket/endpoint/signed-url-free response. The sibling read-scope / export-job guards were updated to treat file streaming as a sibling subBundle concern (their positive implemented evidence is unchanged). Parent bundle remains partial because import-candidate and surface-metadata subBundles remain out of scope.
+
+Implemented evidence update (2026-06-27): import-candidate subBundle implemented evidence — `cli-mcp-import-candidate-port` now runs only through the existing `/dispatch` -> `ManifestDispatcher` -> `cli_reader_port_runtime` boundary in `AuthorizedCliReaderPortRuntime`, with `manifestId` dispatch guard, dispatch/JWT-derived user/role/capability checks, forbidden payload field rejection, and allowed operations limited to `import_structured_output`, `assign_business_object_candidate`, `create_draft_operation`, `create_commit_candidate`, and `get_preview_diff`. Candidate creation persists evidence-only rows in `topology.cli_reader_import_candidates` with fixed operation/status/kind vocabulary, `source_transcript_ref`, `root_utterance`, `structured_output_payload`, `confidence`, `unresolved_fields`, `preview_diff`, `requested_by`, `idempotency_key`, and runtime/audit evidence references; idempotent replay does not duplicate candidates. Preview diff reads stored candidate evidence only and never applies commit/approval. Tests and `.agent/tests/check-cli-mcp-import-candidate-port.sh` cover fail-close dispatch/auth/capability/forbidden payload paths, unresolved field preservation, evidence-only import/draft/commit candidate creation, side-effect operation rejection, and response/log secret projection denial. Parent bundle remains partial because surface-metadata remains out of scope; read/export/file-stream implemented evidence above remains unchanged.
+
+Implemented evidence refinement (2026-06-27): PR521 blocking gaps closed for `cli-mcp-import-candidate-port`: DDL order restores `topology.file_artifacts` before `signed_download_authorizations` / `record_file_attachment_bindings` FK consumers; import creation now fail-closes when `source_transcript_ref`, `root_utterance`, `structured_output_payload`, `confidence`, `unresolved_fields`, `assigned_business_object_candidate`, or `preview_diff` are missing; assignment/draft/commit candidate creation can persist `draft_operation_id`, `assigned_business_object`, `assignment_target_scope`, `evidence_refs`, server-derived `created_by`/`created_at`, and read-only `approval_status`; candidate rows store `runtime_audit_ref` linked to `topology.runtime_event_log`; guard/unit tests detect these requirements. Parent bundle remains partial because surface-metadata remains out of scope.
+
+Implemented evidence refinement (2026-06-27): remaining PR521 import-candidate blockers closed — `cli_reader_ports.config_json` now carries `allowed_business_objects` and `allowed_assignment_target_scopes`; runtime resolves those as typed config and fail-closes assignment/draft/commit candidates outside dispatch-resolved business object or target scope; idempotent replay now returns the existing candidate id and records replay evidence against that persisted candidate instead of appending orphan evidence for a fresh unused id. Guard/runtime tests cover scope denial and replay evidence identity.
+
+Implemented evidence refinement (2026-06-27): remaining PR521 approval-boundary blocker closed — CLI/MCP import-candidate creation no longer reads `approval_status` / `approvalStatus` from payload and fail-closes if either field is supplied anywhere in the candidate payload; `AuthorizedCliReaderPortRuntime` fixes candidate `approval_status` server-side to `not_requested`, preserving approval execution/status changes for UI/Human approval bundles only. The candidate DDL vocabulary now constrains `approval_status` to `not_requested` / `required` for `topology.cli_reader_import_candidates` (with migration guard replacing older broad checks), so CLI/MCP cannot create `approved` or `rejected` candidate approval state. Guard/runtime tests cover payload approval-status rejection and the DB/bootstrap/unified gates have been restored to green.
