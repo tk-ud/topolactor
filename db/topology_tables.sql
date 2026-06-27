@@ -694,46 +694,6 @@ BEGIN
         CHECK (approval_status IN ('not_required', 'pending', 'approved', 'rejected'));
 END $$;
 
-CREATE TABLE IF NOT EXISTS topology.file_artifacts (
-    file_artifact_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    export_job_id      UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
-    file_name          TEXT        NOT NULL,
-    file_type          TEXT        NOT NULL
-                                   CHECK (file_type IN ('pdf', 'csv', 'json', 'zip', 'receipt_image', 'manifest_json')),
-    storage_ref        TEXT        NOT NULL,
-    byte_size          BIGINT,
-    checksum_value     TEXT        NOT NULL,
-    checksum_record_id UUID,
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_file_artifacts_export_job
-    ON topology.file_artifacts (export_job_id);
-
-COMMENT ON TABLE topology.file_artifacts IS
-    'File artifact metadata for file_storage_bundle. storage_ref is env-var reference identifier only; '
-    'plaintext storage URL/path is prohibited.';
-
-CREATE TABLE IF NOT EXISTS topology.file_checksum_records (
-    checksum_record_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    export_job_id       UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
-    file_artifact_id    UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
-    algorithm           TEXT        NOT NULL DEFAULT 'sha256',
-    checksum_value      TEXT        NOT NULL,
-    verified_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    verification_status TEXT        NOT NULL DEFAULT 'pending'
-                                    CHECK (verification_status IN ('pending', 'verified', 'failed')),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_file_checksum_export_job
-    ON topology.file_checksum_records (export_job_id);
-
-COMMENT ON TABLE topology.file_checksum_records IS
-    'Checksum integrity records for file_storage_bundle. Required for all export_job file artifacts.';
-
 CREATE TABLE IF NOT EXISTS topology.export_manifests (
     manifest_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     export_job_id     UUID        NOT NULL UNIQUE REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
@@ -2008,7 +1968,7 @@ COMMENT ON FUNCTION topology.epce_load_projection IS
     'Static per-table SELECT routing for external_port_substrate consumer evidence projection. '
     'Replaces the C# SelectSql tableRef switch. Unknown table_ref fails closed.';
 
--- CLI/MCP authorized reader port substrate (read-scope only; no export/import/file stream).
+-- CLI/MCP authorized reader port substrate (read/export/file stream/import-candidate evidence via dispatch only).
 CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
     port_key TEXT PRIMARY KEY,
     port_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
@@ -2034,7 +1994,7 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_ports (
 CREATE TABLE IF NOT EXISTS topology.cli_reader_port_runtime_events (
     event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     port_key TEXT NOT NULL REFERENCES topology.cli_reader_ports(port_key),
-    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job','download_export_file')),
+    operation TEXT NOT NULL CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job','download_export_file','import_structured_output','assign_business_object_candidate','create_draft_operation','create_commit_candidate','get_preview_diff')),
     user_id TEXT NULL,
     roles JSONB NOT NULL DEFAULT '[]'::jsonb,
     status TEXT NOT NULL CHECK (status IN ('success','fail_close')),
@@ -2073,5 +2033,74 @@ BEGIN
 
     ALTER TABLE topology.cli_reader_port_runtime_events
         ADD CONSTRAINT cli_reader_port_runtime_events_operation_check
-        CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job','download_export_file'));
+        CHECK (operation IN ('read','search','aggregate','analyze','validate','create_export_job','download_export_file','import_structured_output','assign_business_object_candidate','create_draft_operation','create_commit_candidate','get_preview_diff'));
 END $$;
+CREATE TABLE IF NOT EXISTS topology.cli_reader_import_candidates (
+    candidate_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    port_id UUID NOT NULL REFERENCES topology.cli_reader_ports(port_id),
+    port_key TEXT NOT NULL REFERENCES topology.cli_reader_ports(port_key),
+    operation TEXT NOT NULL CHECK (operation IN ('import_structured_output','assign_business_object_candidate','create_draft_operation','create_commit_candidate')),
+    candidate_kind TEXT NOT NULL CHECK (candidate_kind IN ('structured_output','business_object_assignment_candidate','draft_operation','commit_candidate')),
+    source_transcript_ref TEXT NULL,
+    root_utterance TEXT NULL,
+    structured_output_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    confidence NUMERIC(5,4) NULL CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+    unresolved_fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+    preview_diff JSONB NOT NULL DEFAULT '{}'::jsonb,
+    requested_by TEXT NOT NULL,
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    status TEXT NOT NULL CHECK (status IN ('candidate_created','previewed','rejected')),
+    idempotency_key TEXT NOT NULL UNIQUE,
+    runtime_audit_ref UUID NULL,
+    approval_required BOOLEAN NOT NULL DEFAULT FALSE,
+    approval_status TEXT NOT NULL DEFAULT 'not_requested' CHECK (approval_status IN ('not_requested','required','approved','rejected')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT cli_reader_import_candidates_no_secret_payload CHECK ((structured_output_payload::text || unresolved_fields::text || preview_diff::text) !~* '(credential|secret|password|raw_sql|core_api_url|api_key|access_token|refresh_token|bucket|endpoint|signed_url)'),
+    CONSTRAINT cli_reader_import_candidates_unresolved_not_confirmed CHECK (structured_output_payload::text !~* '(confirmed_value|confirmed_values|ssot_confirmed)')
+);
+CREATE INDEX IF NOT EXISTS idx_cli_reader_import_candidates_port_requested
+    ON topology.cli_reader_import_candidates (port_id, requested_by, requested_at DESC);
+COMMENT ON TABLE topology.cli_reader_import_candidates IS
+    'CLI/MCP import-candidate evidence only. External AI structured output, confidence, source transcript, root utterance, unresolved_fields, and preview_diff are candidate evidence, never SSOT/confirmed values; CLI/MCP cannot commit, approve, delete, send email, or execute payment.';
+
+
+CREATE TABLE IF NOT EXISTS topology.file_artifacts (
+    file_artifact_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    export_job_id      UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
+    file_name          TEXT        NOT NULL,
+    file_type          TEXT        NOT NULL
+                                   CHECK (file_type IN ('pdf', 'csv', 'json', 'zip', 'receipt_image', 'manifest_json')),
+    storage_ref        TEXT        NOT NULL,
+    byte_size          BIGINT,
+    checksum_value     TEXT        NOT NULL,
+    checksum_record_id UUID,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_artifacts_export_job
+    ON topology.file_artifacts (export_job_id);
+
+COMMENT ON TABLE topology.file_artifacts IS
+    'File artifact metadata for file_storage_bundle. storage_ref is env-var reference identifier only; '
+    'plaintext storage URL/path is prohibited.';
+
+CREATE TABLE IF NOT EXISTS topology.file_checksum_records (
+    checksum_record_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    export_job_id       UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
+    file_artifact_id    UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
+    algorithm           TEXT        NOT NULL DEFAULT 'sha256',
+    checksum_value      TEXT        NOT NULL,
+    verified_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    verification_status TEXT        NOT NULL DEFAULT 'pending'
+                                    CHECK (verification_status IN ('pending', 'verified', 'failed')),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_checksum_export_job
+    ON topology.file_checksum_records (export_job_id);
+
+COMMENT ON TABLE topology.file_checksum_records IS
+    'Checksum integrity records for file_storage_bundle. Required for all export_job file artifacts.';

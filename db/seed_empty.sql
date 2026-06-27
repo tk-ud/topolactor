@@ -2004,7 +2004,8 @@ VALUES
     ('topology.file_checksum_records',         'topology', 'file_storage_bundle', true),
     ('topology.export_manifests',              'topology', 'file_storage_bundle', true),
     ('topology.signed_download_authorizations','topology', 'file_storage_bundle', true),
-    ('topology.record_file_attachment_bindings','topology', 'file_storage_bundle', true)
+    ('topology.record_file_attachment_bindings','topology', 'file_storage_bundle', true),
+    ('topology.cli_reader_import_candidates','topology', 'cli_mcp_import_candidate_port', true)
 ON CONFLICT (table_ref) DO UPDATE
     SET schema_name = EXCLUDED.schema_name,
         category    = EXCLUDED.category,

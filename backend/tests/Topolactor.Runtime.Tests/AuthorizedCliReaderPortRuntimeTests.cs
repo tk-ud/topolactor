@@ -344,10 +344,115 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.Empty(repo.DownloadEvidence);
     }
 
+
+    [Theory]
+    [InlineData("import_structured_output")]
+    [InlineData("assign_business_object_candidate")]
+    [InlineData("create_draft_operation")]
+    [InlineData("create_commit_candidate")]
+    public async Task Import_candidate_operations_save_evidence_only_without_commit_or_confirmation(string operation)
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(ImportCandidateRequest(operation), Guid.NewGuid());
+
+        Assert.True(response.Success);
+        Assert.Single(repo.ImportCandidates);
+        Assert.Empty(repo.Queries);
+        var command = repo.ImportCandidates.Single();
+        Assert.Equal(operation, command.Operation);
+        Assert.Equal("reader-user", command.RequestedBy);
+        Assert.Equal("transcript-1", command.SourceTranscriptRef);
+        Assert.Equal("root utterance", command.RootUtterance);
+        Assert.Contains("needs_human", JsonSerializer.Serialize(command.UnresolvedFields));
+        var serialized = JsonSerializer.Serialize(response.Emission!.Data!.Value);
+        Assert.Contains("ssotConfirmed\":false", serialized);
+        Assert.Contains("committed\":false", serialized);
+        Assert.Contains("approvalUpdated\":false", serialized);
+        foreach (var forbidden in new[] { "credential", "bucket", "endpoint", "signed_url", "raw_sql", "core_api_url" })
+            Assert.DoesNotContain(forbidden, serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Get_preview_diff_returns_candidate_evidence_without_apply_or_approval()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var candidateId = Guid.NewGuid();
+        repo.ImportCandidateResults[candidateId] = NewImportCandidateResult(candidateId);
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(ImportCandidateRequest("get_preview_diff", candidateId: candidateId), Guid.NewGuid());
+
+        Assert.True(response.Success);
+        Assert.Empty(repo.ImportCandidates);
+        var serialized = JsonSerializer.Serialize(response.Emission!.Data!.Value);
+        Assert.Contains("applied\":false", serialized);
+        Assert.Contains("approvalUpdated\":false", serialized);
+        Assert.Contains("needs_human", serialized);
+        Assert.Contains(repo.ImportCandidateEvidence, e => e.CandidateId == candidateId && e.EventType == "cli_mcp_import_candidate_preview_returned");
+    }
+
+    [Theory]
+    [InlineData("approve_commit")]
+    [InlineData("commit")]
+    [InlineData("delete")]
+    [InlineData("send_email")]
+    [InlineData("payment_capture")]
+    public async Task Mutation_and_side_effect_operations_are_rejected(string operation)
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(ImportCandidateRequest(operation), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_OPERATION_UNSUPPORTED");
+        Assert.Empty(repo.ImportCandidates);
+    }
+
+    [Fact]
+    public async Task Import_candidate_rejects_forbidden_payload_fields_fail_close()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(ImportCandidateRequest("import_structured_output", extra: new Dictionary<string, object?> { ["core_api_url"] = "https://core", ["raw_sql"] = "select 1" }), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_BYPASS_OR_SECRET_FIELD");
+        Assert.Empty(repo.ImportCandidates);
+    }
+
     private static readonly Guid ConfigPortId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
     private static EndpointRequestDto DownloadRequest(Guid exportJobId, string? userId = "reader-user") =>
         Request("download_export_file", userId: userId, extra: new Dictionary<string, object?> { ["export_job_id"] = exportJobId.ToString() });
+
+
+    private static EndpointRequestDto ImportCandidateRequest(string operation, Guid? candidateId = null, Dictionary<string, object?>? extra = null) =>
+        Request(operation, extra: Merge(new Dictionary<string, object?>
+        {
+            ["structured_output_payload"] = new Dictionary<string, object?> { ["candidate_name"] = "Acme" },
+            ["source_transcript_ref"] = "transcript-1",
+            ["root_utterance"] = "root utterance",
+            ["confidence"] = 0.73m,
+            ["unresolved_fields"] = new[] { "needs_human" },
+            ["preview_diff"] = new Dictionary<string, object?> { ["changes"] = new[] { "draft_only" } },
+            ["candidate_id"] = candidateId?.ToString()
+        }, extra));
+
+    private static Dictionary<string, object?> Merge(Dictionary<string, object?> left, Dictionary<string, object?>? right)
+    {
+        if (right is not null) foreach (var (key, value) in right) left[key] = value;
+        return left;
+    }
+
+    private static CliReaderImportCandidateResult NewImportCandidateResult(Guid candidateId) => new(
+        candidateId, "commit_candidate", "candidate_created", "reader-user", DateTimeOffset.UnixEpoch, "idem-1",
+        $"topolactor://commit-candidates/{candidateId}/evidence.json",
+        JsonSerializer.SerializeToElement(new { changes = new[] { "draft_only" }, commit = false }),
+        JsonSerializer.SerializeToElement(new[] { "needs_human" }), 0.73m, "transcript-1", "root utterance");
 
     private static AuthorizedExportFile AuthorizedFile(
         Guid exportJobId,
@@ -433,6 +538,9 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         public List<(Guid PortId, string UserId, AuthorizedExportFile File)> AuthorizedFiles { get; } = [];
         public List<(Guid ExportJobId, bool ChecksumVerified)> DownloadEvidence { get; } = [];
         public List<(Guid ExportJobId, string FailureCode)> DownloadFailureEvidence { get; } = [];
+        public List<CreateCliReaderImportCandidateCommand> ImportCandidates { get; } = [];
+        public Dictionary<Guid, CliReaderImportCandidateResult> ImportCandidateResults { get; } = [];
+        public List<(Guid CandidateId, string EventType)> ImportCandidateEvidence { get; } = [];
         public bool ReturnRowsWithoutSourceIds { get; init; }
         public Task<CliReaderPortConfig?> LoadPortAsync(string portKey, CancellationToken ct = default) => Task.FromResult(config);
         public Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
@@ -491,6 +599,27 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         public Task RecordExportDownloadFailureEvidenceAsync(Guid exportJobId, string failureCode, DateTimeOffset observedAt, CancellationToken ct = default)
         {
             DownloadFailureEvidence.Add((exportJobId, failureCode));
+            return Task.CompletedTask;
+        }
+
+        public Task<CliReaderImportCandidateResult> CreateImportCandidateAsync(CreateCliReaderImportCandidateCommand command, CancellationToken ct = default)
+        {
+            ImportCandidates.Add(command);
+            var candidateId = Guid.NewGuid();
+            var result = new CliReaderImportCandidateResult(candidateId, command.CandidateKind, command.Status, command.RequestedBy, command.RequestedAt, command.IdempotencyKey, $"topolactor://commit-candidates/{candidateId}/evidence.json", command.PreviewDiff, command.UnresolvedFields, command.Confidence, command.SourceTranscriptRef, command.RootUtterance);
+            ImportCandidateResults[candidateId] = result;
+            return Task.FromResult(result);
+        }
+
+        public Task<CliReaderImportCandidateResult?> LoadImportCandidateAsync(LoadCliReaderImportCandidateQuery query, CancellationToken ct = default)
+        {
+            ImportCandidateResults.TryGetValue(query.CandidateId, out var result);
+            return Task.FromResult(result);
+        }
+
+        public Task RecordImportCandidateEvidenceAsync(Guid candidateId, string eventType, DateTimeOffset observedAt, CancellationToken ct = default)
+        {
+            ImportCandidateEvidence.Add((candidateId, eventType));
             return Task.CompletedTask;
         }
     }

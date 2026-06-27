@@ -419,6 +419,109 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         await tx.CommitAsync(ct);
     }
 
+    public async Task<CliReaderImportCandidateResult> CreateImportCandidateAsync(CreateCliReaderImportCandidateCommand command, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = """
+            WITH inserted AS (
+                INSERT INTO topology.cli_reader_import_candidates
+                    (candidate_id, port_id, port_key, operation, candidate_kind, source_transcript_ref, root_utterance,
+                     structured_output_payload, confidence, unresolved_fields, preview_diff, requested_by, requested_at,
+                     status, idempotency_key, runtime_audit_ref)
+                VALUES
+                    (gen_random_uuid(), @port_id, @port_key, @operation, @candidate_kind, @source_transcript_ref, @root_utterance,
+                     @structured_output_payload::jsonb, @confidence, @unresolved_fields::jsonb, @preview_diff::jsonb, @requested_by, @requested_at,
+                     @status, @idempotency_key, NULL)
+                ON CONFLICT (idempotency_key) DO NOTHING
+                RETURNING candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
+                          confidence, source_transcript_ref, root_utterance, true AS inserted
+            )
+            SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
+                   confidence, source_transcript_ref, root_utterance, inserted FROM inserted
+            UNION ALL
+            SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
+                   confidence, source_transcript_ref, root_utterance, false AS inserted
+            FROM topology.cli_reader_import_candidates
+            WHERE idempotency_key = @idempotency_key AND port_id = @port_id AND requested_by = @requested_by
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("port_id", command.PortId);
+        cmd.Parameters.AddWithValue("port_key", command.PortKey);
+        cmd.Parameters.AddWithValue("operation", command.Operation);
+        cmd.Parameters.AddWithValue("candidate_kind", command.CandidateKind);
+        cmd.Parameters.AddWithValue("source_transcript_ref", (object?)command.SourceTranscriptRef ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("root_utterance", (object?)command.RootUtterance ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("structured_output_payload", JsonSerializer.Serialize(command.StructuredOutputPayload));
+        cmd.Parameters.AddWithValue("confidence", (object?)command.Confidence ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("unresolved_fields", JsonSerializer.Serialize(command.UnresolvedFields));
+        cmd.Parameters.AddWithValue("preview_diff", JsonSerializer.Serialize(command.PreviewDiff));
+        cmd.Parameters.AddWithValue("requested_by", command.RequestedBy);
+        cmd.Parameters.AddWithValue("requested_at", command.RequestedAt);
+        cmd.Parameters.AddWithValue("status", command.Status);
+        cmd.Parameters.AddWithValue("idempotency_key", command.IdempotencyKey);
+        var result = await ReadCandidateResultAsync(cmd, ct);
+        await AppendRuntimeEventLogAsync(conn, tx, "cli_mcp_import_candidate_created", result.CandidateId, command.RequestedAt, ct);
+        await tx.CommitAsync(ct);
+        return result;
+    }
+
+    public async Task<CliReaderImportCandidateResult?> LoadImportCandidateAsync(LoadCliReaderImportCandidateQuery query, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
+                   confidence, source_transcript_ref, root_utterance, false AS inserted
+            FROM topology.cli_reader_import_candidates
+            WHERE candidate_id = @candidate_id AND port_id = @port_id AND requested_by = @requested_by
+            """;
+        cmd.Parameters.AddWithValue("candidate_id", query.CandidateId);
+        cmd.Parameters.AddWithValue("port_id", query.PortId);
+        cmd.Parameters.AddWithValue("requested_by", query.UserId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        return CandidateFromReader(reader);
+    }
+
+    public async Task RecordImportCandidateEvidenceAsync(Guid candidateId, string eventType, DateTimeOffset observedAt, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await AppendRuntimeEventLogAsync(conn, tx, eventType, candidateId, observedAt, ct);
+        await tx.CommitAsync(ct);
+    }
+
+    private static async Task<CliReaderImportCandidateResult> ReadCandidateResultAsync(NpgsqlCommand cmd, CancellationToken ct)
+    {
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("CLI_READER_IMPORT_CANDIDATE_IDEMPOTENCY_CONFLICT");
+        return CandidateFromReader(reader);
+    }
+
+    private static CliReaderImportCandidateResult CandidateFromReader(NpgsqlDataReader reader)
+    {
+        var candidateId = reader.GetGuid(0);
+        return new CliReaderImportCandidateResult(
+            candidateId,
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetFieldValue<DateTimeOffset>(4),
+            reader.GetString(5),
+            $"topolactor://commit-candidates/{candidateId}/evidence.json",
+            JsonSerializer.Deserialize<JsonElement>(reader.GetString(6)),
+            JsonSerializer.Deserialize<JsonElement>(reader.GetString(7)),
+            reader.IsDBNull(8) ? null : reader.GetDecimal(8),
+            reader.IsDBNull(9) ? null : reader.GetString(9),
+            reader.IsDBNull(10) ? null : reader.GetString(10));
+    }
+
     private static string MapFileStreamFailureEventType(string failureCode) => failureCode switch
     {
         "CLI_READER_FILE_SOURCE_IDS_MISMATCH" => "cli_mcp_file_source_ids_mismatch_rejected",
@@ -432,7 +535,7 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
     {
         await using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES (@event_type, @entity_id, 'cli_mcp_file_stream_port', @logged_at)";
+        cmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES (@event_type, @entity_id, CASE WHEN @event_type LIKE 'cli_mcp_import_candidate%' THEN 'cli_mcp_import_candidate_port' ELSE 'cli_mcp_file_stream_port' END, @logged_at)";
         cmd.Parameters.AddWithValue("event_type", eventType);
         cmd.Parameters.AddWithValue("entity_id", exportJobId.ToString());
         cmd.Parameters.AddWithValue("logged_at", observedAt);

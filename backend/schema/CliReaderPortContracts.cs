@@ -99,3 +99,40 @@ public sealed record AuthorizedExportFile(
     string ManifestChecksum,
     IReadOnlyList<string> ManifestSourceRecordIds,
     JsonElement ManifestJsonb);
+
+
+public sealed record CreateCliReaderImportCandidateCommand(
+    Guid PortId,
+    string PortKey,
+    string Operation,
+    string CandidateKind,
+    string RequestedBy,
+    string? SourceTranscriptRef,
+    string? RootUtterance,
+    JsonElement StructuredOutputPayload,
+    decimal? Confidence,
+    JsonElement UnresolvedFields,
+    JsonElement PreviewDiff,
+    string Status,
+    string IdempotencyKey,
+    DateTimeOffset RequestedAt);
+
+public sealed record CliReaderImportCandidateResult(
+    Guid CandidateId,
+    string CandidateKind,
+    string Status,
+    string RequestedBy,
+    DateTimeOffset RequestedAt,
+    string IdempotencyKey,
+    string EvidenceUri,
+    JsonElement PreviewDiff,
+    JsonElement UnresolvedFields,
+    decimal? Confidence,
+    string? SourceTranscriptRef,
+    string? RootUtterance,
+    string ApprovalStatus = "not_requested");
+
+public sealed record LoadCliReaderImportCandidateQuery(
+    Guid PortId,
+    string UserId,
+    Guid CandidateId);

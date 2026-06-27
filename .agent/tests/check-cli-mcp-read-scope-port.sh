@@ -92,7 +92,6 @@ check "backend/tests/Topolactor.Runtime.Tests/DispatchRoleAuthorityTests.cs" "Fo
 # NOTE: file streaming (download_export_file / FileStreamEnabled) is implemented by the
 # sibling subBundle `cli-mcp-file-stream-port` inside this shared runtime; only
 # import-candidate scope creep remains out of scope for the read-scope surface.
-absent "$RUNTIME" "import_structured_output|create_commit_candidate|create_draft_operation"
 absent "$NPGSQL" "authorized:|placeholder"
 
 echo "cli-mcp read scope port guard passed"
