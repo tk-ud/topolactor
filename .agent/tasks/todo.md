@@ -190,7 +190,7 @@ out_of_scope:
 
 ### SubBundle `cli-mcp-export-job-port`
 
-**Status:** not_started
+**Status:** implemented
 **対応SSOTファイル:** `docs/design/cli-model-context-protocols-port-ssot.yaml`
 **対応SSOTセクション名:** `export_job` / `manifest` / `data_reader_responsibility`
 
@@ -218,4 +218,6 @@ NG軸:
 - export_job / audit_log / runtime_event_log skip
 
 受入条件:
-- [ ] export は必ず authorized read scope に基づく `export_job` として記録される。
+- [x] export は必ず authorized read scope に基づく `export_job` として記録される。
+
+Implemented evidence update (2026-06-27): `create_export_job` is handled inside `AuthorizedCliReaderPortRuntime` only after ManifestDispatcher supplies a manifest id and the existing cli_reader_port auth/scope/capability checks pass. The runtime reads through `AuthorizedCliReaderQuery`, requires idempotency key and csv/json/pdf/zip format, rejects missing source_record_ids, and persists export job ledger/manifest/checksum/generated_files plus `runtime_event_log` evidence through `CliReaderPortRepository`. Guard/unit tests cover manifest/checksum/source ids and detect file-stream/import-candidate/approval scope creep. Parent bundle remains partial because file-stream, import-candidate, and surface-metadata subBundles remain out of scope.

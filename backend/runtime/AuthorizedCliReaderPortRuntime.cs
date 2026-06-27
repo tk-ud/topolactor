@@ -9,16 +9,16 @@ namespace Topolactor.Runtime;
 /// Authorized CLI/MCP read-side runtime. This handler is intentionally usable only
 /// after ManifestDispatcher resolves a manifest/runtime mapping (manifestId required).
 /// It resolves authenticated user/role/capability from server-side dispatch context,
-/// resolves cli_reader_port scope, and executes only read/search/aggregate/analyze/validate
+/// resolves cli_reader_port scope, and executes only read/search/aggregate/analyze/validate/create_export_job
 /// inside the repository-authorized read model. It never accepts direct SQL, direct DB
-/// connection strings, Core API URLs, plaintext credentials, export jobs, file streams,
+/// connection strings, Core API URLs, plaintext credentials, file streams,
 /// imports, commit candidates, or mutation operations.
 /// </summary>
 public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
 {
     private static readonly HashSet<string> AllowedOperations = new(StringComparer.OrdinalIgnoreCase)
     {
-        "read", "search", "aggregate", "analyze", "validate"
+        "read", "search", "aggregate", "analyze", "validate", "create_export_job"
     };
 
     private static readonly string[] SecretFieldNames =
@@ -56,7 +56,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
             return await FailAsync(seed, "CLI_READER_TARGET_INVALID", "CLI/MCP Data Reader target must be cli_reader_port.", ct);
 
         if (!AllowedOperations.Contains(parsed.Operation!))
-            return await FailAsync(seed, "CLI_READER_OPERATION_UNSUPPORTED", "CLI/MCP Data Reader operation must be read/search/aggregate/analyze/validate.", ct);
+            return await FailAsync(seed, "CLI_READER_OPERATION_UNSUPPORTED", "CLI/MCP Data Reader operation must be read/search/aggregate/analyze/validate/create_export_job.", ct);
 
         if (request.Payload.HasValue && ContainsForbiddenBypassOrSecretField(request.Payload.Value))
             return await FailAsync(seed, "CLI_READER_BYPASS_OR_SECRET_FIELD", "Direct SQL/DB/Core API bypass, client-supplied auth authority, and plaintext credential fields are forbidden.", ct);
@@ -107,7 +107,8 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         if (!config.RowScopeByUser.TryGetValue(parsed.UserId!, out var rowScope) || string.IsNullOrWhiteSpace(rowScope))
             return await FailAsync(seed, "CLI_READER_ROW_SCOPE_UNRESOLVED", "Row scope must resolve explicitly for the authenticated user.", ct);
 
-        var query = new AuthorizedCliReaderQuery(parsed.PortKey!, parsed.Operation!, parsed.UserId!, parsed.Roles, parsed.Table!, parsed.Columns, parsed.Filters, parsed.Period, rowScope, parsed.RequestId, parsed.IdempotencyKey);
+        var readOperation = string.Equals(parsed.Operation, "create_export_job", StringComparison.OrdinalIgnoreCase) ? "read" : parsed.Operation!;
+        var query = new AuthorizedCliReaderQuery(parsed.PortKey!, readOperation, parsed.UserId!, parsed.Roles, parsed.Table!, parsed.Columns, parsed.Filters, parsed.Period, rowScope, parsed.RequestId, parsed.IdempotencyKey);
         IReadOnlyList<Dictionary<string, object?>> rows;
         try
         {
@@ -117,10 +118,61 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         {
             return await FailAsync(seed, ex.Message, "Authorized read query validation failed.", ct);
         }
+        if (string.Equals(parsed.Operation, "create_export_job", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var exportResult = await CreateExportJobAsync(parsed, query, rows, ct);
+                await AppendAsync(seed with { Status = "success", Code = "CLI_READER_EXPORT_JOB_CREATED", ScopeSummary = BuildScopeSummary(query) }, ct);
+                return new EndpointResponseDto(true, new Emission(null, null, null, [], JsonSerializer.SerializeToElement(exportResult), []), []);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("CLI_READER_", StringComparison.Ordinal))
+            {
+                return await FailAsync(seed, ex.Message, "Export job creation validation failed.", ct);
+            }
+        }
+
         var shaped = ShapeResult(parsed.Operation!, rows, parsed.Columns);
 
         await AppendAsync(seed with { Status = "success", Code = "CLI_READER_OK", ScopeSummary = BuildScopeSummary(query) }, ct);
         return new EndpointResponseDto(true, new Emission(null, null, null, [], JsonSerializer.SerializeToElement(shaped), []), []);
+    }
+
+
+    private async Task<object> CreateExportJobAsync(ParsedCliReaderRequest parsed, AuthorizedCliReaderQuery query, IReadOnlyList<Dictionary<string, object?>> rows, CancellationToken ct)
+    {
+        var exportFormat = parsed.ExportFormat!;
+        var idempotencyKey = parsed.IdempotencyKey!;
+        var sourceRecordIds = ExtractSourceRecordIds(rows);
+        if (sourceRecordIds.Count == 0)
+            throw new InvalidOperationException("CLI_READER_EXPORT_SOURCE_RECORD_IDS_REQUIRED");
+
+        var result = await _repository.CreateExportJobAsync(
+            new CreateCliReaderExportJobCommand(query, exportFormat, rows, sourceRecordIds, idempotencyKey, _timeProvider.GetUtcNow()), ct);
+
+        return new
+        {
+            operation = "create_export_job",
+            exportJobId = result.ExportJobId,
+            status = result.Status,
+            exportFormat = result.ExportFormat,
+            sourceRecordIds = result.SourceRecordIds,
+            generatedFiles = result.GeneratedFiles,
+            checksum = result.Checksum,
+            manifestPath = result.ManifestPath,
+            manifest = result.Manifest
+        };
+    }
+
+    private static IReadOnlyList<string> ExtractSourceRecordIds(IReadOnlyList<Dictionary<string, object?>> rows)
+    {
+        var ids = new List<string>();
+        foreach (var row in rows)
+        {
+            var match = row.FirstOrDefault(kvp => string.Equals(kvp.Key, "id", StringComparison.OrdinalIgnoreCase) || string.Equals(kvp.Key, "hub_id", StringComparison.OrdinalIgnoreCase) || kvp.Key.EndsWith("_id", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(match.Key) && match.Value is not null) ids.Add(Convert.ToString(match.Value, System.Globalization.CultureInfo.InvariantCulture)!);
+        }
+        return ids.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
     private static object ShapeResult(string operation, IReadOnlyList<Dictionary<string, object?>> rows, IReadOnlyList<string> columns) =>
@@ -184,7 +236,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
     {
         var eventSeed = new CliReaderPortRuntimeEvent("unknown", request.Action ?? request.OperationType ?? "unknown", null, [], "fail_close", "CLI_READER_PARSE_PENDING", null, null, "parse", DateTimeOffset.UnixEpoch);
         if (!request.Payload.HasValue || request.Payload.Value.ValueKind != JsonValueKind.Object)
-            return new(eventSeed, null, null, null, new HashSet<string>(StringComparer.OrdinalIgnoreCase), null, [], new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, [], null, null, new ValidationError("CLI_READER_PAYLOAD_REQUIRED", "CLI/MCP reader payload object is required."));
+            return new(eventSeed, null, null, null, new HashSet<string>(StringComparer.OrdinalIgnoreCase), null, [], new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, [], null, null, null, new ValidationError("CLI_READER_PAYLOAD_REQUIRED", "CLI/MCP reader payload object is required."));
 
         var payload = request.Payload.Value;
         var portKey = ReadString(payload, "port_key") ?? ReadString(payload, "portKey");
@@ -199,11 +251,17 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         var capabilities = ReadContextSet(request.Context, "resolved_capabilities", "capabilities");
         var requestId = ReadString(payload, "request_id") ?? ReadString(payload, "requestId");
         var idempotencyKey = ReadString(payload, "idempotency_key") ?? ReadString(payload, "idempotencyKey");
+        var exportFormat = ReadString(payload, "export_format") ?? ReadString(payload, "exportFormat");
 
         eventSeed = eventSeed with { PortKey = portKey ?? "unknown", Operation = operation ?? "unknown", UserId = userId, Roles = roles.ToArray(), RequestId = requestId, IdempotencyKey = idempotencyKey, ScopeSummary = $"table={table ?? "unknown"}" };
-        if (string.IsNullOrWhiteSpace(portKey)) return new(eventSeed, null, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, new ValidationError("CLI_READER_PORT_REQUIRED", "port_key is required."));
-        if (string.IsNullOrWhiteSpace(table)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, new ValidationError("CLI_READER_TABLE_REQUIRED", "table is required."));
-        return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, null);
+        if (string.IsNullOrWhiteSpace(portKey)) return new(eventSeed, null, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, null, new ValidationError("CLI_READER_PORT_REQUIRED", "port_key is required."));
+        if (string.IsNullOrWhiteSpace(table)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, new ValidationError("CLI_READER_TABLE_REQUIRED", "table is required."));
+        if (string.Equals(operation, "create_export_job", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(idempotencyKey)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, new ValidationError("CLI_READER_EXPORT_IDEMPOTENCY_KEY_REQUIRED", "create_export_job requires idempotency_key."));
+            if (string.IsNullOrWhiteSpace(exportFormat) || !new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "csv", "json", "pdf", "zip" }.Contains(exportFormat)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, new ValidationError("CLI_READER_EXPORT_FORMAT_DENIED", "export_format must be csv/json/pdf/zip."));
+        }
+        return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, null);
     }
 
     private static string? ReadContextValue(Dictionary<string, string>? context, params string[] names)
@@ -231,5 +289,5 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
     private static IReadOnlyList<string> ReadStringArray(JsonElement obj, string name) => obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array ? value.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray() : [];
     private static IReadOnlyDictionary<string, string> ReadStringMap(JsonElement obj, string name) => obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Object ? value.EnumerateObject().Where(x => x.Value.ValueKind == JsonValueKind.String).ToDictionary(x => x.Name, x => x.Value.GetString()!, StringComparer.OrdinalIgnoreCase) : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-    private sealed record ParsedCliReaderRequest(CliReaderPortRuntimeEvent EventSeed, string? PortKey, string? Operation, string? UserId, IReadOnlySet<string> Roles, string? Table, IReadOnlyList<string> Columns, IReadOnlySet<string> Capabilities, IReadOnlyDictionary<string, string> Filters, string? Period, IReadOnlyList<string> RowScope, string? RequestId, string? IdempotencyKey, ValidationError? Error);
+    private sealed record ParsedCliReaderRequest(CliReaderPortRuntimeEvent EventSeed, string? PortKey, string? Operation, string? UserId, IReadOnlySet<string> Roles, string? Table, IReadOnlyList<string> Columns, IReadOnlySet<string> Capabilities, IReadOnlyDictionary<string, string> Filters, string? Period, IReadOnlyList<string> RowScope, string? RequestId, string? IdempotencyKey, string? ExportFormat, ValidationError? Error);
 }

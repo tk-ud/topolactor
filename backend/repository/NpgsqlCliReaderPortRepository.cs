@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Npgsql;
 using Topolactor.Schema;
@@ -94,6 +96,138 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             rows.Add(row);
         }
         return rows;
+    }
+
+
+    public async Task<CliReaderExportJobResult> CreateExportJobAsync(CreateCliReaderExportJobCommand command, CancellationToken ct = default)
+    {
+        var payloadJson = JsonSerializer.Serialize(command.Rows);
+        var payloadBytes = Encoding.UTF8.GetBytes(payloadJson);
+        var payloadChecksum = Convert.ToHexString(SHA256.HashData(payloadBytes)).ToLowerInvariant();
+        var fileName = $"cli-reader-export-{command.IdempotencyKey}.{command.ExportFormat.ToLowerInvariant()}";
+        var contentRef = $"cli-reader-export-job://{command.IdempotencyKey}/{fileName}";
+        var generatedFiles = new[] { new CliReaderGeneratedFile(fileName, command.ExportFormat, payloadBytes.LongLength, payloadChecksum, contentRef) };
+        var manifestPath = $"topolactor://exports/{command.IdempotencyKey}/manifest.json";
+        var manifestObject = new
+        {
+            manifest_version = "1.0",
+            export_job_id = (Guid?)null,
+            generated_at = command.RequestedAt,
+            generated_by = command.Query.UserId,
+            period = command.Query.Period,
+            source_tables = new[] { command.Query.Table },
+            source_record_ids = command.SourceRecordIds,
+            files = generatedFiles,
+            checksum = payloadChecksum
+        };
+        var manifestJson = JsonSerializer.Serialize(manifestObject);
+        var manifestChecksum = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(manifestJson))).ToLowerInvariant();
+        var generatedFilesJson = JsonSerializer.Serialize(generatedFiles);
+        var sourceRecordIdsJson = JsonSerializer.Serialize(command.SourceRecordIds);
+        var targetScope = $"table={command.Query.Table};columns={string.Join(',', command.Query.Columns)};filters={string.Join(',', command.Query.Filters.Keys)};period={command.Query.Period ?? "none"};row_scope=resolved";
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = """
+            INSERT INTO topology.export_jobs
+                (export_job_id, port_kind, requested_by, requested_at, period, target_scope,
+                 export_format, status, source_record_ids, generated_files, idempotency_key,
+                 checksum, manifest_path, completed_at, approval_required, approval_status)
+            VALUES
+                (gen_random_uuid(), 'access_port', @requested_by, @requested_at, @period, @target_scope,
+                 @export_format, 'completed', @source_record_ids::jsonb, @generated_files::jsonb, @idempotency_key,
+                 @checksum, @manifest_path, @completed_at, false, 'not_required')
+            ON CONFLICT (idempotency_key) DO UPDATE
+                SET updated_at = topology.export_jobs.updated_at
+            RETURNING export_job_id, status, source_record_ids, generated_files, checksum, manifest_path
+            """;
+        cmd.Parameters.AddWithValue("requested_by", command.Query.UserId);
+        cmd.Parameters.AddWithValue("requested_at", command.RequestedAt);
+        cmd.Parameters.AddWithValue("period", command.Query.Period is not null ? (object)command.Query.Period : DBNull.Value);
+        cmd.Parameters.AddWithValue("target_scope", targetScope);
+        cmd.Parameters.AddWithValue("export_format", command.ExportFormat);
+        cmd.Parameters.AddWithValue("source_record_ids", sourceRecordIdsJson);
+        cmd.Parameters.AddWithValue("generated_files", generatedFilesJson);
+        cmd.Parameters.AddWithValue("idempotency_key", command.IdempotencyKey);
+        cmd.Parameters.AddWithValue("checksum", manifestChecksum);
+        cmd.Parameters.AddWithValue("manifest_path", manifestPath);
+        cmd.Parameters.AddWithValue("completed_at", command.RequestedAt);
+
+        Guid exportJobId;
+        string status;
+        string sourceIdsDb;
+        string filesDb;
+        string checksumDb;
+        string manifestPathDb;
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            await reader.ReadAsync(ct);
+            exportJobId = reader.GetGuid(0);
+            status = reader.GetString(1);
+            sourceIdsDb = reader.GetString(2);
+            filesDb = reader.GetString(3);
+            checksumDb = reader.GetString(4);
+            manifestPathDb = reader.GetString(5);
+        }
+
+        var finalManifest = new
+        {
+            manifest_version = "1.0",
+            export_job_id = exportJobId,
+            generated_at = command.RequestedAt,
+            generated_by = command.Query.UserId,
+            period = command.Query.Period,
+            source_tables = new[] { command.Query.Table },
+            source_record_ids = command.SourceRecordIds,
+            files = generatedFiles,
+            checksum = checksumDb
+        };
+        var finalManifestJson = JsonSerializer.Serialize(finalManifest);
+        await using var manifestCmd = conn.CreateCommand();
+        manifestCmd.Transaction = tx;
+        manifestCmd.CommandText = """
+            INSERT INTO topology.export_manifests
+                (export_job_id, manifest_version, generated_at, generated_by, period, export_format,
+                 checksum, file_artifact_ids, manifest_jsonb)
+            VALUES
+                (@export_job_id, '1.0', @generated_at, @generated_by, @period, @export_format,
+                 @checksum, '[]'::jsonb, @manifest_jsonb::jsonb)
+            ON CONFLICT (export_job_id) DO UPDATE
+                SET checksum = EXCLUDED.checksum,
+                    manifest_jsonb = EXCLUDED.manifest_jsonb,
+                    updated_at = now()
+            """;
+        manifestCmd.Parameters.AddWithValue("export_job_id", exportJobId);
+        manifestCmd.Parameters.AddWithValue("generated_at", command.RequestedAt);
+        manifestCmd.Parameters.AddWithValue("generated_by", command.Query.UserId);
+        manifestCmd.Parameters.AddWithValue("period", command.Query.Period is not null ? (object)command.Query.Period : DBNull.Value);
+        manifestCmd.Parameters.AddWithValue("export_format", command.ExportFormat);
+        manifestCmd.Parameters.AddWithValue("checksum", checksumDb);
+        manifestCmd.Parameters.AddWithValue("manifest_jsonb", finalManifestJson);
+        await manifestCmd.ExecuteNonQueryAsync(ct);
+
+        await using var eventCmd = conn.CreateCommand();
+        eventCmd.Transaction = tx;
+        eventCmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES ('cli_mcp_export_job_created', @entity_id, 'cli_mcp_export_job_port', @logged_at)";
+        eventCmd.Parameters.AddWithValue("entity_id", exportJobId.ToString());
+        eventCmd.Parameters.AddWithValue("logged_at", command.RequestedAt);
+        await eventCmd.ExecuteNonQueryAsync(ct);
+
+        await tx.CommitAsync(ct);
+
+        return new CliReaderExportJobResult(
+            exportJobId,
+            status,
+            command.ExportFormat,
+            JsonSerializer.Deserialize<string[]>(sourceIdsDb) ?? [],
+            JsonSerializer.Deserialize<CliReaderGeneratedFile[]>(filesDb) ?? [],
+            checksumDb,
+            manifestPathDb,
+            JsonSerializer.Deserialize<JsonElement>(finalManifestJson));
     }
 
     public async Task AppendRuntimeEventAsync(CliReaderPortRuntimeEvent runtimeEvent, CancellationToken ct = default)

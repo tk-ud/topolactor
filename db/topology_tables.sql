@@ -634,14 +634,18 @@ CREATE TABLE IF NOT EXISTS topology.export_jobs (
     target_scope      TEXT,
     export_format     TEXT,
     status            TEXT        NOT NULL DEFAULT 'initiated'
-                                  CHECK (status IN ('initiated', 'in_progress', 'completed', 'failed')),
+                                  CHECK (status IN ('pending', 'processing', 'awaiting_approval', 'approved', 'rejected', 'completed', 'failed', 'initiated', 'in_progress')),
     source_record_ids JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    generated_files   JSONB       NOT NULL DEFAULT '[]'::jsonb,
     idempotency_key   TEXT        NOT NULL UNIQUE,
     checksum          TEXT,
     manifest_path     TEXT,
     completed_at      TIMESTAMPTZ,
     failed_at         TIMESTAMPTZ,
     failure_code      TEXT,
+    approval_required BOOLEAN     NOT NULL DEFAULT false,
+    approval_status   TEXT        NOT NULL DEFAULT 'not_required'
+                                  CHECK (approval_status IN ('not_required', 'pending', 'approved', 'rejected')),
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -654,7 +658,7 @@ CREATE INDEX IF NOT EXISTS idx_export_jobs_requested_at
     ON topology.export_jobs (requested_at DESC);
 
 COMMENT ON TABLE topology.export_jobs IS
-    'File storage bundle export job tracking. storage_ref and authorization_key are '
+    'File storage bundle and CLI/MCP export job tracking; CLI/MCP create_export_job requires authorized read scope, source_record_ids, generated_files, checksum, manifest_path, and runtime_event_log evidence.  storage_ref and authorization_key are '
     'env-var reference identifiers only; plaintext credentials, bucket names, and '
     'actual signed URLs are prohibited.';
 

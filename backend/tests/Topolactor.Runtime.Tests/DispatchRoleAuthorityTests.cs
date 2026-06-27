@@ -300,6 +300,9 @@ public class DispatchRoleAuthorityTests
             Events.Add(runtimeEvent);
             return Task.CompletedTask;
         }
+
+        public Task<CliReaderExportJobResult> CreateExportJobAsync(CreateCliReaderExportJobCommand command, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class RoleFilteredManifestRepository(string expectedRole, ManifestRecord manifest)
