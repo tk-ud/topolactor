@@ -50,9 +50,9 @@ credential-backed instance connection / instance function call を external_port
 - `backend/runtime/AbstractFunctionRuntime.cs` (future primitive adapter only)
 - `backend/runtime/*InstancePort*` (future runtime lane only)
 - `backend/repository/*InstancePort*` (future policy repository only)
-- `frontend/lib/packageWiringOptions.ts` (future admin/UI Builder target surface vocabulary only after SSOT is updated)
-- `frontend/lib/packageWiringPicker.ts` (future admin/UI Builder targetRef helper only after SSOT is updated)
-- `frontend/islands/UiBuilderAdmin.tsx` (future PackageWiringEditor candidate/wiring surface only after SSOT is updated)
+- `frontend/lib/packageWiringOptions.ts` (future Design Inspector event target surface candidate vocabulary only after SSOT is updated)
+- `frontend/lib/packageWiringPicker.ts` (future Design Inspector event targetRef helper only after SSOT is updated)
+- `frontend/islands/UiBuilderAdmin.tsx` (future Design Inspector event candidate/wiring surface only after SSOT is updated)
 - `backend/runtime/AdminRuntime.cs` (future admin action candidate/wiring read surface only after SSOT is updated)
 - `backend/repository/UiTopologyRepository.cs` / `backend/repository/NpgsqlUiTopologyRepository.cs` (future candidate read/update repository surface only after SSOT is updated)
 
@@ -65,7 +65,7 @@ NG軸:
 - provider-specific runtime handler を第一候補にする
 - provider-specific schema / external instance semantic authority を Topolactor DB に作る
 - external instance を Topolactor runtime SSOT として扱う
-- admin contents / UI Builder / PackageWiringEditor / action wiring を未設計のまま runtime lane / primitive だけ実装して implemented 扱いにする
+- admin contents / Design Inspector event wiring / PackageWiringEditor action wiring を未設計のまま runtime lane / primitive だけ実装して implemented 扱いにする
 - dedicated credential admin UI / standalone credential plane / dedicated credential route/panel を作る
 - 手書き admin UI / hardcoded targetRef / hardcoded action button で Gate 0 の seed/data-defined surface を迂回する
 
@@ -79,9 +79,9 @@ NG軸:
 - [ ] credential は `reference_key` / DB guarded vault / runtime secret resolver 経由で runtime-only 解決され、plaintext connection string は SSOT / seed / UI / projection / log に出ない。
 - [ ] provider_kind / required_by_bundle は data only で C# selector ではない。
 - [ ] 特定 consumer 専用 handler / schema / semantic authority を追加していない。
-- [ ] admin contents / UI Builder / PackageWiringEditor / admin action candidate / targetRef / projection registration の接続方針が SSOT 上で定義され、Gate 0 の admin_authoring_completion_gate を満たす。
+- [ ] admin contents / Admin UI Builder Design Inspector event candidate / PackageWiringEditor targetRef / projection registration の接続方針が SSOT 上で定義され、Gate 0 の admin_authoring_completion_gate を満たす。
 - [ ] admin projection は credential reference / policy / authority binding を data-defined に扱い、secret / endpoint / connection string / raw SQL / function authority を projection しない。
-- [ ] UI Builder / Design Inspector は approved instance operation の `trigger` / `payloadFrom` / `outputProp` 割当だけを扱い、instance function definition / address edit / schema edit / raw SQL edit / credential edit を持たない。
+- [ ] Admin UI Builder Design Inspector event authoring は approved instance operation の `trigger` / `payloadFrom` / `outputProp` 割当だけを扱い、instance function definition / address edit / schema edit / raw SQL edit / credential edit を持たない。
 - [ ] `.agent/tests/check-instance-port-substrate.sh` と必要な runtime/backend/frontend/admin wiring tests が追加・通過している。
 
 ---
