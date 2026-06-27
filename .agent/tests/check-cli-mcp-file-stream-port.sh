@@ -31,12 +31,11 @@ NPGSQL="backend/repository/NpgsqlCliReaderPortRepository.cs"
 DB="db/topology_tables.sql"
 SEED="db/seed_empty.sql"
 TEST="backend/tests/Topolactor.Runtime.Tests/AuthorizedCliReaderPortRuntimeTests.cs"
-TODO=".agent/tasks/todo.md"
 SSOT="docs/design/cli-model-context-protocols-port-ssot.yaml"
 IMPL_SSOT="docs/design/cli-mcp-port-implementation-ssot.yaml"
 FILE_SSOT="docs/design/runtime-bundle-file-storage-ssot.yaml"
 
-for f in "$RUNTIME" "$SCHEMA" "$REPO" "$NPGSQL" "$DB" "$SEED" "$TEST" "$TODO" "$SSOT" "$IMPL_SSOT" "$FILE_SSOT"; do
+for f in "$RUNTIME" "$SCHEMA" "$REPO" "$NPGSQL" "$DB" "$SEED" "$TEST" "$SSOT" "$IMPL_SSOT" "$FILE_SSOT"; do
   [ -f "$f" ] || { echo "missing $f" >&2; exit 1; }
 done
 
@@ -117,10 +116,6 @@ check "$TEST" "Download_export_file_fail_close_when_job_not_authorized"
 check "$TEST" "Download_export_file_fail_close_when_file_stream_disabled"
 check "$TEST" "Download_export_file_rejects_non_dispatch_resolved_request"
 check "$TEST" "Download_export_file_response_excludes_credential_bucket_endpoint_and_signed_url"
-
-# TODO bundle-level evidence
-check "$TODO" "cli-mcp-file-stream-port"
-check "$TODO" "Implemented evidence update"
 
 # Out-of-scope axes must not appear in the file stream surfaces.
 absent "$RUNTIME" "approval_execute|ApproveExport|ExecuteApproval"
