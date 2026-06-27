@@ -1,6 +1,6 @@
 instance_port_substrate_ssot:
   name: instance_port_substrate
-  version: 0.3.1
+  version: 0.3.2
   status: ssot_design_document
   canonical_path: docs/design/instance-port-substrate-ssot.yaml
 
@@ -345,13 +345,14 @@ instance_port_substrate_ssot:
         - direct_runtime_execution
         - arbitrary_SQL_authoring
     design_inspector_surface:
-      role: Bind existing approved instance operations to UI events; do not define functions.
+      role: Extend existing Admin UI Builder Design Inspector event authoring so approved instance operations can be assigned to UI events; do not define functions.
       reuse_existing_runtime_interactions:
         trigger: runtimeInteractions.trigger is the UI firing trigger.
         data_scope: runtimeInteractions.payloadFrom is the data scope / payload binding map.
         result_capture: runtimeInteractions.outputProp is the result capture key.
       allowed_authoring:
         - select_approved_instance_operation_candidate
+        - select_event_action_dispatchInstanceOperation
         - select_trigger
         - map_payloadFrom
         - select_outputProp
@@ -365,11 +366,15 @@ instance_port_substrate_ssot:
     package_wiring_target_surface:
       future_target_surface: instance_port
       candidate_source: admin-approved instance_operation_authority_binding records only.
-      no_free_text_rule: UI Builder / PackageWiringEditor must not accept address, schema, function, SQL, or credential free-text as executable authority.
+      no_free_text_rule: Design Inspector / PackageWiringEditor must not accept address, schema, function, SQL, or credential free-text as executable authority.
 
-  ui_builder_wiring_contract:
-    selected_shape: dispatchInstanceOperation_as_dispatchExternalPort_sibling
-    scope_rule: UI Builder only extends approved instance operation assignment; it does not own instance setting registration, JSON import/download, or credential/address editing.
+  design_inspector_event_wiring_contract:
+    selected_shape: design_inspector_event_authoring_extends_existing_runtimeInteractions
+    scope_rule: >-
+      This is an Admin UI Builder Design Inspector event-authoring extension. It is not a new frontend screen,
+      not a UI Builder rebuild, and not an instance settings editor. Instance settings registration, JSON import/download,
+      and credential/address editing belong to the credential management projection. The Design Inspector only lets an
+      existing UI event choose an approved instance operation action and bind trigger / payloadFrom / outputProp.
     runtime_interaction_shape:
       actionType: dispatchInstanceOperation
       trigger: existing runtimeInteractions.trigger
@@ -384,11 +389,12 @@ instance_port_substrate_ssot:
       - instanceTargetRef uses instance-port prefix and must not reuse manifest target_ref.
       - instanceTargetRef must not be accepted as external port_target_ref.
       - route target_ref and manifest target_ref remain separate contracts.
-    frontend_existing_surface_alignment:
-      - frontend/runtime/visualLayoutUtils.ts already carries runtimeInteractions trigger payloadFrom outputProp for external-port dispatch authoring.
-      - frontend/runtime/renderEmission.ts can add dispatchInstanceOperation as a sibling to dispatchExternalPort without changing the trigger/data-scope/result concepts.
-      - frontend/runtime/frontendScheduler.ts can add enqueueInstanceOperationDispatchCommand as a sibling of enqueueExternalPortDispatchCommand.
-      - frontend/lib/packageWiringOptions.ts can add instance_port as a target surface after this SSOT vocabulary is implemented.
+    design_inspector_existing_surface_alignment:
+      - Existing Admin UI Builder Design Inspector event settings already use runtimeInteractions trigger / payloadFrom / outputProp concepts.
+      - dispatchInstanceOperation is an additional event action choice beside existing dispatchExternalPort-style event wiring, not a standalone frontend feature.
+      - frontend/runtime/renderEmission.ts should add dispatchInstanceOperation as an event binding sibling without changing the trigger/data-scope/result concepts.
+      - frontend/runtime/frontendScheduler.ts should enqueue the approved instance operation dispatch command after Design Inspector event binding resolves instanceTargetRef.
+      - frontend/lib/packageWiringOptions.ts should expose instance_port only as an event target surface candidate for approved instance operations after this SSOT vocabulary is implemented.
 
   runtime_boundary:
     runtime_lane:
@@ -538,15 +544,15 @@ instance_port_substrate_ssot:
     secret_credential_ssot: >-
       Dedicated credential admin UI remains prohibited. Instance settings reuse the existing credential management projection and guarded vault/reference-key model.
     admin_console_workflow_ssot: >-
-      Future implementation must expose instance JSON template import/download, list/edit, validation, preview, and approval through the existing credential management projection extension; Design Inspector only selects approved functions and maps trigger/payloadFrom/outputProp.
+      Future implementation must expose instance JSON template import/download, list/edit, validation, preview, and approval through the existing credential management projection extension; Design Inspector event authoring only selects approved functions and maps trigger/payloadFrom/outputProp.
     runtime_orchestration_ssot: >-
       Future implementation must add instance_port_runtime as a sibling lane without mixing it into external_port_runtime.
     abstract_function_primitive_registry_ssot: >-
       Existing planned vocabulary remains; implementation should treat call_instance_postgres_function as an adapter under approved instance operation authority.
     frontend_runtime: >-
-      Existing runtimeInteractions trigger/payloadFrom/outputProp are reused; only instanceTargetRef/actionType/dispatch sibling are added.
+      Existing runtimeInteractions trigger/payloadFrom/outputProp are reused by Admin UI Builder Design Inspector event authoring; only the event action vocabulary and instanceTargetRef dispatch binding are extended for approved instance operations.
     ci_guard: >-
-      check-instance-port-substrate.sh should guard template/import-driven vocabulary, existing credential management projection extension, and discovery/runtime scanning prohibitions.
+      check-instance-port-substrate.sh should guard template/import-driven vocabulary, existing credential management projection extension, Design Inspector event-authoring scope, and discovery/runtime scanning prohibitions.
 
   prohibited_patterns:
     - provider_specific_schema_in_topolactor_db
@@ -584,5 +590,5 @@ instance_port_substrate_ssot:
       - external instance is documented and tested as a call target, not Topolactor runtime SSOT.
       - The existing credential management projection is extended with instance_settings for JSON template download/import, registered Runtime/DB list/edit, operation list/edit, validate, preview, and explicit apply before UI Builder can select instance operations.
       - Seed-aligned JSON template generation is sanitized against structural information leakage.
-      - UI Builder uses existing runtimeInteractions trigger/payloadFrom/outputProp and only selects approved instance operations.
+      - Admin UI Builder Design Inspector event authoring uses existing runtimeInteractions trigger/payloadFrom/outputProp and only adds dispatchInstanceOperation / instanceTargetRef as approved instance operation event choices.
       - Topolactor does not implement discovery-driven analysis of legacy DB/runtime targets for this substrate.
