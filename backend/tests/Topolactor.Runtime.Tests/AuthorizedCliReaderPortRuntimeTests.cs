@@ -205,6 +205,158 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.Empty(repo.Queries);
     }
 
+    [Fact]
+    public async Task Download_export_file_streams_authorized_job_with_checksum_and_download_evidence()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var jobId = Guid.NewGuid();
+        repo.AuthorizedFiles.Add((ConfigPortId, "reader-user", AuthorizedFile(jobId)));
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(DownloadRequest(jobId), Guid.NewGuid());
+
+        Assert.True(response.Success);
+        var data = response.Emission!.Data!.Value;
+        Assert.Equal($"topolactor://exports/{jobId}/file", data.GetProperty("resourceUri").GetString());
+        Assert.Equal($"topolactor://exports/{jobId}/manifest.json", data.GetProperty("manifestResourceUri").GetString());
+        Assert.True(data.GetProperty("checksumVerified").GetBoolean());
+        Assert.Single(repo.DownloadEvidence);
+        Assert.True(repo.DownloadEvidence.Single().ChecksumVerified);
+        Assert.Contains(repo.Events, e => e.Status == "success" && e.Code == "CLI_READER_FILE_CHECKSUM_VERIFIED");
+        Assert.Contains(repo.Events, e => e.Status == "success" && e.Code == "CLI_READER_FILE_DOWNLOAD_COMPLETED");
+        // file stream must never re-run create_export_job or re-read rows.
+        Assert.Empty(repo.Queries);
+        Assert.Empty(repo.ExportJobs);
+    }
+
+    [Fact]
+    public async Task Download_export_file_response_excludes_credential_bucket_endpoint_and_signed_url()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var jobId = Guid.NewGuid();
+        repo.AuthorizedFiles.Add((ConfigPortId, "reader-user", AuthorizedFile(jobId)));
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(DownloadRequest(jobId), Guid.NewGuid());
+
+        Assert.True(response.Success);
+        var serialized = JsonSerializer.Serialize(response.Emission!.Data!.Value);
+        foreach (var forbidden in new[] { "credential", "bucket", "endpoint", "signed_url", "signedUrl", "access_key", "secret" })
+            Assert.DoesNotContain(forbidden, serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Download_export_file_fail_close_on_checksum_mismatch()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var jobId = Guid.NewGuid();
+        repo.AuthorizedFiles.Add((ConfigPortId, "reader-user", AuthorizedFile(jobId, checksum: "job-checksum", manifestChecksum: "different-checksum")));
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(DownloadRequest(jobId), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_FILE_CHECKSUM_MISMATCH");
+        Assert.Empty(repo.DownloadEvidence);
+        Assert.Contains(repo.Events, e => e.Status == "fail_close" && e.Code == "CLI_READER_FILE_CHECKSUM_MISMATCH");
+    }
+
+    [Fact]
+    public async Task Download_export_file_fail_close_on_source_record_ids_mismatch()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var jobId = Guid.NewGuid();
+        repo.AuthorizedFiles.Add((ConfigPortId, "reader-user", AuthorizedFile(jobId, sourceIds: ["entity-1"], manifestSourceIds: ["entity-2"])));
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(DownloadRequest(jobId), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_FILE_SOURCE_IDS_MISMATCH");
+        Assert.Empty(repo.DownloadEvidence);
+    }
+
+    [Fact]
+    public async Task Download_export_file_fail_close_when_job_not_authorized()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(DownloadRequest(Guid.NewGuid()), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_FILE_JOB_UNAUTHORIZED");
+        Assert.Empty(repo.DownloadEvidence);
+        Assert.Contains(repo.Events, e => e.Status == "fail_close" && e.Code == "CLI_READER_FILE_JOB_UNAUTHORIZED");
+    }
+
+    [Fact]
+    public async Task Download_export_file_fail_close_when_file_stream_disabled()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig() with { FileStreamEnabled = false });
+        var jobId = Guid.NewGuid();
+        repo.AuthorizedFiles.Add((ConfigPortId, "reader-user", AuthorizedFile(jobId)));
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(DownloadRequest(jobId), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_FILE_STREAM_DISABLED");
+        Assert.Empty(repo.DownloadEvidence);
+    }
+
+    [Fact]
+    public async Task Download_export_file_rejects_non_dispatch_resolved_request()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var jobId = Guid.NewGuid();
+        repo.AuthorizedFiles.Add((ConfigPortId, "reader-user", AuthorizedFile(jobId)));
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(DownloadRequest(jobId), manifestId: null);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_DISPATCH_REQUIRED");
+        Assert.Empty(repo.DownloadEvidence);
+    }
+
+    private static readonly Guid ConfigPortId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+    private static EndpointRequestDto DownloadRequest(Guid exportJobId, string? userId = "reader-user") =>
+        Request("download_export_file", userId: userId, extra: new Dictionary<string, object?> { ["export_job_id"] = exportJobId.ToString() });
+
+    private static AuthorizedExportFile AuthorizedFile(
+        Guid exportJobId,
+        string checksum = "job-checksum-value",
+        string? manifestChecksum = null,
+        string[]? sourceIds = null,
+        string[]? manifestSourceIds = null,
+        bool manifestPresent = true,
+        string status = "completed",
+        bool approvalRequired = false,
+        string approvalStatus = "not_required")
+    {
+        manifestChecksum ??= checksum;
+        sourceIds ??= ["entity-1"];
+        manifestSourceIds ??= sourceIds;
+        var files = new[] { new CliReaderGeneratedFile("export.json", "json", 2, checksum, $"cli-reader-export-job://{exportJobId}/export.json") };
+        var manifest = JsonSerializer.SerializeToElement(new
+        {
+            manifest_version = "1.0",
+            export_job_id = exportJobId,
+            generated_by = "reader-user",
+            period = "today",
+            source_tables = new[] { "topology.entity" },
+            source_record_ids = manifestSourceIds,
+            files,
+            checksum = manifestChecksum
+        });
+        return new AuthorizedExportFile(
+            exportJobId, status, "json", "today", "reader-user", DateTimeOffset.UnixEpoch,
+            approvalRequired, approvalStatus, sourceIds, files, checksum,
+            manifestPresent, "1.0", manifestChecksum, manifestSourceIds, manifest);
+    }
+
     private static CliReaderPortConfig DefaultConfig() => new(
         "cli_reader_port.default",
         Guid.Parse("22222222-2222-2222-2222-222222222222"),
@@ -222,7 +374,8 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["reader-user"] = "state_id=active" },
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "cli_reader_port.read" },
         true,
-        60);
+        60,
+        true);
 
     private static EndpointRequestDto Request(string operation, string? userId = "reader-user", string[]? roles = null, string[]? capabilities = null, string table = "topology.entity", string[]? columns = null, Dictionary<string, string>? filters = null, string period = "today", Dictionary<string, object?>? extra = null)
     {
@@ -252,6 +405,8 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         public List<AuthorizedCliReaderQuery> Queries { get; } = [];
         public List<CliReaderPortRuntimeEvent> Events { get; } = [];
         public List<CliReaderExportJobResult> ExportJobs { get; } = [];
+        public List<(Guid PortId, string UserId, AuthorizedExportFile File)> AuthorizedFiles { get; } = [];
+        public List<(Guid ExportJobId, bool ChecksumVerified)> DownloadEvidence { get; } = [];
         public bool ReturnRowsWithoutSourceIds { get; init; }
         public Task<CliReaderPortConfig?> LoadPortAsync(string portKey, CancellationToken ct = default) => Task.FromResult(config);
         public Task<IReadOnlyList<Dictionary<string, object?>>> ReadRowsAsync(AuthorizedCliReaderQuery query, CancellationToken ct = default)
@@ -290,6 +445,21 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
             var result = new CliReaderExportJobResult(exportJobId, "completed", command.ExportFormat, command.SourceRecordIds, generatedFiles, "checksum-manifest", $"topolactor://exports/{exportJobId}/manifest.json", manifest);
             ExportJobs.Add(result);
             return Task.FromResult(result);
+        }
+
+        public Task<AuthorizedExportFile?> LoadAuthorizedExportFileAsync(LoadAuthorizedExportFileQuery query, CancellationToken ct = default)
+        {
+            var match = AuthorizedFiles.FirstOrDefault(x =>
+                x.PortId == query.PortId &&
+                string.Equals(x.UserId, query.UserId, StringComparison.OrdinalIgnoreCase) &&
+                x.File.ExportJobId == query.ExportJobId);
+            return Task.FromResult<AuthorizedExportFile?>(match.File);
+        }
+
+        public Task RecordExportDownloadEvidenceAsync(Guid exportJobId, bool checksumVerified, DateTimeOffset observedAt, CancellationToken ct = default)
+        {
+            DownloadEvidence.Add((exportJobId, checksumVerified));
+            return Task.CompletedTask;
         }
     }
 }

@@ -77,7 +77,10 @@ check "$TEST" "Create_export_job_rejects_missing_source_record_ids"
 check "$TODO" "cli-mcp-export-job-port"
 check "$TODO" "Implemented evidence update"
 
-absent "$RUNTIME" "ReadString\(payload, \"port_id\"\)|ReadString\(payload, \"portId\"\)|CLI_READER_EXPORT_PORT_ID_REQUIRED|download_export_file|FileStream|import_structured_output|create_commit_candidate|create_draft_operation|approval_execute|ApproveExport"
-absent "$NPGSQL" "pending-export-job-id|export_job_id = \(Guid\?\)null|manifestChecksum|topolactor://exports/\{command.IdempotencyKey\}/manifest.json|download_export_file|FileStream|import_structured_output|create_commit_candidate|create_draft_operation|approval_execute|ApproveExport"
+# NOTE: download_export_file / FileStream file streaming is implemented by the sibling
+# subBundle `cli-mcp-file-stream-port` inside these shared files; the export-job surface
+# still must not introduce client-supplied port_id, import-candidate, or approval execution.
+absent "$RUNTIME" "ReadString\(payload, \"port_id\"\)|ReadString\(payload, \"portId\"\)|CLI_READER_EXPORT_PORT_ID_REQUIRED|import_structured_output|create_commit_candidate|create_draft_operation|approval_execute|ApproveExport"
+absent "$NPGSQL" "pending-export-job-id|export_job_id = \(Guid\?\)null|manifestChecksum|topolactor://exports/\{command.IdempotencyKey\}/manifest.json|import_structured_output|create_commit_candidate|create_draft_operation|approval_execute|ApproveExport"
 
 echo "cli-mcp-export-job-port guard passed"
