@@ -136,6 +136,8 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             WHERE idempotency_key = @idempotency_key
             LIMIT 1
             """;
+        var candidateId = Guid.NewGuid();
+        cmd.Parameters.AddWithValue("candidate_id", candidateId);
         cmd.Parameters.AddWithValue("port_id", command.PortId);
         cmd.Parameters.AddWithValue("requested_by", command.Query.UserId);
         cmd.Parameters.AddWithValue("requested_at", command.RequestedAt);
@@ -430,25 +432,29 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             WITH inserted AS (
                 INSERT INTO topology.cli_reader_import_candidates
                     (candidate_id, port_id, port_key, operation, candidate_kind, source_transcript_ref, root_utterance,
-                     structured_output_payload, confidence, unresolved_fields, preview_diff, requested_by, requested_at,
+                     structured_output_payload, confidence, unresolved_fields, preview_diff, assigned_business_object_candidate,
+                     draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, approval_status, requested_by, requested_at,
                      status, idempotency_key, runtime_audit_ref)
                 VALUES
-                    (gen_random_uuid(), @port_id, @port_key, @operation, @candidate_kind, @source_transcript_ref, @root_utterance,
-                     @structured_output_payload::jsonb, @confidence, @unresolved_fields::jsonb, @preview_diff::jsonb, @requested_by, @requested_at,
-                     @status, @idempotency_key, NULL)
+                    (@candidate_id, @port_id, @port_key, @operation, @candidate_kind, @source_transcript_ref, @root_utterance,
+                     @structured_output_payload::jsonb, @confidence, @unresolved_fields::jsonb, @preview_diff::jsonb, @assigned_business_object_candidate::jsonb,
+                     @draft_operation_id, @assigned_business_object::jsonb, @assignment_target_scope::jsonb, @evidence_refs::jsonb, @approval_status, @requested_by, @requested_at,
+                     @status, @idempotency_key, @runtime_audit_ref)
                 ON CONFLICT (idempotency_key) DO NOTHING
                 RETURNING candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
-                          confidence, source_transcript_ref, root_utterance, true AS inserted
+                          assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, true AS inserted
             )
             SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
-                   confidence, source_transcript_ref, root_utterance, inserted FROM inserted
+                   assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, inserted FROM inserted
             UNION ALL
             SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
-                   confidence, source_transcript_ref, root_utterance, false AS inserted
+                   assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, false AS inserted
             FROM topology.cli_reader_import_candidates
             WHERE idempotency_key = @idempotency_key AND port_id = @port_id AND requested_by = @requested_by
             LIMIT 1
             """;
+        var candidateId = Guid.NewGuid();
+        cmd.Parameters.AddWithValue("candidate_id", candidateId);
         cmd.Parameters.AddWithValue("port_id", command.PortId);
         cmd.Parameters.AddWithValue("port_key", command.PortKey);
         cmd.Parameters.AddWithValue("operation", command.Operation);
@@ -459,12 +465,19 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         cmd.Parameters.AddWithValue("confidence", (object?)command.Confidence ?? DBNull.Value);
         cmd.Parameters.AddWithValue("unresolved_fields", JsonSerializer.Serialize(command.UnresolvedFields));
         cmd.Parameters.AddWithValue("preview_diff", JsonSerializer.Serialize(command.PreviewDiff));
+        cmd.Parameters.AddWithValue("assigned_business_object_candidate", JsonSerializer.Serialize(command.AssignedBusinessObjectCandidate));
+        cmd.Parameters.AddWithValue("draft_operation_id", (object?)command.DraftOperationId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("assigned_business_object", command.AssignedBusinessObject is null ? DBNull.Value : JsonSerializer.Serialize(command.AssignedBusinessObject.Value));
+        cmd.Parameters.AddWithValue("assignment_target_scope", command.AssignmentTargetScope is null ? DBNull.Value : JsonSerializer.Serialize(command.AssignmentTargetScope.Value));
+        cmd.Parameters.AddWithValue("evidence_refs", JsonSerializer.Serialize(command.EvidenceRefs));
+        cmd.Parameters.AddWithValue("approval_status", command.ApprovalStatus);
+        var runtimeAuditRef = await AppendRuntimeEventLogAsync(conn, tx, "cli_mcp_import_candidate_created", candidateId, command.RequestedAt, ct);
+        cmd.Parameters.AddWithValue("runtime_audit_ref", runtimeAuditRef);
         cmd.Parameters.AddWithValue("requested_by", command.RequestedBy);
         cmd.Parameters.AddWithValue("requested_at", command.RequestedAt);
         cmd.Parameters.AddWithValue("status", command.Status);
         cmd.Parameters.AddWithValue("idempotency_key", command.IdempotencyKey);
         var result = await ReadCandidateResultAsync(cmd, ct);
-        await AppendRuntimeEventLogAsync(conn, tx, "cli_mcp_import_candidate_created", result.CandidateId, command.RequestedAt, ct);
         await tx.CommitAsync(ct);
         return result;
     }
@@ -476,7 +489,7 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
-                   confidence, source_transcript_ref, root_utterance, false AS inserted
+                   assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, false AS inserted
             FROM topology.cli_reader_import_candidates
             WHERE candidate_id = @candidate_id AND port_id = @port_id AND requested_by = @requested_by
             """;
@@ -517,9 +530,15 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             $"topolactor://commit-candidates/{candidateId}/evidence.json",
             JsonSerializer.Deserialize<JsonElement>(reader.GetString(6)),
             JsonSerializer.Deserialize<JsonElement>(reader.GetString(7)),
-            reader.IsDBNull(8) ? null : reader.GetDecimal(8),
-            reader.IsDBNull(9) ? null : reader.GetString(9),
-            reader.IsDBNull(10) ? null : reader.GetString(10));
+            JsonSerializer.Deserialize<JsonElement>(reader.GetString(8)),
+            reader.IsDBNull(9) ? null : reader.GetGuid(9),
+            reader.IsDBNull(10) ? null : JsonSerializer.Deserialize<JsonElement>(reader.GetString(10)),
+            reader.IsDBNull(11) ? null : JsonSerializer.Deserialize<JsonElement>(reader.GetString(11)),
+            JsonSerializer.Deserialize<JsonElement>(reader.GetString(12)),
+            reader.IsDBNull(13) ? null : reader.GetDecimal(13),
+            reader.IsDBNull(14) ? null : reader.GetString(14),
+            reader.IsDBNull(15) ? null : reader.GetString(15),
+            reader.IsDBNull(16) ? "not_requested" : reader.GetString(16));
     }
 
     private static string MapFileStreamFailureEventType(string failureCode) => failureCode switch
@@ -531,15 +550,16 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         _ => "cli_mcp_file_checksum_mismatch_rejected"
     };
 
-    private static async Task AppendRuntimeEventLogAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string eventType, Guid exportJobId, DateTimeOffset observedAt, CancellationToken ct)
+    private static async Task<Guid> AppendRuntimeEventLogAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string eventType, Guid exportJobId, DateTimeOffset observedAt, CancellationToken ct)
     {
         await using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES (@event_type, @entity_id, CASE WHEN @event_type LIKE 'cli_mcp_import_candidate%' THEN 'cli_mcp_import_candidate_port' ELSE 'cli_mcp_file_stream_port' END, @logged_at)";
+        cmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES (@event_type, @entity_id, CASE WHEN @event_type LIKE 'cli_mcp_import_candidate%' THEN 'cli_mcp_import_candidate_port' ELSE 'cli_mcp_file_stream_port' END, @logged_at) RETURNING event_log_id";
         cmd.Parameters.AddWithValue("event_type", eventType);
         cmd.Parameters.AddWithValue("entity_id", exportJobId.ToString());
         cmd.Parameters.AddWithValue("logged_at", observedAt);
-        await cmd.ExecuteNonQueryAsync(ct);
+        var value = await cmd.ExecuteScalarAsync(ct);
+        return value is Guid id ? id : Guid.Empty;
     }
 
     private static IReadOnlyList<string> ExtractManifestSourceRecordIds(JsonElement manifest)

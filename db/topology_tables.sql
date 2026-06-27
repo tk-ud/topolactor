@@ -712,6 +712,27 @@ CREATE TABLE IF NOT EXISTS topology.export_manifests (
 COMMENT ON TABLE topology.export_manifests IS
     'Export package manifest records for file_storage_bundle. Required for all export_job packages.';
 
+CREATE TABLE IF NOT EXISTS topology.file_artifacts (
+    file_artifact_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    export_job_id      UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
+    file_name          TEXT        NOT NULL,
+    file_type          TEXT        NOT NULL
+                                   CHECK (file_type IN ('pdf', 'csv', 'json', 'zip', 'receipt_image', 'manifest_json')),
+    storage_ref        TEXT        NOT NULL,
+    byte_size          BIGINT,
+    checksum_value     TEXT        NOT NULL,
+    checksum_record_id UUID,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_artifacts_export_job
+    ON topology.file_artifacts (export_job_id);
+
+COMMENT ON TABLE topology.file_artifacts IS
+    'File artifact metadata for file_storage_bundle. storage_ref is env-var reference identifier only; '
+    'plaintext storage URL/path is prohibited.';
+
 CREATE TABLE IF NOT EXISTS topology.signed_download_authorizations (
     authorization_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     file_artifact_id  UUID        NOT NULL REFERENCES topology.file_artifacts (file_artifact_id) ON DELETE CASCADE,
@@ -2047,44 +2068,38 @@ CREATE TABLE IF NOT EXISTS topology.cli_reader_import_candidates (
     confidence NUMERIC(5,4) NULL CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
     unresolved_fields JSONB NOT NULL DEFAULT '[]'::jsonb,
     preview_diff JSONB NOT NULL DEFAULT '{}'::jsonb,
+    assigned_business_object_candidate JSONB NOT NULL DEFAULT '{}'::jsonb,
+    draft_operation_id UUID NULL,
+    assigned_business_object JSONB NULL,
+    assignment_target_scope JSONB NULL,
+    evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
     requested_by TEXT NOT NULL,
     requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     status TEXT NOT NULL CHECK (status IN ('candidate_created','previewed','rejected')),
     idempotency_key TEXT NOT NULL UNIQUE,
-    runtime_audit_ref UUID NULL,
+    runtime_audit_ref UUID NULL REFERENCES topology.runtime_event_log (event_log_id),
     approval_required BOOLEAN NOT NULL DEFAULT FALSE,
     approval_status TEXT NOT NULL DEFAULT 'not_requested' CHECK (approval_status IN ('not_requested','required','approved','rejected')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT cli_reader_import_candidates_no_secret_payload CHECK ((structured_output_payload::text || unresolved_fields::text || preview_diff::text) !~* '(credential|secret|password|raw_sql|core_api_url|api_key|access_token|refresh_token|bucket|endpoint|signed_url)'),
+    CONSTRAINT cli_reader_import_candidates_no_secret_payload CHECK ((structured_output_payload::text || unresolved_fields::text || preview_diff::text || assigned_business_object_candidate::text || COALESCE(assigned_business_object::text, '') || COALESCE(assignment_target_scope::text, '') || evidence_refs::text) !~* '(credential|secret|password|raw_sql|core_api_url|api_key|access_token|refresh_token|bucket|endpoint|signed_url)'),
     CONSTRAINT cli_reader_import_candidates_unresolved_not_confirmed CHECK (structured_output_payload::text !~* '(confirmed_value|confirmed_values|ssot_confirmed)')
 );
 CREATE INDEX IF NOT EXISTS idx_cli_reader_import_candidates_port_requested
     ON topology.cli_reader_import_candidates (port_id, requested_by, requested_at DESC);
 COMMENT ON TABLE topology.cli_reader_import_candidates IS
     'CLI/MCP import-candidate evidence only. External AI structured output, confidence, source transcript, root utterance, unresolved_fields, and preview_diff are candidate evidence, never SSOT/confirmed values; CLI/MCP cannot commit, approve, delete, send email, or execute payment.';
+-- Existing-database migration guard for PR521 import-candidate columns.
+ALTER TABLE topology.cli_reader_import_candidates
+    ADD COLUMN IF NOT EXISTS assigned_business_object_candidate JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS draft_operation_id UUID NULL,
+    ADD COLUMN IF NOT EXISTS assigned_business_object JSONB NULL,
+    ADD COLUMN IF NOT EXISTS assignment_target_scope JSONB NULL,
+    ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'not_requested',
+    ADD COLUMN IF NOT EXISTS runtime_audit_ref UUID NULL;
 
 
-CREATE TABLE IF NOT EXISTS topology.file_artifacts (
-    file_artifact_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    export_job_id      UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
-    file_name          TEXT        NOT NULL,
-    file_type          TEXT        NOT NULL
-                                   CHECK (file_type IN ('pdf', 'csv', 'json', 'zip', 'receipt_image', 'manifest_json')),
-    storage_ref        TEXT        NOT NULL,
-    byte_size          BIGINT,
-    checksum_value     TEXT        NOT NULL,
-    checksum_record_id UUID,
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_file_artifacts_export_job
-    ON topology.file_artifacts (export_job_id);
-
-COMMENT ON TABLE topology.file_artifacts IS
-    'File artifact metadata for file_storage_bundle. storage_ref is env-var reference identifier only; '
-    'plaintext storage URL/path is prohibited.';
 
 CREATE TABLE IF NOT EXISTS topology.file_checksum_records (
     checksum_record_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

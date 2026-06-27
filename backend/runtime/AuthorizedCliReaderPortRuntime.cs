@@ -156,10 +156,41 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         "import_structured_output", "assign_business_object_candidate", "create_draft_operation", "create_commit_candidate", "get_preview_diff"
     }.Contains(operation);
 
+
+    private async Task<EndpointResponseDto?> ValidateImportCandidateRequiredFieldsAsync(ParsedCliReaderRequest parsed, CliReaderPortRuntimeEvent seed, CancellationToken ct)
+    {
+        if (string.Equals(parsed.Operation, "get_preview_diff", StringComparison.OrdinalIgnoreCase)) return null;
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(parsed.SourceTranscriptRef)) missing.Add("source_transcript_ref");
+        if (string.IsNullOrWhiteSpace(parsed.RootUtterance)) missing.Add("root_utterance");
+        if (parsed.StructuredOutputPayload is null) missing.Add("structured_output_payload");
+        if (parsed.Confidence is null) missing.Add("confidence");
+        if (parsed.UnresolvedFields is null) missing.Add("unresolved_fields");
+        if (parsed.AssignedBusinessObjectCandidate is null) missing.Add("assigned_business_object_candidate");
+        if (parsed.PreviewDiff is null) missing.Add("preview_diff");
+
+        if (string.Equals(parsed.Operation, "assign_business_object_candidate", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(parsed.Operation, "create_draft_operation", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(parsed.Operation, "create_commit_candidate", StringComparison.OrdinalIgnoreCase))
+        {
+            if (parsed.DraftOperationId is null) missing.Add("draft_operation_id");
+            if (parsed.AssignedBusinessObject is null) missing.Add("assigned_business_object");
+            if (parsed.AssignmentTargetScope is null) missing.Add("assignment_target_scope");
+            if (parsed.EvidenceRefs is null) missing.Add("evidence_refs");
+        }
+
+        if (missing.Count > 0)
+            return await FailAsync(seed, "CLI_READER_IMPORT_REQUIRED_FIELD_MISSING", $"Import candidate required fields are missing: {string.Join(',', missing)}.", ct);
+        return null;
+    }
+
     private async Task<EndpointResponseDto> ExecuteImportCandidateAsync(ParsedCliReaderRequest parsed, CliReaderPortConfig config, CliReaderPortRuntimeEvent seed, CancellationToken ct)
     {
         if (!config.AuditRequired)
             return await FailAsync(seed, "CLI_READER_IMPORT_AUDIT_REQUIRED", "Import candidate port requires audit-enabled cli_reader_port config.", ct);
+
+        var requiredFieldError = await ValidateImportCandidateRequiredFieldsAsync(parsed, seed, ct);
+        if (requiredFieldError is not null) return requiredFieldError;
 
         if (string.Equals(parsed.Operation, "get_preview_diff", StringComparison.OrdinalIgnoreCase))
         {
@@ -187,12 +218,13 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         var previewDiff = parsed.PreviewDiff ?? BuildPreviewDiff(parsed.Operation!, parsed.StructuredOutputPayload, parsed.UnresolvedFields);
         var result = await _repository.CreateImportCandidateAsync(new CreateCliReaderImportCandidateCommand(
             config.PortId, parsed.PortKey!, parsed.Operation!, candidateKind, parsed.UserId!, parsed.SourceTranscriptRef,
-            parsed.RootUtterance, parsed.StructuredOutputPayload ?? JsonSerializer.SerializeToElement(new { }), parsed.Confidence,
-            parsed.UnresolvedFields ?? JsonSerializer.SerializeToElement(Array.Empty<string>()), previewDiff, "candidate_created",
-            parsed.IdempotencyKey!, _timeProvider.GetUtcNow()), ct);
+            parsed.RootUtterance, parsed.StructuredOutputPayload!.Value, parsed.Confidence,
+            parsed.UnresolvedFields!.Value, previewDiff, parsed.AssignedBusinessObjectCandidate!.Value, parsed.DraftOperationId,
+            parsed.AssignedBusinessObject, parsed.AssignmentTargetScope, parsed.EvidenceRefs!.Value, parsed.ApprovalStatus ?? "not_requested",
+            "candidate_created", parsed.IdempotencyKey!, _timeProvider.GetUtcNow()), ct);
         await _repository.RecordImportCandidateEvidenceAsync(result.CandidateId, "cli_mcp_import_candidate_created", _timeProvider.GetUtcNow(), ct);
         await AppendAsync(seed with { Status = "success", Code = "CLI_READER_IMPORT_CANDIDATE_CREATED", ScopeSummary = $"candidate_id={result.CandidateId};candidate_kind={result.CandidateKind};commit=false;approval=false" }, ct);
-        var response = new { parsed.Operation, result.CandidateId, result.CandidateKind, result.Status, result.EvidenceUri, result.PreviewDiff, result.UnresolvedFields, result.Confidence, result.SourceTranscriptRef, result.RootUtterance, result.ApprovalStatus, ssotConfirmed = false, committed = false, approvalUpdated = false };
+        var response = new { parsed.Operation, result.CandidateId, result.CandidateKind, result.Status, result.EvidenceUri, result.PreviewDiff, result.UnresolvedFields, result.AssignedBusinessObjectCandidate, result.DraftOperationId, result.AssignedBusinessObject, result.AssignmentTargetScope, result.EvidenceRefs, result.Confidence, result.SourceTranscriptRef, result.RootUtterance, result.ApprovalStatus, ssotConfirmed = false, committed = false, approvalUpdated = false };
         return new EndpointResponseDto(true, new Emission(null, null, null, [], JsonSerializer.SerializeToElement(response), []), []);
     }
 
@@ -387,7 +419,7 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
     {
         var eventSeed = new CliReaderPortRuntimeEvent("unknown", request.Action ?? request.OperationType ?? "unknown", null, [], "fail_close", "CLI_READER_PARSE_PENDING", null, null, "parse", DateTimeOffset.UnixEpoch);
         if (!request.Payload.HasValue || request.Payload.Value.ValueKind != JsonValueKind.Object)
-            return new(eventSeed, null, null, null, new HashSet<string>(StringComparer.OrdinalIgnoreCase), null, [], new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, [], null, null, null, null, null, null, null, null, null, null, null, new ValidationError("CLI_READER_PAYLOAD_REQUIRED", "CLI/MCP reader payload object is required."));
+            return new(eventSeed, null, null, null, new HashSet<string>(StringComparer.OrdinalIgnoreCase), null, [], new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, [], null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, new ValidationError("CLI_READER_PAYLOAD_REQUIRED", "CLI/MCP reader payload object is required."));
 
         var payload = request.Payload.Value;
         var portKey = ReadString(payload, "port_key") ?? ReadString(payload, "portKey");
@@ -413,23 +445,30 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
         JsonElement? structuredOutputPayload = payload.TryGetProperty("structured_output_payload", out var sop) ? sop.Clone() : payload.TryGetProperty("structuredOutputPayload", out var sop2) ? sop2.Clone() : null;
         JsonElement? unresolvedFields = payload.TryGetProperty("unresolved_fields", out var uf) ? uf.Clone() : payload.TryGetProperty("unresolvedFields", out var uf2) ? uf2.Clone() : null;
         JsonElement? previewDiff = payload.TryGetProperty("preview_diff", out var pd) ? pd.Clone() : payload.TryGetProperty("previewDiff", out var pd2) ? pd2.Clone() : null;
+        JsonElement? assignedBusinessObjectCandidate = payload.TryGetProperty("assigned_business_object_candidate", out var aboc) ? aboc.Clone() : payload.TryGetProperty("assignedBusinessObjectCandidate", out var aboc2) ? aboc2.Clone() : null;
+        var draftOperationIdRaw = ReadString(payload, "draft_operation_id") ?? ReadString(payload, "draftOperationId");
+        Guid? draftOperationId = Guid.TryParse(draftOperationIdRaw, out var parsedDraftOperationId) ? parsedDraftOperationId : null;
+        JsonElement? assignedBusinessObject = payload.TryGetProperty("assigned_business_object", out var abo) ? abo.Clone() : payload.TryGetProperty("assignedBusinessObject", out var abo2) ? abo2.Clone() : null;
+        JsonElement? assignmentTargetScope = payload.TryGetProperty("assignment_target_scope", out var ats) ? ats.Clone() : payload.TryGetProperty("assignmentTargetScope", out var ats2) ? ats2.Clone() : null;
+        JsonElement? evidenceRefs = payload.TryGetProperty("evidence_refs", out var er) ? er.Clone() : payload.TryGetProperty("evidenceRefs", out var er2) ? er2.Clone() : null;
+        var approvalStatus = ReadString(payload, "approval_status") ?? ReadString(payload, "approvalStatus") ?? "not_requested";
         eventSeed = eventSeed with { PortKey = portKey ?? "unknown", Operation = operation ?? "unknown", UserId = userId, Roles = roles.ToArray(), RequestId = requestId, IdempotencyKey = idempotencyKey, ScopeSummary = $"table={table ?? "unknown"}" };
-        if (string.IsNullOrWhiteSpace(portKey)) return new(eventSeed, null, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, new ValidationError("CLI_READER_PORT_REQUIRED", "port_key is required."));
+        if (string.IsNullOrWhiteSpace(portKey)) return new(eventSeed, null, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, new ValidationError("CLI_READER_PORT_REQUIRED", "port_key is required."));
         // File stream port is keyed by an existing export_job_id, not by a table/column read.
         if (string.Equals(operation, "download_export_file", StringComparison.OrdinalIgnoreCase))
         {
-            if (exportJobId is null) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, null, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, new ValidationError("CLI_READER_FILE_EXPORT_JOB_ID_REQUIRED", "download_export_file requires a valid export_job_id."));
-            return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, null);
+            if (exportJobId is null) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, null, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, new ValidationError("CLI_READER_FILE_EXPORT_JOB_ID_REQUIRED", "download_export_file requires a valid export_job_id."));
+            return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, null);
         }
         if (operation is not null && IsImportCandidateOperation(operation))
-            return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, null);
-        if (string.IsNullOrWhiteSpace(table)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, new ValidationError("CLI_READER_TABLE_REQUIRED", "table is required."));
+            return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, null);
+        if (string.IsNullOrWhiteSpace(table)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, new ValidationError("CLI_READER_TABLE_REQUIRED", "table is required."));
         if (string.Equals(operation, "create_export_job", StringComparison.OrdinalIgnoreCase))
         {
-            if (string.IsNullOrWhiteSpace(idempotencyKey)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, new ValidationError("CLI_READER_EXPORT_IDEMPOTENCY_KEY_REQUIRED", "create_export_job requires idempotency_key."));
-            if (string.IsNullOrWhiteSpace(exportFormat) || !new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "csv", "json", "pdf", "zip" }.Contains(exportFormat)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, new ValidationError("CLI_READER_EXPORT_FORMAT_DENIED", "export_format must be csv/json/pdf/zip."));
+            if (string.IsNullOrWhiteSpace(idempotencyKey)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, new ValidationError("CLI_READER_EXPORT_IDEMPOTENCY_KEY_REQUIRED", "create_export_job requires idempotency_key."));
+            if (string.IsNullOrWhiteSpace(exportFormat) || !new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "csv", "json", "pdf", "zip" }.Contains(exportFormat)) return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, new ValidationError("CLI_READER_EXPORT_FORMAT_DENIED", "export_format must be csv/json/pdf/zip."));
         }
-        return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, null);
+        return new(eventSeed, portKey, operation, userId, roles, table, columns, capabilities, filters, period, [], requestId, idempotencyKey, exportFormat, exportJobId, candidateId, sourceTranscriptRef, rootUtterance, structuredOutputPayload, confidence, unresolvedFields, previewDiff, assignedBusinessObjectCandidate, draftOperationId, assignedBusinessObject, assignmentTargetScope, evidenceRefs, approvalStatus, null);
     }
 
     private static string? ReadContextValue(Dictionary<string, string>? context, params string[] names)
@@ -458,5 +497,5 @@ public sealed class AuthorizedCliReaderPortRuntime : IDispatchableRuntime
     private static decimal? ReadDecimal(JsonElement obj, string name) => obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var parsed) ? parsed : null;
     private static IReadOnlyDictionary<string, string> ReadStringMap(JsonElement obj, string name) => obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Object ? value.EnumerateObject().Where(x => x.Value.ValueKind == JsonValueKind.String).ToDictionary(x => x.Name, x => x.Value.GetString()!, StringComparer.OrdinalIgnoreCase) : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-    private sealed record ParsedCliReaderRequest(CliReaderPortRuntimeEvent EventSeed, string? PortKey, string? Operation, string? UserId, IReadOnlySet<string> Roles, string? Table, IReadOnlyList<string> Columns, IReadOnlySet<string> Capabilities, IReadOnlyDictionary<string, string> Filters, string? Period, IReadOnlyList<string> RowScope, string? RequestId, string? IdempotencyKey, string? ExportFormat, Guid? ExportJobId, Guid? CandidateId, string? SourceTranscriptRef, string? RootUtterance, JsonElement? StructuredOutputPayload, decimal? Confidence, JsonElement? UnresolvedFields, JsonElement? PreviewDiff, ValidationError? Error);
+    private sealed record ParsedCliReaderRequest(CliReaderPortRuntimeEvent EventSeed, string? PortKey, string? Operation, string? UserId, IReadOnlySet<string> Roles, string? Table, IReadOnlyList<string> Columns, IReadOnlySet<string> Capabilities, IReadOnlyDictionary<string, string> Filters, string? Period, IReadOnlyList<string> RowScope, string? RequestId, string? IdempotencyKey, string? ExportFormat, Guid? ExportJobId, Guid? CandidateId, string? SourceTranscriptRef, string? RootUtterance, JsonElement? StructuredOutputPayload, decimal? Confidence, JsonElement? UnresolvedFields, JsonElement? PreviewDiff, JsonElement? AssignedBusinessObjectCandidate, Guid? DraftOperationId, JsonElement? AssignedBusinessObject, JsonElement? AssignmentTargetScope, JsonElement? EvidenceRefs, string? ApprovalStatus, ValidationError? Error);
 }

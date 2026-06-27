@@ -411,6 +411,48 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.Empty(repo.ImportCandidates);
     }
 
+
+    [Theory]
+    [InlineData("source_transcript_ref")]
+    [InlineData("root_utterance")]
+    [InlineData("structured_output_payload")]
+    [InlineData("confidence")]
+    [InlineData("unresolved_fields")]
+    [InlineData("assigned_business_object_candidate")]
+    [InlineData("preview_diff")]
+    public async Task Import_structured_output_fail_closes_when_required_evidence_field_missing(string missingField)
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+        var extra = ImportCandidateExtra();
+        extra.Remove(missingField);
+
+        var response = await runtime.ExecuteAsync(Request("import_structured_output", extra: extra), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_IMPORT_REQUIRED_FIELD_MISSING");
+        Assert.Empty(repo.ImportCandidates);
+    }
+
+    [Theory]
+    [InlineData("draft_operation_id")]
+    [InlineData("assigned_business_object")]
+    [InlineData("assignment_target_scope")]
+    [InlineData("evidence_refs")]
+    public async Task Candidate_operations_fail_close_when_operation_required_field_missing(string missingField)
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+        var extra = ImportCandidateExtra();
+        extra.Remove(missingField);
+
+        var response = await runtime.ExecuteAsync(Request("create_commit_candidate", extra: extra), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_IMPORT_REQUIRED_FIELD_MISSING");
+        Assert.Empty(repo.ImportCandidates);
+    }
+
     [Fact]
     public async Task Import_candidate_rejects_forbidden_payload_fields_fail_close()
     {
@@ -431,16 +473,24 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
 
 
     private static EndpointRequestDto ImportCandidateRequest(string operation, Guid? candidateId = null, Dictionary<string, object?>? extra = null) =>
-        Request(operation, extra: Merge(new Dictionary<string, object?>
-        {
-            ["structured_output_payload"] = new Dictionary<string, object?> { ["candidate_name"] = "Acme" },
-            ["source_transcript_ref"] = "transcript-1",
-            ["root_utterance"] = "root utterance",
-            ["confidence"] = 0.73m,
-            ["unresolved_fields"] = new[] { "needs_human" },
-            ["preview_diff"] = new Dictionary<string, object?> { ["changes"] = new[] { "draft_only" } },
-            ["candidate_id"] = candidateId?.ToString()
-        }, extra));
+        Request(operation, extra: Merge(ImportCandidateExtra(candidateId), extra));
+
+    private static Dictionary<string, object?> ImportCandidateExtra(Guid? candidateId = null) => new()
+    {
+        ["structured_output_payload"] = new Dictionary<string, object?> { ["candidate_name"] = "Acme" },
+        ["source_transcript_ref"] = "transcript-1",
+        ["root_utterance"] = "root utterance",
+        ["confidence"] = 0.73m,
+        ["unresolved_fields"] = new[] { "needs_human" },
+        ["preview_diff"] = new Dictionary<string, object?> { ["changes"] = new[] { "draft_only" } },
+        ["assigned_business_object_candidate"] = new Dictionary<string, object?> { ["candidate"] = "Acme" },
+        ["draft_operation_id"] = "33333333-3333-3333-3333-333333333333",
+        ["assigned_business_object"] = new Dictionary<string, object?> { ["business_object"] = "account" },
+        ["assignment_target_scope"] = new Dictionary<string, object?> { ["table"] = "topology.entity" },
+        ["evidence_refs"] = new[] { "topolactor://commit-candidates/evidence.json" },
+        ["approval_status"] = "not_requested",
+        ["candidate_id"] = candidateId?.ToString()
+    };
 
     private static Dictionary<string, object?> Merge(Dictionary<string, object?> left, Dictionary<string, object?>? right)
     {
@@ -452,7 +502,13 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         candidateId, "commit_candidate", "candidate_created", "reader-user", DateTimeOffset.UnixEpoch, "idem-1",
         $"topolactor://commit-candidates/{candidateId}/evidence.json",
         JsonSerializer.SerializeToElement(new { changes = new[] { "draft_only" }, commit = false }),
-        JsonSerializer.SerializeToElement(new[] { "needs_human" }), 0.73m, "transcript-1", "root utterance");
+        JsonSerializer.SerializeToElement(new[] { "needs_human" }),
+        JsonSerializer.SerializeToElement(new { candidate = "Acme" }),
+        Guid.Parse("33333333-3333-3333-3333-333333333333"),
+        JsonSerializer.SerializeToElement(new { business_object = "account" }),
+        JsonSerializer.SerializeToElement(new { table = "topology.entity" }),
+        JsonSerializer.SerializeToElement(new[] { "topolactor://commit-candidates/evidence.json" }),
+        0.73m, "transcript-1", "root utterance");
 
     private static AuthorizedExportFile AuthorizedFile(
         Guid exportJobId,
@@ -606,7 +662,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         {
             ImportCandidates.Add(command);
             var candidateId = Guid.NewGuid();
-            var result = new CliReaderImportCandidateResult(candidateId, command.CandidateKind, command.Status, command.RequestedBy, command.RequestedAt, command.IdempotencyKey, $"topolactor://commit-candidates/{candidateId}/evidence.json", command.PreviewDiff, command.UnresolvedFields, command.Confidence, command.SourceTranscriptRef, command.RootUtterance);
+            var result = new CliReaderImportCandidateResult(candidateId, command.CandidateKind, command.Status, command.RequestedBy, command.RequestedAt, command.IdempotencyKey, $"topolactor://commit-candidates/{candidateId}/evidence.json", command.PreviewDiff, command.UnresolvedFields, command.AssignedBusinessObjectCandidate, command.DraftOperationId, command.AssignedBusinessObject, command.AssignmentTargetScope, command.EvidenceRefs, command.Confidence, command.SourceTranscriptRef, command.RootUtterance, command.ApprovalStatus);
             ImportCandidateResults[candidateId] = result;
             return Task.FromResult(result);
         }
