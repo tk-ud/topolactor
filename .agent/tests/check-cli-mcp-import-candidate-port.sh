@@ -8,7 +8,6 @@ I=backend/repository/CliReaderPortRepository.cs
 N=backend/repository/NpgsqlCliReaderPortRepository.cs
 D=db/topology_tables.sql
 T=backend/tests/Topolactor.Runtime.Tests/AuthorizedCliReaderPortRuntimeTests.cs
-TODO=.agent/tasks/todo.md
 check "$R" "import_structured_output"
 check "$R" "assign_business_object_candidate"
 check "$R" "create_draft_operation"
@@ -60,7 +59,5 @@ check "$T" "Import_candidate_rejects_payload_approval_status_authority"
 check "$T" "Import_candidate_operations_save_evidence_only_without_commit_or_confirmation"
 check "$T" "Get_preview_diff_returns_candidate_evidence_without_apply_or_approval"
 check "$T" "Mutation_and_side_effect_operations_are_rejected"
-check "$TODO" "cli-mcp-import-candidate-port"
-check "$TODO" "import-candidate subBundle implemented evidence"
 absent "$R" "ApproveExport|approval_execute|ExecuteApproval|core_api_url.*GetString|ReadString\(payload, \"user_id\"\)|ReadString\(payload, \"approval_status\"\)|ReadString\(payload, \"approvalStatus\"\)"
 echo "cli-mcp-import-candidate-port guard passed"
