@@ -1,6 +1,6 @@
 instance_port_substrate_ssot:
   name: instance_port_substrate
-  version: 0.3.0
+  version: 0.3.1
   status: ssot_design_document
   canonical_path: docs/design/instance-port-substrate-ssot.yaml
 
@@ -87,10 +87,36 @@ instance_port_substrate_ssot:
       - instance_address_import_template_json
       - instance_operation_import_template_json
       - legacy_instance_binding_import_bundle_json
-    structural_information_leakage_risk:
-      risk: >-
-        A seed-aligned JSON template can reveal Topolactor-side structure if it exports internal table ids,
-        private topology ids, private schema/function names, endpoint values, or credential material.
+    owner_reviewed_decision:
+      status: owner_reviewed
+      decision: public_safe_template_shape_is_allowed_and_required
+      rationale: >-
+        Public-safe seed/projection structure is an authoring contract, not a secret. JSON templates must expose
+        enough field names, draft keys, reference-key slots, and schema/output reference slots for a human or outside
+        AI/Agent to fill the import artifact. The protected boundary is not structural secrecy; it is secret material,
+        runtime-only values, raw SQL, and executable authority.
+    allowed_template_information:
+      - public_safe_seed_projection_shape
+      - field_names
+      - draft_reference_key_slots
+      - instance_authority_key_placeholder
+      - operation_binding_key_placeholder
+      - provider_kind_and_required_by_bundle_labels
+      - input_schema_key_and_output_shape_key_references
+    protected_boundary:
+      - plaintext_secret
+      - connection_string
+      - endpoint_real_value
+      - credential_plaintext
+      - private_key_material
+      - runtime_only_decrypted_payload
+      - raw_SQL
+      - unapproved_executable_function_or_schema_authority
+    template_authority_and_secret_leakage_boundary:
+      rule: >-
+        The risk is not exposing public-safe structure itself. The risk is mixing that structure with real endpoint
+        values, credential material, raw SQL, runtime-only decrypted payload, or approval-bypassing executable
+        authority.
       mitigation:
         - export_public_safe_shape_only
         - use_reference_keys_and_display_labels_instead_of_real_values
