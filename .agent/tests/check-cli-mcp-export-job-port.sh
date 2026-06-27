@@ -22,7 +22,6 @@ REPO="backend/repository/CliReaderPortRepository.cs"
 NPGSQL="backend/repository/NpgsqlCliReaderPortRepository.cs"
 DB="db/topology_tables.sql"
 TEST="backend/tests/Topolactor.Runtime.Tests/AuthorizedCliReaderPortRuntimeTests.cs"
-TODO=".agent/tasks/todo.md"
 SSOT="docs/design/cli-model-context-protocols-port-ssot.yaml"
 IMPL_SSOT="docs/design/cli-mcp-port-implementation-ssot.yaml"
 
@@ -74,8 +73,6 @@ check "$TEST" "SHA256.HashData\(package.Bytes\)"
 check "$TEST" "Create_export_job_records_manifest_checksum_source_ids_and_runtime_event"
 check "$TEST" "Create_export_job_uses_config_port_id_not_payload_port_id"
 check "$TEST" "Create_export_job_rejects_missing_source_record_ids"
-check "$TODO" "cli-mcp-export-job-port"
-check "$TODO" "Implemented evidence update"
 
 # NOTE: download_export_file / FileStream file streaming is implemented by the sibling
 # subBundle `cli-mcp-file-stream-port` inside these shared files; the export-job surface
