@@ -45,6 +45,7 @@ public sealed record CliReaderPortRuntimeEvent(
 
 public sealed record CreateCliReaderExportJobCommand(
     AuthorizedCliReaderQuery Query,
+    Guid PortId,
     string ExportFormat,
     IReadOnlyList<Dictionary<string, object?>> Rows,
     IReadOnlyList<string> SourceRecordIds,

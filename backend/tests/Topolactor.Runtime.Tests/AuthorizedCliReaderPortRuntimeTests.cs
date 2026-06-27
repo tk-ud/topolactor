@@ -93,6 +93,20 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
         Assert.Contains(repo.Events, e => e.Status == "success" && e.Code == "CLI_READER_EXPORT_JOB_CREATED");
     }
 
+
+    [Fact]
+    public async Task Create_export_job_rejects_missing_port_id()
+    {
+        var repo = new InMemoryCliReaderPortRepository(DefaultConfig());
+        var runtime = new AuthorizedCliReaderPortRuntime(NullLogger<AuthorizedCliReaderPortRuntime>.Instance, repo);
+
+        var response = await runtime.ExecuteAsync(Request("create_export_job", extra: new Dictionary<string, object?> { ["export_format"] = "json", ["port_id"] = null }), Guid.NewGuid());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "CLI_READER_EXPORT_PORT_ID_REQUIRED");
+        Assert.Empty(repo.ExportJobs);
+    }
+
     [Fact]
     public async Task Create_export_job_rejects_missing_source_record_ids()
     {
@@ -177,7 +191,8 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
             ["filters"] = filters ?? new Dictionary<string, string> { ["state_id"] = "active" },
             ["period"] = period,
             ["request_id"] = "req-1",
-            ["idempotency_key"] = "idem-1"
+            ["idempotency_key"] = "idem-1",
+            ["port_id"] = "11111111-1111-1111-1111-111111111111"
         };
         if (extra is not null)
             foreach (var (key, value) in extra) payload[key] = value;
@@ -229,6 +244,7 @@ public sealed class AuthorizedCliReaderPortRuntimeTests
                 files = generatedFiles,
                 checksum = "checksum-manifest"
             });
+            Assert.Equal(Guid.Parse("11111111-1111-1111-1111-111111111111"), command.PortId);
             var result = new CliReaderExportJobResult(exportJobId, "completed", command.ExportFormat, command.SourceRecordIds, generatedFiles, "checksum-manifest", $"topolactor://exports/{exportJobId}/manifest.json", manifest);
             ExportJobs.Add(result);
             return Task.FromResult(result);

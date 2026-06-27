@@ -662,6 +662,38 @@ COMMENT ON TABLE topology.export_jobs IS
     'env-var reference identifiers only; plaintext credentials, bucket names, and '
     'actual signed URLs are prohibited.';
 
+-- Existing-database migration guard for CLI/MCP export_job fields added after the
+-- original file_storage_bundle export_jobs table was introduced. CREATE TABLE IF
+-- NOT EXISTS does not alter already-created databases, so keep these ALTERs here.
+ALTER TABLE topology.export_jobs
+    ADD COLUMN IF NOT EXISTS generated_files JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE topology.export_jobs
+    ADD COLUMN IF NOT EXISTS approval_required BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE topology.export_jobs
+    ADD COLUMN IF NOT EXISTS approval_status TEXT NOT NULL DEFAULT 'not_required';
+
+DO $$
+DECLARE
+    constraint_name TEXT;
+BEGIN
+    FOR constraint_name IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'topology.export_jobs'::regclass
+          AND contype = 'c'
+          AND pg_get_constraintdef(oid) LIKE '%status%'
+    LOOP
+        EXECUTE format('ALTER TABLE topology.export_jobs DROP CONSTRAINT IF EXISTS %I', constraint_name);
+    END LOOP;
+
+    ALTER TABLE topology.export_jobs
+        ADD CONSTRAINT export_jobs_status_check
+        CHECK (status IN ('pending', 'processing', 'awaiting_approval', 'approved', 'rejected', 'completed', 'failed', 'initiated', 'in_progress'));
+    ALTER TABLE topology.export_jobs
+        ADD CONSTRAINT export_jobs_approval_status_check
+        CHECK (approval_status IN ('not_required', 'pending', 'approved', 'rejected'));
+END $$;
+
 CREATE TABLE IF NOT EXISTS topology.file_artifacts (
     file_artifact_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     export_job_id      UUID        NOT NULL REFERENCES topology.export_jobs (export_job_id) ON DELETE CASCADE,
