@@ -21,4 +21,7 @@ public interface CliReaderPortRepository
     // File stream port: append checksum/source/manifest/artifact rejection evidence to
     // runtime_event_log when an authorized export file fails bundle verification.
     Task RecordExportDownloadFailureEvidenceAsync(Guid exportJobId, string failureCode, DateTimeOffset observedAt, CancellationToken ct = default);
+    Task<CliReaderImportCandidateResult> CreateImportCandidateAsync(CreateCliReaderImportCandidateCommand command, CancellationToken ct = default);
+    Task<CliReaderImportCandidateResult?> LoadImportCandidateAsync(LoadCliReaderImportCandidateQuery query, CancellationToken ct = default);
+    Task RecordImportCandidateEvidenceAsync(Guid candidateId, string eventType, DateTimeOffset observedAt, CancellationToken ct = default);
 }

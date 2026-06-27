@@ -17,7 +17,7 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         const string sql = """
             SELECT port_key, port_id, enabled, expires_at, allowed_roles, allowed_users, allowed_tables, allowed_columns,
                    allowed_filters, allowed_periods, row_scope, required_capabilities, audit_required, rate_limit_per_minute,
-                   file_stream_enabled
+                   file_stream_enabled, config_json
             FROM topology.cli_reader_ports
             WHERE port_key = @port_key
             """;
@@ -41,6 +41,8 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             ReadSet(reader.GetString(9)),
             ReadMap(reader.GetString(10)),
             ReadSet(reader.GetString(11)),
+            ReadConfigSet(reader.GetString(15), "allowed_business_objects"),
+            ReadConfigSet(reader.GetString(15), "allowed_assignment_target_scopes"),
             reader.GetBoolean(12),
             reader.IsDBNull(13) ? null : reader.GetInt32(13),
             !reader.IsDBNull(14) && reader.GetBoolean(14));
@@ -136,6 +138,8 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
             WHERE idempotency_key = @idempotency_key
             LIMIT 1
             """;
+        var candidateId = Guid.NewGuid();
+        cmd.Parameters.AddWithValue("candidate_id", candidateId);
         cmd.Parameters.AddWithValue("port_id", command.PortId);
         cmd.Parameters.AddWithValue("requested_by", command.Query.UserId);
         cmd.Parameters.AddWithValue("requested_at", command.RequestedAt);
@@ -419,6 +423,134 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         await tx.CommitAsync(ct);
     }
 
+    public async Task<CliReaderImportCandidateResult> CreateImportCandidateAsync(CreateCliReaderImportCandidateCommand command, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = """
+            WITH inserted AS (
+                INSERT INTO topology.cli_reader_import_candidates
+                    (candidate_id, port_id, port_key, operation, candidate_kind, source_transcript_ref, root_utterance,
+                     structured_output_payload, confidence, unresolved_fields, preview_diff, assigned_business_object_candidate,
+                     draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, approval_status, requested_by, requested_at,
+                     status, idempotency_key)
+                VALUES
+                    (@candidate_id, @port_id, @port_key, @operation, @candidate_kind, @source_transcript_ref, @root_utterance,
+                     @structured_output_payload::jsonb, @confidence, @unresolved_fields::jsonb, @preview_diff::jsonb, @assigned_business_object_candidate::jsonb,
+                     @draft_operation_id, @assigned_business_object::jsonb, @assignment_target_scope::jsonb, @evidence_refs::jsonb, @approval_status, @requested_by, @requested_at,
+                     @status, @idempotency_key)
+                ON CONFLICT (idempotency_key) DO NOTHING
+                RETURNING candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
+                          assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, true AS inserted
+            )
+            SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
+                   assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, inserted FROM inserted
+            UNION ALL
+            SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
+                   assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, false AS inserted
+            FROM topology.cli_reader_import_candidates
+            WHERE idempotency_key = @idempotency_key AND port_id = @port_id AND requested_by = @requested_by
+            LIMIT 1
+            """;
+        var candidateId = Guid.NewGuid();
+        cmd.Parameters.AddWithValue("candidate_id", candidateId);
+        cmd.Parameters.AddWithValue("port_id", command.PortId);
+        cmd.Parameters.AddWithValue("port_key", command.PortKey);
+        cmd.Parameters.AddWithValue("operation", command.Operation);
+        cmd.Parameters.AddWithValue("candidate_kind", command.CandidateKind);
+        cmd.Parameters.AddWithValue("source_transcript_ref", (object?)command.SourceTranscriptRef ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("root_utterance", (object?)command.RootUtterance ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("structured_output_payload", JsonSerializer.Serialize(command.StructuredOutputPayload));
+        cmd.Parameters.AddWithValue("confidence", (object?)command.Confidence ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("unresolved_fields", JsonSerializer.Serialize(command.UnresolvedFields));
+        cmd.Parameters.AddWithValue("preview_diff", JsonSerializer.Serialize(command.PreviewDiff));
+        cmd.Parameters.AddWithValue("assigned_business_object_candidate", JsonSerializer.Serialize(command.AssignedBusinessObjectCandidate));
+        cmd.Parameters.AddWithValue("draft_operation_id", (object?)command.DraftOperationId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("assigned_business_object", command.AssignedBusinessObject is null ? DBNull.Value : JsonSerializer.Serialize(command.AssignedBusinessObject.Value));
+        cmd.Parameters.AddWithValue("assignment_target_scope", command.AssignmentTargetScope is null ? DBNull.Value : JsonSerializer.Serialize(command.AssignmentTargetScope.Value));
+        cmd.Parameters.AddWithValue("evidence_refs", JsonSerializer.Serialize(command.EvidenceRefs));
+        cmd.Parameters.AddWithValue("approval_status", command.ApprovalStatus);
+        cmd.Parameters.AddWithValue("requested_by", command.RequestedBy);
+        cmd.Parameters.AddWithValue("requested_at", command.RequestedAt);
+        cmd.Parameters.AddWithValue("status", command.Status);
+        cmd.Parameters.AddWithValue("idempotency_key", command.IdempotencyKey);
+        var result = await ReadCandidateResultAsync(cmd, ct);
+        var auditRef = await AppendRuntimeEventLogAsync(conn, tx, result.WasCreated ? "cli_mcp_import_candidate_created" : "cli_mcp_import_candidate_replayed", result.CandidateId, command.RequestedAt, ct);
+        await using (var updateAuditCmd = conn.CreateCommand())
+        {
+            updateAuditCmd.Transaction = tx;
+            updateAuditCmd.CommandText = "UPDATE topology.cli_reader_import_candidates SET runtime_audit_ref = COALESCE(runtime_audit_ref, @runtime_audit_ref), updated_at = now() WHERE candidate_id = @candidate_id";
+            updateAuditCmd.Parameters.AddWithValue("runtime_audit_ref", auditRef);
+            updateAuditCmd.Parameters.AddWithValue("candidate_id", result.CandidateId);
+            await updateAuditCmd.ExecuteNonQueryAsync(ct);
+        }
+        await tx.CommitAsync(ct);
+        return result;
+    }
+
+    public async Task<CliReaderImportCandidateResult?> LoadImportCandidateAsync(LoadCliReaderImportCandidateQuery query, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT candidate_id, candidate_kind, status, requested_by, requested_at, idempotency_key, preview_diff, unresolved_fields,
+                   assigned_business_object_candidate, draft_operation_id, assigned_business_object, assignment_target_scope, evidence_refs, confidence, source_transcript_ref, root_utterance, approval_status, false AS inserted
+            FROM topology.cli_reader_import_candidates
+            WHERE candidate_id = @candidate_id AND port_id = @port_id AND requested_by = @requested_by
+            """;
+        cmd.Parameters.AddWithValue("candidate_id", query.CandidateId);
+        cmd.Parameters.AddWithValue("port_id", query.PortId);
+        cmd.Parameters.AddWithValue("requested_by", query.UserId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        return CandidateFromReader(reader);
+    }
+
+    public async Task RecordImportCandidateEvidenceAsync(Guid candidateId, string eventType, DateTimeOffset observedAt, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await AppendRuntimeEventLogAsync(conn, tx, eventType, candidateId, observedAt, ct);
+        await tx.CommitAsync(ct);
+    }
+
+    private static async Task<CliReaderImportCandidateResult> ReadCandidateResultAsync(NpgsqlCommand cmd, CancellationToken ct)
+    {
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("CLI_READER_IMPORT_CANDIDATE_IDEMPOTENCY_CONFLICT");
+        return CandidateFromReader(reader);
+    }
+
+    private static CliReaderImportCandidateResult CandidateFromReader(NpgsqlDataReader reader)
+    {
+        var candidateId = reader.GetGuid(0);
+        return new CliReaderImportCandidateResult(
+            candidateId,
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetFieldValue<DateTimeOffset>(4),
+            reader.GetString(5),
+            $"topolactor://commit-candidates/{candidateId}/evidence.json",
+            JsonSerializer.Deserialize<JsonElement>(reader.GetString(6)),
+            JsonSerializer.Deserialize<JsonElement>(reader.GetString(7)),
+            JsonSerializer.Deserialize<JsonElement>(reader.GetString(8)),
+            reader.IsDBNull(9) ? null : reader.GetGuid(9),
+            reader.IsDBNull(10) ? null : JsonSerializer.Deserialize<JsonElement>(reader.GetString(10)),
+            reader.IsDBNull(11) ? null : JsonSerializer.Deserialize<JsonElement>(reader.GetString(11)),
+            JsonSerializer.Deserialize<JsonElement>(reader.GetString(12)),
+            reader.IsDBNull(13) ? null : reader.GetDecimal(13),
+            reader.IsDBNull(14) ? null : reader.GetString(14),
+            reader.IsDBNull(15) ? null : reader.GetString(15),
+            reader.IsDBNull(16) ? "not_requested" : reader.GetString(16),
+            !reader.IsDBNull(17) && reader.GetBoolean(17));
+    }
+
     private static string MapFileStreamFailureEventType(string failureCode) => failureCode switch
     {
         "CLI_READER_FILE_SOURCE_IDS_MISMATCH" => "cli_mcp_file_source_ids_mismatch_rejected",
@@ -428,15 +560,16 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
         _ => "cli_mcp_file_checksum_mismatch_rejected"
     };
 
-    private static async Task AppendRuntimeEventLogAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string eventType, Guid exportJobId, DateTimeOffset observedAt, CancellationToken ct)
+    private static async Task<Guid> AppendRuntimeEventLogAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string eventType, Guid exportJobId, DateTimeOffset observedAt, CancellationToken ct)
     {
         await using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES (@event_type, @entity_id, 'cli_mcp_file_stream_port', @logged_at)";
+        cmd.CommandText = "INSERT INTO topology.runtime_event_log (event_type, entity_id, required_by_bundle, logged_at) VALUES (@event_type, @entity_id, CASE WHEN @event_type LIKE 'cli_mcp_import_candidate%' THEN 'cli_mcp_import_candidate_port' ELSE 'cli_mcp_file_stream_port' END, @logged_at) RETURNING event_log_id";
         cmd.Parameters.AddWithValue("event_type", eventType);
         cmd.Parameters.AddWithValue("entity_id", exportJobId.ToString());
         cmd.Parameters.AddWithValue("logged_at", observedAt);
-        await cmd.ExecuteNonQueryAsync(ct);
+        var value = await cmd.ExecuteScalarAsync(ct);
+        return value is Guid id ? id : Guid.Empty;
     }
 
     private static IReadOnlyList<string> ExtractManifestSourceRecordIds(JsonElement manifest)
@@ -465,6 +598,13 @@ public sealed class NpgsqlCliReaderPortRepository : CliReaderPortRepository
     }
 
     private static IReadOnlySet<string> ReadSet(string json) => JsonSerializer.Deserialize<string[]>(json)?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private static IReadOnlySet<string> ReadConfigSet(string json, string propertyName)
+    {
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+        if (!doc.RootElement.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Array)
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return value.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).Where(x => !string.IsNullOrWhiteSpace(x)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
     private static IReadOnlyDictionary<string, string> ReadMap(string json) => JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
     private static IReadOnlyDictionary<string, IReadOnlySet<string>> ReadColumns(string json) => (JsonSerializer.Deserialize<Dictionary<string, string[]>>(json) ?? new()).ToDictionary(kvp => kvp.Key, kvp => (IReadOnlySet<string>)kvp.Value.ToHashSet(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
 }

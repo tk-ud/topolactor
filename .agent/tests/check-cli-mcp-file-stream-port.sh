@@ -123,8 +123,8 @@ check "$TODO" "cli-mcp-file-stream-port"
 check "$TODO" "Implemented evidence update"
 
 # Out-of-scope axes must not appear in the file stream surfaces.
-absent "$RUNTIME" "import_structured_output|create_draft_operation|create_commit_candidate|approval_execute|ApproveExport|ExecuteApproval"
-absent "$NPGSQL" "import_structured_output|create_draft_operation|create_commit_candidate|approval_execute|ApproveExport"
+absent "$RUNTIME" "approval_execute|ApproveExport|ExecuteApproval"
+absent "$NPGSQL" "approval_execute|ApproveExport"
 # File stream read path must not project storage secrets / signed URLs.
 absent "$NPGSQL" "signed_url|bucket_name|storage_endpoint|access_key|secret_key"
 # The file stream path keys off an existing export_job_id; it must not call create_export_job

@@ -15,6 +15,8 @@ public sealed record CliReaderPortConfig(
     IReadOnlySet<string> AllowedPeriods,
     IReadOnlyDictionary<string, string> RowScopeByUser,
     IReadOnlySet<string> RequiredCapabilities,
+    IReadOnlySet<string> AllowedBusinessObjects,
+    IReadOnlySet<string> AllowedAssignmentTargetScopes,
     bool AuditRequired,
     int? RateLimitPerMinute = null,
     bool FileStreamEnabled = false);
@@ -99,3 +101,52 @@ public sealed record AuthorizedExportFile(
     string ManifestChecksum,
     IReadOnlyList<string> ManifestSourceRecordIds,
     JsonElement ManifestJsonb);
+
+
+public sealed record CreateCliReaderImportCandidateCommand(
+    Guid PortId,
+    string PortKey,
+    string Operation,
+    string CandidateKind,
+    string RequestedBy,
+    string? SourceTranscriptRef,
+    string? RootUtterance,
+    JsonElement StructuredOutputPayload,
+    decimal? Confidence,
+    JsonElement UnresolvedFields,
+    JsonElement PreviewDiff,
+    JsonElement AssignedBusinessObjectCandidate,
+    Guid? DraftOperationId,
+    JsonElement? AssignedBusinessObject,
+    JsonElement? AssignmentTargetScope,
+    JsonElement EvidenceRefs,
+    string ApprovalStatus,
+    string Status,
+    string IdempotencyKey,
+    DateTimeOffset RequestedAt);
+
+public sealed record CliReaderImportCandidateResult(
+    Guid CandidateId,
+    string CandidateKind,
+    string Status,
+    string RequestedBy,
+    DateTimeOffset RequestedAt,
+    string IdempotencyKey,
+    string EvidenceUri,
+    JsonElement PreviewDiff,
+    JsonElement UnresolvedFields,
+    JsonElement AssignedBusinessObjectCandidate,
+    Guid? DraftOperationId,
+    JsonElement? AssignedBusinessObject,
+    JsonElement? AssignmentTargetScope,
+    JsonElement EvidenceRefs,
+    decimal? Confidence,
+    string? SourceTranscriptRef,
+    string? RootUtterance,
+    string ApprovalStatus = "not_requested",
+    bool WasCreated = true);
+
+public sealed record LoadCliReaderImportCandidateQuery(
+    Guid PortId,
+    string UserId,
+    Guid CandidateId);
