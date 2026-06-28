@@ -1,0 +1,177 @@
+user_facing_helper_manual_authoring_reference_draft:
+  name: user_facing_helper_manual_authoring_reference_draft
+  version: 0.1.0
+  status: design_merge_draft
+  canonical_merge_target: docs/design/user-facing-helper-manual-ssot.yaml
+
+  purpose:
+    summary: >-
+      Existing helper/manual SSOT defines user-facing explanation policy.
+      This draft adds the authoring-reference layer that lets humans, agents, MCP clients,
+      External AI, Local LLM, and admin UI share one reference point while building topology
+      authoring drafts.
+    merge_goal: >-
+      Merge this draft back into docs/design/user-facing-helper-manual-ssot.yaml after review,
+      keeping the current user-facing language policy while adding helper artifact, MCP draft
+      payload guidance, admin helper viewer boundary, and provenance separation.
+
+  current_ssot_alignment:
+    preserved_from_current_ssot:
+      - user-facing helper/manual is not runtime authority
+      - helper/manual explains canonical runtime SSOT outwardly
+      - plain business language is used for non-technical users
+      - AI / CLI / MCP capability and review boundaries must be explainable
+      - site/page/component implementation is not done inside the SSOT itself
+    current_gap:
+      - no data-defined helper artifact contract
+      - no shared reference for agent and human authoring guidance
+      - no MCP import-candidate payload convention for topology authoring drafts
+      - no admin helper viewer projection boundary
+      - no explicit separation between AI/MCP-origin draft evidence and human manual admin draft
+
+  proposed_ssot_delta:
+    helper_reference_artifact:
+      intent: >-
+        Define a data-defined helper artifact that can be consumed by agents and by admin UI.
+        The artifact is a reference dictionary, not an authority source.
+      planned_paths:
+        schema: docs/helper/helper-manual.schema.json
+        seed: docs/helper/helper-manual.seed.json
+      core_fields:
+        - id
+        - title
+        - category
+        - audience
+        - admin_surface
+        - internal_terms
+        - user_facing_terms
+        - mcp_draft_payload_hints
+        - unresolved_fields_policy
+        - human_review_boundary
+        - prohibited_actions
+        - related_ssot
+        - examples
+
+    vocabulary_projection:
+      intent: >-
+        Keep internal vocabulary for agents and technical users, but translate it in admin/user-facing
+        projection.
+      mapping:
+        topology: 業務アプリの構造
+        manifest: 業務コンテンツ設定
+        seed: 初期設定データ
+        screen_data_shape: 画面に出す項目の形
+        relationIntents: データ同士のつながり候補
+        operationEntityBindings: 操作ごとの対象項目
+        adminActionWiring: 操作ボタンと処理のつながり
+        layout_patch: 画面配置の下書き
+        CI Attention: 反映前の確認結果・修正案
+        blocking_fragment: 反映前に直す必要がある問題
+
+    mcp_topology_authoring_draft_reference:
+      intent: >-
+        Use the existing CLI/MCP import-candidate lane as the carrier for topology authoring
+        draft evidence. Do not introduce a new MCP tool surface in this draft.
+      existing_operations:
+        - import_structured_output
+        - assign_business_object_candidate
+        - create_draft_operation
+        - create_commit_candidate
+        - get_preview_diff
+      payload_guidance:
+        structured_output_payload:
+          expected_keys:
+            - topologySystemName
+            - userFacingTopologyLabel
+            - logicalTables
+            - columns
+            - relationIntents
+            - screen_data_shape
+            - operationEntityBindings
+            - adminActionWiring
+            - physicalBindingDraft
+            - layoutPatchDraft
+            - ciAttentionTargetMetadata
+        assigned_business_object_candidate:
+          example_values:
+            - topology_authoring
+            - admin_contents_authoring
+            - ui_builder_authoring
+        assignment_target_scope:
+          example_values:
+            - admin_contents_step_1
+            - admin_contents_step_2
+            - admin_contents_step_2_5
+            - admin_contents_step_3
+            - admin_ui_builder_layout_draft
+        preview_diff:
+          required_contents:
+            - proposed_business_app_structure
+            - proposed_tables_and_columns
+            - proposed_relations
+            - proposed_screen_items
+            - proposed_operation_bindings
+            - proposed_action_wiring
+            - unresolved_questions
+        unresolved_fields:
+          required_policy:
+            - preserve_missing_topology_system_name
+            - preserve_ambiguous_table_or_column
+            - preserve_ambiguous_relation
+            - preserve_ambiguous_operation_binding
+            - keep_unresolved_items_visible_for_human_review
+
+    admin_helper_projection:
+      intent: >-
+        Add a future admin helper viewer that reads the helper artifact and shows guidance.
+        The viewer does not submit admin steps, reflect active topology, or perform human review.
+      entry_surface: admin_common_header
+      ui_flow:
+        - helper_button
+        - drawer
+        - search_box
+        - category_selector
+        - tree_viewer
+        - detail_modal_mount
+      allowed_behaviors:
+        - filter_helper_items
+        - render_user_facing_terms
+        - render_internal_terms_when_requested_by_admin_or_integrator
+        - render_related_ssot_links
+        - render_mcp_draft_payload_hints
+        - render_unresolved_field_examples
+      prohibited_behaviors:
+        - admin_step_submit
+        - active_topology_reflection
+        - promote_or_apply
+        - human_review_action
+        - direct_mcp_tool_execution
+
+    provenance_boundary:
+      intent: >-
+        AI/MCP/Local LLM candidate evidence must remain distinguishable from human manual admin drafts.
+      required_evidence:
+        - source_transcript_ref
+        - root_utterance
+        - confidence
+        - unresolved_fields
+        - evidence_refs
+        - client_or_tool_origin
+      prohibited:
+        - losing_candidate_origin
+        - showing_ai_candidate_as_human_manual_admin_draft
+        - reflecting_candidate_without_review
+
+  related_ssot:
+    - docs/design/user-facing-helper-manual-ssot.yaml
+    - docs/design/cli-model-context-protocols-port-ssot.yaml
+    - docs/design/admin-console-workflow-ssot.yaml
+    - docs/design/ci-contract-ssot.yaml
+    - docs/design/runtime-bundle-audit-approval-ssot.yaml
+    - docs/framework-policy.yaml
+
+  merge_plan:
+    step_1: Review this draft against the current helper/manual SSOT.
+    step_2: Merge purpose, authority boundary, helper artifact, MCP payload guidance, admin viewer, and provenance boundary into the canonical SSOT.
+    step_3: Update .agent/tasks/todo.md with a Bundle for helper artifact schema, seed, and admin projection implementation.
+    step_4: Do not implement component or schema until the canonical SSOT merge is complete.
