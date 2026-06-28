@@ -500,6 +500,8 @@ user_facing_helper_manual_ssot:
       - cli_mcp_does_not_operate_db_directly
       - stripe_paid_state_requires_webhook_verification
       - external_service_is_not_topolactor_runtime_ssot
+      - origin_evidence_is_preserved
+      - helper_projection_is_view_only
     approval_required_operations:
       - email_send
       - payment_approval
@@ -510,8 +512,6 @@ user_facing_helper_manual_ssot:
       - ui_approval_dialog
       - admin_approval_flow
       - requires_ui_approval_port_config
-      - origin_evidence_is_preserved
-      - helper_projection_is_view_only
 
   relation_to_other_ssot:
     cli_model_context_protocols_port:
