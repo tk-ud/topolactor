@@ -43,8 +43,14 @@ if ! command -v rg >/dev/null 2>&1; then
 
     [ -n "$pattern" ] || return 2
 
-    local args=(-R)
+    local args=()
     [ "$line_numbers" -eq 1 ] && args+=(-n)
+    # Match rg behavior: when no path arguments are supplied, read from stdin.
+    # Do not let grep -R default to searching the repository, because pipeline
+    # checks must only inspect their piped block content.
+    if [ "$#" -gt 0 ]; then
+      args=(-R "${args[@]}")
+    fi
     if [ "$fixed" -eq 1 ]; then
       grep "${args[@]}" -F -- "$pattern" "$@"
     else
