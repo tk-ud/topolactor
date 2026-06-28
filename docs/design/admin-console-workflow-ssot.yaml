@@ -22,6 +22,10 @@ admin_console_workflow_ssot:
     - define /admin/ui-builder as a canvas workspace route (NOT a pipeline step): full-width canvas with docked panels; no separate surfaces, no sequential step framing
     - define canvas_workspace_contract: panel layout, flow layout projection, tree-centric layout authoring, live design preview, _tmp auto-save, layer_inspector, design_inspector, html_tag allowlist
     - define /admin/manifests as post-contents hub / relation / navigation management
+    - define /admin/contents Step 1 topology start modes: new topology, clone active as replacement draft, and clone active as new topology draft
+    - define replacement clone completion as backend-owned validation and merge into the existing active topology, never frontend authority
+    - define /admin/manifests active-to-draft / reopen-draft lifecycle as a policy surface that must state runtime dispatch impact before implementation
+    - isolate SQL Attention candidate drafts from human-authored replacement clone drafts and their merge authority
     - record removed legacy or debug wrapper routes so implementation can converge on canonical surfaces
 
   does_not_own:
@@ -49,6 +53,98 @@ admin_console_workflow_ssot:
         Read-only validate or preview may exist inside a step before submit, but they do not
         replace the single submit that persists the step. Legacy validate→preview→promote as three
         separate persistence gates across steps 1–3 is superseded by this pipeline for new work.
+    admin_contents_step1_entry_modes:
+      owner_surface: /admin/contents
+      rule: >
+        Step 1 starts by an explicit author-selected mode. The selected mode determines whether
+        the draft has no source active, replacement authority over one active source, or lineage-only
+        source evidence for a separate topology. Source lineage alone never grants replacement
+        authority; frontend state never decides the merge target.
+      modes:
+        create_new_topology:
+          source_active_manifest_id: prohibited
+          topology_identity: new topologySystemName / routeKey
+          draft_origin: manual_new
+          clone_mode: none
+          completion_path: conventional_register_promote
+        clone_active_as_replacement_draft:
+          source_active_manifest_id: required
+          source_evidence: required
+          topology_identity: same canonical identity as source active unless backend validation explicitly rejects or normalizes it
+          draft_origin: manual_clone_replacement
+          clone_mode: replacement
+          completion_path: backend_validate_then_merge_to_existing_active
+        clone_active_as_new_topology_draft:
+          source_active_manifest_id: lineage_only
+          source_evidence: lineage/audit_evidence_only
+          topology_identity: new topologySystemName / routeKey required before registration/promote
+          draft_origin: manual_clone_new_topology
+          clone_mode: new_topology
+          completion_path: conventional_register_promote_after_new_identity
+      prohibited:
+        - treating_all_clones_as_replacement_drafts
+        - clone_new_topology_reuses_source_identity_without_explicit_rename
+        - frontend_decides_merge_target
+        - frontend_writes_active_topology
+        - treating_source_active_lineage_as_replacement_authority
+    replacement_clone_merge_lifecycle:
+      owner_boundary: backend AdminRuntime / ManifestRepository transaction
+      lifecycle:
+        - select_active_as_read_only_source
+        - create_clone_replacement_draft_with_source_evidence
+        - author_draft_through_existing_contents_pipeline_and_ui_builder_draft_namespace
+        - validate_replacement_draft
+        - show_diff_log_and_merge_blockers
+        - backend_merge_draft_to_existing_active_transactionally
+      frontend_role:
+        - choose clone replacement mode
+        - display source active read-only evidence
+        - submit draft authoring intent through /admin/contents and /admin/ui-builder draft surfaces
+        - display validation / diff / merge blockers
+        - submit merge request intent without deciding merge target or conflict outcome
+      backend_authority:
+        - AdminRuntime
+        - ManifestRepository
+      required_evidence:
+        - source_active_manifest_id
+        - source_active_topologySystemName
+        - source_active_routeKey
+        - source_active_dispatcher_axes
+        - source_active_updated_at_or_version
+        - source_active_topology_hash_or_equivalent_diff_base
+        - clone_mode
+        - draft_origin
+        - validation_result
+        - diff_or_log_evidence
+      fail_close:
+        - stale_source_active
+        - active_identity_conflict
+        - missing_source_evidence
+        - replacement_clone_without_validation
+        - frontend_merge_judgment_detected
+      prohibited:
+        - layout_patch_apply_as_manifest_replacement_merge
+        - direct_active_mutation_from_admin_ui
+        - silent_reuse_of_stale_active_source
+        - replacement_merge_without_diff_or_log_evidence
+    conventional_clone_paths_preserved:
+      create_new_topology: conventional registration/promote path unchanged
+      clone_active_as_new_topology_draft: lineage only; must assign new identity and use conventional registration/promote path
+    draft_origin_vocabulary:
+      values:
+        - manual_new
+        - manual_clone_replacement
+        - manual_clone_new_topology
+        - sql_attention_candidate
+      clone_mode_values:
+        - none
+        - replacement
+        - new_topology
+      candidate_source_rule: >
+        SQL Attention candidate drafts must carry candidate_source or equivalent derivable audit
+        evidence. Candidate source and source_active_manifest_id are evidence fields only unless
+        draft_origin is manual_clone_replacement and backend replacement validation accepts them.
+
   # ---------------------------------------------------------------------------
   # Topology naming SSOT (added with naming-ssot reorganization)
   # ---------------------------------------------------------------------------
@@ -1100,6 +1196,11 @@ admin_console_workflow_ssot:
       - silent_fallback_or_silent_write
       - adding_noncanonical_admin_or_dev_admin_helper_routes
       - treating_frontend_projection_as_runtime_judgment_owner
+      - active_manifest_direct_mutation_from_admin_ui
+      - frontend_production_merge_judgment
+      - sql_attention_candidate_auto_merge_to_active
+      - treating_source_active_lineage_as_replacement_authority
+      - mixing_candidate_drafts_and_human_clone_replacement_drafts_without_visible_origin
       - merging contents pipeline steps 1, 2, 2.5, 3 into one frontend submit unless backend exposes one registered bundle action for that atomicity
       - framing_ui_builder_as_a_pipeline_step
 
@@ -1114,6 +1215,8 @@ admin_console_workflow_ssot:
       ux_label: マニフェスト登録・テーブル定義・物理テーブル割当（パイプライン step 1–3）
       pipeline_steps: [1, 2, 2.5, 3]
       domain_ownership:
+        - step 1 explicit entry mode selection: create_new_topology, clone_active_as_replacement_draft, or clone_active_as_new_topology_draft
+        - step 1 source active read-only selection for clone modes, with visible draft_origin / clone_mode / source evidence
         - step 1 manifest empty register with user-facing topology label minimum
         - step 2 logical table definitions (jsonb columns and types, multiple tables)
         - step 2.5 relationship configuration between logical tables
@@ -1121,6 +1224,7 @@ admin_console_workflow_ssot:
         - optional search key, aggregation, display group (same step 3 submit or explicit follow-up submit documented in UI)
         - step 3 data input subfeature: manual initial-data rows and CSV/JSON import (preview → explicit apply via admin_csv_json_import; not a canonical /admin/import route)
         - hand off to /admin/ui-builder after step 3 success
+        - replacement clone draft merge blocker display; merge request is an intent submitted to backend authority only
       data_input_subfeature:
         route: /admin/contents
         modes:
@@ -1138,6 +1242,8 @@ admin_console_workflow_ssot:
         - created manifest hub membership and inter-manifest navigation (post-pipeline — /admin/manifests)
         - actual initial-data business-row insertion (content_bundle explicit route, not default form submit)
         - presenting file import as a canonical admin route
+        - direct active topology edit or replacement merge from local UI state
+        - frontend merge target decision
       implementation_convergence_note: >
         Current multi-panel draft/promotion UX is legacy projection. Converge on one submit per
         pipeline step 1, 2, 2.5, 3 with sequential backend persistence.
@@ -1160,6 +1266,8 @@ admin_console_workflow_ssot:
             remain in advanced details disclosure only
         - post-apply CI / guard handoff (does not change runtime semantics)
         - preset_ecosystem parent surface: planned UIBuilder authoring support for reusable draft / seed / saved view children; presets bind to selected package tmp canvas draft and never bypass preview / validate / apply
+        - distinguish active source, replacement draft, clone-as-new draft, and SQL Attention candidate draft in authoring context
+        - keep layout/package authoring inside draft namespace until the canonical registration/promote or backend replacement merge boundary
       edit_target_contract_ref: ui_builder_canvas_workspace.edit_target_contract
       canvas_workspace_contract_ref: ui_builder_canvas_workspace.canvas_workspace_contract
       preset_ecosystem_ref: ui_builder_canvas_workspace.authoring_flow.responsibilities.preset_ecosystem
@@ -1207,6 +1315,8 @@ admin_console_workflow_ssot:
         - runtime judgment ownership
         - direct_DB_write_from_frontend
         - raw dispatcher fields as the normal-view authoring path
+        - layout_patch:apply as production manifest replacement merge
+        - active package/layout mutation before backend replacement merge
       authoring_flow_ref: ui_builder_canvas_workspace.authoring_flow
 
     admin_manifests:
@@ -1220,9 +1330,33 @@ admin_console_workflow_ssot:
         - manifest-to-manifest relation management
         - navigation ordering and hub_navigation_ordering
         - page-group continuity management across created manifests
+        - active-to-draft / reopen-as-draft policy design surface, only after runtime dispatch impact is explicit
+        - diff/log evidence and existing transaction boundary reuse for any future active lifecycle operation
+      active_to_draft_lifecycle_policy:
+        status: unresolved_design_gap_until_runtime_dispatch_policy_selected
+        rule: >
+          /admin/manifests MUST NOT implement direct active-to-draft or reopen-active-as-draft as
+          an available operation until SSOT chooses the runtime dispatch semantics. Directly
+          changing the only active canonical manifest to draft can create a no-active runtime
+          dispatch state; that state requires explicit policy, visible warning, audit evidence,
+          and fail-close behavior.
+        unresolved_policy_options:
+          - copy_active_to_new_draft_while_active_remains_dispatchable
+          - change_active_to_non_dispatchable_draft_or_maintenance_state_with_explicit_warning
+          - allow_only_when_replacement_active_already_exists
+          - active_to_draft_disables_runtime_dispatch_and_requires_visible_warning
+        required_before_implementation:
+          - explicit_runtime_dispatch_impact
+          - no_silent_fallback_to_stale_active_runtime_state
+          - diff_log_evidence
+          - backend_transaction_boundary
+          - frontend_direct_status_change_prohibited
       explicitly_out_of_scope:
         - contents pipeline steps 1–3 and /admin/ui-builder canvas workspace (manifest shell, tables, relationships, physical bind, ui bucket/package/layout)
         - raw manifest JSON editing in the default path
+        - hidden active status mutation
+        - active-to-draft without audit log
+        - no-active runtime state without explicit runtime policy and warning
 
   canonical_authoring_order:
     note: >
@@ -1329,6 +1463,22 @@ admin_console_workflow_ssot:
     prohibited:
       - enabling promote before validation execution
       - treating unresolved topology.physical_tables table_ref mismatch as a silent no-op
+    clone_lifecycle_extension:
+      conventional_draft_promote_applies_to:
+        - create_new_topology
+        - clone_active_as_new_topology_draft
+      replacement_clone_guard:
+        path: backend replacement merge, not legacy promote
+        requires:
+          - source evidence
+          - validation result with no blocking issue
+          - diff/log evidence
+          - backend stale source check
+          - backend active identity conflict check
+        prohibited:
+          - frontend merge authority
+          - CI or SQL Attention evidence acting as frontend authority
+          - source_active_manifest_id alone granting replacement authority
 
   admin_authoring_completion_gate:
     note: >-
@@ -1403,6 +1553,16 @@ admin_console_workflow_ssot:
         admin 側 NG 軸 1–5 は、data_driven_projection_completion_gate の
         seed_or_data_defined_surface / dispatch_resolution / ui_db_projection を
         admin domain に特化した軸である。super-gate の全軸も満たす必要がある。
+    clone_draft_lifecycle_required:
+      - /admin/contents Step 1 entry modes are configurable and visibly separated
+      - replacement clone merge requires source evidence, validation, diff/log evidence, and backend conflict check
+      - clone-as-new topology cannot replace the source active
+      - stale source active fails close
+      - frontend has no merge authority
+      - UI Builder layout/package authoring remains draft-scoped until canonical boundary
+      - layout_patch:apply is not treated as production manifest replacement merge
+      - SQL Attention candidate drafts are isolated from manual replacement clone drafts
+      - /admin/manifests active-to-draft policy has explicit runtime dispatch semantics before implementation
     prohibited:
       - settings_ui_without_dispatch_kind_coverage
       - contents_dispatch_definition_not_reachable_in_ui_builder_wiring
