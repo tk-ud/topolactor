@@ -512,6 +512,8 @@ user_facing_helper_manual_ssot:
       - ui_approval_dialog
       - admin_approval_flow
       - requires_ui_approval_port_config
+      - origin_evidence_is_preserved
+      - helper_projection_is_view_only
 
   relation_to_other_ssot:
     cli_model_context_protocols_port:
