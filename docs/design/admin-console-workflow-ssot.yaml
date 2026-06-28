@@ -60,6 +60,39 @@ admin_console_workflow_ssot:
         the draft has no source active, replacement authority over one active source, or lineage-only
         source evidence for a separate topology. Source lineage alone never grants replacement
         authority; frontend state never decides the merge target.
+      physical_state_model:
+        manifest_topology_authoring_state: draft_active_toggle
+        allowed_states:
+          - draft
+          - active
+        invariant: >
+          Manifest/topology authoring state is a two-value draft / active toggle. A row MUST NOT
+          be active-and-draft, draft-and-active, half-draft while remaining active, or otherwise
+          superposed. Clone is not a lifecycle state and MUST NOT require adding a draft/active/clone
+          status enum; clone semantics live in JSONB metadata, attributes, or operation context.
+        prohibited:
+          - active_and_draft_same_row
+          - draft_and_active_same_row
+          - same_row_half_draft_while_active
+          - adding_clone_as_status_enum
+          - using_clone_state_instead_of_metadata_or_operation_context
+      clone_metadata_rule:
+        storage_boundary: JSONB metadata / attribute / operation context, not status enum
+        clone_on:
+          source_active_manifest_id: required_uuid
+          source_resolution: must_resolve_to_active_canonical_manifest
+        clone_off:
+          source_active_manifest_id: null_or_absent
+        replacement_clone_transaction_check: >
+          For replacement clone merge, backend transaction MUST verify that clone.source_active_manifest_id
+          matches the current merge target active UUID and that the source still resolves to the active
+          canonical row.
+        fail_close:
+          - missing_source_active_manifest_id_when_clone_on
+          - stale_source_active_manifest_id
+          - non_active_source_manifest
+          - source_identity_mismatch
+          - merge_target_active_uuid_mismatch
       modes:
         create_new_topology:
           source_active_manifest_id: prohibited
@@ -89,6 +122,14 @@ admin_console_workflow_ssot:
         - treating_source_active_lineage_as_replacement_authority
     replacement_clone_merge_lifecycle:
       owner_boundary: backend AdminRuntime / ManifestRepository transaction
+      physical_lifecycle:
+        - read_active_canonical_row
+        - insert_clone_draft_row_with_clone_metadata_and_source_active_manifest_id
+        - update_draft_row_during_authoring
+        - validate_replacement_draft_and_record_diff_log_evidence
+        - verify_clone_source_active_manifest_id_matches_current_active_inside_backend_transaction
+        - update_existing_active_row_inside_backend_transaction
+        - delete_working_draft_row_after_successful_merge
       lifecycle:
         - select_active_as_read_only_source
         - create_clone_replacement_draft_with_source_evidence
@@ -96,6 +137,7 @@ admin_console_workflow_ssot:
         - validate_replacement_draft
         - show_diff_log_and_merge_blockers
         - backend_merge_draft_to_existing_active_transactionally
+        - delete_working_draft_after_successful_merge
       frontend_role:
         - choose clone replacement mode
         - display source active read-only evidence
@@ -122,11 +164,16 @@ admin_console_workflow_ssot:
         - missing_source_evidence
         - replacement_clone_without_validation
         - frontend_merge_judgment_detected
+      audit_evidence_boundary: >
+        Successful replacement merge preserves evidence in existing diff/log/audit evidence surfaces.
+        The working draft row itself is not preserved as audit evidence.
       prohibited:
         - layout_patch_apply_as_manifest_replacement_merge
         - direct_active_mutation_from_admin_ui
         - silent_reuse_of_stale_active_source
         - replacement_merge_without_diff_or_log_evidence
+        - promoting_draft_row_to_active_for_replacement_merge
+        - preserving_working_draft_row_as_audit_evidence
     conventional_clone_paths_preserved:
       create_new_topology: conventional registration/promote path unchanged
       clone_active_as_new_topology_draft: lineage only; must assign new identity and use conventional registration/promote path
@@ -141,9 +188,17 @@ admin_console_workflow_ssot:
         - replacement
         - new_topology
       candidate_source_rule: >
-        SQL Attention candidate drafts must carry candidate_source or equivalent derivable audit
-        evidence. Candidate source and source_active_manifest_id are evidence fields only unless
-        draft_origin is manual_clone_replacement and backend replacement validation accepts them.
+        SQL Attention candidates are candidate/evidence surfaces and MUST NOT mass-produce manifest
+        draft rows. A draft row is created only after explicit human/admin adoption. Candidate source
+        and source evidence are evidence fields only, never replacement authority, unless draft_origin
+        is manual_clone_replacement and backend replacement validation accepts them.
+      sql_attention_candidate_boundary:
+        storage: candidate_or_evidence_surface_until_explicit_adoption
+        draft_creation: explicit_adoption_only
+        prohibited:
+          - mass_persisting_sql_attention_candidates_as_draft_rows
+          - candidate_source_as_replacement_authority
+          - source_evidence_as_replacement_authority
 
   # ---------------------------------------------------------------------------
   # Topology naming SSOT (added with naming-ssot reorganization)
@@ -1339,7 +1394,19 @@ admin_console_workflow_ssot:
           an available operation until SSOT chooses the runtime dispatch semantics. Directly
           changing the only active canonical manifest to draft can create a no-active runtime
           dispatch state; that state requires explicit policy, visible warning, audit evidence,
-          and fail-close behavior.
+          and fail-close behavior. Safe default is to keep the active row dispatchable and INSERT
+          a draft copy; direct active→draft no-active runtime state is prohibited until runtime
+          dispatch policy is separately fixed in SSOT.
+        safe_default:
+          operation: copy_active_to_new_draft_while_active_remains_dispatchable
+          active_row: remains_active_and_dispatchable
+          draft_row: inserted_copy_with_clone_metadata
+          clone_metadata: source_active_manifest_id_required_and_fail_close_checked
+          transaction_guard: source_uuid_must_match_current_active_uuid
+        prohibited:
+          - direct_active_row_to_draft_without_runtime_dispatch_policy
+          - no_active_runtime_state_before_policy_ssot
+          - same_row_active_and_draft_superposition
         unresolved_policy_options:
           - copy_active_to_new_draft_while_active_remains_dispatchable
           - change_active_to_non_dispatchable_draft_or_maintenance_state_with_explicit_warning
