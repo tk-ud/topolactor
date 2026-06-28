@@ -178,3 +178,140 @@ admin_topology_clone_draft_lifecycle_temp:
       - clone_replacement_vs_clone_new_topology_are_separated
       - admin_manifests_active_to_draft_runtime_policy_is_selected
       - sql_attention_candidate_interference_boundary_is_checked_against_existing_ssot
+
+  diff_ref: |
+    This is an intended integration diff reference, not a literal git-apply patch.
+    Codex/Agent must read AGENTS.md and the existing SSOT before applying it.
+
+    Target canonical SSOT:
+      docs/design/admin-console-workflow-ssot.yaml
+
+    Add to purpose:
+      - define admin contents topology start modes: new topology, clone active as replacement draft, and clone active as new topology draft
+      - define canonical replacement clone merge as backend-owned merge into the existing active topology
+      - define /admin/manifests active-to-draft or reopen-as-draft policy with explicit runtime dispatch impact
+      - isolate SQL Attention draft candidates from human-authored replacement clone drafts
+
+    Add under canonical_sequential_authoring_pipeline:
+      admin_contents_step1_entry_modes:
+        owner_surface: /admin/contents
+        modes:
+          create_new_topology:
+            source_active_manifest_id: prohibited
+            completion_path: conventional_register_promote
+          clone_active_as_replacement_draft:
+            source_active_manifest_id: required
+            source_evidence: required
+            draft_origin: manual_clone_replacement
+            completion_path: backend_validate_then_merge_to_existing_active
+          clone_active_as_new_topology_draft:
+            source_active_manifest_id: lineage_only
+            source_evidence: lineage/audit_evidence_only
+            draft_origin: manual_clone_new_topology
+            completion_path: conventional_register_promote_after_new_identity
+        prohibited:
+          - frontend_decides_merge_target
+          - clone_new_topology_reuses_source_identity_without_explicit_rename
+          - treating_source_lineage_as_replacement_authority
+
+      replacement_clone_merge_lifecycle:
+        lifecycle:
+          - select_active_as_read_only_source
+          - create_clone_replacement_draft_with_source_evidence
+          - author_draft_through_existing_contents_pipeline_and_ui_builder_draft_namespace
+          - validate_replacement_draft
+          - show_diff_log_and_merge_blockers
+          - backend_merge_draft_to_existing_active_transactionally
+        backend_authority:
+          - AdminRuntime
+          - ManifestRepository
+        required_evidence:
+          - source_active_manifest_id
+          - source_active_topologySystemName
+          - source_active_routeKey
+          - source_active_dispatcher_axes
+          - source_active_updated_at_or_version
+          - source_active_topology_hash_or_equivalent_diff_base
+          - clone_mode
+          - draft_origin
+        fail_close:
+          - stale_source_active
+          - active_identity_conflict
+          - missing_source_evidence
+          - replacement_clone_without_validation
+        prohibited:
+          - layout_patch_apply_as_manifest_replacement_merge
+          - direct_active_mutation_from_admin_ui
+          - frontend_merge_judgment
+          - replacement_merge_without_diff_or_log_evidence
+
+      conventional_clone_paths_preserved:
+        create_new_topology: conventional registration/promote path unchanged
+        clone_active_as_new_topology_draft: lineage only; must assign new identity and use conventional registration/promote path
+
+    Amend page_responsibility.admin_contents:
+      add:
+        - step1 entry mode selector for create_new_topology / clone_active_as_replacement_draft / clone_active_as_new_topology_draft
+        - source active read-only selection for clone modes
+        - visible draft_origin / clone_mode / source evidence
+        - merge blocker display for replacement clone drafts
+      prohibit:
+        - direct active topology edit
+        - frontend merge target decision
+        - replacement merge from local UI state only
+
+    Amend page_responsibility.admin_manifests:
+      add:
+        - active-to-draft or reopen-as-draft operation must be explicitly modeled before implementation
+        - runtime dispatch impact must be visible and fail-close
+        - diff/log evidence and transaction boundary reuse required
+      unresolved_policy_options:
+        - copy active to new draft while active remains dispatchable
+        - change active to non-dispatchable draft/maintenance state with explicit warning
+        - allow only when replacement active already exists
+      prohibit:
+        - hidden active status mutation
+        - active-to-draft without audit log
+        - no-active runtime state without explicit runtime policy
+
+    Amend page_responsibility.admin_ui_builder:
+      add:
+        - distinguish active source, replacement draft, clone-as-new draft, and SQL Attention candidate draft
+        - keep layout/package authoring inside draft namespace until canonical pipeline/merge boundary
+      prohibit:
+        - layout_patch:apply as production manifest replacement merge
+        - active package/layout mutation before replacement merge
+
+    Amend shared_authoring_boundary:
+      prohibit:
+        - active_manifest_direct_mutation_from_admin_ui
+        - frontend_production_merge_judgment
+        - sql_attention_candidate_auto_merge_to_active
+        - treating_source_active_lineage_as_replacement_authority
+        - mixing_candidate_drafts_and_human_clone_replacement_drafts_without_visible_origin
+
+    Amend contents_promote_guard:
+      add:
+        - conventional draft promote remains for new topology and clone-as-new topology
+        - replacement clone uses backend replacement merge guard with source evidence and conflict check
+        - CI/SQL Attention evidence may be backend guard input but never frontend authority
+
+    Amend admin_authoring_completion_gate:
+      require:
+        - step1 entry modes are configurable and visibly separated
+        - replacement clone merge requires source evidence, validation, diff/log evidence, and backend conflict check
+        - clone-as-new topology cannot replace the source active
+        - SQL Attention candidate drafts are isolated from manual replacement clone drafts
+        - admin/manifests active-to-draft policy has explicit runtime dispatch semantics
+
+    Expected final design-change diff:
+      keep:
+        - docs/design/admin-console-workflow-ssot.yaml
+        - .agent/tasks/todo.md
+      remove:
+        - docs/design/admin-topology-clone-draft-lifecycle-temp.yaml
+      do_not_touch:
+        - frontend/*
+        - backend/*
+        - db/*
+        - docs/system-roadmap.yaml status values
