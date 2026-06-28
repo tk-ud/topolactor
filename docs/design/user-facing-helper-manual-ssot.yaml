@@ -1,44 +1,61 @@
 user_facing_helper_manual_ssot:
   name: user_facing_helper_manual
-  version: 0.1.0
+  version: 0.2.0
   status: ssot_design_document
   canonical_path: docs/design/user-facing-helper-manual-ssot.yaml
 
   purpose:
     summary: >-
       Topolactor のユーザー向け説明、ヘルパー、マニュアル、サイト内ガイドの
-      UX-facing policy を定義する。
+      UX-facing policy と、人間 / AI / MCP / Local LLM / admin UI が共通参照する
+      data-defined helper reference の境界を定義する。
       canonical runtime SSOT の外向き projection として機能し、
-      Desktop AI / CLI / MCP / 月次処理 / 分析自動化 / 出力 / 承認境界を
-      非技術ユーザー向けに説明可能にする。
+      Desktop AI / CLI / MCP / 月次処理 / 分析自動化 / 出力 / 承認境界 / admin authoring guidance を
+      非技術ユーザーと Agent の双方に説明可能にする。
     goals:
       - non_technical_user_can_understand_what_topolactor_does
       - user_can_understand_what_ai_cli_mcp_can_and_cannot_do
       - user_can_understand_where_human_approval_is_required
+      - agent_can_reference_helper_artifact_when_building_topology_authoring_draft
+      - admin_helper_projection_can_render_the_same_reference_for_human_users
+      - ai_mcp_candidate_origin_is_not_confused_with_human_manual_admin_draft
       - helper_manual_precedes_implementation_to_prevent_ux_safety_boundary_drift
     non_goals:
       - replace_internal_runtime_ssot
       - replace_db_manifest_registry_permission_authority
-      - create_site_pages_or_ui_components
-      - create_help_components_or_mcp_tools
+      - define_new_mcp_tool_surface
+      - define_admin_submit_apply_promote_authority
+      - implement_site_pages_or_components_in_this_ssot
       - rewrite_readme
 
   authority_boundary:
     description: >-
       user-facing helper / manual は runtime authority を持たない。
       DB / Manifest / Runtime / Bundle / Permission / Audit の正本ではない。
-      ユーザーに約束する操作範囲・安全境界・導線説明の SSOT である。
+      ユーザーに約束する操作範囲・安全境界・導線説明と、Agent / MCP / Local LLM が
+      authoring draft を構成する時の参照語彙・payload guidance の SSOT である。
+      admin helper component は projection viewer であり、admin submit / apply / promote /
+      approval を実行しない。
     owns:
       - user_promise
       - onboarding_policy
       - safe_operation_boundary_description
       - helper_manual_category_structure
       - ux_facing_message_policy
+      - helper_reference_artifact_contract
+      - internal_to_user_facing_vocabulary_mapping
+      - mcp_authoring_draft_payload_guidance
+      - admin_helper_projection_boundary
     does_not_own:
       - runtime_dispatch_authority
       - db_schema_authority
       - permission_enforcement_authority
       - audit_log_authority
+      - admin_submit_authority
+      - admin_apply_authority
+      - admin_promote_authority
+      - approval_authority
+      - mcp_tool_implementation
       - email_send_runtime
       - payment_runtime
       - bundle_implementation
@@ -46,6 +63,8 @@ user_facing_helper_manual_ssot:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/ci-contract-ssot.yaml
+      - docs/design/runtime-bundle-audit-approval-ssot.yaml
       - docs/design/extended-runtime-bundle-registry-ssot.yaml
       - docs/framework-policy.yaml
 
