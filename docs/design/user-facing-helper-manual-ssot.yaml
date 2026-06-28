@@ -76,7 +76,6 @@ user_facing_helper_manual_ssot:
     planned_paths:
       schema: docs/helper/helper-manual.schema.json
       seed: docs/helper/helper-manual.seed.json
-    artifact_contract_stage: design_defined
     authority: reference_only_not_runtime_authority
     required_top_level_fields:
       - id
@@ -203,7 +202,6 @@ user_facing_helper_manual_ssot:
     description: >-
       admin helper projection は helper reference artifact を人間向けに検索・選択・閲覧する viewer である。
       admin authoring action を代行せず、runtime/admin authority を持たない。
-    viewer_contract_stage: design_defined
     canonical_entry_surface: admin_common_header
     ui_flow:
       - common_header_helper_button
