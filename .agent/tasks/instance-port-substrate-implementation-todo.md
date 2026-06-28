@@ -1,6 +1,6 @@
 # Instance Port Substrate Implementation TODO
 
-Status: not_started
+Status: partial
 Roadmap bundle: `product.instance_port_substrate`
 Primary SSOT: `docs/design/instance-port-substrate-ssot.yaml`
 
@@ -8,8 +8,7 @@ This file preserves future implementation work. It is not evidence of implemente
 
 ## Bundle-level future work
 
-- [ ] Add DB schema / seed surfaces for `db_instance_port`, `runtime_instance_port`, `instance_connection_policy`, and `instance_function_authority_binding` without plaintext connection strings or endpoint real values.
-- [ ] Add `credential-management-instance-settings-topology` by extending the existing `auth.external.credential_management.projection` seed with instance settings. Do not create a standalone credential plane or dedicated credential route/panel.
+- [ ] Add runtime-executable DB schema / seed rows for `db_instance_port`, `runtime_instance_port`, `instance_connection_policy`, and `instance_function_authority_binding` without plaintext connection strings or endpoint real values.
 - [ ] Add `instance_port_runtime` as a sibling runtime lane to `external_port_runtime`.
 - [ ] Add abstract function primitive support for `call_instance_postgres_function` and `call_bound_instance_function` with manifest-authorized function/schema/instance/output bindings.
 - [ ] Keep existing `call_postgres_function` limited to Topolactor DB `topology.*` functions and fixed Topolactor connectionString.
@@ -20,13 +19,14 @@ This file preserves future implementation work. It is not evidence of implemente
 
 ## Bundle increment `credential-management-instance-settings-topology`
 
-Status: implemented_in_current_branch
+Status: implemented
 Parent bundle: `instance-port-substrate`
+Implemented by: PR522
 
 問題点:
-- `auth.external.credential_management.projection` は manifest `00000000-0000-0000-0000-000000000092` として `db/seed_empty.sql` に seed 済みで、user/auth boundary manifest `00000000-0000-0000-0000-000000000091` と external credential context / policy template selection は fixed-form projection として存在する。
-- しかし instance settings は同 credential management projection / topology に未接続。
-- 現行 instance-port SSOT は runtime lane / DDL / primitive / authority binding に寄っており、既存 credential management projection を user/auth・external・instance の同型切替へ拡張する seed / guard / authoring boundary が未実装。
+- `auth.external.credential_management.projection` は manifest `00000000-0000-0000-0000-000000000092` として `db/seed_empty.sql` に seed 済みで、user/auth boundary manifest `00000000-0000-0000-0000-000000000091` と external credential context / policy template selection は fixed-form projection として存在していた。
+- PR522以前は instance settings が同 credential management projection / topology に未接続だった。
+- 現行 instance-port SSOT は runtime lane / DDL / primitive / authority binding に寄っており、既存 credential management projection を user/auth・external・instance の同型切替へ拡張する seed / guard / authoring boundary が未実装だった。
 
 目的:
 - 既存 credential management projection を拡張し、`user_auth` / `external` / `instance_settings` を select / mode / category で切り替える。
@@ -93,6 +93,6 @@ NG軸:
 - `AbstractInstanceRuntimeHandler`
 - `InstancePortDispatchRuntime`
 - `CallInstancePostgresFunctionPrimitiveAdapter`
-- instance port DDL / seed rows
+- runtime-executable instance port DDL / seed rows
 - external instance SQL function implementation
 - provider-specific integration runtime
