@@ -78,24 +78,84 @@ check_checklist_template_clean() {
   echo "OK  [template-clean] $file"
 }
 
+tmp_path_kind() {
+  local path="$1"
+  if [ -d "$REPO_ROOT/$path" ]; then
+    echo "directory"
+  elif [ -f "$REPO_ROOT/$path" ]; then
+    echo "file"
+  else
+    echo "unknown"
+  fi
+}
+
+print_tmp_artifact_detail() {
+  local path="$1"
+  local kind
+  kind="$(tmp_path_kind "$path")"
+  {
+    echo ""
+    echo "[structure-check tmp artifact]"
+    echo "path: $path"
+    echo "kind: $kind"
+    echo "reason: .agent/tmp artifacts are handoff/runtime scratch files and must not remain before merge completion."
+    echo "allowed use: temporary audit/design handoff before final audit."
+    echo "required action: final auditor removes this file after audit, or move durable content into SSOT/todo before merge."
+    echo "owner: audit finalization"
+  } >&2
+}
+
+print_tracked_tmp_detail() {
+  local path="$1"
+  {
+    echo ""
+    echo "[structure-check tracked tmp]"
+    echo "path: $path"
+    echo "kind: tracked_file"
+    echo "reason: tracked .agent/tmp handoff files are temporary and must not become durable repository state."
+    echo "allowed use: temporary PR handoff before final audit."
+    echo "required action: final auditor deletes the handoff file after PR content audit."
+    echo "owner: audit finalization"
+  } >&2
+}
+
 check_tmp_runtime_artifacts() {
   local tmp_dir="$REPO_ROOT/.agent/tmp"
-  local leftovers
-  leftovers="$(find "$tmp_dir" -mindepth 1 \( -type f -o -type d \) ! -path "$tmp_dir/.gitkeep" | sort || true)"
-  if [ -n "$leftovers" ]; then
-    fail "Runtime tmp artifacts must be cleaned before completion; found: ${leftovers//$'\n'/, }"
+  local -a leftovers=()
+  local artifact abs_path rel_path
+  mapfile -t leftovers < <(find "$tmp_dir" -mindepth 1 \( -type f -o -type d \) ! -path "$tmp_dir/.gitkeep" | sort || true)
+
+  if [ "${#leftovers[@]}" -gt 0 ]; then
+    fail "temporary runtime artifacts detected under .agent/tmp"
+    for artifact in "${leftovers[@]}"; do
+      abs_path="$(cd "$(dirname "$artifact")" && pwd)/$(basename "$artifact")"
+      rel_path="${abs_path#$REPO_ROOT/}"
+      print_tmp_artifact_detail "$rel_path"
+    done
   else
     echo "OK  [tmp]  runtime artifacts cleaned (.gitkeep only)"
   fi
 }
 
 check_tmp_tracked_files() {
-  local tracked
-  tracked="$(git -C "$REPO_ROOT" ls-files .agent/tmp)"
-  if [ "$tracked" = ".agent/tmp/.gitkeep" ]; then
+  local -a tracked=()
+  local -a invalid_tracked=()
+  local path
+  mapfile -t tracked < <(git -C "$REPO_ROOT" ls-files .agent/tmp)
+
+  for path in "${tracked[@]}"; do
+    if [ "$path" != ".agent/tmp/.gitkeep" ]; then
+      invalid_tracked+=("$path")
+    fi
+  done
+
+  if [ "${#invalid_tracked[@]}" -eq 0 ]; then
     echo "OK  [tmp]  tracked files in .agent/tmp are limited to .gitkeep"
   else
-    fail "Tracked files under .agent/tmp must be only .agent/tmp/.gitkeep; found: ${tracked:-<none>}"
+    fail "tracked files under .agent/tmp are not mergeable except .agent/tmp/.gitkeep"
+    for path in "${invalid_tracked[@]}"; do
+      print_tracked_tmp_detail "$path"
+    done
   fi
 }
 
