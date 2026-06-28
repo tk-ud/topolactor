@@ -97,7 +97,6 @@ NG軸:
 **Status:** not_started
 **Roadmap/status SSOT:** `product.helper_manual_policy`
 **Primary SSOT:** `docs/design/user-facing-helper-manual-ssot.yaml`
-**Merge draft:** `docs/design/user-facing-helper-manual-authoring-reference-draft.yaml`
 
 目的:
 helper/manual をユーザー向け文章方針だけでなく、人間 / Agent / MCP / External AI / Local LLM / admin UI が共通参照する helper reference artifact として実装可能にする。現行MCPの import-candidate / draft_operation / commit_candidate lane に topology authoring draft を載せる参照点を作り、admin では同じ内容を viewer として表示する。
@@ -114,7 +113,6 @@ implementation_change で、SSOTに従って helper schema / seed artifact を�
 
 対応資料:
 - `docs/design/user-facing-helper-manual-ssot.yaml`
-- `docs/design/user-facing-helper-manual-authoring-reference-draft.yaml`
 - `docs/design/cli-model-context-protocols-port-ssot.yaml`
 - `docs/design/cli-mcp-port-implementation-ssot.yaml`
 - `docs/design/admin-console-workflow-ssot.yaml`
