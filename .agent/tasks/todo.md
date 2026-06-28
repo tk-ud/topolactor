@@ -32,14 +32,15 @@
 
 残問題:
 - Step 1 entry mode selector と source active read-only selection が未実装。
-- human-authored replacement clone draft と clone-as-new topology draft の draft_origin / clone_mode / source evidence が未保存・未表示。
-- replacement clone merge の backend validation、stale source active fail-close、active identity conflict check、diff/log evidence gate が未実装。
+- human-authored replacement clone draft と clone-as-new topology draft の draft_origin / clone_mode / source evidence が未保存・未表示。draft / active は toggle state であり、active兼draft・draft兼active・同一rowの重ね合わせ状態は禁止する必要がある。
+- clone は enum/status 追加ではなく JSONB metadata / attribute / operation context として扱い、clone on の source_active_manifest_id UUID 必須、clone off の null/absent、source UUID 整合 fail-close が未実装。
+- replacement clone merge の backend validation、stale source active fail-close、active identity conflict check、diff/log evidence gate が未実装。merge は existing active row UPDATE + working draft row DELETE であり、draft row active 化や draft row 自体の audit evidence 永続保持は禁止。
 - source_active_manifest_id や lineage evidence だけで replacement authority を得ない guard が未実装。
-- SQL Attention candidate draft と human clone draft の origin/candidate_source 境界が未検証で、candidate が自動 merge authority を得ない regression guard が無い。
-- /admin/manifests active-to-draft / reopen-active-as-draft は runtime dispatch impact policy が design gap のため未実装に留める必要がある。
+- SQL Attention candidate と human clone draft の origin/candidate_source 境界が未検証で、candidate が自動 merge authority を得ない regression guard が無い。SQL Attention candidate は draft row を量産せず、candidate/evidence surface に保持し、明示採用時のみ draft 化する必要がある。
+- /admin/manifests active-to-draft / reopen-active-as-draft は runtime dispatch impact policy が design gap のため未実装に留める必要がある。safe default は active を dispatchable のまま維持して draft copy を INSERT する方針。
 
 改善方針:
-implementation_change で Primary SSOT に従い、frontend は entry intent / source evidence 表示 / blocker 表示だけを担当し、merge target・conflict 判定・active mutation は backend AdminRuntime / ManifestRepository transaction に限定する。新規作成と clone-as-new topology は従来の registration/promote path を維持し、replacement clone のみ backend replacement merge guard を通す。SQL Attention candidate draft は candidate_source / draft_origin を表示・保存または導出可能にし、manual_clone_replacement と混同しない。active-to-draft 操作は runtime dispatch policy が SSOT 確定するまで UI 実装しない。
+implementation_change で Primary SSOT に従い、frontend は entry intent / source evidence 表示 / blocker 表示だけを担当し、merge target・conflict 判定・active mutation は backend AdminRuntime / ManifestRepository transaction に限定する。新規作成と clone-as-new topology は従来の registration/promote path を維持し、replacement clone のみ backend replacement merge guard を通す。draft / active は toggle state とし、clone は enum/status 追加ではなく JSONB metadata / attribute / operation context として扱う。replacement merge は source UUID 整合を fail-close で確認し、existing active row UPDATE + working draft row DELETE で完了する。SQL Attention candidate は candidate/evidence surface に保持し、draft row を量産せず、明示採用時だけ draft 化し、manual_clone_replacement と混同しない。active-to-draft 操作は safe default として active を維持した draft copy INSERT を採用し、direct active→draft は runtime dispatch policy が SSOT 確定するまで UI 実装しない。
 
 対応資料:
 - `docs/design/admin-console-workflow-ssot.yaml`
