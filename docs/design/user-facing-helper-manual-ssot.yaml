@@ -113,6 +113,79 @@ user_facing_helper_manual_ssot:
       - helper_artifact_must_reference_canonical_ssot_for_runtime_semantics
       - helper_artifact_must_distinguish_ai_mcp_candidate_origin_from_human_admin_manual_draft
 
+  mcp_topology_authoring_draft_reference:
+    description: >-
+      現行 CLI/MCP import-candidate lane に、topology authoring draft を candidate evidence として載せるための
+      payload convention を定義する。これは新規MCP tool surfaceではない。
+      MCP tool は authority ではなく、External AI / Local LLM の構造化出力を draft/candidate evidence として
+      記録する operation surface である。
+    existing_mcp_operations:
+      - import_structured_output
+      - assign_business_object_candidate
+      - create_draft_operation
+      - create_commit_candidate
+      - get_preview_diff
+    payload_mapping:
+      structured_output_payload:
+        purpose: topology authoring draft body
+        expected_keys:
+          - topologySystemName
+          - userFacingTopologyLabel
+          - logicalTables
+          - columns
+          - relationIntents
+          - screen_data_shape
+          - operationEntityBindings
+          - adminActionWiring
+          - physicalBindingDraft
+          - layoutPatchDraft
+          - ciAttentionTargetMetadata
+      assigned_business_object_candidate:
+        purpose: classify draft target as topology authoring candidate
+        example_values:
+          - topology_authoring
+          - admin_contents_authoring
+          - ui_builder_authoring
+          - helper_manual_reference
+      assignment_target_scope:
+        purpose: identify authoring surface or admin step without executing that step
+        example_values:
+          - admin_contents_step_1
+          - admin_contents_step_2
+          - admin_contents_step_2_5
+          - admin_contents_step_3
+          - admin_ui_builder_layout_draft
+          - mcp_import_candidate_topology_authoring
+      preview_diff:
+        required_contents:
+          - proposed_business_app_structure
+          - proposed_tables_and_columns
+          - proposed_relations
+          - proposed_screen_items
+          - proposed_operation_bindings
+          - proposed_action_wiring
+          - unresolved_questions
+          - approval_required_before_reflection
+      unresolved_fields:
+        required_policy:
+          - must_preserve_missing_topology_system_name
+          - must_preserve_ambiguous_table_or_column
+          - must_preserve_ambiguous_relation
+          - must_preserve_ambiguous_operation_binding
+          - must_preserve_secret_endpoint_credential_or_raw_sql_request_as_denied_or_question
+          - must_not_force_unresolved_fields_into_confirmed_values
+      evidence_refs:
+        purpose: preserve source transcript, user request, external AI output, and helper reference IDs
+    prohibited:
+      - creating_new_mcp_tool_surface_in_this_ssot
+      - treating_external_ai_structured_output_as_ssot
+      - treating_helper_artifact_as_runtime_authority
+      - admin_submit_via_mcp_without_distinct_ai_mcp_origin
+      - apply_or_promote_via_mcp_helper_reference
+      - approval_execution_by_ai_mcp_cli
+      - ai_mcp_draft_origin_logged_as_human_manual_admin_draft
+      - storing_secret_endpoint_credential_or_raw_sql_in_payload
+
   user_facing_message_policy:
     description: >-
       ユーザーに向けてどのような表現・約束をするかの方針。
@@ -126,6 +199,7 @@ user_facing_helper_manual_ssot:
         - analysis_and_aggregation_extension
         - external_output_extension
         - desktop_ai_assisted_data_search_and_aggregation
+        - ai_assisted_authoring_draft_creation
       what_ai_cli_mcp_can_do:
         - search_business_data_within_permitted_scope
         - aggregate_and_summarize
@@ -133,6 +207,8 @@ user_facing_helper_manual_ssot:
         - export_csv_pdf_zip
         - read_monthly_context
         - validate_before_export
+        - create_candidate_or_draft_evidence_for_author_review
+        - provide_topology_authoring_draft_hints_without_authority
       what_ai_cli_mcp_cannot_do:
         - send_email_without_human_approval
         - confirm_payment_without_human_approval
@@ -140,6 +216,8 @@ user_facing_helper_manual_ssot:
         - execute_final_register_without_human_approval
         - operate_db_directly
         - bypass_permission_scope
+        - apply_or_promote_topology_without_runtime_admin_authority
+        - convert_ai_candidate_to_human_manual_draft_without_origin_evidence
     language_policy:
       principle: use_plain_business_language_not_internal_system_terms
       avoid:
@@ -148,12 +226,25 @@ user_facing_helper_manual_ssot:
         - runtime_orchestration
         - ssot
         - attractor
+        - operationEntityBindings
+        - relationIntents
+        - screen_data_shape
+        - CI Attention
       use_instead:
         topology: 業務アプリの構造
         manifest: 業務コンテンツ設定
+        seed: 初期設定データ
         runtime: 処理の実行
+        screen_data_shape: 画面に出す項目の形
+        relationIntents: データ同士のつながり候補
+        operationEntityBindings: 操作ごとの対象項目
+        adminActionWiring: 操作ボタンと処理のつながり
+        layout_patch: 画面配置の下書き
         export_job: 搬出処理
         cli_reader_port: AI/CLIへのデータ読み取り窓口
+        CI Attention: 反映前の確認結果・修正案
+        blocking_fragment: 反映前に直す必要がある問題
+        apply_or_promote: 反映
 
   helper_manual_category_candidates:
     description: >-
@@ -313,5 +404,6 @@ user_facing_helper_manual_ssot:
     - user_facing_helper_manual
     - ux_facing_policy_ssot
     - data_defined_helper_reference_artifact
+    - mcp_topology_authoring_draft_reference
     - helper_manual_category
     - safety_boundary_user_promise
