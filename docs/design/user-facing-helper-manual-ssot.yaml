@@ -1,44 +1,61 @@
 user_facing_helper_manual_ssot:
   name: user_facing_helper_manual
-  version: 0.1.0
+  version: 0.2.0
   status: ssot_design_document
   canonical_path: docs/design/user-facing-helper-manual-ssot.yaml
 
   purpose:
     summary: >-
       Topolactor のユーザー向け説明、ヘルパー、マニュアル、サイト内ガイドの
-      UX-facing policy を定義する。
+      UX-facing policy と、人間 / AI / MCP / Local LLM / admin UI が共通参照する
+      data-defined helper reference の境界を定義する。
       canonical runtime SSOT の外向き projection として機能し、
-      Desktop AI / CLI / MCP / 月次処理 / 分析自動化 / 出力 / 承認境界を
-      非技術ユーザー向けに説明可能にする。
+      Desktop AI / CLI / MCP / 月次処理 / 分析自動化 / 出力 / 承認境界 / admin authoring guidance を
+      非技術ユーザーと Agent の双方に説明可能にする。
     goals:
       - non_technical_user_can_understand_what_topolactor_does
       - user_can_understand_what_ai_cli_mcp_can_and_cannot_do
       - user_can_understand_where_human_approval_is_required
+      - agent_can_reference_helper_artifact_when_building_topology_authoring_draft
+      - admin_helper_projection_can_render_the_same_reference_for_human_users
+      - ai_mcp_candidate_origin_is_not_confused_with_human_manual_admin_draft
       - helper_manual_precedes_implementation_to_prevent_ux_safety_boundary_drift
     non_goals:
       - replace_internal_runtime_ssot
       - replace_db_manifest_registry_permission_authority
-      - create_site_pages_or_ui_components
-      - create_help_components_or_mcp_tools
+      - define_new_mcp_tool_surface
+      - define_admin_submit_apply_promote_authority
+      - implement_site_pages_or_components_in_this_ssot
       - rewrite_readme
 
   authority_boundary:
     description: >-
       user-facing helper / manual は runtime authority を持たない。
       DB / Manifest / Runtime / Bundle / Permission / Audit の正本ではない。
-      ユーザーに約束する操作範囲・安全境界・導線説明の SSOT である。
+      ユーザーに約束する操作範囲・安全境界・導線説明と、Agent / MCP / Local LLM が
+      authoring draft を構成する時の参照語彙・payload guidance の SSOT である。
+      admin helper component は projection viewer であり、admin submit / apply / promote /
+      approval を実行しない。
     owns:
       - user_promise
       - onboarding_policy
       - safe_operation_boundary_description
       - helper_manual_category_structure
       - ux_facing_message_policy
+      - helper_reference_artifact_contract
+      - internal_to_user_facing_vocabulary_mapping
+      - mcp_authoring_draft_payload_guidance
+      - admin_helper_projection_boundary
     does_not_own:
       - runtime_dispatch_authority
       - db_schema_authority
       - permission_enforcement_authority
       - audit_log_authority
+      - admin_submit_authority
+      - admin_apply_authority
+      - admin_promote_authority
+      - approval_authority
+      - mcp_tool_implementation
       - email_send_runtime
       - payment_runtime
       - bundle_implementation
@@ -46,8 +63,248 @@ user_facing_helper_manual_ssot:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/ci-contract-ssot.yaml
+      - docs/design/runtime-bundle-audit-approval-ssot.yaml
       - docs/design/extended-runtime-bundle-registry-ssot.yaml
       - docs/framework-policy.yaml
+
+  helper_reference_artifact:
+    description: >-
+      helper reference artifact は、Agent / External AI / Local LLM / admin UI が同じ参照点を読むための
+      data-defined helper body である。AI向けには internal vocabulary を保持し、人間向けには
+      user-facing vocabulary projection を提供する。
+    planned_paths:
+      schema: docs/helper/helper-manual.schema.json
+      seed: docs/helper/helper-manual.seed.json
+    authority: reference_only_not_runtime_authority
+    required_top_level_fields:
+      - id
+      - title
+      - category
+      - audience
+      - admin_surface
+      - origin_kind
+      - origin_evidence
+      - review_state
+      - internal_terms
+      - user_facing_terms
+      - mcp_draft_payload_hints
+      - unresolved_fields_policy
+      - approval_boundary
+      - prohibited_actions
+      - related_ssot
+      - examples
+    audience_values:
+      - human
+      - agent
+      - integrator
+      - admin
+    origin_kind_values:
+      - human_admin_manual
+      - mcp_import_candidate
+      - external_ai_structured_output
+      - local_llm_structured_output
+    review_state_values:
+      - not_required
+      - review_required
+      - reviewed
+      - rejected
+    category_values:
+      - getting_started
+      - admin_authoring_flow
+      - mcp_topology_authoring_draft
+      - cli_mcp_reader
+      - external_bundle_guide
+      - approval_boundary
+      - export_and_file_stream
+      - ui_builder_authoring
+      - ci_attention_guidance
+    invariant:
+      - helper_artifact_is_data_defined_reference_not_authority
+      - helper_artifact_must_not_contain_secret_endpoint_credential_or_raw_sql
+      - helper_artifact_must_reference_canonical_ssot_for_runtime_semantics
+      - helper_artifact_must_distinguish_ai_mcp_candidate_origin_from_human_admin_manual_draft
+
+  mcp_topology_authoring_draft_reference:
+    description: >-
+      現行 CLI/MCP import-candidate lane に、topology authoring draft を candidate evidence として載せるための
+      payload convention を定義する。これは新規MCP tool surfaceではない。
+      MCP tool は authority ではなく、External AI / Local LLM の構造化出力を draft/candidate evidence として
+      記録する operation surface である。
+    existing_mcp_operations:
+      - import_structured_output
+      - assign_business_object_candidate
+      - create_draft_operation
+      - create_commit_candidate
+      - get_preview_diff
+    payload_mapping:
+      structured_output_payload:
+        purpose: topology authoring draft body
+        expected_keys:
+          - topologySystemName
+          - userFacingTopologyLabel
+          - logicalTables
+          - columns
+          - relationIntents
+          - screen_data_shape
+          - operationEntityBindings
+          - adminActionWiring
+          - physicalBindingDraft
+          - layoutPatchDraft
+          - ciAttentionTargetMetadata
+      assigned_business_object_candidate:
+        purpose: classify draft target as topology authoring candidate
+        example_values:
+          - topology_authoring
+          - admin_contents_authoring
+          - ui_builder_authoring
+          - helper_manual_reference
+      assignment_target_scope:
+        purpose: identify authoring surface or admin step without executing that step
+        example_values:
+          - admin_contents_step_1
+          - admin_contents_step_2
+          - admin_contents_step_2_5
+          - admin_contents_step_3
+          - admin_ui_builder_layout_draft
+          - mcp_import_candidate_topology_authoring
+      preview_diff:
+        required_contents:
+          - proposed_business_app_structure
+          - proposed_tables_and_columns
+          - proposed_relations
+          - proposed_screen_items
+          - proposed_operation_bindings
+          - proposed_action_wiring
+          - unresolved_questions
+          - approval_required_before_reflection
+      unresolved_fields:
+        required_policy:
+          - must_preserve_missing_topology_system_name
+          - must_preserve_ambiguous_table_or_column
+          - must_preserve_ambiguous_relation
+          - must_preserve_ambiguous_operation_binding
+          - must_preserve_secret_endpoint_credential_or_raw_sql_request_as_denied_or_question
+          - must_not_force_unresolved_fields_into_confirmed_values
+      evidence_refs:
+        purpose: preserve source transcript, user request, external AI output, and helper reference IDs
+    prohibited:
+      - creating_new_mcp_tool_surface_in_this_ssot
+      - treating_external_ai_structured_output_as_ssot
+      - treating_helper_artifact_as_runtime_authority
+      - admin_submit_via_mcp_without_distinct_ai_mcp_origin
+      - apply_or_promote_via_mcp_helper_reference
+      - approval_execution_by_ai_mcp_cli
+      - ai_mcp_draft_origin_logged_as_human_manual_admin_draft
+      - storing_secret_endpoint_credential_or_raw_sql_in_payload
+
+  admin_helper_projection:
+    description: >-
+      admin helper projection は helper reference artifact を人間向けに検索・選択・閲覧する viewer である。
+      admin authoring action を代行せず、runtime/admin authority を持たない。
+    canonical_entry_surface: admin_common_header
+    ui_flow:
+      - common_header_helper_button
+      - helper_drawer_open
+      - search_box
+      - category_or_surface_selector
+      - tree_viewer
+      - selected_helper_summary
+      - detail_helper_modal_mount
+    viewer_inputs:
+      - helper_reference_artifact
+      - current_admin_surface
+      - selected_category
+      - search_keyword
+    allowed_behaviors:
+      - filter_helper_items
+      - render_user_facing_terms
+      - render_internal_terms_for_admin_or_integrator_when_explicitly_needed
+      - render_related_ssot_links
+      - render_mcp_draft_payload_hints
+      - render_approval_boundary_warning
+      - render_unresolved_fields_examples
+      - render_origin_badge
+      - render_review_state
+      - render_preview_diff_summary
+      - render_source_evidence_summary
+    prohibited_behaviors:
+      - admin_step_submit
+      - layout_patch_apply
+      - manifest_promote
+      - approval_action
+      - active_topology_reflection
+      - mcp_operation_invocation
+      - candidate_origin_loss
+    projection_only_invariant:
+      - helper_component_must_not_own_authoring_convergence
+      - helper_component_must_not_bypass_admin_runtime
+      - helper_component_must_not_bypass_mcp_import_candidate_audit
+      - helper_component_must_not_treat_dismissed_ci_attention_as_unlock
+
+  provenance_boundary:
+    description: >-
+      AI / MCP / External AI / Local LLM 由来の candidate evidence と、
+      人間が admin 画面で手作業作成した draft を監査上混同しないための境界。
+      helper artifact / admin helper projection / MCP draft guidance は origin evidence を保持し、
+      candidate を active topology や human manual admin draft として扱わない。
+    origin_kinds:
+      human_admin_manual:
+        description: 人間が admin UI 上で明示的に作成・編集した draft。
+        required_evidence:
+          - actor_user_ref
+          - admin_surface
+          - submitted_step_or_view_context
+      mcp_import_candidate:
+        description: MCP import-candidate lane から保存された candidate / draft evidence。
+        required_evidence:
+          - source_transcript_ref
+          - root_utterance
+          - confidence
+          - unresolved_fields
+          - evidence_refs
+          - client_or_tool_origin
+      external_ai_structured_output:
+        description: External AI が生成した構造化出力を source とする candidate evidence。
+        required_evidence:
+          - source_transcript_ref
+          - structured_output_payload
+          - confidence
+          - unresolved_fields
+          - evidence_refs
+          - client_or_tool_origin
+      local_llm_structured_output:
+        description: Local LLM / External instance が生成した構造化出力を source とする candidate evidence。
+        required_evidence:
+          - source_transcript_ref
+          - structured_output_payload
+          - confidence
+          - unresolved_fields
+          - evidence_refs
+          - client_or_tool_origin
+    display_policy:
+      - admin_helper_projection_must_show_origin_badge
+      - admin_helper_projection_must_show_review_state
+      - admin_helper_projection_must_show_unresolved_fields_when_present
+      - admin_helper_projection_must_show_preview_diff_summary_when_present
+      - admin_helper_projection_must_show_source_evidence_summary_when_available
+    transition_policy:
+      candidate_to_admin_draft:
+        requires:
+          - explicit_human_review
+          - preview_diff_visible
+          - unresolved_fields_resolved_or_explicitly_accepted
+          - origin_evidence_preserved
+      candidate_to_active_topology:
+        policy: >-
+          helper/manual は active topology reflection authority を持たない。
+          active topology reflection は canonical runtime/admin authority のみが扱う。
+    prohibited:
+      - losing_candidate_origin
+      - showing_ai_mcp_candidate_as_human_manual_admin_draft
+      - reflecting_candidate_without_explicit_human_review
+      - hiding_unresolved_fields_before_review
+      - treating_helper_artifact_as_runtime_authority
 
   user_facing_message_policy:
     description: >-
@@ -62,6 +319,7 @@ user_facing_helper_manual_ssot:
         - analysis_and_aggregation_extension
         - external_output_extension
         - desktop_ai_assisted_data_search_and_aggregation
+        - ai_assisted_authoring_draft_creation
       what_ai_cli_mcp_can_do:
         - search_business_data_within_permitted_scope
         - aggregate_and_summarize
@@ -69,6 +327,8 @@ user_facing_helper_manual_ssot:
         - export_csv_pdf_zip
         - read_monthly_context
         - validate_before_export
+        - create_candidate_or_draft_evidence_for_author_review
+        - provide_topology_authoring_draft_hints_without_authority
       what_ai_cli_mcp_cannot_do:
         - send_email_without_human_approval
         - confirm_payment_without_human_approval
@@ -76,6 +336,8 @@ user_facing_helper_manual_ssot:
         - execute_final_register_without_human_approval
         - operate_db_directly
         - bypass_permission_scope
+        - apply_or_promote_topology_without_runtime_admin_authority
+        - convert_ai_candidate_to_human_manual_draft_without_origin_evidence
     language_policy:
       principle: use_plain_business_language_not_internal_system_terms
       avoid:
@@ -84,12 +346,25 @@ user_facing_helper_manual_ssot:
         - runtime_orchestration
         - ssot
         - attractor
+        - operationEntityBindings
+        - relationIntents
+        - screen_data_shape
+        - CI Attention
       use_instead:
         topology: 業務アプリの構造
         manifest: 業務コンテンツ設定
+        seed: 初期設定データ
         runtime: 処理の実行
+        screen_data_shape: 画面に出す項目の形
+        relationIntents: データ同士のつながり候補
+        operationEntityBindings: 操作ごとの対象項目
+        adminActionWiring: 操作ボタンと処理のつながり
+        layout_patch: 画面配置の下書き
         export_job: 搬出処理
         cli_reader_port: AI/CLIへのデータ読み取り窓口
+        CI Attention: 反映前の確認結果・修正案
+        blocking_fragment: 反映前に直す必要がある問題
+        apply_or_promote: 反映
 
   helper_manual_category_candidates:
     description: >-
@@ -101,6 +376,23 @@ user_facing_helper_manual_ssot:
         title: はじめての業務アプリ作成
         audience: non_technical_business_user
         classification: planned
+
+      admin_authoring_flow:
+        id: admin_authoring_flow
+        title: 管理画面で業務アプリを作る流れ
+        audience: business_user_or_admin
+        classification: planned
+        related_ssot:
+          - docs/design/admin-console-workflow-ssot.yaml
+
+      mcp_topology_authoring_draft:
+        id: mcp_topology_authoring_draft
+        title: AI/MCPで業務アプリ構造の下書きを作る
+        audience: agent_or_integrator
+        classification: planned
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+          - docs/design/admin-console-workflow-ssot.yaml
 
       basic_surfaces:
         id: basic_surfaces
@@ -129,6 +421,23 @@ user_facing_helper_manual_ssot:
         classification: planned
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
+
+      ui_builder_authoring:
+        id: ui_builder_authoring
+        title: UI Builderで画面を調整する
+        audience: admin_or_power_user
+        classification: planned
+        related_ssot:
+          - docs/design/admin-console-workflow-ssot.yaml
+
+      ci_attention_guidance:
+        id: ci_attention_guidance
+        title: 反映前の確認結果を読む
+        audience: admin_or_integrator
+        classification: planned
+        related_ssot:
+          - docs/design/ci-contract-ssot.yaml
+          - docs/framework-policy.yaml
 
       csv_pdf_zip_export:
         id: csv_pdf_zip_export
@@ -191,6 +500,8 @@ user_facing_helper_manual_ssot:
       - cli_mcp_does_not_operate_db_directly
       - stripe_paid_state_requires_webhook_verification
       - external_service_is_not_topolactor_runtime_ssot
+      - origin_evidence_is_preserved
+      - helper_projection_is_view_only
     approval_required_operations:
       - email_send
       - payment_approval
@@ -248,5 +559,8 @@ user_facing_helper_manual_ssot:
   change_surface:
     - user_facing_helper_manual
     - ux_facing_policy_ssot
+    - data_defined_helper_reference_artifact
+    - mcp_topology_authoring_draft_reference
+    - admin_helper_projection_viewer
     - helper_manual_category
     - safety_boundary_user_promise
