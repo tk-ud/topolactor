@@ -186,6 +186,47 @@ user_facing_helper_manual_ssot:
       - ai_mcp_draft_origin_logged_as_human_manual_admin_draft
       - storing_secret_endpoint_credential_or_raw_sql_in_payload
 
+  admin_helper_projection:
+    description: >-
+      admin helper projection は helper reference artifact を人間向けに検索・選択・閲覧する viewer である。
+      admin authoring action を代行せず、runtime/admin authority を持たない。
+    implementation_status: planned_after_design
+    canonical_entry_surface: admin_common_header
+    ui_flow:
+      - common_header_helper_button
+      - helper_drawer_open
+      - search_box
+      - category_or_surface_selector
+      - tree_viewer
+      - selected_helper_summary
+      - detail_helper_modal_mount
+    viewer_inputs:
+      - helper_reference_artifact
+      - current_admin_surface
+      - selected_category
+      - search_keyword
+    allowed_behaviors:
+      - filter_helper_items
+      - render_user_facing_terms
+      - render_internal_terms_for_admin_or_integrator_when_explicitly_needed
+      - render_related_ssot_links
+      - render_mcp_draft_payload_hints
+      - render_approval_boundary_warning
+      - render_unresolved_fields_examples
+    prohibited_behaviors:
+      - admin_step_submit
+      - layout_patch_apply
+      - manifest_promote
+      - approval_action
+      - active_topology_reflection
+      - mcp_operation_invocation
+      - candidate_origin_loss
+    projection_only_invariant:
+      - helper_component_must_not_own_authoring_convergence
+      - helper_component_must_not_bypass_admin_runtime
+      - helper_component_must_not_bypass_mcp_import_candidate_audit
+      - helper_component_must_not_treat_dismissed_ci_attention_as_unlock
+
   user_facing_message_policy:
     description: >-
       ユーザーに向けてどのような表現・約束をするかの方針。
@@ -257,6 +298,23 @@ user_facing_helper_manual_ssot:
         audience: non_technical_business_user
         classification: planned
 
+      admin_authoring_flow:
+        id: admin_authoring_flow
+        title: 管理画面で業務アプリを作る流れ
+        audience: business_user_or_admin
+        classification: planned
+        related_ssot:
+          - docs/design/admin-console-workflow-ssot.yaml
+
+      mcp_topology_authoring_draft:
+        id: mcp_topology_authoring_draft
+        title: AI/MCPで業務アプリ構造の下書きを作る
+        audience: agent_or_integrator
+        classification: planned
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+          - docs/design/admin-console-workflow-ssot.yaml
+
       basic_surfaces:
         id: basic_surfaces
         title: フォーム・一覧・PDF・CSVの基本
@@ -284,6 +342,23 @@ user_facing_helper_manual_ssot:
         classification: planned
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
+
+      ui_builder_authoring:
+        id: ui_builder_authoring
+        title: UI Builderで画面を調整する
+        audience: admin_or_power_user
+        classification: planned
+        related_ssot:
+          - docs/design/admin-console-workflow-ssot.yaml
+
+      ci_attention_guidance:
+        id: ci_attention_guidance
+        title: 反映前の確認結果を読む
+        audience: admin_or_integrator
+        classification: planned
+        related_ssot:
+          - docs/design/ci-contract-ssot.yaml
+          - docs/framework-policy.yaml
 
       csv_pdf_zip_export:
         id: csv_pdf_zip_export
@@ -405,5 +480,6 @@ user_facing_helper_manual_ssot:
     - ux_facing_policy_ssot
     - data_defined_helper_reference_artifact
     - mcp_topology_authoring_draft_reference
+    - admin_helper_projection_viewer
     - helper_manual_category
     - safety_boundary_user_promise
