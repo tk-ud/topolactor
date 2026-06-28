@@ -73,6 +73,40 @@ public sealed class InstancePortRuntimeTests
         Assert.DoesNotContain("secret", evidence.EntityId, StringComparison.OrdinalIgnoreCase);
     }
 
+
+    [Fact]
+    public async Task ExecuteAsync_PrimitiveFailure_AppendsReferenceOnlyFailureEvidence()
+    {
+        var repo = new FakeInstanceRepo { BindingOverride = FakeInstanceRepo.Binding() with { SecretDeny = false } };
+        var response = await BuildRuntime(repo, out var log)
+            .ExecuteAsync(Request($"instance-port:db_instance_port:{PortId}:approved"), null);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "INSTANCE_RESULT_SECRET_DENIED");
+        var evidence = Assert.Single(log.Events, e => e.EventType == "instance_port_execution_fail_close" && e.EntityId!.Contains("failure_code=INSTANCE_RESULT_SECRET_DENIED", StringComparison.Ordinal));
+        Assert.Contains("instance_authority_key=registered_instance_key", evidence.EntityId);
+        Assert.Contains("port_kind=db_instance_port", evidence.EntityId);
+        Assert.Contains("operation_binding_key=approved", evidence.EntityId);
+        Assert.Contains("function_key=registered_instance.approved_operation", evidence.EntityId);
+        Assert.DoesNotContain("Host=", evidence.EntityId);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AuthorityMismatch_AppendsReferenceOnlyFailureEvidence()
+    {
+        var manifestRepo = new FakeManifestRepo(authorities: FakeManifestRepo.Authorities.Where(a => a.AuthorityKind != "instance_operation").ToArray());
+        var response = await BuildRuntime(new FakeInstanceRepo(), out var log, manifestRepo)
+            .ExecuteAsync(Request($"instance-port:db_instance_port:{PortId}:approved"), null);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "INSTANCE_OPERATION_NOT_APPROVED");
+        var evidence = Assert.Single(log.Events, e => e.EventType == "instance_port_execution_fail_close" && e.EntityId!.Contains("failure_code=INSTANCE_OPERATION_NOT_APPROVED", StringComparison.Ordinal));
+        Assert.Contains("instance_authority_key=registered_instance_key", evidence.EntityId);
+        Assert.Contains("port_kind=db_instance_port", evidence.EntityId);
+        Assert.Contains("operation_binding_key=approved", evidence.EntityId);
+        Assert.Contains("function_key=registered_instance.approved_operation", evidence.EntityId);
+    }
+
     [Theory]
     [InlineData("instance_schema", "INSTANCE_FUNCTION_SCHEMA_NOT_ALLOWLISTED")]
     [InlineData("instance_operation", "INSTANCE_OPERATION_NOT_APPROVED")]
@@ -127,10 +161,10 @@ public sealed class InstancePortRuntimeTests
         Assert.Equal("ABSTRACT_FUNCTION_POSTGRES_FUNCTION_INVALID", ex.Message);
     }
 
-    private static InstancePortDispatchRuntime BuildRuntime(FakeInstanceRepo repo, out FakeRuntimeEventLog log)
+    private static InstancePortDispatchRuntime BuildRuntime(FakeInstanceRepo repo, out FakeRuntimeEventLog log, IAbstractFunctionManifestRepository? manifestRepo = null)
     {
         log = new FakeRuntimeEventLog();
-        return new InstancePortDispatchRuntime(NullLogger<InstancePortDispatchRuntime>.Instance, repo, new VaultReferenceInstanceCredentialMaterializer(new FakeCredentialCrypto()), new AbstractFunctionExecutor(new FakeManifestRepo(), new IAbstractFunctionPrimitiveAdapter[] { new CallBoundInstanceFunctionPrimitiveAdapter() }), log);
+        return new InstancePortDispatchRuntime(NullLogger<InstancePortDispatchRuntime>.Instance, repo, new VaultReferenceInstanceCredentialMaterializer(new FakeCredentialCrypto()), new AbstractFunctionExecutor(manifestRepo ?? new FakeManifestRepo(), new IAbstractFunctionPrimitiveAdapter[] { new CallBoundInstanceFunctionPrimitiveAdapter() }), log);
     }
     private static EndpointRequestDto Request(string targetRef) => new EndpointRequestDto("x", null, null, null, null, JsonSerializer.SerializeToElement(new { instanceTargetRef = targetRef, dispatch_payload = new { x = "ok" } }), null);
 }
@@ -163,10 +197,11 @@ internal sealed class FakeInstanceRepo : IInstancePortPolicyRepository
     public bool PolicyMissing { get; init; }
     public bool BindingMissing { get; init; }
     public bool MaterializationFails { get; init; }
+    public InstanceOperationAuthorityBinding? BindingOverride { get; init; }
     public Task<InstancePortRecord?> ResolveInstancePortRecordAsync(string portKind, Guid instancePortId, CancellationToken ct = default) => Task.FromResult(RecordMissing ? null : new InstancePortRecord(instancePortId, portKind, "registered_instance_key", "external_postgres", "generic_instance_integration", "vault:ref", true));
     public Task<ExternalCredentialVaultRecord?> ResolveInstanceCredentialReferenceAsync(string referenceKey, CancellationToken ct = default) => Task.FromResult(CredentialMissing ? null : new ExternalCredentialVaultRecord(Guid.NewGuid(), "external_postgres", "generic_instance_integration", "runtime", null, [0], MaterializationFails ? "kms:fail" : "kms:ref", null, 300, 1, null, true));
     public Task<InstanceConnectionPolicy?> LoadConnectionPolicyAsync(string instanceAuthorityKey, string credentialReferenceKey, CancellationToken ct = default) => Task.FromResult(PolicyMissing ? null : Policy());
-    public Task<InstanceOperationAuthorityBinding?> LoadOperationAuthorityBindingAsync(string instanceAuthorityKey, string operationBindingKey, CancellationToken ct = default) => Task.FromResult(BindingMissing ? null : Binding());
+    public Task<InstanceOperationAuthorityBinding?> LoadOperationAuthorityBindingAsync(string instanceAuthorityKey, string operationBindingKey, CancellationToken ct = default) => Task.FromResult(BindingMissing ? null : BindingOverride ?? Binding());
     public static InstanceConnectionPolicy Policy() => new(Guid.NewGuid(), "registered_instance_key", "vault:ref", 1000, 1000, 1024, new HashSet<string>(["approved_schema"], StringComparer.Ordinal), new HashSet<string>(["approved_function"], StringComparer.Ordinal), "secret_deny_default", true);
     public static InstanceOperationAuthorityBinding Binding() => new(Guid.NewGuid(), "approved", "registered_instance_key", "registered_instance.approved_operation", "approved_schema", "approved_function", "registered_instance.bound_operation", new Dictionary<string, string> { ["result"] = "InstanceResult" }, true, true);
     public static AbstractFunctionExecutionContext Context(InstanceOperationAuthorityBinding? binding = null) => new("registered_instance.approved_operation", requiredRuntimeLane: "instance_port_runtime", instancePortContext: new InstancePortExecutionContext { PortRecord = new InstancePortRecord(Guid.NewGuid(), "db_instance_port", "registered_instance_key", "external_postgres", "generic_instance_integration", "vault:ref", true), CredentialVaultRecord = new ExternalCredentialVaultRecord(Guid.NewGuid(), "external_postgres", "generic_instance_integration", "runtime", null, [0], "kms:ref", null, 300, 1, null, true), ConnectionPolicy = Policy(), OperationBinding = binding ?? Binding(), RuntimeOnlyConnectionString = "fake" });
@@ -175,7 +210,12 @@ internal sealed class FakeInstanceRepo : IInstancePortPolicyRepository
 internal sealed class FakeManifestRepo : IAbstractFunctionManifestRepository
 {
     private readonly string _runtimeLane;
-    public FakeManifestRepo(string runtimeLane = "instance_port_runtime") => _runtimeLane = runtimeLane;
+    private readonly AbstractFunctionAuthorityBinding[] _authorities;
+    public FakeManifestRepo(string runtimeLane = "instance_port_runtime", AbstractFunctionAuthorityBinding[]? authorities = null)
+    {
+        _runtimeLane = runtimeLane;
+        _authorities = authorities ?? Authorities;
+    }
     public static readonly AbstractFunctionAuthorityBinding[] Authorities =
     [
         new("instance", "registered_instance_key", true),
@@ -184,5 +224,5 @@ internal sealed class FakeManifestRepo : IAbstractFunctionManifestRepository
         new("instance_operation", "approved", true),
         new("output", "InstanceResult", true)
     ];
-    public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) => Task.FromResult<AbstractFunctionManifest?>(new AbstractFunctionManifest(Guid.NewGuid(), functionKey, _runtimeLane, "registered_instance.approved_operation", [new AbstractFunctionStep(Guid.NewGuid(), 1, "call_bound_instance_function", new Dictionary<string, string>(), [], "InstanceResult", true)], [], true, Authorities, new Dictionary<string, string> { ["result"] = "InstanceResult" }));
+    public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) => Task.FromResult<AbstractFunctionManifest?>(new AbstractFunctionManifest(Guid.NewGuid(), functionKey, _runtimeLane, "registered_instance.approved_operation", [new AbstractFunctionStep(Guid.NewGuid(), 1, "call_bound_instance_function", new Dictionary<string, string>(), [], "InstanceResult", true)], [], true, _authorities, new Dictionary<string, string> { ["result"] = "InstanceResult" }));
 }

@@ -213,6 +213,10 @@ require_term 'instance_operation' backend/runtime/InstancePortRuntime.cs "instan
 require_term 'INSTANCE_OUTPUT_AUTHORITY_MISSING' backend/runtime/InstancePortRuntime.cs "output authority fail-close"
 require_term 'instance_port_execution_success' backend/runtime/InstancePortRuntime.cs "reference-only success runtime evidence"
 require_term 'instance_port_execution_fail_close' backend/runtime/InstancePortRuntime.cs "reference-only fail-close runtime evidence"
+require_term 'evidenceFunctionKey = binding.FunctionKey' backend/runtime/InstancePortRuntime.cs "fail-close evidence retains resolved function key"
+if rg -n 'AppendEvidenceAsync\("instance_port_execution_fail_close", contextPort: null' backend/runtime/InstancePortRuntime.cs; then
+  fail "primitive/executor fail-close evidence must not discard resolved instance reference context"
+fi
 require_term '["instance_port_runtime"]' backend/Program.cs "ManifestDispatcher instance runtime registration"
 require_term 'instance_port_runtime' db/topology_tables.sql "DDL runtime lane allowlist"
 require_term 'topology.instance_connection_policy' db/topology_tables.sql "connection policy DDL"
@@ -227,6 +231,8 @@ for test_name in \
   CallInstancePostgresFunction_AuthorityHelpers_FailClose \
   ExecuteAsync_MaterializationFailure_UsesRealVaultMaterializerAndFailsClose \
   ExecuteAsync_Success_AppendsReferenceOnlyRuntimeEvidence \
+  ExecuteAsync_PrimitiveFailure_AppendsReferenceOnlyFailureEvidence \
+  ExecuteAsync_AuthorityMismatch_AppendsReferenceOnlyFailureEvidence \
   CallBoundInstanceFunction_MissingAuthorityKinds_FailClose \
   CallPostgresFunction_TopologyOnlyBoundary_Regression; do
   require_term "$test_name" backend/tests/Topolactor.Runtime.Tests/InstancePortRuntimeTests.cs "instance fail-close test $test_name"

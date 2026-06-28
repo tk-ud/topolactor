@@ -79,31 +79,39 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
 
     public async Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
     {
+        InstancePortRecord? evidencePort = null;
+        string? evidenceOperationBindingKey = null;
+        string? evidenceFunctionKey = null;
+
         try
         {
             var rawRef = ReadStringProperty(request.Payload, "instanceTargetRef") ?? ReadStringProperty(request.Payload, "instance_target_ref") ?? ReadStringProperty(request.Payload, "target_ref");
             if (!TryParseInstanceTargetRef(rawRef, out var portKind, out var portId, out var operationBindingKey))
-                return await FailAsync("INSTANCE_PORT_TARGET_REF_INVALID", "instanceTargetRef must use instance-port:<db_instance_port|runtime_instance_port>:<uuid>:<operationBindingKey>.", null, null, ct);
+                return await FailAsync("INSTANCE_PORT_TARGET_REF_INVALID", "instanceTargetRef must use instance-port:<db_instance_port|runtime_instance_port>:<uuid>:<operationBindingKey>.", null, null, null, ct);
+            evidenceOperationBindingKey = operationBindingKey;
 
             var port = await _repository.ResolveInstancePortRecordAsync(portKind, portId, ct);
             if (port is null || !port.Active)
-                return await FailAsync("INSTANCE_PORT_RECORD_MISSING", "No active instance port record matched the dispatch target.", null, operationBindingKey, ct);
+                return await FailAsync("INSTANCE_PORT_RECORD_MISSING", "No active instance port record matched the dispatch target.", null, operationBindingKey, null, ct);
+            evidencePort = port;
             if (!string.Equals(port.PortKind, portKind, StringComparison.Ordinal) || port.InstancePortId != portId || string.IsNullOrWhiteSpace(port.ReferenceKey))
-                return await FailAsync("INSTANCE_PORT_RECORD_MISSING", "Resolved instance port record does not match target or credential reference.", port, operationBindingKey, ct);
+                return await FailAsync("INSTANCE_PORT_RECORD_MISSING", "Resolved instance port record does not match target or credential reference.", port, operationBindingKey, null, ct);
             if (ProviderSelectorAttempted(request.Payload))
-                return await FailAsync("INSTANCE_PROVIDER_SELECTOR_FORBIDDEN", "provider_kind and required_by_bundle are data labels and cannot select runtime handlers.", port, operationBindingKey, ct);
+                return await FailAsync("INSTANCE_PROVIDER_SELECTOR_FORBIDDEN", "provider_kind and required_by_bundle are data labels and cannot select runtime handlers.", port, operationBindingKey, null, ct);
 
             var credential = await _repository.ResolveInstanceCredentialReferenceAsync(port.ReferenceKey, ct);
             if (credential is null)
-                return await FailAsync("INSTANCE_CREDENTIAL_REFERENCE_MISSING", "Instance credential reference could not be resolved.", port, operationBindingKey, ct);
+                return await FailAsync("INSTANCE_CREDENTIAL_REFERENCE_MISSING", "Instance credential reference could not be resolved.", port, operationBindingKey, null, ct);
 
             var policy = await _repository.LoadConnectionPolicyAsync(port.InstanceAuthorityKey, port.ReferenceKey, ct);
             if (policy is null || !policy.Active)
-                return await FailAsync("INSTANCE_CONNECTION_POLICY_MISSING", "No active instance connection policy matched the port authority.", port, operationBindingKey, ct);
+                return await FailAsync("INSTANCE_CONNECTION_POLICY_MISSING", "No active instance connection policy matched the port authority.", port, operationBindingKey, null, ct);
 
             var binding = await _repository.LoadOperationAuthorityBindingAsync(port.InstanceAuthorityKey, operationBindingKey, ct);
             if (binding is null || !binding.Active)
-                return await FailAsync("INSTANCE_OPERATION_AUTHORITY_MISSING", "No active instance operation authority binding matched the target.", port, operationBindingKey, ct);
+                return await FailAsync("INSTANCE_OPERATION_AUTHORITY_MISSING", "No active instance operation authority binding matched the target.", port, operationBindingKey, null, ct);
+            evidenceOperationBindingKey = binding.OperationBindingKey;
+            evidenceFunctionKey = binding.FunctionKey;
 
             string runtimeOnlyConnectionString;
             try
@@ -112,7 +120,7 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
             }
             catch (InvalidOperationException ex) when (string.Equals(ex.Message, "INSTANCE_CREDENTIAL_MATERIALIZATION_FAILED", StringComparison.Ordinal) || string.Equals(ex.Message, "INSTANCE_CREDENTIAL_REFERENCE_MISSING", StringComparison.Ordinal))
             {
-                return await FailAsync(ex.Message, "Instance credential could not be materialized for runtime use.", port, operationBindingKey, ct);
+                return await FailAsync(ex.Message, "Instance credential could not be materialized for runtime use.", port, operationBindingKey, binding.FunctionKey, ct);
             }
 
             var instanceContext = new InstancePortExecutionContext { PortRecord = port, CredentialVaultRecord = credential, ConnectionPolicy = policy, OperationBinding = binding, RuntimeOnlyConnectionString = runtimeOnlyConnectionString, RequestPayload = ReadObjectProperty(request.Payload, "dispatch_payload") };
@@ -126,7 +134,7 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
             var code = ex is AbstractFunctionFailCloseException af ? af.Message : ex.Message;
             if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("INSTANCE_", StringComparison.Ordinal)) code = "INSTANCE_OPERATION_FAILED_CLOSED";
             _logger.LogWarning("Instance port dispatch failed closed with {Code}.", code);
-            await AppendEvidenceAsync("instance_port_execution_fail_close", contextPort: null, operationBindingKey: null, functionKey: null, failureCode: code, ct);
+            await AppendEvidenceAsync("instance_port_execution_fail_close", evidencePort, evidenceOperationBindingKey, evidenceFunctionKey, code, ct);
             return Fail(code, "Instance port dispatch failed closed.");
         }
     }
@@ -144,9 +152,9 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
     }
 
     private static bool ProviderSelectorAttempted(JsonElement? payload) => ReadStringProperty(payload, "provider_kind_selector") is not null || ReadStringProperty(payload, "required_by_bundle_selector") is not null;
-    private async Task<EndpointResponseDto> FailAsync(string code, string message, InstancePortRecord? contextPort, string? operationBindingKey, CancellationToken ct)
+    private async Task<EndpointResponseDto> FailAsync(string code, string message, InstancePortRecord? contextPort, string? operationBindingKey, string? functionKey, CancellationToken ct)
     {
-        await AppendEvidenceAsync("instance_port_execution_fail_close", contextPort, operationBindingKey, null, code, ct);
+        await AppendEvidenceAsync("instance_port_execution_fail_close", contextPort, operationBindingKey, functionKey, code, ct);
         return Fail(code, message);
     }
 
@@ -154,7 +162,14 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
     {
         if (_runtimeEventLog is null) return;
         var entityId = BuildReferenceOnlyEvidenceId(contextPort, operationBindingKey, functionKey, failureCode);
-        await _runtimeEventLog.AppendAsync(eventType, entityId, contextPort?.RequiredByBundle, ct);
+        try
+        {
+            await _runtimeEventLog.AppendAsync(eventType, entityId, contextPort?.RequiredByBundle, ct);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NpgsqlException)
+        {
+            _logger.LogWarning("Instance port reference-only evidence append failed closed with {FailureType}.", ex.GetType().Name);
+        }
     }
 
     private static string? BuildReferenceOnlyEvidenceId(InstancePortRecord? contextPort, string? operationBindingKey, string? functionKey, string? failureCode)
