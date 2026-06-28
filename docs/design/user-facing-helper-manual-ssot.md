@@ -10,6 +10,7 @@ canonical runtime SSOT の外向き projection として機能し、以下を非
 - 月次処理・分析自動化・外部出力の考え方
 - どこで人間承認が必要か
 - AI が自動実行しないこと
+- helper reference artifact が admin clone / draft lifecycle を JSON contract としてどう区別するか
 
 > 実装より先にマニュアル方針を置くことで、ユーザー体験・安全境界・プロダクト説明のズレを防ぐ。
 
@@ -33,6 +34,30 @@ user-facing helper / manual は **runtime authority を持たない**。
 - safe operation boundary の説明方針
 - helper / manual category 構造
 - UX-facing message policy
+- helper reference artifact contract
+- admin clone / draft lifecycle reference vocabulary
+- admin helper projection viewer boundary
+
+---
+
+## Helper Reference Artifact Contract
+
+`docs/helper/helper-manual.schema.json` と `docs/helper/helper-manual.seed.json` は未実装だが、YAML SSOT は実装前提の JSON reference artifact contract を所有する。
+
+必須 vocabulary:
+
+- `/admin/contents` Step 1 entry modes: `create_new_topology`, `clone_active_as_replacement_draft`, `clone_active_as_new_topology_draft`
+- `draft_origin`: `manual_new`, `manual_clone_replacement`, `manual_clone_new_topology`, `sql_attention_candidate`
+- `clone_mode`: `none`, `replacement`, `new_topology`
+
+境界:
+
+- clone semantics は status enum ではなく JSONB metadata / attribute / operation context。
+- source evidence / lineage evidence は replacement authority ではない。
+- replacement merge authority は backend `AdminRuntime` / `ManifestRepository` transaction だけが持つ。
+- SQL Attention candidate は explicit human/admin adoption まで candidate/evidence surface に留まる。
+- `layoutPatchDraft` / `layout_patch:apply` は UI Builder layout draft / layout persistence であり、production manifest replacement merge ではない。
+- admin helper projection は JSON viewer-only surface であり、submit / apply / promote / approval / merge target decision / active mutation authority を持たない。
 
 ---
 
@@ -94,6 +119,7 @@ user-facing helper / manual は **runtime authority を持たない**。
 | CSV / PDF / ZIP を出力する | 業務担当者・管理者 | CLI MCP Port SSOT |
 | Email送信はUIで承認する | 業務担当者 | Extended Bundle Registry |
 | Stripe決済はWebhookで確定する | 管理者・連携担当 | Extended Bundle Registry |
+| 業務アプリ構造の新規作成・複製・置き換えの違い | 管理者・連携担当 | Admin Console SSOT, Runtime Orchestration SSOT |
 | 管理者向け: 権限・搬出・監査設定 | 管理者 | CLI MCP Port SSOT, Admin Console SSOT |
 | 外部Bundle連携の考え方 | 管理者・連携担当 | Extended Bundle Registry |
 
@@ -111,6 +137,9 @@ user-facing helper / manual は **runtime authority を持たない**。
 4. **CLI/MCP はDBを直接操作しない** — Context API / Data Reader 経由のみ
 5. **Stripe の支払済み判定は Webhook 検証後** — 自動確定なし
 6. **外部サービスは Topolactor の runtime SSOT ではない** — intake/preview/apply 経由
+7. **複製元の情報だけでは既存設定を置き換えない** — backend 検証・diff/log・stale source / conflict check が必要
+8. **SQL Attention candidate は候補のまま扱う** — 明示採用前に draft row や production merge authority にしない
+9. **画面配置の下書き反映は業務コンテンツ正本の置き換えではない**
 
 ### 人間承認が必要な操作
 
@@ -145,6 +174,6 @@ user-facing helper / manual は **runtime authority を持たない**。
 | `docs/design/cli-model-context-protocols-port-ssot.yaml` | CLI/MCP read/export port runtime 設計正本 |
 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` | Bundle 分類正本（Email/Stripe/外部） |
 | `docs/design/runtime-orchestration-ssot.yaml` | canonical runtime route 正本 |
-| `docs/design/admin-console-workflow-ssot.yaml` | admin UI surface 正本 |
+| `docs/design/admin-console-workflow-ssot.yaml` | admin UI surface 正本。clone lifecycle / draft_origin / clone_mode / replacement merge boundary の正本 |
 | `docs/system-roadmap.yaml` | 実装状態・マイルストーン参照点 |
 | `.agent/tasks/todo.md` | 未実装作業キュー |

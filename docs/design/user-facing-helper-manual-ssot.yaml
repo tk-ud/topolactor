@@ -1,6 +1,6 @@
 user_facing_helper_manual_ssot:
   name: user_facing_helper_manual
-  version: 0.2.0
+  version: 0.3.0
   status: ssot_design_document
   canonical_path: docs/design/user-facing-helper-manual-ssot.yaml
 
@@ -94,6 +94,24 @@ user_facing_helper_manual_ssot:
       - prohibited_actions
       - related_ssot
       - examples
+      - authoring_lifecycle
+      - entry_mode
+      - draft_origin
+      - clone_mode
+      - source_active_manifest_id
+      - source_active_evidence
+      - lineage_evidence_only
+      - replacement_authority
+      - replacement_merge_intent
+      - replacement_merge_allowed
+      - replacement_merge_blockers
+      - backend_merge_authority
+      - frontend_authority_boundary
+      - required_validation_result
+      - required_diff_or_log_evidence
+      - merge_physical_effect
+      - layout_patch_draft_boundary
+      - sql_attention_candidate_boundary
     audience_values:
       - human
       - agent
@@ -119,11 +137,149 @@ user_facing_helper_manual_ssot:
       - export_and_file_stream
       - ui_builder_authoring
       - ci_attention_guidance
+      - admin_topology_clone_lifecycle
+      - replacement_merge_boundary
+    entry_mode_values:
+      - create_new_topology
+      - clone_active_as_replacement_draft
+      - clone_active_as_new_topology_draft
+    draft_origin_values:
+      - manual_new
+      - manual_clone_replacement
+      - manual_clone_new_topology
+      - sql_attention_candidate
+    clone_mode_values:
+      - none
+      - replacement
+      - new_topology
     invariant:
       - helper_artifact_is_data_defined_reference_not_authority
       - helper_artifact_must_not_contain_secret_endpoint_credential_or_raw_sql
       - helper_artifact_must_reference_canonical_ssot_for_runtime_semantics
       - helper_artifact_must_distinguish_ai_mcp_candidate_origin_from_human_admin_manual_draft
+      - clone_semantics_are_metadata_attribute_or_operation_context_not_status_enum
+      - source_lineage_evidence_is_not_replacement_authority
+      - replacement_merge_authority_belongs_only_to_backend_adminruntime_manifestrepository_transaction
+      - helper_artifact_must_not_convert_sql_attention_candidate_to_draft_or_merge_authority
+
+  admin_topology_clone_lifecycle_reference_contract:
+    description: >-
+      /admin/contents Step 1 の create / clone lifecycle を helper reference artifact 上で
+      Agent / MCP / admin helper が混同せず参照するための JSON contract。
+      ユーザーマニュアル本文ではなく、schema / seed / viewer 実装前の artifact vocabulary である。
+    canonical_source: docs/design/admin-console-workflow-ssot.yaml
+    state_model:
+      physical_state: draft_active_toggle
+      clone_semantics_location:
+        - JSONB_metadata
+        - attribute
+        - operation_context
+      prohibited:
+        - clone_status_enum
+        - active_and_draft_same_row
+        - frontend_decides_merge_target
+        - helper_viewer_decides_merge_target
+    entry_modes:
+      create_new_topology:
+        draft_origin: manual_new
+        clone_mode: none
+        source_active_manifest_id: prohibited
+        source_evidence_role: none
+        completion_path: conventional_register_promote
+      clone_active_as_replacement_draft:
+        draft_origin: manual_clone_replacement
+        clone_mode: replacement
+        source_active_manifest_id: required_uuid
+        source_evidence_role: required_evidence_not_authority
+        completion_path: backend_validate_then_merge_to_existing_active
+      clone_active_as_new_topology_draft:
+        draft_origin: manual_clone_new_topology
+        clone_mode: new_topology
+        source_active_manifest_id: lineage_only
+        source_evidence_role: lineage_evidence_only_not_replacement_authority
+        completion_path: conventional_register_promote_after_new_identity
+    required_reference_fields_for_replacement_clone:
+      - source_active_manifest_id
+      - source_active_topologySystemName
+      - source_active_routeKey
+      - source_active_dispatcher_axes
+      - source_active_updated_at_or_version
+      - source_active_topology_hash_or_equivalent_diff_base
+      - draft_origin
+      - clone_mode
+      - replacement_merge_intent
+      - required_validation_result
+      - required_diff_or_log_evidence
+      - stale_source_blocker
+      - active_identity_conflict_blocker
+      - merge_target_active_uuid_mismatch_blocker
+      - backend_merge_authority
+    reference_invariants:
+      - create_new_topology_has_no_source_active_manifest_id
+      - clone_as_new_topology_is_lineage_only_and_requires_new_identity
+      - replacement_clone_requires_backend_validation_before_existing_active_update
+      - source_evidence_and_lineage_evidence_never_grant_replacement_authority_by_themselves
+
+  replacement_merge_authority_boundary:
+    owner: backend AdminRuntime / ManifestRepository transaction
+    helper_reference_role: describe_required_evidence_and_blockers_only
+    authority_grant_rule: >-
+      Replacement authority is not obtained from source evidence, lineage evidence, helper artifact fields,
+      frontend state, MCP candidate payload, or admin helper projection. It is accepted only inside the
+      backend AdminRuntime / ManifestRepository transaction after source evidence, validation result,
+      diff/log evidence, stale source check, and active identity conflict check pass.
+    required_evidence:
+      - source_active_manifest_id
+      - source_active_topologySystemName
+      - source_active_routeKey
+      - source_active_dispatcher_axes
+      - source_active_updated_at_or_version
+      - source_active_topology_hash_or_equivalent_diff_base
+      - validation_result
+      - diff_or_log_evidence
+      - stale_source_check
+      - active_identity_conflict_check
+    physical_effect:
+      - update_existing_active_row_inside_backend_transaction
+      - delete_working_draft_row_after_successful_merge
+    prohibited:
+      - source_evidence_as_replacement_authority
+      - lineage_evidence_as_replacement_authority
+      - frontend_merge_judgment
+      - helper_viewer_merge_judgment
+      - promoting_draft_row_to_active_for_replacement_merge
+      - preserving_working_draft_row_as_audit_evidence
+
+  sql_attention_candidate_reference_boundary:
+    description: >-
+      SQL Attention candidate is a candidate/evidence surface until explicit human/admin adoption.
+      Helper reference artifact may display or describe the candidate evidence, but must not treat it
+      as a draft row, production merge authority, or replacement authority.
+    draft_origin: sql_attention_candidate
+    storage_policy: candidate_or_evidence_surface_until_explicit_adoption
+    candidate_to_draft_policy: explicit_human_admin_adoption_only
+    prohibited:
+      - mass_persisting_sql_attention_candidates_as_draft_rows
+      - candidate_source_as_replacement_authority
+      - source_evidence_as_replacement_authority
+      - sql_attention_candidate_auto_merge_to_active
+      - sql_attention_candidate_logged_as_manual_clone_replacement
+
+  layout_patch_draft_vs_manifest_replacement_boundary:
+    description: >-
+      layoutPatchDraft / layout_patch:apply は UI Builder の layout draft / layout persistence 境界であり、
+      production manifest replacement merge ではない。helper reference artifact は両者を別の lifecycle として表示する。
+    layout_patch_scope:
+      - ui_builder_layout_draft
+      - layout_persistence
+    not_scope:
+      - production_manifest_replacement_merge
+      - replacement_merge_authority
+      - active_topology_mutation_authority
+    prohibited:
+      - layoutPatchDraft_as_replacement_merge_intent
+      - layout_patch_apply_as_manifest_replacement_merge
+      - helper_viewer_apply_layout_patch
 
   mcp_topology_authoring_draft_reference:
     description: >-
@@ -152,6 +308,28 @@ user_facing_helper_manual_ssot:
           - physicalBindingDraft
           - layoutPatchDraft
           - ciAttentionTargetMetadata
+          - authoring_lifecycle
+          - entry_mode
+          - draft_origin
+          - clone_mode
+          - source_active_manifest_id
+          - source_active_evidence
+          - lineage_evidence_only
+          - replacement_merge_intent
+          - replacement_merge_blockers
+          - backend_merge_authority
+          - layout_patch_draft_boundary
+          - sql_attention_candidate_boundary
+      authoring_lifecycle_contract:
+        required_disambiguation:
+          - create_new_topology_must_use_draft_origin_manual_new_and_clone_mode_none
+          - replacement_clone_must_use_draft_origin_manual_clone_replacement_and_clone_mode_replacement
+          - clone_as_new_topology_must_use_draft_origin_manual_clone_new_topology_and_clone_mode_new_topology
+          - sql_attention_candidate_must_remain_candidate_until_explicit_human_admin_adoption
+        authority_boundary:
+          - mcp_payload_may_carry_evidence_only
+          - mcp_payload_must_not_decide_replacement_merge_target
+          - mcp_payload_must_not_apply_or_promote_active_topology
       assigned_business_object_candidate:
         purpose: classify draft target as topology authoring candidate
         example_values:
@@ -197,6 +375,10 @@ user_facing_helper_manual_ssot:
       - approval_execution_by_ai_mcp_cli
       - ai_mcp_draft_origin_logged_as_human_manual_admin_draft
       - storing_secret_endpoint_credential_or_raw_sql_in_payload
+      - treating_clone_as_status_enum
+      - treating_lineage_evidence_as_replacement_authority
+      - treating_layoutPatchDraft_as_manifest_replacement_merge
+      - treating_sql_attention_candidate_as_draft_row_or_merge_authority
 
   admin_helper_projection:
     description: >-
@@ -228,6 +410,12 @@ user_facing_helper_manual_ssot:
       - render_review_state
       - render_preview_diff_summary
       - render_source_evidence_summary
+      - render_clone_lifecycle_badge
+      - render_replacement_vs_lineage_only_badge
+      - render_backend_merge_authority_notice
+      - render_stale_source_and_active_conflict_blockers
+      - render_sql_attention_candidate_boundary_notice
+      - render_layout_patch_not_replacement_merge_notice
     prohibited_behaviors:
       - admin_step_submit
       - layout_patch_apply
@@ -236,11 +424,16 @@ user_facing_helper_manual_ssot:
       - active_topology_reflection
       - mcp_operation_invocation
       - candidate_origin_loss
+      - merge_target_decision
+      - active_mutation_authority
+      - replacement_merge_approval_or_apply
     projection_only_invariant:
       - helper_component_must_not_own_authoring_convergence
       - helper_component_must_not_bypass_admin_runtime
       - helper_component_must_not_bypass_mcp_import_candidate_audit
       - helper_component_must_not_treat_dismissed_ci_attention_as_unlock
+      - helper_component_must_not_convert_source_evidence_to_replacement_authority
+      - helper_component_must_not_convert_sql_attention_candidate_to_draft_row
 
   provenance_boundary:
     description: >-
@@ -251,6 +444,10 @@ user_facing_helper_manual_ssot:
     origin_kinds:
       human_admin_manual:
         description: 人間が admin UI 上で明示的に作成・編集した draft。
+        admin_draft_origin_mapping:
+          - manual_new
+          - manual_clone_replacement
+          - manual_clone_new_topology
         required_evidence:
           - actor_user_ref
           - admin_surface
@@ -288,6 +485,8 @@ user_facing_helper_manual_ssot:
       - admin_helper_projection_must_show_unresolved_fields_when_present
       - admin_helper_projection_must_show_preview_diff_summary_when_present
       - admin_helper_projection_must_show_source_evidence_summary_when_available
+      - admin_helper_projection_must_show_draft_origin_and_clone_mode_when_available
+      - admin_helper_projection_must_show_lineage_only_vs_replacement_boundary
     transition_policy:
       candidate_to_admin_draft:
         requires:
@@ -295,16 +494,27 @@ user_facing_helper_manual_ssot:
           - preview_diff_visible
           - unresolved_fields_resolved_or_explicitly_accepted
           - origin_evidence_preserved
+        draft_origin_after_explicit_adoption_only: sql_attention_candidate
+        must_not_be_logged_as:
+          - manual_clone_replacement
+          - manual_clone_new_topology
       candidate_to_active_topology:
         policy: >-
           helper/manual は active topology reflection authority を持たない。
           active topology reflection は canonical runtime/admin authority のみが扱う。
+      replacement_clone_merge:
+        policy: >-
+          source evidence / lineage evidence / origin evidence are not authority. Replacement merge requires
+          backend AdminRuntime / ManifestRepository transaction checks described in admin-console-workflow SSOT.
     prohibited:
       - losing_candidate_origin
       - showing_ai_mcp_candidate_as_human_manual_admin_draft
       - reflecting_candidate_without_explicit_human_review
       - hiding_unresolved_fields_before_review
       - treating_helper_artifact_as_runtime_authority
+      - treating_source_evidence_as_replacement_authority
+      - treating_lineage_evidence_as_replacement_authority
+      - treating_sql_attention_candidate_as_replacement_authority
 
   user_facing_message_policy:
     description: >-
@@ -338,6 +548,16 @@ user_facing_helper_manual_ssot:
         - bypass_permission_scope
         - apply_or_promote_topology_without_runtime_admin_authority
         - convert_ai_candidate_to_human_manual_draft_without_origin_evidence
+        - decide_replacement_merge_from_source_or_lineage_evidence
+        - turn_sql_attention_candidate_into_draft_or_active_without_human_adoption
+        - treat_layout_patch_apply_as_business_content_replacement
+      admin_clone_lifecycle_messages:
+        - new_creation_clone_for_replacement_and_clone_for_separate_new_app_are_distinct_start_modes
+        - source_active_information_is_reference_evidence_not_replacement_permission
+        - replacement_reflection_is_checked_by_backend_after_validation_diff_and_stale_source_checks
+        - clone_as_new_keeps_lineage_only_and_must_use_a_new_identity_before_registration
+        - sql_attention_candidates_are_suggestions_until_admin_adopts_them
+        - layout_changes_are_screen_layout_drafts_not_production_content_replacement_merges
     language_policy:
       principle: use_plain_business_language_not_internal_system_terms
       avoid:
@@ -365,6 +585,17 @@ user_facing_helper_manual_ssot:
         CI Attention: 反映前の確認結果・修正案
         blocking_fragment: 反映前に直す必要がある問題
         apply_or_promote: 反映
+        entry_mode: 作り始め方
+        draft_origin: 下書きの由来
+        clone_mode: 複製の目的
+        source_active_manifest_id: 複製元の正本ID
+        source_active_evidence: 複製元の確認情報
+        replacement_merge: 既存の業務コンテンツ設定への反映
+        stale_source_blocker: 複製元が更新されているため反映前に確認が必要な状態
+        active_identity_conflict: 反映先の業務コンテンツ設定が一致しない状態
+        clone_active_as_replacement_draft: 既存設定を置き換えるための下書き作成
+        clone_active_as_new_topology_draft: 別の業務アプリとして使うための複製下書き
+        sql_attention_candidate: 確認結果から出た反映候補
 
   helper_manual_category_candidates:
     description: >-
@@ -376,6 +607,20 @@ user_facing_helper_manual_ssot:
         title: はじめての業務アプリ作成
         audience: non_technical_business_user
         classification: planned
+
+      admin_topology_clone_lifecycle:
+        id: admin_topology_clone_lifecycle
+        title: 業務アプリ構造の新規作成・複製・置き換えの違い
+        audience: admin_or_integrator
+        classification: planned
+        related_blocks:
+          - admin_topology_clone_lifecycle_reference_contract
+          - replacement_merge_authority_boundary
+          - sql_attention_candidate_reference_boundary
+          - layout_patch_draft_vs_manifest_replacement_boundary
+        related_ssot:
+          - docs/design/admin-console-workflow-ssot.yaml
+          - docs/design/runtime-orchestration-ssot.yaml
 
       admin_authoring_flow:
         id: admin_authoring_flow
@@ -502,6 +747,16 @@ user_facing_helper_manual_ssot:
       - external_service_is_not_topolactor_runtime_ssot
       - origin_evidence_is_preserved
       - helper_projection_is_view_only
+      - source_evidence_is_not_replacement_authority
+      - lineage_evidence_is_not_replacement_authority
+      - replacement_merge_requires_backend_authority_and_checks
+      - sql_attention_candidate_remains_candidate_until_explicit_adoption
+      - layout_patch_apply_is_not_production_manifest_replacement_merge
+    authority_denials:
+      - admin_helper_projection_has_no_submit_apply_promote_approval_merge_target_decision_or_active_mutation_authority
+      - mcp_payload_has_no_replacement_merge_authority
+      - sql_attention_candidate_has_no_draft_row_or_production_merge_authority_without_explicit_adoption
+      - layoutPatchDraft_has_no_manifest_replacement_merge_authority
     approval_required_operations:
       - email_send
       - payment_approval
@@ -537,7 +792,10 @@ user_facing_helper_manual_ssot:
       role: canonical runtime route の正本
     admin_console_workflow_ssot:
       path: docs/design/admin-console-workflow-ssot.yaml
-      role: admin UI surface の正本
+      role: >-
+        admin UI surface の正本。/admin/contents Step 1 entry modes、draft_origin、clone_mode、
+        replacement clone merge lifecycle、SQL Attention candidate boundary、layout patch と
+        production manifest replacement merge の分離はこのSSOTへ追従する。
     system_roadmap:
       path: docs/system-roadmap.yaml
       role: 実装状態・マイルストーン参照点
@@ -564,3 +822,7 @@ user_facing_helper_manual_ssot:
     - admin_helper_projection_viewer
     - helper_manual_category
     - safety_boundary_user_promise
+    - admin_topology_clone_lifecycle_reference_contract
+    - replacement_merge_authority_boundary
+    - sql_attention_candidate_reference_boundary
+    - layout_patch_draft_vs_manifest_replacement_boundary
