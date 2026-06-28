@@ -9,7 +9,7 @@
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
 | `instance-port-substrate` | credential-backed instance connection / instance function call substrate | partial | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
-| `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 3 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
+| `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
@@ -95,13 +95,59 @@ NG軸:
 ## Bundle `helper-manual`
 
 **Status:** not_started
-**SSOT:** `docs/design/user-facing-helper-manual-ssot.yaml`
+**Roadmap/status SSOT:** `product.helper_manual_policy`
+**Primary SSOT:** `docs/design/user-facing-helper-manual-ssot.yaml`
+**Merge draft:** `docs/design/user-facing-helper-manual-authoring-reference-draft.yaml`
 
-SSOT 上、helper/manual category candidates は実装ではなく方針整理。site page / UI component / help screen component 実装は explicitly out of scope。
+目的:
+helper/manual をユーザー向け文章方針だけでなく、人間 / Agent / MCP / External AI / Local LLM / admin UI が共通参照する helper reference artifact として実装可能にする。現行MCPの import-candidate / draft_operation / commit_candidate lane に topology authoring draft を載せる参照点を作り、admin では同じ内容を viewer として表示する。
 
-- [ ] helper/manual category candidates を user promise / safety boundary / onboarding policy として整理する（ページ・コンポーネント実装はしない）
-- [ ] Desktop AI / CLI / MCP Reader 向けに、plain business language と approval boundary のライティング方針を整理する
-- [ ] 現行 external_port_substrate 実装で user-facing に案内可能な範囲を監査し、`external_bundle_guide` へ JSON 受け渡し型の外部 surface 例として整理する。Notion / Google Sheets / Slack / GitHub Issues / generic webhook / external REST API は入力・通知・承認・作業依頼 surface の例として案内してよいが、専用 connector 実装済み・iframe/frame 埋め込み・外部 service の runtime SSOT 化・外部 tool direct DB write・provider-specific runtime/client/handler は案内しない。対応資料: `docs/design/user-facing-helper-manual-ssot.yaml`, `docs/design/external-port-substrate-ssot.yaml`, `docs/design/extended-runtime-bundle-registry-ssot.yaml`。
+残問題:
+- `helper_reference_artifact` の schema / seed がまだ無い。
+- MCPで topology authoring draft を構築する際の `structured_output_payload` / `assigned_business_object_candidate` / `assignment_target_scope` / `preview_diff` / `unresolved_fields` の具体例が未実装。
+- admin 共通ヘッダから開く helper viewer が未実装。
+- helper viewer が admin submit / apply / promote / approval を実行しない projection-only surface であることを実装上確認する guard が無い。
+- AI/MCP由来 candidate evidence と人間の admin 手作業 draft の origin を混同しない表示・保存・監査境界が未検証。
+
+改善方針:
+implementation_change で、SSOTに従って helper schema / seed artifact を追加し、admin common header から Drawer helper viewer を開けるようにする。viewer は検索・カテゴリ選択・tree viewer・detail modal mount までに限定し、runtime/admin/MCP authority を持たせない。MCP新規tool surfaceは作らず、既存 import-candidate lane の payload reference として実装する。
+
+対応資料:
+- `docs/design/user-facing-helper-manual-ssot.yaml`
+- `docs/design/user-facing-helper-manual-authoring-reference-draft.yaml`
+- `docs/design/cli-model-context-protocols-port-ssot.yaml`
+- `docs/design/cli-mcp-port-implementation-ssot.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/ci-contract-ssot.yaml`
+- `docs/design/runtime-bundle-audit-approval-ssot.yaml`
+- `docs/framework-policy.yaml`
+
+対象ファイル名候補:
+- `docs/helper/helper-manual.schema.json` (new helper artifact schema)
+- `docs/helper/helper-manual.seed.json` (new helper reference seed)
+- `frontend/islands/*Admin*.tsx` or common admin shell/header files (helper launch button)
+- `frontend/islands/*Helper*.tsx` or future `AdminHelper*` component files
+- `frontend/lib/*helper*` (helper artifact load/filter/tree utility)
+- `backend/runtime/AuthorizedCliReaderPortRuntime.cs` (reference only; MCP operation expansionは原則しない)
+- `backend/tests/Topolactor.Runtime.Tests/AuthorizedCliReaderPortRuntimeTests.cs` (reference only; candidate origin regression確認)
+
+対象関数名候補:
+- future `loadHelperManualSeed`
+- future `filterHelperManualItems`
+- future `buildHelperManualTree`
+- future `renderHelperManualDetail`
+- future `openAdminHelperDrawer`
+- future `mountDetailHelperModal`
+
+残受入条件:
+- [ ] helper schema / seed artifact が追加され、SSOTの required fields を満たしている。
+- [ ] helper seed に admin authoring flow / MCP topology authoring draft / UI Builder / CI Attention / approval boundary のカテゴリがある。
+- [ ] internal vocabulary と user-facing vocabulary の対応が helper artifact に定義されている。
+- [ ] MCP topology authoring draft の payload example が、既存 import-candidate lane の field に対応している。
+- [ ] admin common header から helper Drawer を開け、検索・カテゴリ選択・tree viewer・detail modal が使える。
+- [ ] helper viewer は admin submit / apply / promote / approval / MCP operation を実行しない。
+- [ ] AI/MCP由来 candidate evidence と human manual admin draft の origin を混同しない表示・監査境界が確認できる。
+- [ ] 新規 MCP tool surface / admin submit direct execution / active topology mutation は追加していない。
 
 ---
 
