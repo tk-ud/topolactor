@@ -1,0 +1,180 @@
+admin_topology_clone_draft_lifecycle_temp:
+  name: admin_topology_clone_draft_lifecycle_temporary_material
+  status: temporary_work_material_not_ssot
+  target_repo: github.com/tk-ud/topolactor
+
+  role:
+    summary: >
+      Temporary design material for auditing admin topology clone/draft lifecycle before integration
+      into the canonical SSOT. This file is not a product SSOT and must not remain as final
+      authority. The canonical target is docs/design/admin-console-workflow-ssot.yaml.
+    canonical_target: docs/design/admin-console-workflow-ssot.yaml
+    final_diff_policy:
+      - integrate_usable_atoms_into_existing_admin_console_workflow_ssot
+      - do_not_add_parallel_admin_lifecycle_ssot
+      - remove_this_temp_file_before_final_review
+      - roadmap_status_not_promoted
+      - no_frontend_backend_db_implementation_in_design_change
+
+  user_intent_axis:
+    purpose:
+      - id: admin_contents_clone_entry_modes
+        statement: >
+          From /admin/contents, allow authors to start Step 1 by creating a new topology,
+          cloning an active canonical topology as a replacement draft, or cloning an active
+          canonical topology as a separate new topology draft.
+      - id: replacement_clone_merge
+        statement: >
+          When the author chooses clone draft for canonical replacement, the draft merges back
+          into the existing active topology. New topology and clone-as-new-topology continue to
+          use the conventional registration/promote path.
+      - id: admin_manifests_active_to_draft
+        statement: >
+          From /admin/manifests, allow changing an active canonical manifest/topology state back
+          to draft or reopening it as a draft lifecycle operation, with explicit runtime dispatch
+          impact and audit evidence.
+    concerns:
+      - id: diff_log_transaction
+        statement: >
+          Existing diff/log evidence and pipeline transaction boundaries should be reused where
+          possible. The design should not invent a parallel transaction plane if the pipeline
+          already provides sufficient audit and atomicity.
+      - id: sql_attention_draft_candidate_interference
+        statement: >
+          SQL Attention draft candidate generation may interfere with human-authored clone drafts.
+          Candidate drafts must be isolated from replacement clone authority and must not silently
+          become canonical replacement targets.
+
+  required_design_axes:
+    admin_contents_step1_entry_mode:
+      owner_surface: /admin/contents
+      canonical_location: docs/design/admin-console-workflow-ssot.yaml canonical_sequential_authoring_pipeline
+      modes:
+        create_new_topology:
+          meaning: conventional new manifest/topology draft creation
+          source_active_manifest_id: prohibited
+          topology_identity: new topologySystemName / routeKey
+          completion_path: conventional validate/promote/register path
+        clone_active_as_replacement_draft:
+          meaning: edit draft cloned from an existing active canonical topology for replacing that active
+          source_active_manifest_id: required
+          source_evidence: required
+          topology_identity: same canonical identity as source active unless explicit backend rule says otherwise
+          completion_path: validate then merge into existing active via backend authority
+        clone_active_as_new_topology_draft:
+          meaning: copy an active topology as a template for a separate topology
+          source_active_manifest_id: lineage_only
+          source_evidence: lineage/audit evidence, not replacement authority
+          topology_identity: new topologySystemName / routeKey required
+          completion_path: conventional validate/promote/register path
+      prohibited:
+        - treating_all_clones_as_replacement_drafts
+        - clone_as_new_topology_reusing_source_routeKey_or_topologySystemName_without_explicit_rename
+        - frontend_decides_merge_target
+        - frontend_writes_active_topology
+
+    replacement_clone_merge_lifecycle:
+      owner_boundary: backend AdminRuntime / ManifestRepository transaction
+      frontend_role:
+        - choose clone replacement mode
+        - display source active read-only evidence
+        - submit draft authoring intent through existing /admin/contents and /admin/ui-builder surfaces
+        - display validation / diff / merge blockers
+        - submit merge request intent
+      backend_role:
+        - create clone replacement draft with source evidence
+        - validate replacement draft through existing pipeline/backend validation
+        - check stale source and active identity conflict
+        - merge replacement draft into existing active transactionally
+        - preserve prior active state as audit evidence when required
+      evidence_required:
+        - source_active_manifest_id
+        - source_active_topologySystemName
+        - source_active_routeKey
+        - source_active_dispatcher_axes
+        - source_active_updated_at_or_version
+        - source_active_topology_hash_or_equivalent_diff_base
+        - clone_mode
+        - draft_origin
+      fail_close:
+        - stale_source_active
+        - active_identity_conflict
+        - missing_source_evidence
+        - replacement_clone_without_validation
+        - frontend_merge_judgment_detected
+      prohibited:
+        - layout_patch_apply_as_manifest_replacement_merge
+        - direct_active_mutation_from_admin_ui
+        - silent_reuse_of_stale_active_source
+        - replacement_merge_without_diff_or_log_evidence
+
+    conventional_paths_preserved:
+      create_new_topology:
+        rule: no replacement merge; use existing registration/promote path
+      clone_active_as_new_topology_draft:
+        rule: lineage from source active is evidence only; use existing registration/promote path after new identity assignment
+      prohibited:
+        - forcing_new_topology_clone_into_existing_active_merge
+        - source_active_manifest_id_granting_replacement_authority_without_clone_mode_replacement
+
+    admin_manifests_active_to_draft:
+      owner_surface: /admin/manifests
+      design_gap: >
+        Active-to-draft or reopen-as-draft must define runtime dispatch impact before implementation.
+        Directly changing active status to draft may leave no dispatch-resolvable canonical topology.
+      options_to_resolve_in_ssot:
+        - active_to_draft_disables_runtime_dispatch_and_requires_visible_warning
+        - active_to_draft_allowed_only_when_replacement_active_exists
+        - active_to_draft_creates_new_draft_copy_while_active_remains_dispatchable
+        - active_to_draft_enters_maintenance_non_dispatchable_state
+      required_policy:
+        - explicit runtime dispatch impact
+        - diff/log evidence
+        - transaction boundary reuse where existing pipeline supports it
+        - no silent fallback to stale active runtime state
+      prohibited:
+        - hidden_active_status_mutation_without_runtime_policy
+        - frontend_direct_status_change
+        - active_to_draft_without_audit_log
+
+    sql_attention_candidate_isolation:
+      draft_origin_values:
+        - manual_new
+        - manual_clone_replacement
+        - manual_clone_new_topology
+        - sql_attention_candidate
+      rules:
+        - sql_attention_candidate may propose draft candidates but must not acquire replacement merge authority automatically
+        - replacement merge requires explicit human clone replacement mode and source evidence
+        - SQL Attention candidate lists must be distinguishable from human clone drafts in admin projection
+        - candidate_source and draft_origin must be persisted or derivable as audit evidence before merge gates consume them
+      prohibited:
+        - sql_attention_candidate_auto_merge_to_active
+        - treating_source_active_lineage_as_replacement_authority
+        - mixing_candidate_drafts_and_human_clone_replacement_drafts_without_visible_origin
+
+  integration_targets:
+    primary_ssot:
+      - docs/design/admin-console-workflow-ssot.yaml
+    supporting_ssot_to_check:
+      - docs/registrar-admin-ui-specification.md
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/ci-contract-ssot.yaml
+      - docs/system-roadmap.yaml
+    likely_sections:
+      - canonical_sequential_authoring_pipeline
+      - page_responsibility.admin_contents
+      - page_responsibility.admin_manifests
+      - page_responsibility.admin_ui_builder
+      - shared_authoring_boundary
+      - contents_promote_guard
+      - admin_authoring_completion_gate
+
+  audit_verdict:
+    current_status: design_material_only
+    not_ready_for_prompt_issue_until:
+      - admin_contents_step1_entry_modes_are_confirmed_in_existing_ssot_context
+      - clone_replacement_vs_clone_new_topology_are_separated
+      - admin_manifests_active_to_draft_runtime_policy_is_selected
+      - sql_attention_candidate_interference_boundary_is_checked_against_existing_ssot
