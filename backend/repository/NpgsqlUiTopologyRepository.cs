@@ -1433,39 +1433,48 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             """
-            SELECT binding->>'instanceTargetRef' AS target_ref,
-                   COALESCE(binding->>'operation_binding_key', '') AS operation_binding_key,
-                   COALESCE(binding->>'operation_key', '') AS operation_key,
-                   COALESCE(binding->>'approval_status', '') AS approval_status
+            SELECT candidate->>'instanceTargetRef' AS target_ref,
+                   COALESCE(candidate->>'candidateScope', '') AS candidate_scope
             FROM hubs.topology_manifests tm
             CROSS JOIN LATERAL jsonb_path_query(
                 tm.topology_jsonb,
-                '$[*] ? (@.type == "screen_data_shape").jsonTemplateShape.instance_operation_authority_binding[*]'
-            ) AS binding
+                '$[*] ? (@.type == "screen_data_shape").designInspectorEventCandidates[*]'
+            ) AS candidate
             WHERE tm.status = 'active'
               AND tm.manifest_key = 'auth.external.credential_management.projection'
-              AND binding->>'approval_status' = 'approved'
-              AND binding->>'event_action_type' = 'dispatchInstanceOperation'
-              AND binding ? 'instanceTargetRef'
-            ORDER BY binding->>'instanceTargetRef' ASC
+              AND candidate->>'actionType' = 'dispatchInstanceOperation'
+              AND candidate->>'candidateScope' = 'approved_instance_operation_only'
+              AND candidate ? 'instanceTargetRef'
+            ORDER BY candidate->>'instanceTargetRef' ASC
             """;
 
         var candidates = new List<InstanceOperationAuthoringCandidateDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
-            var targetRef = reader.GetString(0);
-            var match = InstanceTargetRefPartsRegex.Match(targetRef);
-            if (!match.Success) continue;
-            candidates.Add(new InstanceOperationAuthoringCandidateDto(
-                match.Groups["portKind"].Value,
-                match.Groups["instancePortId"].Value,
-                string.IsNullOrWhiteSpace(reader.GetString(1)) ? match.Groups["operationBindingKey"].Value : reader.GetString(1),
-                reader.GetString(2),
-                reader.GetString(3),
-                targetRef));
+            candidates.Add(ProjectInstanceOperationAuthoringCandidate(
+                reader.GetString(0),
+                reader.GetString(1)));
         }
         return candidates;
+    }
+
+    internal static InstanceOperationAuthoringCandidateDto ProjectInstanceOperationAuthoringCandidate(
+        string targetRef,
+        string candidateScope)
+    {
+        if (!string.Equals(candidateScope, "approved_instance_operation_only", StringComparison.Ordinal))
+            throw new InvalidOperationException($"INSTANCE_OPERATION_CANDIDATE_SCOPE_INVALID:{candidateScope}");
+        var match = InstanceTargetRefPartsRegex.Match(targetRef);
+        if (!match.Success)
+            throw new InvalidOperationException($"INSTANCE_OPERATION_CANDIDATE_TARGET_REF_MALFORMED:{targetRef}");
+        return new InstanceOperationAuthoringCandidateDto(
+            match.Groups["portKind"].Value,
+            match.Groups["instancePortId"].Value,
+            match.Groups["operationBindingKey"].Value,
+            match.Groups["operationBindingKey"].Value,
+            "approved",
+            targetRef);
     }
 
 

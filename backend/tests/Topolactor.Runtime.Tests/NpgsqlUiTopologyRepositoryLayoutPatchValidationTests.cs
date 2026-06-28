@@ -465,6 +465,29 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.Equal("RUNTIME_INTERACTION_INSTANCE_CANDIDATE_SOURCE_UNAVAILABLE", result.Message);
     }
 
+
+    [Fact]
+    public void ProjectInstanceOperationAuthoringCandidate_MalformedTargetRef_FailsClose()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            NpgsqlUiTopologyRepository.ProjectInstanceOperationAuthoringCandidate(
+                "instance-port:malformed",
+                "approved_instance_operation_only"));
+
+        Assert.Equal("INSTANCE_OPERATION_CANDIDATE_TARGET_REF_MALFORMED:instance-port:malformed", ex.Message);
+    }
+
+    [Fact]
+    public void ProjectInstanceOperationAuthoringCandidate_NonApprovedScope_FailsClose()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            NpgsqlUiTopologyRepository.ProjectInstanceOperationAuthoringCandidate(
+                "instance-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder",
+                "draft"));
+
+        Assert.Equal("INSTANCE_OPERATION_CANDIDATE_SCOPE_INVALID:draft", ex.Message);
+    }
+
     private static readonly InstanceOperationAuthoringCandidateDto ApprovedInstanceCandidate = new(
         "db_instance_port",
         "public-safe-placeholder",

@@ -129,8 +129,14 @@ require_term 'list_instance_operation_authoring_candidates' frontend/islands/UiB
 require_term 'instanceOperationCandidates.map' frontend/islands/UiBuilderAdmin.tsx "Design Inspector select-only instance candidate options"
 require_term 'RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED' backend/repository/NpgsqlUiTopologyRepository.cs "backend unapproved instance targetRef rejection"
 require_term 'jsonb_path_query' backend/repository/NpgsqlUiTopologyRepository.cs "DB manifest-record approved instance operation source"
+require_term 'designInspectorEventCandidates' backend/repository/NpgsqlUiTopologyRepository.cs "Design Inspector approved event candidate source"
+if rg -n 'jsonTemplateShape\.instance_operation_authority_binding|jsonTemplateShape"' backend/repository/NpgsqlUiTopologyRepository.cs; then
+  fail "Design Inspector approved candidates must not come from public-safe jsonTemplateShape"
+fi
 require_term 'RUNTIME_INTERACTION_INSTANCE_CANDIDATE_SOURCE_UNAVAILABLE' backend/repository/NpgsqlUiTopologyRepository.cs "explicit candidate source failure"
 require_term 'ValidateLayoutPatchAsync_DispatchInstanceOperation_CandidateSourceUnavailable_FailsClose' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "candidate source unavailable negative test"
+require_term 'ProjectInstanceOperationAuthoringCandidate_MalformedTargetRef_FailsClose' backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryLayoutPatchValidationTests.cs "malformed active candidate negative test"
+require_term 'INSTANCE_OPERATION_CANDIDATE_TARGET_REF_MALFORMED' backend/repository/NpgsqlUiTopologyRepository.cs "malformed candidate fail-close error"
 if rg -n 'ListSeedDefinedApprovedInstanceOperationCandidates|FindRepositoryFile\("db", "seed_empty.sql"\)|File\.ReadAllText\([^)]*seed_empty\.sql' backend/repository/NpgsqlUiTopologyRepository.cs; then
   fail "instance operation candidates must come from DB/manifest records, not runtime seed file scanning"
 fi
