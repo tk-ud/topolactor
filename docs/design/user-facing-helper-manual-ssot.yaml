@@ -226,6 +226,10 @@ user_facing_helper_manual_ssot:
       - render_mcp_draft_payload_hints
       - render_approval_boundary_warning
       - render_unresolved_fields_examples
+      - render_origin_badge
+      - render_review_state
+      - render_preview_diff_summary
+      - render_source_evidence_summary
     prohibited_behaviors:
       - admin_step_submit
       - layout_patch_apply
