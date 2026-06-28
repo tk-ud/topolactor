@@ -65,7 +65,7 @@ public sealed class AbstractFunctionExecutionContext
     private readonly Dictionary<string, object?> _resultContext = new(StringComparer.Ordinal);
     private readonly List<string> _executedPrimitiveKeys = new();
 
-    public AbstractFunctionExecutionContext(string authorityScope, JsonElement? requestPayload = null, ExternalPortExecutionContext? externalPortContext = null, string? requiredRuntimeLane = null, RuntimeWorkingShape? runtimeContext = null, SchedulerExecutionContext? schedulerContext = null)
+    public AbstractFunctionExecutionContext(string authorityScope, JsonElement? requestPayload = null, ExternalPortExecutionContext? externalPortContext = null, string? requiredRuntimeLane = null, RuntimeWorkingShape? runtimeContext = null, SchedulerExecutionContext? schedulerContext = null, InstancePortExecutionContext? instancePortContext = null)
     {
         AuthorityScope = authorityScope;
         RequestPayload = requestPayload;
@@ -73,6 +73,7 @@ public sealed class AbstractFunctionExecutionContext
         _requiredRuntimeLane = requiredRuntimeLane;
         RuntimeContext = runtimeContext;
         SchedulerContext = schedulerContext;
+        InstancePortContext = instancePortContext;
     }
 
     private readonly string? _requiredRuntimeLane;
@@ -82,12 +83,13 @@ public sealed class AbstractFunctionExecutionContext
     public ExternalPortExecutionContext? ExternalPortContext { get; }
     public RuntimeWorkingShape? RuntimeContext { get; }
     public SchedulerExecutionContext? SchedulerContext { get; }
+    public InstancePortExecutionContext? InstancePortContext { get; }
     public string RequiredRuntimeLane => _requiredRuntimeLane ?? "external_port_runtime";
     public IReadOnlyDictionary<string, object?> ResultContext => _resultContext;
     public IReadOnlyList<string> ExecutedPrimitiveKeys => _executedPrimitiveKeys;
     public IReadOnlyList<AbstractFunctionAuthorityBinding> AuthorityBindings { get; private set; } = Array.Empty<AbstractFunctionAuthorityBinding>();
 
-    internal void SetAuthorityBindings(IReadOnlyList<AbstractFunctionAuthorityBinding> bindings) => AuthorityBindings = bindings;
+    public void SetAuthorityBindings(IReadOnlyList<AbstractFunctionAuthorityBinding> bindings) => AuthorityBindings = bindings;
 
     public object? ResolveBinding(AbstractFunctionInputBinding binding, IReadOnlyDictionary<string, string>? stepConfig = null)
     {
@@ -242,7 +244,7 @@ public sealed class AbstractFunctionExecutor
             if (!activeAuthority.Any(b => string.Equals(b.AuthorityKind, "policy", StringComparison.Ordinal) && string.Equals(b.AuthorityRef, policyKey, StringComparison.Ordinal)))
                 throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, $"ABSTRACT_FUNCTION_POLICY_AUTHORITY_INVALID: {policyKey}");
         }
-        else
+        else if (context.InstancePortContext is null)
         {
             if (!activeAuthority.Any(static b => string.Equals(b.AuthorityKind, "policy", StringComparison.Ordinal)))
                 throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_POLICY_AUTHORITY_MISSING");

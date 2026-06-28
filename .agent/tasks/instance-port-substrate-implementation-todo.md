@@ -1,21 +1,25 @@
 # Instance Port Substrate Implementation TODO
 
-Status: partial
+Status: acceptance_pending
 Roadmap bundle: `product.instance_port_substrate`
 Primary SSOT: `docs/design/instance-port-substrate-ssot.yaml`
 
 This file preserves future implementation work. It is not evidence of implemented runtime behavior.
 
-## Bundle-level future work
+## Bundle-level implementation status
 
-- [ ] Add runtime-executable DB schema / seed rows for `db_instance_port`, `runtime_instance_port`, `instance_connection_policy`, and `instance_function_authority_binding` without plaintext connection strings or endpoint real values.
-- [ ] Add `instance_port_runtime` as a sibling runtime lane to `external_port_runtime`.
-- [ ] Add abstract function primitive support for `call_instance_postgres_function` and `call_bound_instance_function` with manifest-authorized function/schema/instance/output bindings.
-- [ ] Keep existing `call_postgres_function` limited to Topolactor DB `topology.*` functions and fixed Topolactor connectionString.
-- [ ] Reuse the DB guarded vault / runtime secret reference model by `reference_key`; do not create a standalone credential runtime or admin UI.
-- [ ] Add fail-close tests for missing credential, missing instance policy, missing function/schema binding, timeout, secret projection denial, provider selector attempts, and unauthorized function names.
-- [ ] Add guards proving `provider_kind`, `required_by_bundle`, and provider labels are data only and do not select C# handlers.
-- [ ] Treat multiple external DB/runtime instances as consumer-agnostic `instance_authority_key` rows only; do not add provider-specific runtime handlers, provider-specific schemas, or external instance semantic authority to the Topolactor DB.
+- [x] Added runtime-executable DB schema / seed rows for `db_instance_port`, `runtime_instance_port`, `instance_connection_policy`, and `instance_operation_authority_binding` without plaintext connection strings or endpoint real values.
+- [x] Added `instance_port_runtime` as a sibling runtime lane to `external_port_runtime`.
+- [x] Added abstract function primitive support for `call_instance_postgres_function` and `call_bound_instance_function` with manifest-authorized function/schema/instance/output bindings.
+- [x] Kept existing `call_postgres_function` limited to Topolactor DB `topology.*` functions and fixed Topolactor connectionString.
+- [x] Reused the DB guarded vault / runtime secret reference model by `reference_key`; no standalone credential runtime or admin UI was added.
+- [x] Added fail-close tests for missing credential, missing instance policy, missing function/schema binding, timeout, secret projection denial, provider selector attempts, unauthorized function names, malformed instanceTargetRef, and topology-only call_postgres_function regression.
+- [x] Added guards proving `provider_kind`, `required_by_bundle`, and provider labels are data only and do not select C# handlers.
+- [x] Treat multiple external DB/runtime instances as consumer-agnostic `instance_authority_key` rows only; no provider-specific runtime handlers, provider-specific schemas, or external instance semantic authority were added to the Topolactor DB.
+
+## Remaining acceptance gap
+
+- [ ] Run live generic instance integration acceptance with real runtime-secret material supplied out of band; do not store plaintext connection strings or endpoints in seed/projection/log surfaces.
 
 ## Bundle increment `credential-management-instance-settings-topology`
 

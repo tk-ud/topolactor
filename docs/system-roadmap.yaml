@@ -671,9 +671,9 @@ system_roadmap_ssot:
     product.instance_port_substrate:
       bundle_id: instance-port-substrate
       title: Credential-backed instance port substrate
-      status: not_started
+      status: partial
       production_ready: false
-      public_summary: Design SSOT and lightweight CI guard are introduced for credential-backed DB/runtime instance connections and manifest-authorized instance function calls. Runtime/DDL/seed/adapter implementation is intentionally not started. The substrate is a sibling of external_port_substrate, not an extension of access_port/response_port/hook_port.
+      public_summary: Design SSOT, runtime-executable DDL/seed surface, instance_port_runtime sibling lane, runtime-only credential reference resolution, call_instance_postgres_function / call_bound_instance_function primitive adapters, authority/allowlist/sanitize/timeout fail-close guards, and regression tests are implemented. Remaining gap is live generic instance integration acceptance, not PR522 topology/projection/authoring scope.
       scope:
         - instance_port_substrate_design
         - db_instance_port
@@ -681,7 +681,7 @@ system_roadmap_ssot:
         - credential_backed_instance_function
         - call_instance_postgres_function_primitive_contract
         - instance_connection_policy
-        - instance_function_authority_binding
+        - instance_operation_authority_binding
       detail_ref:
         - docs/design/instance-port-substrate-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
@@ -698,11 +698,7 @@ system_roadmap_ssot:
         - docs/design/instance-port-substrate-ssot.yaml
         - .agent/tests/check-instance-port-substrate.sh
       known_gap_ref:
-        - instance_port_DDL_not_started
-        - instance_port_runtime_not_started
-        - call_instance_postgres_function_adapter_not_started
-        - authority_binding_runtime_tests_not_started
-        - generic_instance_integration_not_started
+        - generic_instance_integration_acceptance_pending
 
     product.email_port_consumer:
       bundle_id: email-port-consumer

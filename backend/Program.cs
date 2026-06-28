@@ -79,6 +79,10 @@ builder.Services.AddSingleton<IExternalPortPolicyRepository>(sp =>
     new NpgsqlExternalPortPolicyRepository(
         sp.GetRequiredService<ILogger<NpgsqlExternalPortPolicyRepository>>(),
         connectionString));
+builder.Services.AddSingleton<IInstancePortPolicyRepository>(sp =>
+    new NpgsqlInstancePortPolicyRepository(
+        connectionString,
+        sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<IExternalCredentialVaultRepository>(sp =>
     new NpgsqlExternalCredentialVaultRepository(
         sp.GetRequiredService<ILogger<NpgsqlExternalCredentialVaultRepository>>(),
@@ -126,6 +130,8 @@ builder.Services.AddSingleton<ISchedulerJobManifestRepository>(_ =>
     new NpgsqlSchedulerJobManifestRepository(connectionString));
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(_ =>
     new CallPostgresFunctionPrimitiveAdapter(connectionString));
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, CallInstancePostgresFunctionPrimitiveAdapter>();
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, CallBoundInstanceFunctionPrimitiveAdapter>();
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, ProjectionPrimitiveAdapter>();
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter, FailClosePrimitiveAdapter>();
 builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
@@ -188,6 +194,7 @@ builder.Services.AddSingleton<IExternalPortHttpClient>(sp =>
 builder.Services.AddSingleton<IExternalPortCredentialReferenceResolver>(sp =>
     new ExternalPortCredentialReferenceResolver(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<IExternalCredentialCrypto, AesExternalCredentialCrypto>();
+builder.Services.AddSingleton<IInstanceCredentialMaterializer, VaultReferenceInstanceCredentialMaterializer>();
 builder.Services.AddSingleton<ISchedulerEnqueueBoundary>(sp =>
     new RuntimeTimelineSchedulerEnqueueBoundary(
         new Lazy<RuntimeTimelineScheduler>(() => sp.GetRequiredService<RuntimeTimelineScheduler>())));
@@ -217,6 +224,12 @@ builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
         sp.GetRequiredService<IExternalPortPolicyStepExecutor>(),
         sp.GetRequiredService<SseEventBroadcaster>(),
         sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
+builder.Services.AddSingleton<InstancePortDispatchRuntime>(sp =>
+    new InstancePortDispatchRuntime(
+        sp.GetRequiredService<ILogger<InstancePortDispatchRuntime>>(),
+        sp.GetRequiredService<IInstancePortPolicyRepository>(),
+        sp.GetRequiredService<IInstanceCredentialMaterializer>(),
+        sp.GetRequiredService<AbstractFunctionExecutor>()));
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>(sp =>
@@ -288,6 +301,7 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         ["sse_projection_runtime"]      = sp.GetRequiredService<SseProjectionRuntime>(),
         ["registry_attractor_runtime"]  = sp.GetRequiredService<RegistryAttractorDispatchRuntime>(),
         ["external_port_runtime"]      = sp.GetRequiredService<ExternalPortDispatchRuntime>(),
+        ["instance_port_runtime"]      = sp.GetRequiredService<InstancePortDispatchRuntime>(),
         ["cli_reader_port_runtime"]   = sp.GetRequiredService<AuthorizedCliReaderPortRuntime>(),
     };
     return new ManifestDispatcher(

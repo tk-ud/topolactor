@@ -498,7 +498,7 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policies (
 CREATE TABLE IF NOT EXISTS topology.abstract_function_manifests (
     abstract_function_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     function_key         TEXT NOT NULL UNIQUE,
-    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime', 'admin_runtime', 'runtime_executor', 'scheduler_job_runtime')),
+    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime', 'instance_port_runtime', 'admin_runtime', 'runtime_executor', 'scheduler_job_runtime')),
     authority_scope      TEXT NOT NULL,
     output_shape         JSONB NOT NULL DEFAULT '{}'::jsonb,
     projection_deny_keys TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
@@ -506,6 +506,13 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_manifests (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+
+ALTER TABLE topology.abstract_function_manifests
+    DROP CONSTRAINT IF EXISTS abstract_function_manifests_runtime_lane_check;
+ALTER TABLE topology.abstract_function_manifests
+    ADD CONSTRAINT abstract_function_manifests_runtime_lane_check
+    CHECK (runtime_lane IN ('external_port_runtime', 'instance_port_runtime', 'admin_runtime', 'runtime_executor', 'scheduler_job_runtime'));
 
 CREATE TABLE IF NOT EXISTS topology.abstract_function_steps (
     abstract_function_step_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -555,13 +562,20 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_input_bindings (
 CREATE TABLE IF NOT EXISTS topology.abstract_function_authority_bindings (
     authority_binding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     abstract_function_id UUID NOT NULL REFERENCES topology.abstract_function_manifests (abstract_function_id) ON DELETE CASCADE,
-    authority_kind       TEXT NOT NULL CHECK (authority_kind IN ('table','column','join','output','policy')),
+    authority_kind       TEXT NOT NULL CHECK (authority_kind IN ('table','column','join','output','policy','instance','instance_function')),
     authority_ref        TEXT NOT NULL,
     active               BOOLEAN NOT NULL DEFAULT true,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (abstract_function_id, authority_kind, authority_ref)
 );
+
+
+ALTER TABLE topology.abstract_function_authority_bindings
+    DROP CONSTRAINT IF EXISTS abstract_function_authority_bindings_authority_kind_check;
+ALTER TABLE topology.abstract_function_authority_bindings
+    ADD CONSTRAINT abstract_function_authority_bindings_authority_kind_check
+    CHECK (authority_kind IN ('table','column','join','output','policy','instance','instance_function'));
 
 CREATE INDEX IF NOT EXISTS idx_abstract_function_steps_manifest
     ON topology.abstract_function_steps (abstract_function_id, step_order) WHERE active = true;
@@ -588,6 +602,74 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policy_steps (
 );
 
 COMMENT ON TABLE topology.external_port_policies IS 'Seed-driven policy surface for external port generic primitive execution.';
+
+-- ---------------------------------------------------------------------------
+-- Instance port runtime-executable substrate.
+-- Credential reference keys point to topology.external_credential_vault; no
+-- plaintext connection strings, endpoints, raw SQL, or secrets are stored here.
+-- provider_kind / required_by_bundle are labels only and do not select C# handlers.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.db_instance_port (
+    instance_port_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    port_kind             TEXT NOT NULL DEFAULT 'db_instance_port' CHECK (port_kind = 'db_instance_port'),
+    instance_authority_key TEXT NOT NULL UNIQUE,
+    provider_kind         TEXT NOT NULL,
+    required_by_bundle    TEXT NOT NULL,
+    reference_key         TEXT NOT NULL REFERENCES topology.external_credential_vault (reference_key),
+    active                BOOLEAN NOT NULL DEFAULT true,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.runtime_instance_port (
+    instance_port_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    port_kind             TEXT NOT NULL DEFAULT 'runtime_instance_port' CHECK (port_kind = 'runtime_instance_port'),
+    instance_authority_key TEXT NOT NULL UNIQUE,
+    provider_kind         TEXT NOT NULL,
+    required_by_bundle    TEXT NOT NULL,
+    reference_key         TEXT NOT NULL REFERENCES topology.external_credential_vault (reference_key),
+    active                BOOLEAN NOT NULL DEFAULT true,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS topology.instance_connection_policy (
+    policy_id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    instance_authority_key      TEXT NOT NULL,
+    credential_reference_key    TEXT NOT NULL REFERENCES topology.external_credential_vault (reference_key),
+    connection_timeout_ms       INTEGER NOT NULL CHECK (connection_timeout_ms > 0),
+    statement_timeout_ms        INTEGER NOT NULL CHECK (statement_timeout_ms > 0),
+    max_result_bytes            INTEGER NOT NULL CHECK (max_result_bytes > 0),
+    allowed_schemas             TEXT[] NOT NULL CHECK (array_length(allowed_schemas, 1) > 0),
+    allowed_function_names      TEXT[] NOT NULL CHECK (array_length(allowed_function_names, 1) > 0),
+    result_sanitize_policy_key  TEXT NOT NULL,
+    active                     BOOLEAN NOT NULL DEFAULT true,
+    created_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (instance_authority_key, credential_reference_key)
+);
+
+CREATE TABLE IF NOT EXISTS topology.instance_operation_authority_binding (
+    binding_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    operation_binding_key  TEXT NOT NULL,
+    instance_authority_key TEXT NOT NULL,
+    function_key           TEXT NOT NULL,
+    function_schema        TEXT NOT NULL CHECK (function_schema ~ '^[A-Za-z_][A-Za-z0-9_]*$'),
+    function_name          TEXT NOT NULL CHECK (function_name ~ '^[A-Za-z_][A-Za-z0-9_]*$'),
+    abstract_function_key  TEXT NOT NULL REFERENCES topology.abstract_function_manifests (function_key),
+    output_shape           JSONB NOT NULL CHECK (output_shape <> '{}'::jsonb),
+    secret_deny            BOOLEAN NOT NULL DEFAULT true,
+    active                 BOOLEAN NOT NULL DEFAULT true,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (instance_authority_key, operation_binding_key)
+);
+
+COMMENT ON TABLE topology.db_instance_port IS 'runtime-executable db instance port metadata: reference_key only, no plaintext connection string/endpoint/raw SQL/secret.';
+COMMENT ON TABLE topology.runtime_instance_port IS 'runtime-executable runtime instance port metadata: reference_key only, no plaintext endpoint/secret.';
+COMMENT ON TABLE topology.instance_connection_policy IS 'Fail-close instance connection policy with schema/function allowlists, timeout, max result bytes, and sanitize policy.';
+COMMENT ON TABLE topology.instance_operation_authority_binding IS 'Approved instance operation binding for instance_port_runtime abstract functions. Function/schema/output authority is data-defined and secret-deny required.';
+
 
 -- Update operation_key CHECK constraint to sync with SSOT operation_key_allowed_values.
 -- execute_abstract_function is the primary abstract function boundary for consumer bundle domain mutations

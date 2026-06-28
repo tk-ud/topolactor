@@ -8,7 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
-| `instance-port-substrate` | credential-backed instance connection / instance function call substrate | partial | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
+| `instance-port-substrate` | credential-backed instance connection / instance function call substrate | acceptance_pending | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 3 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
@@ -18,7 +18,7 @@
 
 ## Bundle `instance-port-substrate`
 
-**Status:** partial
+**Status:** acceptance_pending
 **Roadmap/status SSOT:** `product.instance_port_substrate`
 **Primary SSOT:** `docs/design/instance-port-substrate-ssot.yaml`
 
@@ -34,8 +34,7 @@ PR522で実装済みとして扱う範囲:
 - `jsonTemplateShape` authority化禁止 / free-text targetRef 禁止 / runtime seed file scanning 禁止 guard
 
 残問題:
-- `instance_port_runtime` 実行lane、`call_instance_postgres_function` / `call_bound_instance_function` primitive adapter、runtime-only credential reference 解決、instance connection policy / operation authority binding の実行時検証は未実装。
-- PR522の projection / authoring 実装を未実装扱いへ戻さない。残scopeは runtime execution substrate に限定する。
+- runtime execution substrate（DDL / repository / instance_port_runtime / primitive adapters / fail-close tests）は実装済み。残scopeは、runtime-only secret material を外部投入した live generic instance integration acceptance の確認のみ。
 
 改善方針:
 implementation_change で、SSOT通りに `instance_port_runtime` を `external_port_runtime` の sibling lane として追加し、manifest-authorized operation binding / function/schema allowlist / timeout / result sanitize / fail-close を実装する。`call_postgres_function` の Topolactor DB `topology.*` 専用境界は維持する。provider_kind / required_by_bundle / provider label で C# selector を作らない。
@@ -80,15 +79,16 @@ NG軸:
 - 手書き admin UI / hardcoded targetRef / hardcoded action button で Gate 0 の seed/data-defined surface を迂回する
 
 残受入条件:
-- [ ] runtime-executable instance port DDL / seed rows / repository read surface が SSOT に従って追加されている。
-- [ ] `instance_port_runtime` が `external_port_runtime` の sibling lane として追加されている。
-- [ ] `call_instance_postgres_function` は manifest-authorized function のみ実行し、function/schema allowlist / instance authority binding / timeout / result sanitize / fail-close を持つ。
-- [ ] `call_bound_instance_function` は instance operation authority binding / output shape / secret-deny projection を必須にする。
-- [ ] `call_postgres_function` は Topolactor DB 内 `topology.*` 専用のまま保持されている。
-- [ ] credential は `reference_key` / DB guarded vault / runtime secret resolver 経由で runtime-only 解決され、plaintext connection string は SSOT / seed / UI / projection / log に出ない。
-- [ ] provider_kind / required_by_bundle は data only で C# selector ではない。
-- [ ] 特定 consumer 専用 handler / schema / semantic authority を追加していない。
-- [ ] missing credential / missing instance policy / missing authority binding / unauthorized function / timeout / secret result denial / provider selector attempt の fail-close tests がある。
+- [x] runtime-executable instance port DDL / seed rows / repository read surface が SSOT に従って追加されている。
+- [x] `instance_port_runtime` が `external_port_runtime` の sibling lane として追加されている。
+- [x] `call_instance_postgres_function` は manifest-authorized function のみ実行し、function/schema allowlist / instance authority binding / timeout / result sanitize / fail-close を持つ。
+- [x] `call_bound_instance_function` は instance operation authority binding / output shape / secret-deny projection を必須にする。
+- [x] `call_postgres_function` は Topolactor DB 内 `topology.*` 専用のまま保持されている。
+- [x] credential は `reference_key` / DB guarded vault / runtime secret resolver 経由で runtime-only 解決され、plaintext connection string は SSOT / seed / UI / projection / log に出ない。
+- [x] provider_kind / required_by_bundle は data only で C# selector ではない。
+- [x] 特定 consumer 専用 handler / schema / semantic authority を追加していない。
+- [x] missing credential / missing instance policy / missing authority binding / unauthorized function / timeout / secret result denial / provider selector attempt の fail-close tests がある。
+- [ ] live generic instance integration acceptance を runtime-only secret material の外部投入で確認する。
 
 ---
 
