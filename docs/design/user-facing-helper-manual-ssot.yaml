@@ -84,6 +84,9 @@ user_facing_helper_manual_ssot:
       - category
       - audience
       - admin_surface
+      - origin_kind
+      - origin_evidence
+      - review_state
       - internal_terms
       - user_facing_terms
       - mcp_draft_payload_hints
@@ -97,6 +100,16 @@ user_facing_helper_manual_ssot:
       - agent
       - integrator
       - admin
+    origin_kind_values:
+      - human_admin_manual
+      - mcp_import_candidate
+      - external_ai_structured_output
+      - local_llm_structured_output
+    review_state_values:
+      - not_required
+      - review_required
+      - reviewed
+      - rejected
     category_values:
       - getting_started
       - admin_authoring_flow
