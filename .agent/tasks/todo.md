@@ -9,9 +9,82 @@
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
+| `admin-topology-clone-draft-lifecycle` | admin topology clone / draft lifecycle | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
+
+---
+
+## Bundle `admin-topology-clone-draft-lifecycle`
+
+**Status:** not_started
+**Roadmap bundle:** `product.admin_topology_authoring`
+**Primary SSOT:** `docs/design/admin-console-workflow-ssot.yaml`
+**Supporting SSOT:**
+- `docs/registrar-admin-ui-specification.md`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/ci-contract-ssot.yaml`
+
+目的:
+/admin/contents Step 1 に、新規作成 / active 正本から正本置き換え用 clone 下書き作成 / active 正本から別トポロジ登録用 clone 下書き作成を実装し、正本置き換え merge は backend authority で source evidence・validation・diff/log・conflict check を満たす場合だけ成立させる。/admin/manifests の active-to-draft / reopen draft 操作は runtime dispatch policy が確定するまで実装可能扱いにしない。
+
+残問題:
+- Step 1 entry mode selector と source active read-only selection が未実装。
+- human-authored replacement clone draft と clone-as-new topology draft の draft_origin / clone_mode / source evidence が未保存・未表示。
+- replacement clone merge の backend validation、stale source active fail-close、active identity conflict check、diff/log evidence gate が未実装。
+- source_active_manifest_id や lineage evidence だけで replacement authority を得ない guard が未実装。
+- SQL Attention candidate draft と human clone draft の origin/candidate_source 境界が未検証で、candidate が自動 merge authority を得ない regression guard が無い。
+- /admin/manifests active-to-draft / reopen-active-as-draft は runtime dispatch impact policy が design gap のため未実装に留める必要がある。
+
+改善方針:
+implementation_change で Primary SSOT に従い、frontend は entry intent / source evidence 表示 / blocker 表示だけを担当し、merge target・conflict 判定・active mutation は backend AdminRuntime / ManifestRepository transaction に限定する。新規作成と clone-as-new topology は従来の registration/promote path を維持し、replacement clone のみ backend replacement merge guard を通す。SQL Attention candidate draft は candidate_source / draft_origin を表示・保存または導出可能にし、manual_clone_replacement と混同しない。active-to-draft 操作は runtime dispatch policy が SSOT 確定するまで UI 実装しない。
+
+対応資料:
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/registrar-admin-ui-specification.md`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/ci-contract-ssot.yaml`
+
+対象ファイル名候補:
+- `frontend/islands/ContentsAdmin.tsx`
+- `frontend/islands/ContentsScreenDesignPanel.tsx`
+- `frontend/islands/UiBuilderAdmin.tsx`
+- `frontend/api/adminApi.ts`
+- `frontend/content/adminUxTerms.ts`
+- `frontend/tests/adminUxGuard.test.ts`
+- `backend/runtime/AdminRuntime.cs`
+- `backend/repository/ManifestRepository.cs`
+- `backend/repository/NpgsqlManifestRepository.cs`
+- `backend/tests/Topolactor.Runtime.Tests/InMemoryManifestAdminRepository.cs`
+- backend tests for clone draft / replacement merge / stale source conflict
+- DB migration only if draft_origin / clone_mode / source evidence schema is required by implementation design
+
+対象関数名候補:
+- `manifest:create_new_topology_draft`
+- `manifest:create_clone_replacement_draft_from_active`
+- `manifest:create_clone_new_topology_draft_from_active`
+- `manifest:validate_clone_replacement_draft`
+- `manifest:merge_clone_replacement_draft_to_active`
+- `manifest:reopen_active_as_draft` or equivalent, only after runtime dispatch policy is fixed
+- `CreateCloneReplacementDraftFromActiveAsync`
+- `CreateCloneNewTopologyDraftFromActiveAsync`
+- `MergeCloneReplacementDraftToActiveAsync`
+- `LoadCloneSourceEvidenceAsync`
+- `CountActiveIdentityConflictsAsync`
+
+残受入条件:
+- [ ] /admin/contents Step 1 entry modes are SSOT-defined and visibly separated.
+- [ ] Replacement clone and clone-as-new topology cannot be confused.
+- [ ] Replacement merge requires source evidence, validation, diff/log evidence, and backend conflict check.
+- [ ] Stale source active fails close.
+- [ ] Frontend has no merge authority.
+- [ ] UI Builder layout/package authoring remains draft-scoped until canonical boundary.
+- [ ] `layout_patch:apply` is not treated as production manifest replacement merge.
+- [ ] SQL Attention candidate drafts cannot auto-merge to active.
+- [ ] /admin/manifests active-to-draft policy has explicit runtime dispatch semantics or remains disabled as unresolved design gap.
 
 ---
 
