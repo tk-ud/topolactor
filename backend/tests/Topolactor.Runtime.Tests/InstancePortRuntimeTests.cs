@@ -11,10 +11,11 @@ public sealed class InstancePortRuntimeTests
     [Fact]
     public async Task ExecuteAsync_MissingCredentialReference_FailsClose()
     {
-        var runtime = BuildRuntime(new FakeInstanceRepo { CredentialMissing = true });
+        var runtime = BuildRuntime(new FakeInstanceRepo { CredentialMissing = true }, out var log);
         var response = await runtime.ExecuteAsync(Request($"instance-port:db_instance_port:{PortId}:approved"), null);
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "INSTANCE_CREDENTIAL_REFERENCE_MISSING");
+        Assert.Contains(log.Events, e => e.EventType == "instance_port_execution_fail_close" && e.EntityId!.Contains("failure_code=INSTANCE_CREDENTIAL_REFERENCE_MISSING", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -24,7 +25,7 @@ public sealed class InstancePortRuntimeTests
     public async Task ExecuteAsync_MissingAuthority_FailsClose(string missing, string code)
     {
         var repo = new FakeInstanceRepo { RecordMissing = missing == "record", PolicyMissing = missing == "policy", BindingMissing = missing == "binding" };
-        var response = await BuildRuntime(repo).ExecuteAsync(Request($"instance-port:db_instance_port:{PortId}:approved"), null);
+        var response = await BuildRuntime(repo, out _).ExecuteAsync(Request($"instance-port:db_instance_port:{PortId}:approved"), null);
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == code);
     }
@@ -34,7 +35,7 @@ public sealed class InstancePortRuntimeTests
     [InlineData("instance-port:access_port:00000000-0000-0000-0000-000000000ab1:approved", "INSTANCE_PORT_TARGET_REF_INVALID")]
     public async Task ExecuteAsync_MalformedInstanceTargetRef_FailsClose(string targetRef, string code)
     {
-        var response = await BuildRuntime(new FakeInstanceRepo()).ExecuteAsync(Request(targetRef), null);
+        var response = await BuildRuntime(new FakeInstanceRepo(), out _).ExecuteAsync(Request(targetRef), null);
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == code);
     }
@@ -43,9 +44,45 @@ public sealed class InstancePortRuntimeTests
     public async Task ExecuteAsync_ProviderSelectorAttempt_FailsClose()
     {
         var payload = JsonSerializer.SerializeToElement(new { instanceTargetRef = $"instance-port:db_instance_port:{PortId}:approved", provider_kind_selector = "external_postgres" });
-        var response = await BuildRuntime(new FakeInstanceRepo()).ExecuteAsync(new EndpointRequestDto("x", null, null, null, null, payload, null), null);
+        var response = await BuildRuntime(new FakeInstanceRepo(), out _).ExecuteAsync(new EndpointRequestDto("x", null, null, null, null, payload, null), null);
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "INSTANCE_PROVIDER_SELECTOR_FORBIDDEN");
+    }
+
+
+    [Fact]
+    public async Task ExecuteAsync_MaterializationFailure_UsesRealVaultMaterializerAndFailsClose()
+    {
+        var response = await BuildRuntime(new FakeInstanceRepo { MaterializationFails = true }, out var log)
+            .ExecuteAsync(Request($"instance-port:db_instance_port:{PortId}:approved"), null);
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "INSTANCE_CREDENTIAL_MATERIALIZATION_FAILED");
+        Assert.Contains(log.Events, e => e.EventType == "instance_port_execution_fail_close" && e.EntityId!.Contains("failure_code=INSTANCE_CREDENTIAL_MATERIALIZATION_FAILED", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_Success_AppendsReferenceOnlyRuntimeEvidence()
+    {
+        var response = await BuildRuntime(new FakeInstanceRepo(), out var log)
+            .ExecuteAsync(Request($"instance-port:db_instance_port:{PortId}:approved"), null);
+        Assert.True(response.Success);
+        var evidence = Assert.Single(log.Events, e => e.EventType == "instance_port_execution_success");
+        Assert.Contains("instance_authority_key=registered_instance_key", evidence.EntityId);
+        Assert.Contains("operation_binding_key=approved", evidence.EntityId);
+        Assert.DoesNotContain("Host=", evidence.EntityId);
+        Assert.DoesNotContain("secret", evidence.EntityId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("instance_schema", "INSTANCE_FUNCTION_SCHEMA_NOT_ALLOWLISTED")]
+    [InlineData("instance_operation", "INSTANCE_OPERATION_NOT_APPROVED")]
+    [InlineData("output", "INSTANCE_OUTPUT_AUTHORITY_MISSING")]
+    public async Task CallBoundInstanceFunction_MissingAuthorityKinds_FailClose(string removedKind, string expectedCode)
+    {
+        var ctx = FakeInstanceRepo.Context();
+        ctx.SetAuthorityBindings(FakeManifestRepo.Authorities.Where(a => a.AuthorityKind != removedKind).ToArray());
+        var ex = await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(() => new CallBoundInstanceFunctionPrimitiveAdapter().ExecuteAsync(new AbstractFunctionStep(Guid.NewGuid(), 1, "call_bound_instance_function", new Dictionary<string, string>(), [], "Result", true), new Dictionary<string, object?> { ["x"] = "ok" }, ctx, CancellationToken.None));
+        Assert.Equal(expectedCode, ex.Message);
     }
 
     [Fact]
@@ -60,7 +97,7 @@ public sealed class InstancePortRuntimeTests
     {
         var binding = FakeInstanceRepo.Binding() with { SecretDeny = false };
         var ctx = FakeInstanceRepo.Context(binding);
-        ctx.SetAuthorityBindings([new("instance", "registered_instance_key", true), new("instance_function", "registered_instance.approved_operation", true)]);
+        ctx.SetAuthorityBindings(FakeManifestRepo.Authorities);
         await Assert.ThrowsAsync<AbstractFunctionFailCloseException>(() => new CallBoundInstanceFunctionPrimitiveAdapter().ExecuteAsync(new AbstractFunctionStep(Guid.NewGuid(), 1, "call_bound_instance_function", new Dictionary<string, string>(), [], "Result", true), new Dictionary<string, object?> { ["x"] = "ok" }, ctx, CancellationToken.None));
     }
 
@@ -90,11 +127,34 @@ public sealed class InstancePortRuntimeTests
         Assert.Equal("ABSTRACT_FUNCTION_POSTGRES_FUNCTION_INVALID", ex.Message);
     }
 
-    private static InstancePortDispatchRuntime BuildRuntime(FakeInstanceRepo repo) => new(NullLogger<InstancePortDispatchRuntime>.Instance, repo, new FakeMaterializer(), new AbstractFunctionExecutor(new FakeManifestRepo(), new IAbstractFunctionPrimitiveAdapter[] { new CallBoundInstanceFunctionPrimitiveAdapter() }));
+    private static InstancePortDispatchRuntime BuildRuntime(FakeInstanceRepo repo, out FakeRuntimeEventLog log)
+    {
+        log = new FakeRuntimeEventLog();
+        return new InstancePortDispatchRuntime(NullLogger<InstancePortDispatchRuntime>.Instance, repo, new VaultReferenceInstanceCredentialMaterializer(new FakeCredentialCrypto()), new AbstractFunctionExecutor(new FakeManifestRepo(), new IAbstractFunctionPrimitiveAdapter[] { new CallBoundInstanceFunctionPrimitiveAdapter() }), log);
+    }
     private static EndpointRequestDto Request(string targetRef) => new EndpointRequestDto("x", null, null, null, null, JsonSerializer.SerializeToElement(new { instanceTargetRef = targetRef, dispatch_payload = new { x = "ok" } }), null);
 }
 
-internal sealed class FakeMaterializer : IInstanceCredentialMaterializer { public string MaterializeConnectionString(ExternalCredentialVaultRecord credentialVaultRecord) => "fake-runtime-only"; }
+internal sealed class FakeCredentialCrypto : IExternalCredentialCrypto
+{
+    public string DecryptForRuntimeUse(byte[] encryptedPayload, string encryptionKeyReference)
+    {
+        if (encryptionKeyReference == "kms:fail") throw new InvalidOperationException("decrypt failed");
+        return "Host=runtime-only-decrypted";
+    }
+    public byte[] EncryptForVaultStorage(string plaintextPayload, string encryptionKeyReference) => [1, 2, 3];
+    public string ComputeTokenHash(string plaintextPayload) => "sha256:fake";
+}
+
+internal sealed class FakeRuntimeEventLog : IExternalPortRuntimeEventLogRepository
+{
+    public List<(string EventType, string? EntityId, string? RequiredByBundle)> Events { get; } = [];
+    public Task AppendAsync(string eventType, string? entityId, string? requiredByBundle, CancellationToken ct = default)
+    {
+        Events.Add((eventType, entityId, requiredByBundle));
+        return Task.CompletedTask;
+    }
+}
 
 internal sealed class FakeInstanceRepo : IInstancePortPolicyRepository
 {
@@ -102,8 +162,9 @@ internal sealed class FakeInstanceRepo : IInstancePortPolicyRepository
     public bool CredentialMissing { get; init; }
     public bool PolicyMissing { get; init; }
     public bool BindingMissing { get; init; }
+    public bool MaterializationFails { get; init; }
     public Task<InstancePortRecord?> ResolveInstancePortRecordAsync(string portKind, Guid instancePortId, CancellationToken ct = default) => Task.FromResult(RecordMissing ? null : new InstancePortRecord(instancePortId, portKind, "registered_instance_key", "external_postgres", "generic_instance_integration", "vault:ref", true));
-    public Task<ExternalCredentialVaultRecord?> ResolveInstanceCredentialReferenceAsync(string referenceKey, CancellationToken ct = default) => Task.FromResult(CredentialMissing ? null : new ExternalCredentialVaultRecord(Guid.NewGuid(), "external_postgres", "generic_instance_integration", "runtime", null, [0], "kms:ref", null, 300, 1, null, true));
+    public Task<ExternalCredentialVaultRecord?> ResolveInstanceCredentialReferenceAsync(string referenceKey, CancellationToken ct = default) => Task.FromResult(CredentialMissing ? null : new ExternalCredentialVaultRecord(Guid.NewGuid(), "external_postgres", "generic_instance_integration", "runtime", null, [0], MaterializationFails ? "kms:fail" : "kms:ref", null, 300, 1, null, true));
     public Task<InstanceConnectionPolicy?> LoadConnectionPolicyAsync(string instanceAuthorityKey, string credentialReferenceKey, CancellationToken ct = default) => Task.FromResult(PolicyMissing ? null : Policy());
     public Task<InstanceOperationAuthorityBinding?> LoadOperationAuthorityBindingAsync(string instanceAuthorityKey, string operationBindingKey, CancellationToken ct = default) => Task.FromResult(BindingMissing ? null : Binding());
     public static InstanceConnectionPolicy Policy() => new(Guid.NewGuid(), "registered_instance_key", "vault:ref", 1000, 1000, 1024, new HashSet<string>(["approved_schema"], StringComparer.Ordinal), new HashSet<string>(["approved_function"], StringComparer.Ordinal), "secret_deny_default", true);
@@ -115,5 +176,13 @@ internal sealed class FakeManifestRepo : IAbstractFunctionManifestRepository
 {
     private readonly string _runtimeLane;
     public FakeManifestRepo(string runtimeLane = "instance_port_runtime") => _runtimeLane = runtimeLane;
-    public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) => Task.FromResult<AbstractFunctionManifest?>(new AbstractFunctionManifest(Guid.NewGuid(), functionKey, _runtimeLane, "registered_instance.approved_operation", [new AbstractFunctionStep(Guid.NewGuid(), 1, "call_bound_instance_function", new Dictionary<string, string>(), [], "result", true)], [], true, [new("instance", "registered_instance_key", true), new("instance_function", "registered_instance.approved_operation", true)], new Dictionary<string, string> { ["result"] = "result" }));
+    public static readonly AbstractFunctionAuthorityBinding[] Authorities =
+    [
+        new("instance", "registered_instance_key", true),
+        new("instance_function", "registered_instance.approved_operation", true),
+        new("instance_schema", "approved_schema", true),
+        new("instance_operation", "approved", true),
+        new("output", "InstanceResult", true)
+    ];
+    public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) => Task.FromResult<AbstractFunctionManifest?>(new AbstractFunctionManifest(Guid.NewGuid(), functionKey, _runtimeLane, "registered_instance.approved_operation", [new AbstractFunctionStep(Guid.NewGuid(), 1, "call_bound_instance_function", new Dictionary<string, string>(), [], "InstanceResult", true)], [], true, Authorities, new Dictionary<string, string> { ["result"] = "InstanceResult" }));
 }

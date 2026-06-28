@@ -201,9 +201,18 @@ require_term 'PrimitiveKey => "call_instance_postgres_function"' backend/runtime
 require_term 'PrimitiveKey => "call_bound_instance_function"' backend/runtime/InstancePortRuntime.cs "bound instance primitive adapter"
 require_term 'ResolveInstancePortRecordAsync' backend/repository/NpgsqlInstancePortPolicyRepository.cs "instance port repository read surface"
 require_term 'ResolveInstanceCredentialReferenceAsync' backend/repository/NpgsqlInstancePortPolicyRepository.cs "runtime credential resolver"
+require_term 'DecryptForRuntimeUse' backend/runtime/InstancePortRuntime.cs "guarded vault crypto materialization"
+if rg -n 'Convert\.ToBase64String\(credentialVaultRecord\.EncryptedPayload\)|class[[:space:]]+FakeMaterializer' backend/runtime backend/tests/Topolactor.Runtime.Tests/InstancePortRuntimeTests.cs; then
+  fail "instance credential materialization must use guarded vault crypto, not placeholder/base64 or fake materializer"
+fi
 require_term 'VerifyInstanceConnectionPolicyAsync' backend/runtime/InstancePortRuntime.cs "connection policy verifier"
 require_term 'VerifyInstanceOperationAuthorityBindingAsync' backend/runtime/InstancePortRuntime.cs "operation authority verifier"
 require_term 'SanitizeInstanceFunctionResultAsync' backend/runtime/InstancePortRuntime.cs "result sanitizer"
+require_term 'instance_schema' backend/runtime/InstancePortRuntime.cs "instance schema authority check"
+require_term 'instance_operation' backend/runtime/InstancePortRuntime.cs "instance operation authority check"
+require_term 'INSTANCE_OUTPUT_AUTHORITY_MISSING' backend/runtime/InstancePortRuntime.cs "output authority fail-close"
+require_term 'instance_port_execution_success' backend/runtime/InstancePortRuntime.cs "reference-only success runtime evidence"
+require_term 'instance_port_execution_fail_close' backend/runtime/InstancePortRuntime.cs "reference-only fail-close runtime evidence"
 require_term '["instance_port_runtime"]' backend/Program.cs "ManifestDispatcher instance runtime registration"
 require_term 'instance_port_runtime' db/topology_tables.sql "DDL runtime lane allowlist"
 require_term 'topology.instance_connection_policy' db/topology_tables.sql "connection policy DDL"
@@ -216,6 +225,9 @@ for test_name in \
   AbstractFunctionRuntimeLaneMismatch_FailsClose \
   CallBoundInstanceFunction_SecretResultDenial_FailsClose \
   CallInstancePostgresFunction_AuthorityHelpers_FailClose \
+  ExecuteAsync_MaterializationFailure_UsesRealVaultMaterializerAndFailsClose \
+  ExecuteAsync_Success_AppendsReferenceOnlyRuntimeEvidence \
+  CallBoundInstanceFunction_MissingAuthorityKinds_FailClose \
   CallPostgresFunction_TopologyOnlyBoundary_Regression; do
   require_term "$test_name" backend/tests/Topolactor.Runtime.Tests/InstancePortRuntimeTests.cs "instance fail-close test $test_name"
 done

@@ -2778,8 +2778,14 @@ INSERT INTO topology.abstract_function_authority_bindings
 VALUES
     ('00000000-0000-0000-0000-00000000af90', 'instance', 'registered_instance_key', true),
     ('00000000-0000-0000-0000-00000000af90', 'instance_function', 'registered_instance.approved_operation', true),
+    ('00000000-0000-0000-0000-00000000af90', 'instance_schema', 'approved_schema', true),
+    ('00000000-0000-0000-0000-00000000af90', 'instance_operation', 'approved-operation-placeholder', true),
+    ('00000000-0000-0000-0000-00000000af90', 'output', 'InstanceResult', true),
     ('00000000-0000-0000-0000-00000000af91', 'instance', 'registered_runtime_key', true),
-    ('00000000-0000-0000-0000-00000000af91', 'instance_function', 'registered_instance.bound_operation', true)
+    ('00000000-0000-0000-0000-00000000af91', 'instance_function', 'registered_instance.bound_operation', true),
+    ('00000000-0000-0000-0000-00000000af91', 'instance_schema', 'approved_schema', true),
+    ('00000000-0000-0000-0000-00000000af91', 'instance_operation', 'approved-bound-placeholder', true),
+    ('00000000-0000-0000-0000-00000000af91', 'output', 'InstanceResult', true)
 ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
 
 INSERT INTO topology.instance_operation_authority_binding

@@ -194,7 +194,8 @@ builder.Services.AddSingleton<IExternalPortHttpClient>(sp =>
 builder.Services.AddSingleton<IExternalPortCredentialReferenceResolver>(sp =>
     new ExternalPortCredentialReferenceResolver(sp.GetRequiredService<IExternalCredentialVaultRepository>()));
 builder.Services.AddSingleton<IExternalCredentialCrypto, AesExternalCredentialCrypto>();
-builder.Services.AddSingleton<IInstanceCredentialMaterializer, VaultReferenceInstanceCredentialMaterializer>();
+builder.Services.AddSingleton<IInstanceCredentialMaterializer>(sp =>
+    new VaultReferenceInstanceCredentialMaterializer(sp.GetRequiredService<IExternalCredentialCrypto>()));
 builder.Services.AddSingleton<ISchedulerEnqueueBoundary>(sp =>
     new RuntimeTimelineSchedulerEnqueueBoundary(
         new Lazy<RuntimeTimelineScheduler>(() => sp.GetRequiredService<RuntimeTimelineScheduler>())));
@@ -229,7 +230,8 @@ builder.Services.AddSingleton<InstancePortDispatchRuntime>(sp =>
         sp.GetRequiredService<ILogger<InstancePortDispatchRuntime>>(),
         sp.GetRequiredService<IInstancePortPolicyRepository>(),
         sp.GetRequiredService<IInstanceCredentialMaterializer>(),
-        sp.GetRequiredService<AbstractFunctionExecutor>()));
+        sp.GetRequiredService<AbstractFunctionExecutor>(),
+        sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>(sp =>

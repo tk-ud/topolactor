@@ -36,13 +36,27 @@ public interface IInstanceCredentialMaterializer
 
 public sealed class VaultReferenceInstanceCredentialMaterializer : IInstanceCredentialMaterializer
 {
+    private readonly IExternalCredentialCrypto _crypto;
+
+    public VaultReferenceInstanceCredentialMaterializer(IExternalCredentialCrypto crypto)
+        => _crypto = crypto ?? throw new ArgumentNullException(nameof(crypto));
+
     public string MaterializeConnectionString(ExternalCredentialVaultRecord credentialVaultRecord)
     {
         if (credentialVaultRecord.EncryptedPayload is null || credentialVaultRecord.EncryptedPayload.Length == 0 || string.IsNullOrWhiteSpace(credentialVaultRecord.EncryptionKeyReference))
             throw new InvalidOperationException("INSTANCE_CREDENTIAL_REFERENCE_MISSING");
-        // Runtime-only materialization boundary. Production deployments plug real decryption behind the guarded vault;
-        // seed/projection/log surfaces only carry reference_key and encrypted payload metadata.
-        return Convert.ToBase64String(credentialVaultRecord.EncryptedPayload);
+
+        try
+        {
+            var plaintext = _crypto.DecryptForRuntimeUse(credentialVaultRecord.EncryptedPayload, credentialVaultRecord.EncryptionKeyReference);
+            if (string.IsNullOrWhiteSpace(plaintext))
+                throw new InvalidOperationException("INSTANCE_CREDENTIAL_REFERENCE_MISSING");
+            return plaintext;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or FormatException or System.Security.Cryptography.CryptographicException)
+        {
+            throw new InvalidOperationException("INSTANCE_CREDENTIAL_MATERIALIZATION_FAILED", ex);
+        }
     }
 }
 
@@ -52,13 +66,15 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
     private readonly IInstancePortPolicyRepository _repository;
     private readonly IInstanceCredentialMaterializer _credentialMaterializer;
     private readonly AbstractFunctionExecutor _abstractFunctionExecutor;
+    private readonly IExternalPortRuntimeEventLogRepository? _runtimeEventLog;
 
-    public InstancePortDispatchRuntime(ILogger<InstancePortDispatchRuntime> logger, IInstancePortPolicyRepository repository, IInstanceCredentialMaterializer credentialMaterializer, AbstractFunctionExecutor abstractFunctionExecutor)
+    public InstancePortDispatchRuntime(ILogger<InstancePortDispatchRuntime> logger, IInstancePortPolicyRepository repository, IInstanceCredentialMaterializer credentialMaterializer, AbstractFunctionExecutor abstractFunctionExecutor, IExternalPortRuntimeEventLogRepository? runtimeEventLog = null)
     {
         _logger = logger;
         _repository = repository;
         _credentialMaterializer = credentialMaterializer;
         _abstractFunctionExecutor = abstractFunctionExecutor;
+        _runtimeEventLog = runtimeEventLog;
     }
 
     public async Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
@@ -67,37 +83,51 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
         {
             var rawRef = ReadStringProperty(request.Payload, "instanceTargetRef") ?? ReadStringProperty(request.Payload, "instance_target_ref") ?? ReadStringProperty(request.Payload, "target_ref");
             if (!TryParseInstanceTargetRef(rawRef, out var portKind, out var portId, out var operationBindingKey))
-                return Fail("INSTANCE_PORT_TARGET_REF_INVALID", "instanceTargetRef must use instance-port:<db_instance_port|runtime_instance_port>:<uuid>:<operationBindingKey>.");
+                return await FailAsync("INSTANCE_PORT_TARGET_REF_INVALID", "instanceTargetRef must use instance-port:<db_instance_port|runtime_instance_port>:<uuid>:<operationBindingKey>.", null, null, ct);
 
             var port = await _repository.ResolveInstancePortRecordAsync(portKind, portId, ct);
             if (port is null || !port.Active)
-                return Fail("INSTANCE_PORT_RECORD_MISSING", "No active instance port record matched the dispatch target.");
+                return await FailAsync("INSTANCE_PORT_RECORD_MISSING", "No active instance port record matched the dispatch target.", null, operationBindingKey, ct);
             if (!string.Equals(port.PortKind, portKind, StringComparison.Ordinal) || port.InstancePortId != portId || string.IsNullOrWhiteSpace(port.ReferenceKey))
-                return Fail("INSTANCE_PORT_RECORD_MISSING", "Resolved instance port record does not match target or credential reference.");
+                return await FailAsync("INSTANCE_PORT_RECORD_MISSING", "Resolved instance port record does not match target or credential reference.", port, operationBindingKey, ct);
             if (ProviderSelectorAttempted(request.Payload))
-                return Fail("INSTANCE_PROVIDER_SELECTOR_FORBIDDEN", "provider_kind and required_by_bundle are data labels and cannot select runtime handlers.");
+                return await FailAsync("INSTANCE_PROVIDER_SELECTOR_FORBIDDEN", "provider_kind and required_by_bundle are data labels and cannot select runtime handlers.", port, operationBindingKey, ct);
 
             var credential = await _repository.ResolveInstanceCredentialReferenceAsync(port.ReferenceKey, ct);
             if (credential is null)
-                return Fail("INSTANCE_CREDENTIAL_REFERENCE_MISSING", "Instance credential reference could not be resolved.");
+                return await FailAsync("INSTANCE_CREDENTIAL_REFERENCE_MISSING", "Instance credential reference could not be resolved.", port, operationBindingKey, ct);
 
             var policy = await _repository.LoadConnectionPolicyAsync(port.InstanceAuthorityKey, port.ReferenceKey, ct);
             if (policy is null || !policy.Active)
-                return Fail("INSTANCE_CONNECTION_POLICY_MISSING", "No active instance connection policy matched the port authority.");
+                return await FailAsync("INSTANCE_CONNECTION_POLICY_MISSING", "No active instance connection policy matched the port authority.", port, operationBindingKey, ct);
 
             var binding = await _repository.LoadOperationAuthorityBindingAsync(port.InstanceAuthorityKey, operationBindingKey, ct);
             if (binding is null || !binding.Active)
-                return Fail("INSTANCE_OPERATION_AUTHORITY_MISSING", "No active instance operation authority binding matched the target.");
+                return await FailAsync("INSTANCE_OPERATION_AUTHORITY_MISSING", "No active instance operation authority binding matched the target.", port, operationBindingKey, ct);
 
-            var instanceContext = new InstancePortExecutionContext { PortRecord = port, CredentialVaultRecord = credential, ConnectionPolicy = policy, OperationBinding = binding, RuntimeOnlyConnectionString = _credentialMaterializer.MaterializeConnectionString(credential), RequestPayload = ReadObjectProperty(request.Payload, "dispatch_payload") };
+            string runtimeOnlyConnectionString;
+            try
+            {
+                runtimeOnlyConnectionString = _credentialMaterializer.MaterializeConnectionString(credential);
+            }
+            catch (InvalidOperationException ex) when (string.Equals(ex.Message, "INSTANCE_CREDENTIAL_MATERIALIZATION_FAILED", StringComparison.Ordinal) || string.Equals(ex.Message, "INSTANCE_CREDENTIAL_REFERENCE_MISSING", StringComparison.Ordinal))
+            {
+                return await FailAsync(ex.Message, "Instance credential could not be materialized for runtime use.", port, operationBindingKey, ct);
+            }
+
+            var instanceContext = new InstancePortExecutionContext { PortRecord = port, CredentialVaultRecord = credential, ConnectionPolicy = policy, OperationBinding = binding, RuntimeOnlyConnectionString = runtimeOnlyConnectionString, RequestPayload = ReadObjectProperty(request.Payload, "dispatch_payload") };
             var result = await _abstractFunctionExecutor.ExecuteAsync(binding.AbstractFunctionKey, new AbstractFunctionExecutionContext(binding.FunctionKey, ReadObjectProperty(request.Payload, "dispatch_payload"), requiredRuntimeLane: "instance_port_runtime", instancePortContext: instanceContext), ct);
+            await AppendEvidenceAsync("instance_port_execution_success", port, binding.OperationBindingKey, binding.FunctionKey, null, ct);
             var data = JsonSerializer.SerializeToElement(new { instancePortDispatch = new { status = "executed", instanceTargetRef = rawRef, portKind, instancePortId = portId, port.InstanceAuthorityKey, binding.OperationBindingKey, binding.FunctionKey, result = result.ResultContext } });
             return new EndpointResponseDto(true, new Emission(null, null, null, [], data, []), []);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or AbstractFunctionFailCloseException or TimeoutException)
         {
-            _logger.LogWarning(ex, "Instance port dispatch failed closed.");
-            return Fail(ex is AbstractFunctionFailCloseException af ? af.Message : ex.Message, "Instance port dispatch failed closed.");
+            var code = ex is AbstractFunctionFailCloseException af ? af.Message : ex.Message;
+            if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("INSTANCE_", StringComparison.Ordinal)) code = "INSTANCE_OPERATION_FAILED_CLOSED";
+            _logger.LogWarning("Instance port dispatch failed closed with {Code}.", code);
+            await AppendEvidenceAsync("instance_port_execution_fail_close", contextPort: null, operationBindingKey: null, functionKey: null, failureCode: code, ct);
+            return Fail(code, "Instance port dispatch failed closed.");
         }
     }
 
@@ -114,6 +144,32 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
     }
 
     private static bool ProviderSelectorAttempted(JsonElement? payload) => ReadStringProperty(payload, "provider_kind_selector") is not null || ReadStringProperty(payload, "required_by_bundle_selector") is not null;
+    private async Task<EndpointResponseDto> FailAsync(string code, string message, InstancePortRecord? contextPort, string? operationBindingKey, CancellationToken ct)
+    {
+        await AppendEvidenceAsync("instance_port_execution_fail_close", contextPort, operationBindingKey, null, code, ct);
+        return Fail(code, message);
+    }
+
+    private async Task AppendEvidenceAsync(string eventType, InstancePortRecord? contextPort, string? operationBindingKey, string? functionKey, string? failureCode, CancellationToken ct)
+    {
+        if (_runtimeEventLog is null) return;
+        var entityId = BuildReferenceOnlyEvidenceId(contextPort, operationBindingKey, functionKey, failureCode);
+        await _runtimeEventLog.AppendAsync(eventType, entityId, contextPort?.RequiredByBundle, ct);
+    }
+
+    private static string? BuildReferenceOnlyEvidenceId(InstancePortRecord? contextPort, string? operationBindingKey, string? functionKey, string? failureCode)
+    {
+        if (contextPort is null && operationBindingKey is null && functionKey is null && failureCode is null) return null;
+        return string.Join(";", new[]
+        {
+            contextPort is null ? null : $"instance_authority_key={contextPort.InstanceAuthorityKey}",
+            contextPort is null ? null : $"port_kind={contextPort.PortKind}",
+            operationBindingKey is null ? null : $"operation_binding_key={operationBindingKey}",
+            functionKey is null ? null : $"function_key={functionKey}",
+            failureCode is null ? null : $"failure_code={failureCode}"
+        }.Where(static part => !string.IsNullOrWhiteSpace(part)));
+    }
+
     private static EndpointResponseDto Fail(string code, string message) => new(false, null, [new ValidationError(code, message)]);
     private static string? ReadStringProperty(JsonElement? payload, string name) => payload is { ValueKind: JsonValueKind.Object } e && e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
     private static JsonElement? ReadObjectProperty(JsonElement? payload, string name) => payload is { ValueKind: JsonValueKind.Object } e && e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Object ? p.Clone() : null;
@@ -161,8 +217,19 @@ public sealed class CallInstancePostgresFunctionPrimitiveAdapter : IAbstractFunc
     internal static void VerifyInstanceOperationAuthorityBindingAsync(AbstractFunctionExecutionContext context, InstanceOperationAuthorityBinding binding)
     {
         if (binding.OutputShape.Count == 0) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidProjection, "INSTANCE_OPERATION_AUTHORITY_MISSING");
-        if (!context.AuthorityBindings.Any(b => b.Active && b.AuthorityKind == "instance" && b.AuthorityRef == binding.InstanceAuthorityKey) || !context.AuthorityBindings.Any(b => b.Active && b.AuthorityKind == "instance_function" && b.AuthorityRef == binding.FunctionKey)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "INSTANCE_FUNCTION_AUTHORITY_MISSING");
+        if (!HasAuthority(context, "instance", binding.InstanceAuthorityKey)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "INSTANCE_OPERATION_AUTHORITY_MISSING");
+        if (!HasAuthority(context, "instance_function", binding.FunctionKey)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "INSTANCE_FUNCTION_AUTHORITY_MISSING");
+        if (!HasAuthority(context, "instance_schema", binding.FunctionSchema)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "INSTANCE_FUNCTION_SCHEMA_NOT_ALLOWLISTED");
+        if (!HasAuthority(context, "instance_operation", binding.OperationBindingKey)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "INSTANCE_OPERATION_NOT_APPROVED");
+        foreach (var outputRef in binding.OutputShape.Values)
+        {
+            if (!HasAuthority(context, "output", outputRef))
+                throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "INSTANCE_OUTPUT_AUTHORITY_MISSING");
+        }
     }
+
+    private static bool HasAuthority(AbstractFunctionExecutionContext context, string kind, string authorityRef)
+        => context.AuthorityBindings.Any(b => b.Active && string.Equals(b.AuthorityKind, kind, StringComparison.Ordinal) && string.Equals(b.AuthorityRef, authorityRef, StringComparison.Ordinal));
 
     internal static object? SanitizeInstanceFunctionResultAsync(object? result, InstanceConnectionPolicy policy, InstanceOperationAuthorityBinding binding)
     {

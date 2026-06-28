@@ -562,7 +562,7 @@ CREATE TABLE IF NOT EXISTS topology.abstract_function_input_bindings (
 CREATE TABLE IF NOT EXISTS topology.abstract_function_authority_bindings (
     authority_binding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     abstract_function_id UUID NOT NULL REFERENCES topology.abstract_function_manifests (abstract_function_id) ON DELETE CASCADE,
-    authority_kind       TEXT NOT NULL CHECK (authority_kind IN ('table','column','join','output','policy','instance','instance_function')),
+    authority_kind       TEXT NOT NULL CHECK (authority_kind IN ('table','column','join','output','policy','instance','instance_function','instance_schema','instance_operation')),
     authority_ref        TEXT NOT NULL,
     active               BOOLEAN NOT NULL DEFAULT true,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -575,7 +575,7 @@ ALTER TABLE topology.abstract_function_authority_bindings
     DROP CONSTRAINT IF EXISTS abstract_function_authority_bindings_authority_kind_check;
 ALTER TABLE topology.abstract_function_authority_bindings
     ADD CONSTRAINT abstract_function_authority_bindings_authority_kind_check
-    CHECK (authority_kind IN ('table','column','join','output','policy','instance','instance_function'));
+    CHECK (authority_kind IN ('table','column','join','output','policy','instance','instance_function','instance_schema','instance_operation'));
 
 CREATE INDEX IF NOT EXISTS idx_abstract_function_steps_manifest
     ON topology.abstract_function_steps (abstract_function_id, step_order) WHERE active = true;
