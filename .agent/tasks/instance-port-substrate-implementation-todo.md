@@ -20,7 +20,7 @@ This file preserves future implementation work. It is not evidence of implemente
 
 ## Bundle increment `credential-management-instance-settings-topology`
 
-Status: not_started
+Status: implemented_in_current_branch
 Parent bundle: `instance-port-substrate`
 
 問題点:
@@ -80,13 +80,13 @@ NG軸:
 - Admin UI Builder / Design Inspector の Event 設定に instance function definition / address edit / schema edit / raw SQL edit / credential edit を持たせる
 
 受入条件:
-- [ ] existing credential management projection 系で `user_auth` / `external` / `instance_settings` を select / mode / category 切替できる。
-- [ ] `instance` は external_port `credential_kind` ではなく instance settings category として扱う。
-- [ ] `db_instance_port` / `runtime_instance_port` / operation binding / connection policy が seed/data-defined に扱われる。
-- [ ] JSON template download/import が secret・endpoint実値・connection string・raw SQL・executable authority を出さない。
-- [ ] approved operation 以外は Admin UI Builder Design Inspector の Event action candidate に出ない。
-- [ ] dedicated credential route / standalone credential plane / provider-specific handler を追加していない。
-- [ ] `.agent/tests/check-instance-port-substrate.sh` が existing credential management projection extension / instance_settings category / JSON template leak guard / Design Inspector event-authoring scope boundary を検出する。
+- [x] existing credential management projection 系で `user_auth` / `external` / `instance_settings` を select / mode / category 切替できる。
+- [x] `instance` は external_port `credential_kind` ではなく instance settings category として扱う。
+- [x] `db_instance_port` / `runtime_instance_port` / operation binding / connection policy が seed/data-defined に扱われる。
+- [x] JSON template download/import が secret・endpoint実値・connection string・raw SQL・executable authority を出さない。
+- [x] approved operation 以外は Admin UI Builder Design Inspector の Event action candidate に出ない。
+- [x] dedicated credential route / standalone credential plane / provider-specific handler を追加していない。
+- [x] `.agent/tests/check-instance-port-substrate.sh` が existing credential management projection extension / instance_settings category / JSON template leak guard / Design Inspector event-authoring scope boundary を検出する。
 
 ## Explicitly out of scope for the SSOT wiring PR
 

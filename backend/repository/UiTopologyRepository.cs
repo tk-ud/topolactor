@@ -252,6 +252,12 @@ public class UiTopologyRepository
         throw new NotImplementedException("UiTopologyRepository.ListExternalPortAuthoringCandidatesAsync must be overridden.");
     }
 
+    public virtual Task<IReadOnlyList<InstanceOperationAuthoringCandidateDto>> ListInstanceOperationAuthoringCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ListInstanceOperationAuthoringCandidatesAsync must be overridden.");
+    }
+
     public virtual Task<AdminPackageWiringDto?> GetPackageWiringAsync(
         Guid packageId,
         CancellationToken ct = default)
