@@ -78,27 +78,142 @@ check_checklist_template_clean() {
   echo "OK  [template-clean] $file"
 }
 
+tmp_path_kind() {
+  local path="$1"
+  if [ -d "$REPO_ROOT/$path" ]; then
+    echo "directory"
+  elif [ -f "$REPO_ROOT/$path" ]; then
+    echo "file"
+  else
+    echo "unknown"
+  fi
+}
+
+declare -a TMP_VIOLATION_PATHS=()
+declare -A TMP_VIOLATIONS_BY_PATH=()
+declare -A TMP_KIND_BY_PATH=()
+
+tmp_record_violation() {
+  local path="$1"
+  local violation="$2"
+  local kind="$3"
+
+  if [ -z "${TMP_VIOLATIONS_BY_PATH[$path]+set}" ]; then
+    TMP_VIOLATION_PATHS+=("$path")
+    TMP_VIOLATIONS_BY_PATH[$path]="$violation"
+    TMP_KIND_BY_PATH[$path]="$kind"
+    return
+  fi
+
+  if [[ ", ${TMP_VIOLATIONS_BY_PATH[$path]}, " != *", $violation, "* ]]; then
+    TMP_VIOLATIONS_BY_PATH[$path]="${TMP_VIOLATIONS_BY_PATH[$path]}, $violation"
+  fi
+  if [ "$kind" = "tracked_file" ]; then
+    TMP_KIND_BY_PATH[$path]="$kind"
+  fi
+}
+
+github_step_summary_available() {
+  [ -n "${GITHUB_STEP_SUMMARY:-}" ]
+}
+
+append_structure_failure_summary() {
+  if ! github_step_summary_available || [ "${#TMP_VIOLATION_PATHS[@]}" -eq 0 ]; then
+    return
+  fi
+
+  {
+    echo "## Structure Check Failure"
+    echo ""
+    echo "| path | violations | kind | required action | owner |"
+    echo "|---|---|---|---|---|"
+    local path
+    for path in "${TMP_VIOLATION_PATHS[@]}"; do
+      printf '| `%s` | %s | %s | final auditor deletes after audit, or moves durable content into SSOT/todo | audit finalization |\n' \
+        "$path" \
+        "${TMP_VIOLATIONS_BY_PATH[$path]}" \
+        "${TMP_KIND_BY_PATH[$path]}"
+    done
+  } >>"$GITHUB_STEP_SUMMARY"
+}
+
+emit_tmp_violation_annotation() {
+  local path="$1"
+  echo "::error file=$path,title=Non-mergeable .agent/tmp artifact::See Structure Check Failure summary."
+}
+
+print_tmp_violation_summary() {
+  if [ "${#TMP_VIOLATION_PATHS[@]}" -eq 0 ]; then
+    return
+  fi
+
+  fail ".agent/tmp contains non-mergeable artifacts"
+  local path violation
+  for path in "${TMP_VIOLATION_PATHS[@]}"; do
+    {
+      echo ""
+      echo "[structure-check tmp summary]"
+      echo "path: $path"
+      echo "violations:"
+      IFS=',' read -ra violations <<<"${TMP_VIOLATIONS_BY_PATH[$path]}"
+      for violation in "${violations[@]}"; do
+        violation="${violation# }"
+        echo "  - $violation"
+      done
+      echo "kind: ${TMP_KIND_BY_PATH[$path]}"
+      echo "required action: final auditor deletes after audit, or moves durable content into SSOT/todo."
+      echo "owner: audit finalization"
+    } >&2
+    emit_tmp_violation_annotation "$path"
+  done
+
+  append_structure_failure_summary
+}
+
 check_tmp_runtime_artifacts() {
   local tmp_dir="$REPO_ROOT/.agent/tmp"
-  local leftovers
-  leftovers="$(find "$tmp_dir" -mindepth 1 \( -type f -o -type d \) ! -path "$tmp_dir/.gitkeep" | sort || true)"
-  if [ -n "$leftovers" ]; then
-    fail "Runtime tmp artifacts must be cleaned before completion; found: ${leftovers//$'\n'/, }"
-  else
+  local -a leftovers=()
+  local artifact abs_path rel_path kind
+  mapfile -t leftovers < <(find "$tmp_dir" -mindepth 1 \( -type f -o -type d \) ! -path "$tmp_dir/.gitkeep" | sort || true)
+
+  if [ "${#leftovers[@]}" -eq 0 ]; then
     echo "OK  [tmp]  runtime artifacts cleaned (.gitkeep only)"
+    return
   fi
+
+  for artifact in "${leftovers[@]}"; do
+    abs_path="$(cd "$(dirname "$artifact")" && pwd)/$(basename "$artifact")"
+    rel_path="${abs_path#$REPO_ROOT/}"
+    kind="$(tmp_path_kind "$rel_path")"
+    tmp_record_violation "$rel_path" "runtime_leftover" "$kind"
+  done
 }
 
 check_tmp_tracked_files() {
-  local tracked
-  tracked="$(git -C "$REPO_ROOT" ls-files .agent/tmp)"
-  if [ "$tracked" = ".agent/tmp/.gitkeep" ]; then
+  local -a tracked=()
+  local -a invalid_tracked=()
+  local path
+  mapfile -t tracked < <(git -C "$REPO_ROOT" ls-files .agent/tmp)
+
+  for path in "${tracked[@]}"; do
+    if [ "$path" != ".agent/tmp/.gitkeep" ]; then
+      invalid_tracked+=("$path")
+    fi
+  done
+
+  if [ "${#invalid_tracked[@]}" -eq 0 ]; then
     echo "OK  [tmp]  tracked files in .agent/tmp are limited to .gitkeep"
-  else
-    fail "Tracked files under .agent/tmp must be only .agent/tmp/.gitkeep; found: ${tracked:-<none>}"
+    return
   fi
+
+  for path in "${invalid_tracked[@]}"; do
+    tmp_record_violation "$path" "tracked_tmp_file" "tracked_file"
+  done
 }
 
+report_tmp_violations() {
+  print_tmp_violation_summary
+}
 
 check_no_in_progress_todos() {
   local todo_file="$REPO_ROOT/.agent/tasks/todo.md"
@@ -738,6 +853,7 @@ fi
 
 check_tmp_runtime_artifacts
 check_tmp_tracked_files
+report_tmp_violations
 check_no_in_progress_todos
 check_no_annotated_pseudo_paths_in_ssot_map
 
