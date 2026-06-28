@@ -8,7 +8,6 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
-STRUCTURE_CHECK_SUMMARY_STARTED=0
 
 
 if ! command -v rg >/dev/null 2>&1; then
@@ -90,105 +89,85 @@ tmp_path_kind() {
   fi
 }
 
-print_tmp_artifact_detail() {
-  local path="$1"
-  local kind
-  kind="$(tmp_path_kind "$path")"
-  {
-    echo ""
-    echo "[structure-check tmp artifact]"
-    echo "path: $path"
-    echo "kind: $kind"
-    echo "reason: .agent/tmp artifacts are handoff/runtime scratch files and must not remain before merge completion."
-    echo "allowed use: temporary audit/design handoff before final audit."
-    echo "required action: final auditor removes this file after audit, or move durable content into SSOT/todo before merge."
-    echo "owner: audit finalization"
-  } >&2
-}
+declare -a TMP_VIOLATION_PATHS=()
+declare -A TMP_VIOLATIONS_BY_PATH=()
+declare -A TMP_KIND_BY_PATH=()
 
-print_tracked_tmp_detail() {
+tmp_record_violation() {
   local path="$1"
-  {
-    echo ""
-    echo "[structure-check tracked tmp]"
-    echo "path: $path"
-    echo "kind: tracked_file"
-    echo "reason: tracked .agent/tmp handoff files are temporary and must not become durable repository state."
-    echo "allowed use: temporary PR handoff before final audit."
-    echo "required action: final auditor deletes the handoff file after PR content audit."
-    echo "owner: audit finalization"
-  } >&2
+  local violation="$2"
+  local kind="$3"
+
+  if [ -z "${TMP_VIOLATIONS_BY_PATH[$path]+set}" ]; then
+    TMP_VIOLATION_PATHS+=("$path")
+    TMP_VIOLATIONS_BY_PATH[$path]="$violation"
+    TMP_KIND_BY_PATH[$path]="$kind"
+    return
+  fi
+
+  if [[ ", ${TMP_VIOLATIONS_BY_PATH[$path]}, " != *", $violation, "* ]]; then
+    TMP_VIOLATIONS_BY_PATH[$path]="${TMP_VIOLATIONS_BY_PATH[$path]}, $violation"
+  fi
+  if [ "$kind" = "tracked_file" ]; then
+    TMP_KIND_BY_PATH[$path]="$kind"
+  fi
 }
 
 github_step_summary_available() {
   [ -n "${GITHUB_STEP_SUMMARY:-}" ]
 }
 
-append_structure_failure_summary_heading() {
-  if ! github_step_summary_available; then
+append_structure_failure_summary() {
+  if ! github_step_summary_available || [ "${#TMP_VIOLATION_PATHS[@]}" -eq 0 ]; then
     return
   fi
-  if [ "$STRUCTURE_CHECK_SUMMARY_STARTED" -eq 0 ]; then
+
+  {
+    echo "## Structure Check Failure"
+    echo ""
+    echo "| path | violations | kind | required action | owner |"
+    echo "|---|---|---|---|---|"
+    local path
+    for path in "${TMP_VIOLATION_PATHS[@]}"; do
+      printf '| `%s` | %s | %s | final auditor deletes after audit, or moves durable content into SSOT/todo | audit finalization |\n' \
+        "$path" \
+        "${TMP_VIOLATIONS_BY_PATH[$path]}" \
+        "${TMP_KIND_BY_PATH[$path]}"
+    done
+  } >>"$GITHUB_STEP_SUMMARY"
+}
+
+emit_tmp_violation_annotation() {
+  local path="$1"
+  echo "::error file=$path,title=Non-mergeable .agent/tmp artifact::See Structure Check Failure summary."
+}
+
+print_tmp_violation_summary() {
+  if [ "${#TMP_VIOLATION_PATHS[@]}" -eq 0 ]; then
+    return
+  fi
+
+  fail ".agent/tmp contains non-mergeable artifacts"
+  local path violation
+  for path in "${TMP_VIOLATION_PATHS[@]}"; do
     {
-      echo "## Structure Check Failure"
       echo ""
-    } >>"$GITHUB_STEP_SUMMARY"
-    STRUCTURE_CHECK_SUMMARY_STARTED=1
-  fi
-}
+      echo "[structure-check tmp summary]"
+      echo "path: $path"
+      echo "violations:"
+      IFS=',' read -ra violations <<<"${TMP_VIOLATIONS_BY_PATH[$path]}"
+      for violation in "${violations[@]}"; do
+        violation="${violation# }"
+        echo "  - $violation"
+      done
+      echo "kind: ${TMP_KIND_BY_PATH[$path]}"
+      echo "required action: final auditor deletes after audit, or moves durable content into SSOT/todo."
+      echo "owner: audit finalization"
+    } >&2
+    emit_tmp_violation_annotation "$path"
+  done
 
-append_tmp_artifacts_summary_header() {
-  if ! github_step_summary_available; then
-    return
-  fi
-  append_structure_failure_summary_heading
-  {
-    echo "### Temporary tmp artifacts"
-    echo ""
-    echo "| path | kind | reason | required action | owner |"
-    echo "|---|---|---|---|---|"
-  } >>"$GITHUB_STEP_SUMMARY"
-}
-
-append_tracked_tmp_summary_header() {
-  if ! github_step_summary_available; then
-    return
-  fi
-  append_structure_failure_summary_heading
-  {
-    echo ""
-    echo "### Tracked tmp files"
-    echo ""
-    echo "| path | kind | reason | required action | owner |"
-    echo "|---|---|---|---|---|"
-  } >>"$GITHUB_STEP_SUMMARY"
-}
-
-append_tmp_artifact_summary_row() {
-  local path="$1"
-  local kind="$2"
-  if ! github_step_summary_available; then
-    return
-  fi
-  printf '| `%s` | %s | .agent/tmp artifacts are temporary handoff/runtime scratch files | final auditor removes after audit or moves durable content into SSOT/todo | audit finalization |\n' "$path" "$kind" >>"$GITHUB_STEP_SUMMARY"
-}
-
-append_tracked_tmp_summary_row() {
-  local path="$1"
-  if ! github_step_summary_available; then
-    return
-  fi
-  printf '| `%s` | tracked_file | tracked .agent/tmp handoff files must not become durable repository state | final auditor deletes after PR content audit | audit finalization |\n' "$path" >>"$GITHUB_STEP_SUMMARY"
-}
-
-emit_tmp_artifact_annotation() {
-  local path="$1"
-  echo "::error file=$path,title=Temporary tmp artifact detected::.agent/tmp handoff/runtime scratch file must be removed before merge completion. Required action: final auditor removes it after audit, or moves durable content into SSOT/todo."
-}
-
-emit_tracked_tmp_annotation() {
-  local path="$1"
-  echo "::error file=$path,title=Tracked tmp file is not mergeable::Tracked .agent/tmp handoff file must not become durable repository state. Required action: final auditor deletes it after PR content audit."
+  append_structure_failure_summary
 }
 
 check_tmp_runtime_artifacts() {
@@ -197,20 +176,17 @@ check_tmp_runtime_artifacts() {
   local artifact abs_path rel_path kind
   mapfile -t leftovers < <(find "$tmp_dir" -mindepth 1 \( -type f -o -type d \) ! -path "$tmp_dir/.gitkeep" | sort || true)
 
-  if [ "${#leftovers[@]}" -gt 0 ]; then
-    fail "temporary runtime artifacts detected under .agent/tmp"
-    append_tmp_artifacts_summary_header
-    for artifact in "${leftovers[@]}"; do
-      abs_path="$(cd "$(dirname "$artifact")" && pwd)/$(basename "$artifact")"
-      rel_path="${abs_path#$REPO_ROOT/}"
-      kind="$(tmp_path_kind "$rel_path")"
-      print_tmp_artifact_detail "$rel_path"
-      emit_tmp_artifact_annotation "$rel_path"
-      append_tmp_artifact_summary_row "$rel_path" "$kind"
-    done
-  else
+  if [ "${#leftovers[@]}" -eq 0 ]; then
     echo "OK  [tmp]  runtime artifacts cleaned (.gitkeep only)"
+    return
   fi
+
+  for artifact in "${leftovers[@]}"; do
+    abs_path="$(cd "$(dirname "$artifact")" && pwd)/$(basename "$artifact")"
+    rel_path="${abs_path#$REPO_ROOT/}"
+    kind="$(tmp_path_kind "$rel_path")"
+    tmp_record_violation "$rel_path" "runtime_leftover" "$kind"
+  done
 }
 
 check_tmp_tracked_files() {
@@ -227,17 +203,17 @@ check_tmp_tracked_files() {
 
   if [ "${#invalid_tracked[@]}" -eq 0 ]; then
     echo "OK  [tmp]  tracked files in .agent/tmp are limited to .gitkeep"
-  else
-    fail "tracked files under .agent/tmp are not mergeable except .agent/tmp/.gitkeep"
-    append_tracked_tmp_summary_header
-    for path in "${invalid_tracked[@]}"; do
-      print_tracked_tmp_detail "$path"
-      emit_tracked_tmp_annotation "$path"
-      append_tracked_tmp_summary_row "$path"
-    done
+    return
   fi
+
+  for path in "${invalid_tracked[@]}"; do
+    tmp_record_violation "$path" "tracked_tmp_file" "tracked_file"
+  done
 }
 
+report_tmp_violations() {
+  print_tmp_violation_summary
+}
 
 check_no_in_progress_todos() {
   local todo_file="$REPO_ROOT/.agent/tasks/todo.md"
@@ -877,6 +853,7 @@ fi
 
 check_tmp_runtime_artifacts
 check_tmp_tracked_files
+report_tmp_violations
 check_no_in_progress_todos
 check_no_annotated_pseudo_paths_in_ssot_map
 
