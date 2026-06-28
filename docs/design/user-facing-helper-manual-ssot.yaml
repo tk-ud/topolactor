@@ -68,6 +68,51 @@ user_facing_helper_manual_ssot:
       - docs/design/extended-runtime-bundle-registry-ssot.yaml
       - docs/framework-policy.yaml
 
+  helper_reference_artifact:
+    description: >-
+      helper reference artifact は、Agent / External AI / Local LLM / admin UI が同じ参照点を読むための
+      data-defined helper body である。AI向けには internal vocabulary を保持し、人間向けには
+      user-facing vocabulary projection を提供する。
+    planned_paths:
+      schema: docs/helper/helper-manual.schema.json
+      seed: docs/helper/helper-manual.seed.json
+    artifact_status: planned
+    authority: reference_only_not_runtime_authority
+    required_top_level_fields:
+      - id
+      - title
+      - category
+      - audience
+      - admin_surface
+      - internal_terms
+      - user_facing_terms
+      - mcp_draft_payload_hints
+      - unresolved_fields_policy
+      - approval_boundary
+      - prohibited_actions
+      - related_ssot
+      - examples
+    audience_values:
+      - human
+      - agent
+      - integrator
+      - admin
+    category_values:
+      - getting_started
+      - admin_authoring_flow
+      - mcp_topology_authoring_draft
+      - cli_mcp_reader
+      - external_bundle_guide
+      - approval_boundary
+      - export_and_file_stream
+      - ui_builder_authoring
+      - ci_attention_guidance
+    invariant:
+      - helper_artifact_is_data_defined_reference_not_authority
+      - helper_artifact_must_not_contain_secret_endpoint_credential_or_raw_sql
+      - helper_artifact_must_reference_canonical_ssot_for_runtime_semantics
+      - helper_artifact_must_distinguish_ai_mcp_candidate_origin_from_human_admin_manual_draft
+
   user_facing_message_policy:
     description: >-
       ユーザーに向けてどのような表現・約束をするかの方針。
@@ -267,5 +312,6 @@ user_facing_helper_manual_ssot:
   change_surface:
     - user_facing_helper_manual
     - ux_facing_policy_ssot
+    - data_defined_helper_reference_artifact
     - helper_manual_category
     - safety_boundary_user_promise
