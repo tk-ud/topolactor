@@ -379,6 +379,15 @@ CREATE TABLE IF NOT EXISTS topology.external_credential_vault (
 ALTER TABLE topology.external_credential_vault
     ADD COLUMN IF NOT EXISTS reference_key TEXT;
 
+DO $$
+BEGIN
+    ALTER TABLE topology.external_credential_vault
+        ADD CONSTRAINT external_credential_vault_reference_key_unique
+        UNIQUE (reference_key);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_external_credential_vault_provider_bundle
     ON topology.external_credential_vault (provider_kind, required_by_bundle)
     WHERE active = true;
