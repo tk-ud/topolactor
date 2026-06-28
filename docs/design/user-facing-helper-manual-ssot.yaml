@@ -244,6 +244,70 @@ user_facing_helper_manual_ssot:
       - helper_component_must_not_bypass_mcp_import_candidate_audit
       - helper_component_must_not_treat_dismissed_ci_attention_as_unlock
 
+  provenance_boundary:
+    description: >-
+      AI / MCP / External AI / Local LLM 由来の candidate evidence と、
+      人間が admin 画面で手作業作成した draft を監査上混同しないための境界。
+      helper artifact / admin helper projection / MCP draft guidance は origin evidence を保持し、
+      candidate を active topology や human manual admin draft として扱わない。
+    origin_kinds:
+      human_admin_manual:
+        description: 人間が admin UI 上で明示的に作成・編集した draft。
+        required_evidence:
+          - actor_user_ref
+          - admin_surface
+          - submitted_step_or_view_context
+      mcp_import_candidate:
+        description: MCP import-candidate lane から保存された candidate / draft evidence。
+        required_evidence:
+          - source_transcript_ref
+          - root_utterance
+          - confidence
+          - unresolved_fields
+          - evidence_refs
+          - client_or_tool_origin
+      external_ai_structured_output:
+        description: External AI が生成した構造化出力を source とする candidate evidence。
+        required_evidence:
+          - source_transcript_ref
+          - structured_output_payload
+          - confidence
+          - unresolved_fields
+          - evidence_refs
+          - client_or_tool_origin
+      local_llm_structured_output:
+        description: Local LLM / External instance が生成した構造化出力を source とする candidate evidence。
+        required_evidence:
+          - source_transcript_ref
+          - structured_output_payload
+          - confidence
+          - unresolved_fields
+          - evidence_refs
+          - client_or_tool_origin
+    display_policy:
+      - admin_helper_projection_must_show_origin_badge
+      - admin_helper_projection_must_show_review_state
+      - admin_helper_projection_must_show_unresolved_fields_when_present
+      - admin_helper_projection_must_show_preview_diff_summary_when_present
+      - admin_helper_projection_must_show_source_evidence_summary_when_available
+    transition_policy:
+      candidate_to_admin_draft:
+        requires:
+          - explicit_human_review
+          - preview_diff_visible
+          - unresolved_fields_resolved_or_explicitly_accepted
+          - origin_evidence_preserved
+      candidate_to_active_topology:
+        policy: >-
+          helper/manual は active topology reflection authority を持たない。
+          active topology reflection は canonical runtime/admin authority のみが扱う。
+    prohibited:
+      - losing_candidate_origin
+      - showing_ai_mcp_candidate_as_human_manual_admin_draft
+      - reflecting_candidate_without_explicit_human_review
+      - hiding_unresolved_fields_before_review
+      - treating_helper_artifact_as_runtime_authority
+
   user_facing_message_policy:
     description: >-
       ユーザーに向けてどのような表現・約束をするかの方針。
