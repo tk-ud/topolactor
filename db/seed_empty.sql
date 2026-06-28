@@ -2123,6 +2123,32 @@ ON CONFLICT (policy_id, step_order) DO NOTHING;
 -- url_or_env_reference values are env-variable reference names, not real URLs.
 -- ---------------------------------------------------------------------------
 
+
+-- Instance port runtime seed records use guarded vault reference metadata only.
+INSERT INTO topology.external_credential_vault
+    (credential_vault_id, provider_kind, required_by_bundle, token_kind, token_hash, encrypted_payload, encryption_key_reference, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000aa1', 'external_postgres', 'generic_instance_integration', 'runtime_connection_ref', 'sha256:instance-reference-only', decode('00','hex'), 'kms:instance-reference-key', 'vault:ref:generic_instance_runtime', true)
+ON CONFLICT (credential_vault_id) DO NOTHING;
+
+INSERT INTO topology.db_instance_port
+    (instance_port_id, port_kind, instance_authority_key, provider_kind, required_by_bundle, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000ab1', 'db_instance_port', 'registered_instance_key', 'external_postgres', 'generic_instance_integration', 'vault:ref:generic_instance_runtime', true)
+ON CONFLICT (instance_port_id) DO NOTHING;
+
+INSERT INTO topology.runtime_instance_port
+    (instance_port_id, port_kind, instance_authority_key, provider_kind, required_by_bundle, reference_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000ab2', 'runtime_instance_port', 'registered_runtime_key', 'peer_runtime', 'generic_instance_integration', 'vault:ref:generic_instance_runtime', true)
+ON CONFLICT (instance_port_id) DO NOTHING;
+
+INSERT INTO topology.instance_connection_policy
+    (policy_id, instance_authority_key, credential_reference_key, connection_timeout_ms, statement_timeout_ms, max_result_bytes, allowed_schemas, allowed_function_names, result_sanitize_policy_key, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000ac1', 'registered_instance_key', 'vault:ref:generic_instance_runtime', 3000, 3000, 65536, ARRAY['approved_schema'], ARRAY['approved_function'], 'secret_deny_default', true)
+ON CONFLICT (instance_authority_key, credential_reference_key) DO NOTHING;
+
 -- file_storage_bundle: object_storage access_port + response_port
 INSERT INTO topology.external_access_ports
     (access_port_id, required_by_bundle, provider_kind, url_or_env_reference, credential_kind, reference_key, active)
@@ -2724,6 +2750,50 @@ VALUES
     ('00000000-0000-0000-0000-00000000af10', 'policy', 'external_credential_vault_refresh',       true),
     ('00000000-0000-0000-0000-00000000af10', 'table',  'topology.external_credential_vaults',     true)
 ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
+
+-- Instance port runtime abstract function manifests (runtime_lane = instance_port_runtime).
+INSERT INTO topology.abstract_function_manifests
+    (abstract_function_id, function_key, runtime_lane, authority_scope, output_shape, projection_deny_keys, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af90', 'registered_instance.approved_operation', 'instance_port_runtime', 'registered_instance.approved_operation', '{"result":"InstanceResult"}', ARRAY['credential','secret','token','connection_string','endpoint','private_key'], true),
+    ('00000000-0000-0000-0000-00000000af91', 'registered_instance.bound_operation', 'instance_port_runtime', 'registered_instance.bound_operation', '{"result":"InstanceResult"}', ARRAY['credential','secret','token','connection_string','endpoint','private_key'], true)
+ON CONFLICT (abstract_function_id) DO NOTHING;
+
+INSERT INTO topology.abstract_function_steps
+    (abstract_function_step_id, abstract_function_id, step_order, primitive_key, step_config, result_context_key, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000bf90', '00000000-0000-0000-0000-00000000af90', 1, 'call_instance_postgres_function', '{"function_schema":"approved_schema","function_name":"approved_function","arguments":["input_ref"]}', 'InstanceResult', true),
+    ('00000000-0000-0000-0000-00000000bf91', '00000000-0000-0000-0000-00000000af91', 1, 'call_bound_instance_function', '{}', 'InstanceResult', true)
+ON CONFLICT (abstract_function_id, step_order) DO NOTHING;
+
+INSERT INTO topology.abstract_function_input_bindings
+    (input_binding_id, abstract_function_step_id, input_key, binding_source, binding_path, required, secret, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000cf90', '00000000-0000-0000-0000-00000000bf90', 'input_ref', 'payload', 'input_ref', true, false, true)
+ON CONFLICT (abstract_function_step_id, input_key) DO NOTHING;
+
+INSERT INTO topology.abstract_function_authority_bindings
+    (abstract_function_id, authority_kind, authority_ref, active)
+VALUES
+    ('00000000-0000-0000-0000-00000000af90', 'instance', 'registered_instance_key', true),
+    ('00000000-0000-0000-0000-00000000af90', 'instance_function', 'registered_instance.approved_operation', true),
+    ('00000000-0000-0000-0000-00000000af90', 'instance_schema', 'approved_schema', true),
+    ('00000000-0000-0000-0000-00000000af90', 'instance_operation', 'approved-operation-placeholder', true),
+    ('00000000-0000-0000-0000-00000000af90', 'output', 'InstanceResult', true),
+    ('00000000-0000-0000-0000-00000000af91', 'instance', 'registered_runtime_key', true),
+    ('00000000-0000-0000-0000-00000000af91', 'instance_function', 'registered_instance.bound_operation', true),
+    ('00000000-0000-0000-0000-00000000af91', 'instance_schema', 'approved_schema', true),
+    ('00000000-0000-0000-0000-00000000af91', 'instance_operation', 'approved-bound-placeholder', true),
+    ('00000000-0000-0000-0000-00000000af91', 'output', 'InstanceResult', true)
+ON CONFLICT (abstract_function_id, authority_kind, authority_ref) DO NOTHING;
+
+INSERT INTO topology.instance_operation_authority_binding
+    (binding_id, operation_binding_key, instance_authority_key, function_key, function_schema, function_name, abstract_function_key, output_shape, secret_deny, active)
+VALUES
+    ('00000000-0000-0000-0000-000000000ad1', 'approved-operation-placeholder', 'registered_instance_key', 'registered_instance.approved_operation', 'approved_schema', 'approved_function', 'registered_instance.approved_operation', '{"result":"InstanceResult"}', true, true),
+    ('00000000-0000-0000-0000-000000000ad2', 'approved-bound-placeholder', 'registered_runtime_key', 'registered_instance.bound_operation', 'approved_schema', 'approved_bound_function', 'registered_instance.bound_operation', '{"result":"InstanceResult"}', true, true)
+ON CONFLICT (instance_authority_key, operation_binding_key) DO NOTHING;
 
 -- external_credential_vault_refresh_bundle: token refresh access_port
 INSERT INTO topology.external_access_ports

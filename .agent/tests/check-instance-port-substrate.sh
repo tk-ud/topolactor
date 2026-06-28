@@ -83,10 +83,12 @@ require_term "sibling_substrate_not_external_port_extension" "$SSOT" "sibling su
 require_term "instance_port_substrate_ref: docs/design/instance-port-substrate-ssot.yaml" docs/design/external-port-substrate-ssot.yaml "external-port sibling reference"
 require_term "instance_port_runtime" docs/design/external-port-substrate-ssot.yaml "instance lane distinction"
 require_term "product.instance_port_substrate" docs/system-roadmap.yaml "roadmap bundle"
-require_term "instance-port-substrate" .agent/tasks/todo.md "TODO bundle index"
-require_term "instance-port-substrate" .agent/tasks/instance-port-substrate-implementation-todo.md "future implementation TODO"
-require_term "credential-management-instance-settings-topology" .agent/tasks/instance-port-substrate-implementation-todo.md "credential management increment"
-require_term "Status: implemented_in_current_branch" .agent/tasks/instance-port-substrate-implementation-todo.md "credential management increment status"
+if rg -n 'instance-port-substrate|product.instance_port_substrate|instance-port-substrate-implementation-todo' .agent/tasks/todo.md; then
+  fail "implemented instance-port-substrate must not remain in active unfinished TODO surface"
+fi
+if [[ -e .agent/tasks/instance-port-substrate-implementation-todo.md ]]; then
+  fail "implemented instance-port-substrate implementation TODO must be deleted or retired from active task surfaces"
+fi
 
 CREDENTIAL_SEED_BLOCK=$(sed -n '/auth\/external credential management topology projection/,/external_port_substrate canonical physical binding catalog/p' db/seed_empty.sql)
 for term in \
@@ -192,21 +194,62 @@ fi
 
 # No raw SQL/function authority in frontend payload surfaces for the new primitive.
 if rg -n "call_instance_postgres_function|instance_function_authority_binding|instance_connection_policy" frontend; then
-  fail "instance function authority must not be introduced in frontend payload/projection before runtime design is implemented"
+  fail "instance function authority must not be introduced in frontend payload/projection"
 fi
 
-# The new primitive is design-only in this PR; require absence of a runtime implementation claim.
-if rg -n 'PrimitiveKey[[:space:]]*=>[[:space:]]*"call_instance_postgres_function"|class[[:space:]]+CallInstancePostgresFunctionPrimitiveAdapter|class[[:space:]]+InstancePortDispatchRuntime' backend; then
-  fail "instance port runtime implementation/stub found; this PR should remain SSOT/CI wiring only"
+# Runtime substrate must now exist as a sibling lane with primitive adapters and fail-close tests.
+require_term 'class InstancePortDispatchRuntime' backend/runtime/InstancePortRuntime.cs "instance runtime lane"
+require_term 'PrimitiveKey => "call_instance_postgres_function"' backend/runtime/InstancePortRuntime.cs "instance postgres primitive adapter"
+require_term 'PrimitiveKey => "call_bound_instance_function"' backend/runtime/InstancePortRuntime.cs "bound instance primitive adapter"
+require_term 'ResolveInstancePortRecordAsync' backend/repository/NpgsqlInstancePortPolicyRepository.cs "instance port repository read surface"
+require_term 'ResolveInstanceCredentialReferenceAsync' backend/repository/NpgsqlInstancePortPolicyRepository.cs "runtime credential resolver"
+require_term 'DecryptForRuntimeUse' backend/runtime/InstancePortRuntime.cs "guarded vault crypto materialization"
+if rg -n 'Convert\.ToBase64String\(credentialVaultRecord\.EncryptedPayload\)|class[[:space:]]+FakeMaterializer' backend/runtime backend/tests/Topolactor.Runtime.Tests/InstancePortRuntimeTests.cs; then
+  fail "instance credential materialization must use guarded vault crypto, not placeholder/base64 or fake materializer"
 fi
+require_term 'VerifyInstanceConnectionPolicyAsync' backend/runtime/InstancePortRuntime.cs "connection policy verifier"
+require_term 'VerifyInstanceOperationAuthorityBindingAsync' backend/runtime/InstancePortRuntime.cs "operation authority verifier"
+require_term 'SanitizeInstanceFunctionResultAsync' backend/runtime/InstancePortRuntime.cs "result sanitizer"
+require_term 'instance_schema' backend/runtime/InstancePortRuntime.cs "instance schema authority check"
+require_term 'instance_operation' backend/runtime/InstancePortRuntime.cs "instance operation authority check"
+require_term 'INSTANCE_OUTPUT_AUTHORITY_MISSING' backend/runtime/InstancePortRuntime.cs "output authority fail-close"
+require_term 'instance_port_execution_success' backend/runtime/InstancePortRuntime.cs "reference-only success runtime evidence"
+require_term 'instance_port_execution_fail_close' backend/runtime/InstancePortRuntime.cs "reference-only fail-close runtime evidence"
+require_term 'evidenceFunctionKey = binding.FunctionKey' backend/runtime/InstancePortRuntime.cs "fail-close evidence retains resolved function key"
+if rg -n 'AppendEvidenceAsync\("instance_port_execution_fail_close", contextPort: null' backend/runtime/InstancePortRuntime.cs; then
+  fail "primitive/executor fail-close evidence must not discard resolved instance reference context"
+fi
+require_term '["instance_port_runtime"]' backend/Program.cs "ManifestDispatcher instance runtime registration"
+require_term 'instance_port_runtime' db/topology_tables.sql "DDL runtime lane allowlist"
+require_term 'topology.instance_connection_policy' db/topology_tables.sql "connection policy DDL"
+require_term 'topology.instance_operation_authority_binding' db/topology_tables.sql "operation authority DDL"
+for test_name in \
+  ExecuteAsync_MissingCredentialReference_FailsClose \
+  ExecuteAsync_MissingAuthority_FailsClose \
+  ExecuteAsync_MalformedInstanceTargetRef_FailsClose \
+  ExecuteAsync_ProviderSelectorAttempt_FailsClose \
+  AbstractFunctionRuntimeLaneMismatch_FailsClose \
+  CallBoundInstanceFunction_SecretResultDenial_FailsClose \
+  CallInstancePostgresFunction_AuthorityHelpers_FailClose \
+  ExecuteAsync_MaterializationFailure_UsesRealVaultMaterializerAndFailsClose \
+  ExecuteAsync_Success_AppendsReferenceOnlyRuntimeEvidence \
+  ExecuteAsync_PrimitiveFailure_AppendsReferenceOnlyFailureEvidence \
+  ExecuteAsync_AuthorityMismatch_AppendsReferenceOnlyFailureEvidence \
+  CallBoundInstanceFunction_MissingAuthorityKinds_FailClose \
+  CallPostgresFunction_TopologyOnlyBoundary_Regression; do
+  require_term "$test_name" backend/tests/Topolactor.Runtime.Tests/InstancePortRuntimeTests.cs "instance fail-close test $test_name"
+done
 
-# Roadmap must not mark the new bundle as implemented/production_ready.
 python3 - <<'PY'
 from pathlib import Path
 s = Path('docs/system-roadmap.yaml').read_text()
 block = s.split('product.instance_port_substrate:', 1)[1].split('\n    product.', 1)[0]
-if 'status: implemented' in block or 'production_ready: true' in block:
-    raise SystemExit('product.instance_port_substrate must remain not_started/planned and production_ready false')
+if 'status: implemented' not in block or 'production_ready: false' not in block:
+    raise SystemExit('product.instance_port_substrate must be implemented but production_ready false until live integration evidence closes')
+if 'generic_instance_integration_acceptance_pending' not in block:
+    raise SystemExit('product.instance_port_substrate must retain explicit residual production-readiness acceptance gap')
+if '.agent/tasks/instance-port-substrate-implementation-todo.md' in block:
+    raise SystemExit('product.instance_port_substrate must not point to deleted implementation todo file')
 PY
 
-echo "OK instance port substrate SSOT/design wiring guard"
+echo "OK instance port substrate runtime guard"
