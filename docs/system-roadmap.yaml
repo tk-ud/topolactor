@@ -671,9 +671,9 @@ system_roadmap_ssot:
     product.instance_port_substrate:
       bundle_id: instance-port-substrate
       title: Credential-backed instance port substrate
-      status: partial
+      status: implemented
       production_ready: false
-      public_summary: Design SSOT, runtime-executable DDL/seed surface, instance_port_runtime sibling lane, runtime-only credential reference resolution, call_instance_postgres_function / call_bound_instance_function primitive adapters, authority/allowlist/sanitize/timeout fail-close guards, and regression tests are implemented. Remaining gap is live generic instance integration acceptance, not PR522 topology/projection/authoring scope.
+      public_summary: Design SSOT, runtime-executable DDL/seed surface, instance_port_runtime sibling lane, runtime-only credential reference resolution, call_instance_postgres_function / call_bound_instance_function primitive adapters, authority/allowlist/sanitize/timeout fail-close guards, and regression tests are implemented. Remaining live generic instance integration acceptance is production-readiness evidence, not implementation residue.
       scope:
         - instance_port_substrate_design
         - db_instance_port
@@ -685,7 +685,6 @@ system_roadmap_ssot:
       detail_ref:
         - docs/design/instance-port-substrate-ssot.yaml
         - docs/design/external-port-substrate-ssot.yaml
-        - .agent/tasks/instance-port-substrate-implementation-todo.md
       completion_condition:
         - instance_connection_is_credential_backed_and_runtime_only
         - call_instance_postgres_function_does_not_weaken_topology_only_call_postgres_function

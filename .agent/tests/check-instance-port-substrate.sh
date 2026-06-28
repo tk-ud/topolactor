@@ -83,10 +83,12 @@ require_term "sibling_substrate_not_external_port_extension" "$SSOT" "sibling su
 require_term "instance_port_substrate_ref: docs/design/instance-port-substrate-ssot.yaml" docs/design/external-port-substrate-ssot.yaml "external-port sibling reference"
 require_term "instance_port_runtime" docs/design/external-port-substrate-ssot.yaml "instance lane distinction"
 require_term "product.instance_port_substrate" docs/system-roadmap.yaml "roadmap bundle"
-require_term "instance-port-substrate" .agent/tasks/todo.md "TODO bundle index"
-require_term "instance-port-substrate" .agent/tasks/instance-port-substrate-implementation-todo.md "future implementation TODO"
-require_term "credential-management-instance-settings-topology" .agent/tasks/instance-port-substrate-implementation-todo.md "credential management increment"
-require_term "Status: implemented" .agent/tasks/instance-port-substrate-implementation-todo.md "credential management increment status"
+if rg -n 'instance-port-substrate|product.instance_port_substrate|instance-port-substrate-implementation-todo' .agent/tasks/todo.md; then
+  fail "implemented instance-port-substrate must not remain in active unfinished TODO surface"
+fi
+if [[ -e .agent/tasks/instance-port-substrate-implementation-todo.md ]]; then
+  fail "implemented instance-port-substrate implementation TODO must be deleted or retired from active task surfaces"
+fi
 
 CREDENTIAL_SEED_BLOCK=$(sed -n '/auth\/external credential management topology projection/,/external_port_substrate canonical physical binding catalog/p' db/seed_empty.sql)
 for term in \
@@ -242,10 +244,12 @@ python3 - <<'PY'
 from pathlib import Path
 s = Path('docs/system-roadmap.yaml').read_text()
 block = s.split('product.instance_port_substrate:', 1)[1].split('\n    product.', 1)[0]
-if 'status: partial' not in block or 'production_ready: false' not in block:
-    raise SystemExit('product.instance_port_substrate must remain partial with production_ready false until live integration evidence closes')
+if 'status: implemented' not in block or 'production_ready: false' not in block:
+    raise SystemExit('product.instance_port_substrate must be implemented but production_ready false until live integration evidence closes')
 if 'generic_instance_integration_acceptance_pending' not in block:
-    raise SystemExit('product.instance_port_substrate must retain explicit residual acceptance gap')
+    raise SystemExit('product.instance_port_substrate must retain explicit residual production-readiness acceptance gap')
+if '.agent/tasks/instance-port-substrate-implementation-todo.md' in block:
+    raise SystemExit('product.instance_port_substrate must not point to deleted implementation todo file')
 PY
 
 echo "OK instance port substrate runtime guard"
