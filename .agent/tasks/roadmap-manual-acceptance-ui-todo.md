@@ -70,6 +70,12 @@ Roadmap:
 - `owner_decision_required`: SSOT / Roadmap / UI方針の設計判断が必要な項目。実装指示に進めず、同じ Roadmap 節内に `Owner decision required` を追記する。
 - `out_of_scope`: admin UI / projection UI の手動受入対象ではない項目。TODO から削除する。
 
+処理済み項目の扱い:
+- `巡回監査メモ` で `manual_acceptance_required` と明記されたチェック項目は、手動受入待ちとして残すが、巡回監査では処理済みとして扱う。
+- `manual_acceptance_required` は手動受入 checklist の未実施状態を表すため、チェックボックス `[ ]` のままでよい。
+- 巡回監査 Agent は、処理済みメモが付いた項目を再監査せず、次の未処理チェック項目へ進む。
+- ただし、関連 SSOT / 実装 / Roadmap が更新された場合、または owner が再監査を指示した場合は再処理してよい。
+
 `Implementation changes request` に書く内容:
 - 対象 route / surface
 - 問題
