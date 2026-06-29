@@ -97,6 +97,10 @@ Roadmap:
 ## Common Manual Acceptance Viewpoints
 
 admin UI:
+
+巡回監査メモ:
+- 2026-06-29 audit: 先頭5項目は `manual_acceptance_required`。共通 UX 観点のため削除せず、個別 route / surface の静的確認は Roadmap-based TODO 側で継続する。
+
 - [ ] 初見で現在位置と次操作を誤認しない。
 - [ ] 操作途中で draft / preview / validate / apply / saved / failed の文脈を失わない。
 - [ ] 設定・登録・適用の結果がどの projection に出るか追える。
