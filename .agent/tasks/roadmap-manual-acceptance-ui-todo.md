@@ -59,6 +59,41 @@ Roadmap:
 
 ---
 
+## Circulation Audit Rules
+
+巡回監査 Agent は、未処理チェック項目を上から順に処理する。プロンプト側に細かい分岐を書かず、この節を正として判定する。
+
+判定種別:
+- `audit_resolved`: SSOT / 実装 / test を読めば確認でき、手動受入に残す必要がない項目。該当チェック項目を削除するか、完了扱いへ変更する。
+- `manual_acceptance_required`: 実画面で触らないと判断できない項目。手動受入 TODO として残し、必要なら route / surface 単位に短く整える。
+- `implementation_changes_request`: UI 実装不足により、手動受入以前に実装変更が必要な項目。同じ Roadmap 節内に `Implementation changes request` を追記する。
+- `owner_decision_required`: SSOT / Roadmap / UI方針の設計判断が必要な項目。実装指示に進めず、同じ Roadmap 節内に `Owner decision required` を追記する。
+- `out_of_scope`: admin UI / projection UI の手動受入対象ではない項目。TODO から削除する。
+
+`Implementation changes request` に書く内容:
+- 対象 route / surface
+- 問題
+- 期待する UI 振る舞い
+- 関連 SSOT
+- 対象ファイル / 関数候補
+- 手動受入で確認したい NG 症状
+
+`Owner decision required` に書く内容:
+- 判断が必要な論点
+- SSOT上の不明点または矛盾
+- 選択肢
+- 推奨しない作業
+- owner 判断後に更新すべき TODO / SSOT 候補
+
+修正ルール:
+- このファイルのみ最小差分で修正する。
+- 全置換や Roadmap 再分類の大規模整理は禁止。
+- implemented 済み bundle を未実装扱いへ戻さない。
+- backend runtime / DB / scheduler / dispatcher / repository の correctness gap は、この手動受入 TODO に残さない。
+- 監査で処理した項目は、削除 / 残す / 修正 / 完了扱い / implementation request / owner report のいずれかに必ず分類する。
+
+---
+
 ## Common Manual Acceptance Viewpoints
 
 admin UI:
