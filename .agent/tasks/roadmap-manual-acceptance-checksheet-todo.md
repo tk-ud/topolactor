@@ -1,8 +1,8 @@
-# Roadmap Manual Acceptance Checksheet TODO
+# Roadmap Manual Debug Confirmation TODO
 
-目的: `docs/system-roadmap.yaml` の feature bundle 全文を分類し、手動受入 / hand-debug 用チェックシートを作るためのユーザー向け TODO。
+目的: `docs/system-roadmap.yaml` の feature bundle 全文を材料に、テストではなく、実画面・実操作で確認する手動デバッグ用チェックシートを作る。
 
-このファイルは `.agent/tasks/todo.md` の canonical unresolved bundle queue を置き換えない。Roadmap status / implemented 判定の正本でもない。`product-nocode-loop-acceptance` の実施準備として、Roadmap 全体から受入観点を抽出する作業メモとして扱う。
+このファイルは `.agent/tasks/todo.md` の canonical unresolved bundle queue を置き換えない。Roadmap status / implemented 判定の正本でもない。既に test で解決している内容を再証明するためではなく、`product-nocode-loop-acceptance` の hand-debug 確認を、ユーザーが実操作しやすい単位へ分解するための作業メモ。
 
 ---
 
@@ -10,7 +10,7 @@
 
 対象repo: `github.com/tk-ud/topolactor`
 
-Worktype: `todo_maintenance` / manual acceptance planning
+Worktype: `todo_maintenance` / manual debug planning
 
 正本:
 - `docs/system-roadmap.yaml`
@@ -22,172 +22,338 @@ Worktype: `todo_maintenance` / manual acceptance planning
 - `.agent/prompt/todo-maintenance.md`
 - `.agent/protocols/todo-carry-over.md`
 
-Foundation SSOT:
+最低限読む SSOT:
 - `docs/framework-core.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
 - `docs/design/pipeline-continuity-ssot.yaml`
-
-補助 SSOT:
 - `docs/design/admin-console-workflow-ssot.yaml`
 - `docs/design/sql-attention-logs-ssot.yaml`
 - `docs/design/external-port-substrate-ssot.yaml`
 - `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`
-- `docs/design/user-facing-helper-manual-ssot.yaml`
 
 ---
 
 ## Boundary
 
-- Roadmap は status SSOT / feature catalog として読む。
-- 実装完了判定は Roadmap だけで行わない。
+- これは自動テスト追加 TODO ではない。
+- これは実装不足の洗い出し TODO ではない。
+- これは production_ready 昇格 TODO ではない。
+- これは Roadmap status 変更 TODO ではない。
 - implemented 済み bundle を未実装扱いへ戻さない。
-- production_ready と manual acceptance pending を混同しない。
-- 手動受入は product experience acceptance 用であり、API atom ごとの必須 gate ではない。
-- optional external surfaces / helper manual policy を M6 combined UX acceptance の必須確認へ混入させない。
+- 確認対象は「ユーザーが触った時に、UX・状態遷移・投影・失敗表示が破綻しないか」。
+- test / CI / evidence_ref は参照資料に留め、チェック項目の主役にしない。
 
 ---
 
-## Feature Classification TODO
+## Debug Sheet Output
 
-### 1. Runtime 基盤
+作成先候補:
+- `.agent/checklists/check-roadmap-manual-debug.md`
 
-対象 bundle:
+チェックシートの列:
+- Debug scenario
+- Related Roadmap bundle
+- Screen / route
+- User operation
+- Expected visible result
+- State / projection to watch
+- Failure case to try
+- NG symptom
+- Debug memo
+
+不要な列:
+- test file
+- CI check
+- evidence_ref 中心の証跡欄
+- implemented 判定欄
+- production_ready 判定欄
+
+---
+
+## Roadmap Feature Classification for Debug
+
+### A. 起動・基本導線 smoke debug
+
+関連 bundle:
 - `product.core_runtime_route`
 - `product.projection_and_output_lanes`
-- `product.registry_attractor_runtime_dispatch_handler`
-- `product.instance_port_substrate`
-- `product.scheduler_job_manifest_substrate`
+- `product.frontend_projection_surface_ux_acceptance`
 
-確認観点:
-- [ ] client trigger が scheduler -> manifest dispatcher -> dispatchable runtime を通る。
-- [ ] runtime destination は manifest / SSOT vocabulary に従い、silent fallback しない。
-- [ ] response / db_notify / SSE projection boundary が崩れていない。
-- [ ] frontend が topology / SQL Attention / persistence authority を持たない。
-- [ ] production_ready pending と implementation residue を混同していない。
+確認目的:
+初回アクセス、画面遷移、基本投影、SSE / refetch 系が、実操作上で破綻していないかを見る。
 
-### 2. Admin / No-code Authoring
+TODO:
+- [ ] app 起動後、通常画面と admin 画面へ到達できる。
+- [ ] route 遷移後に白画面・hydration error・console fatal が出ない。
+- [ ] refresh / reload 後に画面状態が不自然に消えない。
+- [ ] 操作後の loading / success / failed 表示が見える。
+- [ ] 同じ操作を連打しても UI が壊れない。
+- [ ] SSE または refetch 更新後に古い表示が残り続けない。
 
-対象 bundle:
+NG 症状:
+- ボタンを押しても無反応。
+- 成功したのか失敗したのか分からない。
+- 画面は変わるが状態が戻る。
+- console error が出続ける。
+- reload 後に直前の保存状態が見えない。
+
+### B. Admin authoring guidance debug
+
+関連 bundle:
 - `product.admin_topology_authoring`
 - `product.dynamic_support_nocode_loop`
 - `product.frontend_projection_surface_ux_acceptance`
 
-確認観点:
-- [ ] admin authoring guidance から操作開始できる。
-- [ ] preview / validate / apply boundary が UI 上で見える。
-- [ ] validation error が原因・対象・修復示唆を表示する。
-- [ ] lifecycle state が draft / validated / applied / failed / persisted で区別できる。
-- [ ] admin CSV/JSON import と authoring route が M6 loop として通し確認できる。
-- [ ] frontend は DB direct write / topology judgment / promotion authority を持たない。
+確認目的:
+admin authoring の入口から、ユーザーが迷わず次の操作に進めるかを見る。
 
-### 3. SQL Attention / Feedback
+TODO:
+- [ ] `/admin/contents` で作成・編集・import 系の入口が分かる。
+- [ ] Step 表示や guidance が、現在位置と次操作を説明している。
+- [ ] draft / preview / validate / apply の状態差が見える。
+- [ ] 入力不足や不正値で、どこを直すべきか分かる。
+- [ ] cancel / reset / back / retry の逃げ道がある。
+- [ ] 失敗後に同じ画面で復帰できる。
 
-対象 bundle:
+NG 症状:
+- 何を押せばいいか分からない。
+- Step が進んだのか分からない。
+- validation error が内部語だけ。
+- 失敗後に画面をリロードしないと復帰できない。
+- frontend が勝手に成功扱いへ進む。
+
+### C. CSV / JSON import debug
+
+関連 bundle:
+- `product.dynamic_support_nocode_loop`
+- `product.admin_topology_authoring`
+
+確認目的:
+self-hosted no-code loop の import 操作が、実データ投入として使えるかを見る。
+
+TODO:
+- [ ] CSV import 入口が見つかる。
+- [ ] JSON import 入口が見つかる。
+- [ ] file 選択後に preview が表示される。
+- [ ] preview で対象列・対象項目・件数が分かる。
+- [ ] validate 結果が成功 / 失敗で分かる。
+- [ ] apply 前に「何が登録されるか」が分かる。
+- [ ] apply 後に一覧・投影・関連画面へ反映される。
+- [ ] import 失敗後に同じファイルを修正して再試行できる。
+
+Failure case:
+- [ ] 空ファイル。
+- [ ] 必須列不足。
+- [ ] 型不一致。
+- [ ] 重複行。
+- [ ] JSON 構造不正。
+
+NG 症状:
+- preview なしで apply できる。
+- validate failure でも apply できる。
+- apply 後にどこへ反映されたか分からない。
+- エラーが raw exception / stack trace だけ。
+- import した件数と画面表示が合わない。
+
+### D. Authoring -> projection refresh debug
+
+関連 bundle:
+- `product.projection_and_output_lanes`
+- `product.dynamic_support_nocode_loop`
+- `product.frontend_projection_surface_ux_acceptance`
+
+確認目的:
+admin 操作後、ProjectionShell / child island / list / card 表示が自然に更新されるかを見る。
+
+TODO:
+- [ ] apply 後、対象 projection が更新される。
+- [ ] 更新中表示が見える。
+- [ ] 古い projection と新しい projection が混ざらない。
+- [ ] 画面遷移して戻っても保存済み状態が見える。
+- [ ] reload 後も persisted state が見える。
+- [ ] 同時に複数操作した時に表示順が破綻しない。
+
+NG 症状:
+- DBには入ったらしいが画面に出ない。
+- reload しないと反映されないのに、その案内がない。
+- 反映された後に古い表示へ戻る。
+- child island だけ古い。
+- 成功 toast が出たが保存されていない。
+
+### E. SQL Attention feedback debug
+
+関連 bundle:
 - `product.sql_attention_observation_runtime`
-- `backend.sql_attention_logs_current`
-- `backend.sql_attention_hub_current`
-- `backend.sql_attention_scheduler_exploration`
-- `backend.sql_attention_logs_attention_persistence`
-- `backend.sql_attention_phase_vector`
-- `backend.sql_attention_topology_projection`
+- `product.dynamic_support_nocode_loop`
 
-確認観点:
-- [ ] SQL Attention feedback projection が UI 上で確認できる。
-- [ ] recommendation / attention candidate が fixed route を自動上書きしない。
-- [ ] feedback は projection-only surface として表示される。
-- [ ] candidate adoption は explicit user action を要求する。
-- [ ] topology projection は evidence read-only で、topology mutation authority を持たない。
+確認目的:
+SQL Attention feedback projection が、推薦・観察・採用候補として理解でき、勝手に route / topology を変えないことを見る。
 
-### 4. External Port / Consumer
+TODO:
+- [ ] feedback / recommendation 表示に到達できる。
+- [ ] 候補の理由・対象・信頼度または根拠らしき情報が見える。
+- [ ] feedback は projection-only として見える。
+- [ ] candidate adoption が明示操作になっている。
+- [ ] 採用しない限り fixed route / current state が変わらない。
+- [ ] feedback 後、関連 projection が自然に更新される。
 
-対象 bundle:
-- `product.external_port_substrate`
-- `product.email_port_consumer`
-- `product.stripe_port_consumer`
-- `product.file_storage_port_consumer`
-- `product.export_sftp_port_consumer`
-- `product.webhook_inbox_port_consumer`
-- `product.audit_approval_port_consumer`
+Failure case:
+- [ ] 候補ゼロ。
+- [ ] 古い候補。
+- [ ] 対象 record が削除済み。
+- [ ] relation / hub context 不足。
 
-確認観点:
-- [ ] external tool は human editing / intake / preview / approval surface であり system SSOT ではない。
-- [ ] external_source -> connector_adapter -> intake_snapshot -> validate -> preview -> explicit_apply -> canonical_runtime_route の境界が崩れていない。
-- [ ] credential / secret / raw provider payload が projection されない。
-- [ ] failure は explicit rejection / runtime_event_log / evidence として残り silent fallback しない。
-- [ ] provider-specific runtime / client / handler を追加しない方針が維持されている。
+NG 症状:
+- 推薦が勝手に適用される。
+- 何の候補か分からない。
+- 採用ボタンと preview / inspect の区別がない。
+- candidate 表示が route 状態と混ざる。
+- attention score が semantic authority のように見える。
 
-### 5. Markdown / Saved View
+### F. M6 combined UX 通し debug
 
-対象 bundle:
-- `product.preset_db_seed_registration`
+関連 bundle:
+- `product.dynamic_support_nocode_loop`
+- `product.admin_topology_authoring`
+- `product.sql_attention_observation_runtime`
+- `product.projection_and_output_lanes`
+
+確認目的:
+`authoring guidance -> import / authoring -> validate -> apply -> projection refresh -> SQL Attention feedback -> user action` の一連操作が、製品体験として破綻しないかを見る。
+
+TODO:
+- [ ] admin authoring guidance から開始する。
+- [ ] CSV / JSON または手入力でデータを入れる。
+- [ ] preview を見る。
+- [ ] validate を見る。
+- [ ] apply する。
+- [ ] projection 更新を見る。
+- [ ] SQL Attention feedback / recommendation を見る。
+- [ ] candidate を採用しない場合、状態が変わらないことを見る。
+- [ ] candidate を明示採用する場合、次状態が分かることを見る。
+- [ ] reload 後に persisted state が維持されることを見る。
+
+NG 症状:
+- 途中で文脈が切れて、次に何をすべきか分からない。
+- preview / validate / apply / feedback が別物に見えて一連の流れに見えない。
+- 成功・失敗・保留の区別が曖昧。
+- 推薦候補が勝手に反映される。
+- 操作後にどの bundle / route / projection が関係したか追えない。
+
+### G. Markdown / saved view debug
+
+関連 bundle:
 - `product.component_markdown_authoring_projection`
 - `product.md_viewer_projection_component`
 - `product.completed_preset_seed_projection_gate`
 
-確認観点:
-- [ ] Markdown body を runtime SSOT として扱っていない。
-- [ ] saved view は persisted rendered projection として表示される。
-- [ ] completed preset seed validation が refresh / clone / rebind の gate になっている。
-- [ ] md_viewer は projection component であり physical record / topology mutation authority を持たない。
-- [ ] seed invalid state が explicit error になり silent fallback しない。
+確認目的:
+Markdown saved view が、表示・保存・refresh / clone / rebind の実操作で混乱しないかを見る。
 
-### 6. CI / Governance
+TODO:
+- [ ] `/admin/team-dashboard` に到達できる。
+- [ ] saved view を表示できる。
+- [ ] rendered Markdown と source / binding / seed summary が区別できる。
+- [ ] refresh / clone / rebind が seed valid / invalid 状態で適切に有効・無効になる。
+- [ ] invalid seed の時、何が足りないか分かる。
+- [ ] Markdown body が正本のように見えない。
 
-対象 bundle:
-- `product.system_ci_contract_audit`
-- `system_ci.dotnet_ssot_wiring_audit_tests`
-- `system_ci.topology_registration`
-- `system_ci.hub_registration`
-- `system_ci.scheduler_runtime`
-- `system_ci.component_registration`
+NG 症状:
+- Markdown を直接編集すれば正本が変わるように見える。
+- seed invalid なのに refresh / clone / rebind できる。
+- missing props が空表示になる。
+- source record と rendered projection の関係が分からない。
 
-確認観点:
-- [ ] CI は SSOT wiring audit / diagnostics evidence eligibility であり product runtime authority ではない。
-- [ ] shell check と dotnet semantic test の責務を混同しない。
-- [ ] CI compatibility entry を新規 product bundle として重複扱いしない。
-- [ ] check result を manual acceptance の補助 evidence として扱い、UX受入そのものと混同しない。
+### H. External port consumer demo debug
 
-### 7. Future / Out of Scope
+関連 bundle:
+- `product.external_port_substrate`
+- `product.file_storage_port_consumer`
+- `product.email_port_consumer`
+- `product.audit_approval_port_consumer`
+- `product.webhook_inbox_port_consumer`
+- `product.stripe_port_consumer`
+- `product.export_sftp_port_consumer`
 
-対象 bundle:
+確認目的:
+外部連携系を provider 実接続の証明ではなく、human approval / preview / explicit failure / sanitized projection の製品表示として確認する。
+
+TODO:
+- [ ] 外部連携系の操作入口が分かる。
+- [ ] credential / secret / raw payload が画面に出ない。
+- [ ] approval required な操作は明示承認なしで進まない。
+- [ ] failure 時に明示的な拒否・失敗表示が見える。
+- [ ] runtime_event_log / evidence 的な履歴表示がユーザーに追える形で見える、または確認手段が分かる。
+- [ ] provider-specific runtime を触っているように見えない。
+
+NG 症状:
+- secret / endpoint / raw provider response が見える。
+- approval 前に送信済みになる。
+- 失敗が成功風に見える。
+- 外部サービスが system SSOT のように見える。
+- provider 実接続できないことを product failure と誤認する UI になっている。
+
+### I. Future / out-of-scope 表示 debug
+
+関連 bundle:
 - `product.external_optional_surface_bundle_gate`
 - `product.helper_manual_policy`
 
-確認観点:
-- [ ] optional external connector は future surface として分類する。
-- [ ] helper manual policy は helper artifact / onboarding / language policy の作業であり、M6 combined UX acceptance の必須実装範囲へ混入させない。
-- [ ] future bundle を production gap と誤判定しない。
+確認目的:
+未実装・future・helper policy が、現在の M6 manual debug の失敗として混入しないようにする。
+
+TODO:
+- [ ] optional external connector は future として扱う。
+- [ ] helper manual policy は別 TODO / 別設計として扱う。
+- [ ] 現行画面で未提供機能がある場合、coming soon / unavailable / out of scope が分かる。
+- [ ] future scope を product-nocode-loop-acceptance の NG にしない。
+
+NG 症状:
+- future 機能が壊れている扱いになる。
+- helper 未実装が M6 loop failure として混ざる。
+- optional external connector が必須導線に見える。
 
 ---
 
-## Manual Acceptance Checksheet Output Requirements
+## Debug Session Template
 
-作成先候補:
-- `.agent/checklists/check-roadmap-manual-acceptance.md`
+各 debug session で残すメモ:
 
-チェックシートに必ず含める列:
-- feature classification
-- Roadmap bundle id
-- status
-- production_ready
-- user operation / manual step
-- expected visible result
-- authority boundary
-- explicit failure / no silent fallback
-- evidence_ref / detail_ref
-- NG condition
-- relation to `product.dynamic_support_nocode_loop`
-- implemented regression guard memo
+```md
+### Debug session: <scenario name>
+
+Date:
+Branch / commit:
+Startup command:
+Seed / fixture:
+Browser:
+
+Steps:
+1.
+2.
+3.
+
+Observed:
+-
+
+NG / suspicious behavior:
+-
+
+Screenshot / log memo:
+-
+
+Follow-up candidate:
+- none / implementation_change / design_change / wording / fixture / unknown
+```
 
 ---
 
-## Acceptance Criteria
+## Completion Criteria
 
-- [ ] `docs/system-roadmap.yaml` の `implementation_registry` 全文を分類している。
-- [ ] Roadmap 全文の内容を TODO へ写経せず、手動受入観点へ圧縮している。
-- [ ] `product.dynamic_support_nocode_loop` combined UX を中心に据えている。
-- [ ] authoring guidance -> SQL Attention feedback -> M6 admin loop の通し確認に落とせる。
+- [ ] Roadmap 全文を、テスト証跡ではなく実操作 debug scenario に分類している。
+- [ ] `product.dynamic_support_nocode_loop` combined UX を中心にしている。
+- [ ] authoring guidance -> import / authoring -> validate -> apply -> projection refresh -> SQL Attention feedback -> explicit user action の通し確認がある。
 - [ ] implemented 済み bundle を未実装へ戻していない。
-- [ ] production_ready pending / live CI pending / manual acceptance pending を区別している。
-- [ ] authority boundary と explicit failure を各分類に含めている。
-- [ ] optional / future / helper policy を必須受入 scope へ混入させていない。
+- [ ] test / CI / evidence_ref を主チェック項目にしていない。
+- [ ] NG 症状が、ユーザーが実画面で見て判断できる言葉になっている。
+- [ ] follow-up は、debug で実際に見つかった違和感だけを implementation_change / design_change / wording / fixture に分類する。
