@@ -131,7 +131,6 @@ required_files:
     - .agent/scripts/delete-tmp.sh
     - .agent/tmp/.gitkeep
     - .agent/tasks/todo.md
-    - .agent/tasks/external-port-substrate-implementation-todo.md
     - .agent/reports/README.md
     - .agent/checklists/policy-judgment.md
     - .agent/checklists/boundary-identity.md

@@ -311,7 +311,6 @@ check_absent '.agent/tasks/todo.md' '## Bundle `external-port-substrate-implemen
 check_absent '.agent/tasks/todo.md' '`external-port-substrate-implementation` | external_port_substrate'
 check_absent ".agent/tasks/todo.md" "external-port-substrate-design"
 check_absent ".agent/tasks/todo.md" "接続設計"
-check_content ".agent/tasks/external-port-substrate-implementation-todo.md" "external_port_substrate"
 
 echo ""
 echo "=== Design SSOTs: no progress management terms ==="

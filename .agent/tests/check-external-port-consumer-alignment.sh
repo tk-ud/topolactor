@@ -209,9 +209,9 @@ check_content "docs/design/runtime-bundle-export-sftp-ssot.yaml" "manifest"
 check_content "docs/design/runtime-bundle-export-sftp-ssot.yaml" "sftp_push_without_checksum"
 check_content "docs/design/runtime-bundle-export-sftp-ssot.yaml" "sftp_push_without_manifest"
 
-# file/export TODO must include checksum/manifest remaining items
-check_content ".agent/tasks/todo.md" "checksum"
-check_content ".agent/tasks/todo.md" "manifest"
+# file/export remaining checksum/manifest gaps are tracked by roadmap/SSOT, not a retired detail TODO file
+check_content "docs/system-roadmap.yaml" "file_storage_checksum_and_manifest_runtime_not_connected"
+check_content "docs/system-roadmap.yaml" "export_sftp_checksum_and_manifest_verification_boundary_not_connected"
 
 echo ""
 echo "=== 8. Evidence-required bundles: physical table manifest / evidence / runtime_event_log declared ==="
@@ -251,7 +251,6 @@ SSOT_AND_TASK_FILES=(
   "docs/design/external-port-substrate-ssot.yaml"
   "docs/design/extended-runtime-bundle-registry-ssot.yaml"
   ".agent/tasks/todo.md"
-  ".agent/tasks/external-port-substrate-implementation-todo.md"
   "docs/system-roadmap.yaml"
 )
 
