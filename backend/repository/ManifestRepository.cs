@@ -37,6 +37,38 @@ public record ManifestDetailRecord(
 );
 
 /// <summary>
+/// Read-only evidence captured from an active source manifest at clone time.
+///
+/// SSOT: admin-console-workflow-ssot.yaml replacement_clone_merge_lifecycle.required_evidence.
+/// Source evidence and lineage are evidence only — they NEVER grant replacement authority on
+/// their own. Replacement authority requires draft_origin=manual_clone_replacement plus the
+/// full backend merge guard (UUID integrity, stale check, validation, diff/log, conflict check).
+/// </summary>
+public record CloneSourceEvidence(
+    Guid SourceActiveManifestId,
+    string? TopologySystemName,
+    string? RouteKey,
+    AdminManifestDispatcherMappingDto? DispatcherAxes,
+    DateTimeOffset SourceUpdatedAt,
+    string SourceTopologyHash,
+    string Status
+);
+
+/// <summary>
+/// Result of a backend replacement clone merge. On success the EXISTING active row was updated
+/// in place and the working draft row was deleted (no draft-row promotion, no draft-row audit
+/// persistence). Diff/log evidence is preserved in the existing edit-log surface.
+/// </summary>
+public record CloneReplacementMergeResult(
+    bool Ok,
+    Guid? ActiveManifestId,
+    Guid DraftManifestId,
+    string? DiffJson,
+    int ChangeCount,
+    ValidationError? Error
+);
+
+/// <summary>
 /// Abstract manifest repository. Resolves active manifests by dispatcher axes
 /// (role, target, layer, action) from the manifest table.
 ///
@@ -165,6 +197,105 @@ public abstract class ManifestRepository
         string entryType,
         JsonElement entryBody,
         CancellationToken ct = default);
+
+    // -----------------------------------------------------------------------
+    // Clone / replacement draft lifecycle
+    // SSOT: admin-console-workflow-ssot.yaml admin_contents_step1_entry_modes /
+    //       replacement_clone_merge_lifecycle
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Loads read-only source evidence for an active manifest. Returns null when the manifest
+    /// does not exist or is not active (lineage/replacement source must resolve to active).
+    /// Base default fails closed (null); ManifestRepository implementations override it.
+    /// </summary>
+    public virtual Task<CloneSourceEvidence?> LoadCloneSourceEvidenceAsync(
+        Guid sourceActiveManifestId,
+        CancellationToken ct = default) =>
+        Task.FromResult<CloneSourceEvidence?>(null);
+
+    /// <summary>
+    /// Creates a replacement clone draft from an active source: copies the source topology,
+    /// stamps clone_metadata (draft_origin=manual_clone_replacement, clone_mode=replacement,
+    /// source_active_manifest_id + source evidence). The draft is authored through the existing
+    /// contents pipeline and completed only via MergeCloneReplacementDraftToActiveAsync.
+    /// Base default fails closed; ManifestRepository implementations override it.
+    /// </summary>
+    public virtual Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateCloneReplacementDraftFromActiveAsync(
+        Guid sourceActiveManifestId,
+        CancellationToken ct = default) =>
+        Task.FromResult<(ManifestDetailRecord?, ValidationError?)>(
+            (null, new ValidationError("CLONE_NOT_SUPPORTED", "Clone replacement draft is not supported by this repository.")));
+
+    /// <summary>
+    /// Creates a clone-as-new-topology draft from an active source: copies the source content
+    /// but assigns a NEW topologySystemName identity and stamps clone_metadata
+    /// (draft_origin=manual_clone_new_topology, clone_mode=new_topology, lineage source evidence).
+    /// Completion uses the conventional register/promote path — it can never replace the source.
+    /// Base default fails closed; ManifestRepository implementations override it.
+    /// </summary>
+    public virtual Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateCloneNewTopologyDraftFromActiveAsync(
+        Guid sourceActiveManifestId,
+        string newTopologySystemName,
+        string? userFacingLabel,
+        CancellationToken ct = default) =>
+        Task.FromResult<(ManifestDetailRecord?, ValidationError?)>(
+            (null, new ValidationError("CLONE_NOT_SUPPORTED", "Clone-as-new-topology draft is not supported by this repository.")));
+
+    /// <summary>
+    /// Counts active manifests (optionally excluding one id) whose dispatcher axes collide with
+    /// the given axes — the replacement-merge active identity conflict check.
+    /// </summary>
+    public virtual Task<int> CountActiveIdentityConflictsAsync(
+        string role,
+        string target,
+        string layer,
+        string action,
+        Guid? excludeManifestId,
+        CancellationToken ct = default) =>
+        CountActiveAxisConflictsAsync(role, target, layer, action, excludeManifestId, ct);
+
+    /// <summary>
+    /// Backend replacement merge — the ONLY authority that turns a replacement clone draft into
+    /// the production active topology. Inside a single transaction this MUST:
+    ///   - resolve the draft and its clone_metadata; require draft_origin=manual_clone_replacement
+    ///     (source evidence / lineage / SQL Attention candidate alone never grant authority);
+    ///   - verify clone.source_active_manifest_id matches a live ACTIVE row (merge target);
+    ///   - fail close on stale source active (source topology hash changed since clone);
+    ///   - fail close on active identity conflict (another active shares the merge-target axes);
+    ///   - validate the draft topology (no blocking issue);
+    ///   - produce diff/log evidence (no-op merges fail close);
+    ///   - UPDATE the existing active row in place and DELETE the working draft row.
+    /// The draft row is never promoted to active and never preserved as audit evidence.
+    /// Base default fails closed; ManifestRepository implementations override it.
+    /// </summary>
+    public virtual Task<CloneReplacementMergeResult> MergeCloneReplacementDraftToActiveAsync(
+        Guid draftManifestId,
+        IReadOnlySet<string> allowedRuntimeDestinations,
+        string? actor,
+        CancellationToken ct = default) =>
+        Task.FromResult(new CloneReplacementMergeResult(
+            false, null, draftManifestId, null, 0,
+            new ValidationError("CLONE_NOT_SUPPORTED", "Replacement merge is not supported by this repository.")));
+
+    /// <summary>
+    /// Builds read-only source evidence from an active source record. Shared by all
+    /// repository implementations so evidence shape stays identical.
+    /// </summary>
+    protected static CloneSourceEvidence BuildSourceEvidence(ManifestDetailRecord source)
+    {
+        var summary = ManifestTopologyValidator.ExtractSummary(source.Topology);
+        var topologySystemName = CloneDraftMetadata.ExtractTopologySystemName(source.Topology);
+        var routeKey = string.IsNullOrWhiteSpace(topologySystemName) ? null : topologySystemName;
+        return new CloneSourceEvidence(
+            source.ManifestId,
+            topologySystemName,
+            routeKey,
+            summary.DispatcherMapping,
+            source.UpdatedAt,
+            CloneDraftMetadata.ComputeTopologyHash(source.Topology),
+            source.Status);
+    }
 }
 
 public record PromotionManifestListItem(

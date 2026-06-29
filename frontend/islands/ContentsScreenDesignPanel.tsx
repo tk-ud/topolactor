@@ -4,12 +4,21 @@ import {
   type AdminManifestDetail,
   type AdminManifestListItem,
   assignAdminManifestScreenDataShape,
+  type CloneReplacementValidateResult,
+  type CloneSourceEvidence,
+  type ContentsStep1EntryMode,
   createAdminManifestDraft,
+  createCloneNewTopologyDraftFromActive,
+  createCloneReplacementDraftFromActive,
+  createNewTopologyDraft,
   getAdminManifest,
   getEnumDictionaryGroup,
   listAdminManifests,
   listEnumDictionaryGroups,
   listRelationshipRemoteTargets,
+  loadCloneSourceEvidence,
+  mergeCloneReplacementDraftToActive,
+  validateCloneReplacementDraft,
   type EnumDictionaryGroupDetail,
   type RelationshipRemoteTarget,
 } from "../api/adminApi.ts";
@@ -116,10 +125,51 @@ import {
   UX_HUB_MANIFESTS_PAGE,
   UX_STATUS_LABELS,
   UX_UI_BUILDER,
+  CONTENTS_STEP1_ENTRY_MODE_OPTIONS,
+  CLONE_DRAFT_ORIGIN_LABELS,
+  CLONE_MODE_LABELS,
+  UX_CLONE_SOURCE_EVIDENCE_HEADING,
+  UX_CLONE_BACKEND_MERGE_AUTHORITY_NOTICE,
+  UX_CLONE_LINEAGE_ONLY_NOTICE,
+  UX_CLONE_MERGE_BLOCKERS_HEADING,
 } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
 type DraftSource = "none" | "local" | "backend" | "merged";
+
+type CloneMetadataView = {
+  draftOrigin: string;
+  cloneMode: string;
+  sourceActiveManifestId: string | null;
+};
+
+/** Reads the clone_metadata topology entry for display (origin / mode / source). Read-only. */
+function readCloneMetadata(topologyRawJson: string): CloneMetadataView | null {
+  try {
+    const entries = JSON.parse(topologyRawJson) as unknown;
+    if (!Array.isArray(entries)) return null;
+    for (const entry of entries) {
+      if (
+        typeof entry === "object" && entry !== null &&
+        (entry as { type?: string }).type === "clone_metadata"
+      ) {
+        const e = entry as {
+          draftOrigin?: string;
+          cloneMode?: string;
+          sourceActiveManifestId?: string | null;
+        };
+        return {
+          draftOrigin: e.draftOrigin ?? "manual_new",
+          cloneMode: e.cloneMode ?? "none",
+          sourceActiveManifestId: e.sourceActiveManifestId ?? null,
+        };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 
 function SamplePreviewPanel({
@@ -359,6 +409,18 @@ export default function ContentsScreenDesignPanel({
     emptyManifestScreenDesign(),
   );
   const [draftSource, setDraftSource] = useState<DraftSource>("none");
+  // Step 1 entry mode — SSOT: admin-console-workflow-ssot.yaml admin_contents_step1_entry_modes.
+  const [entryMode, setEntryMode] = useState<ContentsStep1EntryMode>(
+    "create_new_topology",
+  );
+  const [cloneSourceId, setCloneSourceId] = useState("");
+  const [activeSources, setActiveSources] = useState<AdminManifestListItem[]>([]);
+  const [cloneSourceEvidence, setCloneSourceEvidence] = useState<
+    CloneSourceEvidence | null
+  >(null);
+  const [replacementReadiness, setReplacementReadiness] = useState<
+    CloneReplacementValidateResult | null
+  >(null);
   const [errors, setErrors] = useState<PanelError[]>([]);
   const [submitStatus, setSubmitStatus] = useState<AdminSubmitStatusState>(
     initialAdminSubmitStatus(),
@@ -434,6 +496,58 @@ export default function ContentsScreenDesignPanel({
       }
     })();
   }, [activeStep, selectedId]);
+
+  const isCloneMode = entryMode === "clone_active_as_replacement_draft" ||
+    entryMode === "clone_active_as_new_topology_draft";
+
+  // Load active source candidates (read-only) for clone entry modes.
+  useEffect(() => {
+    if (activeStep !== 1 || !isCloneMode) return;
+    void (async () => {
+      const items = await listAdminManifests("active");
+      setActiveSources(items ?? []);
+    })();
+  }, [activeStep, isCloneMode]);
+
+  // Load read-only source evidence when an active source is selected for a clone.
+  useEffect(() => {
+    if (!isCloneMode || !cloneSourceId) {
+      setCloneSourceEvidence(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const evidence = await loadCloneSourceEvidence(cloneSourceId);
+        setCloneSourceEvidence(evidence);
+      } catch {
+        setCloneSourceEvidence(null);
+      }
+    })();
+  }, [isCloneMode, cloneSourceId]);
+
+  // Selected draft clone lifecycle view (origin / mode / source).
+  const selectedCloneMetadata = backendDetail
+    ? readCloneMetadata(backendDetail.topologyRawJson)
+    : null;
+  const isReplacementCloneDraft =
+    selectedCloneMetadata?.draftOrigin === "manual_clone_replacement" &&
+    selectedCloneMetadata?.cloneMode === "replacement";
+
+  // For a selected replacement clone draft, load backend-computed merge readiness (read-only).
+  useEffect(() => {
+    if (!selectedId || !isReplacementCloneDraft) {
+      setReplacementReadiness(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const readiness = await validateCloneReplacementDraft(selectedId);
+        setReplacementReadiness(readiness);
+      } catch {
+        setReplacementReadiness(null);
+      }
+    })();
+  }, [selectedId, isReplacementCloneDraft, manifestsVersion]);
 
   const loadManifestLabels = async (items: AdminManifestListItem[]) => {
     const labels: Record<string, string> = {};
@@ -604,33 +718,51 @@ export default function ContentsScreenDesignPanel({
   }, [remoteTargets, design.logicalTables, design.relationIntents]);
 
   const handleStep1Submit = async () => {
-    const nameErr = topologySystemNameValidationError(design.topologySystemName);
-    if (nameErr) {
-      setErrors([{ message: nameErr }]);
+    // create_new_topology and clone_active_as_new_topology_draft both require a new
+    // topologySystemName. clone_active_as_replacement_draft inherits the source identity.
+    const requiresNewName = entryMode !== "clone_active_as_replacement_draft";
+    if (requiresNewName) {
+      const nameErr = topologySystemNameValidationError(design.topologySystemName);
+      if (nameErr) {
+        setErrors([{ message: nameErr }]);
+        return;
+      }
+    }
+    if (entryMode !== "create_new_topology" && !cloneSourceId) {
+      setErrors([{ message: "複製元の有効な正本を選択してください。" }]);
       return;
     }
     setErrors([]);
+    const successMessage = entryMode === "clone_active_as_replacement_draft"
+      ? "Step 1: 正本置き換え用クローン下書きを作成しました。"
+      : entryMode === "clone_active_as_new_topology_draft"
+      ? "Step 1: 別トポロジ登録用クローン下書きを作成しました。"
+      : "Step 1: 空の下書きを登録しました。";
     const created = await runAdminSubmit(
       setSubmitStatus,
       setLoading,
       {
         confirmFn: confirm,
         confirmKind: "create",
-        successMessage: "Step 1: 空の下書きを登録しました。",
+        successMessage,
         errorMessage: "下書きを作成できませんでした。",
         onSuccess: async (result) => {
           const sysName = design.topologySystemName.trim();
           const label = design.screenLabel.trim();
           setSelectedId(result.manifestId);
           if (label) setStoredScreenLabel(result.manifestId, label);
-          saveManifestScreenDesignLocal(result.manifestId, design);
-          await assignAdminManifestScreenDataShape({
-            manifestId: result.manifestId,
-            topologySystemName: sysName,
-            userFacingTopologyLabel: label || undefined,
-          });
-          const visibleLabel = label || sysName;
-          setManifestLabels((prev) => ({ ...prev, [result.manifestId]: visibleLabel }));
+          // create_new_topology assigns identity via the conventional path; clone modes
+          // already carry their identity/content from the backend clone.
+          if (entryMode === "create_new_topology") {
+            saveManifestScreenDesignLocal(result.manifestId, design);
+            await assignAdminManifestScreenDataShape({
+              manifestId: result.manifestId,
+              topologySystemName: sysName,
+              userFacingTopologyLabel: label || undefined,
+            });
+            const visibleLabel = label || sysName;
+            setManifestLabels((prev) => ({ ...prev, [result.manifestId]: visibleLabel }));
+          }
           onManifestsReload();
           await loadManifests();
           await loadSelectedManifest(result.manifestId);
@@ -639,12 +771,62 @@ export default function ContentsScreenDesignPanel({
           setShowStep3Completion(false);
         },
         run: async () => {
+          if (entryMode === "clone_active_as_replacement_draft") {
+            return await createCloneReplacementDraftFromActive(cloneSourceId);
+          }
+          if (entryMode === "clone_active_as_new_topology_draft") {
+            return await createCloneNewTopologyDraftFromActive(
+              cloneSourceId,
+              design.topologySystemName.trim(),
+              design.screenLabel.trim() || undefined,
+            );
+          }
           const draftInput = buildStep1DraftInput(null);
-          return await createAdminManifestDraft(draftInput);
+          return await createNewTopologyDraft(draftInput);
         },
       },
     );
     void created;
+  };
+
+  // Replacement merge INTENT only. Backend AdminRuntime / ManifestRepository transaction is the
+  // sole authority that decides the merge target, conflict, and active mutation.
+  const handleReplacementMergeIntent = async () => {
+    if (!selectedId || !isReplacementCloneDraft) return;
+    const confirmed = await confirm(
+      "正本への置き換えをバックエンドに依頼します。証跡・検証・差分・競合チェックを満たす場合のみ成立します。続行しますか？",
+    );
+    if (!confirmed) return;
+    setErrors([]);
+    setLoading(true);
+    try {
+      const result = await mergeCloneReplacementDraftToActive(selectedId);
+      if (result === null) {
+        setErrors([{ message: "バックエンドが未構成のため置き換えを実行できません。" }]);
+        return;
+      }
+      if (!result.ok) {
+        setErrors([{
+          code: result.errorCode,
+          message: result.message,
+        }]);
+        // Refresh readiness so blockers stay visible.
+        const readiness = await validateCloneReplacementDraft(selectedId);
+        setReplacementReadiness(readiness);
+        return;
+      }
+      setSubmitStatus({
+        outcome: "success",
+        message: result.message,
+      });
+      setSelectedId("");
+      onManifestsReload();
+      await loadManifests();
+    } catch (err) {
+      setErrors([{ message: err instanceof Error ? err.message : "置き換えに失敗しました。" }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleStepAssign = async (step: ContentsPipelineStep) => {
@@ -1136,6 +1318,61 @@ export default function ContentsScreenDesignPanel({
           : ""}
       </p>
 
+      {selectedCloneMetadata && selectedCloneMetadata.cloneMode !== "none" && (
+        <div class="mb-3 rounded border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
+          <p class="font-semibold">
+            この下書きの種別:{" "}
+            <span class="rounded bg-indigo-200 px-1.5 py-0.5">
+              {CLONE_DRAFT_ORIGIN_LABELS[selectedCloneMetadata.draftOrigin] ??
+                selectedCloneMetadata.draftOrigin}
+            </span>{" "}
+            /{" "}
+            <span class="rounded bg-indigo-200 px-1.5 py-0.5">
+              {CLONE_MODE_LABELS[selectedCloneMetadata.cloneMode] ??
+                selectedCloneMetadata.cloneMode}
+            </span>
+          </p>
+          {selectedCloneMetadata.cloneMode === "new_topology" && (
+            <p class="mt-1">{UX_CLONE_LINEAGE_ONLY_NOTICE}</p>
+          )}
+          {selectedCloneMetadata.cloneMode === "replacement" && (
+            <p class="mt-1">{UX_CLONE_BACKEND_MERGE_AUTHORITY_NOTICE}</p>
+          )}
+        </div>
+      )}
+
+      {isReplacementCloneDraft && replacementReadiness && (
+        <div class="mb-3 rounded border border-purple-200 bg-purple-50 p-3 text-xs text-purple-900">
+          <p class="font-semibold">{UX_CLONE_MERGE_BLOCKERS_HEADING}</p>
+          {replacementReadiness.mergeReady
+            ? (
+              <p class="mt-1 text-green-700">
+                バックエンドの事前判定: 置き換え可能（変更点 {replacementReadiness.changeCount} 件）。
+              </p>
+            )
+            : (
+              <ul class="mt-1 list-disc pl-4">
+                {replacementReadiness.mergeBlockers.map((b) => (
+                  <li key={b.code}>
+                    <span class="font-mono text-[10px]">{b.code}</span>: {b.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          <button
+            type="button"
+            class="btn-secondary mt-2"
+            disabled={loading || !replacementReadiness.mergeReady}
+            onClick={handleReplacementMergeIntent}
+          >
+            正本への置き換えをバックエンドに依頼
+          </button>
+          <p class="mt-1 text-[10px] text-purple-700">
+            {UX_CLONE_BACKEND_MERGE_AUTHORITY_NOTICE}
+          </p>
+        </div>
+      )}
+
       {backendDetail?.summary?.dispatcherMapping && (
         <details class="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs">
           <summary class="cursor-pointer font-semibold">
@@ -1180,24 +1417,103 @@ export default function ContentsScreenDesignPanel({
 
       {activeStep === 1 && (
         <div class="mb-3 space-y-3">
-          <label class="block text-xs">
-            <span class="font-semibold">トポロジーID <span class="text-red-500">*</span></span>
-            <span class="ml-1 text-slate-500">（英小文字・数字・ハイフンのみ、例: customer-management）</span>
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 font-mono"
-              placeholder="例: customer-management"
-              value={design.topologySystemName}
-              onInput={(e) => {
-                const val = (e.target as HTMLInputElement).value;
-                patchDesign({ topologySystemName: val });
-              }}
-            />
-            {design.topologySystemName.trim() && !isValidTopologySystemName(design.topologySystemName) && (
-              <span class="mt-0.5 block text-xs text-red-600">
-                {topologySystemNameValidationError(design.topologySystemName)}
-              </span>
-            )}
-          </label>
+          <fieldset class="rounded border border-slate-300 p-3">
+            <legend class="px-1 text-xs font-semibold">開始モード</legend>
+            <div class="space-y-2">
+              {CONTENTS_STEP1_ENTRY_MODE_OPTIONS.map((opt) => (
+                <label
+                  key={opt.id}
+                  class="flex cursor-pointer items-start gap-2 text-xs"
+                >
+                  <input
+                    type="radio"
+                    name="contents-step1-entry-mode"
+                    class="mt-0.5"
+                    checked={entryMode === opt.id}
+                    onChange={() => {
+                      setEntryMode(opt.id);
+                      setCloneSourceId("");
+                      setCloneSourceEvidence(null);
+                    }}
+                  />
+                  <span>
+                    <span class="font-semibold">{opt.label}</span>
+                    <span class="mt-0.5 block text-slate-500">{opt.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {isCloneMode && (
+            <div class="space-y-2">
+              <label class="block text-xs">
+                <span class="font-semibold">{UX_CLONE_SOURCE_EVIDENCE_HEADING}</span>
+                <select
+                  class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                  value={cloneSourceId}
+                  onChange={(e) =>
+                    setCloneSourceId((e.target as HTMLSelectElement).value)}
+                >
+                  <option value="">— 複製元を選択 —</option>
+                  {activeSources.map((m) => (
+                    <option key={m.manifestId} value={m.manifestId}>
+                      {manifestLabels[m.manifestId] ?? m.manifestId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {cloneSourceEvidence && (
+                <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
+                  <p class="font-semibold mb-1">複製元の証跡（読み取り専用）</p>
+                  <ul class="space-y-0.5 font-mono text-[11px]">
+                    <li>topologySystemName: {cloneSourceEvidence.topologySystemName ?? "—"}</li>
+                    <li>status: {cloneSourceEvidence.status}</li>
+                    {cloneSourceEvidence.dispatcherAxes && (
+                      <li>
+                        dispatcher: {cloneSourceEvidence.dispatcherAxes.role}/
+                        {cloneSourceEvidence.dispatcherAxes.target}/
+                        {cloneSourceEvidence.dispatcherAxes.layer}/
+                        {cloneSourceEvidence.dispatcherAxes.action}
+                      </li>
+                    )}
+                    <li>updatedAt: {cloneSourceEvidence.sourceUpdatedAt}</li>
+                  </ul>
+                  {entryMode === "clone_active_as_replacement_draft" && (
+                    <p class="mt-1 text-[10px] text-purple-700">
+                      {UX_CLONE_BACKEND_MERGE_AUTHORITY_NOTICE}
+                    </p>
+                  )}
+                  {entryMode === "clone_active_as_new_topology_draft" && (
+                    <p class="mt-1 text-[10px] text-indigo-700">
+                      {UX_CLONE_LINEAGE_ONLY_NOTICE}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {entryMode !== "clone_active_as_replacement_draft" && (
+            <label class="block text-xs">
+              <span class="font-semibold">トポロジーID <span class="text-red-500">*</span></span>
+              <span class="ml-1 text-slate-500">（英小文字・数字・ハイフンのみ、例: customer-management）</span>
+              <input
+                class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                placeholder="例: customer-management"
+                value={design.topologySystemName}
+                onInput={(e) => {
+                  const val = (e.target as HTMLInputElement).value;
+                  patchDesign({ topologySystemName: val });
+                }}
+              />
+              {design.topologySystemName.trim() && !isValidTopologySystemName(design.topologySystemName) && (
+                <span class="mt-0.5 block text-xs text-red-600">
+                  {topologySystemNameValidationError(design.topologySystemName)}
+                </span>
+              )}
+            </label>
+          )}
           {design.topologySystemName.trim() && isValidTopologySystemName(design.topologySystemName) && (
             <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
               <p class="font-semibold mb-1">生成される識別子（自動）</p>

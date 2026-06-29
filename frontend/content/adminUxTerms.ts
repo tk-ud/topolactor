@@ -217,6 +217,71 @@ export const UX_COLUMN_TYPE_LABELS: Record<string, string> = {
 /** 通常表示候補外のカスタム型を入力するための advanced/other オプションラベル */
 export const UX_COLUMN_TYPE_ADVANCED_LABEL = "その他（詳細入力）";
 
+/**
+ * /admin/contents Step 1 entry mode 選択肢。
+ * SSOT: admin-console-workflow-ssot.yaml admin_contents_step1_entry_modes.
+ * 3 つの mode は可視的に分離する。replacement と clone-as-new-topology を混同させない。
+ */
+export type ContentsStep1EntryModeId =
+  | "create_new_topology"
+  | "clone_active_as_replacement_draft"
+  | "clone_active_as_new_topology_draft";
+
+export const CONTENTS_STEP1_ENTRY_MODE_OPTIONS: readonly {
+  id: ContentsStep1EntryModeId;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "create_new_topology",
+    label: "新規トポロジを作成",
+    description: "元の正本なし。新しいトポロジIDで空の下書きを作成します。",
+  },
+  {
+    id: "clone_active_as_replacement_draft",
+    label: "有効な正本を複製して『正本置き換え用』下書きを作成",
+    description:
+      "有効な正本を読み取り専用ソースとして複製し、置き換え用の下書きを作成します。" +
+      "置き換えの成立はバックエンド権限のみ（証跡・検証・差分・競合チェック必須）。",
+  },
+  {
+    id: "clone_active_as_new_topology_draft",
+    label: "有効な正本を複製して『別トポロジ登録用』下書きを作成",
+    description:
+      "有効な正本を系譜（lineage）の証跡としてのみ参照し、新しいトポロジIDで別トポロジを登録します。" +
+      "元の正本を置き換えることはできません。",
+  },
+];
+
+/** clone lifecycle 表示ラベル（draft_origin / clone_mode をユーザー向けに可視化）。 */
+export const CLONE_DRAFT_ORIGIN_LABELS: Record<string, string> = {
+  manual_new: "新規作成",
+  manual_clone_replacement: "正本置き換え用クローン",
+  manual_clone_new_topology: "別トポロジ登録用クローン",
+  sql_attention_candidate: "SQL Attention 候補",
+};
+
+export const CLONE_MODE_LABELS: Record<string, string> = {
+  none: "クローンなし",
+  replacement: "正本置き換え",
+  new_topology: "別トポロジ登録",
+};
+
+/** clone source active 読み取り専用証跡の見出し。 */
+export const UX_CLONE_SOURCE_EVIDENCE_HEADING = "複製元（有効な正本・読み取り専用）";
+
+/** replacement merge はバックエンド権限のみ、という固定注記。 */
+export const UX_CLONE_BACKEND_MERGE_AUTHORITY_NOTICE =
+  "正本への置き換えはバックエンド権限のみで成立します。" +
+  "この画面は意図の送信と証跡・ブロッカーの表示のみを行い、置き換え対象や競合の判定は行いません。";
+
+/** 系譜のみ（置き換え権限ではない）という注記。 */
+export const UX_CLONE_LINEAGE_ONLY_NOTICE =
+  "複製元は系譜（lineage）の証跡としてのみ参照します。系譜の証跡だけでは正本を置き換えできません。";
+
+/** replacement merge ブロッカーの見出し。 */
+export const UX_CLONE_MERGE_BLOCKERS_HEADING = "置き換えブロッカー（バックエンド判定）";
+
 /** 推奨フローの Step ラベル（canonical admin workflow のみ。ログインは prerequisite） */
 export const UX_MAIN_FLOW_STEP_LABELS = [
   UX_CONTENTS,
