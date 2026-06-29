@@ -44,6 +44,9 @@ import {
   UX_ROUTE_NAVIGATION_SAVE_LABEL,
   UX_RUNTIME_DESTINATION_LABELS,
   UX_STATUS_LABELS,
+  CONTENTS_STEP1_ENTRY_MODE_OPTIONS,
+  CLONE_DRAFT_ORIGIN_LABELS,
+  CLONE_MODE_LABELS,
 } from "../content/adminUxTerms.ts";
 import {
   encodeManifestPackageTargetRef,
@@ -2243,4 +2246,130 @@ Deno.test("ManifestRouteEntry SSOT: topologySystemNameToUiBuilderKey roundtrip m
   const _ = screenLabel + userFacingLabel; // referenced but not passed to derivation
   assertEquals(topologySystemNameToUiBuilderKey(name), "customer-management");
   assertEquals(encodeRouteNavigationTargetRef(topologySystemNameToUiBuilderKey(name)), "route:customer-management");
+});
+
+// ─── /admin/contents Step 1 clone draft lifecycle guards ──────────────────────
+// SSOT: admin-console-workflow-ssot.yaml admin_contents_step1_entry_modes /
+//       replacement_clone_merge_lifecycle. Frontend carries entry intent + source evidence
+//       display only; merge target / conflict / active mutation authority is backend.
+
+Deno.test("Step 1 entry modes: three SSOT-defined modes are present and visibly separated", () => {
+  const ids = CONTENTS_STEP1_ENTRY_MODE_OPTIONS.map((o) => o.id);
+  assertEquals(ids, [
+    "create_new_topology",
+    "clone_active_as_replacement_draft",
+    "clone_active_as_new_topology_draft",
+  ]);
+  // Each mode has a distinct label and description so modes are not confused.
+  const labels = new Set(CONTENTS_STEP1_ENTRY_MODE_OPTIONS.map((o) => o.label));
+  assertEquals(labels.size, 3);
+  for (const o of CONTENTS_STEP1_ENTRY_MODE_OPTIONS) {
+    assert(o.description.length > 0, `${o.id} needs a description`);
+  }
+});
+
+Deno.test("clone lifecycle: replacement and clone-as-new-topology are distinct modes", () => {
+  assert(CLONE_MODE_LABELS["replacement"]);
+  assert(CLONE_MODE_LABELS["new_topology"]);
+  assert(
+    CLONE_MODE_LABELS["replacement"] !== CLONE_MODE_LABELS["new_topology"],
+    "replacement and new_topology must not share a label",
+  );
+  // draft_origin vocabulary keeps manual replacement, manual new-topology, and SQL Attention
+  // candidate distinct so origins are never confused.
+  assert(CLONE_DRAFT_ORIGIN_LABELS["manual_clone_replacement"]);
+  assert(CLONE_DRAFT_ORIGIN_LABELS["manual_clone_new_topology"]);
+  assert(CLONE_DRAFT_ORIGIN_LABELS["sql_attention_candidate"]);
+});
+
+Deno.test("adminApi: clone lifecycle wrappers target the dedicated backend manifest ops", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../api/adminApi.ts", import.meta.url),
+  );
+  assert(src.includes('"create_new_topology_draft"'), "create_new_topology op");
+  assert(
+    src.includes('"create_clone_replacement_draft_from_active"'),
+    "replacement clone create op",
+  );
+  assert(
+    src.includes('"create_clone_new_topology_draft_from_active"'),
+    "clone-as-new create op",
+  );
+  assert(
+    src.includes('"merge_clone_replacement_draft_to_active"'),
+    "replacement merge op",
+  );
+  assert(src.includes('"load_clone_source_evidence"'), "source evidence op");
+  assert(
+    src.includes('"validate_clone_replacement_draft"'),
+    "merge readiness op",
+  );
+});
+
+Deno.test("adminApi: replacement merge is an intent submitted to backend, not a layout_patch op", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../api/adminApi.ts", import.meta.url),
+  );
+  // The merge wrapper must use the manifest replacement-merge op, never layout_patch:apply,
+  // which is UI Builder layout persistence — not a production manifest replacement merge.
+  const mergeFnStart = src.indexOf("mergeCloneReplacementDraftToActive");
+  assert(mergeFnStart > 0, "merge wrapper must exist");
+  const mergeFnSrc = src.slice(mergeFnStart, mergeFnStart + 400);
+  assert(
+    mergeFnSrc.includes("merge_clone_replacement_draft_to_active"),
+    "merge wrapper uses the dedicated backend merge op",
+  );
+  assertFalse(
+    mergeFnSrc.includes("layout_patch"),
+    "replacement merge must not be a layout_patch op",
+  );
+});
+
+Deno.test("ContentsScreenDesignPanel: frontend has no merge authority — merge button gated by backend readiness", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  // The panel submits a merge INTENT; it does not decide the merge target/conflict locally.
+  assert(
+    src.includes("mergeCloneReplacementDraftToActive"),
+    "panel submits merge intent",
+  );
+  assert(
+    src.includes("validateCloneReplacementDraft"),
+    "panel reads backend-computed readiness",
+  );
+  // Merge button must be disabled unless the backend marked the draft mergeReady.
+  assert(
+    src.includes("!replacementReadiness.mergeReady"),
+    "merge button disabled unless backend says mergeReady",
+  );
+  // Blockers are rendered from the backend response, not locally computed.
+  assert(
+    src.includes("replacementReadiness.mergeBlockers"),
+    "panel renders backend merge blockers",
+  );
+});
+
+Deno.test("ContentsScreenDesignPanel: clone source selection is read-only evidence, not active mutation", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("loadCloneSourceEvidence"),
+    "panel loads read-only source evidence",
+  );
+  assert(
+    src.includes("createCloneReplacementDraftFromActive"),
+    "replacement clone draft created via backend",
+  );
+  assert(
+    src.includes("createCloneNewTopologyDraftFromActive"),
+    "clone-as-new draft created via backend",
+  );
+  // The panel must not promote/activate the working draft itself for replacement.
+  assertFalse(
+    src.includes("promoteAdminManifest(selectedId)") &&
+      src.includes("isReplacementCloneDraft"),
+    "replacement draft must not be promoted to active from the panel",
+  );
 });

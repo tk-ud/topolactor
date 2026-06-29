@@ -213,3 +213,53 @@ public record AdminManifestLifecycleResponseDto(
     [property: JsonPropertyName("message")] string Message,
     [property: JsonPropertyName("errorCode")] string? ErrorCode = null
 );
+
+// ---------------------------------------------------------------------------
+// Clone / replacement draft lifecycle
+// SSOT: admin-console-workflow-ssot.yaml admin_contents_step1_entry_modes /
+//       replacement_clone_merge_lifecycle
+// ---------------------------------------------------------------------------
+
+/// <summary>Step 1 clone entry request. newTopologySystemName is required only for clone-as-new-topology.</summary>
+public record AdminManifestCloneFromActiveRequestDto(
+    [property: JsonPropertyName("sourceActiveManifestId")] string SourceActiveManifestId,
+    [property: JsonPropertyName("newTopologySystemName")] string? NewTopologySystemName = null,
+    [property: JsonPropertyName("userFacingTopologyLabel")] string? UserFacingTopologyLabel = null
+);
+
+/// <summary>Read-only source active evidence for clone authoring display. Never replacement authority.</summary>
+public record AdminCloneSourceEvidenceDto(
+    [property: JsonPropertyName("sourceActiveManifestId")] string SourceActiveManifestId,
+    [property: JsonPropertyName("topologySystemName")] string? TopologySystemName,
+    [property: JsonPropertyName("routeKey")] string? RouteKey,
+    [property: JsonPropertyName("dispatcherAxes")] AdminManifestDispatcherMappingDto? DispatcherAxes,
+    [property: JsonPropertyName("sourceUpdatedAt")] string SourceUpdatedAt,
+    [property: JsonPropertyName("sourceTopologyHash")] string SourceTopologyHash,
+    [property: JsonPropertyName("status")] string Status
+);
+
+/// <summary>Backend-computed replacement merge readiness. Frontend displays only; it has no merge authority.</summary>
+public record AdminCloneReplacementValidateResponseDto(
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("draftManifestId")] string DraftManifestId,
+    [property: JsonPropertyName("draftOrigin")] string DraftOrigin,
+    [property: JsonPropertyName("cloneMode")] string CloneMode,
+    [property: JsonPropertyName("sourceEvidence")] AdminCloneSourceEvidenceDto? SourceEvidence,
+    [property: JsonPropertyName("sourceStale")] bool SourceStale,
+    [property: JsonPropertyName("activeIdentityConflictCount")] int ActiveIdentityConflictCount,
+    [property: JsonPropertyName("changeCount")] int ChangeCount,
+    [property: JsonPropertyName("diffJson")] string? DiffJson,
+    [property: JsonPropertyName("validationBlocking")] bool ValidationBlocking,
+    [property: JsonPropertyName("mergeReady")] bool MergeReady,
+    [property: JsonPropertyName("mergeBlockers")] IReadOnlyList<AdminManifestValidationIssueDto> MergeBlockers
+);
+
+/// <summary>Result of a backend replacement merge: existing active row updated, working draft deleted.</summary>
+public record AdminCloneReplacementMergeResponseDto(
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("activeManifestId")] string? ActiveManifestId,
+    [property: JsonPropertyName("draftManifestId")] string DraftManifestId,
+    [property: JsonPropertyName("changeCount")] int ChangeCount,
+    [property: JsonPropertyName("message")] string Message,
+    [property: JsonPropertyName("errorCode")] string? ErrorCode = null
+);

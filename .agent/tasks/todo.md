@@ -9,7 +9,7 @@
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
-| `admin-topology-clone-draft-lifecycle` | admin topology clone / draft lifecycle | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `admin-topology-clone-draft-lifecycle` | admin topology clone / draft lifecycle | acceptance_pending | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
@@ -18,7 +18,8 @@
 
 ## Bundle `admin-topology-clone-draft-lifecycle`
 
-**Status:** not_started
+**Status:** acceptance_pending
+**実装/テスト状況:** backend (AdminRuntime clone actions + ManifestRepository transaction authority + CloneDraftMetadata) と frontend (Step 1 entry mode selector / source evidence / merge intent) を実装し、backend clone lifecycle tests と frontend adminUxGuard tests を追加・green。残りは通し手動受入。実装完了判定は実コード・テストで確認すること。
 **Roadmap bundle:** `product.admin_topology_authoring`
 **Primary SSOT:** `docs/design/admin-console-workflow-ssot.yaml`
 **Supporting SSOT:**
@@ -77,15 +78,18 @@ implementation_change で Primary SSOT に従い、frontend は entry intent / s
 - `CountActiveIdentityConflictsAsync`
 
 残受入条件:
-- [ ] /admin/contents Step 1 entry modes are SSOT-defined and visibly separated.
-- [ ] Replacement clone and clone-as-new topology cannot be confused.
-- [ ] Replacement merge requires source evidence, validation, diff/log evidence, and backend conflict check.
-- [ ] Stale source active fails close.
-- [ ] Frontend has no merge authority.
-- [ ] UI Builder layout/package authoring remains draft-scoped until canonical boundary.
-- [ ] `layout_patch:apply` is not treated as production manifest replacement merge.
-- [ ] SQL Attention candidate drafts cannot auto-merge to active.
-- [ ] /admin/manifests active-to-draft policy has explicit runtime dispatch semantics or remains disabled as unresolved design gap.
+- [x] /admin/contents Step 1 entry modes are SSOT-defined and visibly separated. (CONTENTS_STEP1_ENTRY_MODE_OPTIONS + radio selector; adminUxGuard test)
+- [x] Replacement clone and clone-as-new topology cannot be confused. (draft_origin / clone_mode metadata + distinct backend ops + badges; tests)
+- [x] Replacement merge requires source evidence, validation, diff/log evidence, and backend conflict check. (MergeCloneReplacementDraftToActiveAsync gates; tests)
+- [x] Stale source active fails close. (topology hash recheck inside merge TX; STALE_SOURCE_ACTIVE test)
+- [x] Frontend has no merge authority. (frontend submits intent only; merge button gated by backend mergeReady; adminUxGuard test)
+- [x] UI Builder layout/package authoring remains draft-scoped until canonical boundary. (unchanged; no regression)
+- [x] `layout_patch:apply` is not treated as production manifest replacement merge. (dedicated merge op; adminUxGuard test asserts merge wrapper has no layout_patch)
+- [x] SQL Attention candidate drafts cannot auto-merge to active. (REPLACEMENT_AUTHORITY_DENIED for non manual_clone_replacement origin; regression test)
+- [x] /admin/manifests active-to-draft policy has explicit runtime dispatch semantics or remains disabled as unresolved design gap. (remains disabled; SSOT documents safe default only — no UI added)
+
+手動受入 (acceptance_pending):
+- [ ] /admin/contents Step 1 の 3 entry mode → 複製 → 編集 → backend replacement merge を通し手動受入する。
 
 ---
 

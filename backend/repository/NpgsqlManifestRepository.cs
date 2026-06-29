@@ -504,6 +504,270 @@ public class NpgsqlManifestRepository : ManifestRepository
         return await UpdateDraftAsync(manifestId, existing.RelationRegistryId, merged, ct);
     }
 
+    /// <inheritdoc/>
+    public override async Task<CloneSourceEvidence?> LoadCloneSourceEvidenceAsync(
+        Guid sourceActiveManifestId,
+        CancellationToken ct = default)
+    {
+        var detail = await LoadDetailByIdAsync(sourceActiveManifestId, ct);
+        if (detail is null) return null;
+        if (!string.Equals(detail.Status, "active", StringComparison.OrdinalIgnoreCase)) return null;
+        return BuildSourceEvidence(detail);
+    }
+
+    /// <inheritdoc/>
+    public override async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateCloneReplacementDraftFromActiveAsync(
+        Guid sourceActiveManifestId,
+        CancellationToken ct = default)
+    {
+        var source = await LoadDetailByIdAsync(sourceActiveManifestId, ct);
+        if (source is null)
+            return (null, new ValidationError("CLONE_SOURCE_NOT_FOUND", $"Source manifest {sourceActiveManifestId} was not found."));
+        if (!string.Equals(source.Status, "active", StringComparison.OrdinalIgnoreCase))
+            return (null, new ValidationError("CLONE_SOURCE_NOT_ACTIVE", $"Source manifest {sourceActiveManifestId} is status={source.Status}; clone source must be active."));
+
+        var evidence = BuildSourceEvidence(source);
+        var cloneEntry = CloneDraftMetadata.BuildEntry(
+            CloneDraftMetadata.OriginManualCloneReplacement,
+            CloneDraftMetadata.CloneModeReplacement,
+            sourceActiveManifestId,
+            evidence);
+        var topology = ManifestCanonicalProjection.MergeTopologyEntry(
+            source.Topology, CloneDraftMetadata.EntryType, cloneEntry);
+
+        return await CreateDraftAsync(source.RelationRegistryId, topology, ct);
+    }
+
+    /// <inheritdoc/>
+    public override async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateCloneNewTopologyDraftFromActiveAsync(
+        Guid sourceActiveManifestId,
+        string newTopologySystemName,
+        string? userFacingLabel,
+        CancellationToken ct = default)
+    {
+        var source = await LoadDetailByIdAsync(sourceActiveManifestId, ct);
+        if (source is null)
+            return (null, new ValidationError("CLONE_SOURCE_NOT_FOUND", $"Source manifest {sourceActiveManifestId} was not found."));
+        if (!string.Equals(source.Status, "active", StringComparison.OrdinalIgnoreCase))
+            return (null, new ValidationError("CLONE_SOURCE_NOT_ACTIVE", $"Source manifest {sourceActiveManifestId} is status={source.Status}; clone source must be active."));
+
+        var evidence = BuildSourceEvidence(source);
+        var renamed = CloneDraftMetadata.WithNewTopologyIdentity(source.Topology, newTopologySystemName, userFacingLabel);
+        var cloneEntry = CloneDraftMetadata.BuildEntry(
+            CloneDraftMetadata.OriginManualCloneNewTopology,
+            CloneDraftMetadata.CloneModeNewTopology,
+            sourceActiveManifestId,
+            evidence);
+        var topology = ManifestCanonicalProjection.MergeTopologyEntry(
+            renamed, CloneDraftMetadata.EntryType, cloneEntry);
+
+        return await CreateDraftAsync(source.RelationRegistryId, topology, ct);
+    }
+
+    /// <inheritdoc/>
+    public override Task<int> CountActiveIdentityConflictsAsync(
+        string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct = default) =>
+        CountActiveAxisConflictsAsync(role, target, layer, action, excludeManifestId, ct);
+
+    /// <inheritdoc/>
+    public override async Task<CloneReplacementMergeResult> MergeCloneReplacementDraftToActiveAsync(
+        Guid draftManifestId,
+        IReadOnlySet<string> allowedRuntimeDestinations,
+        string? actor,
+        CancellationToken ct = default)
+    {
+        var draft = await LoadDetailByIdAsync(draftManifestId, ct);
+        if (draft is null)
+            return MergeFail(draftManifestId, "MANIFEST_NOT_FOUND", $"Draft manifest {draftManifestId} was not found.");
+        if (!string.Equals(draft.Status, "draft", StringComparison.OrdinalIgnoreCase))
+            return MergeFail(draftManifestId, "MANIFEST_NOT_DRAFT", $"Manifest {draftManifestId} is status={draft.Status}; only a draft can be merged.");
+
+        var meta = CloneDraftMetadata.Extract(draft.Topology);
+        if (meta is null)
+            return MergeFail(draftManifestId, "CLONE_METADATA_MISSING", "Draft has no clone_metadata; not a replacement clone draft.");
+        // Source evidence / lineage / SQL Attention candidate alone never grant replacement authority.
+        if (!string.Equals(meta.DraftOrigin, CloneDraftMetadata.OriginManualCloneReplacement, StringComparison.Ordinal) ||
+            !string.Equals(meta.CloneMode, CloneDraftMetadata.CloneModeReplacement, StringComparison.Ordinal))
+            return MergeFail(draftManifestId, "REPLACEMENT_AUTHORITY_DENIED",
+                $"Replacement merge requires draft_origin=manual_clone_replacement and clone_mode=replacement (got {meta.DraftOrigin}/{meta.CloneMode}).");
+        if (meta.SourceActiveManifestId is null || meta.SourceEvidence is null)
+            return MergeFail(draftManifestId, "MISSING_SOURCE_EVIDENCE", "Replacement clone draft is missing source_active_manifest_id / source evidence.");
+
+        var sourceId = meta.SourceActiveManifestId.Value;
+        var draftSummary = ManifestTopologyValidator.ExtractSummary(draft.Topology);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        // Resolve and lock the merge-target active row.
+        ManifestDetailRecord? source;
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "SELECT manifest_id, relation_registry_id, topology, status, created_at, updated_at " +
+                "FROM manifest WHERE manifest_id = @id FOR UPDATE";
+            cmd.Parameters.AddWithValue("id", sourceId);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            source = await reader.ReadAsync(ct) ? ReadDetailRecord(reader) : null;
+        }
+
+        if (source is null)
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "CLONE_SOURCE_NOT_FOUND", $"Merge target {sourceId} was not found.");
+        }
+        if (!string.Equals(source.Status, "active", StringComparison.OrdinalIgnoreCase))
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "STALE_SOURCE_ACTIVE", $"Merge target {sourceId} is status={source.Status}; source active is stale.");
+        }
+        // UUID integrity: clone source must equal the merge-target active row.
+        if (source.ManifestId != sourceId)
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "SOURCE_IDENTITY_MISMATCH", "Clone source UUID does not match the merge-target active row.");
+        }
+        // Stale check: source active topology must be unchanged since clone capture.
+        var liveHash = CloneDraftMetadata.ComputeTopologyHash(source.Topology);
+        if (!string.Equals(liveHash, meta.SourceEvidence.SourceTopologyHash, StringComparison.Ordinal))
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "STALE_SOURCE_ACTIVE", "Source active changed since the clone was created; re-clone before merging.");
+        }
+
+        // Active identity conflict: no other active row may share the merge-target axes.
+        if (draftSummary.DispatcherMapping is { } axes)
+        {
+            var conflict = await CountActiveIdentityConflictsTxAsync(conn, tx, axes.Role, axes.Target, axes.Layer, axes.Action, sourceId, ct);
+            if (conflict > 0)
+            {
+                await tx.RollbackAsync(ct);
+                return MergeFail(draftManifestId, "ACTIVE_IDENTITY_CONFLICT", $"Another active manifest already holds the merge-target axes ({conflict} conflict(s)).");
+            }
+        }
+
+        // The merged production shape excludes the draft's clone_metadata bookkeeping entry.
+        var mergedTopology = StripCloneMetadata(draft.Topology);
+        var validation = ManifestTopologyValidator.Validate(mergedTopology, allowedRuntimeDestinations);
+        if (validation.IsBlocking)
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, validation.Errors[0].Code, validation.Errors[0].Message);
+        }
+
+        // Diff/log evidence gate — a no-op merge has no evidence and fails close.
+        var (diffJson, changeCount) = CloneDraftMetadata.ComputeTopologyDiff(source.Topology, mergedTopology);
+        if (changeCount == 0)
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "REPLACEMENT_MERGE_NO_DIFF", "Replacement draft is identical to the active source; nothing to merge.");
+        }
+
+        // Diff/log evidence is preserved in the existing edit-log surface (not the draft row).
+        await AppendMergeEditLogAsync(conn, tx, source, draft, diffJson, actor, ct);
+
+        // existing active row UPDATE in place.
+        ManifestDetailRecord mergedActive;
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "UPDATE manifest SET relation_registry_id = @rel, topology = @topology, updated_at = now() " +
+                "WHERE manifest_id = @id AND status = 'active' " +
+                "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+            cmd.Parameters.AddWithValue("id", sourceId);
+            cmd.Parameters.AddWithValue("rel", (object?)draft.RelationRegistryId ?? DBNull.Value);
+            AddTopologyArrayParameter(cmd, "topology", mergedTopology);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                await tx.RollbackAsync(ct);
+                return MergeFail(draftManifestId, "REPLACEMENT_MERGE_FAILED", "Failed to update the active manifest during merge.");
+            }
+            mergedActive = ReadDetailRecord(reader);
+        }
+
+        var projectionError = await ManifestCanonicalProjection.ProjectOnPromoteAsync(conn, mergedActive, ct, tx);
+        if (projectionError is not null)
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, projectionError.Code, projectionError.Message);
+        }
+
+        // working draft row DELETE after a successful merge (no promotion, no draft-row audit retention).
+        await using (var del = conn.CreateCommand())
+        {
+            del.Transaction = tx;
+            del.CommandText = "DELETE FROM manifest WHERE manifest_id = @id AND status = 'draft'";
+            del.Parameters.AddWithValue("id", draftManifestId);
+            await del.ExecuteNonQueryAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return new CloneReplacementMergeResult(true, sourceId, draftManifestId, diffJson, changeCount, null);
+    }
+
+    private static CloneReplacementMergeResult MergeFail(Guid draftId, string code, string message) =>
+        new(false, null, draftId, null, 0, new ValidationError(code, message));
+
+    private static IReadOnlyList<JsonElement> StripCloneMetadata(IReadOnlyList<JsonElement> topology)
+    {
+        var list = new List<JsonElement>(topology.Count);
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind == JsonValueKind.Object &&
+                entry.TryGetProperty("type", out var typeEl) &&
+                typeEl.ValueKind == JsonValueKind.String &&
+                string.Equals(typeEl.GetString(), CloneDraftMetadata.EntryType, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            list.Add(entry);
+        }
+        return list;
+    }
+
+    private static async Task<int> CountActiveIdentityConflictsTxAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx,
+        string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT manifest_id, topology FROM manifest WHERE status = 'active'";
+        var count = 0;
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var manifestId = reader.GetGuid(0);
+            if (excludeManifestId.HasValue && manifestId == excludeManifestId.Value) continue;
+            var topology = ParseTopologyArray(reader.IsDBNull(1) ? null : reader.GetFieldValue<string[]>(1));
+            if (MatchesAxes(topology, role, target, layer, action)) count++;
+        }
+        return count;
+    }
+
+    private static async Task AppendMergeEditLogAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx,
+        ManifestDetailRecord source, ManifestDetailRecord draft, string diffJson, string? actor, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            "INSERT INTO topology.topology_edit_log " +
+            "(target_table, target_id, operation, before_json, after_json, diff_json, actor) " +
+            "VALUES (@tt, @tid, @op, @before::jsonb, @after::jsonb, @diff::jsonb, @actor)";
+        cmd.Parameters.AddWithValue("tt", "manifest:replacement_clone_merge");
+        cmd.Parameters.AddWithValue("tid", source.ManifestId.ToString());
+        cmd.Parameters.AddWithValue("op", "merge_clone_replacement_draft_to_active");
+        cmd.Parameters.AddWithValue("before", JsonSerializer.Serialize(source.Topology));
+        cmd.Parameters.AddWithValue("after", JsonSerializer.Serialize(StripCloneMetadata(draft.Topology)));
+        cmd.Parameters.AddWithValue("diff", diffJson);
+        cmd.Parameters.AddWithValue("actor", (object?)actor ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     private static ManifestDetailRecord ReadDetailRecord(NpgsqlDataReader reader)
     {
         return new ManifestDetailRecord(

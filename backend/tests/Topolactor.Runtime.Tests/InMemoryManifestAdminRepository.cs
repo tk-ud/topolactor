@@ -14,16 +14,37 @@ internal sealed record ProjectedTopologyManifest(
     string ManifestKey,
     string Status);
 
+internal sealed record InMemoryMergeEditLogEntry(
+    string TargetTable,
+    string? TargetId,
+    string Operation,
+    string? DiffJson,
+    string? Actor);
+
 internal sealed class InMemoryManifestAdminRepository : ManifestRepository
 {
     private readonly List<ManifestDetailRecord> _manifests = [];
     private readonly List<ProjectedTopologyManifest> _projected = [];
+    private readonly List<InMemoryMergeEditLogEntry> _mergeEditLog = [];
 
     public InMemoryManifestAdminRepository() : base(NullLogger<ManifestRepository>.Instance) { }
 
     public void Seed(ManifestDetailRecord record) => _manifests.Add(record);
 
     public IReadOnlyList<ProjectedTopologyManifest> ProjectedTopologyManifests => _projected;
+
+    public IReadOnlyList<InMemoryMergeEditLogEntry> MergeEditLog => _mergeEditLog;
+
+    public IReadOnlyList<ManifestDetailRecord> Manifests => _manifests;
+
+    /// <summary>Test-only: mutate an active row's topology to simulate a source drifting after a clone.</summary>
+    public Task UpdateActiveTopologyForTest(Guid manifestId, IReadOnlyList<JsonElement> topology)
+    {
+        var idx = _manifests.FindIndex(m => m.ManifestId == manifestId);
+        if (idx >= 0)
+            _manifests[idx] = _manifests[idx] with { Topology = topology.ToList(), UpdatedAt = DateTimeOffset.UtcNow };
+        return Task.CompletedTask;
+    }
 
     public override Task<ManifestRecord?> ResolveActiveManifestAsync(
         string? role, string? target, string? layer, string? action, CancellationToken ct = default)
@@ -246,6 +267,139 @@ internal sealed class InMemoryManifestAdminRepository : ManifestRepository
             string.Equals(meta.ManifestKey, manifestKey, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(meta.VersionLabel, versionLabel, StringComparison.OrdinalIgnoreCase));
         return Task.FromResult(count);
+    }
+
+    public override Task<CloneSourceEvidence?> LoadCloneSourceEvidenceAsync(
+        Guid sourceActiveManifestId, CancellationToken ct = default)
+    {
+        var detail = _manifests.FirstOrDefault(m => m.ManifestId == sourceActiveManifestId);
+        if (detail is null || !detail.Status.Equals("active", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult<CloneSourceEvidence?>(null);
+        return Task.FromResult<CloneSourceEvidence?>(BuildSourceEvidence(detail));
+    }
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateCloneReplacementDraftFromActiveAsync(
+        Guid sourceActiveManifestId, CancellationToken ct = default)
+    {
+        var source = _manifests.FirstOrDefault(m => m.ManifestId == sourceActiveManifestId);
+        if (source is null)
+            return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("CLONE_SOURCE_NOT_FOUND", "source not found")));
+        if (!source.Status.Equals("active", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("CLONE_SOURCE_NOT_ACTIVE", "source not active")));
+
+        var evidence = BuildSourceEvidence(source);
+        var cloneEntry = CloneDraftMetadata.BuildEntry(
+            CloneDraftMetadata.OriginManualCloneReplacement,
+            CloneDraftMetadata.CloneModeReplacement,
+            sourceActiveManifestId,
+            evidence);
+        var topology = ManifestCanonicalProjection.MergeTopologyEntry(
+            source.Topology, CloneDraftMetadata.EntryType, cloneEntry);
+        return CreateDraftAsync(source.RelationRegistryId, topology, ct);
+    }
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateCloneNewTopologyDraftFromActiveAsync(
+        Guid sourceActiveManifestId, string newTopologySystemName, string? userFacingLabel, CancellationToken ct = default)
+    {
+        var source = _manifests.FirstOrDefault(m => m.ManifestId == sourceActiveManifestId);
+        if (source is null)
+            return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("CLONE_SOURCE_NOT_FOUND", "source not found")));
+        if (!source.Status.Equals("active", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("CLONE_SOURCE_NOT_ACTIVE", "source not active")));
+
+        var evidence = BuildSourceEvidence(source);
+        var renamed = CloneDraftMetadata.WithNewTopologyIdentity(source.Topology, newTopologySystemName, userFacingLabel);
+        var cloneEntry = CloneDraftMetadata.BuildEntry(
+            CloneDraftMetadata.OriginManualCloneNewTopology,
+            CloneDraftMetadata.CloneModeNewTopology,
+            sourceActiveManifestId,
+            evidence);
+        var topology = ManifestCanonicalProjection.MergeTopologyEntry(
+            renamed, CloneDraftMetadata.EntryType, cloneEntry);
+        return CreateDraftAsync(source.RelationRegistryId, topology, ct);
+    }
+
+    public override Task<int> CountActiveIdentityConflictsAsync(
+        string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct = default) =>
+        CountActiveAxisConflictsAsync(role, target, layer, action, excludeManifestId, ct);
+
+    public override Task<CloneReplacementMergeResult> MergeCloneReplacementDraftToActiveAsync(
+        Guid draftManifestId, IReadOnlySet<string> allowedRuntimeDestinations, string? actor, CancellationToken ct = default)
+    {
+        CloneReplacementMergeResult Fail(string code, string message) =>
+            new(false, null, draftManifestId, null, 0, new ValidationError(code, message));
+
+        var draftIdx = _manifests.FindIndex(m => m.ManifestId == draftManifestId);
+        if (draftIdx < 0)
+            return Task.FromResult(Fail("MANIFEST_NOT_FOUND", "draft not found"));
+        var draft = _manifests[draftIdx];
+        if (!draft.Status.Equals("draft", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(Fail("MANIFEST_NOT_DRAFT", "not draft"));
+
+        var meta = CloneDraftMetadata.Extract(draft.Topology);
+        if (meta is null)
+            return Task.FromResult(Fail("CLONE_METADATA_MISSING", "no clone metadata"));
+        if (meta.DraftOrigin != CloneDraftMetadata.OriginManualCloneReplacement ||
+            meta.CloneMode != CloneDraftMetadata.CloneModeReplacement)
+            return Task.FromResult(Fail("REPLACEMENT_AUTHORITY_DENIED", $"{meta.DraftOrigin}/{meta.CloneMode}"));
+        if (meta.SourceActiveManifestId is null || meta.SourceEvidence is null)
+            return Task.FromResult(Fail("MISSING_SOURCE_EVIDENCE", "no source evidence"));
+
+        var sourceId = meta.SourceActiveManifestId.Value;
+        var sourceIdx = _manifests.FindIndex(m => m.ManifestId == sourceId);
+        if (sourceIdx < 0)
+            return Task.FromResult(Fail("CLONE_SOURCE_NOT_FOUND", "merge target not found"));
+        var source = _manifests[sourceIdx];
+        if (!source.Status.Equals("active", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(Fail("STALE_SOURCE_ACTIVE", "merge target not active"));
+
+        var liveHash = CloneDraftMetadata.ComputeTopologyHash(source.Topology);
+        if (liveHash != meta.SourceEvidence.SourceTopologyHash)
+            return Task.FromResult(Fail("STALE_SOURCE_ACTIVE", "source changed since clone"));
+
+        var draftSummary = ManifestTopologyValidator.ExtractSummary(draft.Topology);
+        if (draftSummary.DispatcherMapping is { } axes)
+        {
+            var conflict = _manifests.Count(m =>
+                m.Status == "active" && m.ManifestId != sourceId &&
+                MatchesAxes(m.Topology, axes.Role, axes.Target, axes.Layer, axes.Action));
+            if (conflict > 0)
+                return Task.FromResult(Fail("ACTIVE_IDENTITY_CONFLICT", $"{conflict} conflict(s)"));
+        }
+
+        var mergedTopology = StripCloneMetadata(draft.Topology);
+        var validation = ManifestTopologyValidator.Validate(mergedTopology, allowedRuntimeDestinations);
+        if (validation.IsBlocking)
+            return Task.FromResult(Fail(validation.Errors[0].Code, validation.Errors[0].Message));
+
+        var (diffJson, changeCount) = CloneDraftMetadata.ComputeTopologyDiff(source.Topology, mergedTopology);
+        if (changeCount == 0)
+            return Task.FromResult(Fail("REPLACEMENT_MERGE_NO_DIFF", "no changes"));
+
+        _mergeEditLog.Add(new InMemoryMergeEditLogEntry(
+            "manifest:replacement_clone_merge", sourceId.ToString(),
+            "merge_clone_replacement_draft_to_active", diffJson, actor));
+
+        // existing active row UPDATE in place; working draft row DELETE.
+        _manifests[sourceIdx] = source with { Topology = mergedTopology, RelationRegistryId = draft.RelationRegistryId, UpdatedAt = DateTimeOffset.UtcNow };
+        _manifests.RemoveAll(m => m.ManifestId == draftManifestId);
+
+        return Task.FromResult(new CloneReplacementMergeResult(true, sourceId, draftManifestId, diffJson, changeCount, null));
+    }
+
+    private static IReadOnlyList<JsonElement> StripCloneMetadata(IReadOnlyList<JsonElement> topology)
+    {
+        var list = new List<JsonElement>(topology.Count);
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind == JsonValueKind.Object &&
+                entry.TryGetProperty("type", out var typeEl) &&
+                typeEl.ValueKind == JsonValueKind.String &&
+                string.Equals(typeEl.GetString(), CloneDraftMetadata.EntryType, StringComparison.Ordinal))
+                continue;
+            list.Add(entry);
+        }
+        return list;
     }
 
     private static bool MatchesAxes(

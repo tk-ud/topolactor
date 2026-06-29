@@ -286,6 +286,50 @@ export type AdminManifestDraftInput = {
   screenOperationKind?: string;
 };
 
+// Step 1 clone entry modes — SSOT: admin-console-workflow-ssot.yaml
+// admin_contents_step1_entry_modes. The frontend only carries the author intent and the
+// read-only source selection; merge target / conflict / active mutation authority is backend.
+export type ContentsStep1EntryMode =
+  | "create_new_topology"
+  | "clone_active_as_replacement_draft"
+  | "clone_active_as_new_topology_draft";
+
+export type CloneSourceEvidence = {
+  sourceActiveManifestId: string;
+  topologySystemName: string | null;
+  routeKey: string | null;
+  dispatcherAxes:
+    | { role: string; target: string; layer: string; action: string }
+    | null;
+  sourceUpdatedAt: string;
+  sourceTopologyHash: string;
+  status: string;
+};
+
+export type CloneReplacementValidateResult = {
+  ok: boolean;
+  draftManifestId: string;
+  draftOrigin: string;
+  cloneMode: string;
+  sourceEvidence: CloneSourceEvidence | null;
+  sourceStale: boolean;
+  activeIdentityConflictCount: number;
+  changeCount: number;
+  diffJson: string | null;
+  validationBlocking: boolean;
+  mergeReady: boolean;
+  mergeBlockers: AdminManifestValidationIssue[];
+};
+
+export type CloneReplacementMergeResult = {
+  ok: boolean;
+  activeManifestId: string | null;
+  draftManifestId: string;
+  changeCount: number;
+  message: string;
+  errorCode?: string;
+};
+
 export type AdminManifestScreenColumnInput = {
   name: string;
   dataType: string;
@@ -567,6 +611,81 @@ export async function createAdminManifestDraft(
   const body = await callAdminManifestOp("create_draft", input);
   if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
   return body.emission?.data as AdminManifestDetail;
+}
+
+/** Step 1 create_new_topology entry mode — stamps clone_off metadata (manual_new / none). */
+export async function createNewTopologyDraft(
+  input: AdminManifestDraftInput,
+): Promise<AdminManifestDetail> {
+  const body = await callAdminManifestOp("create_new_topology_draft", input);
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return body.emission?.data as AdminManifestDetail;
+}
+
+/** Step 1 clone_active_as_replacement_draft — backend copies the active source + stamps replacement metadata. */
+export async function createCloneReplacementDraftFromActive(
+  sourceActiveManifestId: string,
+): Promise<AdminManifestDetail> {
+  const body = await callAdminManifestOp(
+    "create_clone_replacement_draft_from_active",
+    { sourceActiveManifestId },
+  );
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return body.emission?.data as AdminManifestDetail;
+}
+
+/** Step 1 clone_active_as_new_topology_draft — lineage-only clone with a new topologySystemName. */
+export async function createCloneNewTopologyDraftFromActive(
+  sourceActiveManifestId: string,
+  newTopologySystemName: string,
+  userFacingTopologyLabel?: string,
+): Promise<AdminManifestDetail> {
+  const body = await callAdminManifestOp(
+    "create_clone_new_topology_draft_from_active",
+    { sourceActiveManifestId, newTopologySystemName, userFacingTopologyLabel },
+  );
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return body.emission?.data as AdminManifestDetail;
+}
+
+/** Read-only source active evidence for clone authoring display. Never replacement authority. */
+export async function loadCloneSourceEvidence(
+  sourceActiveManifestId: string,
+): Promise<CloneSourceEvidence | null> {
+  const body = await callAdminManifestOp("load_clone_source_evidence", {
+    sourceActiveManifestId,
+  });
+  if (body === null) return null;
+  return body.emission?.data as CloneSourceEvidence;
+}
+
+/**
+ * Backend-computed replacement merge readiness (read-only). The frontend renders blockers;
+ * it never decides the merge target or conflict outcome.
+ */
+export async function validateCloneReplacementDraft(
+  draftManifestId: string,
+): Promise<CloneReplacementValidateResult | null> {
+  const body = await callAdminManifestOp("validate_clone_replacement_draft", {
+    manifestId: draftManifestId,
+  });
+  if (body === null) return null;
+  return body.emission?.data as CloneReplacementValidateResult;
+}
+
+/**
+ * Submits a replacement merge INTENT to backend authority. The backend (AdminRuntime /
+ * ManifestRepository transaction) is the only authority that performs the merge.
+ */
+export async function mergeCloneReplacementDraftToActive(
+  draftManifestId: string,
+): Promise<CloneReplacementMergeResult | null> {
+  const body = await callAdminManifestOp(
+    "merge_clone_replacement_draft_to_active",
+    { manifestId: draftManifestId },
+  );
+  if (body === null) return null;
+  return body.emission?.data as CloneReplacementMergeResult;
 }
 
 export async function updateAdminManifestDraft(

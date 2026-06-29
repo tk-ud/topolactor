@@ -269,6 +269,12 @@ public partial class AdminRuntime
             "manifest:get"                              => await DataManifestGetAsync(vector, ct),
             "manifest:validate"                         => await DataManifestValidateAsync(vector, ct),
             "manifest:create_draft"                     => await DataManifestCreateDraftAsync(vector, ct),
+            "manifest:create_new_topology_draft"        => await DataManifestCreateNewTopologyDraftAsync(vector, ct),
+            "manifest:create_clone_replacement_draft_from_active" => await DataManifestCreateCloneReplacementDraftAsync(vector, ct),
+            "manifest:create_clone_new_topology_draft_from_active" => await DataManifestCreateCloneNewTopologyDraftAsync(vector, ct),
+            "manifest:load_clone_source_evidence"       => await DataManifestLoadCloneSourceEvidenceAsync(vector, ct),
+            "manifest:validate_clone_replacement_draft" => await DataManifestValidateCloneReplacementDraftAsync(vector, ct),
+            "manifest:merge_clone_replacement_draft_to_active" => await DataManifestMergeCloneReplacementDraftAsync(vector, ct),
             "manifest:update_draft"                     => await DataManifestUpdateDraftAsync(vector, ct),
             "manifest:promote"                          => await DataManifestPromoteAsync(vector, ct),
             "manifest:deprecate"                        => await DataManifestDeprecateAsync(vector, ct),
@@ -1928,6 +1934,263 @@ public partial class AdminRuntime
         manifest = refreshed ?? manifest;
 
         return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    // -----------------------------------------------------------------------
+    // Clone / replacement draft lifecycle handlers.
+    // SSOT: admin-console-workflow-ssot.yaml admin_contents_step1_entry_modes /
+    //       replacement_clone_merge_lifecycle. Frontend supplies entry intent and source
+    //       selection only; merge target / conflict / active mutation authority is here.
+    // -----------------------------------------------------------------------
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestCreateNewTopologyDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseDraftRequest(vector, out var request, out var parseError))
+            return (null, parseError);
+
+        var role = request!.Role;
+        var target = request.Target;
+        var layer = request.Layer;
+        var action = request.Action;
+        var runtimeDestination = request.RuntimeDestination;
+        if (ManifestScreenOperationDeriver.TryDeriveAxes(
+                request.ScreenOperationKind, manifestKey: null, manifestId: null,
+                out var dRole, out var dTarget, out var dLayer, out var dAction, out var dRuntime))
+        {
+            role = dRole; target = dTarget; layer = dLayer; action = dAction; runtimeDestination = dRuntime;
+        }
+
+        var topology = ManifestTopologyValidator.BuildTopology(
+            role, target, layer, action, runtimeDestination, request.ProjectionDefinition);
+
+        var validation = ManifestTopologyValidator.Validate(topology, KnownRuntimeDestinations);
+        if (validation.IsBlocking) return (null, validation.Errors[0]);
+
+        // create_new_topology: clone_off (clone_mode=none, no source_active_manifest_id).
+        var cloneEntry = CloneDraftMetadata.BuildEntry(
+            CloneDraftMetadata.OriginManualNew, CloneDraftMetadata.CloneModeNone, null, null);
+        topology = ManifestCanonicalProjection.MergeTopologyEntry(topology, CloneDraftMetadata.EntryType, cloneEntry);
+
+        Guid? relationRegistryId = null;
+        if (!string.IsNullOrWhiteSpace(request.RelationRegistryId))
+        {
+            if (!Guid.TryParse(request.RelationRegistryId, out var relId))
+                return (null, new ValidationError("MALFORMED_RELATION_REGISTRY_ID", "relationRegistryId must be a valid UUID when provided."));
+            relationRegistryId = relId;
+        }
+
+        var (manifest, error) = await _manifestRepository.CreateDraftAsync(relationRegistryId, topology, ct);
+        if (error is not null) return (null, error);
+
+        var (refreshed, refreshError) = await RefreshManifestDispatcherFromExtensionsAsync(manifest!, ct);
+        if (refreshError is not null) return (null, refreshError);
+        manifest = refreshed ?? manifest;
+
+        return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestCreateCloneReplacementDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseCloneRequest(vector, out var request, out var parseError))
+            return (null, parseError);
+        if (!Guid.TryParse(request!.SourceActiveManifestId, out var sourceId))
+            return (null, new ValidationError("MALFORMED_SOURCE_MANIFEST_ID", "sourceActiveManifestId must be a valid UUID."));
+
+        var (manifest, error) = await _manifestRepository.CreateCloneReplacementDraftFromActiveAsync(sourceId, ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestCreateCloneNewTopologyDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseCloneRequest(vector, out var request, out var parseError))
+            return (null, parseError);
+        if (!Guid.TryParse(request!.SourceActiveManifestId, out var sourceId))
+            return (null, new ValidationError("MALFORMED_SOURCE_MANIFEST_ID", "sourceActiveManifestId must be a valid UUID."));
+
+        var newName = request.NewTopologySystemName?.Trim();
+        if (string.IsNullOrWhiteSpace(newName))
+            return (null, new ValidationError("TOPOLOGY_SYSTEM_NAME_REQUIRED", "clone-as-new-topology requires a new topologySystemName before registration."));
+        if (!System.Text.RegularExpressions.Regex.IsMatch(newName, @"^[a-z0-9]+(?:-[a-z0-9]+)*$"))
+            return (null, new ValidationError("INVALID_TOPOLOGY_SYSTEM_NAME", "topologySystemName は英小文字・数字・ハイフンのみで、先頭・末尾・連続ハイフン禁止です。"));
+
+        var (manifest, error) = await _manifestRepository.CreateCloneNewTopologyDraftFromActiveAsync(
+            sourceId, newName, request.UserFacingTopologyLabel?.Trim(), ct);
+        if (error is not null) return (null, error);
+
+        var (refreshed, refreshError) = await RefreshManifestDispatcherFromExtensionsAsync(manifest!, ct);
+        if (refreshError is not null) return (null, refreshError);
+        manifest = refreshed ?? manifest;
+
+        return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestLoadCloneSourceEvidenceAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseCloneRequest(vector, out var request, out var parseError))
+            return (null, parseError);
+        if (!Guid.TryParse(request!.SourceActiveManifestId, out var sourceId))
+            return (null, new ValidationError("MALFORMED_SOURCE_MANIFEST_ID", "sourceActiveManifestId must be a valid UUID."));
+
+        var evidence = await _manifestRepository.LoadCloneSourceEvidenceAsync(sourceId, ct);
+        if (evidence is null)
+            return (null, new ValidationError("CLONE_SOURCE_NOT_ACTIVE", $"Source manifest {sourceId} was not found or is not active."));
+
+        return (JsonSerializer.SerializeToElement(ToCloneSourceEvidenceDto(evidence)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestValidateCloneReplacementDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var draftId, out var parseError))
+            return (null, parseError);
+
+        var draft = await _manifestRepository.LoadDetailByIdAsync(draftId, ct);
+        if (draft is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Draft manifest {draftId} was not found."));
+
+        var meta = CloneDraftMetadata.Extract(draft.Topology);
+        var draftOrigin = meta?.DraftOrigin ?? CloneDraftMetadata.OriginManualNew;
+        var cloneMode = meta?.CloneMode ?? CloneDraftMetadata.CloneModeNone;
+        var blockers = new List<AdminManifestValidationIssueDto>();
+
+        // Replacement authority is gated by origin/mode — source evidence / lineage / candidate
+        // is never sufficient on its own.
+        var isReplacement = draftOrigin == CloneDraftMetadata.OriginManualCloneReplacement &&
+                            cloneMode == CloneDraftMetadata.CloneModeReplacement;
+        if (!isReplacement)
+            blockers.Add(new AdminManifestValidationIssueDto("NOT_REPLACEMENT_CLONE",
+                $"Draft is {draftOrigin}/{cloneMode}; only manual_clone_replacement drafts merge into the active source.", true));
+
+        AdminCloneSourceEvidenceDto? evidenceDto = meta?.SourceEvidence is { } ev ? ToCloneSourceEvidenceDto(ev) : null;
+        if (meta?.SourceActiveManifestId is null || meta.SourceEvidence is null)
+            blockers.Add(new AdminManifestValidationIssueDto("MISSING_SOURCE_EVIDENCE", "Replacement clone draft is missing source evidence.", true));
+
+        var sourceStale = false;
+        var conflictCount = 0;
+        var mergedTopology = draft.Topology.Where(IsNonCloneMetadataEntry).ToList();
+        var validation = ManifestTopologyValidator.Validate(mergedTopology, KnownRuntimeDestinations);
+        if (validation.IsBlocking)
+        {
+            foreach (var e in validation.Errors)
+                blockers.Add(new AdminManifestValidationIssueDto(e.Code, e.Message, true));
+        }
+
+        string? diffJson = null;
+        var changeCount = 0;
+        if (meta?.SourceActiveManifestId is { } sourceId)
+        {
+            var source = await _manifestRepository.LoadDetailByIdAsync(sourceId, ct);
+            if (source is null || !source.Status.Equals("active", StringComparison.OrdinalIgnoreCase))
+            {
+                sourceStale = true;
+                blockers.Add(new AdminManifestValidationIssueDto("STALE_SOURCE_ACTIVE", "Source active no longer exists or is not active.", true));
+            }
+            else
+            {
+                var liveHash = CloneDraftMetadata.ComputeTopologyHash(source.Topology);
+                if (meta.SourceEvidence is not null && liveHash != meta.SourceEvidence.SourceTopologyHash)
+                {
+                    sourceStale = true;
+                    blockers.Add(new AdminManifestValidationIssueDto("STALE_SOURCE_ACTIVE", "Source active changed since the clone was created.", true));
+                }
+
+                var summary = ManifestTopologyValidator.ExtractSummary(mergedTopology);
+                if (summary.DispatcherMapping is { } axes)
+                {
+                    conflictCount = await _manifestRepository.CountActiveIdentityConflictsAsync(
+                        axes.Role, axes.Target, axes.Layer, axes.Action, sourceId, ct);
+                    if (conflictCount > 0)
+                        blockers.Add(new AdminManifestValidationIssueDto("ACTIVE_IDENTITY_CONFLICT", $"Another active manifest holds the merge-target axes ({conflictCount}).", true));
+                }
+
+                (diffJson, changeCount) = CloneDraftMetadata.ComputeTopologyDiff(source.Topology, mergedTopology);
+                if (changeCount == 0)
+                    blockers.Add(new AdminManifestValidationIssueDto("REPLACEMENT_MERGE_NO_DIFF", "Replacement draft has no changes relative to the active source.", true));
+            }
+        }
+
+        var mergeReady = blockers.Count == 0;
+        var response = new AdminCloneReplacementValidateResponseDto(
+            true, draftId.ToString(), draftOrigin, cloneMode, evidenceDto,
+            sourceStale, conflictCount, changeCount, diffJson, validation.IsBlocking, mergeReady, blockers);
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestMergeCloneReplacementDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var draftId, out var parseError))
+            return (null, parseError);
+
+        var result = await _manifestRepository.MergeCloneReplacementDraftToActiveAsync(
+            draftId, KnownRuntimeDestinations, vector.ContextUserId, ct);
+
+        if (!result.Ok)
+        {
+            return (JsonSerializer.SerializeToElement(new AdminCloneReplacementMergeResponseDto(
+                false, null, draftId.ToString(), 0,
+                result.Error?.Message ?? "Replacement merge failed.", result.Error?.Code)), null);
+        }
+
+        return (JsonSerializer.SerializeToElement(new AdminCloneReplacementMergeResponseDto(
+            true, result.ActiveManifestId?.ToString(), draftId.ToString(), result.ChangeCount,
+            "Replacement clone merged into the active manifest; working draft removed.")), null);
+    }
+
+    private static bool IsNonCloneMetadataEntry(JsonElement entry) =>
+        !(entry.ValueKind == JsonValueKind.Object &&
+          entry.TryGetProperty("type", out var typeEl) &&
+          typeEl.ValueKind == JsonValueKind.String &&
+          string.Equals(typeEl.GetString(), CloneDraftMetadata.EntryType, StringComparison.Ordinal));
+
+    private static AdminCloneSourceEvidenceDto ToCloneSourceEvidenceDto(CloneSourceEvidence ev) =>
+        new(
+            ev.SourceActiveManifestId.ToString(),
+            ev.TopologySystemName,
+            ev.RouteKey,
+            ev.DispatcherAxes,
+            ev.SourceUpdatedAt.ToString("o"),
+            ev.SourceTopologyHash,
+            ev.Status);
+
+    private static bool TryParseCloneRequest(
+        OperationVector vector,
+        out AdminManifestCloneFromActiveRequestDto? request,
+        out ValidationError? error)
+    {
+        request = null;
+        error = null;
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            error = new ValidationError("CLONE_PAYLOAD_REQUIRED", "payload with sourceActiveManifestId is required.");
+            return false;
+        }
+        try
+        {
+            request = JsonSerializer.Deserialize<AdminManifestCloneFromActiveRequestDto>(vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            error = new ValidationError("CLONE_PAYLOAD_MALFORMED", "payload could not be parsed.");
+            return false;
+        }
+        if (request is null || string.IsNullOrWhiteSpace(request.SourceActiveManifestId))
+        {
+            error = new ValidationError("SOURCE_MANIFEST_ID_REQUIRED", "sourceActiveManifestId is required.");
+            return false;
+        }
+        return true;
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataManifestUpdateDraftAsync(
