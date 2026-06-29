@@ -576,31 +576,67 @@ public class NpgsqlManifestRepository : ManifestRepository
         string? actor,
         CancellationToken ct = default)
     {
-        var draft = await LoadDetailByIdAsync(draftManifestId, ct);
-        if (draft is null)
-            return MergeFail(draftManifestId, "MANIFEST_NOT_FOUND", $"Draft manifest {draftManifestId} was not found.");
-        if (!string.Equals(draft.Status, "draft", StringComparison.OrdinalIgnoreCase))
-            return MergeFail(draftManifestId, "MANIFEST_NOT_DRAFT", $"Manifest {draftManifestId} is status={draft.Status}; only a draft can be merged.");
-
-        var meta = CloneDraftMetadata.Extract(draft.Topology);
-        if (meta is null)
-            return MergeFail(draftManifestId, "CLONE_METADATA_MISSING", "Draft has no clone_metadata; not a replacement clone draft.");
-        // Source evidence / lineage / SQL Attention candidate alone never grant replacement authority.
-        if (!string.Equals(meta.DraftOrigin, CloneDraftMetadata.OriginManualCloneReplacement, StringComparison.Ordinal) ||
-            !string.Equals(meta.CloneMode, CloneDraftMetadata.CloneModeReplacement, StringComparison.Ordinal))
-            return MergeFail(draftManifestId, "REPLACEMENT_AUTHORITY_DENIED",
-                $"Replacement merge requires draft_origin=manual_clone_replacement and clone_mode=replacement (got {meta.DraftOrigin}/{meta.CloneMode}).");
-        if (meta.SourceActiveManifestId is null || meta.SourceEvidence is null)
-            return MergeFail(draftManifestId, "MISSING_SOURCE_EVIDENCE", "Replacement clone draft is missing source_active_manifest_id / source evidence.");
-
-        var sourceId = meta.SourceActiveManifestId.Value;
-        var draftSummary = ManifestTopologyValidator.ExtractSummary(draft.Topology);
-
+        // Deterministic lock ordering to avoid deadlock: lock the WORKING DRAFT row first,
+        // then the MERGE-TARGET ACTIVE (source) row. Draft rows and active rows are disjoint by
+        // status, so no concurrent merge can request these two locks in the opposite order.
+        // Every decision below — status, clone_metadata authority, source evidence, stale check,
+        // active identity conflict, validation, diff/log evidence, active UPDATE, draft DELETE —
+        // is made from the locked draft snapshot read INSIDE this transaction, never from an
+        // out-of-transaction read. A concurrent draft mutation therefore cannot slip a stale
+        // snapshot past the guard: it blocks on the draft lock until this merge commits (then
+        // finds the draft deleted) or this merge sees the committed change and fails close.
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
-        // Resolve and lock the merge-target active row.
+        // 1) Lock + read the working draft row inside the transaction.
+        ManifestDetailRecord? draft;
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "SELECT manifest_id, relation_registry_id, topology, status, created_at, updated_at " +
+                "FROM manifest WHERE manifest_id = @id FOR UPDATE";
+            cmd.Parameters.AddWithValue("id", draftManifestId);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            draft = await reader.ReadAsync(ct) ? ReadDetailRecord(reader) : null;
+        }
+
+        if (draft is null)
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "MANIFEST_NOT_FOUND", $"Draft manifest {draftManifestId} was not found.");
+        }
+        if (!string.Equals(draft.Status, "draft", StringComparison.OrdinalIgnoreCase))
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "MANIFEST_NOT_DRAFT", $"Manifest {draftManifestId} is status={draft.Status}; only a draft can be merged.");
+        }
+
+        var meta = CloneDraftMetadata.Extract(draft.Topology);
+        if (meta is null)
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "CLONE_METADATA_MISSING", "Draft has no clone_metadata; not a replacement clone draft.");
+        }
+        // Source evidence / lineage / SQL Attention candidate alone never grant replacement authority.
+        if (!string.Equals(meta.DraftOrigin, CloneDraftMetadata.OriginManualCloneReplacement, StringComparison.Ordinal) ||
+            !string.Equals(meta.CloneMode, CloneDraftMetadata.CloneModeReplacement, StringComparison.Ordinal))
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "REPLACEMENT_AUTHORITY_DENIED",
+                $"Replacement merge requires draft_origin=manual_clone_replacement and clone_mode=replacement (got {meta.DraftOrigin}/{meta.CloneMode}).");
+        }
+        if (meta.SourceActiveManifestId is null || meta.SourceEvidence is null)
+        {
+            await tx.RollbackAsync(ct);
+            return MergeFail(draftManifestId, "MISSING_SOURCE_EVIDENCE", "Replacement clone draft is missing source_active_manifest_id / source evidence.");
+        }
+
+        var sourceId = meta.SourceActiveManifestId.Value;
+        var draftSummary = ManifestTopologyValidator.ExtractSummary(draft.Topology);
+
+        // 2) Lock + read the merge-target active (source) row.
         ManifestDetailRecord? source;
         await using (var cmd = conn.CreateCommand())
         {

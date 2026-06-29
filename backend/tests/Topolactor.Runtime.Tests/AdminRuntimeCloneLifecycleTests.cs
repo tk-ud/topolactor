@@ -281,6 +281,54 @@ public class AdminRuntimeCloneLifecycleTests
         Assert.Equal("CLONE_SOURCE_NOT_ACTIVE", error!.Code);
     }
 
+    // ── transaction-shape regression guard ──────────────────────────────────
+    // PR#534 review: the working draft row must be locked FOR UPDATE INSIDE the merge
+    // transaction (not read out-of-transaction), so a concurrent draft mutation cannot drive
+    // active UPDATE + draft DELETE from a stale snapshot.
+
+    [Fact]
+    public void MergeCloneReplacement_LocksDraftInsideTransaction_NoOutOfTxDraftRead()
+    {
+        var method = ExtractMergeMethodSource();
+
+        // The merge must NOT read the working draft out-of-transaction.
+        Assert.DoesNotContain("LoadDetailByIdAsync(draftManifestId", method);
+
+        // The transaction must begin before any row is locked.
+        var txIdx = method.IndexOf("BeginTransactionAsync", StringComparison.Ordinal);
+        var firstLockIdx = method.IndexOf("FOR UPDATE", StringComparison.Ordinal);
+        Assert.True(txIdx >= 0, "merge must open a transaction");
+        Assert.True(firstLockIdx > txIdx, "the first FOR UPDATE lock must occur after BeginTransactionAsync");
+
+        // The draft row is locked (its id parameter precedes the source id parameter — draft-first
+        // deterministic lock ordering).
+        var draftParamIdx = method.IndexOf("AddWithValue(\"id\", draftManifestId)", StringComparison.Ordinal);
+        var sourceParamIdx = method.IndexOf("AddWithValue(\"id\", sourceId)", StringComparison.Ordinal);
+        Assert.True(draftParamIdx > 0, "draft row must be locked by id inside the transaction");
+        Assert.True(sourceParamIdx > draftParamIdx, "draft must be locked before the source active row");
+    }
+
+    private static string ExtractMergeMethodSource()
+    {
+        var src = ReadRepositorySource("NpgsqlManifestRepository.cs");
+        var start = src.IndexOf("MergeCloneReplacementDraftToActiveAsync(\n", StringComparison.Ordinal);
+        if (start < 0) start = src.IndexOf("MergeCloneReplacementDraftToActiveAsync(", StringComparison.Ordinal);
+        Assert.True(start > 0, "merge method must exist in NpgsqlManifestRepository.cs");
+        var end = src.IndexOf("private static CloneReplacementMergeResult MergeFail", start, StringComparison.Ordinal);
+        Assert.True(end > start, "merge method end marker must exist");
+        return src.Substring(start, end - start);
+    }
+
+    private static string ReadRepositorySource(
+        string fileName,
+        [System.Runtime.CompilerServices.CallerFilePath] string callerPath = "")
+    {
+        var testDir = System.IO.Path.GetDirectoryName(callerPath)!;
+        var path = System.IO.Path.GetFullPath(
+            System.IO.Path.Combine(testDir, "..", "..", "repository", fileName));
+        return System.IO.File.ReadAllText(path);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static Guid SeedActive(
