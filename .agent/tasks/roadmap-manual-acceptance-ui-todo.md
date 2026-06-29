@@ -105,7 +105,7 @@ Roadmap:
 admin UI:
 
 巡回監査メモ:
-- 2026-06-29 audit: 先頭5項目は `manual_acceptance_required`。共通 UX 観点のため削除せず、個別 route / surface の静的確認は Roadmap-based TODO 側で継続する。
+- 2026-06-29 audit: 共通 UX 観点は `manual_acceptance_required` として残す。ただし route 固有の未実装混入は Roadmap-based TODO 側で切り分ける。
 
 - [ ] 初見で現在位置と次操作を誤認しない。
 - [ ] 操作途中で draft / preview / validate / apply / saved / failed の文脈を失わない。
@@ -136,7 +136,7 @@ Roadmap bundle:
 - `/admin/manifests`
 
 手動受入 TODO:
-- [ ] `/admin/contents` で、作成・編集・clone・import などの入口を触った時に、作業の現在位置を誤認しない。
+- [ ] `/admin/contents` で、作成・編集・import など実装済み入口を触った時に、作業の現在位置を誤認しない。
 - [ ] Step 遷移中に、draft / preview / validate / apply の関係が体感で分かる。
 - [ ] apply 前に、何が変わるかを画面上で追える。
 - [ ] apply 後に、どの projection / list / screen に反映されたか辿れる。
@@ -144,6 +144,14 @@ Roadmap bundle:
 - [ ] UI Builder で配置・style・binding を触った時に、編集中状態と反映済み状態を混同しない。
 - [ ] modal / drawer / preview が、canvas 操作を妨げる違和感を起こさない。
 - [ ] advanced / internal vocabulary が通常操作の判断を邪魔しない。
+
+Implementation changes request:
+- 対象 route / surface: `/admin/contents` Step 1 entry mode selector / source active selection
+- 問題: SSOT は `create_new_topology` / `clone_active_as_replacement_draft` / `clone_active_as_new_topology_draft` を Step 1 entry mode として要求するが、現行 UI/API/runtime は通常 `create_draft` 入口のみで clone entry / source active evidence / clone_mode / draft_origin / replacement merge authority がない。手動受入 TODO に `clone` を混ぜると、未実装 scope を UX 確認対象へ誤分類する。
+- 期待する UI 振る舞い: clone 実装後に、新規作成・正本置換 clone・別トポロジ clone を入口で明確に分離し、replacement clone は source active read-only evidence / validation / diff-log / backend merge authority / stale source blocker を見える形にする。
+- 関連 SSOT: `docs/design/admin-console-workflow-ssot.yaml`, `.agent/tasks/todo.md` Bundle `admin-topology-clone-draft-lifecycle`
+- 対象ファイル / 関数候補: `frontend/islands/ContentsScreenDesignPanel.tsx` `handleStep1Submit`, `frontend/runtime/screenAuthoringIntent.ts` `buildStep1DraftInput`, `frontend/api/adminApi.ts` `createAdminManifestDraft`, `backend/runtime/AdminRuntime.cs` `ExecuteDataAsync` manifest actions, future clone draft / replacement merge functions
+- 手動受入で確認したい NG 症状: clone-as-replacement と clone-as-new が同じ入口に見える、source evidence だけで replacement authority があるように見える、frontend が merge target / conflict outcome を決めているように見える、layout_patch apply が production manifest replacement merge に見える。
 
 監査で削除候補:
 - 単に選択式かどうか。
