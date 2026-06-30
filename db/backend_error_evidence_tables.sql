@@ -91,22 +91,29 @@ CREATE TRIGGER trg_logs_error_block_update
 -- best-effort wake-up signal, the durable queue row is the source of truth for a pending wake.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS logs.error_notify_queue (
-    queue_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    error_id     UUID        NOT NULL REFERENCES logs.error (error_id),
-    channel      TEXT        NOT NULL DEFAULT 'logs_error_inserted',
-    enqueued_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    status       TEXT        NOT NULL DEFAULT 'pending',  -- pending | acknowledged
+    queue_id        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    error_id        UUID        NOT NULL REFERENCES logs.error (error_id),
+    channel         TEXT        NOT NULL DEFAULT 'logs_error_inserted',
+    enqueued_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- pending | processing | acknowledged | failed_retryable | failed_terminal
+    status          TEXT        NOT NULL DEFAULT 'pending',
+    attempt_count   INTEGER     NOT NULL DEFAULT 0,
+    processing_at   TIMESTAMPTZ,
+    last_attempt_at TIMESTAMPTZ,
     acknowledged_at TIMESTAMPTZ,
-    payload_json JSONB       NOT NULL DEFAULT '{}'::jsonb
+    failed_reason   TEXT,
+    payload_json    JSONB       NOT NULL DEFAULT '{}'::jsonb
 );
 
 COMMENT ON TABLE logs.error_notify_queue IS
-  'Durable wake-up queue for logs.error inserts. pg_notify is wake-up only; this table is the durable source of truth. Trigger writes rows; it does not call external providers.';
+  'Durable wake-up queue for logs.error inserts and the canonical source of truth for the post-notify bridge. pg_notify is wake-up only. The backend bridge atomically claims pending/failed_retryable rows, joins logs.error to build a hook trigger payload, dispatches through RuntimeTimelineScheduler (never an external provider directly), then transitions the row to acknowledged / failed_retryable / failed_terminal. The DB trigger writes rows only and never calls external providers.';
 
 CREATE INDEX IF NOT EXISTS idx_logs_error_notify_queue_status
   ON logs.error_notify_queue (status, enqueued_at);
 CREATE INDEX IF NOT EXISTS idx_logs_error_notify_queue_error_id
   ON logs.error_notify_queue (error_id);
+CREATE INDEX IF NOT EXISTS idx_logs_error_notify_queue_claimable
+  ON logs.error_notify_queue (status, last_attempt_at);
 
 -- ---------------------------------------------------------------------------
 -- logs.notify_error_inserted (AFTER INSERT trigger on logs.error)

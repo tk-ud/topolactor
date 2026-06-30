@@ -33,6 +33,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 // backend boundary so all classified system errors connect to the same evidence envelope.
 builder.Services.AddSingleton<IBackendErrorEvidenceAppender>(_ =>
     new NpgsqlBackendErrorEvidenceAppender(connectionString));
+// Durable post-notify bridge boundary: claim/ack/fail of logs.error_notify_queue and the scheduler
+// hook trigger dispatch seam (never an external provider directly).
+builder.Services.AddSingleton<IBackendErrorNotifyQueueRepository>(_ =>
+    new NpgsqlBackendErrorNotifyQueueRepository(connectionString));
+builder.Services.AddSingleton<IBackendErrorNotifyHookDispatcher>(sp =>
+    new SchedulerBackendErrorNotifyHookDispatcher(sp.GetRequiredService<RuntimeTimelineScheduler>()));
 
 builder.Services.AddSingleton<TopologyRepository>(sp =>
     new NpgsqlTopologyRepository(
@@ -396,6 +402,13 @@ builder.Services.AddHostedService(sp => new DbNotifyListener(
     sp.GetRequiredService<RuntimeTimelineScheduler>(),
     sp.GetRequiredService<SseEventBroadcaster>(),
     sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
+// Post-notify bridge: LISTEN logs_error_inserted -> claim durable queue -> scheduler hook trigger.
+builder.Services.AddHostedService(sp => new BackendErrorNotifyBridge(
+    sp.GetRequiredService<ILogger<BackendErrorNotifyBridge>>(),
+    connectionString,
+    sp.GetRequiredService<IBackendErrorNotifyQueueRepository>(),
+    sp.GetRequiredService<IBackendErrorNotifyHookDispatcher>(),
+    BackendErrorNotifyBridgeOptions.FromEnvironment()));
 
 // ---------------------------------------------------------------------------
 // HTTP layer

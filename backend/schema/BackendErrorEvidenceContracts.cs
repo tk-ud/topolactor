@@ -110,3 +110,64 @@ public interface IBackendErrorEvidenceAppender
 {
     Task AppendAsync(BackendErrorEvidence evidence, CancellationToken ct = default);
 }
+
+/// <summary>
+/// logs.error_notify_queue lifecycle status vocabulary. The durable queue — not the pg_notify
+/// wake-up signal — is the source of truth for the post-notify bridge.
+/// </summary>
+public static class BackendErrorNotifyQueueStatus
+{
+    public const string Pending = "pending";
+    public const string Processing = "processing";
+    public const string Acknowledged = "acknowledged";
+    public const string FailedRetryable = "failed_retryable";
+    public const string FailedTerminal = "failed_terminal";
+}
+
+/// <summary>
+/// One claimed logs.error_notify_queue row joined to its logs.error evidence row. The post-notify
+/// bridge builds the hook trigger dispatch payload from these authoritative fields.
+/// </summary>
+public sealed record BackendErrorNotifyClaim(
+    Guid QueueId,
+    Guid ErrorId,
+    int AttemptCount,
+    string OriginLayer,
+    string BoundaryKey,
+    string ErrorCode,
+    string Severity,
+    string StackHash);
+
+/// <summary>
+/// Durable claim/ack/fail boundary for logs.error_notify_queue. Claiming is atomic
+/// (FOR UPDATE SKIP LOCKED) so concurrent bridge instances never double-process a row.
+/// </summary>
+public interface IBackendErrorNotifyQueueRepository
+{
+    /// <summary>
+    /// Atomically claims up to <paramref name="batchSize"/> pending rows (and failed_retryable rows
+    /// whose last attempt is older than <paramref name="retryBackoff"/>), marking them claimed and
+    /// incrementing attempt_count, then returns them joined to logs.error.
+    /// </summary>
+    Task<IReadOnlyList<BackendErrorNotifyClaim>> ClaimPendingAsync(
+        int batchSize, TimeSpan retryBackoff, CancellationToken ct = default);
+
+    /// <summary>Transitions a claimed row to acknowledged after an accepted dispatch boundary result.</summary>
+    Task AcknowledgeAsync(Guid queueId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Transitions a claimed row to failed_retryable (retry later) or failed_terminal (give up).
+    /// The row is never deleted — durable failure evidence is preserved.
+    /// </summary>
+    Task FailAsync(Guid queueId, string reason, bool terminal, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Dispatch seam for the post-notify bridge. The implementation MUST route through the runtime
+/// scheduler's hook trigger path (RuntimeTimelineScheduler) and MUST NOT call ExternalPortDispatchRuntime
+/// or any external provider directly.
+/// </summary>
+public interface IBackendErrorNotifyHookDispatcher
+{
+    Task<EndpointResponseDto> DispatchAsync(EndpointRequestDto request, CancellationToken ct = default);
+}
