@@ -1,6 +1,5 @@
 version: 1
 ssot: backend_error_evidence_report_notify
-status: draft_ssot
 purpose: >
   Define backend-wide append-only system error evidence, derived error report
   aggregation, and post-insert notify routing. This SSOT exists to preserve
