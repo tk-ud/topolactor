@@ -367,6 +367,7 @@ system_roadmap_ssot:
         - backend/tests/Topolactor.Integration.Tests/BackendErrorEvidenceAppenderLiveDbTests.cs
         - backend/tests/Topolactor.Integration.Tests/BackendErrorNotifyQueueRepositoryLiveDbTests.cs
         - backend/tests/Topolactor.Integration.Tests/BackendErrorNotifyBridgeEndToEndLiveDbTests.cs
+        - backend/tests/Topolactor.Integration.Tests/BackendErrorNotifyBridgeProductionRouteLiveDbTests.cs
       completion_condition:
         - logs_error_append_only_table_and_indexes_exist
         - error_report_or_equivalent_derived_aggregation_exists
