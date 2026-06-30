@@ -1,0 +1,177 @@
+version: 1
+ssot: backend_error_evidence_report_notify
+status: draft_ssot
+purpose: >
+  Define backend-wide append-only system error evidence, derived error report
+  aggregation, and post-insert notify routing. This SSOT exists to preserve
+  repairable evidence for backend execution substrate failures without mixing in
+  user input mistakes, ordinary DTO failures, normal auth rejects, or business
+  policy rejects.
+
+ownership:
+  owns:
+    - logs.error append-only system error evidence contract
+    - backend error classification vocabulary
+    - error report aggregation boundary
+    - logs.error INSERT trigger / notify queue / pg_notify wake-up boundary
+    - admin projection requirements for unresolved system errors
+    - AbstractFunctionExecutor error-boundary requirements
+  does_not_own:
+    - DTO validation response semantics
+    - ordinary authError / 401 / 403 response semantics
+    - business policy reject semantics
+    - CI Attention guidance fragments
+    - SystemOperationCI diagnostic implementation
+    - .agent route/index/check wiring
+
+current_gap:
+  summary: >
+    Current backend error handling is scattered across process logger call sites
+    and local runtime responses. topology.runtime_event_log exists for external
+    port consumer domain events, but no backend-wide logs.error / error_report /
+    notify_queue substrate is defined.
+  scattered_surfaces:
+    - backend/runtime/RuntimeExecutor.cs
+    - backend/runtime/ManifestDispatcher.cs
+    - backend/runtime/AdminRuntime.cs
+    - backend/runtime/AbstractFunctionRuntime.cs
+    - backend/runtime/ExternalPortDispatchRuntime.cs
+    - backend/runtime/ExternalPortCredentialRefresher.cs
+    - backend/scheduler/RuntimeTimelineScheduler.cs
+    - backend/scheduler/SchedulerJobRunner.cs
+    - backend/scheduler/DbNotifyListener.cs
+    - backend/repository/*
+    - db/topology_tables.sql
+
+classification:
+  dto_failure:
+    logs_error: false
+    meaning: User/client input, normal validation reject, ordinary auth reject, or business policy reject.
+  security_or_audit_evidence:
+    logs_error: false
+    meaning: Security/audit evidence that is not backend substrate breakage. It requires its own owning SSOT or domain evidence table.
+  system_error:
+    logs_error: true
+    meaning: Backend execution substrate failure, invariant break, dependency failure, unexpected exception, repository/db unavailable condition, malformed runtime authority, or primitive adapter failure.
+  diagnostic_gap:
+    logs_error: conditional
+    meaning: Diagnostic Gap/Blocking output becomes logs.error only when classified as backend substrate breakage.
+
+primary_boundary:
+  file: backend/runtime/AbstractFunctionRuntime.cs
+  class: AbstractFunctionExecutor
+  function: ExecuteAsync
+  reason: >
+    This is the execute_abstract_function aggregate boundary. It loads manifests,
+    validates authority/runtime lane, binds inputs, dispatches primitive adapters,
+    stores result_context, runs compensation on normal step failure, and rethrows.
+  required_delta:
+    - add backend error classifier/appender composition
+    - append only classified system_error to logs.error
+    - preserve existing fail-close / compensation / rethrow semantics
+    - never put error evidence ownership into DTO records
+    - do not rely on a manifest step to catch manifest-load, authority, lane, binding, or primitive registry failures
+
+secondary_boundaries:
+  - file: backend/runtime/RuntimeExecutor.cs
+    functions: [ExecuteAsync, ErrorResponse]
+  - file: backend/runtime/ManifestDispatcher.cs
+    functions: [DispatchAsync, DispatchToHandlerAsync]
+  - file: backend/runtime/AdminRuntime.cs
+    functions: [ExecuteDataAsync]
+  - file: backend/scheduler/RuntimeTimelineScheduler.cs
+    functions: [ExecuteAsync, EnqueueCronTrigger, EnqueueHookTrigger]
+  - file: backend/scheduler/DbNotifyListener.cs
+    functions: [HandleNotificationPayload, HandleSqlAttentionDraftCandidatePayload]
+  - file: backend/scheduler/SchedulerJobRunner.cs
+    functions: [RunAsync]
+  - file: backend/runtime/ExternalPortDispatchRuntime.cs
+    functions: [ExecuteAsync]
+  - file: backend/runtime/ExternalPortCredentialRefresher.cs
+    functions: [RefreshIfNeededAsync]
+  - file: backend/repository/*
+    functions: [repository DB operation boundaries]
+
+logs_error_contract:
+  namespace: logs
+  table: error
+  role: append_only_system_error_evidence
+  required_fields:
+    - error_id
+    - occurred_at
+    - origin_layer
+    - boundary_key
+    - function_key
+    - runtime_lane
+    - primitive_key
+    - step_order
+    - error_kind
+    - error_code
+    - exception_type
+    - message_public
+    - stack_hash
+    - severity
+    - retryable
+    - evidence_json
+  rules:
+    - append-only evidence, not current projection
+    - business transaction rollback must not erase already-classified system error evidence when the appender can reach DB
+    - DTO failure, ordinary auth reject, and business policy reject must not append logs.error
+    - evidence_json must be redacted and bounded
+
+appender_contract:
+  interface_candidate: IBackendErrorEvidenceAppender
+  implementation_candidate: NpgsqlBackendErrorEvidenceAppender
+  method_candidate: AppendAsync(BackendErrorEvidence evidence, CancellationToken ct)
+  responsibilities:
+    - validate envelope
+    - redact evidence
+    - append logs.error
+    - preserve original exception flow
+    - expose appender failure without converting the original failure into success
+
+primitive_adapter_contract:
+  status: optional_explicit_step_adapter
+  primitive_key_candidate: append_error_evidence
+  rule: >
+    Useful only for explicit seeded append steps. It is not the global catch
+    mechanism and cannot replace AbstractFunctionExecutor boundary classification.
+
+report_and_notify:
+  error_report:
+    table_candidate: logs.error_report
+    role: derived aggregation from logs.error, not replacement evidence
+    grouping_keys: [stack_hash, error_code, origin_layer, boundary_key, function_key, primitive_key]
+  notify_queue:
+    table_candidate: logs.error_notify_queue
+    trigger_role: logs.error AFTER INSERT hook only
+    pg_notify_channel_candidate: logs_error_inserted
+    rule: >
+      DB trigger creates durable queue row and emits pg_notify wake-up only. It
+      must not capture errors or call external providers directly.
+  admin_projection:
+    projection_candidate: current.error_report_projection
+    role: read-side projection of unresolved system error reports
+
+relation_to_existing_surfaces:
+  ci_attention: Do not route logs.error into CI Attention by default; CI Attention is guidance projection, not backend error handler authority.
+  system_operation_ci: Diagnostic output may inform classification, but does not own logs.error.
+  topology_runtime_event_log: Existing runtime_event_log remains external-port consumer domain-event evidence unless another SSOT changes that boundary.
+  logs_diff_current_attention: SQL Attention logs remain observation/evidence pressure surfaces, not system error evidence.
+
+acceptance_contract:
+  - logs.error DDL and indexes exist
+  - logs.error_report or equivalent aggregation exists
+  - logs.error_notify_queue and pg_notify wake-up exist
+  - IBackendErrorEvidenceAppender exists
+  - classifier tests prove DTO/auth/policy rejects do not append logs.error
+  - AbstractFunctionExecutor system error tests preserve compensation/rethrow semantics
+  - runtime/dispatcher/admin/scheduler/listener/repository boundary tests append only system errors
+  - admin projection can read unresolved error reports
+  - CI Attention wiring is not added unless separately SSOT-approved
+
+agent_work_split:
+  ssot_and_todo_author: ChatGPT auditor/design assistant
+  agent_wiring_owner: Codex
+  implementation_owner: Claude
+  note: This SSOT intentionally does not update .agent route/index/check wiring.
