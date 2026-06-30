@@ -853,6 +853,71 @@ mapping:
       - docs/framework-core.yaml
     protocols: []
 
+  - work_type: backend_error_evidence_report_notify_substrate
+    change_surfaces:
+      - backend system error evidence
+      - logs.error
+      - logs.error_report
+      - error_report
+      - logs.error_notify_queue
+      - notify_queue
+      - pg_notify logs_error_inserted
+      - append_error_evidence
+      - IBackendErrorEvidenceAppender
+      - NpgsqlBackendErrorEvidenceAppender
+      - BackendErrorClassifier
+      - AbstractFunctionExecutor error boundary
+      - AbstractFunctionExecutor.ExecuteAsync
+      - backend/runtime/AbstractFunctionRuntime.cs
+      - scheduler listener error boundary
+      - backend/scheduler/DbNotifyListener.cs
+      - backend/scheduler/RuntimeTimelineScheduler.cs
+      - backend/scheduler/SchedulerJobRunner.cs
+      - repository error boundary
+      - backend/repository/*
+      - backend/runtime/RuntimeExecutor.cs
+      - backend/runtime/ManifestDispatcher.cs
+      - backend/runtime/AdminRuntime.cs
+      - backend/runtime/ExternalPortDispatchRuntime.cs
+      - backend/runtime/ExternalPortCredentialRefresher.cs
+      - db/backend_error_evidence_tables.sql
+      - db/topology_tables.sql logs.error surface
+      - current.error_report_projection
+    required_docs:
+      - docs/design/backend-error-evidence-report-notify-ssot.yaml
+    supporting_docs:
+      - docs/design/abstract-function-primitive-registry-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/external-port-substrate-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/ci-contract-ssot.yaml
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+    protocols:
+      - .agent/protocols/implementation-change.md
+      - .agent/protocols/runtime-boundary-matrix.md
+    boundaries:
+      logs_error_includes:
+        - backend execution substrate system_error
+        - invariant break
+        - dependency failure
+        - repository/db unavailable condition
+        - malformed runtime authority
+        - primitive adapter failure
+      logs_error_excludes:
+        - DTO failure
+        - validation reject
+        - ordinary authError
+        - business policy reject
+        - user input mistake
+        - CI Attention handler authority
+        - topology.runtime_event_log reinterpretation
+      implementation_scope_note: >-
+        This map routes future implementation_change work to the SSOT only. It does
+        not add DB DDL, backend runtime code, tests, CI Attention wiring, or an
+        append_error_evidence primitive adapter.
+
   - work_type: data_driven_projection_completion_gate
     change_surfaces:
       - DB-driven UI projection

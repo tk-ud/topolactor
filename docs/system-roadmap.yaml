@@ -45,6 +45,7 @@ system_roadmap_ssot:
       - docs/framework-policy.yaml
       - docs/design/css-dictionary-ssot.yaml
       - docs/design/auth-db-session-credential-ssot.yaml
+      - docs/design/backend-error-evidence-report-notify-ssot.yaml
     task_queue:
       - .agent/tasks/todo.md
     audit_reports:
@@ -220,6 +221,7 @@ system_roadmap_ssot:
       bundle_refs:
         - product.core_runtime_route
         - product.projection_and_output_lanes
+        - product.backend_error_evidence_report_notify_substrate
       detail_ref:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/pipeline-continuity-ssot.yaml
@@ -330,6 +332,39 @@ system_roadmap_ssot:
       files:
         - backend/
         - frontend/
+
+    product.backend_error_evidence_report_notify_substrate:
+      bundle_id: backend-error-evidence-report-notify-substrate
+      title: Backend system error evidence / report / notify substrate
+      status: not_started
+      production_ready: false
+      public_summary: Backend-wide system error evidence, derived error report aggregation, durable notify queue, pg_notify wake-up, and admin unresolved-error projection are approved as a feature substrate, but implementation is not yet started. DTO validation failures, ordinary auth rejects, business policy rejects, user input mistakes, CI Attention, and topology.runtime_event_log are outside this backend error evidence authority.
+      scope:
+        - logs_error_append_only_system_error_evidence
+        - error_report_derived_aggregation
+        - error_notify_queue_and_pg_notify_wakeup
+        - AbstractFunctionExecutor_error_boundary
+        - scheduler_listener_repository_error_boundaries
+        - admin_unresolved_error_report_projection
+      detail_ref:
+        - docs/design/backend-error-evidence-report-notify-ssot.yaml
+      evidence_ref: []
+      completion_condition:
+        - logs_error_append_only_table_and_indexes_exist
+        - error_report_or_equivalent_derived_aggregation_exists
+        - error_notify_queue_and_logs_error_after_insert_pg_notify_wakeup_exist
+        - backend_error_evidence_appender_and_classifier_exist
+        - DTO_auth_policy_user_input_rejects_do_not_append_logs_error
+        - AbstractFunctionExecutor_preserves_compensation_rethrow_fail_close_semantics_while_appending_system_errors
+        - runtime_dispatcher_admin_scheduler_listener_repository_boundaries_append_only_system_errors
+        - admin_projection_reads_unresolved_error_reports
+        - CI_Attention_and_topology_runtime_event_log_are_not_repurposed_as_backend_error_log
+      known_gap_ref:
+        - .agent/tasks/backend-error-evidence-report-notify-todo.md
+      files:
+        - backend/
+        - db/
+        - docs/design/backend-error-evidence-report-notify-ssot.yaml
 
     product.projection_and_output_lanes:
       bundle_id: product.projection_and_output_lanes
