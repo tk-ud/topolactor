@@ -8,6 +8,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
+| `backend-error-evidence-report-notify-substrate` | backend system error evidence / report / notify substrate | not_started | 1 | `product.backend_error_evidence_report_notify_substrate` | `docs/design/backend-error-evidence-report-notify-ssot.yaml` |
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
