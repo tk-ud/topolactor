@@ -28,19 +28,35 @@ backend 実行基盤の system error を `logs.error` append-only evidence と�
 - **error-notify `hook_port` seed**（`db/backend_error_notify_hook_port_seed.sql`）: active hook_port（`/hooks/error_notify` / `error_notify` / `credential_kind=none`）+ hook_port policy `error_notify_hook_port_logger_sink`（`append_runtime_event_log` logger sink step、SSOT logger_sink_boundary 準拠の first implementation）。init.sql に配線済み。
 - **bridge dispatch evidence（2系統）**: (1) direct seam test（`BackendErrorNotifyBridgeEndToEndLiveDbTests`）で hook_port + policy resolve → accepted → `acknowledged`。(2) **production route test**（`BackendErrorNotifyBridgeProductionRouteLiveDbTests`、full init.sql）で bridge → `SchedulerBackendErrorNotifyHookDispatcher` → `RuntimeTimelineScheduler.AlignAndDispatchAsync` → `ManifestDispatcher` → `external_port_runtime` → seeded hook_port + policy resolve → accepted → `acknowledged` + `backend_error_notify_delivered` consumer event を検証済み（Gate0 production route 要件充足）。
 
-## 残scope（同一PR内の次作業）
+## PR536 scope 判定（reviewer 監査 2026-06-30）
 
-- [ ] admin workflow / admin UI: `current.error_report_projection` の unresolved system error report を admin が閲覧する read-side surface を追加する（既存 admin data-projection lane: dispatch → admin_runtime → `ExecuteDataAsync` + seed manifest の写像。`sql_attention:list_projection` 等の既存 pattern を再利用）。`logs.error` evidence row を frontend が直接編集しない（read-only projection）。
-- [ ] hook_port 設定/有効化 surface: error-notify hook port の設定/有効化を、外部ポート port record context（既存 external-port admin authoring substrate: `hook_path` / `route_key` / `provider_kind` / `credential_kind` / `reference_key` / `required_by_bundle`）経由で expose する。SSOT `admin_external_port_configuration_dependency` 準拠。provider-specific な専用 notification UI は作らない。CI Attention へ `logs.error` を流さない。`topology.runtime_event_log` を backend-wide error log に流用しない。
-- [ ] 上記 admin / hook_port surface の test。
+PR536 内の deliverable scope（backend error evidence / report / notify substrate、post-notify bridge、`error_notify` hook_port seed、production route accepted→acknowledged evidence）は **実装済み / OK**。PR536 では **新規 admin UI を実装しない**。下記 admin/errorlogs read-side は **別PR follow-up** として切り出す。PR536 は admin read-side 未完のため bundle 全体としては `partial` 継続だが、これは「未実装に戻す」意味ではなく「残scopeを別PRへ分離するための partial」。
 
-## 完了条件（残）
+## 別PR follow-up scope（PR536 では実装しない）
 
-- [x] error-notify hook_port seed/config が存在し、bridge dispatch が accepted → `acknowledged` まで通る live evidence。
+- [ ] admin read-side surface: `current.error_report_projection` の unresolved system error report viewer。既存 admin data-projection lane（dispatch → admin_runtime → `ExecuteDataAsync` + seed manifest の写像、`sql_attention:list_projection` 等の pattern 再利用）。read-only、`logs.error` evidence row を frontend から直接編集しない。
+- [ ] admin/errorlogs UI test。
+- [ ] hook 設定の扱い（**新規専用画面を作らない**）: error-notify hook 設定は backend error notification 専用画面ではなく、**既存の投影側クレデンシャル管理画面** `auth.external.credential_management.projection`（manifest `00000000-0000-0000-0000-000000000092`）に載せる。この projection は既に `external_hook_ports` / `hook_port` / `external_port_context` / `policy_template_key` を扱う surface（`canonical_port_bindings` で `hook_port → topology.external_hook_ports`、`screen_data_shape` に list/update operation）。`error_notify` は seed 済みの **hook_port record の1つ**であり uuid で一意に識別される。`stripe` / `webhook_inbox` / `job_scheduler` / `error_notify` が同じ `hook_port` kind の複数 record として並ぶ形を維持する。
+- [ ] 各 manifest / projection / hook_port は必ず uuid で識別される前提を維持。
+
+## follow-up scope の NG（厳守）
+
+- backend error notification 専用 admin 画面を作る。
+- `hook_port` kind を1件固定（singleton）にする。dispatch 対象は `hook_path` / `route_key` / `required_by_bundle` / `provider_kind` / active policy / uuid で解決し、kind 選択だけで呼び先 hook を決めない。`error_notify` だけを kind から暗黙選択する仕様は禁止。
+- provider-specific / bundle-specific C# 分岐を追加する。
+- `topology.runtime_event_log` を backend-wide error log として流用する。
+- CI Attention に `logs.error` を流す。
+
+## PR536 完了条件（充足済み）
+
+- [x] error-notify hook_port seed/config が存在し、bridge dispatch が accepted → `acknowledged` まで通る live evidence（direct seam + production route の2系統）。
+
+## 別PR follow-up 完了条件
+
 - [ ] admin が unresolved error report を read-side projection 経由で閲覧でき、evidence row を直接編集しない guard。
-- [ ] hook_port 設定/有効化 surface が external-port port record context 経由で存在する。
-- [ ] admin / hook_port surface の test が緑。
-- [ ] 全 scope 完了確認後にのみ: 本 todo 削除、`.agent/tasks/todo.md` 索引行削除、Roadmap status を implemented へ更新、evidence_ref 反映。
+- [ ] error-notify hook record が既存 `auth.external.credential_management.projection`（manifest `...0092`）に hook_port record として（multi-record の1行・uuid 識別で）載っていることを確認。
+- [ ] admin/errorlogs UI test が緑。
+- [ ] follow-up 完了確認後にのみ: 本 todo 削除、`.agent/tasks/todo.md` 索引行削除、Roadmap status を implemented へ更新、evidence_ref 反映。
 
 ## 禁止（継続）
 
