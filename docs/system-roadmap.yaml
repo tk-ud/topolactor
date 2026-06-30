@@ -351,6 +351,7 @@ system_roadmap_ssot:
         - docs/design/backend-error-evidence-report-notify-ssot.yaml
       evidence_ref:
         - db/backend_error_evidence_tables.sql
+        - db/backend_error_notify_hook_port_seed.sql
         - backend/schema/BackendErrorEvidenceContracts.cs
         - backend/runtime/BackendErrorEvidence.cs
         - backend/runtime/AppendErrorEvidencePrimitiveAdapter.cs
@@ -365,6 +366,7 @@ system_roadmap_ssot:
         - backend/tests/Topolactor.Runtime.Tests/BackendErrorNotifyBridgeTests.cs
         - backend/tests/Topolactor.Integration.Tests/BackendErrorEvidenceAppenderLiveDbTests.cs
         - backend/tests/Topolactor.Integration.Tests/BackendErrorNotifyQueueRepositoryLiveDbTests.cs
+        - backend/tests/Topolactor.Integration.Tests/BackendErrorNotifyBridgeEndToEndLiveDbTests.cs
       completion_condition:
         - logs_error_append_only_table_and_indexes_exist
         - error_report_or_equivalent_derived_aggregation_exists

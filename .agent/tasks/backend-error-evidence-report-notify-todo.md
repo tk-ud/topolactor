@@ -24,19 +24,20 @@ backend 実行基盤の system error を `logs.error` append-only evidence と�
 - secondary boundary 接続: `RuntimeExecutor` / `ManifestDispatcher` / `AdminRuntime` / `RuntimeTimelineScheduler` / `SchedulerJobRunner` / `DbNotifyListener` / `ExternalPortDispatchRuntime` / `ExternalTokenRefresher`。repository 境界の system error は throw → 上位 boundary で同一 envelope に接続。
 - explicit-step `append_error_evidence` primitive adapter（global catch 代替ではないことを test 済み）。
 - **post-notify bridge**: `NpgsqlBackendErrorNotifyQueueRepository`（atomic claim `FOR UPDATE SKIP LOCKED` + logs.error join、ack / failed_retryable / failed_terminal、row 非削除）と `BackendErrorNotifyBridge`（LISTEN `logs_error_inserted` wake-up + 周期 poll → claim → hook trigger payload 構築 → `RuntimeTimelineScheduler` hook trigger 経由 dispatch → accepted で acknowledged / 失敗で failed_retryable|terminal）。`SchedulerBackendErrorNotifyHookDispatcher` で scheduler 経由（`ExternalPortDispatchRuntime` 直呼びしない）。
-- tests: classifier / executor boundary / explicit-step primitive / dispatcher boundary / bridge（Runtime.Tests）、appender+trigger+queue+report+projection+redaction+append-only / queue claim-ack-fail roundtrip（Integration.Tests live-DB）。
+- tests: classifier / executor boundary / explicit-step primitive / dispatcher boundary / bridge（Runtime.Tests）、appender+trigger+queue+report+projection+redaction+append-only / queue claim-ack-fail roundtrip / **bridge end-to-end accepted→acknowledged**（Integration.Tests live-DB）。
+- **error-notify `hook_port` seed**（`db/backend_error_notify_hook_port_seed.sql`）: active hook_port（`/hooks/error_notify` / `error_notify` / `credential_kind=none`）+ hook_port policy `error_notify_hook_port_logger_sink`（`append_runtime_event_log` logger sink step、SSOT logger_sink_boundary 準拠の first implementation）。init.sql に配線済み。e2e live-DB test で append→trigger→claim→dispatch（ExternalPortDispatchRuntime 経由で hook_port+policy 解決）→ accepted → `acknowledged` + `backend_error_notify_delivered` consumer event を検証済み。
 
 ## 残scope（同一PR内の次作業）
 
-- [ ] error-notify `hook_port` の seed / config surface を追加する（`route_key` = `error_notify` 等）。bridge は data-defined の hook_path / route_key で dispatch するため、seed 未整備の間は dispatch が `failed_retryable` に留まる。provider-specific / bundle-specific C# 分岐は追加しない。
-- [ ] admin workflow / admin UI: `current.error_report_projection` の unresolved system error report を admin が閲覧する read-side surface を追加する。`logs.error` evidence row を frontend が直接編集しない（read-only projection）。
-- [ ] hook_port 設定面（admin UI）: error-notify hook port の設定/有効化 surface。CI Attention へ `logs.error` を流さない。`topology.runtime_event_log` を backend-wide error log に流用しない。
+- [ ] admin workflow / admin UI: `current.error_report_projection` の unresolved system error report を admin が閲覧する read-side surface を追加する（既存 admin data-projection lane: dispatch → admin_runtime → `ExecuteDataAsync` + seed manifest の写像。`sql_attention:list_projection` 等の既存 pattern を再利用）。`logs.error` evidence row を frontend が直接編集しない（read-only projection）。
+- [ ] hook_port 設定/有効化 surface: error-notify hook port の設定/有効化を、外部ポート port record context（既存 external-port admin authoring substrate: `hook_path` / `route_key` / `provider_kind` / `credential_kind` / `reference_key` / `required_by_bundle`）経由で expose する。SSOT `admin_external_port_configuration_dependency` 準拠。provider-specific な専用 notification UI は作らない。CI Attention へ `logs.error` を流さない。`topology.runtime_event_log` を backend-wide error log に流用しない。
 - [ ] 上記 admin / hook_port surface の test。
 
 ## 完了条件（残）
 
-- [ ] error-notify hook_port seed/config が存在し、bridge dispatch が accepted → `acknowledged` まで通る live evidence。
+- [x] error-notify hook_port seed/config が存在し、bridge dispatch が accepted → `acknowledged` まで通る live evidence。
 - [ ] admin が unresolved error report を read-side projection 経由で閲覧でき、evidence row を直接編集しない guard。
+- [ ] hook_port 設定/有効化 surface が external-port port record context 経由で存在する。
 - [ ] admin / hook_port surface の test が緑。
 - [ ] 全 scope 完了確認後にのみ: 本 todo 削除、`.agent/tasks/todo.md` 索引行削除、Roadmap status を implemented へ更新、evidence_ref 反映。
 

@@ -14,6 +14,7 @@ namespace Topolactor.Integration.Tests;
 /// logs.error_report derived aggregation; current.error_report_projection read-side projection;
 /// redaction/bounding of evidence_json and message_public.
 /// </summary>
+[Collection("BackendErrorEvidenceLiveDb")]
 public class BackendErrorEvidenceAppenderLiveDbTests
 {
     [Fact]

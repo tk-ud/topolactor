@@ -13,6 +13,7 @@ namespace Topolactor.Integration.Tests;
 /// logs.error; acknowledge transition; failed_retryable -> re-claim -> failed_terminal transitions;
 /// failed rows are never deleted.
 /// </summary>
+[Collection("BackendErrorEvidenceLiveDb")]
 public class BackendErrorNotifyQueueRepositoryLiveDbTests
 {
     [Fact]

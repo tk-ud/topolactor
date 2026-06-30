@@ -101,3 +101,6 @@
 
 \echo '[init.sql] applying external_port_result_context_mapping_seed.sql'
 \i /db/external_port_result_context_mapping_seed.sql
+
+\echo '[init.sql] applying backend_error_notify_hook_port_seed.sql'
+\i /db/backend_error_notify_hook_port_seed.sql
