@@ -336,28 +336,50 @@ system_roadmap_ssot:
     product.backend_error_evidence_report_notify_substrate:
       bundle_id: backend-error-evidence-report-notify-substrate
       title: Backend system error evidence / report / notify substrate
-      status: not_started
+      status: partial
       production_ready: false
-      public_summary: Backend-wide system error evidence, derived error report aggregation, durable notify queue, pg_notify wake-up, and admin unresolved-error projection are approved as a feature substrate, but implementation is not yet started. DTO validation failures, ordinary auth rejects, business policy rejects, user input mistakes, CI Attention, and topology.runtime_event_log are outside this backend error evidence authority.
+      public_summary: Backend-wide append-only system error evidence (logs.error), derived error report aggregation (logs.error_report), durable notify queue with logs.error AFTER INSERT trigger + pg_notify wake-up (logs.error_notify_queue / logs_error_inserted), the IBackendErrorEvidenceAppender / NpgsqlBackendErrorEvidenceAppender boundary, the BackendErrorClassifier, the read-side current.error_report_projection, and the durable post-notify bridge (BackendErrorNotifyBridge LISTEN -> atomic queue claim -> logs.error join -> RuntimeTimelineScheduler hook trigger -> acknowledged / failed_retryable / failed_terminal) are implemented and tested. The AbstractFunctionExecutor aggregate boundary and the RuntimeExecutor / ManifestDispatcher / AdminRuntime / scheduler / DbNotifyListener / external-port boundaries append only classified system errors while preserving compensation / rethrow / fail-close semantics. The error_notify hook_port seed and the full production route (bridge -> scheduler hook trigger -> ManifestDispatcher -> external_port_runtime -> seeded hook_port + policy -> accepted -> acknowledged) are implemented and tested. Per PR536 review the remaining admin/errorlogs read-side surface (unresolved error report viewer for current.error_report_projection) is carved out as a separate-PR follow-up and is NOT implemented inside PR536; hook configuration rides on the existing auth.external.credential_management.projection (manifest 00000000-0000-0000-0000-000000000092) where error_notify is one uuid-identified hook_port record among many (no dedicated notification screen, no hook_port kind singleton). The bundle stays partial until that follow-up lands. DTO validation failures, ordinary auth rejects, business policy rejects, user input mistakes, CI Attention, and topology.runtime_event_log remain outside this backend error evidence authority.
       scope:
         - logs_error_append_only_system_error_evidence
         - error_report_derived_aggregation
         - error_notify_queue_and_pg_notify_wakeup
+        - post_notify_bridge_claim_join_hook_dispatch_ack_failure_transitions
         - AbstractFunctionExecutor_error_boundary
         - scheduler_listener_repository_error_boundaries
         - admin_unresolved_error_report_projection
       detail_ref:
         - docs/design/backend-error-evidence-report-notify-ssot.yaml
-      evidence_ref: []
+      evidence_ref:
+        - db/backend_error_evidence_tables.sql
+        - db/backend_error_notify_hook_port_seed.sql
+        - backend/schema/BackendErrorEvidenceContracts.cs
+        - backend/runtime/BackendErrorEvidence.cs
+        - backend/runtime/AppendErrorEvidencePrimitiveAdapter.cs
+        - backend/repository/NpgsqlBackendErrorEvidenceAppender.cs
+        - backend/repository/NpgsqlBackendErrorNotifyQueueRepository.cs
+        - backend/scheduler/BackendErrorNotifyBridge.cs
+        - backend/runtime/AbstractFunctionRuntime.cs
+        - backend/tests/Topolactor.Runtime.Tests/BackendErrorClassifierTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/BackendErrorEvidenceBoundaryTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/AppendErrorEvidencePrimitiveAdapterTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherErrorEvidenceTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/BackendErrorNotifyBridgeTests.cs
+        - backend/tests/Topolactor.Integration.Tests/BackendErrorEvidenceAppenderLiveDbTests.cs
+        - backend/tests/Topolactor.Integration.Tests/BackendErrorNotifyQueueRepositoryLiveDbTests.cs
+        - backend/tests/Topolactor.Integration.Tests/BackendErrorNotifyBridgeEndToEndLiveDbTests.cs
+        - backend/tests/Topolactor.Integration.Tests/BackendErrorNotifyBridgeProductionRouteLiveDbTests.cs
       completion_condition:
         - logs_error_append_only_table_and_indexes_exist
         - error_report_or_equivalent_derived_aggregation_exists
         - error_notify_queue_and_logs_error_after_insert_pg_notify_wakeup_exist
         - backend_error_evidence_appender_and_classifier_exist
+        - post_notify_bridge_claims_durable_queue_joins_logs_error_dispatches_via_scheduler_hook_trigger_and_transitions_ack_retryable_terminal
+        - error_notify_hook_port_seed_and_full_production_route_reach_accepted_then_acknowledged
         - DTO_auth_policy_user_input_rejects_do_not_append_logs_error
         - AbstractFunctionExecutor_preserves_compensation_rethrow_fail_close_semantics_while_appending_system_errors
         - runtime_dispatcher_admin_scheduler_listener_repository_boundaries_append_only_system_errors
         - admin_projection_reads_unresolved_error_reports
+        - SEPARATE_PR_FOLLOWUP_admin_errorlogs_read_side_viewer_for_current_error_report_projection_on_existing_credential_management_projection_not_a_dedicated_screen
         - CI_Attention_and_topology_runtime_event_log_are_not_repurposed_as_backend_error_log
       known_gap_ref:
         - .agent/tasks/backend-error-evidence-report-notify-todo.md

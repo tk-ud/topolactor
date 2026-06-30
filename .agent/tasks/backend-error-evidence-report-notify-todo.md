@@ -5,41 +5,67 @@
 ## Bundle
 
 - Bundle ID: `backend-error-evidence-report-notify-substrate`
-- Status: `not_started`
-- Worktype: `implementation_change` after Codex `.agent` wiring
+- Status: `partial`
+- Worktype: `implementation_change`
 - Primary SSOT: `docs/design/backend-error-evidence-report-notify-ssot.yaml`
-- Roadmap/status SSOT: `pending_system_roadmap_alignment`
-
-## 作業分担
-
-- ChatGPT: SSOT / bundle todo 作成
-- Codex: `.agent` route / ssot-map / check 配線
-- Claude: todo implementation_change 処理
+- Roadmap/status SSOT: `product.backend_error_evidence_report_notify_substrate`
+- PR: #536（同一PR内で残scopeを処理する）
 
 ## 目的
 
-backend 実行基盤の system error を `logs.error` 相当の append-only evidence として永続化し、derived error_report / notify queue / admin projection へ接続する。
+backend 実行基盤の system error を `logs.error` append-only evidence として永続化し、derived error_report / durable notify queue / post-notify bridge / admin projection へ接続する。DTO failure / 通常 validation reject / 通常 authError / 業務 policy reject / user input miss は混ぜない。
 
-DTO failure、通常 validation reject、通常 authError、業務 policy reject、ユーザー入力ミスは `logs.error` に混ぜない。
+## 実装済み（PR #536 で完了・test済み）
 
-## 残問題
+- `db/backend_error_evidence_tables.sql`: `logs.error`(append-only + UPDATE block + index)/`logs.error_report`(derived view)/`logs.error_notify_queue`(claim lifecycle 列付き)/AFTER INSERT trigger(durable row + `pg_notify('logs_error_inserted')` wake-up only)/`current.error_report_projection`(read-side)。
+- `IBackendErrorEvidenceAppender` / `NpgsqlBackendErrorEvidenceAppender`(validate / redact / bounded / 独立 connection append)。
+- `BackendErrorClassifier`(DTO / 通常 authError / 業務 policy reject / user input miss を `logs.error` 対象外）。
+- `AbstractFunctionExecutor.ExecuteAsync` primary boundary（system error のみ append、compensation / rethrow / fail-close 維持）。
+- secondary boundary 接続: `RuntimeExecutor` / `ManifestDispatcher` / `AdminRuntime` / `RuntimeTimelineScheduler` / `SchedulerJobRunner` / `DbNotifyListener` / `ExternalPortDispatchRuntime` / `ExternalTokenRefresher`。repository 境界の system error は throw → 上位 boundary で同一 envelope に接続。
+- explicit-step `append_error_evidence` primitive adapter（global catch 代替ではないことを test 済み）。
+- **post-notify bridge**: `NpgsqlBackendErrorNotifyQueueRepository`（atomic claim `FOR UPDATE SKIP LOCKED` + logs.error join、ack / failed_retryable / failed_terminal、row 非削除）と `BackendErrorNotifyBridge`（LISTEN `logs_error_inserted` wake-up + 周期 poll → claim → hook trigger payload 構築 → `RuntimeTimelineScheduler` hook trigger 経由 dispatch → accepted で acknowledged / 失敗で failed_retryable|terminal）。`SchedulerBackendErrorNotifyHookDispatcher` で scheduler 経由（`ExternalPortDispatchRuntime` 直呼びしない）。
+- tests: classifier / executor boundary / explicit-step primitive / dispatcher boundary / bridge（Runtime.Tests）、appender+trigger+queue+report+projection+redaction+append-only / queue claim-ack-fail roundtrip / **bridge end-to-end accepted→acknowledged**（Integration.Tests live-DB）。
+- **error-notify `hook_port` seed**（`db/backend_error_notify_hook_port_seed.sql`）: active hook_port（`/hooks/error_notify` / `error_notify` / `credential_kind=none`）+ hook_port policy `error_notify_hook_port_logger_sink`（`append_runtime_event_log` logger sink step、SSOT logger_sink_boundary 準拠の first implementation）。init.sql に配線済み。
+- **bridge dispatch evidence（2系統）**: (1) direct seam test（`BackendErrorNotifyBridgeEndToEndLiveDbTests`）で hook_port + policy resolve → accepted → `acknowledged`。(2) **production route test**（`BackendErrorNotifyBridgeProductionRouteLiveDbTests`、full init.sql）で bridge → `SchedulerBackendErrorNotifyHookDispatcher` → `RuntimeTimelineScheduler.AlignAndDispatchAsync` → `ManifestDispatcher` → `external_port_runtime` → seeded hook_port + policy resolve → accepted → `acknowledged` + `backend_error_notify_delivered` consumer event を検証済み（Gate0 production route 要件充足）。
 
-- backend error 処理が `ILogger.LogError` と caller response に散在しており、横断の永続 error evidence が無い。
-- `topology.runtime_event_log` は external-port consumer domain event evidence であり、backend-wide system error evidence ではない。
-- `AbstractFunctionExecutor.ExecuteAsync` は execute_abstract_function の集約境界だが、現行は compensation best-effort 後に rethrow するだけで error evidence append が無い。
-- `RuntimeExecutor` / `ManifestDispatcher` / `AdminRuntime` / scheduler / `DbNotifyListener` / repository の system error が同じ envelope に集約されていない。
-- `logs.error` insert 後の notify hook / durable queue / admin projection / report aggregation が未定義・未実装。
-- CI Attention は backend error handler authority ではないため、`logs.error` を CI Attention に流す設計は不可。
+## PR536 scope 判定（reviewer 監査 2026-06-30）
 
-## 改善方針
+PR536 内の deliverable scope（backend error evidence / report / notify substrate、post-notify bridge、`error_notify` hook_port seed、production route accepted→acknowledged evidence）は **実装済み / OK**。PR536 では **新規 admin UI を実装しない**。下記 admin/errorlogs read-side は **別PR follow-up** として切り出す。PR536 は admin read-side 未完のため bundle 全体としては `partial` 継続だが、これは「未実装に戻す」意味ではなく「残scopeを別PRへ分離するための partial」。
 
-implementation_change で、Primary SSOT に従って `logs.error` / error_report / error_notify_queue の永続 substrate を追加し、`IBackendErrorEvidenceAppender` と classifier を実装する。
+## 別PR follow-up scope（PR536 では実装しない）
 
-最初の集約点は `AbstractFunctionExecutor.ExecuteAsync` とし、primitive adapter 失敗・manifest/authority/runtime lane/binding/registry 失敗を分類して system error のみ append する。
+- [ ] admin read-side surface: `current.error_report_projection` の unresolved system error report viewer。既存 admin data-projection lane（dispatch → admin_runtime → `ExecuteDataAsync` + seed manifest の写像、`sql_attention:list_projection` 等の pattern 再利用）。read-only、`logs.error` evidence row を frontend から直接編集しない。
+- [ ] admin/errorlogs UI test。
+- [ ] hook 設定の扱い（**新規専用画面を作らない**）: error-notify hook 設定は backend error notification 専用画面ではなく、**既存の投影側クレデンシャル管理画面** `auth.external.credential_management.projection`（manifest `00000000-0000-0000-0000-000000000092`）に載せる。この projection は既に `external_hook_ports` / `hook_port` / `external_port_context` / `policy_template_key` を扱う surface（`canonical_port_bindings` で `hook_port → topology.external_hook_ports`、`screen_data_shape` に list/update operation）。`error_notify` は seed 済みの **hook_port record の1つ**であり uuid で一意に識別される。`stripe` / `webhook_inbox` / `job_scheduler` / `error_notify` が同じ `hook_port` kind の複数 record として並ぶ形を維持する。
+- [ ] 各 manifest / projection / hook_port は必ず uuid で識別される前提を維持。
 
-DTO failure / 通常 authError / 業務 policy reject は append 対象外とする。
+## follow-up scope の NG（厳守）
 
-`logs.error` INSERT trigger は error取得ではなく post-insert hook として durable notify queue へ積み、`pg_notify` は wake-up のみに使う。
+- backend error notification 専用 admin 画面を作る。
+- `hook_port` kind を1件固定（singleton）にする。dispatch 対象は `hook_path` / `route_key` / `required_by_bundle` / `provider_kind` / active policy / uuid で解決し、kind 選択だけで呼び先 hook を決めない。`error_notify` だけを kind から暗黙選択する仕様は禁止。
+- provider-specific / bundle-specific C# 分岐を追加する。
+- `topology.runtime_event_log` を backend-wide error log として流用する。
+- CI Attention に `logs.error` を流す。
+
+## PR536 完了条件（充足済み）
+
+- [x] error-notify hook_port seed/config が存在し、bridge dispatch が accepted → `acknowledged` まで通る live evidence（direct seam + production route の2系統）。
+
+## 別PR follow-up 完了条件
+
+- [ ] admin が unresolved error report を read-side projection 経由で閲覧でき、evidence row を直接編集しない guard。
+- [ ] error-notify hook record が既存 `auth.external.credential_management.projection`（manifest `...0092`）に hook_port record として（multi-record の1行・uuid 識別で）載っていることを確認。
+- [ ] admin/errorlogs UI test が緑。
+- [ ] follow-up 完了確認後にのみ: 本 todo 削除、`.agent/tasks/todo.md` 索引行削除、Roadmap status を implemented へ更新、evidence_ref 反映。
+
+## 禁止（継続）
+
+- DB trigger から外部 provider を直接呼ばない。
+- `pg_notify` payload だけで `acknowledged` にしない（durable queue を正本にする）。
+- `topology.runtime_event_log` を backend error log に流用しない。
+- CI Attention 連携を追加しない。
+- DTO / validation / auth / business policy reject を system error として永続化しない。
+- provider-specific / bundle-specific C# 分岐を追加しない。
 
 ## 対応資料
 
@@ -52,56 +78,3 @@ DTO failure / 通常 authError / 業務 policy reject は append 対象外とす
 - `docs/design/ci-contract-ssot.yaml`
 - `docs/framework-core.yaml`
 - `docs/framework-policy.yaml`
-
-## 対象ファイル名候補
-
-- `db/topology_tables.sql` or future `db/backend_error_evidence_tables.sql`
-- `backend/runtime/AbstractFunctionRuntime.cs`
-- `backend/runtime/RuntimeExecutor.cs`
-- `backend/runtime/ManifestDispatcher.cs`
-- `backend/runtime/AdminRuntime.cs`
-- `backend/runtime/ExternalPortDispatchRuntime.cs`
-- `backend/runtime/ExternalPortCredentialRefresher.cs`
-- `backend/scheduler/RuntimeTimelineScheduler.cs`
-- `backend/scheduler/SchedulerJobRunner.cs`
-- `backend/scheduler/DbNotifyListener.cs`
-- `backend/repository/*Error*` or future `backend/repository/NpgsqlBackendErrorEvidenceAppender.cs`
-- `backend/schema/*Error*` or future `backend/schema/BackendErrorEvidenceContracts.cs`
-- `backend/tests/Topolactor.Runtime.Tests/*Error*`
-- `backend/tests/Topolactor.Integration.Tests/*Error*`
-
-## 対象関数名候補
-
-- `AbstractFunctionExecutor.ExecuteAsync`
-- future `IBackendErrorEvidenceAppender.AppendAsync`
-- future `NpgsqlBackendErrorEvidenceAppender.AppendAsync`
-- future `BackendErrorClassifier.Classify`
-- future `AppendErrorEvidencePrimitiveAdapter.ExecuteAsync`
-- `RuntimeExecutor.ExecuteAsync`
-- `RuntimeExecutor.ErrorResponse`
-- `ManifestDispatcher.DispatchAsync`
-- `ManifestDispatcher.DispatchToHandlerAsync`
-- `AdminRuntime.ExecuteDataAsync`
-- `RuntimeTimelineScheduler.ExecuteAsync`
-- `RuntimeTimelineScheduler.EnqueueCronTrigger`
-- `RuntimeTimelineScheduler.EnqueueHookTrigger`
-- `SchedulerJobRunner.RunAsync`
-- `DbNotifyListener.HandleNotificationPayload`
-- `DbNotifyListener.HandleSqlAttentionDraftCandidatePayload`
-- `ExternalPortDispatchRuntime.ExecuteAsync`
-- `ExternalTokenRefresher.RefreshIfNeededAsync`
-
-## 残受入条件
-
-- [ ] `.agent` route / ssot-map / check 配線が Codex により追加され、Claude implementation_change 前に参照可能になっている。
-- [ ] `logs.error` append-only table と index が追加されている。
-- [ ] `logs.error_report` または同等の derived aggregation が追加されている。
-- [ ] `logs.error_notify_queue` と `logs.error` AFTER INSERT trigger / `pg_notify` wake-up が追加されている。
-- [ ] `IBackendErrorEvidenceAppender` と `NpgsqlBackendErrorEvidenceAppender` が追加されている。
-- [ ] classifier が DTO failure / 通常 authError / 業務 policy reject / user input miss を `logs.error` 対象外にしている。
-- [ ] `AbstractFunctionExecutor.ExecuteAsync` が system error のみ append し、既存 compensation / rethrow / fail-close semantics を保っている。
-- [ ] `RuntimeExecutor` / `ManifestDispatcher` / `AdminRuntime` / scheduler / `DbNotifyListener` / repository 境界の system error が同じ evidence envelope に接続されている。
-- [ ] `append_error_evidence` primitive adapter を追加する場合、それは明示 step 用であり global catch 代替ではないことが test で確認されている。
-- [ ] `topology.runtime_event_log` を backend-wide error log と誤用していない。
-- [ ] CI Attention へ `logs.error` を流していない。
-- [ ] admin projection は derived read-side であり、`logs.error` evidence row を frontend が直接編集しない。

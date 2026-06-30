@@ -219,15 +219,32 @@ public sealed class AbstractFunctionExecutor
 
     private readonly IAbstractFunctionManifestRepository _manifestRepository;
     private readonly IReadOnlyDictionary<string, IAbstractFunctionPrimitiveAdapter> _primitiveRegistry;
+    private readonly IBackendErrorEvidenceAppender? _errorAppender;
+    private readonly ILogger<AbstractFunctionExecutor>? _logger;
 
-    public AbstractFunctionExecutor(IAbstractFunctionManifestRepository manifestRepository, IEnumerable<IAbstractFunctionPrimitiveAdapter> primitiveAdapters)
+    // errorAppender/logger are optional: the executor preserves all existing fail-close /
+    // compensation / rethrow semantics when no appender is wired. When wired, only classified
+    // system errors at this aggregate boundary (manifest-load / authority / lane / binding /
+    // primitive-registry / primitive-adapter / unexpected) append to logs.error — DTO failure /
+    // ordinary auth reject / business policy reject / user input miss never append.
+    public AbstractFunctionExecutor(
+        IAbstractFunctionManifestRepository manifestRepository,
+        IEnumerable<IAbstractFunctionPrimitiveAdapter> primitiveAdapters,
+        IBackendErrorEvidenceAppender? errorAppender = null,
+        ILogger<AbstractFunctionExecutor>? logger = null)
     {
         _manifestRepository = manifestRepository;
         _primitiveRegistry = primitiveAdapters.ToDictionary(static adapter => adapter.PrimitiveKey, StringComparer.Ordinal);
+        _errorAppender = errorAppender;
+        _logger = logger;
     }
 
     public async Task<AbstractFunctionExecutionContext> ExecuteAsync(string functionKey, AbstractFunctionExecutionContext context, CancellationToken ct = default)
     {
+        // Track the in-flight step so a primitive/binding failure can record primitive_key/step_order.
+        AbstractFunctionStep? failingStep = null;
+        try
+        {
         var manifest = await _manifestRepository.LoadAsync(functionKey, ct) ?? throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.MissingAuthority, "ABSTRACT_FUNCTION_MANIFEST_MISSING");
         if (!manifest.Active) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_MANIFEST_INACTIVE");
         if (!string.Equals(manifest.RuntimeLane, context.RequiredRuntimeLane, StringComparison.Ordinal)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.InvalidAuthority, "ABSTRACT_FUNCTION_RUNTIME_LANE_INVALID");
@@ -274,6 +291,7 @@ public sealed class AbstractFunctionExecutor
         {
             foreach (var step in normalSteps)
             {
+                failingStep = step;
                 if (!_primitiveRegistry.TryGetValue(step.PrimitiveKey, out var primitive)) throw new AbstractFunctionFailCloseException(AbstractFunctionFailCloseStatus.UnsupportedPrimitive, $"ABSTRACT_FUNCTION_PRIMITIVE_UNSUPPORTED: {step.PrimitiveKey}");
                 var inputs = new Dictionary<string, object?>(StringComparer.Ordinal);
                 foreach (var binding in step.InputBindings)
@@ -312,6 +330,24 @@ public sealed class AbstractFunctionExecutor
             throw;
         }
         return context;
+        }
+        catch (Exception ex)
+        {
+            // Primary boundary append: classify and record only system errors, after compensation
+            // has already run. Rethrow preserves existing fail-close / rethrow semantics; DTO/auth/
+            // policy/input-miss are filtered out by the classifier inside RecordSystemErrorAsync.
+            await BackendErrorBoundary.RecordSystemErrorAsync(
+                _errorAppender, _logger, ex,
+                BackendErrorOriginLayer.AbstractFunctionExecutor,
+                $"execute_abstract_function:{functionKey}",
+                new BackendErrorEvidenceHint(
+                    FunctionKey: functionKey,
+                    RuntimeLane: context.RequiredRuntimeLane,
+                    PrimitiveKey: failingStep?.PrimitiveKey,
+                    StepOrder: failingStep?.StepOrder),
+                ct);
+            throw;
+        }
     }
 }
 

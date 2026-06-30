@@ -21,6 +21,9 @@
 \echo '[init.sql] applying sql_attention_logs_tables.sql'
 \i /db/sql_attention_logs_tables.sql
 
+\echo '[init.sql] applying backend_error_evidence_tables.sql'
+\i /db/backend_error_evidence_tables.sql
+
 \echo '[init.sql] applying ci_attention_guidance_tables.sql'
 \i /db/ci_attention_guidance_tables.sql
 
@@ -98,3 +101,6 @@
 
 \echo '[init.sql] applying external_port_result_context_mapping_seed.sql'
 \i /db/external_port_result_context_mapping_seed.sql
+
+\echo '[init.sql] applying backend_error_notify_hook_port_seed.sql'
+\i /db/backend_error_notify_hook_port_seed.sql

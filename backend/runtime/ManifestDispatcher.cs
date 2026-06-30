@@ -41,19 +41,22 @@ public class ManifestDispatcher
     private readonly ManifestRepository? _manifestRepository;
     private readonly OperationVectorResolver _operationVectorResolver;
     private readonly TargetDispatchOverride _targetDispatchOverride;
+    private readonly IBackendErrorEvidenceAppender? _errorAppender;
 
     public ManifestDispatcher(
         ILogger<ManifestDispatcher> logger,
         IReadOnlyDictionary<string, IDispatchableRuntime> runtimeHandlers,
         OperationVectorResolver operationVectorResolver,
         TargetDispatchOverride targetDispatchOverride,
-        ManifestRepository? manifestRepository = null)
+        ManifestRepository? manifestRepository = null,
+        IBackendErrorEvidenceAppender? errorAppender = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _runtimeHandlers = runtimeHandlers ?? throw new ArgumentNullException(nameof(runtimeHandlers));
         _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
         _targetDispatchOverride = targetDispatchOverride ?? throw new ArgumentNullException(nameof(targetDispatchOverride));
         _manifestRepository = manifestRepository;
+        _errorAppender = errorAppender;
     }
 
     /// <summary>
@@ -258,6 +261,8 @@ public class ManifestDispatcher
                     ? $"Manifest {manifest.ManifestId} has no db_notify projection mapping entry."
                     : $"Manifest {manifest.ManifestId} has no runtime_mapping entry.";
                 _logger.LogError("ManifestDispatcher: destination mapping missing in manifest {ManifestId}. code={Code}", manifest.ManifestId, errorCode);
+                await RecordSubstrateErrorAsync(errorCode, errorMessage,
+                    $"manifest_dispatcher:{manifest.ManifestId}", ct);
                 return new EndpointResponseDto(
                     Success: false,
                     Emission: null,
@@ -282,12 +287,35 @@ public class ManifestDispatcher
         catch (InvalidOperationException ex) when (ex.Message.StartsWith("MANIFEST_AMBIGUOUS", StringComparison.Ordinal))
         {
             _logger.LogError(ex, "ManifestDispatcher: ambiguous manifest lookup rejected.");
+            await BackendErrorBoundary.RecordSystemErrorAsync(
+                _errorAppender, _logger, ex,
+                BackendErrorOriginLayer.ManifestDispatcher,
+                "manifest_dispatcher:resolve_active_manifest",
+                new BackendErrorEvidenceHint(ErrorCode: "MANIFEST_AMBIGUOUS"),
+                ct);
             return new EndpointResponseDto(
                 Success: false,
                 Emission: null,
                 Errors: [new ValidationError("MANIFEST_AMBIGUOUS", ex.Message)]);
         }
     }
+
+    // Records a manifest-dispatch substrate failure that surfaced as a configuration gap (no
+    // exception object): missing runtime destination mapping or unregistered handler. These are
+    // substrate breakage, distinct from MANIFEST_NOT_FOUND / TARGET_REF_INVALID / capability rejects.
+    private Task RecordSubstrateErrorAsync(string errorCode, string message, string boundaryKey, CancellationToken ct) =>
+        BackendErrorBoundary.RecordSystemErrorAsync(
+            _errorAppender, _logger,
+            new BackendErrorEvidence(
+                OriginLayer: BackendErrorOriginLayer.ManifestDispatcher,
+                BoundaryKey: boundaryKey,
+                ErrorKind: BackendErrorKind.SystemError,
+                ErrorCode: errorCode,
+                MessagePublic: message,
+                StackHash: BackendErrorBoundary.ComputeHash($"manifest_dispatcher|{errorCode}|{boundaryKey}"),
+                Severity: "error",
+                Retryable: false),
+            ct);
 
     private static bool TryExtractManifestId(EndpointRequestDto request, out Guid manifestId)
     {
@@ -345,7 +373,7 @@ public class ManifestDispatcher
         return Guid.TryParse(parts[1], out manifestId);
     }
 
-    private Task<EndpointResponseDto> DispatchToHandlerAsync(
+    private async Task<EndpointResponseDto> DispatchToHandlerAsync(
         string destination,
         EndpointRequestDto request,
         Guid? manifestId,
@@ -356,19 +384,23 @@ public class ManifestDispatcher
             _logger.LogError(
                 "ManifestDispatcher: no handler registered for runtime_destination '{Destination}'.",
                 destination);
-            return Task.FromResult(new EndpointResponseDto(
+            await RecordSubstrateErrorAsync(
+                "RUNTIME_DESTINATION_UNKNOWN",
+                $"runtime_destination '{destination}' is not a registered handler.",
+                $"manifest_dispatcher:handler:{destination}", ct);
+            return new EndpointResponseDto(
                 Success: false,
                 Emission: null,
                 Errors: [new ValidationError(
                     "RUNTIME_DESTINATION_UNKNOWN",
-                    $"runtime_destination '{destination}' is not a registered handler. Known: {string.Join(", ", _runtimeHandlers.Keys)}")]));
+                    $"runtime_destination '{destination}' is not a registered handler. Known: {string.Join(", ", _runtimeHandlers.Keys)}")]);
         }
 
         _logger.LogDebug(
             "ManifestDispatcher: dispatching to handler for runtime_destination={Destination}.",
             destination);
 
-        return handler.ExecuteAsync(request, manifestId, ct);
+        return await handler.ExecuteAsync(request, manifestId, ct);
     }
 
     private static string? ExtractDbNotifyProjectionDestination(IReadOnlyList<JsonElement> topology)

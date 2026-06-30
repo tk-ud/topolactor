@@ -46,5 +46,6 @@
     <Compile Include="../../scheduler/DbNotifyListener.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../scheduler/SchedulerJobRunner.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../scheduler/CronScheduleEvaluator.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../scheduler/BackendErrorNotifyBridge.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

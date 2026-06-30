@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Topolactor.Repository;
 using Topolactor.Runtime;
+using Topolactor.Schema;
 
 namespace Topolactor.Scheduler;
 
@@ -33,17 +34,20 @@ public sealed class SchedulerJobRunner : BackgroundService
     private readonly ISchedulerJobManifestRepository _manifestRepository;
     private readonly AbstractFunctionExecutor _abstractFunctionExecutor;
     private readonly DbNotifyRepository? _dbNotifyRepository;
+    private readonly IBackendErrorEvidenceAppender? _errorAppender;
 
     public SchedulerJobRunner(
         ILogger<SchedulerJobRunner> logger,
         ISchedulerJobManifestRepository manifestRepository,
         AbstractFunctionExecutor abstractFunctionExecutor,
-        DbNotifyRepository? dbNotifyRepository = null)
+        DbNotifyRepository? dbNotifyRepository = null,
+        IBackendErrorEvidenceAppender? errorAppender = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _manifestRepository = manifestRepository ?? throw new ArgumentNullException(nameof(manifestRepository));
         _abstractFunctionExecutor = abstractFunctionExecutor ?? throw new ArgumentNullException(nameof(abstractFunctionExecutor));
         _dbNotifyRepository = dbNotifyRepository;
+        _errorAppender = errorAppender;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -69,6 +73,12 @@ public sealed class SchedulerJobRunner : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "SchedulerJobRunner: unhandled exception in poll cycle.");
+                await BackendErrorBoundary.RecordSystemErrorAsync(
+                    _errorAppender, _logger, ex,
+                    BackendErrorOriginLayer.Scheduler,
+                    "scheduler_job_runner:poll_cycle",
+                    new BackendErrorEvidenceHint(RuntimeLane: "scheduler_job_runtime"),
+                    stoppingToken);
             }
 
             try { await Task.Delay(pollInterval, stoppingToken); }
@@ -106,6 +116,14 @@ public sealed class SchedulerJobRunner : BackgroundService
                 _logger.LogError(ex,
                     "SchedulerJobRunner: unhandled exception executing job={JobKey}.",
                     job.JobKey);
+                await BackendErrorBoundary.RecordSystemErrorAsync(
+                    _errorAppender, _logger, ex,
+                    BackendErrorOriginLayer.Scheduler,
+                    $"scheduler_job_runner:job:{job.JobKey}",
+                    new BackendErrorEvidenceHint(
+                        RuntimeLane: "scheduler_job_runtime",
+                        Evidence: new Dictionary<string, string> { ["job_key"] = job.JobKey ?? "unknown" }),
+                    ct);
             }
         }
     }

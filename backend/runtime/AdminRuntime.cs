@@ -34,6 +34,7 @@ public partial class AdminRuntime
     private readonly AbstractFunctionExecutor? _abstractFunctionExecutor;
     private readonly MockPresetRepository? _mockPresetRepository;
     private readonly TeamMarkdownRepository? _teamMarkdownRepository;
+    private readonly IBackendErrorEvidenceAppender? _errorAppender;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -68,7 +69,8 @@ public partial class AdminRuntime
         AbstractFunctionExecutor? abstractFunctionExecutor = null,
         MockPresetRepository? mockPresetRepository = null,
         TeamMarkdownRepository? teamMarkdownRepository = null,
-        ISchedulerJobManifestRepository? schedulerJobManifestRepository = null)
+        ISchedulerJobManifestRepository? schedulerJobManifestRepository = null,
+        IBackendErrorEvidenceAppender? errorAppender = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -90,6 +92,7 @@ public partial class AdminRuntime
         _mockPresetRepository = mockPresetRepository;
         _teamMarkdownRepository = teamMarkdownRepository;
         _schedulerJobManifestRepository = schedulerJobManifestRepository;
+        _errorAppender = errorAppender;
     }
 
     // ---------------------------------------------------------------------------
@@ -223,6 +226,8 @@ public partial class AdminRuntime
         var layerAction = $"{vector.Layer?.ToLowerInvariant()}:{vector.Action?.ToLowerInvariant()}";
         _logger.LogInformation("AdminRuntime.ExecuteDataAsync: layerAction={LayerAction}", layerAction);
 
+        try
+        {
         return layerAction switch
         {
             "context_token_registry:list"      => await DataListTokensAsync(ct),
@@ -337,6 +342,20 @@ public partial class AdminRuntime
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Uncaught admin substrate failure (e.g. repository/db unavailable bubbling out of a
+            // Data* method). Record as system error and preserve propagation. Validation/JSON
+            // rejects that Data* methods convert into ValidationError responses are not appended.
+            await BackendErrorBoundary.RecordSystemErrorAsync(
+                _errorAppender, _logger, ex,
+                BackendErrorOriginLayer.AdminRuntime,
+                $"admin_runtime:{layerAction}",
+                new BackendErrorEvidenceHint(RuntimeLane: "admin_runtime"),
+                ct);
+            throw;
+        }
     }
     private async Task<(JsonElement? data, ValidationError? error)> DataCiAttentionRefreshFragmentsAsync(OperationVector vector, CancellationToken ct)
     {

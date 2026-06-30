@@ -20,19 +20,22 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
     private readonly IExternalPortPolicyStepExecutor _policyStepExecutor;
     private readonly SseEventBroadcaster? _sseBroadcaster;
     private readonly IExternalPortRuntimeEventLogRepository? _runtimeEventLog;
+    private readonly IBackendErrorEvidenceAppender? _errorAppender;
 
     public ExternalPortDispatchRuntime(
         ILogger<ExternalPortDispatchRuntime> logger,
         IExternalPortPolicyRepository repository,
         IExternalPortPolicyStepExecutor policyStepExecutor,
         SseEventBroadcaster? sseBroadcaster = null,
-        IExternalPortRuntimeEventLogRepository? runtimeEventLog = null)
+        IExternalPortRuntimeEventLogRepository? runtimeEventLog = null,
+        IBackendErrorEvidenceAppender? errorAppender = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _policyStepExecutor = policyStepExecutor ?? throw new ArgumentNullException(nameof(policyStepExecutor));
         _sseBroadcaster = sseBroadcaster;
         _runtimeEventLog = runtimeEventLog;
+        _errorAppender = errorAppender;
     }
 
     public async Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
@@ -138,6 +141,20 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
                 }
             }
             return Fail(ex.Message, "External port dispatch failed closed at the generic execution boundary.");
+        }
+        catch (Exception ex)
+        {
+            // Unexpected substrate failure (e.g. repository/db unavailable) — distinct from the
+            // InvalidOperationException/ArgumentException fail-close rejects above (signature/policy
+            // rejects are not system errors). Record as system error and preserve propagation.
+            _logger.LogError(ex, "External port dispatch unexpected substrate failure.");
+            await BackendErrorBoundary.RecordSystemErrorAsync(
+                _errorAppender, _logger, ex,
+                BackendErrorOriginLayer.ExternalPortDispatch,
+                "external_port_dispatch:execute",
+                new BackendErrorEvidenceHint(RuntimeLane: "external_port_runtime"),
+                ct);
+            throw;
         }
     }
 

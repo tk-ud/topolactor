@@ -2,10 +2,11 @@ version: 1
 ssot: backend_error_evidence_report_notify
 purpose: >
   Define backend-wide append-only system error evidence, derived error report
-  aggregation, and post-insert notify routing. This SSOT exists to preserve
-  repairable evidence for backend execution substrate failures without mixing in
-  user input mistakes, ordinary DTO failures, normal auth rejects, or business
-  policy rejects.
+  aggregation, post-insert notify routing, and the backend listener bridge from
+  logs.error notify queue into the existing hook-trigger runtime path. This SSOT
+  exists to preserve repairable evidence for backend execution substrate failures
+  without mixing in user input mistakes, ordinary DTO failures, normal auth
+  rejects, or business policy rejects.
 
 ownership:
   owns:
@@ -13,6 +14,7 @@ ownership:
     - backend error classification vocabulary
     - error report aggregation boundary
     - logs.error INSERT trigger / notify queue / pg_notify wake-up boundary
+    - logs.error notify listener / hook-trigger bridge contract
     - admin projection requirements for unresolved system errors
     - AbstractFunctionExecutor error-boundary requirements
   does_not_own:
@@ -21,6 +23,8 @@ ownership:
     - business policy reject semantics
     - CI Attention guidance fragments
     - SystemOperationCI diagnostic implementation
+    - external-port provider-specific notification policy
+    - external-port admin projection implementation details
     - .agent route/index/check wiring
 
 current_gap:
@@ -79,7 +83,7 @@ secondary_boundaries:
   - file: backend/runtime/AdminRuntime.cs
     functions: [ExecuteDataAsync]
   - file: backend/scheduler/RuntimeTimelineScheduler.cs
-    functions: [ExecuteAsync, EnqueueCronTrigger, EnqueueHookTrigger]
+    functions: [ExecuteAsync, EnqueueCronTrigger, EnqueueHookTrigger, AlignAndDispatchAsync]
   - file: backend/scheduler/DbNotifyListener.cs
     functions: [HandleNotificationPayload, HandleSqlAttentionDraftCandidatePayload]
   - file: backend/scheduler/SchedulerJobRunner.cs
@@ -145,18 +149,91 @@ report_and_notify:
     table_candidate: logs.error_notify_queue
     trigger_role: logs.error AFTER INSERT hook only
     pg_notify_channel_candidate: logs_error_inserted
+    role: durable wake-up queue for post-error handling
     rule: >
       DB trigger creates durable queue row and emits pg_notify wake-up only. It
-      must not capture errors or call external providers directly.
+      must not capture errors or call external providers directly. The queue row
+      is the source of truth; pg_notify payload is only a wake-up hint.
+    status_vocabulary:
+      - pending
+      - processing
+      - acknowledged
+      - failed_retryable
+      - failed_terminal
+    required_queue_fields:
+      - queue_id
+      - error_id
+      - channel
+      - enqueued_at
+      - status
+      - acknowledged_at
+      - payload_json
+  listener_bridge:
+    channel: logs_error_inserted
+    role: backend_wakeup_to_hook_trigger_bridge
+    source_of_truth: logs.error_notify_queue
+    reads:
+      - logs.error_notify_queue pending rows
+      - logs.error rows joined by error_id
+    queue_claim_rule: >
+      Listener must claim pending rows atomically before dispatching hook work so
+      multiple backend processes do not process the same queue row. The listener
+      must not mark a row acknowledged from pg_notify payload alone.
+    hook_trigger_contract:
+      scheduler: RuntimeTimelineScheduler
+      trigger_kind: hook
+      route: scheduler_alignment_before_runtime
+      request_shape:
+        operation_type: dispatchExternalPort
+        target: external_port
+        layer: external_port
+        action: dispatchExternalPort
+        payload_required_fields:
+          - hook_path
+          - route_key
+          - dispatch_payload.error_id
+          - dispatch_payload.queue_id
+          - dispatch_payload.origin_layer
+          - dispatch_payload.boundary_key
+          - dispatch_payload.error_code
+          - dispatch_payload.severity
+          - dispatch_payload.stack_hash
+      runtime_destination: external_port_runtime
+      target_resolution: >
+        hook_path / route_key resolve an active topology.external_hook_ports row
+        and its active external_port_policy. Hardcoded provider or bundle-specific
+        notification handlers are prohibited.
+    ack_rule: >
+      Mark queue row acknowledged only after the hook trigger has been accepted by
+      the scheduler/runtime path and the configured external_port_runtime dispatch
+      has completed successfully or reached an explicitly accepted boundary result.
+      Failed dispatch keeps durable evidence and transitions to failed_retryable or
+      failed_terminal according to the error category.
+    logger_sink_boundary: >
+      A Logger-backed notify sink may be used as the first implementation, but it
+      is a hook dispatch target/sink implementation detail. It must not replace
+      durable queue state, and it must not become the global error evidence store.
   admin_projection:
     projection_candidate: current.error_report_projection
     role: read-side projection of unresolved system error reports
+  admin_external_port_configuration_dependency:
+    owning_ssot:
+      - docs/design/external-port-substrate-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+    rule: >
+      The error notify listener may emit hook triggers only to admin/seed-authored
+      external hook port configuration. Admin projection must expose hook_path,
+      route_key, provider_kind, credential_kind, reference_key, required_by_bundle,
+      and consumer bundle binding through the external-port port record context;
+      this SSOT does not authorize a dedicated provider-specific notification UI.
 
 relation_to_existing_surfaces:
   ci_attention: Do not route logs.error into CI Attention by default; CI Attention is guidance projection, not backend error handler authority.
   system_operation_ci: Diagnostic output may inform classification, but does not own logs.error.
   topology_runtime_event_log: Existing runtime_event_log remains external-port consumer domain-event evidence unless another SSOT changes that boundary.
   logs_diff_current_attention: SQL Attention logs remain observation/evidence pressure surfaces, not system error evidence.
+  runtime_hook_trigger: Listener bridge must enter RuntimeTimelineScheduler as hook before runtime dispatch; it must not call ExternalPortDispatchRuntime directly.
+  external_port_substrate: External notification delivery is data/admin configured external_port_runtime work, not provider-specific backend branching in this SSOT.
 
 acceptance_contract:
   - logs.error DDL and indexes exist
@@ -166,7 +243,13 @@ acceptance_contract:
   - classifier tests prove DTO/auth/policy rejects do not append logs.error
   - AbstractFunctionExecutor system error tests preserve compensation/rethrow semantics
   - runtime/dispatcher/admin/scheduler/listener/repository boundary tests append only system errors
+  - listener listens to logs_error_inserted and uses logs.error_notify_queue as durable source of truth
+  - listener claims pending queue rows atomically and does not trust pg_notify payload as completion evidence
+  - listener emits a hook trigger through RuntimeTimelineScheduler before external_port_runtime dispatch
+  - hook trigger payload resolves an admin/seed-authored external hook port by hook_path and route_key
+  - listener updates queue status to acknowledged / failed_retryable / failed_terminal according to dispatch result
   - admin projection can read unresolved error reports
+  - external-port/admin setting surface supports the hook target configuration without provider-specific hardcode
   - CI Attention wiring is not added unless separately SSOT-approved
 
 agent_work_split:

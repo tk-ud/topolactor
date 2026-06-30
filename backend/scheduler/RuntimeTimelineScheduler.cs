@@ -38,21 +38,25 @@ public class RuntimeTimelineScheduler : BackgroundService
     private readonly ILogger<RuntimeTimelineScheduler> _logger;
     private readonly ManifestDispatcher _manifestDispatcher;
     private readonly Channel<SchedulerItem> _bgQueue;
+    private readonly IBackendErrorEvidenceAppender? _errorAppender;
 
     public RuntimeTimelineScheduler(
         ILogger<RuntimeTimelineScheduler> logger,
-        ManifestDispatcher manifestDispatcher)
-        : this(logger, manifestDispatcher, queueCapacity: 256)
+        ManifestDispatcher manifestDispatcher,
+        IBackendErrorEvidenceAppender? errorAppender = null)
+        : this(logger, manifestDispatcher, queueCapacity: 256, errorAppender)
     {
     }
 
     internal RuntimeTimelineScheduler(
         ILogger<RuntimeTimelineScheduler> logger,
         ManifestDispatcher manifestDispatcher,
-        int queueCapacity)
+        int queueCapacity,
+        IBackendErrorEvidenceAppender? errorAppender = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _manifestDispatcher = manifestDispatcher ?? throw new ArgumentNullException(nameof(manifestDispatcher));
+        _errorAppender = errorAppender;
         _bgQueue = Channel.CreateBounded<SchedulerItem>(new BoundedChannelOptions(queueCapacity)
         {
             FullMode = BoundedChannelFullMode.Wait,
@@ -209,6 +213,18 @@ public class RuntimeTimelineScheduler : BackgroundService
                 _logger.LogError(ex,
                     "RuntimeTimelineScheduler: background dispatch failed for TriggerKind={TriggerKind} Target={Target}",
                     item.Request.TriggerKind, item.Request.Target);
+                await BackendErrorBoundary.RecordSystemErrorAsync(
+                    _errorAppender, _logger, ex,
+                    BackendErrorOriginLayer.Scheduler,
+                    $"runtime_timeline_scheduler:dispatch:{item.Request.TriggerKind}",
+                    new BackendErrorEvidenceHint(
+                        RuntimeLane: "scheduler",
+                        Evidence: new Dictionary<string, string>
+                        {
+                            ["trigger_kind"] = item.Request.TriggerKind ?? "unknown",
+                            ["target"] = item.Request.Target ?? "unknown",
+                        }),
+                    stoppingToken);
                 item.Response.TrySetException(ex);
             }
         }
