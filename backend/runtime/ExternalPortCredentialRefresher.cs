@@ -129,17 +129,20 @@ public sealed class ExternalTokenRefresher : IExternalTokenRefresher
     private readonly IExternalCredentialCrypto _crypto;
     private readonly IExternalPortHttpClient _httpClient;
     private readonly IExternalPortPolicyStepExecutor _policyStepExecutor;
+    private readonly Topolactor.Schema.IBackendErrorEvidenceAppender? _errorAppender;
 
     public ExternalTokenRefresher(
         IExternalCredentialVaultRepository repository,
         IExternalCredentialCrypto crypto,
         IExternalPortHttpClient httpClient,
-        IExternalPortPolicyStepExecutor policyStepExecutor)
+        IExternalPortPolicyStepExecutor policyStepExecutor,
+        Topolactor.Schema.IBackendErrorEvidenceAppender? errorAppender = null)
     {
         _repository = repository;
         _crypto = crypto;
         _httpClient = httpClient;
         _policyStepExecutor = policyStepExecutor;
+        _errorAppender = errorAppender;
     }
 
     public async Task<ExternalCredentialVaultRecord> RefreshIfNeededAsync(
@@ -197,9 +200,17 @@ public sealed class ExternalTokenRefresher : IExternalTokenRefresher
             return await _repository.LoadAsync(credentialVaultId, ct)
                 ?? throw new InvalidOperationException("EXTERNAL_CREDENTIAL_MISSING_AFTER_REFRESH");
         }
-        catch
+        catch (Exception ex)
         {
             await _repository.FailRefreshLeaseAsync(lease, "EXTERNAL_CREDENTIAL_REFRESH_FAILED", ct);
+            // Credential refresh failure is a dependency/substrate failure (system error). Record,
+            // then preserve fail-close rethrow. Cancellation is filtered out by the classifier.
+            await BackendErrorBoundary.RecordSystemErrorAsync(
+                _errorAppender, null, ex,
+                BackendErrorOriginLayer.ExternalPortCredentialRefresher,
+                "external_port_credential_refresher:refresh",
+                new BackendErrorEvidenceHint(ErrorCode: "EXTERNAL_CREDENTIAL_REFRESH_FAILED"),
+                ct);
             throw;
         }
     }

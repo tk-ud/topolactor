@@ -29,6 +29,11 @@ var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL") ?? str
 if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("DATABASE_URL is required. Backend runtime must connect to PostgreSQL; in-memory fallback is not allowed.");
 
+// Backend-wide append-only system error evidence appender (logs.error). Shared by every
+// backend boundary so all classified system errors connect to the same evidence envelope.
+builder.Services.AddSingleton<IBackendErrorEvidenceAppender>(_ =>
+    new NpgsqlBackendErrorEvidenceAppender(connectionString));
+
 builder.Services.AddSingleton<TopologyRepository>(sp =>
     new NpgsqlTopologyRepository(
         sp.GetRequiredService<ILogger<NpgsqlTopologyRepository>>(),
@@ -183,6 +188,10 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
     new LogRetentionPrimitiveAdapter(
         sp.GetRequiredService<ILogger<LogRetentionPrimitiveAdapter>>(),
         sp.GetRequiredService<LogRetentionRuntime>()));
+// Optional explicit-step adapter: appends logs.error only when a manifest step invokes it.
+// It is NOT the global error-capture path (that is the AbstractFunctionExecutor boundary).
+builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
+    new AppendErrorEvidencePrimitiveAdapter(sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
@@ -224,7 +233,8 @@ builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
         sp.GetRequiredService<IExternalPortPolicyRepository>(),
         sp.GetRequiredService<IExternalPortPolicyStepExecutor>(),
         sp.GetRequiredService<SseEventBroadcaster>(),
-        sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
+        sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>(),
+        sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
 builder.Services.AddSingleton<InstancePortDispatchRuntime>(sp =>
     new InstancePortDispatchRuntime(
         sp.GetRequiredService<ILogger<InstancePortDispatchRuntime>>(),
@@ -255,7 +265,8 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<MockPresetRepository>(),
         sp.GetRequiredService<TeamMarkdownRepository>(),
-        sp.GetRequiredService<ISchedulerJobManifestRepository>()));
+        sp.GetRequiredService<ISchedulerJobManifestRepository>(),
+        sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
     new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>()));
@@ -283,7 +294,8 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<AbstractFunctionExecutor>(),
         sp.GetRequiredService<OutputLaneRouter>(),
         sp.GetRequiredService<HubNavigationResolver>(),
-        sp.GetRequiredService<ManifestRepository>()));
+        sp.GetRequiredService<ManifestRepository>(),
+        sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
 builder.Services.AddSingleton<AdminRuntimeDispatchAdapter>(sp =>
     new AdminRuntimeDispatchAdapter(
         sp.GetRequiredService<AdminRuntime>(),
@@ -311,7 +323,8 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         handlers,
         sp.GetRequiredService<OperationVectorResolver>(),
         sp.GetRequiredService<TargetDispatchOverride>(),
-        sp.GetRequiredService<ManifestRepository>());
+        sp.GetRequiredService<ManifestRepository>(),
+        sp.GetRequiredService<IBackendErrorEvidenceAppender>());
 });
 builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<PackageGeneratorRuntime>();
@@ -375,12 +388,14 @@ builder.Services.AddHostedService(sp => new SchedulerJobRunner(
     sp.GetRequiredService<ILogger<SchedulerJobRunner>>(),
     sp.GetRequiredService<ISchedulerJobManifestRepository>(),
     sp.GetRequiredService<AbstractFunctionExecutor>(),
-    sp.GetRequiredService<DbNotifyRepository>()));
+    sp.GetRequiredService<DbNotifyRepository>(),
+    sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
 builder.Services.AddHostedService(sp => new DbNotifyListener(
     sp.GetRequiredService<ILogger<DbNotifyListener>>(),
     connectionString,
     sp.GetRequiredService<RuntimeTimelineScheduler>(),
-    sp.GetRequiredService<SseEventBroadcaster>()));
+    sp.GetRequiredService<SseEventBroadcaster>(),
+    sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
 
 // ---------------------------------------------------------------------------
 // HTTP layer

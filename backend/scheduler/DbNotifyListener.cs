@@ -42,17 +42,20 @@ public class DbNotifyListener : BackgroundService
     private readonly string _connectionString;
     private readonly RuntimeTimelineScheduler _scheduler;
     private readonly SseEventBroadcaster? _broadcaster;
+    private readonly Topolactor.Schema.IBackendErrorEvidenceAppender? _errorAppender;
 
     public DbNotifyListener(
         ILogger<DbNotifyListener> logger,
         string connectionString,
         RuntimeTimelineScheduler scheduler,
-        SseEventBroadcaster? broadcaster = null)
+        SseEventBroadcaster? broadcaster = null,
+        Topolactor.Schema.IBackendErrorEvidenceAppender? errorAppender = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
         _broadcaster = broadcaster;
+        _errorAppender = errorAppender;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -234,6 +237,20 @@ public class DbNotifyListener : BackgroundService
         {
             _logger.LogError(
                 "DbNotifyListener: DB_NOTIFY_HOOK_TRIGGER_QUEUE_FULL — scheduler queue full; db_notify hook trigger dropped.");
+            // Queue saturation is a backend substrate capacity failure (system error), distinct from
+            // the malformed-payload data rejects above. Best-effort fire-and-forget: the helper never
+            // throws, so the unobserved task carries no failure path.
+            _ = Topolactor.Runtime.BackendErrorBoundary.RecordSystemErrorAsync(
+                _errorAppender, _logger,
+                new Topolactor.Schema.BackendErrorEvidence(
+                    OriginLayer: Topolactor.Schema.BackendErrorOriginLayer.DbNotifyListener,
+                    BoundaryKey: "db_notify_listener:hook_trigger_enqueue",
+                    ErrorKind: Topolactor.Schema.BackendErrorKind.SystemError,
+                    ErrorCode: "DB_NOTIFY_HOOK_TRIGGER_QUEUE_FULL",
+                    MessagePublic: "scheduler queue full; db_notify hook trigger dropped.",
+                    StackHash: Topolactor.Runtime.BackendErrorBoundary.ComputeHash("db_notify_listener|DB_NOTIFY_HOOK_TRIGGER_QUEUE_FULL"),
+                    Severity: "error",
+                    Retryable: true));
         }
     }
 }

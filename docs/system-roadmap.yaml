@@ -336,9 +336,9 @@ system_roadmap_ssot:
     product.backend_error_evidence_report_notify_substrate:
       bundle_id: backend-error-evidence-report-notify-substrate
       title: Backend system error evidence / report / notify substrate
-      status: not_started
+      status: implemented
       production_ready: false
-      public_summary: Backend-wide system error evidence, derived error report aggregation, durable notify queue, pg_notify wake-up, and admin unresolved-error projection are approved as a feature substrate, but implementation is not yet started. DTO validation failures, ordinary auth rejects, business policy rejects, user input mistakes, CI Attention, and topology.runtime_event_log are outside this backend error evidence authority.
+      public_summary: Backend-wide append-only system error evidence (logs.error), derived error report aggregation (logs.error_report), durable notify queue with logs.error AFTER INSERT trigger + pg_notify wake-up (logs.error_notify_queue / logs_error_inserted), the IBackendErrorEvidenceAppender / NpgsqlBackendErrorEvidenceAppender boundary, the BackendErrorClassifier, and the read-side current.error_report_projection are implemented. The AbstractFunctionExecutor aggregate boundary and the RuntimeExecutor / ManifestDispatcher / AdminRuntime / scheduler / DbNotifyListener / external-port boundaries append only classified system errors while preserving compensation / rethrow / fail-close semantics. DTO validation failures, ordinary auth rejects, business policy rejects, user input mistakes, CI Attention, and topology.runtime_event_log remain outside this backend error evidence authority.
       scope:
         - logs_error_append_only_system_error_evidence
         - error_report_derived_aggregation
@@ -348,7 +348,18 @@ system_roadmap_ssot:
         - admin_unresolved_error_report_projection
       detail_ref:
         - docs/design/backend-error-evidence-report-notify-ssot.yaml
-      evidence_ref: []
+      evidence_ref:
+        - db/backend_error_evidence_tables.sql
+        - backend/schema/BackendErrorEvidenceContracts.cs
+        - backend/runtime/BackendErrorEvidence.cs
+        - backend/runtime/AppendErrorEvidencePrimitiveAdapter.cs
+        - backend/repository/NpgsqlBackendErrorEvidenceAppender.cs
+        - backend/runtime/AbstractFunctionRuntime.cs
+        - backend/tests/Topolactor.Runtime.Tests/BackendErrorClassifierTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/BackendErrorEvidenceBoundaryTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/AppendErrorEvidencePrimitiveAdapterTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherErrorEvidenceTests.cs
+        - backend/tests/Topolactor.Integration.Tests/BackendErrorEvidenceAppenderLiveDbTests.cs
       completion_condition:
         - logs_error_append_only_table_and_indexes_exist
         - error_report_or_equivalent_derived_aggregation_exists
@@ -360,7 +371,7 @@ system_roadmap_ssot:
         - admin_projection_reads_unresolved_error_reports
         - CI_Attention_and_topology_runtime_event_log_are_not_repurposed_as_backend_error_log
       known_gap_ref:
-        - .agent/tasks/backend-error-evidence-report-notify-todo.md
+        - production_ready_gate_separate_full_admin_console_error_report_ui_surface_and_resolution_lane_are_out_of_scope_until_a_future_ssot
       files:
         - backend/
         - db/

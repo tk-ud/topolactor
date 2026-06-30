@@ -30,6 +30,7 @@ public class RuntimeExecutor : IDispatchableRuntime
     private readonly OutputLaneRouter? _outputLaneRouter;
     private readonly HubNavigationResolver? _hubNavigationResolver;
     private readonly ScreenDataShapeQueryRuntime _screenDataShapeQueryRuntime;
+    private readonly Topolactor.Schema.IBackendErrorEvidenceAppender? _errorAppender;
 
     public RuntimeExecutor(
         ILogger<RuntimeExecutor> logger,
@@ -46,7 +47,8 @@ public class RuntimeExecutor : IDispatchableRuntime
         AbstractFunctionExecutor abstractFunctionExecutor,
         OutputLaneRouter? outputLaneRouter = null,
         HubNavigationResolver? hubNavigationResolver = null,
-        ManifestRepository? manifestRepository = null)
+        ManifestRepository? manifestRepository = null,
+        Topolactor.Schema.IBackendErrorEvidenceAppender? errorAppender = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
@@ -63,6 +65,22 @@ public class RuntimeExecutor : IDispatchableRuntime
         _outputLaneRouter = outputLaneRouter;
         _hubNavigationResolver = hubNavigationResolver;
         _screenDataShapeQueryRuntime = new ScreenDataShapeQueryRuntime(manifestRepository);
+        _errorAppender = errorAppender;
+    }
+
+    // Records a pipeline substrate failure (resolver/repository/infra) as logs.error system error,
+    // then returns the existing explicit error response. Route-missing (handled separately) is not
+    // a substrate failure and is never recorded here.
+    private async Task<EndpointResponseDto> RecordAndErrorResponseAsync(
+        Exception ex, string code, CancellationToken ct)
+    {
+        await BackendErrorBoundary.RecordSystemErrorAsync(
+            _errorAppender, _logger, ex,
+            BackendErrorOriginLayer.RuntimeExecutor,
+            $"runtime_executor:{code}",
+            new BackendErrorEvidenceHint(ErrorCode: code, RuntimeLane: "runtime_executor"),
+            ct);
+        return ErrorResponse(code, ex.Message);
     }
 
     /// <summary>
@@ -119,7 +137,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex, "AttractorResolver failed for key '{AttractorKey}'.", vector.AttractorKey);
-            return ErrorResponse("ATTRACTOR_RESOLVE_FAILED", ex.Message);
+            return await RecordAndErrorResponseAsync(ex, "ATTRACTOR_RESOLVE_FAILED", ct);
         }
 
         // Step 4: Resolve structure map
@@ -131,7 +149,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex, "StructureMapResolver failed for attractor '{AttractorKey}'.", attractorResult.AttractorKey);
-            return ErrorResponse("STRUCTURE_MAP_RESOLVE_FAILED", ex.Message);
+            return await RecordAndErrorResponseAsync(ex, "STRUCTURE_MAP_RESOLVE_FAILED", ct);
         }
 
         // Attach vector to working shape
@@ -145,7 +163,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex, "PackageResolver failed for PackageId '{PackageId}'.", workingShape.PackageId);
-            return ErrorResponse("PACKAGE_RESOLVE_FAILED", ex.Message);
+            return await RecordAndErrorResponseAsync(ex, "PACKAGE_RESOLVE_FAILED", ct);
         }
 
         // Step 6: Resolve schema — error if not found
@@ -156,7 +174,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex, "SchemaResolver failed for SchemaId '{SchemaId}'.", workingShape.SchemaId);
-            return ErrorResponse("SCHEMA_RESOLVE_FAILED", ex.Message);
+            return await RecordAndErrorResponseAsync(ex, "SCHEMA_RESOLVE_FAILED", ct);
         }
 
         // Step 7: Map to repository command (semantic mapping, not ORM)
