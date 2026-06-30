@@ -51,6 +51,45 @@ public class AppendErrorEvidencePrimitiveAdapterTests
         Assert.True(stepAppender.Appended.TryDequeue(out var evidence));
         Assert.Equal("EXPLICIT_STEP_ERROR", evidence!.ErrorCode);
         Assert.Equal(BackendErrorOriginLayer.PrimitiveAdapter, evidence.OriginLayer);
+
+        // function_key and runtime_lane must NOT be conflated: the runtime lane belongs in
+        // RuntimeLane, and FunctionKey stays null unless explicitly configured.
+        Assert.Equal("external_port_runtime", evidence.RuntimeLane);
+        Assert.Null(evidence.FunctionKey);
+        Assert.NotEqual(evidence.RuntimeLane, evidence.FunctionKey);
+    }
+
+    [Fact]
+    public async Task ExplicitStep_FunctionKeyFromStepConfig_DoesNotConflateWithRuntimeLane()
+    {
+        var stepAppender = new FakeBackendErrorEvidenceAppender();
+        var stepConfig = new Dictionary<string, string>
+        {
+            ["origin_layer"] = BackendErrorOriginLayer.PrimitiveAdapter,
+            ["boundary_key"] = "explicit_seeded_step",
+            ["error_code"] = "EXPLICIT_STEP_ERROR",
+            ["function_key"] = "system.some_function",
+        };
+        var manifest = new AbstractFunctionManifest(
+            Guid.NewGuid(), "test.fn", "external_port_runtime", "test_scope",
+            new[]
+            {
+                Step(1, "append_error_evidence",
+                    new[] { new AbstractFunctionInputBinding("message_public", "constant", "msg", true, false) },
+                    null, stepConfig),
+            },
+            Array.Empty<string>(), true, ValidAuthority);
+
+        var executor = new AbstractFunctionExecutor(
+            new StaticManifestRepository(manifest),
+            new IAbstractFunctionPrimitiveAdapter[] { new AppendErrorEvidencePrimitiveAdapter(stepAppender) });
+
+        await executor.ExecuteAsync("test.fn", new AbstractFunctionExecutionContext("test_scope"));
+
+        Assert.True(stepAppender.Appended.TryDequeue(out var evidence));
+        Assert.Equal("system.some_function", evidence!.FunctionKey); // explicit function_key
+        Assert.Equal("external_port_runtime", evidence.RuntimeLane);  // distinct runtime lane
+        Assert.NotEqual(evidence.FunctionKey, evidence.RuntimeLane);
     }
 
     [Fact]

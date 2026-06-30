@@ -20,6 +20,8 @@ namespace Topolactor.Runtime;
 ///   - error_code    : stable machine error code
 ///   - error_kind    : optional (default system_error)
 ///   - severity      : optional (default error)
+///   - function_key  : optional, explicit abstract function key — never the runtime lane
+/// runtime_lane on the evidence is always context.RequiredRuntimeLane (distinct from function_key).
 /// inputs (manifest-bound):
 ///   - message_public: required, redacted/bounded by the appender
 ///   - any remaining string inputs are passed as evidence_json (appender redacts/bounds).
@@ -57,6 +59,13 @@ public sealed class AppendErrorEvidencePrimitiveAdapter : IAbstractFunctionPrimi
             if (kvp.Value is string str) evidencePairs[kvp.Key] = str;
         }
 
+        // function_key and runtime_lane are distinct evidence fields and must not be conflated.
+        // function_key is OPTIONAL and explicit (from step_config); it is never the runtime lane.
+        // runtime_lane carries the execution lane (context.RequiredRuntimeLane).
+        var functionKey = step.StepConfig.TryGetValue("function_key", out var fk) && !string.IsNullOrWhiteSpace(fk)
+            ? fk
+            : null;
+
         var evidence = new BackendErrorEvidence(
             OriginLayer: originLayer,
             BoundaryKey: boundaryKey,
@@ -66,7 +75,8 @@ public sealed class AppendErrorEvidencePrimitiveAdapter : IAbstractFunctionPrimi
             StackHash: ComputeStackHash(boundaryKey, errorCode, message),
             Severity: severity,
             Retryable: false,
-            FunctionKey: context.RequiredRuntimeLane,
+            FunctionKey: functionKey,
+            RuntimeLane: context.RequiredRuntimeLane,
             EvidenceJson: evidencePairs.Count > 0 ? evidencePairs : null);
 
         await _appender.AppendAsync(evidence, ct);
