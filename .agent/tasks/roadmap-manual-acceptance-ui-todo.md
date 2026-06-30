@@ -136,6 +136,10 @@ Roadmap bundle:
 - `/admin/manifests`
 
 手動受入 TODO:
+
+巡回監査メモ:
+- 2026-06-30 audit: 先頭3項目（現在位置誤認 / Step境界理解 / apply前変更追跡）は `manual_acceptance_required`。SSOT・実装で `/admin/contents` stepper / 開始モード / 保存状態表示と `/admin/ui-builder` 保存前チェック / preview / validate / apply 境界は確認できる。一方、既存testは語彙・静的guard中心で、初見誤認・体感理解・変更追跡は実画面受入判断が必要なため残す。
+
 - [ ] `/admin/contents` で、作成・編集・import など実装済み入口を触った時に、作業の現在位置を誤認しない。
 - [ ] Step 遷移中に、draft / preview / validate / apply の関係が体感で分かる。
 - [ ] apply 前に、何が変わるかを画面上で追える。
