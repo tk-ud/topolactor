@@ -495,7 +495,6 @@ chronological_scope_index:
     depends_on:
       - db_schema_seed_contract
       - backend_runtime_function_contract
-      - instance_substrate_contract_gap
     unblocks:
       - admin_projection_readback_contract
     proves:

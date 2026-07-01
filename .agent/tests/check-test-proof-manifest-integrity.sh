@@ -9,7 +9,12 @@ ruby <<'RUBY'
 require 'yaml'
 
 manifest_path = 'docs/design/test-proof-manifest-ssot.yaml'
+reverse_lookup_path = '.agent/docs/test-bundles.yaml'
+ssot_map_path = '.agent/docs/ssot-map.yaml'
+
 manifest = YAML.load_file(manifest_path)
+reverse_lookup = YAML.load_file(reverse_lookup_path)
+ssot_map = YAML.load_file(ssot_map_path)
 failures = []
 
 proofs = manifest.fetch('chronological_scope_index') { failures << 'missing chronological_scope_index'; [] }
@@ -17,9 +22,8 @@ required = manifest.dig('proof_model', 'required_fields') || []
 proof_types = manifest.dig('proof_model', 'proof_types') || []
 ids = {}
 orders = []
-existing_paths = lambda do |path|
-  File.exist?(path) || Dir.exist?(path)
-end
+existing_paths = ->(path) { File.exist?(path) || Dir.exist?(path) }
+workflow_file_for = ->(workflow_job) { workflow_job.to_s.split('::', 2).first }
 
 proofs.each_with_index do |proof, index|
   label = proof['proof_id'] || "index #{index}"
@@ -50,6 +54,23 @@ proofs.each_with_index do |proof, index|
 
   changed = proof.dig('required_when', 'changed_files')
   failures << "#{label}: required_when.changed_files must be a non-empty list" unless changed.is_a?(Array) && !changed.empty?
+
+  Array(proof['implementation_files']).each do |path|
+    failures << "#{label}: implementation_files path does not exist: #{path}" unless existing_paths.call(path)
+  end
+
+  Array(proof['runner_surfaces']).each do |path|
+    failures << "#{label}: runner_surfaces path does not exist: #{path}" unless File.exist?(path)
+  end
+
+  Array(proof['evidence_inputs']).each do |path|
+    failures << "#{label}: evidence_inputs path does not exist: #{path}" unless existing_paths.call(path)
+  end
+
+  Array(proof['workflow_jobs']).each do |workflow_job|
+    workflow_file = workflow_file_for.call(workflow_job)
+    failures << "#{label}: workflow_jobs workflow file does not exist: #{workflow_job}" unless File.exist?(workflow_file)
+  end
 
   Array(proof['test_files']).each do |path|
     if path.start_with?('docs/design/') || path.start_with?('db/') || path.start_with?('.agent/tests/') || path.start_with?('.github/')
@@ -89,6 +110,11 @@ proofs.each do |proof|
     if ids[dep] && ids[dep]['proof_order'].to_i >= proof['proof_order'].to_i
       failures << "#{label}: depends_on #{dep} must have lower proof_order"
     end
+    if ids[dep] && proof['proof_type'] != 'known_gap' && ids[dep]['proof_type'] == 'known_gap'
+      unless proof['depends_on_known_gap_allowed'] == true && !proof['depends_on_known_gap_reason'].to_s.strip.empty?
+        failures << "#{label}: non-gap proof depends_on known_gap #{dep}; remove dependency or set depends_on_known_gap_allowed with reason"
+      end
+    end
   end
   Array(proof['unblocks']).each do |target|
     next if target == 'frontend-admin-projection-expression-e2e-completion'
@@ -96,8 +122,27 @@ proofs.each do |proof|
   end
 end
 
+Array(reverse_lookup['reverse_lookup']).each_with_index do |bundle, index|
+  label = bundle['bundle_id'] || "reverse_lookup index #{index}"
+  Array(bundle['proof_refs']).each do |proof_ref|
+    failures << "#{reverse_lookup_path}: #{label}: proof_refs unknown proof_id #{proof_ref}" unless ids.key?(proof_ref)
+  end
+end
+
+ssot_map_entries = Array(ssot_map['mapping'])
+test_proof_entries = ssot_map_entries.select { |entry| Array(entry['required_docs']).include?(manifest_path) }
+if test_proof_entries.empty?
+  failures << "#{ssot_map_path}: #{manifest_path} must be discoverable via required_docs"
+else
+  required_surface_terms = ['test-proof-manifest-ci-gate', 'proof graph', 'manifest integrity', 'CI proof audit surface']
+  surface_terms = test_proof_entries.flat_map { |entry| Array(entry['change_surfaces']) }
+  required_surface_terms.each do |term|
+    failures << "#{ssot_map_path}: missing discovery change surface #{term}" unless surface_terms.include?(term)
+  end
+end
+
 if failures.empty?
-  puts "OK  [test-proof-manifest] #{proofs.length} proof edges passed integrity checks"
+  puts "OK  [test-proof-manifest] #{proofs.length} proof edges and #{Array(reverse_lookup['reverse_lookup']).length} reverse lookup bundles passed integrity checks"
 else
   failures.each { |f| warn "FAIL [test-proof-manifest] #{f}" }
   exit 1
