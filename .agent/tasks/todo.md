@@ -56,6 +56,5 @@
   - 対象関数/単位: `proof_id`, `proof_order`, `scope_phase`, `domain`, `depends_on`, `unblocks`, `source_contract`, `target_contract`, `proves`, `does_not_prove`
   - OK軸: DB/backend/runtime/external/instance/frontend を含む時系列順序索引があり、各 domain の証明 edge が既存 test と未証明 gap に分解される。
   - NG軸: frontend/admin のみ、test file 一覧のみ、proves/does_not_prove のみで順序索引なし、DB/backend/runtime/external/instance gap の欠落、seed-only/JSON-only/backend-unit-only 成功扱い、CI gate が証明 Manifest と無関係。
-  - 後続: `frontend-admin-projection-expression-e2e-completion` は本 Bundle 完了後に proof gap を読んで処理する。
 
 ---

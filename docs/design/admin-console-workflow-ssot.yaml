@@ -308,9 +308,10 @@ admin_console_workflow_ssot:
             fail_close: errors must surface explicitly; no silent fallback
         - component_auto_registration:
             trigger: catalog component card dropped onto canvas (or keyboard add equivalent)
-            backend: ui_component_bucket:create (if absent) then package_generator:promote_package with new bucketItemId
-            rule: skip when component already in package (idempotent)
-            effect: component bound to route package, then catalog_component node placed on canvas
+            backend: component_registration:register_or_update_projection_component as canonical registration/update readback contract
+            legacy_backend_sequence: ui_component_bucket:create (if absent) then package_generator:promote_package with new bucketItemId
+            rule: skip when component already in package (idempotent); readback must include projectionDefinition for projection constructor consumers
+            effect: component registration/update is acknowledged by AdminRuntime, projectionDefinition is read back, then catalog_component node can be placed on canvas
         - component_auto_removal:
             trigger: canvas node deleted and no remaining canvas nodes share the same componentKey
             backend: package_generator:detach_package_components for route_key + componentKey
@@ -530,7 +531,7 @@ admin_console_workflow_ssot:
       entered_after: /admin/contents contents pipeline completion
       domain_ownership:
         - route_key gate + implicit package auto-generation (package_generator:promote_package shell)
-        - canvas drop auto-registration (ui_component_bucket:create + promote_package additive)
+        - canvas drop auto-registration via component_registration:register_or_update_projection_component readback contract (legacy sequence: ui_component_bucket:create + promote_package additive)
         - package-only canvas workspace (配置・色・形・リアクション等 in docked inspector panels)
         - canvas_workspace_contract: full-width canvas + docked panels (ref ui_builder_canvas_workspace.canvas_workspace_contract)
         - component-level wiring from registry references

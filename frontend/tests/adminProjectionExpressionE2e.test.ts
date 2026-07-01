@@ -79,13 +79,33 @@ function makeProjectionDefinition(label: string): ProjectionDefinition {
   };
 }
 
+function makeAdminRuntimeReadbackData(label: string): Record<string, unknown> {
+  const projectionDefinition = makeProjectionDefinition(label);
+  return {
+    ok: true,
+    operation: "component_registration:register_or_update_projection_component",
+    bucketItem: {
+      bucketItemId: "bucket-admin-readback-proof",
+      componentKey: proofCatalogEntry.componentKey,
+      sourcePath: proofCatalogEntry.sourcePath,
+      componentKind: proofCatalogEntry.componentKind,
+      status: "bucketed",
+    },
+    projectionDefinition,
+    data: { label },
+    componentIds: ["cmp-admin-readback-button"],
+  };
+}
+
 function makeAdminReadbackResponse(label: string): DispatchResponse {
+  const readback = makeAdminRuntimeReadbackData(label);
   return {
     success: true,
     emission: {
-      data: { label },
-      componentIds: ["cmp-admin-readback-button"],
-      projectionDefinition: makeProjectionDefinition(label),
+      data: readback,
+      componentIds: readback.componentIds as string[],
+      projectionDefinition: readback
+        .projectionDefinition as ProjectionDefinition,
     },
   };
 }
@@ -112,6 +132,7 @@ async function runAdminRegistrationOrUpdateReadback(
       action: "register_or_update_projection_component",
       payload: {
         adminRoute: "/admin/ui-builder/components",
+        routeKey: "admin:projection-expression-proof",
         componentKey: proofCatalogEntry.componentKey,
         componentKind: proofCatalogEntry.componentKind,
         projectionDefinition: makeProjectionDefinition(label),
@@ -147,14 +168,33 @@ Deno.test("admin projection expression E2E: admin update readback reaches catalo
     "After admin update",
   );
 
+  const beforeReadback = before.data as Record<string, unknown>;
+  const afterReadback = after.data as Record<string, unknown>;
+  const beforeData = beforeReadback.data as Record<string, unknown>;
+  const afterData = afterReadback.data as Record<string, unknown>;
+  assertEquals(
+    beforeReadback.operation,
+    "component_registration:register_or_update_projection_component",
+  );
+  assertEquals(
+    afterReadback.operation,
+    "component_registration:register_or_update_projection_component",
+  );
   assertFalse(
-    before.data?.label === after.data?.label,
+    beforeData.label === afterData.label,
     "update must produce a downstream contract diff",
   );
 
   for (const emission of [before, after]) {
-    const definition = emission.projectionDefinition;
-    assertExists(definition, "readback projectionDefinition is required");
+    const readback = emission.data as Record<string, unknown>;
+    const definition = readback.projectionDefinition as
+      | ProjectionDefinition
+      | undefined;
+    assertExists(
+      definition,
+      "AdminRuntime readback projectionDefinition is required",
+    );
+    assertEquals(emission.projectionDefinition, definition);
     const componentDefinition = definition.componentDefinition;
     assertExists(
       componentDefinition,
@@ -175,7 +215,11 @@ Deno.test("admin projection expression E2E: admin update readback reaches catalo
     );
     assertEquals(catalog.capabilityTags.includes("accepts_design"), true);
 
-    const projectionResult = projectionFromEmission(emission, definition);
+    const readbackData = readback.data as Record<string, unknown>;
+    const projectionResult = projectionFromEmission({
+      ...emission,
+      data: readbackData,
+    }, definition);
     assertExists(projectionResult.projection, projectionResult.error);
     assertEquals(projectionResult.projection.kind, "component_projection");
     if (projectionResult.projection.kind !== "component_projection") {
@@ -188,7 +232,7 @@ Deno.test("admin projection expression E2E: admin update readback reaches catalo
       componentDefinition.event_binding?.click,
     );
     assertEquals(hub.design?.className, "admin-readback-proof");
-    assertEquals(hub.props.label, emission.data?.label);
+    assertEquals(hub.props.label, readbackData.label);
 
     const adapted = adaptComponentDataHub(hub);
     assertEquals(adapted.ok, true, adapted.ok ? undefined : adapted.error);
@@ -205,7 +249,7 @@ Deno.test("admin projection expression E2E: admin update readback reaches catalo
     );
     const runtimeHtml = renderToString(rendered.node);
     assert(
-      runtimeHtml.includes(String(emission.data?.label)),
+      runtimeHtml.includes(String(readbackData.label)),
       "runtime DOM must contain user-facing label",
     );
     assert(

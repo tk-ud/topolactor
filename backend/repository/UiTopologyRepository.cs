@@ -47,7 +47,18 @@ public class UiTopologyRepository
             "UiTopologyRepository.CreateBucketItemAsync must be overridden by a production implementation.");
     }
 
-    
+
+    public virtual Task<UiComponentBucketCreateResult> RegisterOrUpdateProjectionComponentAsync(
+        string componentKey,
+        string sourcePath,
+        string componentKind,
+        string? metadataJson = null,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.RegisterOrUpdateProjectionComponentAsync must be overridden by a production implementation.");
+    }
+
 
     /// <summary>
     /// Transitions a bucket item from 'bucketed' to 'packaging'.

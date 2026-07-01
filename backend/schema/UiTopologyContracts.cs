@@ -20,6 +20,33 @@ public record UiComponentBucketCreateRequestDto(
     [property: JsonPropertyName("metadataJson")]   string? MetadataJson = null
 );
 
+
+/// <summary>
+/// Admin projection-expression registration/update request.
+/// The backend route is the canonical admin/** entrypoint for proving
+/// component registration/update readback before frontend projection rendering.
+/// projectionDefinition is read back verbatim after validation so the frontend
+/// uses the same contract produced by AdminRuntime, not a locally invented mock.
+/// </summary>
+public record ComponentRegistrationProjectionRequestDto(
+    [property: JsonPropertyName("componentKey")] string ComponentKey,
+    [property: JsonPropertyName("sourcePath")] string SourcePath,
+    [property: JsonPropertyName("componentKind")] string ComponentKind,
+    [property: JsonPropertyName("routeKey")] string? RouteKey,
+    [property: JsonPropertyName("projectionDefinition")] System.Text.Json.JsonElement ProjectionDefinition,
+    [property: JsonPropertyName("data")] System.Text.Json.JsonElement? Data = null,
+    [property: JsonPropertyName("metadataJson")] string? MetadataJson = null
+);
+
+public record ComponentRegistrationProjectionReadbackDto(
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("operation")] string Operation,
+    [property: JsonPropertyName("bucketItem")] UiComponentBucketItemDto BucketItem,
+    [property: JsonPropertyName("projectionDefinition")] System.Text.Json.JsonElement ProjectionDefinition,
+    [property: JsonPropertyName("data")] System.Text.Json.JsonElement Data,
+    [property: JsonPropertyName("componentIds")] IReadOnlyList<string> ComponentIds
+);
+
 public enum UiComponentBucketCreateCode
 {
     Success,

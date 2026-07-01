@@ -132,6 +132,7 @@ chronological_scope_index:
       - frontend/tests/componentCatalogSeedRegistration.test.ts
       - frontend/tests/adminDispatchManifestSeed.test.ts
       - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeProjectionRegistrationTests.cs
       - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
     runner_surfaces:
       - .agent/tests/check-db-schema.sh
@@ -468,6 +469,9 @@ chronological_scope_index:
     implementation_files:
       - backend/runtime
       - backend/repository
+      - backend/repository/UiTopologyRepository.cs
+      - backend/repository/NpgsqlUiTopologyRepository.cs
+      - backend/schema/UiTopologyContracts.cs
       - frontend/api/adminApi.ts
       - frontend/routes/admin
     test_files:
@@ -478,6 +482,7 @@ chronological_scope_index:
       - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
       - backend/tests/Topolactor.Runtime.Tests/AdminRuntimePromotionManifestTests.cs
       - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeProjectionRegistrationTests.cs
     runner_surfaces:
       - .agent/tests/check-unified-test-gate.sh
       - .agent/tests/check-frontend-all-tests.sh
@@ -617,6 +622,12 @@ chronological_scope_index:
       - docs/design/component-catalog-classification-ssot.yaml
       - docs/design/ui-ux-primitive-catalog-ssot.yaml
     implementation_files:
+      - backend/runtime/AdminRuntime.cs
+      - backend/runtime/AdminRuntimeDispatchAdapter.cs
+      - backend/schema/UiTopologyContracts.cs
+      - backend/repository/UiTopologyRepository.cs
+      - backend/repository/NpgsqlUiTopologyRepository.cs
+      - db/seed_empty.sql
       - frontend/api/dispatch.ts
       - frontend/runtime/frontendScheduler.ts
       - frontend/runtime/projectionConstructor.ts
@@ -627,6 +638,8 @@ chronological_scope_index:
       - frontend/components/LayoutVisualAuditCanvas.tsx
       - frontend/components/catalog.ts
     test_files:
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeProjectionRegistrationTests.cs
+      - frontend/tests/adminDispatchManifestSeed.test.ts
       - frontend/tests/adminProjectionExpressionE2e.test.ts
     runner_surfaces:
       - .agent/tests/check-frontend-all-tests.sh
@@ -652,8 +665,8 @@ chronological_scope_index:
     unblocks:
       - frontend-admin-projection-expression-e2e-completion
     proves:
-      - admin registration/update client command is the proof entrypoint before projection readback
-      - admin readback projectionDefinition drives projectionFromEmission and constructProjection
+      - component_registration:register_or_update_projection_component is an AdminRuntime executable route and the proof entrypoint before projection readback
+      - AdminRuntime readback projectionDefinition is copied to the dispatch emission and drives projectionFromEmission and constructProjection
       - readback componentKey resolves to catalog entry and component_kind/semantic_role/visual_role/capability_tags match catalog classification
       - props, event binding, design, and layout preview boundaries are traversed before runtime rendering
       - runtime render and LayoutVisualAuditCanvas produce non-empty user-facing DOM and reject fallback/error/empty success
