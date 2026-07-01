@@ -1,0 +1,230 @@
+version: 1
+ssot_id: test-proof-manifest
+status: draft
+
+purpose:
+  - Define what each test proof bundle proves and does not prove.
+  - Define chronological proof order for bundle scopes.
+  - Treat tests as a proof graph, not as an unordered file list.
+  - Prevent seed-only, JSON-only, and UI-surface-only evidence from being overclaimed as E2E proof.
+
+authority_boundary:
+  ssot: docs/design/test-proof-manifest-ssot.yaml
+  reverse_lookup_index: .agent/docs/test-bundles.yaml
+  notes:
+    - This file is the design SSOT for test proof meaning and proof order.
+    - .agent/docs/test-bundles.yaml remains an agent-facing reverse lookup and MUST NOT override this SSOT.
+    - Test existence alone is not proof.
+
+proof_model:
+  required_fields:
+    - proof_id
+    - proof_order
+    - scope_phase
+    - source_contract
+    - target_contract
+    - test_files
+    - proves
+    - does_not_prove
+    - depends_on
+    - unblocks
+  prohibited_claims:
+    - Seed fixture arrival alone proves admin registration or update.
+    - componentIds display alone proves runtime component rendering.
+    - projection JSON display alone proves user-facing UI expression.
+    - admin screen render alone proves projection registration or readback.
+    - fallback, error, or empty DOM alone proves successful UI expression.
+
+chronological_scope_index:
+  - proof_order: 10
+    scope_phase: catalog_and_seed_authority
+    proof_id: catalog_seed_ssot_alignment
+    source_contract: catalog SSOT vocabulary
+    target_contract: frontend catalog and seed surfaces
+    test_files:
+      - frontend/tests/componentCatalogSeedRegistration.test.ts
+      - frontend/tests/documentCanvasCatalogCheck.test.ts
+      - frontend/tests/adminDispatchManifestSeed.test.ts
+      - frontend/tests/ssotReaderCatalog.test.ts
+      - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+    depends_on: []
+    unblocks:
+      - admin_surface_contract
+      - admin_registration_promotion_contract
+      - projection_constructor_contract
+    proves:
+      - catalog classification vocabulary is aligned with SSOT vocabulary
+      - registrationRequired catalog entries have seed/catalog evidence
+      - runtimeConnected catalog entries are reachable at interface boundary
+    does_not_prove:
+      - admin operation created or updated the registration
+      - projection readback consumed the registration
+      - rendered DOM represents the registered component
+
+  - proof_order: 20
+    scope_phase: admin_surface_and_command_contract
+    proof_id: admin_surface_contract
+    source_contract: admin workflow SSOT
+    target_contract: admin UI/API command contract
+    test_files:
+      - frontend/tests/adminApi.test.ts
+      - frontend/tests/adminImport.test.ts
+      - frontend/tests/adminUxGuard.test.ts
+      - frontend/tests/uiRenderedInteraction.test.ts
+      - frontend/tests/uiBuilderStepper.test.ts
+    depends_on:
+      - catalog_seed_ssot_alignment
+    unblocks:
+      - admin_registration_promotion_contract
+      - admin_projection_readback_contract
+    proves:
+      - admin UI surfaces expose guarded controls and interaction affordances
+      - admin API and frontend boundary failures are explicit
+    does_not_prove:
+      - backend registration or promotion persisted the operation
+      - projection readback returns the registered or updated projection
+      - runtime component DOM was rendered from admin-created projection
+
+  - proof_order: 30
+    scope_phase: admin_registration_promotion_contract
+    proof_id: admin_registration_promotion_contract
+    source_contract: admin registration/update command contract
+    target_contract: registered topology/projection record contract
+    test_files:
+      - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+    depends_on:
+      - catalog_seed_ssot_alignment
+      - admin_surface_contract
+    unblocks:
+      - admin_projection_readback_contract
+    proves:
+      - generate and promote boundaries assign required IDs where SSOT requires them
+      - promotion failure is explicit and does not create partial IDs
+      - registrationRequired entries are not treated as registered merely because code/catalog exists
+    does_not_prove:
+      - a frontend admin operation reached this backend boundary
+      - projection readback consumed the promoted record
+      - UI rendered the promoted record
+
+  - proof_order: 40
+    scope_phase: projection_readback_and_lane_contract
+    proof_id: admin_projection_readback_contract
+    source_contract: registered topology/projection record contract
+    target_contract: projection event/emission contract
+    test_files:
+      - frontend/tests/projectionLaneSeedHarness.test.ts
+      - frontend/tests/sseLane.test.ts
+      - frontend/tests/pipelineContinuity.test.ts
+    depends_on:
+      - admin_registration_promotion_contract
+    unblocks:
+      - projection_constructor_contract
+    proves:
+      - projection lane preserves identity fields required by frontend projection constructor
+      - seed/test data may be used as input fixture for lane assertions
+      - missing projection definitions fail or are ignored only by explicit policy
+    does_not_prove:
+      - seed fixture alone proves admin registration or update
+      - projection JSON display proves user-facing component rendering
+      - live backend push is covered
+
+  - proof_order: 50
+    scope_phase: projection_constructor_and_props_contract
+    proof_id: projection_constructor_contract
+    source_contract: projection event/emission contract
+    target_contract: ComponentDataHub contract
+    test_files:
+      - frontend/tests/projectionConstructor.test.ts
+      - frontend/runtime/projectionConstructor.ts
+    depends_on:
+      - admin_projection_readback_contract
+    unblocks:
+      - runtime_component_render_contract
+      - visual_layout_guard_contract
+    proves:
+      - componentId and definition identity are preserved or fail explicitly
+      - required props and typed schema values are validated explicitly
+      - supported component kinds normalize into ComponentDataHub props
+    does_not_prove:
+      - componentKey exists in catalog unless a catalog edge test asserts it
+      - extra unknown props are rejected globally
+      - runtime renderer produced DOM
+
+  - proof_order: 60
+    scope_phase: runtime_component_render_contract
+    proof_id: runtime_component_render_contract
+    source_contract: ComponentDataHub contract
+    target_contract: runtime rendered component contract
+    test_files:
+      - frontend/tests/projectionRuntime.test.ts
+      - frontend/tests/runtimePrimitiveRenderer.test.ts
+      - frontend/tests/runtimeComponentFactory.test.ts
+    depends_on:
+      - projection_constructor_contract
+    unblocks:
+      - visual_layout_guard_contract
+      - admin_projection_expression_completion_gap
+    proves:
+      - supported runtimeConnected component kinds are renderer reachable
+      - unsupported kinds fail explicitly rather than silently fallback
+      - preview runtime specs can produce live component nodes for representative components
+    does_not_prove:
+      - real browser visual correctness
+      - admin-created projection was the source of the ComponentDataHub
+      - LayoutVisualAuditCanvas rendered the node list
+
+  - proof_order: 70
+    scope_phase: layout_and_visual_guard_contract
+    proof_id: visual_layout_guard_contract
+    source_contract: runtime rendered component contract
+    target_contract: visual guard DOM contract
+    test_files:
+      - frontend/tests/visualLayoutBuilder.test.ts
+      - frontend/tests/adminUxGuard.test.ts
+      - frontend/components/LayoutVisualAuditCanvas.tsx
+      - frontend/runtime/visualLayoutUtils.ts
+    depends_on:
+      - projection_constructor_contract
+      - runtime_component_render_contract
+    unblocks:
+      - admin_projection_expression_completion_gap
+    proves:
+      - visual layout patch preserves layout identity and structural HTML boundaries
+      - layout preview rejects unsupported or factory-missing nodes explicitly
+      - visual builder guard blocks known UX drift patterns
+    does_not_prove:
+      - LayoutVisualAuditCanvas itself is directly asserted unless a dedicated test exists
+      - invalid node skipping cannot collapse into empty success unless explicitly asserted
+      - admin registration/update was the source of layout nodes
+
+  - proof_order: 80
+    scope_phase: frontend_admin_projection_expression_completion
+    proof_id: admin_projection_expression_completion_gap
+    source_contract: admin registration/update command contract
+    target_contract: visual guard DOM contract
+    test_files:
+      - frontend/tests/projectionLaneSeedHarness.test.ts
+      - frontend/tests/uiRenderedInteraction.test.ts
+      - frontend/tests/adminUxGuard.test.ts
+      - frontend/tests/visualLayoutBuilder.test.ts
+      - frontend/tests/runtimeComponentFactory.test.ts
+      - frontend/tests/projectionConstructor.test.ts
+    depends_on:
+      - catalog_seed_ssot_alignment
+      - admin_surface_contract
+      - admin_registration_promotion_contract
+      - admin_projection_readback_contract
+      - projection_constructor_contract
+      - runtime_component_render_contract
+      - visual_layout_guard_contract
+    unblocks:
+      - frontend-admin-projection-expression-e2e-completion
+    proves:
+      - not_yet_implemented
+    does_not_prove:
+      - This proof is currently the known gap. Downstream work must add missing edge tests or cite existing proof edges by proof_id.
+
+maintenance_rules:
+  - When adding a test file, add or update a proof_id here before claiming a new proof boundary.
+  - When moving a test between proof scopes, update proof_order and depends_on/unblocks in the same change.
+  - The selected CI gate should eventually consume proof_id semantics rather than raw file lists only.
