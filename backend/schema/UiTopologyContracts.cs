@@ -26,7 +26,7 @@ public record UiComponentBucketCreateRequestDto(
 /// The backend route is the canonical admin/** entrypoint for proving
 /// component registration/update readback before frontend projection rendering.
 /// projectionDefinition is read back verbatim after validation so the frontend
-/// uses the same contract produced by AdminRuntime, not a locally invented mock.
+/// uses the same contract produced by AdminRuntime, not a locally invented client-side response.
 /// </summary>
 public record ComponentRegistrationProjectionRequestDto(
     [property: JsonPropertyName("componentKey")] string ComponentKey,
