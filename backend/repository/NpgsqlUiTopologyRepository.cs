@@ -184,6 +184,61 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return records;
     }
 
+    public override async Task<UiComponentBucketCreateResult> RegisterOrUpdateProjectionComponentAsync(
+        string componentKey,
+        string sourcePath,
+        string componentKind,
+        string? metadataJson = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText =
+                "INSERT INTO topology.components_bucket (component_key, source_path, component_kind, metadata_json) " +
+                "VALUES (@key, @path, @kind, @metadata::jsonb) " +
+                "ON CONFLICT (component_key, source_path) DO UPDATE " +
+                "SET component_kind = EXCLUDED.component_kind, metadata_json = EXCLUDED.metadata_json, updated_at = now() " +
+                "RETURNING bucket_item_id, component_key, source_path, component_kind, status";
+            cmd.Parameters.AddWithValue("key", componentKey);
+            cmd.Parameters.AddWithValue("path", sourcePath);
+            cmd.Parameters.AddWithValue("kind", componentKind);
+            cmd.Parameters.AddWithValue("metadata", metadataJson ?? "{}");
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+            var record = new UiComponentBucketRecord(
+                BucketItemId: reader.GetGuid(0),
+                ComponentKey: reader.GetString(1),
+                SourcePath: reader.GetString(2),
+                ComponentKind: reader.GetString(3),
+                Status: reader.GetString(4)
+            );
+            return new UiComponentBucketCreateResult(UiComponentBucketCreateCode.Success, record);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidTextRepresentation
+            || ex.SqlState == PostgresErrorCodes.InvalidParameterValue
+            || ex.MessageText.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            return new UiComponentBucketCreateResult(
+                UiComponentBucketCreateCode.MalformedMetadataJson,
+                null,
+                "MALFORMED_METADATA_JSON",
+                "metadataJson must be valid JSON.");
+        }
+        catch (Exception ex)
+        {
+            _npgsqlLogger.LogError(ex, "RegisterOrUpdateProjectionComponentAsync failed.");
+            return new UiComponentBucketCreateResult(
+                UiComponentBucketCreateCode.DbUnavailable,
+                null,
+                "DB_UNAVAILABLE",
+                ex.Message);
+        }
+    }
+
     public override async Task<PackageGenerateResult> GenerateFromBucketAsync(
         Guid bucketItemId,
         string routeKey,

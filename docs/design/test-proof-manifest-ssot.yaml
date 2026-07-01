@@ -132,6 +132,7 @@ chronological_scope_index:
       - frontend/tests/componentCatalogSeedRegistration.test.ts
       - frontend/tests/adminDispatchManifestSeed.test.ts
       - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeProjectionRegistrationTests.cs
       - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
     runner_surfaces:
       - .agent/tests/check-db-schema.sh
@@ -468,6 +469,9 @@ chronological_scope_index:
     implementation_files:
       - backend/runtime
       - backend/repository
+      - backend/repository/UiTopologyRepository.cs
+      - backend/repository/NpgsqlUiTopologyRepository.cs
+      - backend/schema/UiTopologyContracts.cs
       - frontend/api/adminApi.ts
       - frontend/routes/admin
     test_files:
@@ -478,6 +482,7 @@ chronological_scope_index:
       - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
       - backend/tests/Topolactor.Runtime.Tests/AdminRuntimePromotionManifestTests.cs
       - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeProjectionRegistrationTests.cs
     runner_surfaces:
       - .agent/tests/check-unified-test-gate.sh
       - .agent/tests/check-frontend-all-tests.sh
@@ -595,7 +600,7 @@ chronological_scope_index:
     depends_on:
       - admin_projection_readback_contract
     unblocks:
-      - frontend_admin_projection_expression_completion_gap
+      - frontend_admin_projection_expression_e2e_contract
     proves:
       - projection constructor, runtime renderer, factory, and layout/visual guard edges are partially covered by existing tests
     does_not_prove:
@@ -603,11 +608,11 @@ chronological_scope_index:
       - unknown props global policy
       - complete LayoutVisualAuditCanvas direct render unless dedicated test asserts it
 
-  - proof_id: frontend_admin_projection_expression_completion_gap
+  - proof_id: frontend_admin_projection_expression_e2e_contract
     proof_order: 130
     scope_phase: frontend_admin_projection_expression_completion
     domain: cross_domain
-    proof_type: known_gap
+    proof_type: executable_test_proof
     source_contract: admin registration/update command contract
     target_contract: visual guard DOM contract
     ssot_refs:
@@ -616,14 +621,34 @@ chronological_scope_index:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/component-catalog-classification-ssot.yaml
       - docs/design/ui-ux-primitive-catalog-ssot.yaml
-    implementation_files: []
-    test_files: []
+    implementation_files:
+      - backend/runtime/AdminRuntime.cs
+      - backend/runtime/AdminRuntimeDispatchAdapter.cs
+      - backend/schema/UiTopologyContracts.cs
+      - backend/repository/UiTopologyRepository.cs
+      - backend/repository/NpgsqlUiTopologyRepository.cs
+      - db/seed_empty.sql
+      - frontend/api/dispatch.ts
+      - frontend/runtime/frontendScheduler.ts
+      - frontend/runtime/projectionConstructor.ts
+      - frontend/runtime/renderEmission.ts
+      - frontend/runtime/runtimeComponentAdapter.ts
+      - frontend/runtime/runtimePrimitiveRenderer.ts
+      - frontend/runtime/layoutComponentPreview.ts
+      - frontend/components/LayoutVisualAuditCanvas.tsx
+      - frontend/components/catalog.ts
+    test_files:
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeProjectionRegistrationTests.cs
+      - frontend/tests/adminDispatchManifestSeed.test.ts
+      - frontend/tests/adminProjectionExpressionE2e.test.ts
     runner_surfaces:
+      - .agent/tests/check-frontend-all-tests.sh
       - .agent/tests/check-test-proof-manifest-integrity.sh
+      - .agent/tests/check-unified-test-gate.sh
     evidence_inputs:
-      - .agent/tasks/todo.md
+      - db/seed_empty.sql
     workflow_jobs:
-      - .github/workflows/structure-check.yml::structure-check
+      - .github/workflows/unified-test-gate.yml::test-gate
     required_when:
       changed_files:
         - frontend/**
@@ -634,16 +659,21 @@ chronological_scope_index:
       - db_schema_seed_contract
       - backend_runtime_function_contract
       - manifest_dispatch_runtime_route_contract
-      - instance_substrate_contract_gap
       - admin_registration_promotion_contract
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
     unblocks:
       - frontend-admin-projection-expression-e2e-completion
-    known_gap_reason: admin registration/update to readback to catalog/runtime/layout/visual DOM is not yet proven end-to-end
-    proves: []
+    proves:
+      - component_registration:register_or_update_projection_component is an AdminRuntime executable route and the proof entrypoint before projection readback
+      - AdminRuntime readback projectionDefinition is copied to the dispatch emission and drives projectionFromEmission and constructProjection
+      - readback componentKey resolves to catalog entry and component_kind/semantic_role/visual_role/capability_tags match catalog classification
+      - props, event binding, design, and layout preview boundaries are traversed before runtime rendering
+      - runtime render and LayoutVisualAuditCanvas produce non-empty user-facing DOM and reject fallback/error/empty success
+      - update readback changes downstream projection/DOM contract data
     does_not_prove:
-      - downstream work must add missing edge tests or cite existing proof edges by proof_id before claiming completion
+      - live browser click simulation against deployed admin route
+      - unknown props global policy beyond existing projection constructor schema checks
 
 maintenance_rules:
   - Add or update a proof_id before claiming a new proof boundary.

@@ -249,6 +249,16 @@ VALUES
         'active'
     ),
     (
+        '00000000-0000-0000-0000-0000000000f0',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"component_registration","action":"register_or_update_projection_component"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
         '00000000-0000-0000-0000-00000000005a',
         NULL,
         ARRAY[
@@ -1094,6 +1104,15 @@ VALUES
         '00000000-0000-0000-0000-000000000092',
         'admin_ui_component_bucket_create',
         'admin:ui_component_bucket:create',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000f0',
+        'admin_component_registration_projection_upsert',
+        'admin:component_registration:register_or_update_projection_component',
         '00000000-0000-0000-0000-000000000020',
         '00000000-0000-0000-0000-000000000021',
         ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Topolactor.Schema;
 
 namespace Topolactor.Runtime;
@@ -29,14 +30,35 @@ public sealed class AdminRuntimeDispatchAdapter : IDispatchableRuntime
         if (error is not null)
             return new EndpointResponseDto(Success: false, Emission: null, Errors: [error]);
 
+        JsonElement? projectionDefinition = null;
+        IReadOnlyList<string> componentIds = [];
+        if (data.HasValue && data.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+        {
+            if (data.Value.TryGetProperty("projectionDefinition", out var projectionDefinitionElement) &&
+                projectionDefinitionElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                projectionDefinition = projectionDefinitionElement.Clone();
+            }
+            if (data.Value.TryGetProperty("componentIds", out var componentIdsElement) &&
+                componentIdsElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                componentIds = componentIdsElement.EnumerateArray()
+                    .Select(e => e.GetString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s!)
+                    .ToList();
+            }
+        }
+
         var emission = new Emission(
             StructureMapId: null,
             PackageId: null,
             SchemaId: null,
-            ComponentIds: [],
+            ComponentIds: componentIds,
             Data: data,
             Errors: [],
-            ContextRouteRecommendation: null);
+            ContextRouteRecommendation: null,
+            ProjectionDefinition: projectionDefinition);
 
         return new EndpointResponseDto(Success: true, Emission: emission, Errors: []);
     }
