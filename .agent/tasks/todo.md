@@ -10,7 +10,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | not_started | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
-| `test-proof-manifest-ci-gate` | test 証明 Manifest / CI gate | partial | 1 | `docs/design/test-proof-manifest-ssot.yaml` |
+| `aggregate-trigger-substrate` | 集計トリガー基盤 | not_started | 1 | `docs/design/runtime-orchestration-ssot.yaml` |
 
 ---
 
@@ -42,19 +42,18 @@
 
 ---
 
-## Bundle `test-proof-manifest-ci-gate`
+## Bundle `aggregate-trigger-substrate`
 
-**Status:** partial  
-**SSOT:** `docs/design/test-proof-manifest-ssot.yaml`, `.agent/docs/test-bundles.yaml`（reverse lookup）, `docs/system-roadmap.yaml`（参照）
+**Status:** not_started  
+**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/abstract-function-primitive-registry-ssot.yaml`, `docs/design/test-proof-manifest-ssot.yaml`, `.agent/docs/ssot-map.yaml`
 
-- [x] system-wide test 証明 Manifest と CI gate 最適化（SSOT proof graph / reverse lookup / integrity gate / workflow wiring を追加。known gap は SSOT に残す）
-  - 問題点: 既存 test は個別に存在するが、DB/schema/seed、backend runtime、scheduler cron/hook/client、manifest dispatch、external intake/API、instance substrate、admin/frontend projection がそれぞれ何を証明し、何を証明せず、どの時系列順序で接続されるかが SSOT として固定されていない。
-  - 目的: `docs/design/test-proof-manifest-ssot.yaml` を正本として、既存 test 群を system-wide proof graph として扱える状態にする。
-  - 改善方針: `proof_id`, `proof_order`, `scope_phase`, `domain`, `depends_on`, `unblocks`, `source_contract`, `target_contract`, `proves`, `does_not_prove` を軸に `.agent/docs/test-bundles.yaml` と CI gate を整合させる。frontend/admin だけでなく DB/backend/runtime/external/instance の未証明 edge も明示する。
-  - 対応資料: `docs/design/test-proof-manifest-ssot.yaml`, `.agent/docs/test-bundles.yaml`, `.agent/tests/check-unified-test-gate.sh`, `.agent/tests/check-frontend-all-tests.sh`, `.agent/tests/check-backend-tests.sh`, `.agent/tests/check-runtime-semantics.sh`
-  - 対象ファイル: `docs/design/test-proof-manifest-ssot.yaml`, `.agent/docs/test-bundles.yaml`, `.agent/tests/*.sh`, `backend/tests/**/*.cs`, `frontend/tests/*.test.ts`, `db/schema.sql`, `db/seed_empty.sql`, `db/demo_seed.sql`
-  - 対象関数/単位: `proof_id`, `proof_order`, `scope_phase`, `domain`, `depends_on`, `unblocks`, `source_contract`, `target_contract`, `proves`, `does_not_prove`
-  - OK軸: DB/backend/runtime/external/instance/frontend を含む時系列順序索引があり、各 domain の証明 edge が既存 test と未証明 gap に分解される。
-  - NG軸: frontend/admin のみ、test file 一覧のみ、proves/does_not_prove のみで順序索引なし、DB/backend/runtime/external/instance gap の欠落、seed-only/JSON-only/backend-unit-only 成功扱い、CI gate が証明 Manifest と無関係。
-
----
+- [ ] 集計トリガー基盤の SSOT / test / backend / frontend(admin/contents Step3) 完全化
+  - 問題点: 現行基盤には cron / hook / client trigger entry と admin/contents の集計 projection はあるが、UI/event/hook/cron 入力を処理関数へ渡し、idempotent event evidence、aggregate current row への atomic upsert、最低試行回数と対象比率による閾値判定、登録先 entity/relation への controlled materialization、materialization evidence までを一つの公開基盤設備として定義していない。
+  - 目的: `aggregate-trigger-substrate` を公開基盤設備として定義し、admin/contents Step3 で構造化された処理関数を登録できるようにする。event は入力であり scope owner ではない。execution scope / transaction boundary / aggregate target / threshold policy / materialization target / approval policy は処理関数または operation definition 側が所有する。
+  - 改善方針: UI は SQL / CASE / WHERE / 任意 table 名を保存しない。Step3 で、Step2 の logical entity または Step2.5 の relation definition から aggregate target / materialization target を選択し、conflict key、delta map、最低試行回数、比率分子/分母、比較演算子、target ratio、materialization policy、approval policy を構造化 payload として backend runtime に送る。repository は許可済み template に展開し、app-side read -> count++ -> update race を避けて atomic upsert / duplicate materialization guard を実装する。
+  - 対応資料: `docs/framework-core.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/abstract-function-primitive-registry-ssot.yaml`, `docs/design/test-proof-manifest-ssot.yaml`, `.agent/docs/ssot-map.yaml`
+  - 対象ファイル: `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/abstract-function-primitive-registry-ssot.yaml`, `docs/design/test-proof-manifest-ssot.yaml`, `.agent/docs/ssot-map.yaml`, `backend/runtime/AdminRuntime.cs`, `backend/runtime/RuntimeExecutor.cs`, `backend/runtime/ScreenDataShapeQueryRuntime.cs`, `backend/runtime/ScreenDataShapeQueryEvaluator.cs`, `backend/repository/ContextRouteRepository.cs`, `backend/repository/NpgsqlContextRouteRepository.cs`, `frontend/islands/**`, `frontend/components/**`, `frontend/tests/*.test.ts`, `backend/tests/**/*.cs`, `db/*.sql`
+  - 対象関数/単位: `aggregate_trigger_definition`, `aggregate_trigger_event_log`, `aggregate_trigger_materialization_log`, `trigger_source`, `processing_function_scope`, `aggregate_target_binding`, `conflict_key_fields`, `delta_map`, `minimum_trial_count`, `ratio_numerator_field`, `ratio_denominator_field`, `comparison_operator`, `target_ratio`, `materialization_target_binding`, `materialization_payload_map`, `approval_policy`, `AggregateTriggerRuntime`, `AggregateTriggerRepository`, `AggregateTriggerDefinitionValidator`, `AggregateTriggerConditionEvaluator`
+  - OK軸: SSOT が公開汎用設備として aggregate trigger を定義し、candidate/todo 等のアプリ固有名を正本化せず、Step3 が Step2/2.5 定義済み対象だけを選ばせ、backend が構造化定義を検証し、repository が fixed SQL template で idempotent event append / atomic upsert / minimum trial + ratio threshold / controlled materialization / duplicate prevention / evidence log を実装し、backend/frontend/test/proof manifest が event -> aggregate -> threshold -> materialize 経路を証明する。
+  - NG軸: 特定アプリ専用の hardcode 実装、candidate/todo 等の具象名を substrate 要件へ混入、UI の raw SQL/CASE/WHERE 保存、任意 table 名入力、event 側を scope owner とする設計、Step2/2.5 未定義対象への登録、frontend persistence 判断、app-side read -> count++ -> update race、閾値超過時の二重 materialization、approval policy 未定義、projection aggregation のみで mutation/materialization 未証明、proof manifest の過剰主張。
+  - 要確認: materialization payload map の初期表現を、processing function output として `function input event`, `aggregate current row`, `selected Step2 entity fields`, `selected Step2.5 relation fields`, `constant`, `generated value`, `runtime actor/source metadata` のどこまで許可するかを SSOT で確定する。
