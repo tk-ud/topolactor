@@ -9,6 +9,9 @@ fi
 echo "=== [FRONTEND_LANE] SSE receiver / dispatcher / projection runtime / render helper ==="
 deno test "${REPO_ROOT}/frontend/tests/sseLane.test.ts" --allow-read
 echo "OK  [FRONTEND_LANE] frontend projection lane tests passed"
+echo "=== [FRONTEND_USER_FACING_RENDER] /demo ProjectionView / UserDemoStepper / UserDemoResultCard projectionDefinition consumption ==="
+deno test "${REPO_ROOT}/frontend/tests/uiRenderedInteraction.test.ts" --allow-read --filter "projectionDefinition"
+echo "OK  [FRONTEND_USER_FACING_RENDER] user-facing render projectionDefinition tests passed"
 echo "=== [SEED_CONTRACT] static seed mapping parse ==="
 echo "=== [SEED_TO_LANE_INTEGRATION] seed static parse -> lane harness -> projection assertion ==="
 deno test "${REPO_ROOT}/frontend/tests/projectionLaneSeedHarness.test.ts" --allow-read

@@ -57,6 +57,20 @@ jobs:
       - name: Run frontend lane tests
         run: deno test frontend/tests/sseLane.test.ts --allow-read
 
+
+  frontend-user-facing-render:
+    name: "[FRONTEND_USER_FACING_RENDER] /demo ProjectionView / UserDemoStepper / UserDemoResultCard"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run user-facing render projectionDefinition tests
+        run: deno test frontend/tests/uiRenderedInteraction.test.ts --allow-read --filter "projectionDefinition"
+
   seed-contract:
     name: "[SEED_CONTRACT] Static seed mapping contract"
     runs-on: ubuntu-latest

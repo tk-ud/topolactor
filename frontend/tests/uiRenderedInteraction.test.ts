@@ -73,6 +73,7 @@ import RegistryVectorValidator from "../islands/RegistryVectorValidator.tsx";
 import ContentsPromotionPanel from "../islands/ContentsPromotionPanel.tsx";
 import ContentsScreenDesignPanel from "../islands/ContentsScreenDesignPanel.tsx";
 import AuthPanel from "../islands/AuthPanel.tsx";
+import { ProjectionView } from "../components/ProjectionView.tsx";
 
 // ─── Preact effect scheduling shim ───────────────────────────────────────────
 // Preact checks typeof requestAnimationFrame at hooks module load time and falls
@@ -390,6 +391,75 @@ Deno.test("UserDemoStepper render: initial DOM contains scenario selection butto
 Deno.test("UserDemoStepper render: step bar is present in initial render", () => {
   const html = renderHtml(UserDemoStepper);
   assert(html.includes("投影を選ぶ") || html.includes("step"), "step bar must be rendered");
+});
+
+
+Deno.test("ProjectionView user-facing render: projectionDefinition is consumed in visible output", () => {
+  const html = renderHtml(ProjectionView, {
+    emission: {
+      componentIds: [],
+      data: { seedLabel: "projection-lane-visible" },
+      projectionDefinition: {
+        constructorKey: "user-facing-render-test",
+        packageIds: ["00000000-0000-0000-0000-000000000001"],
+        outputKind: "form_inputs",
+        fieldDefs: [{ key: "seedLabel", label: "Seed label", kind: "text", required: true }],
+      },
+    },
+  });
+
+  assert(
+    html.includes("ProjectionDefinition projection") && html.includes("projection-lane-visible"),
+    "lane=frontend_user_facing_render component=ProjectionView mapping=projection_constructor_mapping seed=user-facing-render-test must display projectionDefinition-derived value",
+  );
+});
+
+Deno.test("UserDemoStepper DOM: scenario click with projectionDefinition → UserDemoResultCard shows projected seed value", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  __testOnly.resetQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, {
+      success: true,
+      emission: {
+        structureMapId: "sm-demo",
+        packageId: "pkg-demo",
+        componentIds: [],
+        data: { seedLabel: "user-facing-projection-seed" },
+        projectionDefinition: {
+          constructorKey: "user-facing-render-test",
+          packageIds: ["00000000-0000-0000-0000-000000000001"],
+          outputKind: "form_inputs",
+          fieldDefs: [{ key: "seedLabel", label: "Seed label", kind: "text", required: true }],
+        },
+      },
+    });
+    renderInto(UserDemoStepper, container);
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const allBtns = Array.from((container as any).querySelectorAll("button")) as Array<{
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    assertExists(allBtns[0], "scenario button must be present");
+    // deno-lint-ignore no-explicit-any
+    allBtns[0].dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(
+      html.includes("user-facing-projection-seed"),
+      "lane=frontend_user_facing_render component=UserDemoStepper/UserDemoResultCard mapping=projection_constructor_mapping seed=user-facing-render-test must fail if projectionDefinition is ignored",
+    );
+  } finally {
+    stopComponentEventRuntime();
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    __testOnly.resetQueue();
+    cleanup();
+  }
 });
 
 Deno.test("UserDemoStepper dispatch: runScenario body has triggerKind=client role absent", async () => {
