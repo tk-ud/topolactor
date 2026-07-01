@@ -61,6 +61,33 @@ seed 存在確認だけで implemented 判定しない。
 - canonical projection consumer の実装
 - 投影基盤そのものの修正を test hardening に混ぜること
 
+### Test strategy
+
+- DB なしで動く fast lane を優先して作る
+- seed file を静的 parse し、抽出した seedData を loop で lane harness に流す
+- lane に流す値は `seedData ?? explicitLiteralFixture` とする
+- `seedData ?? null` の silent fallback は禁止する
+- `null` を使うのは projectionDefinition missing / seed missing を検出する専用 NG test のみとする
+- literal fixture を使う場合は `explicitLiteralFixture` として明示し、seed 欠落を隠さない
+- seed test は文字列存在確認ではなく、seed → lane harness → projection assertion まで到達させる
+- DB 環境がある場合は別 job / 別 lane で repository / constraint / pg_notify / SSE live path を追加検証する
+
+DB なし fast lane で確認する範囲:
+
+- `db/seed_empty.sql` / `db/demo_seed.sql` の静的 parse
+- manifest topology JSON の抽出
+- `dispatcher_mapping` / `runtime_mapping` / `projection_constructor_mapping` / `screen_data_shape` / `db_notify_projection_mapping` の整合
+- seedData → projectionRuntime / renderEmission への投入
+- frontend projection assertion
+- workflow に含まれること
+
+DB integration が必要な範囲:
+
+- 実際の INSERT / FK / unique / constraint 検証
+- `topology.physical_tables` と `topology.wiring_physical_to_package` の実DB join確認
+- Npgsql repository 経由の promote / read 確認
+- pg_notify / SSE live path
+
 ### OK軸
 
 - 追加・拡張した test が GitHub Actions workflow に含まれること
@@ -68,6 +95,8 @@ seed 存在確認だけで implemented 判定しない。
 - test error 時のログが、どの lane / seed / projection mapping が壊れたか分かる粒度で出ること
 - lane test が seed を実際に入力として流せること
 - seed 存在確認だけでなく、seed → lane → projection assertion まで到達すること
+- DB なし fast lane で seed static parse → lane simulation → projection assertion が回ること
+- seedData が無い場合は silent null fallback せず、明示 fixture または NG test として扱うこと
 - fail した場合に、frontend render 断線・backend read 断線・seed 整合不良を切り分けられること
 - test failure が implementation gap を示す場合、その場で実装修正せず次 bundle の scope へ分離できること
 
@@ -77,6 +106,8 @@ seed 存在確認だけで implemented 判定しない。
 - GitHub workflow に含まれない test を追加して完了扱いにする
 - error log が単なる assertion failed で、壊れた lane / seed / mapping が分からない
 - seed の文字列存在確認だけで lane に流していない
+- `seedData ?? null` で seed 欠落を隠す
+- literal fixture を seed 由来と誤認させる
 - test failure が示した runtime read-source / frontend render / canonical projection consumer の実装不足を、この bundle 内で雑に潰す
 - frontend-only 表示追加や seed-only 修正で implemented 扱いにする
 
@@ -147,6 +178,8 @@ CI / workflow:
   - `screen_data_shape.tableRef` と `topology.physical_tables` / `topology.wiring_physical_to_package` の整合を確認すること
   - seed 存在確認だけでなく、lane test が消費する形になっていること
   - seed を lane に流し、projection assertion まで到達すること
+  - seed file を静的 parse して loop で lane harness に流すこと
+  - seedData が無い場合に silent null fallback しないこと
 
 - [ ] Test error を潰す
   - 追加・拡張した lane / seed test を GitHub workflow 上で通す
