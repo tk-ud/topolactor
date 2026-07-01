@@ -32,7 +32,7 @@ reverse_lookup:
       - admin_registration_promotion_contract
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
-      - frontend_admin_projection_expression_completion_gap
+      - frontend_admin_projection_expression_e2e_contract
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
       - .agent/tests/check-unified-test-gate.sh
@@ -103,10 +103,11 @@ reverse_lookup:
       - admin_registration_promotion_contract
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
-      - frontend_admin_projection_expression_completion_gap
+      - frontend_admin_projection_expression_e2e_contract
     runner_surfaces:
       - .agent/tests/check-frontend-all-tests.sh
       - .agent/tests/check-projection-lane-seed-hardening.sh
       - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - completion while frontend_admin_projection_expression_completion_gap remains proof_type known_gap in the SSOT
+      - live browser click simulation against deployed admin route
+      - unknown props global policy beyond existing projection constructor schema checks
