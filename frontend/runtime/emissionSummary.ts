@@ -1,5 +1,6 @@
 import type { Emission } from "../api/dispatch.ts";
 import { validationErrorText } from "../api/dispatch.ts";
+import { projectionFromEmission } from "./renderEmission.ts";
 
 export type EmissionSummary = {
   ok: boolean;
@@ -10,6 +11,7 @@ export type EmissionSummary = {
   recommendationStatus?: string;
   recommendationDetail?: string;
   errorMessages: string[];
+  projectionSummary?: string;
 };
 
 export function summarizeEmission(emission: Emission): EmissionSummary {
@@ -25,7 +27,32 @@ export function summarizeEmission(emission: Emission): EmissionSummary {
     recommendationStatus: rec?.status,
     recommendationDetail: rec?.statusDetail,
     errorMessages,
+    projectionSummary: summarizeProjection(emission),
   };
+}
+
+function summarizeProjection(emission: Emission): string | undefined {
+  if (!emission.projectionDefinition) return undefined;
+
+  const result = projectionFromEmission(emission, emission.projectionDefinition);
+  if (!result.projection) return undefined;
+
+  const projection = result.projection;
+  if (projection.kind === "form_inputs") {
+    return projection.fields
+      .map((field) => `${field.label}: ${field.value ?? ""}`)
+      .join(" / ");
+  }
+
+  if (projection.kind === "component_projection") {
+    return Object.entries(projection.props)
+      .map(([key, value]) => `${key}: ${String(value ?? "")}`)
+      .join(" / ");
+  }
+
+  return Object.entries(projection.raw)
+    .map(([key, value]) => `${key}: ${String(value ?? "")}`)
+    .join(" / ");
 }
 
 export type UserFacingResult = {
@@ -35,6 +62,7 @@ export type UserFacingResult = {
   itemCount: number;
   hasRecommendation: boolean;
   recommendationSummary?: string;
+  projectionSummary?: string;
 };
 
 export function toUserFacingResult(summary: EmissionSummary): UserFacingResult {
@@ -58,8 +86,10 @@ export function toUserFacingResult(summary: EmissionSummary): UserFacingResult {
   return {
     status: "success",
     headline,
+    detail: summary.projectionSummary,
     itemCount: count,
     hasRecommendation: hasRec,
     recommendationSummary: hasRec ? "レコメンドが見つかりました" : undefined,
+    projectionSummary: summary.projectionSummary,
   };
 }

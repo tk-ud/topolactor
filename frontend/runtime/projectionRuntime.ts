@@ -14,6 +14,7 @@
  */
 
 import { constructProjection } from "./projectionConstructor.ts";
+import { projectionInputFromData } from "./projectionInput.ts";
 import type { ProjectionDefinition, UiProjection } from "./projectionConstructor.ts";
 
 export type ProjectionEventPayload = {
@@ -94,7 +95,7 @@ export function createProjectionRuntime(options?: ProjectionRuntimeOptions): Pro
       return;
     }
 
-    const jsonKeyValue: Record<string, unknown> = payload.data ?? {};
+    const jsonKeyValue = projectionInputFromData(payload.data ?? {});
     const result = constructProjection(jsonKeyValue, currentDefinition);
 
     if (!result.projection) {

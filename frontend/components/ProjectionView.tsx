@@ -1,6 +1,7 @@
 import { JSX } from "preact";
 import type { Emission } from "../api/dispatch.ts";
 import type { StructureMapEntry } from "../structure_map.ts";
+import { projectionFromEmission } from "../runtime/renderEmission.ts";
 
 type Props = {
   emission: Emission;
@@ -15,6 +16,9 @@ type Props = {
  */
 export function ProjectionView({ emission, structureMap }: Props): JSX.Element {
   const hasErrors = Array.isArray(emission.errors) && emission.errors.length > 0;
+  const projectionResult = emission.projectionDefinition
+    ? projectionFromEmission(emission, emission.projectionDefinition)
+    : null;
 
   return (
     <div class="space-y-4 text-sm">
@@ -63,6 +67,20 @@ export function ProjectionView({ emission, structureMap }: Props): JSX.Element {
           </ul>
         )}
       </div>
+
+
+      {projectionResult?.projection && (
+        <div class="card" data-projection-definition="consumed">
+          <h3 class="mb-3 font-semibold">ProjectionDefinition projection</h3>
+          <pre class="pre-box">{JSON.stringify(projectionResult.projection, null, 2)}</pre>
+        </div>
+      )}
+
+      {projectionResult?.error && (
+        <div class="alert-error" data-projection-definition="error">
+          <strong>ProjectionDefinition エラー:</strong> {projectionResult.error}
+        </div>
+      )}
 
       {emission.data && Object.keys(emission.data).length > 0 && (
         <div class="card">
