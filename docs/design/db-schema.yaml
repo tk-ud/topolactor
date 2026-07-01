@@ -72,6 +72,15 @@ db_schema:
         current: logs.current
         hub_current: logs.hub_current
         attention: logs.attention
+    runtime_orchestration:
+      status: design_contract_pending_sql_implementation
+      role: aggregate trigger definitions, event evidence, aggregate current rows, and materialization evidence for runtime orchestration substrate
+      reference: docs/design/runtime-orchestration-ssot.yaml#aggregate_trigger_substrate_contract
+      canonical_tables:
+        aggregate_trigger_definitions: runtime_orchestration.aggregate_trigger_definitions
+        aggregate_trigger_event_evidence: runtime_orchestration.aggregate_trigger_event_evidence
+        aggregate_trigger_current: runtime_orchestration.aggregate_trigger_current
+        aggregate_trigger_materialization_evidence: runtime_orchestration.aggregate_trigger_materialization_evidence
     namespace_rules:
       - public_or_unqualified_tables_are_schema_drift_not_canonical
       - topologys_schema_is_naming_drift_and_must_migrate_to_topology
@@ -91,6 +100,14 @@ db_schema:
         - hubs.hub
         - hubs.hub_relations
         - hubs.topology_manifests
+    runtime_orchestration:
+      status: design_contract_pending_sql_implementation
+      role: aggregate trigger definitions, event evidence, aggregate current rows, and materialization evidence
+      tables:
+        - runtime_orchestration.aggregate_trigger_definitions
+        - runtime_orchestration.aggregate_trigger_event_evidence
+        - runtime_orchestration.aggregate_trigger_current
+        - runtime_orchestration.aggregate_trigger_materialization_evidence
     topology:
       status: canonical_active
       role: physical table catalog, registry tables, topology definition, wiring, UI component design/package/layout
@@ -1305,8 +1322,13 @@ recommend_target_boundary:
 aggregate_trigger_table_contracts:
   status: design_contract_only_no_sql_implementation_in_this_change
   namespace: runtime_orchestration
+  schema_qualified_tables:
+    aggregate_trigger_definitions: runtime_orchestration.aggregate_trigger_definitions
+    aggregate_trigger_event_evidence: runtime_orchestration.aggregate_trigger_event_evidence
+    aggregate_trigger_current: runtime_orchestration.aggregate_trigger_current
+    aggregate_trigger_materialization_evidence: runtime_orchestration.aggregate_trigger_materialization_evidence
   tables:
-    aggregate_trigger_definitions:
+    runtime_orchestration.aggregate_trigger_definitions:
       role: canonical structured aggregate trigger definition store
       required_columns:
         - trigger_definition_id
@@ -1330,13 +1352,13 @@ aggregate_trigger_table_contracts:
         - raw_case_expression
         - raw_where_clause
         - arbitrary_table_name
-    aggregate_trigger_event_evidence:
+    runtime_orchestration.aggregate_trigger_event_evidence:
       role: append-only idempotent input event evidence
       required_uniqueness: source_kind_source_id_correlation_id_event_fingerprint
-    aggregate_trigger_current:
+    runtime_orchestration.aggregate_trigger_current:
       role: current aggregate row maintained by atomic upsert
       required_uniqueness: trigger_definition_id_plus_conflict_key_hash
-    aggregate_trigger_materialization_evidence:
+    runtime_orchestration.aggregate_trigger_materialization_evidence:
       role: append-only evidence for controlled materialization attempts and outcomes
       required_uniqueness: trigger_definition_id_plus_materialization_target_plus_conflict_key_hash_plus_payload_fingerprint
   repository_requirements:

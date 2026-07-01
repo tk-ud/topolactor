@@ -250,6 +250,7 @@ runtime_orchestration_ssot:
       - topology_transform_runtime
       - registry_attractor_runtime
       - admin_runtime
+      - aggregate_trigger_runtime
       - sse_projection_runtime
       - auth_runtime
     auth_command_lane:
@@ -329,10 +330,13 @@ runtime_orchestration_ssot:
           output: topology_output_lanes
         registry_attractor_runtime:
           output: sql_attention_observation
+        aggregate_trigger_runtime:
+          output: aggregate_trigger_event_aggregate_threshold_materialization_evidence
     backend_dispatchable_kinds:
       - topology_transform_runtime
       - registry_attractor_runtime
       - admin_runtime
+      - aggregate_trigger_runtime
       - sse_projection_runtime
     backend_to_frontend_bridge:
       lanes:
@@ -823,13 +827,37 @@ aggregate_trigger_substrate_contract:
       - raw_case_expression
       - raw_where_clause
       - arbitrary_table_name
+  runtime_membership:
+    runtime_destination: aggregate_trigger_runtime
+    dispatchable_kind: aggregate_trigger_runtime
+    registration_surface: runtime_contract.backend_dispatchable_kinds
+    execution_route: trigger enters scheduler as cron/hook/client, manifest dispatcher resolves aggregate_trigger_runtime after scheduler alignment, and AggregateTriggerRuntime executes the structured definition.
+    not_admin_runtime_action: AdminRuntime authors and validates aggregate trigger definitions but does not own threshold evaluation, aggregate current upsert, or materialization execution.
   trigger_source:
-    allowed_kinds:
-      - client_operation_event
-      - hook_event
+    canonical_trigger_kind:
+      allowed_kinds:
+        - cron
+        - hook
+        - client
+      source_ref: runtime_orchestration_ssot.trigger_contract.kind_enum
+    trigger_source_detail_kind:
+      role: source detail after canonical trigger kind is known; not a runtime destination and not scheduler ownership
+      mapping:
+        client_operation_event:
+          canonical_trigger_kind: client
+          detail_source: ui_operation_or_admin_operation
+        hook_event:
+          canonical_trigger_kind: hook
+          detail_source: db_notify_external_webhook_or_internal_runtime_event
+        scheduled_cron_event:
+          canonical_trigger_kind: cron
+          detail_source: schedule_aligned_by_runtime_timeline_scheduler
+        runtime_function_event:
+          canonical_trigger_kind: hook
+          detail_source: internal_runtime_event
+    prohibited_detail_kinds:
       - scheduler_event
-      - runtime_function_event
-    rule: trigger_source supplies event payload and source metadata only; it never owns execution scope, transaction boundary, aggregate target, threshold policy, materialization target, or approval policy.
+    rule: trigger_source supplies event payload and source metadata only; canonical trigger kind remains cron/hook/client and never owns execution scope, transaction boundary, aggregate target, threshold policy, materialization target, or approval policy.
   processing_function_scope:
     owner: processing_function_or_operation_definition
     required_fields:
