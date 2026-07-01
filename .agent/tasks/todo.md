@@ -40,6 +40,22 @@
 seed 存在確認だけで implemented 判定しない。
 失敗 test を根拠に、次 bundle で projection registration / read / render の実装修正 scope を確定する。
 
+### OK軸
+
+- 追加・拡張した test が GitHub Actions workflow に含まれること
+- test error 時のログが、どの lane / seed / projection mapping が壊れたか分かる粒度で出ること
+- lane test が seed を実際に入力として流せること
+- seed 存在確認だけでなく、seed → lane → projection assertion まで到達すること
+- fail した場合に、frontend render 断線・backend read 断線・seed 整合不良を切り分けられること
+
+### NG軸
+
+- ローカルでしか動かない test を追加して完了扱いにする
+- GitHub workflow に含まれない test を追加して完了扱いにする
+- error log が単なる assertion failed で、壊れた lane / seed / mapping が分からない
+- seed の文字列存在確認だけで lane に流していない
+- frontend-only 表示追加や seed-only 修正で implemented 扱いにする
+
 ### 対応資料
 
 - `AGENTS.md`
@@ -88,6 +104,10 @@ Seed / DB:
 - `db/manifest_tables.sql`
 - `db/topology_tables.sql`
 
+CI / workflow:
+- `.github/workflows/*`
+- `.agent/tests/*`
+
 ### Tasks
 
 - [ ] Lane test 作成・拡張
@@ -95,14 +115,17 @@ Seed / DB:
   - `RuntimeExecutor` → `ScreenDataShapeQueryRuntime` → `emission.data`
   - SSE receiver / dispatcher / projection runtime / render helper
   - frontend user-facing render が `projectionDefinition` を無視した場合に検出できる test
+  - test は GitHub Actions workflow に含める
+  - error 時に対象 lane / mapping / seed id が分かるログを出す
 
 - [ ] Seed test 作成・拡張
   - demo / admin manifest seed に必要な `dispatcher_mapping`, `runtime_mapping`, `projection_constructor_mapping`, `screen_data_shape`, `db_notify_projection_mapping` が lane 前提として整合すること
   - `screen_data_shape.tableRef` と `topology.physical_tables` / `topology.wiring_physical_to_package` の整合を確認すること
   - seed 存在確認だけでなく、lane test が消費する形になっていること
+  - seed を lane に流し、projection assertion まで到達すること
 
 - [ ] Test error を潰す
-  - 追加・拡張した lane / seed test を通す
+  - 追加・拡張した lane / seed test を GitHub workflow 上で通す
   - test failure が実装不足を示す場合は、修正対象を次 bundle へ分離する
   - frontend-only 表示追加や seed-only 修正で implemented 扱いにしない
 
