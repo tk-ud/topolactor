@@ -49,11 +49,11 @@
 
 - [ ] admin/** 登録・更新由来の projection expression E2E 完全化
   - 問題点: 既存 E2E/seed/projection/layout/render test は seed 到達・projection JSON 表示・個別 utility 境界を証明するが、admin 登録/更新から readback された投影が catalog/runtime/layout/visual DOM まで成立することを一気通貫で証明していない。
-  - 目的: seed fixture ではなく admin/** の登録・更新操作を入口に固定し、frontend projection expression chain の未証明領域を潰す。
-  - 改善方針: 既存 E2E 相当 test を、admin 登録/更新 → projection readback → catalog 解決 → props/event/design/layout validation → runtime component render → visual guard surface → rendered DOM assertion まで通す完全実装へ昇格する。componentIds 表示、projection JSON 表示、fallback/error/empty DOM のみを成功扱いしない。
+  - 目的: seed を test data / 初期条件として使うことは許可しつつ、証明入口は admin/** の登録・更新操作に固定し、frontend projection expression chain の未証明領域を潰す。
+  - 改善方針: 既存 E2E 相当 test を、seed 由来の test data を admin 登録/更新経路へ投入 → projection readback → catalog 解決 → props/event/design/layout validation → runtime component render → visual guard surface → rendered DOM assertion まで通す完全実装へ昇格する。componentIds 表示、projection JSON 表示、fallback/error/empty DOM のみを成功扱いしない。
   - 対応資料: `.agent/docs/test-bundles.yaml`, `frontend/tests/projectionLaneSeedHarness.test.ts`, `frontend/tests/uiRenderedInteraction.test.ts`, `frontend/tests/adminUxGuard.test.ts`, `frontend/tests/visualLayoutBuilder.test.ts`, `frontend/tests/runtimeComponentFactory.test.ts`, `frontend/tests/projectionConstructor.test.ts`
   - 対象ファイル: `frontend/components/ProjectionView.tsx`, `frontend/components/LayoutVisualAuditCanvas.tsx`, `frontend/components/catalog.ts`, `frontend/runtime/projectionConstructor.ts`, `frontend/runtime/renderEmission.ts`, `frontend/runtime/projectionRuntime.ts`, `frontend/runtime/runtimeComponentAdapter.ts`, `frontend/runtime/runtimePrimitiveRenderer.ts`, `frontend/runtime/layoutComponentPreview.ts`, `frontend/runtime/visualLayoutUtils.ts`
   - 対象関数: `constructProjection`, `projectionFromEmission`, `renderRuntimeComponents`, `renderEmission`, `adaptComponentDataHub`, `renderRuntimeComponent`, `buildLayoutPreviewRuntimeSpec`, `renderLayoutComponentPreview`, `parseVisualLayoutPatchJson`, `buildVisualLayoutPatchJson`, `LayoutVisualAuditCanvas`, `ProjectionView`
-  - OK軸: admin/** 経由の登録/更新結果を readback し、catalog 登録済み component として分類整合・props/event/design/layout 境界を通過し、runtime component と visual guard DOM で user-facing 表示を確認できる。
+  - OK軸: seed を test data として使用し、admin/** 経由の登録/更新結果を readback し、catalog 登録済み component として分類整合・props/event/design/layout 境界を通過し、runtime component と visual guard DOM で user-facing 表示を確認できる。
   - NG軸: seedData fixture の到達確認のみ、componentIds/projection JSON 表示のみ、admin 画面 DOM 表示のみ、backend promote unit のみ、catalog 外 componentKey 通過、分類ズレ、更新後 readback/DOM 差分なし、invalid layout node の skip による empty 成功、fallback/error component 成功扱い。
   - 要確認: unknown props を global fail-close にするか、SSOT/schema で許可された追加属性のみ透過するかを実装前に確定する。
