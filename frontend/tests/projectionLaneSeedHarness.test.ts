@@ -1,5 +1,10 @@
 import { assert, assertEquals, assertExists } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { createProjectionRuntime } from "../runtime/projectionRuntime.ts";
+import { createSseDispatcher } from "../runtime/sseDispatcher.ts";
+import { createProjectionLaneReReadHandler } from "../runtime/projectionLaneReRead.ts";
+import { ProjectionView } from "../components/ProjectionView.tsx";
+import { h } from "preact";
+import { renderToString } from "preact-render-to-string";
 import { projectionFromEmission } from "../runtime/renderEmission.ts";
 import type { Emission } from "../api/dispatch.ts";
 import type { ProjectionDefinition, UiProjection } from "../runtime/projectionConstructor.ts";
@@ -130,6 +135,79 @@ Deno.test("projection lane seed contract: screen_data_shape.tableRef has physica
     assert(allSql.includes(`VALUES ('${tableRef}'`), `${describeLane(seed, shape)} physical_tables seed missing tableRef=${tableRef}`);
     assert(allSql.includes(`WHERE table_ref = '${tableRef}'`), `${describeLane(seed, shape)} wiring_physical_to_package seed missing tableRef=${tableRef}`);
   }
+});
+
+Deno.test("projection lane collapse: backend SSE identity re-read reaches frontend projectionRuntime and user-facing render", async () => {
+  const seed = targetSeedManifests().find((m) => m.manifestId === "00000000-0000-0000-0000-000000000085");
+  assertExists(seed, "lane=projection_seed_collapse seed=db/demo_seed.sql manifest=00000000-0000-0000-0000-000000000085 missing seed manifest");
+  const data = seedData(seed);
+  const definition = projectionDefinition(seed);
+  const backendEmission: Emission = {
+    structureMapId: "seed-projection-lane-structure-map",
+    packageId: definition.packageIds[0],
+    schemaId: "seed-static-schema",
+    componentIds: [],
+    data: {
+      kind: "screen_data_shape_query_result",
+      manifestId: seed.manifestId,
+      rows: [data],
+      aggregationResults: [],
+      activeColumns: ["seedLabel"],
+      displayColumnMode: "all",
+    },
+    projectionDefinition: definition,
+  };
+  const backendSsePayload = JSON.stringify({
+    table_id: "demo:screen_list:read",
+    table_registry_id: "demo",
+    manifest_id: seed.manifestId,
+  });
+
+  const runtime = createProjectionRuntime({ definitionMissingPolicy: "ignore" });
+  const projectedBox: { value: UiProjection | null; payload: Record<string, unknown> | null } = { value: null, payload: null };
+  runtime.onProjectionUpdate((projection, payload) => {
+    projectedBox.value = projection;
+    projectedBox.payload = payload as unknown as Record<string, unknown>;
+  });
+
+  const dispatcher = createSseDispatcher({ unhandledEventPolicy: "ignore" });
+  const errors: string[] = [];
+  let reReadPromise: Promise<void> | null = null;
+  const reReadHandler = createProjectionLaneReReadHandler({
+    projectionRuntime: runtime,
+    readEmission: async (identity) => {
+      assertEquals(identity.manifestId, seed.manifestId, `${describeLane(seed)} sse_path=frontend_re_read manifest identity mismatch`);
+      assertEquals(identity.tableId, "demo:screen_list:read", `${describeLane(seed)} sse_path=frontend_re_read table identity mismatch`);
+      return backendEmission;
+    },
+    onError: (message) => errors.push(message),
+  });
+  dispatcher.register("projection", (raw) => {
+    reReadPromise = reReadHandler(raw);
+  });
+
+  runtime.handleProjectionEvent(backendSsePayload);
+  assertEquals(projectedBox.value, null, `${describeLane(seed)} identity-only backend SSE payload must not be treated as seedData projection`);
+
+  dispatcher.route("projection", backendSsePayload);
+  await reReadPromise;
+
+  assertEquals(errors, [], `${describeLane(seed)} frontend re-read errors: ${errors.join("; ")}`);
+  assertExists(projectedBox.value, `${describeLane(seed)} sse_path=backend_sse->sseDispatcher->reRead->projectionRuntime did not project`);
+  assertEquals(projectedBox.payload?.manifest_id, seed.manifestId, `${describeLane(seed)} projected payload manifest mismatch`);
+  assertEquals(projectedBox.payload?.table_id, "demo:screen_list:read", `${describeLane(seed)} projected payload table mismatch`);
+  assertEquals(projectedBox.value.kind, "form_inputs", describeLane(seed));
+  if (projectedBox.value.kind === "form_inputs") {
+    const field = projectedBox.value.fields.find((f) => f.key === "seedLabel");
+    assertExists(field, `${describeLane(seed)} seedLabel field missing after frontend re-read`);
+    assertEquals(field.value, "projection-lane-seed", `${describeLane(seed)} seedLabel did not reach frontend projectionRuntime`);
+  }
+
+  const html = renderToString(h(ProjectionView, { emission: backendEmission }));
+  assert(
+    html.includes("projection-lane-seed"),
+    `${describeLane(seed)} user-facing ProjectionView must render seedLabel from backend ScreenDataShapeQueryRuntime emission.Data`,
+  );
 });
 
 Deno.test("projection lane NG: missing seedData is explicit and never seedData ?? null silent fallback", () => {

@@ -3,6 +3,7 @@ import type { ComponentRegistry } from "../registry/componentRegistry.ts";
 import { adaptComponentDataHub, type RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
 import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
 import { constructProjection, type ComponentDataHub, type ProjectionDefinition, type UiProjection } from "./projectionConstructor.ts";
+import { projectionInputFromData } from "./projectionInput.ts";
 
 export type ComponentSpec = {
   componentId?: string;
@@ -40,7 +41,7 @@ export function projectionFromEmission(
   emission: Emission,
   definition: ProjectionDefinition,
 ): { projection: UiProjection; error?: undefined } | { projection?: undefined; error: string } {
-  const jsonKeyValue: Record<string, unknown> = emission.data ?? {};
+  const jsonKeyValue = projectionInputFromData(emission.data);
   return constructProjection(jsonKeyValue, definition);
 }
 
