@@ -1,0 +1,84 @@
+name: projection-lane-seed-hardening
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - 'db/**/*.sql'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
+      - 'docs/design/pipeline-continuity-ssot.yaml'
+      - '.agent/tests/check-projection-lane-seed-hardening.sh'
+      - '.github/workflows/projection-lane-seed-hardening.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - 'db/**/*.sql'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
+      - 'docs/design/pipeline-continuity-ssot.yaml'
+      - '.agent/tests/check-projection-lane-seed-hardening.sh'
+      - '.github/workflows/projection-lane-seed-hardening.yml'
+
+jobs:
+  backend-lane:
+    name: "[BACKEND_LANE] ManifestDispatcher / RuntimeExecutor projection lane"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run backend lane tests
+        run: dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --filter "FullyQualifiedName~ManifestDispatcherManifestDrivenTests|FullyQualifiedName~ScreenDataShapeQueryRuntimeTests" --nologo --verbosity minimal
+
+  frontend-lane:
+    name: "[FRONTEND_LANE] SSE receiver / dispatcher / projection runtime / render helper"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run frontend lane tests
+        run: deno test frontend/tests/sseLane.test.ts --allow-read
+
+  seed-contract:
+    name: "[SEED_CONTRACT] Static seed mapping contract"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run seed contract static parse tests
+        run: deno test frontend/tests/projectionLaneSeedHarness.test.ts --allow-read --filter "seed contract"
+
+  seed-to-lane-integration:
+    name: "[SEED_TO_LANE_INTEGRATION] seed static parse -> lane harness -> projection assertion"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run seed to lane integration tests
+        run: deno test frontend/tests/projectionLaneSeedHarness.test.ts --allow-read --filter "seed integration|NG"

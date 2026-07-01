@@ -759,6 +759,38 @@ public class ManifestDispatcherManifestDrivenTests
             "TargetDispatchOverride must not be called when manifest repository is configured.");
     }
 
+
+    [Fact]
+    public async Task DispatchAsync_ProjectionLane_InjectsManifestProjectionDefinitionIntoEmission()
+    {
+        var manifestId = Guid.NewGuid();
+        var sentinel = JsonSerializer.SerializeToElement(new { seedLabel = "projection-lane-seed" });
+        var fakeHandler = new FakeDispatchableRuntime(sentinel);
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                manifestId,
+                RelationRegistryId: null,
+                Topology: BuildProjectionLaneTopology("topology_transform_runtime"),
+                Status: "active"));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            manifestRepo,
+            extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["topology_transform_runtime"] = fakeHandler });
+
+        var request = new EndpointRequestDto("Read", "seed", "projection_lane", "read", null, null, null, Role: "admin");
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(fakeHandler.WasCalled);
+        Assert.Equal(manifestId, fakeHandler.LastManifestId);
+        Assert.NotNull(response.Emission);
+        Assert.True(response.Emission!.ProjectionDefinition.HasValue);
+        var definition = response.Emission.ProjectionDefinition!.Value;
+        Assert.Equal("seed-projection-lane", definition.GetProperty("constructorKey").GetString());
+        Assert.Equal("form_inputs", definition.GetProperty("outputKind").GetString());
+        Assert.Equal("projection-lane-seed", response.Emission.Data!.Value.GetProperty("seedLabel").GetString());
+    }
+
     [Fact]
     public async Task DispatchAsync_ManifestRepositoryConfigured_ManifestNotFound_ReturnsManifestNotFound()
     {
@@ -1068,6 +1100,50 @@ public class ManifestDispatcherManifestDrivenTests
         var fail = await dispatcher.DispatchAsync(request with { Role = "viewer" });
         Assert.False(fail.Success);
         Assert.Contains(fail.Errors, e => e.Code == "MANIFEST_NOT_FOUND");
+    }
+
+
+    private static IReadOnlyList<System.Text.Json.JsonElement> BuildProjectionLaneTopology(string runtimeDestination)
+    {
+        return
+        [
+            System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                type = "dispatcher_mapping",
+                role = "admin",
+                target = "seed",
+                layer = "projection_lane",
+                action = "read"
+            }),
+            System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                type = "runtime_mapping",
+                runtime_destination = runtimeDestination
+            }),
+            System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                type = "db_notify_projection_mapping",
+                runtime_destination = "sse_projection_runtime"
+            }),
+            System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                type = "projection_constructor_mapping",
+                projection_definition = new
+                {
+                    constructorKey = "seed-projection-lane",
+                    packageIds = new[] { "00000000-0000-0000-0000-000000000001" },
+                    outputKind = "form_inputs",
+                    fieldDefs = new[] { new { key = "seedLabel", label = "Seed label", kind = "text", required = true } }
+                }
+            }),
+            System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                type = "screen_data_shape",
+                tableRef = "seed.projection_lane",
+                initialDataRows = new[] { new { values = new Dictionary<string, string> { ["seedLabel"] = "projection-lane-seed" } } },
+                displayColumnMode = "all"
+            })
+        ];
     }
 
     private static IReadOnlyList<System.Text.Json.JsonElement> BuildTopology(string runtimeDestination)

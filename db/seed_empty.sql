@@ -128,7 +128,9 @@ VALUES (
     ARRAY[
       '{"type":"dispatcher_mapping","role":"admin","target":"default","layer":"entity","action":"Search"}'::jsonb,
       '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-      '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+      '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
     ]::jsonb[],
     'active'
 )
@@ -292,7 +294,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"list"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -302,7 +306,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"get"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -312,7 +318,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"validate"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -322,7 +330,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"create_draft"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -332,7 +342,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"update_draft"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -342,7 +354,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"promote"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -352,7 +366,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"deprecate"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -362,7 +378,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"assign_hub_grouping"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -372,7 +390,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"assign_screen_data_shape"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -382,7 +402,9 @@ VALUES
         ARRAY[
             '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"list_relationship_remote_targets"}'::jsonb,
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
-            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+            '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
+            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -1642,3 +1664,18 @@ VALUES (
 ON CONFLICT (manifest_id) DO UPDATE
     SET topology = EXCLUDED.topology,
         status   = EXCLUDED.status;
+-- ---------------------------------------------------------------------------
+-- projection lane seed hardening fixture (DB-free static tests also parse this)
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.physical_tables (table_ref, schema_name, category, active)
+VALUES ('seed.projection_lane', 'seed', 'projection_lane_test', true)
+ON CONFLICT (table_ref) DO NOTHING;
+
+INSERT INTO topology.wiring_physical_to_package (physical_table_id, package_id, wiring_def, active)
+SELECT physical_table_id,
+       '00000000-0000-0000-0000-000000000001'::uuid,
+       '{"seedContract":"projection-lane-seed-test-hardening"}'::jsonb,
+       true
+FROM topology.physical_tables
+WHERE table_ref = 'seed.projection_lane'
+ON CONFLICT DO NOTHING;
