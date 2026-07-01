@@ -53,6 +53,8 @@ builder.Services.AddSingleton<DbNotifyRepository>(sp =>
     new NpgsqlDbNotifyRepository(
         sp.GetRequiredService<ILogger<NpgsqlDbNotifyRepository>>(),
         connectionString));
+builder.Services.AddSingleton<AggregateTriggerRepository>(_ =>
+    new NpgsqlAggregateTriggerRepository(connectionString));
 builder.Services.AddSingleton<SqlAttentionLogsRepository>(sp =>
     new NpgsqlSqlAttentionLogsRepository(
         sp.GetRequiredService<ILogger<NpgsqlSqlAttentionLogsRepository>>(),
@@ -144,6 +146,7 @@ builder.Services.AddSingleton<AdminRuntimeDispatchAdapter>(sp =>
         sp.GetRequiredService<AdminRuntime>(),
         sp.GetRequiredService<OperationVectorResolver>()));
 builder.Services.AddSingleton<SseProjectionRuntime>();
+builder.Services.AddSingleton<AggregateTriggerRuntime>();
 builder.Services.AddSingleton<ManifestDispatcher>(sp =>
 {
     var handlers = new Dictionary<string, IDispatchableRuntime>
@@ -151,6 +154,7 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         ["topology_transform_runtime"] = sp.GetRequiredService<RuntimeExecutor>(),
         ["admin_runtime"]              = sp.GetRequiredService<AdminRuntimeDispatchAdapter>(),
         ["sse_projection_runtime"]     = sp.GetRequiredService<SseProjectionRuntime>(),
+        ["aggregate_trigger_runtime"] = sp.GetRequiredService<AggregateTriggerRuntime>(),
     };
     return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),

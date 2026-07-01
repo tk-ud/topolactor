@@ -728,3 +728,15 @@ aggregate_trigger_substrate_known_gaps:
       - repository SQL template correctness
       - admin Step3 UI enforcement
       - materialization duplicate prevention at runtime
+
+aggregate_trigger_substrate_runtime_contract_tests:
+  proves:
+    - aggregate_trigger_runtime_dispatchable_destination
+    - canonical_trigger_kind_and_source_detail_kind_validation
+    - materialization_payload_map_allowed_sources
+    - repository_idempotent_append_atomic_upsert_duplicate_guard
+    - frontend_authoring_preview_without_threshold_materialization_approval_judgment
+  tests:
+    - backend/tests/Topolactor.Runtime.Tests/AggregateTriggerSubstrateTests.cs
+    - backend/tests/Topolactor.Runtime.Tests/AggregateTriggerRepositorySqlContractTests.cs
+    - frontend/tests/aggregateTriggerAuthoring.test.ts
