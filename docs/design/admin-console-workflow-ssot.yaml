@@ -665,3 +665,42 @@ admin_console_workflow_ssot:
     prohibited:
       - enabling promote before validation execution
       - treating unresolved topology.physical_tables table_ref mismatch as a silent no-op
+
+aggregate_trigger_step3_extension_contract:
+  status: design_contract_confirmed_for_future_implementation
+  owning_step: admin_contents_step3_operation_definition
+  connected_ssot: docs/design/runtime-orchestration-ssot.yaml#aggregate_trigger_substrate_contract
+  purpose: expose aggregate trigger substrate as public structured operation authoring, not as application-specific tooling.
+  ui_authoring_boundary:
+    allowed:
+      - select_trigger_source_kind
+      - select_processing_function_or_operation_definition
+      - select_execution_scope_from_registered_options
+      - select_transaction_boundary_from_registered_options
+      - select_aggregate_target_from_step2_or_step2_5
+      - select_conflict_key_fields_from_target
+      - configure_delta_map_from_declared_event_and_target_fields
+      - configure_threshold_policy_minimum_trial_count_ratio_operator
+      - select_materialization_target_from_step2_or_step2_5
+      - configure_materialization_payload_map_from_allowed_sources
+      - select_approval_policy
+    prohibited:
+      - storing_raw_sql
+      - storing_case_expression
+      - storing_where_clause
+      - accepting_arbitrary_table_name
+      - deciding_threshold_or_materialization_in_frontend
+  target_candidate_rule:
+    aggregate_target_binding: Step3 candidates are only Step2 logical entities and Step2.5 relation definitions already saved in the same admin contents workflow.
+    materialization_target_binding: Step3 candidates are only Step2 logical entities and Step2.5 relation definitions already saved in the same admin contents workflow.
+  materialization_payload_map_authoring:
+    allowed_sources:
+      - function_input_event
+      - aggregate_current_row
+      - selected_step2_entity_fields
+      - selected_step2_5_relation_fields
+      - constant
+      - generated_value
+      - runtime_actor_source_metadata
+    validation_owner: backend_runtime
+    frontend_role: structured_selector_and_preview_only

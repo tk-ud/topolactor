@@ -703,6 +703,41 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: aggregate_trigger_substrate
+    change_surfaces:
+      - aggregate trigger substrate
+      - aggregate_trigger_definition
+      - trigger_source
+      - processing_function_scope
+      - execution_scope
+      - transaction_boundary
+      - aggregate_target_binding
+      - conflict_key_fields
+      - delta_map
+      - threshold_policy
+      - materialization_target_binding
+      - materialization_payload_map
+      - approval_policy
+      - aggregate trigger event evidence
+      - aggregate trigger current row
+      - aggregate trigger materialization evidence
+      - admin contents Step3 aggregate trigger authoring
+      - backend aggregate trigger runtime/repository
+      - db aggregate trigger table contracts
+    required_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/abstract-function-primitive-registry-ssot.yaml
+      - docs/design/test-proof-manifest-ssot.yaml
+    supporting_docs:
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
 worktypes:
   ids:
     - audit
