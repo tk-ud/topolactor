@@ -681,3 +681,50 @@ maintenance_rules:
   - DB/backend/runtime/external/instance/admin/frontend proof gaps must remain explicit.
   - Known gaps and missing SSOTs MUST NOT be mixed into implemented proof edges.
   - CI gates MUST run manifest integrity checks and MUST NOT claim proof completion from fixed test lists alone.
+
+aggregate_trigger_substrate_known_gaps:
+  - proof_id: aggregate_trigger_substrate_executable_proof_gap
+    proof_order: 140
+    scope_phase: aggregate_trigger_substrate_future_implementation
+    domain: cross_domain
+    proof_type: known_gap
+    source_contract: docs/design/runtime-orchestration-ssot.yaml aggregate_trigger_substrate_contract
+    target_contract: backend/admin/db executable aggregate trigger behavior
+    ssot_refs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/abstract-function-primitive-registry-ssot.yaml
+    implementation_files:
+      - backend/runtime/AggregateTriggerRuntime.cs
+      - backend/repository/AggregateTriggerRepository.cs
+      - backend/repository/NpgsqlAggregateTriggerRepository.cs
+      - frontend/islands/**
+      - frontend/components/**
+      - db/*.sql
+    test_files: []
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs: []
+    workflow_jobs: []
+    required_when:
+      changed_files:
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/db-schema.yaml
+        - docs/design/abstract-function-primitive-registry-ssot.yaml
+        - backend/**
+        - frontend/**
+        - db/**/*.sql
+    depends_on:
+      - db_schema_seed_contract
+      - backend_runtime_function_contract
+    unblocks:
+      - aggregate-trigger-substrate-implementation
+    known_gap_reason: SSOT is defined, but executable tests and implementation for idempotent event append, atomic aggregate upsert, threshold evaluation, controlled materialization, and duplicate guard are intentionally not implemented in this design-only change.
+    proves: []
+    does_not_prove:
+      - backend runtime execution
+      - repository SQL template correctness
+      - admin Step3 UI enforcement
+      - materialization duplicate prevention at runtime
