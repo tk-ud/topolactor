@@ -40,6 +40,19 @@ require_tool deno
 
 cd "${REPO_ROOT}"
 
+
+# ─── TEST_PROOF_MANIFEST_INTEGRITY ───────────────────────────────────────────
+
+echo ""
+echo "=== [TEST_PROOF_MANIFEST_INTEGRITY] System-wide proof graph SSOT audit ==="
+echo "    Scope: proof_id uniqueness/order, dependency references, field separation, known_gap/missing_ssot boundaries"
+
+if bash .agent/tests/check-test-proof-manifest-integrity.sh; then
+  echo "OK  [TEST_PROOF_MANIFEST_INTEGRITY] manifest integrity checks passed"
+else
+  fail "[TEST_PROOF_MANIFEST_INTEGRITY] manifest integrity checks failed"
+fi
+
 # ─── FUNCTION_BOUNDARY ────────────────────────────────────────────────────────
 
 echo ""

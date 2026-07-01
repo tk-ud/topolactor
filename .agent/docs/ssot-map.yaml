@@ -676,6 +676,33 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: test_proof_manifest_ci_gate
+    change_surfaces:
+      - test-proof-manifest-ci-gate
+      - proof graph
+      - manifest integrity
+      - CI proof audit surface
+      - system-wide test proof SSOT
+      - docs/design/test-proof-manifest-ssot.yaml
+      - .agent/docs/test-bundles.yaml
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+      - .agent/tests/check-unified-test-gate.sh
+      - .github/workflows/unified-test-gate.yml
+      - .github/workflows/structure-check.yml
+    required_docs:
+      - docs/design/test-proof-manifest-ssot.yaml
+    supporting_docs:
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/runtime-bundle-job-scheduler-ssot.yaml
+      - .agent/docs/test-bundles.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
 worktypes:
   ids:
     - audit

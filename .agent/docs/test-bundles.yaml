@@ -1,382 +1,112 @@
-# test-bundles.yaml — roadmap completion bundle → test evidence index
-#
-# Purpose:
-#   Agent-facing reverse-lookup map: given a roadmap completion bundle,
-#   immediately find which tests prove which completion conditions
-#   and what is explicitly NOT proven.
-#
-# Usage (PR audit):
-#   1. Identify the roadmap unlock key or milestone (e.g., data_binding_to_document_canvas).
-#   2. Look up bundle_id referenced in docs/system-roadmap.yaml test_bundle_refs.
-#   3. Read test_files / test_cases / proves / does_not_prove.
+# test-bundles.yaml — reverse lookup for docs/design/test-proof-manifest-ssot.yaml
 #
 # Boundary:
-#   - This file is a lightweight index only. Not a SSOT for design or runtime rules.
-#   - For SSOT read routing at task time, use ssot-map.yaml instead.
-#   - pipeline-continuity-ssot.yaml already declares test_files per lane;
-#     ssot_refs below point to those definitions rather than duplicating them.
-#   - proves and does_not_prove MUST both be explicit to prevent over-claiming.
-#   - test_cases use the exact Deno.test or [ClassName] test name strings.
+#   - This file is NOT the proof SSOT.
+#   - The authoritative proof graph, proof_order, proof_type, field semantics,
+#     known gaps, and missing SSOT handling live in docs/design/test-proof-manifest-ssot.yaml.
+#   - This file only helps agents map roadmap/test-bundle labels to proof_id entries.
 
-version: 1
+version: 2
+authority_boundary:
+  ssot: docs/design/test-proof-manifest-ssot.yaml
+  role: reverse_lookup_index_only
+  prohibited_use:
+    - Do not claim proof completion from this file alone.
+    - Do not add SSOT/seed/implementation paths to test_files here; use manifest fields in the SSOT.
+    - Do not override proof_type, proof_order, depends_on, or known_gap state from this file.
 
-bundles:
-
-  - bundle_id: projection_runtime_component_props_pipeline
+reverse_lookup:
+  - bundle_id: test-proof-manifest-ci-gate
     roadmap_bundle_refs:
-      - data_binding_to_document_canvas
-    ssot_refs:
-      - docs/design/pipeline-continuity-ssot.yaml  # frontend_projection_constructor_lane
-    test_files:
-      - frontend/tests/projectionRuntime.test.ts
-      - frontend/runtime/projectionRuntime.ts
-      - frontend/runtime/renderEmission.ts
-    test_cases:
-      - file: frontend/tests/projectionRuntime.test.ts
-        cases:
-          - "projectionRuntime: projection event drives runtime component lane for component_projection"
-    proves:
-      - projection event drives constructProjection → componentDataHub.props → renderRuntimeComponents route at unit boundary
-      - SSE projection event produces correct componentType via renderRuntimeComponents (uses form_input/search_input as representative kind)
+      - test-proof-manifest-ci-gate
+    proof_refs:
+      - ssot_structure_policy_contract
+      - db_schema_seed_contract
+      - backend_runtime_function_contract
+      - backend_runtime_integration_contract
+      - runtime_trigger_scheduler_contract
+      - manifest_dispatch_runtime_route_contract
+      - external_intake_surface_contract
+      - external_bundle_specific_proofs_gap
+      - instance_substrate_contract_gap
+      - admin_registration_promotion_contract
+      - admin_projection_readback_contract
+      - frontend_projection_expression_contract
+      - frontend_admin_projection_expression_completion_gap
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+      - .agent/tests/check-unified-test-gate.sh
+      - .agent/tests/check-structure.sh
+    proves_lookup_for:
+      - system-wide proof graph integrity
+      - CI audit wiring for the manifest itself
     does_not_prove:
-      - DocumentCanvas-specific field coordinate binding (see document_canvas_projection_constructor_field_validation bundle)
-      - DB/JSONB label/value manifest runtime (jsonb_label_value_manifest_runtime is not_started)
-      - DocumentCanvas DB binding policy
-      - full data_binding_to_document_canvas loop with real DB-sourced field values
-      - projection event from real SSE backend push (integration scope, not covered here)
+      - frontend/admin E2E completion
+      - any known_gap edge listed by proof_type in the SSOT
 
-  - bundle_id: document_canvas_runtime_factory_registration
-    roadmap_bundle_refs:
-      - document_canvas_runtime_connected_factory_registration
-    ssot_refs:
-      - docs/design/ui-ux-primitive-catalog-ssot.yaml
-      - docs/design/pipeline-continuity-ssot.yaml  # frontend_projection_constructor_lane
-    test_files:
-      - frontend/tests/runtimePrimitiveRenderer.test.ts
-      - frontend/runtime/runtimeComponentFactory.ts
-    test_cases:
-      - file: frontend/tests/runtimePrimitiveRenderer.test.ts
-        cases:
-          - "runtimePrimitiveRenderer: document_canvas/document_canvas_template_editor renders without event binding"
-          - "runtimePrimitiveRenderer: document_canvas/document_canvas_template_editor renders with empty props"
-          - "runtimePrimitiveRenderer: runtimeConnected catalog entries are renderer-reachable (interface reachability)"
-    proves:
-      - document_canvas/document_canvas_template_editor is registered in runtimeComponentFactory (runtimeConnected:true verified via renderer reachability)
-      - renderRuntimeComponent renders document_canvas kind without error
-      - all runtimeConnected:true catalog entries are renderer-reachable (factory registered)
+  - bundle_id: db_schema_seed_contract
+    proof_refs:
+      - db_schema_seed_contract
+    runner_surfaces:
+      - .agent/tests/check-db-schema.sh
+      - .agent/tests/check-unified-test-gate.sh
     does_not_prove:
-      - PDF export snapshot (separate bundle, not_started)
-      - production report layout engine
-      - DB-side component entity registration (registrationRequired:true entries require separate promotion)
+      - runtime behavior from seed presence alone
 
-  - bundle_id: document_canvas_projection_constructor_field_validation
-    roadmap_bundle_refs:
-      - document_canvas_runtime_connected_factory_registration
-      - data_binding_to_document_canvas
-    ssot_refs:
-      - docs/design/pipeline-continuity-ssot.yaml  # frontend_projection_constructor_lane
-      - docs/design/ui-ux-primitive-catalog-ssot.yaml
-    test_files:
-      - frontend/tests/projectionConstructor.test.ts
-    test_cases:
-      - file: frontend/tests/projectionConstructor.test.ts
-        cases:
-          - "constructProjection: document_canvas/document_canvas_template_editor supported with valid fields"
-          - "constructProjection: document_canvas/document_canvas_template_editor without fields is valid"
-          - "constructProjection: document_canvas fields non-array is explicit error"
-          - "constructProjection: document_canvas field missing key is explicit error"
-          - "constructProjection: document_canvas field x non-number is explicit error"
-          - "constructProjection: document_canvas field value non-string is explicit error"
-          - "constructProjection: document_canvas field y non-number is explicit error"
-          - "constructProjection: document_canvas backgroundImageUrl non-string is explicit error"
-    proves:
-      - document_canvas/document_canvas_template_editor props normalization in projectionConstructor
-      - backgroundImageUrl string validation is explicit error on non-string
-      - fields array validation is explicit error on non-array
-      - field.key non-empty string validation is explicit error when missing
-      - field.x/y number validation is explicit error on non-number
-      - field.value string validation is explicit error on non-string
-      - malformed document_canvas props return explicit PROJECTION_CONSTRUCTOR_INVALID_* error (not silent fallback)
+  - bundle_id: backend_runtime_contracts
+    proof_refs:
+      - backend_runtime_function_contract
+      - backend_runtime_integration_contract
+    runner_surfaces:
+      - .agent/tests/check-backend-tests.sh
+      - .agent/tests/check-runtime-semantics.sh
+      - .agent/tests/check-unified-test-gate.sh
     does_not_prove:
-      - runtime renderer factory registration (see document_canvas_runtime_factory_registration bundle)
-      - DB/JSONB label/value manifest runtime (jsonb_label_value_manifest_runtime is not_started)
-      - full DB/JSONB→canvas binding loop with real DB-sourced field values
-      - PDF export snapshot
+      - scheduler/external/frontend behavior outside the listed SSOT proof edges
 
-  - bundle_id: jsonb_label_value_manifest_runtime
-    roadmap_bundle_refs:
-      - jsonb_label_value_manifest_runtime
-      - data_binding_to_document_canvas
-    ssot_refs:
-      - docs/design/pipeline-continuity-ssot.yaml
-    test_files:
-      - backend/tests/Topolactor.Runtime.Tests/JsonbManifestRuntimeTests.cs
-      - backend/runtime/JsonbManifestRuntime.cs
-      - backend/schema/JsonbManifestContracts.cs
-    test_cases:
-      - file: backend/tests/Topolactor.Runtime.Tests/JsonbManifestRuntimeTests.cs
-        cases:
-          - "ResolveFields_SimpleJsonPath_ResolvesFieldValue"
-          - "ResolveFields_NestedJsonPath_ResolvesNestedValue"
-          - "ResolveFields_MissingJsonPath_ResolvesToNull"
-          - "ResolveFields_FormatCurrencyPolicy_FormatsNumber"
-          - "ResolveFields_FormatDatePolicy_FormatsDate"
-          - "ResolveFields_UppercasePolicy_Uppercases"
-          - "ResolveFields_LowercasePolicy_Lowercases"
-          - "ResolveFields_EmptySourceJsonb_ReturnsExplicitError"
-          - "ResolveFields_EmptyFieldManifest_ReturnsExplicitError"
-          - "ResolveFields_InvalidJson_ReturnsExplicitError"
-          - "ResolveFields_UnknownAggregationPolicy_ReturnsExplicitError"
-          - "ResolveFields_UnknownDisplayPolicy_ReturnsExplicitError"
-          - "ResolveFields_MissingFieldKey_ReturnsExplicitError"
-          - "ResolveFields_PreservesXYCoordinates"
-          - "ResolveFields_MultiFieldManifest_ProducesDocumentCanvasReadyFields"
-    proves:
-      - JsonbManifestRuntime resolves label/value fields from JSONB using dot-notation jsonPath
-      - Display policies (as_is, format_currency, format_date, format_number, uppercase, lowercase) apply correctly
-      - Missing JSONB path resolves to null (not error)
-      - empty sourceJsonb returns explicit JSONB_MANIFEST_SOURCE_EMPTY error
-      - empty fieldManifest returns explicit JSONB_MANIFEST_FIELD_MANIFEST_EMPTY error
-      - invalid JSON source returns explicit JSONB_MANIFEST_INVALID_SOURCE_JSON error
-      - unknown aggregation policy returns explicit JSONB_MANIFEST_UNSUPPORTED_AGGREGATION_POLICY error
-      - unknown display policy returns explicit JSONB_MANIFEST_UNSUPPORTED_DISPLAY_POLICY error
-      - missing field key returns explicit JSONB_MANIFEST_FIELD_KEY_REQUIRED error
-      - x/y coordinates are preserved through resolution
-      - multi-field manifest produces DocumentCanvas-ready fields (key, label, x, y, value) at unit boundary
+  - bundle_id: runtime_scheduler_and_dispatch_route
+    proof_refs:
+      - runtime_trigger_scheduler_contract
+      - manifest_dispatch_runtime_route_contract
+    runner_surfaces:
+      - .agent/tests/check-runtime-semantics.sh
+      - .agent/tests/check-unified-test-gate.sh
+      - .agent/tests/check-projection-lane-seed-hardening.sh
     does_not_prove:
-      - DB persistence (in-memory resolution only)
-      - frontend rendering of resolved fields (frontend projectionConstructor scope)
-      - PDF generation (PdfExportSnapshotRuntime scope)
-      - live SSE backend push with real DB rows (integration scope)
+      - external connector implementation
+      - instance authority enforcement
+      - final frontend/admin E2E visual DOM completion
 
-  - bundle_id: user_defined_aggregation_display_binding_policy
+  - bundle_id: external_intake_bundle_gate
     roadmap_bundle_refs:
-      - user_defined_aggregation_display_binding_policy
-      - data_binding_to_document_canvas
-    ssot_refs:
-      - docs/design/pipeline-continuity-ssot.yaml
-    test_files:
-      - backend/tests/Topolactor.Runtime.Tests/DocumentCanvasBindingPolicyTests.cs
-      - backend/runtime/DocumentCanvasBindingPolicy.cs
-      - backend/schema/DocumentCanvasContracts.cs
-    test_cases:
-      - file: backend/tests/Topolactor.Runtime.Tests/DocumentCanvasBindingPolicyTests.cs
-        cases:
-          - "Validate_ValidPolicy_IsValid"
-          - "Validate_MissingTemplateKey_ReturnsError"
-          - "Validate_EmptyFields_ReturnsError"
-          - "Validate_DuplicateFieldKeys_ReturnsError"
-          - "Validate_MissingFieldKey_ReturnsError"
-          - "Apply_ValidPolicyAndSource_ReturnsCanvasFields"
-          - "Apply_InvalidPolicy_ReturnsExplicitError"
-          - "Apply_InvalidSourceJsonb_ReturnsExplicitError"
-          - "Apply_DisplayPolicies_ApplyCorrectly"
-          - "Apply_InvoiceDocument_ProducesCompleteCanvasFields"
-    proves:
-      - DocumentCanvasBindingPolicy validates templateKey, fields, duplicate keys, NaN coordinates
-      - Apply delegates to JsonbManifestRuntime and returns canvas-ready fields
-      - AggregationPolicy and DisplayPolicy enum → string conversion is correct
-      - Apply with invalid policy returns explicit CANVAS_BINDING_POLICY_INVALID error
-      - Full DB/JSONB → canvas fields loop via Apply is proven at unit boundary (invoice example)
-      - Display policy variants (as_is, uppercase, lowercase, format_currency, format_number) all apply correctly
+      - future-external-bundle-gate
+    proof_refs:
+      - external_intake_surface_contract
+      - external_bundle_specific_proofs_gap
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - DB persistence (in-memory resolution only)
-      - PDF generation (PdfExportSnapshotRuntime scope)
-      - frontend rendering (frontend projectionConstructor scope)
+      - Notion/Sheets/Slack/GitHub/Webhook/REST connector behavior until gap proof edges are replaced by executable proofs
 
-  - bundle_id: document_canvas_db_binding_loop
-    roadmap_bundle_refs:
-      - data_binding_to_document_canvas
-      - jsonb_label_value_manifest_runtime
-    ssot_refs:
-      - docs/design/pipeline-continuity-ssot.yaml
-      - docs/design/ui-ux-primitive-catalog-ssot.yaml
-    test_files:
-      - frontend/tests/documentCanvasDbBinding.test.ts
-      - frontend/runtime/projectionConstructor.ts
-    test_cases:
-      - file: frontend/tests/documentCanvasDbBinding.test.ts
-        cases:
-          - "documentCanvasDbBinding: jsonb manifest → canvas fields → projectionConstructor succeeds"
-          - "documentCanvasDbBinding: empty fields from manifest resolution produce valid empty-fields canvas"
-          - "documentCanvasDbBinding: null value from missing jsonb path resolves to undefined field value"
-          - "documentCanvasDbBinding: display policy uppercase applied before canvas binding"
-          - "documentCanvasDbBinding: backgroundImageUrl is preserved through projection constructor"
-          - "documentCanvasDbBinding: invalid field shape from manifest returns explicit projectionConstructor error"
-    proves:
-      - DB/JSONB manifest resolution → DocumentCanvas fields[key,label,x,y,value] loop is closed at frontend boundary
-      - Resolved fields from JSONB manifest pass projectionConstructor validation without error
-      - Display policy (uppercase) applied before canvas binding produces correct field values
-      - backgroundImageUrl is preserved through the projection pipeline
-      - Missing JSONB path (null value) produces a valid canvas field with undefined value
-      - Invalid field shape (value non-string) returns explicit PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_VALUE error
+  - bundle_id: instance_substrate_gate
+    proof_refs:
+      - instance_substrate_contract_gap
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - Backend DB persistence (backend scope)
-      - Live SSE backend push with real DB rows (integration scope)
-      - PDF generation (PdfExportSnapshotRuntime scope)
-      - Full production JSONB query operators beyond dot-notation paths
+      - instance settings topology, primitive authority, runtime instance selection, or execution authority enforcement
 
-  - bundle_id: pdf_export_snapshot_runtime
+  - bundle_id: frontend-admin-projection-expression-e2e-completion
     roadmap_bundle_refs:
-      - pdf_export_snapshot_runtime
-    ssot_refs:
-      - docs/design/pipeline-continuity-ssot.yaml
-    test_files:
-      - backend/tests/Topolactor.Runtime.Tests/PdfExportSnapshotRuntimeTests.cs
-      - backend/runtime/PdfExportSnapshotRuntime.cs
-      - backend/schema/PdfExportContracts.cs
-    test_cases:
-      - file: backend/tests/Topolactor.Runtime.Tests/PdfExportSnapshotRuntimeTests.cs
-        cases:
-          - "CreateSnapshot_ValidRequest_ReturnsSuccess"
-          - "CreateSnapshot_WithSourceLinkage_PreservesLinkIds"
-          - "CreateSnapshot_WithoutSourceLinkage_SucceedsWithNullLinks"
-          - "CreateSnapshot_SnapshotLogGrows"
-          - "CreateSnapshot_EachSnapshotHasUniqueId"
-          - "CreateSnapshot_EmptyFields_SucceedsWithZeroFieldCount"
-          - "CreateSnapshot_NullRequest_ReturnsExplicitError"
-          - "CreateSnapshot_EmptyTemplateKey_ReturnsExplicitError"
-          - "CreateSnapshot_NullFields_ReturnsExplicitError"
-          - "CreateSnapshot_FieldWithEmptyKey_ReturnsExplicitError"
-          - "CreateSnapshot_InvalidSourceSnapshotId_ReturnsExplicitError"
-          - "CreateSnapshot_InvalidSourceApplyLogId_ReturnsExplicitError"
-          - "CreateSnapshot_NoteConfirmsSnapshotBoundaryOnly"
-    proves:
-      - PdfExportSnapshotRuntime creates a snapshot record with exportSnapshotId (valid UUID)
-      - templateKey and fieldCount are preserved in the snapshot result
-      - sourceSnapshotId and sourceApplyLogId linkage (canonical diff/audit evidence) is preserved
-      - status is 'snapshot_created' on success
-      - snapshot log grows by one per successful create (evidence of record creation)
-      - each snapshot has a unique exportSnapshotId
-      - null request returns explicit PDF_EXPORT_REQUEST_NULL error
-      - empty templateKey returns explicit PDF_EXPORT_TEMPLATE_KEY_REQUIRED error
-      - null fields returns explicit PDF_EXPORT_FIELDS_REQUIRED error
-      - field with empty key returns explicit PDF_EXPORT_FIELD_KEY_REQUIRED error
-      - invalid UUID sourceSnapshotId returns explicit PDF_EXPORT_INVALID_SOURCE_SNAPSHOT_ID error
-      - invalid UUID sourceApplyLogId returns explicit PDF_EXPORT_INVALID_SOURCE_APPLY_LOG_ID error
+      - frontend-admin-projection-expression-e2e-completion
+    proof_refs:
+      - admin_registration_promotion_contract
+      - admin_projection_readback_contract
+      - frontend_projection_expression_contract
+      - frontend_admin_projection_expression_completion_gap
+    runner_surfaces:
+      - .agent/tests/check-frontend-all-tests.sh
+      - .agent/tests/check-projection-lane-seed-hardening.sh
+      - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - PDF byte generation (out of scope — snapshot boundary only; production PDF layout engine not implemented)
-      - DB persistence (in-memory MVP boundary)
-      - file storage of PDF bytes
-
-  - bundle_id: scheduler_runtime_load_benchmark
-    roadmap_bundle_refs:
-      - scheduler_runtime_load_benchmark
-    ssot_refs:
-      - docs/design/runtime-orchestration-ssot.yaml
-    test_files:
-      - backend/tests/Topolactor.Runtime.Tests/SchedulerLoadBenchmarkTests.cs
-      - backend/scheduler/RuntimeTimelineScheduler.cs
-    test_cases:
-      - file: backend/tests/Topolactor.Runtime.Tests/SchedulerLoadBenchmarkTests.cs
-        cases:
-          - "LoadBenchmark_SustainedThroughput_AllProcessedWithinCapacity"
-          - "LoadBenchmark_HighVolumeBurst_MetricsAreCapturedExplicitly"
-    proves:
-      - input_count, processed_count, rejected_count, timeout_count, backlog_count, queue_full_count are all captured
-      - latency summary (min, max, avg, p50, p95, p99 in ms) is captured for processed requests
-      - sustained throughput scenario: all within-capacity requests are processed with backlog_count=0
-      - high-volume burst scenario: processed + rejected + timeout == input_count (no silent drop)
-      - queue_full_count == rejected_count (SCHEDULER_QUEUE_FULL is the only rejection reason)
-      - all load metric fields are positive and finite
-    does_not_prove:
-      - protocol contract invariants (see FrontendBurstProtocolTests for protocol coverage)
-      - real production database throughput (in-memory scheduler boundary)
-      - live SSE pipeline throughput (integration scope)
-
-  - bundle_id: document_canvas_catalog_seed_ssot_consistency
-    roadmap_bundle_refs:
-      - document_canvas_runtime_connected_factory_registration
-    ssot_refs:
-      - docs/design/ui-ux-primitive-catalog-ssot.yaml
-    test_files:
-      - frontend/tests/documentCanvasCatalogCheck.test.ts
-      - frontend/components/catalog.ts
-      - db/seed_empty.sql
-      - docs/design/ui-ux-primitive-catalog-ssot.yaml
-    test_cases:
-      - file: frontend/tests/documentCanvasCatalogCheck.test.ts
-        cases:
-          - "documentCanvasCatalogCheck: entry exists in COMPONENT_CATALOG_ENTRIES"
-          - "documentCanvasCatalogCheck: sourcePath file exists"
-          - "documentCanvasCatalogCheck: component is exported from frontend/components/index.ts"
-          - "documentCanvasCatalogCheck: seed_empty.sql contains matching ui_component_bucket row"
-          - "documentCanvasCatalogCheck: SSOT contains document_canvas_template_editor entry"
-          - "documentCanvasCatalogCheck: catalog and seed classification fields match"
-    proves:
-      - catalog/seed/design SSOT classification fields are synchronized for document_canvas_template_editor
-      - runtimeConnected/registrationRequired/lifecycleStatus/componentFamily/semanticRole/visualRole/capabilityTags match across catalog, seed, and SSOT
-    does_not_prove:
-      - runtime DB binding completion
-      - projection pipeline correctness (classification consistency check only)
-      - component behavioral semantics at runtime (renderer boundary not covered here)
-
-  - bundle_id: sql_attention_live_db_end_to_end_loop
-    roadmap_bundle_refs:
-      - sql_attention_observation_runtime
-    ssot_refs:
-      - docs/design/sql-attention-logs-ssot.md
-      - docs/design/sql-attention-logs-ssot.yaml
-    test_files:
-      - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-      - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-      - backend/runtime/HubAttractorExplorationRuntime.cs
-      - backend/scheduler/SqlAttentionScheduler.cs
-      - db/sql_attention_logs_tables.sql
-    test_cases:
-      - file: backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-        cases:
-          - "ClosedLoop_DiffAppend_Watch_Explore_WriteAttention_RefreshHubCurrent_ProjectionRead"
-    proves:
-      - logs.diff append is persisted to the physical table
-      - logs.refresh_logs_current_watch returns change candidates with ChangeDetected=true after diff insert
-      - HubAttractorExplorationRuntime.ExploreAsync produces hits from hub_current candidates
-      - NpgsqlSqlAttentionLogsRepository.WriteLogsAttentionAsync persists evidence rows to logs.attention
-      - logs.attention archive_policy is 'required' on all persisted rows (append-only boundary)
-      - phase_vector_json carries w/x/y/z/i/j/k structure with not_manifest_or_policy_cap boundary
-      - meaning_boundary.no_automatic_topology_mutation=true in phase_vector_json per SSOT invariant
-      - logs.refresh_hub_current updates hub_current.population_count from 0 to > 0 (evidence aggregated)
-      - LoadAttentionEvidenceForProjectionAsync returns evidence with StatisticsJson/VectorJson/PhaseVectorJson/EvidenceJson preserved
-      - evidence layer separation (statistics/attention/phase_attention) is maintained through the full loop
-    does_not_prove:
-      - EMA score integration (EmaScore is null by explicit boundary; not a gap)
-      - production scheduler cron timing (cron delay is 60s by default; not tested here)
-      - topology/registry mutation absence at DB level (structural boundary enforced by repository SQL targeting only logs.*)
-      - SSE projection pipeline (separate M4 boundary)
-      - multi-tenant or multi-source-set isolation beyond the single test sourceSetId
-
-  - bundle_id: sql_attention_observation_runtime_production_ready
-    roadmap_bundle_refs:
-      - sql_attention_observation_runtime
-      - sql_attention_live_db_end_to_end_loop
-    ssot_refs:
-      - docs/design/sql-attention-logs-ssot.md
-      - docs/design/sql-attention-logs-ssot.yaml
-    test_files:
-      - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-      - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
-    test_cases:
-      - file: backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-        cases:
-          - "ClosedLoop_DiffAppend_Watch_Explore_WriteAttention_RefreshHubCurrent_ProjectionRead"
-      - file: backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
-        cases:
-          - "RefreshFunction_IncludesTopNMembershipOrderLevelAndDeltaWatch"
-          - "RefreshFunction_ComputesL2NormAndDoesNotWriteAttentionOrPhaseOrExploration"
-          - "PolicyResolver_FailCloses_WhenPolicyMissingOrIncomplete"
-          - "RefreshFunction_UsesSsotPhysicalIdentityColumns_AndNoSiblingDoubleWriteCte"
-          - "RefreshHubCurrent_UpdatesProjectionBoundaries_AndAvoidsMutation"
-          - "GenerateAttentionPhaseVector_ContainsWxyzIjkAndNoPolicyCapMovement"
-    proves:
-      - SQL Attention observation runtime is closed end-to-end with live PostgreSQL
-      - all SSOT boundaries (logs.current / logs.hub_current / logs.attention) are implemented and functional
-      - phase_vector SSOT invariants (w/x/y/z/i/j/k, not_manifest_or_policy_cap) are enforced in persisted data
-      - evidence layer separation (statistics/attention/phase_attention) is maintained through persistence and projection read
-      - append-only constraint on logs.attention is enforced (archive_policy='required')
-      - no topology/registry mutation is introduced by the SQL Attention pipeline
-      - function contract boundaries (refresh_logs_current_watch, refresh_hub_current, generate_attention_phase_vector) are satisfied
-    does_not_prove:
-      - production_ready promotion (requires CI confirmation of live DB E2E evidence run)
-      - EMA score integration (null by explicit boundary; separate implementation task)
-      - SSE projection pipeline (M4 boundary; separate test surface)
-      - multi-instance horizontal scale behavior
+      - completion while frontend_admin_projection_expression_completion_gap remains proof_type known_gap in the SSOT

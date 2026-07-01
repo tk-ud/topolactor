@@ -1,21 +1,20 @@
-version: 2
+version: 3
 ssot_id: test-proof-manifest
-status: draft
+status: active
 
 purpose:
-  - Define what each test proof bundle proves and does not prove across DB, backend, runtime, external intake, instance substrate, and frontend.
-  - Define chronological proof order for bundle scopes.
-  - Treat tests as a system-wide proof graph, not as an unordered file list.
-  - Prevent seed-only, JSON-only, UI-surface-only, backend-unit-only, or CI-runner-only evidence from being overclaimed as E2E proof.
+  - Define the system-wide proof graph for DB, backend, runtime scheduler, manifest dispatch, external intake, instance substrate, admin, and frontend projection expression evidence.
+  - Separate design SSOT references, implementation surfaces, executable tests, runner gates, seed/evidence inputs, and workflow jobs so no evidence class is overclaimed.
+  - Keep missing SSOT, missing tests, and known gaps outside implemented proof edges.
 
 authority_boundary:
   ssot: docs/design/test-proof-manifest-ssot.yaml
   reverse_lookup_index: .agent/docs/test-bundles.yaml
   notes:
     - This file is the design SSOT for test proof meaning and proof order.
-    - .agent/docs/test-bundles.yaml remains an agent-facing reverse lookup and MUST NOT override this SSOT.
-    - Test existence alone is not proof.
-    - Frontend projection proof is only one downstream branch of the system proof graph.
+    - .agent/docs/test-bundles.yaml is a reverse lookup only and MUST NOT override this SSOT.
+    - Test existence, file existence, seed presence, or workflow invocation alone is not proof.
+    - Frontend/admin projection expression is the downstream gap consumer; this manifest update does not implement frontend/admin E2E.
 
 proof_model:
   required_fields:
@@ -23,13 +22,36 @@ proof_model:
     - proof_order
     - scope_phase
     - domain
+    - proof_type
     - source_contract
     - target_contract
+    - ssot_refs
+    - implementation_files
     - test_files
-    - proves
-    - does_not_prove
+    - runner_surfaces
+    - evidence_inputs
+    - workflow_jobs
+    - required_when
     - depends_on
     - unblocks
+    - proves
+    - does_not_prove
+  proof_types:
+    - design_boundary_proof
+    - executable_test_proof
+    - integration_route_proof
+    - runner_gate_proof
+    - known_gap
+  required_when_schema:
+    changed_files: list of repository path globs that require evaluating the proof edge or gap
+  field_boundaries:
+    ssot_refs: design SSOTs that exist and are authoritative for the edge
+    missing_ssot_blocking: referenced design contracts that do not exist yet and therefore cannot be treated as ssot_refs
+    implementation_files: product code or schema implementation surfaces, excluding seeds and tests
+    test_files: executable test files or test project files only; MUST NOT contain docs/design, db seed files, product implementation files, or runner scripts
+    runner_surfaces: local agent scripts or CI gate scripts that execute or audit tests
+    evidence_inputs: seed, schema fixture, static fixture, or input files consumed as evidence but not executable tests
+    workflow_jobs: GitHub workflow jobs that run the runner/audit surface
   prohibited_claims:
     - DB seed presence alone proves runtime behavior.
     - Backend unit success alone proves scheduler/external/frontend route behavior.
@@ -43,15 +65,36 @@ proof_model:
     - fallback, error, or empty DOM alone proves successful UI expression.
 
 chronological_scope_index:
-  - proof_order: 10
+  - proof_id: ssot_structure_policy_contract
+    proof_order: 10
     scope_phase: ssot_structure_and_policy_gate
     domain: governance
-    proof_id: ssot_structure_policy_contract
+    proof_type: runner_gate_proof
     source_contract: AGENTS.md + .agent rules + framework policy
     target_contract: repository structure and SSOT routing contract
-    test_files:
+    ssot_refs:
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+    implementation_files: []
+    test_files: []
+    runner_surfaces:
       - .agent/tests/check-structure.sh
       - .agent/tests/check-ssot-vocabulary-contract.sh
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs:
+      - AGENTS.md
+      - .agent/rules/rule.md
+      - .agent/README.md
+      - .agent/prompt/design-change.md
+      - .agent/protocols/design-change.md
+    workflow_jobs:
+      - .github/workflows/structure-check.yml::structure-check
+    required_when:
+      changed_files:
+        - AGENTS.md
+        - .agent/**
+        - docs/framework-*.yaml
+        - docs/design/test-proof-manifest-ssot.yaml
     depends_on: []
     unblocks:
       - db_schema_seed_contract
@@ -61,27 +104,50 @@ chronological_scope_index:
       - instance_substrate_contract_gap
       - frontend_projection_expression_contract
     proves:
-      - required governance and structure checks can run explicitly
-      - vocabulary and SSOT routing drift can be detected at repository boundary
+      - governance structure and manifest integrity can be audited before claiming proof completion
+      - proof graph shape, dependency references, and field separation are machine-checked
     does_not_prove:
       - DB schema behavior
       - backend runtime behavior
-      - external or instance behavior
-      - frontend UI expression
+      - external, instance, admin, or frontend runtime behavior
 
-  - proof_order: 20
+  - proof_id: db_schema_seed_contract
+    proof_order: 20
     scope_phase: db_schema_seed_authority
     domain: db
-    proof_id: db_schema_seed_contract
+    proof_type: executable_test_proof
     source_contract: DB schema/seed SSOT and migration contract
     target_contract: canonical DB tables, seed rows, and registration records
-    test_files:
+    ssot_refs:
+      - docs/design/db-schema.yaml
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    implementation_files:
       - db/schema.sql
-      - db/seed_empty.sql
-      - db/demo_seed.sql
+      - db/topology_tables.sql
+      - db/manifest_tables.sql
+      - db/ui_topology_tables.sql
+    test_files:
       - frontend/tests/componentCatalogSeedRegistration.test.ts
       - frontend/tests/adminDispatchManifestSeed.test.ts
       - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
+    runner_surfaces:
+      - .agent/tests/check-db-schema.sh
+      - .agent/tests/check-unified-test-gate.sh
+    evidence_inputs:
+      - db/seed_empty.sql
+      - db/demo_seed.sql
+      - db/enum_seed.sql
+    workflow_jobs:
+      - .github/workflows/db-schema-check.yml::db-schema-check
+      - .github/workflows/bootstrap-validation.yml::bootstrap-sql-validation
+    required_when:
+      changed_files:
+        - db/**/*.sql
+        - docs/design/db-schema.yaml
+        - docs/design/*catalog*ssot.yaml
     depends_on:
       - ssot_structure_policy_contract
     unblocks:
@@ -90,25 +156,47 @@ chronological_scope_index:
       - admin_registration_promotion_contract
       - frontend_projection_expression_contract
     proves:
-      - seed/catalog evidence exists where tests assert it
-      - registrationRequired/catalog alignment can be checked against DB seed surfaces
-      - schema/seed files are available as proof inputs
+      - schema and seed evidence can be checked against catalog/registration expectations where tests assert them
+      - seeds are evidence inputs only, not executable proof files
     does_not_prove:
-      - live DB migration was applied
-      - runtime executed against a real database
-      - external source wrote through preview/apply
-      - frontend rendered DB-derived records
+      - live production migration application
+      - runtime execution against real DB rows beyond covered tests
+      - external source writes or frontend rendered records
 
-  - proof_order: 30
+  - proof_id: backend_runtime_function_contract
+    proof_order: 30
     scope_phase: backend_function_boundary
     domain: backend
-    proof_id: backend_runtime_function_contract
+    proof_type: executable_test_proof
     source_contract: backend runtime function/interface contract
     target_contract: explicit function outputs and failure codes
+    ssot_refs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+    implementation_files:
+      - backend/runtime
+      - backend/guard
+      - backend/mapper
+      - backend/schema
     test_files:
       - backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj
+      - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/JsonbManifestRuntimeTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/DocumentCanvasBindingPolicyTests.cs
+    runner_surfaces:
       - .agent/tests/check-backend-tests.sh
       - .agent/tests/check-runtime-semantics.sh
+    evidence_inputs: []
+    workflow_jobs:
+      - .github/workflows/backend-tests.yml::backend-tests
+      - .github/workflows/runtime-semantics.yml::runtime-semantics
+    required_when:
+      changed_files:
+        - backend/**/*.cs
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
     depends_on:
       - ssot_structure_policy_contract
       - db_schema_seed_contract
@@ -117,48 +205,85 @@ chronological_scope_index:
       - runtime_trigger_scheduler_contract
       - admin_registration_promotion_contract
     proves:
-      - backend function boundaries can be verified by runtime unit tests
-      - explicit failure behavior is testable at backend boundary
+      - backend function boundaries and explicit failure behavior are executable at unit-test boundary
     does_not_prove:
       - integration route through scheduler/dispatcher
-      - cron/hook/client trigger alignment
-      - external API or instance behavior
-      - frontend behavior
+      - external API, instance authority, or frontend behavior
 
-  - proof_order: 40
+  - proof_id: backend_runtime_integration_contract
+    proof_order: 40
     scope_phase: backend_runtime_integration
     domain: backend
-    proof_id: backend_runtime_integration_contract
+    proof_type: integration_route_proof
     source_contract: backend function outputs
     target_contract: dispatcher/executor/integration route outputs
+    ssot_refs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+    implementation_files:
+      - backend/endpoint
+      - backend/repository
+      - backend/runtime
     test_files:
       - backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj
+      - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
+      - backend/tests/Topolactor.Integration.Tests/UiTopologyRegistrationContinuityIntegrationTests.cs
+      - backend/tests/Topolactor.Integration.Tests/ComponentEventAppendIntegrationTests.cs
+    runner_surfaces:
       - .agent/tests/check-unified-test-gate.sh
+      - .agent/tests/check-default-entity-search.sh
+    evidence_inputs: []
+    workflow_jobs:
+      - .github/workflows/unified-test-gate.yml::test-gate
+      - .github/workflows/default-entity-search.yml::default-entity-search
+    required_when:
+      changed_files:
+        - backend/**/*.cs
+        - db/**/*.sql
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
     depends_on:
       - backend_runtime_function_contract
     unblocks:
       - runtime_trigger_scheduler_contract
       - admin_projection_readback_contract
     proves:
-      - backend integration boundary can validate dispatch/executor route behavior where covered
+      - covered backend integration tests validate dispatch/executor route behavior
     does_not_prove:
-      - live DB/docker-compose environment
-      - external webhook or REST intake
+      - live external webhook or REST intake
       - real frontend projection/rendering
 
-  - proof_order: 50
+  - proof_id: runtime_trigger_scheduler_contract
+    proof_order: 50
     scope_phase: runtime_trigger_scheduler
     domain: runtime
-    proof_id: runtime_trigger_scheduler_contract
+    proof_type: executable_test_proof
     source_contract: cron/hook/client trigger contract
     target_contract: scheduler-aligned runtime event contract
     ssot_refs:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/runtime-bundle-job-scheduler-ssot.yaml
+    implementation_files:
+      - backend/scheduler
+      - frontend/runtime/frontendScheduler.ts
     test_files:
+      - backend/tests/Topolactor.Runtime.Tests/SystemOperationCiSchedulerTests.cs
       - backend/tests/Topolactor.Runtime.Tests/SchedulerLoadBenchmarkTests.cs
-      - backend/scheduler/RuntimeTimelineScheduler.cs
+      - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditSchedulerRuntimeTests.cs
+      - frontend/tests/frontendScheduler.test.ts
+      - frontend/tests/sseLane.test.ts
+    runner_surfaces:
       - .agent/tests/check-unified-test-gate.sh
+      - .agent/tests/check-runtime-semantics.sh
+    evidence_inputs: []
+    workflow_jobs:
+      - .github/workflows/unified-test-gate.yml::test-gate
+      - .github/workflows/runtime-semantics.yml::runtime-semantics
+    required_when:
+      changed_files:
+        - backend/scheduler/**
+        - frontend/runtime/frontendScheduler.ts
+        - docs/design/runtime-bundle-job-scheduler-ssot.yaml
     depends_on:
       - backend_runtime_function_contract
       - backend_runtime_integration_contract
@@ -167,68 +292,100 @@ chronological_scope_index:
       - external_intake_surface_contract
       - instance_substrate_contract_gap
     proves:
-      - scheduler-related tests can prove trigger alignment and queue behavior where implemented
-      - cron/hook/client belong before runtime route, not after it
+      - cron/hook/client scheduler boundaries are ordered before runtime route proof and covered where tests assert them
     does_not_prove:
       - manifest dispatcher selected the correct runtime destination
       - external webhook/API intake was validated and applied
       - instance execution authority was enforced
 
-  - proof_order: 60
+  - proof_id: manifest_dispatch_runtime_route_contract
+    proof_order: 60
     scope_phase: manifest_dispatch_runtime_route
     domain: runtime
-    proof_id: manifest_dispatch_runtime_route_contract
+    proof_type: integration_route_proof
     source_contract: scheduler-aligned runtime event contract
     target_contract: manifest dispatcher/runtime route contract
     ssot_refs:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/pipeline-continuity-ssot.yaml
+    implementation_files:
+      - backend/runtime
+      - backend/endpoint
+      - frontend/runtime/projectionRuntime.ts
+      - frontend/runtime/renderEmission.ts
     test_files:
-      - backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj
-      - backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimePackageWiringTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/ManifestScreenOperationDeriverTests.cs
+      - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
       - frontend/tests/pipelineContinuity.test.ts
+      - frontend/tests/sseLane.test.ts
+    runner_surfaces:
+      - .agent/tests/check-unified-test-gate.sh
+      - .agent/tests/check-projection-lane-seed-hardening.sh
+    evidence_inputs:
+      - db/seed_empty.sql
+    workflow_jobs:
+      - .github/workflows/unified-test-gate.yml::test-gate
+      - .github/workflows/projection-lane-seed-hardening.yml::backend-lane
+      - .github/workflows/projection-lane-seed-hardening.yml::frontend-lane
+    required_when:
+      changed_files:
+        - backend/runtime/**
+        - backend/endpoint/**
+        - frontend/runtime/**
+        - docs/design/pipeline-continuity-ssot.yaml
     depends_on:
       - runtime_trigger_scheduler_contract
     unblocks:
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
     proves:
-      - dispatcher/runtime lane evidence can be connected to pipeline continuity where tests assert it
+      - dispatcher/runtime/projection lane evidence is connected to pipeline continuity where tests assert it
     does_not_prove:
       - external source validation/preview/apply
       - instance authority
       - rendered frontend DOM
 
-  - proof_order: 70
+  - proof_id: external_intake_surface_contract
+    proof_order: 70
     scope_phase: external_intake_and_api_surface
     domain: external
-    proof_id: external_intake_surface_contract
+    proof_type: design_boundary_proof
     source_contract: external source / webhook / REST API / connector adapter contract
     target_contract: intake snapshot -> validate -> preview -> explicit apply -> canonical runtime route contract
     ssot_refs:
       - docs/design/extended-runtime-bundle-registry-ssot.yaml
-    test_files:
-      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+      - docs/design/runtime-bundle-secret-credential-ssot.yaml
+    implementation_files: []
+    test_files: []
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs:
       - .agent/tasks/todo.md
+    workflow_jobs:
+      - .github/workflows/structure-check.yml::structure-check
+    required_when:
+      changed_files:
+        - docs/design/extended-runtime-bundle-registry-ssot.yaml
+        - docs/design/runtime-bundle-*-ssot.yaml
+        - .agent/tasks/todo.md
     depends_on:
       - runtime_trigger_scheduler_contract
       - manifest_dispatch_runtime_route_contract
     unblocks:
       - external_bundle_specific_proofs_gap
     proves:
-      - external surfaces require separate SSOT before implementation
+      - external intake must not be claimed as implemented by scheduler/runtime tests alone
       - direct DB write and direct runtime execution are prohibited by design boundary
-      - webhook/REST/external intake must route through scheduler/validate/preview/apply where designed
     does_not_prove:
-      - Notion/Sheets/Slack/GitHub/Webhook/REST connector implementation exists
-      - connector authentication or credential handling works
-      - external intake produces valid topology payload candidates
-      - runtime event log/diff log evidence is produced by real external events
+      - connector implementation, authentication, credential handling, payload validation, or runtime event logs from real external events
 
-  - proof_order: 80
+  - proof_id: external_bundle_specific_proofs_gap
+    proof_order: 80
     scope_phase: external_bundle_specific_proofs
     domain: external
-    proof_id: external_bundle_specific_proofs_gap
+    proof_type: known_gap
     source_contract: bundle-specific external SSOTs
     target_contract: implemented external connector proof bundles
     ssot_refs:
@@ -238,26 +395,49 @@ chronological_scope_index:
       - docs/design/runtime-bundle-export-sftp-ssot.yaml
       - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
       - docs/design/runtime-bundle-secret-credential-ssot.yaml
+      - docs/design/runtime-bundle-audit-approval-ssot.yaml
+    implementation_files: []
     test_files: []
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs:
+      - .agent/tasks/todo.md
+    workflow_jobs:
+      - .github/workflows/structure-check.yml::structure-check
+    required_when:
+      changed_files:
+        - docs/design/runtime-bundle-*-ssot.yaml
     depends_on:
       - external_intake_surface_contract
     unblocks: []
-    proves:
-      - not_yet_implemented
+    known_gap_reason: bundle-specific external connector proof suites are not implemented yet
+    proves: []
     does_not_prove:
-      - Any specific external connector behavior until its separate SSOT and tests exist
+      - any specific external connector behavior
 
-  - proof_order: 90
+  - proof_id: instance_substrate_contract_gap
+    proof_order: 90
     scope_phase: instance_substrate
     domain: instance
-    proof_id: instance_substrate_contract_gap
+    proof_type: known_gap
     source_contract: instance settings / primitive / runtime / execution authority contract
     target_contract: instance runtime authority proof bundle
     ssot_refs:
-      - docs/design/instance-port-substrate-ssot.yaml
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/runtime-orchestration-ssot.yaml
+    missing_ssot_blocking:
+      - docs/design/instance-port-substrate-ssot.yaml
+    implementation_files: []
     test_files: []
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs: []
+    workflow_jobs:
+      - .github/workflows/structure-check.yml::structure-check
+    required_when:
+      changed_files:
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
     depends_on:
       - ssot_structure_policy_contract
       - runtime_trigger_scheduler_contract
@@ -265,8 +445,8 @@ chronological_scope_index:
     unblocks:
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
-    proves:
-      - not_yet_implemented
+    known_gap_reason: instance-port substrate SSOT is missing and no executable instance authority proof exists
+    proves: []
     does_not_prove:
       - instance settings topology
       - primitive registry authority
@@ -274,22 +454,47 @@ chronological_scope_index:
       - execution authority enforcement
       - credential/secret boundary behavior
 
-  - proof_order: 100
+  - proof_id: admin_registration_promotion_contract
+    proof_order: 100
     scope_phase: admin_surface_and_registration
     domain: admin
-    proof_id: admin_registration_promotion_contract
+    proof_type: executable_test_proof
     source_contract: admin operation + DB/catalog registration contract
     target_contract: registered topology/projection record contract
+    ssot_refs:
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/admin-master-roster-management-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    implementation_files:
+      - backend/runtime
+      - backend/repository
+      - frontend/api/adminApi.ts
+      - frontend/routes/admin
     test_files:
       - frontend/tests/adminApi.test.ts
       - frontend/tests/adminImport.test.ts
       - frontend/tests/adminUxGuard.test.ts
       - frontend/tests/uiRenderedInteraction.test.ts
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimePromotionManifestTests.cs
       - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+    runner_surfaces:
+      - .agent/tests/check-unified-test-gate.sh
+      - .agent/tests/check-frontend-all-tests.sh
+      - .agent/tests/check-backend-tests.sh
+    evidence_inputs:
+      - db/seed_empty.sql
+    workflow_jobs:
+      - .github/workflows/unified-test-gate.yml::test-gate
+    required_when:
+      changed_files:
+        - backend/runtime/AdminRuntime*.cs
+        - frontend/routes/admin/**
+        - frontend/api/adminApi.ts
+        - docs/design/admin-*-ssot.yaml
     depends_on:
       - db_schema_seed_contract
       - backend_runtime_function_contract
-      - instance_substrate_contract_gap
     unblocks:
       - admin_projection_readback_contract
     proves:
@@ -300,35 +505,72 @@ chronological_scope_index:
       - projection readback consumed the promoted record
       - UI rendered the promoted record
 
-  - proof_order: 110
+  - proof_id: admin_projection_readback_contract
+    proof_order: 110
     scope_phase: projection_readback_and_lane
     domain: frontend_runtime
-    proof_id: admin_projection_readback_contract
+    proof_type: integration_route_proof
     source_contract: registered topology/projection record contract
     target_contract: projection event/emission contract
+    ssot_refs:
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    implementation_files:
+      - frontend/runtime/projectionRuntime.ts
+      - frontend/runtime/renderEmission.ts
+      - frontend/components/ProjectionView.tsx
     test_files:
       - frontend/tests/projectionLaneSeedHarness.test.ts
       - frontend/tests/sseLane.test.ts
       - frontend/tests/pipelineContinuity.test.ts
+    runner_surfaces:
+      - .agent/tests/check-projection-lane-seed-hardening.sh
+      - .agent/tests/check-frontend-all-tests.sh
+    evidence_inputs:
+      - db/seed_empty.sql
+    workflow_jobs:
+      - .github/workflows/projection-lane-seed-hardening.yml::frontend-lane
+      - .github/workflows/projection-lane-seed-hardening.yml::seed-contract
+      - .github/workflows/projection-lane-seed-hardening.yml::seed-to-lane-integration
+    required_when:
+      changed_files:
+        - frontend/runtime/projectionRuntime.ts
+        - frontend/runtime/renderEmission.ts
+        - frontend/components/ProjectionView.tsx
+        - docs/design/pipeline-continuity-ssot.yaml
     depends_on:
       - admin_registration_promotion_contract
       - manifest_dispatch_runtime_route_contract
     unblocks:
       - frontend_projection_expression_contract
     proves:
-      - projection lane preserves identity fields required by frontend projection constructor
+      - projection lane preserves identity fields required by frontend projection constructor where tests assert it
       - seed/test data may be used as input fixture for lane assertions
     does_not_prove:
       - seed fixture alone proves admin registration or update
       - projection JSON display proves user-facing component rendering
-      - live SSE/backend push is covered
+      - live backend SSE push is fully covered
 
-  - proof_order: 120
+  - proof_id: frontend_projection_expression_contract
+    proof_order: 120
     scope_phase: frontend_projection_expression
     domain: frontend
-    proof_id: frontend_projection_expression_contract
+    proof_type: executable_test_proof
     source_contract: projection event/emission contract
     target_contract: rendered component / layout / visual guard DOM contract
+    ssot_refs:
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/css-dictionary-ssot.yaml
+      - docs/design/topology-layout-class-ssot.yaml
+    implementation_files:
+      - frontend/runtime/projectionConstructor.ts
+      - frontend/runtime/projectionRuntime.ts
+      - frontend/runtime/runtimeComponentFactory.ts
+      - frontend/runtime/runtimePrimitiveRenderer.ts
+      - frontend/runtime/visualLayoutUtils.ts
+      - frontend/components/LayoutVisualAuditCanvas.tsx
     test_files:
       - frontend/tests/projectionConstructor.test.ts
       - frontend/tests/projectionRuntime.test.ts
@@ -336,31 +578,58 @@ chronological_scope_index:
       - frontend/tests/runtimeComponentFactory.test.ts
       - frontend/tests/visualLayoutBuilder.test.ts
       - frontend/tests/adminUxGuard.test.ts
+    runner_surfaces:
+      - .agent/tests/check-frontend-all-tests.sh
+      - .agent/tests/check-unified-test-gate.sh
+    evidence_inputs: []
+    workflow_jobs:
+      - .github/workflows/unified-test-gate.yml::test-gate
+      - .github/workflows/projection-lane-seed-hardening.yml::frontend-user-facing-render
+    required_when:
+      changed_files:
+        - frontend/runtime/**
+        - frontend/components/**
+        - docs/design/*catalog*ssot.yaml
+        - docs/design/css-dictionary-ssot.yaml
+        - docs/design/topology-layout-class-ssot.yaml
     depends_on:
       - admin_projection_readback_contract
     unblocks:
       - frontend_admin_projection_expression_completion_gap
     proves:
-      - projection constructor, runtime renderer, and layout/visual guard edges are partially covered by existing tests
+      - projection constructor, runtime renderer, factory, and layout/visual guard edges are partially covered by existing tests
     does_not_prove:
-      - componentKey catalog membership unless asserted by a catalog edge test
-      - unknown props global policy
-      - LayoutVisualAuditCanvas direct render unless dedicated test exists
       - admin-created projection reached user-facing DOM
+      - unknown props global policy
+      - complete LayoutVisualAuditCanvas direct render unless dedicated test asserts it
 
-  - proof_order: 130
+  - proof_id: frontend_admin_projection_expression_completion_gap
+    proof_order: 130
     scope_phase: frontend_admin_projection_expression_completion
     domain: cross_domain
-    proof_id: frontend_admin_projection_expression_completion_gap
+    proof_type: known_gap
     source_contract: admin registration/update command contract
     target_contract: visual guard DOM contract
-    test_files:
-      - frontend/tests/projectionLaneSeedHarness.test.ts
-      - frontend/tests/uiRenderedInteraction.test.ts
-      - frontend/tests/adminUxGuard.test.ts
-      - frontend/tests/visualLayoutBuilder.test.ts
-      - frontend/tests/runtimeComponentFactory.test.ts
-      - frontend/tests/projectionConstructor.test.ts
+    ssot_refs:
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+    implementation_files: []
+    test_files: []
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs:
+      - .agent/tasks/todo.md
+    workflow_jobs:
+      - .github/workflows/structure-check.yml::structure-check
+    required_when:
+      changed_files:
+        - frontend/**
+        - backend/**
+        - db/**/*.sql
+        - docs/design/test-proof-manifest-ssot.yaml
     depends_on:
       - db_schema_seed_contract
       - backend_runtime_function_contract
@@ -371,13 +640,14 @@ chronological_scope_index:
       - frontend_projection_expression_contract
     unblocks:
       - frontend-admin-projection-expression-e2e-completion
-    proves:
-      - not_yet_implemented
+    known_gap_reason: admin registration/update to readback to catalog/runtime/layout/visual DOM is not yet proven end-to-end
+    proves: []
     does_not_prove:
-      - This proof is currently the known gap. Downstream work must add missing edge tests or cite existing proof edges by proof_id.
+      - downstream work must add missing edge tests or cite existing proof edges by proof_id before claiming completion
 
 maintenance_rules:
-  - When adding a test file, add or update a proof_id here before claiming a new proof boundary.
-  - When moving a test between proof scopes, update proof_order and depends_on/unblocks in the same change.
-  - DB/backend/runtime/external/instance/frontend proof gaps must remain explicit.
-  - The selected CI gate should eventually consume proof_id semantics rather than raw file lists only.
+  - Add or update a proof_id before claiming a new proof boundary.
+  - Keep proof_order, depends_on, and unblocks acyclic and aligned in the same change.
+  - DB/backend/runtime/external/instance/admin/frontend proof gaps must remain explicit.
+  - Known gaps and missing SSOTs MUST NOT be mixed into implemented proof edges.
+  - CI gates MUST run manifest integrity checks and MUST NOT claim proof completion from fixed test lists alone.

@@ -10,7 +10,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | not_started | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
-| `test-proof-manifest-ci-gate` | test 証明 Manifest / CI gate | not_started | 1 | `docs/design/test-proof-manifest-ssot.yaml` |
+| `test-proof-manifest-ci-gate` | test 証明 Manifest / CI gate | partial | 1 | `docs/design/test-proof-manifest-ssot.yaml` |
 | `frontend-admin-projection-expression-e2e-completion` | admin 投影登録/更新 E2E 完全化 | not_started | 1 | `docs/design/admin-console-workflow-ssot.yaml` |
 
 ---
@@ -45,10 +45,10 @@
 
 ## Bundle `test-proof-manifest-ci-gate`
 
-**Status:** not_started  
+**Status:** partial  
 **SSOT:** `docs/design/test-proof-manifest-ssot.yaml`, `.agent/docs/test-bundles.yaml`（reverse lookup）, `docs/system-roadmap.yaml`（参照）
 
-- [ ] system-wide test 証明 Manifest と CI gate 最適化
+- [x] system-wide test 証明 Manifest と CI gate 最適化（SSOT proof graph / reverse lookup / integrity gate / workflow wiring を追加。known gap は SSOT に残す）
   - 問題点: 既存 test は個別に存在するが、DB/schema/seed、backend runtime、scheduler cron/hook/client、manifest dispatch、external intake/API、instance substrate、admin/frontend projection がそれぞれ何を証明し、何を証明せず、どの時系列順序で接続されるかが SSOT として固定されていない。
   - 目的: `docs/design/test-proof-manifest-ssot.yaml` を正本として、既存 test 群を system-wide proof graph として扱える状態にする。
   - 改善方針: `proof_id`, `proof_order`, `scope_phase`, `domain`, `depends_on`, `unblocks`, `source_contract`, `target_contract`, `proves`, `does_not_prove` を軸に `.agent/docs/test-bundles.yaml` と CI gate を整合させる。frontend/admin だけでなく DB/backend/runtime/external/instance の未証明 edge も明示する。

@@ -113,6 +113,14 @@ check_no_in_progress_todos() {
   fi
 }
 
+check_test_proof_manifest_integrity() {
+  if bash "$REPO_ROOT/.agent/tests/check-test-proof-manifest-integrity.sh"; then
+    echo "OK  [test-proof] manifest integrity"
+  else
+    fail "test proof manifest integrity failed"
+  fi
+}
+
 check_no_annotated_pseudo_paths_in_ssot_map() {
   local ssot_map="$REPO_ROOT/.agent/docs/ssot-map.yaml"
   if [ ! -f "$ssot_map" ]; then
@@ -204,6 +212,7 @@ check_file ".agent/tests/check-topology-layout-class-ssot.sh"
 check_file ".agent/tests/check-ui-ux-executable-component-slice.sh"
 check_file ".agent/tests/check-worktype-routing.sh"
 check_file ".agent/tests/check-local-ci.sh"
+check_file ".agent/tests/check-test-proof-manifest-integrity.sh"
 check_file ".agent/tasks/todo.md"
 check_file ".agent/reports/README.md"
 check_file ".agent/checklists/policy-judgment.md"
@@ -924,6 +933,8 @@ if bash "$REPO_ROOT/.agent/tests/check-cli-mcp-port-implementation-ssot.sh"; the
 else
   fail "Subcheck failed: .agent/tests/check-cli-mcp-port-implementation-ssot.sh"
 fi
+
+check_test_proof_manifest_integrity
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== All checks passed ==="
