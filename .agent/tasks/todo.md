@@ -40,13 +40,36 @@
 seed 存在確認だけで implemented 判定しない。
 失敗 test を根拠に、次 bundle で projection registration / read / render の実装修正 scope を確定する。
 
+### 実装境界
+
+この bundle は test hardening が scope であり、投影基盤本体の修正 bundle ではない。
+追加・拡張した test が runtime read-source / frontend render / canonical projection consumer の実装断線を露出した場合、その失敗は本 bundle の成果として扱い、断線修正は次 bundle に分離する。
+
+この bundle 内で直してよい範囲:
+
+- test harness の不備
+- GitHub Actions workflow 未接続
+- seed fixture の不足
+- test log の不足
+- assertion 粒度不足
+- lane に seed が流れていない test 構成不備
+
+この bundle 内で直してはいけない範囲:
+
+- runtime read-source 本体修正
+- frontend render 本体修正
+- canonical projection consumer の実装
+- 投影基盤そのものの修正を test hardening に混ぜること
+
 ### OK軸
 
 - 追加・拡張した test が GitHub Actions workflow に含まれること
+- GitHub Actions の job / step 名で backend lane / frontend lane / seed contract / seed → lane integration のどこで落ちたか分かること
 - test error 時のログが、どの lane / seed / projection mapping が壊れたか分かる粒度で出ること
 - lane test が seed を実際に入力として流せること
 - seed 存在確認だけでなく、seed → lane → projection assertion まで到達すること
 - fail した場合に、frontend render 断線・backend read 断線・seed 整合不良を切り分けられること
+- test failure が implementation gap を示す場合、その場で実装修正せず次 bundle の scope へ分離できること
 
 ### NG軸
 
@@ -54,6 +77,7 @@ seed 存在確認だけで implemented 判定しない。
 - GitHub workflow に含まれない test を追加して完了扱いにする
 - error log が単なる assertion failed で、壊れた lane / seed / mapping が分からない
 - seed の文字列存在確認だけで lane に流していない
+- test failure が示した runtime read-source / frontend render / canonical projection consumer の実装不足を、この bundle 内で雑に潰す
 - frontend-only 表示追加や seed-only 修正で implemented 扱いにする
 
 ### 対応資料
@@ -126,6 +150,7 @@ CI / workflow:
 
 - [ ] Test error を潰す
   - 追加・拡張した lane / seed test を GitHub workflow 上で通す
+  - test harness / workflow / seed fixture / log / assertion 粒度の不備を潰す
   - test failure が実装不足を示す場合は、修正対象を次 bundle へ分離する
   - frontend-only 表示追加や seed-only 修正で implemented 扱いにしない
 
