@@ -21,7 +21,7 @@ public class InMemoryAggregateTriggerRepository : AggregateTriggerRepository
 
     public Task<AggregateTriggerAppendResult> AppendEventEvidenceAsync(AggregateTriggerEventEvidence evidence, CancellationToken ct = default)
     {
-        lock (_gate) return Task.FromResult(new AggregateTriggerAppendResult(_events.Add((evidence.DefinitionId, evidence.EventId))));
+        lock (_gate) return Task.FromResult(new AggregateTriggerAppendResult(_events.Add((evidence.TriggerDefinitionId, evidence.EventId))));
     }
 
     public Task<AggregateTriggerCurrentRow> AtomicUpsertCurrentAsync(Guid definitionId, string conflictKey, IReadOnlyDictionary<string, decimal> deltaMap, CancellationToken ct = default)
@@ -41,7 +41,7 @@ public class InMemoryAggregateTriggerRepository : AggregateTriggerRepository
     {
         lock (_gate)
         {
-            var key = (definition.DefinitionId, currentRow.ConflictKey);
+            var key = (definition.TriggerDefinitionId, currentRow.ConflictKey);
             if (_materializations.TryGetValue(key, out var existing)) return Task.FromResult(new AggregateTriggerMaterializationResult(false, existing));
             var id = Guid.NewGuid();
             _materializations[key] = id;

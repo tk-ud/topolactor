@@ -1,37 +1,44 @@
 export const aggregateTriggerRuntimeDestination = "aggregate_trigger_runtime" as const;
-export const aggregateTriggerKinds = ["cron", "hook", "client"] as const;
-export const sourceDetailKinds = ["schedule", "webhook", "ui_operation", "system_operation", "component_event"] as const;
-export const materializationPayloadSourceKinds = [
+export const canonicalTriggerKinds = ["cron", "hook", "client"] as const;
+export const triggerSourceDetailKinds = ["client_operation_event", "hook_event", "scheduled_cron_event", "runtime_function_event"] as const;
+export const materializationPayloadMapAllowedSources = [
   "function_input_event",
   "aggregate_current_row",
-  "step2_entity_field",
-  "step2_5_relation_field",
+  "selected_step2_entity_fields",
+  "selected_step2_5_relation_fields",
   "constant",
   "generated_value",
-  "runtime_actor_metadata",
-  "runtime_source_metadata",
+  "runtime_actor_source_metadata",
 ] as const;
+export const approvalPolicyAllowedValues = [
+  "auto_materialize_when_threshold_passes",
+  "require_backend_approval_before_materialization",
+  "require_human_approval_before_materialization",
+] as const;
+export const comparisonOperatorAllowedValues = [">", ">=", "<", "<=", "=", "!="] as const;
 
-export type StepTarget = { kind: "step2_entity" | "step2_5_relation"; id: string; label: string };
+export type StepTarget = { targetSource: "step2_logical_entity_definition" | "step2_5_relation_definition"; targetId: string; label: string };
 
-export function aggregateTriggerTargetOptions(step2Entities: StepTarget[], step25Relations: StepTarget[]): StepTarget[] {
-  return [...step2Entities, ...step25Relations].filter((target) =>
-    target.kind === "step2_entity" || target.kind === "step2_5_relation"
+export function aggregateTriggerTargetOptions(step2LogicalEntityDefinitions: StepTarget[], step25RelationDefinitions: StepTarget[]): StepTarget[] {
+  return [...step2LogicalEntityDefinitions, ...step25RelationDefinitions].filter((target) =>
+    target.targetSource === "step2_logical_entity_definition" || target.targetSource === "step2_5_relation_definition"
   );
 }
 
 export function previewAggregateTriggerDefinition(input: {
-  triggerKind: string;
-  sourceDetailKind: string;
-  aggregateTarget: StepTarget;
-  materializationTarget: StepTarget;
+  canonicalTriggerKind: string;
+  triggerSourceDetailKind: string;
+  aggregateTargetBinding: StepTarget;
+  materializationTargetBinding: StepTarget;
 }) {
   return {
     runtimeDestination: aggregateTriggerRuntimeDestination,
-    triggerKind: input.triggerKind,
-    sourceDetailKind: input.sourceDetailKind,
-    aggregateTarget: input.aggregateTarget,
-    materializationTarget: input.materializationTarget,
-    frontendJudgment: "authoring_preview_only_no_threshold_materialization_or_approval_decision",
+    triggerSource: {
+      canonicalTriggerKind: input.canonicalTriggerKind,
+      triggerSourceDetailKind: input.triggerSourceDetailKind,
+    },
+    aggregateTargetBinding: input.aggregateTargetBinding,
+    materializationTargetBinding: input.materializationTargetBinding,
+    frontendRole: "structured_selector_and_preview_only",
   };
 }
