@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
@@ -30,7 +31,8 @@ public class RuntimeExecutorTests
 
     internal static RuntimeExecutor CreateExecutor(
         TopologyRepository? topologyRepositoryOverride = null,
-        ManifestRepository? manifestRepository = null)
+        ManifestRepository? manifestRepository = null,
+        OutputLaneRouter? outputLaneRouter = null)
     {
         var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
@@ -56,6 +58,7 @@ public class RuntimeExecutorTests
                 contextRoutePolicyRepository,
                 new SystemOperationCiRuntime(
                     NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
+            outputLaneRouter: outputLaneRouter,
             manifestRepository: manifestRepository);
     }
 
@@ -1078,6 +1081,73 @@ public class ManifestDispatcherManifestDrivenTests
         Assert.Contains(response.Errors, e => e.Code == "DB_NOTIFY_PROJECTION_MAPPING_MISSING");
     }
 
+
+    [Fact]
+    public async Task ProjectionLaneSeedCollapse_SeedManifestIdentity_ReachesScreenDataDbNotifyAndSse()
+    {
+        var seedFile = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../db/demo_seed.sql"));
+        var manifestId = Guid.Parse("00000000-0000-0000-0000-000000000085");
+        var seedManifest = LoadSeedManifest(seedFile, manifestId);
+        var dispatcherEntry = RequireTopologyEntry(seedManifest.Topology, "dispatcher_mapping", seedFile, manifestId);
+        var screenShape = RequireTopologyEntry(seedManifest.Topology, "screen_data_shape", seedFile, manifestId);
+        var projectionMapping = RequireTopologyEntry(seedManifest.Topology, "projection_constructor_mapping", seedFile, manifestId);
+        var notifyMapping = RequireTopologyEntry(seedManifest.Topology, "db_notify_projection_mapping", seedFile, manifestId);
+        var tableRef = screenShape.GetProperty("tableRef").GetString();
+        Assert.Equal("seed.projection_lane", tableRef);
+
+        var target = dispatcherEntry.GetProperty("target").GetString();
+        var layer = dispatcherEntry.GetProperty("layer").GetString();
+        var action = dispatcherEntry.GetProperty("action").GetString();
+        var role = dispatcherEntry.GetProperty("role").GetString();
+        var manifestRepo = new AxesFilteredStubManifestRepository(target, layer, action, seedManifest);
+        var dbNotifyRepo = new ProjectionLaneSpyDbNotifyRepository();
+        var outputRouter = new OutputLaneRouter(NullLogger<OutputLaneRouter>.Instance, dbNotifyRepo);
+        var topologyRepo = new ProjectionLaneScreenTopologyRepository();
+        var executor = RuntimeExecutorTests.CreateExecutor(topologyRepo, manifestRepo, outputRouter);
+        var broadcaster = new SseEventBroadcaster();
+        var sseRuntime = new SseProjectionRuntime(NullLogger<SseProjectionRuntime>.Instance, broadcaster);
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            new Dictionary<string, IDispatchableRuntime>
+            {
+                ["topology_transform_runtime"] = executor,
+                ["sse_projection_runtime"] = sseRuntime,
+            },
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo),
+            manifestRepo);
+
+        var request = new EndpointRequestDto("ProjectionLaneSeedCollapse", target, layer, action, null, null, null, "client", role);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success, $"lane=projection_seed_collapse seed={seedFile} manifest={manifestId} mapping=runtime_mapping tableRef={tableRef} response errors={string.Join(';', response.Errors.Select(e => e.Code + ':' + e.Message))}");
+        Assert.NotNull(response.Emission);
+        Assert.True(response.Emission!.ProjectionDefinition.HasValue, $"lane=projection_seed_collapse seed={seedFile} manifest={manifestId} mapping={projectionMapping.GetProperty("type").GetString()} projectionDefinition missing");
+        Assert.NotNull(response.Emission.Data);
+        var data = response.Emission.Data!.Value;
+        Assert.Equal("screen_data_shape_query_result", data.GetProperty("kind").GetString());
+        Assert.Equal(manifestId.ToString(), data.GetProperty("manifestId").GetString());
+        Assert.Equal("projection-lane-seed", data.GetProperty("rows")[0].GetProperty("seedLabel").GetString());
+        Assert.Equal(1, dbNotifyRepo.CallCount);
+        Assert.Equal(manifestId, dbNotifyRepo.LastManifestId);
+        Assert.Equal("demo:screen_list:read", dbNotifyRepo.LastTableId);
+
+        var sseChannel = broadcaster.Subscribe();
+        var notifyPayload = JsonSerializer.SerializeToElement(new
+        {
+            table_id = dbNotifyRepo.LastTableId,
+            table_registry_id = dbNotifyRepo.LastTableRegistryId,
+            manifest_id = manifestId.ToString(),
+        });
+        var dbNotifyRequest = new EndpointRequestDto("ProjectionLaneSeedCollapseNotify", "db_notify", "projection", "broadcast", null, notifyPayload, null, "hook", role);
+        var notifyResponse = await dispatcher.DispatchAsync(dbNotifyRequest);
+
+        Assert.True(notifyResponse.Success, $"lane=projection_seed_collapse seed={seedFile} manifest={manifestId} mapping={notifyMapping.GetProperty("type").GetString()} sse_path=db_notify->ManifestDispatcher->SseProjectionRuntime failed");
+        Assert.True(sseChannel.Reader.TryRead(out var evt), $"lane=projection_seed_collapse seed={seedFile} manifest={manifestId} mapping=db_notify_projection_mapping sse_path=no_event");
+        Assert.Equal("projection", evt.EventType);
+        Assert.Contains(manifestId.ToString(), evt.Data);
+    }
+
     [Fact]
     public async Task DispatchAsync_ManifestRoleAxis_UsesRequestRoleForResolution()
     {
@@ -1171,6 +1241,75 @@ public class ManifestDispatcherManifestDrivenTests
             runtime_destination = projectionRuntimeDestination
         });
         return [runtimeMapping, projectionMapping];
+    }
+
+    private static ManifestRecord LoadSeedManifest(string seedFile, Guid manifestId)
+    {
+        var sql = File.ReadAllText(seedFile);
+        var pattern = @"\(\s*'" + Regex.Escape(manifestId.ToString()) + @"'\s*,\s*(?:NULL|'[0-9a-fA-F-]{36}')\s*,\s*ARRAY\[(?<entries>[\s\S]*?)\]\s*::jsonb\[\]";
+        var match = Regex.Match(sql, pattern, RegexOptions.Multiline);
+        Assert.True(match.Success, $"lane=projection_seed_collapse seed={seedFile} manifest={manifestId} seed manifest tuple missing");
+        var topology = new List<JsonElement>();
+        foreach (Match jsonb in Regex.Matches(match.Groups["entries"].Value, @"'((?:[^']|'')*)'::jsonb"))
+        {
+            var raw = jsonb.Groups[1].Value.Replace("''", "'");
+            topology.Add(JsonSerializer.Deserialize<JsonElement>(raw));
+        }
+        Assert.NotEmpty(topology);
+        return new ManifestRecord(manifestId, RelationRegistryId: null, Topology: topology, Status: "active");
+    }
+
+    private static JsonElement RequireTopologyEntry(IReadOnlyList<JsonElement> topology, string type, string seedFile, Guid manifestId)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind == JsonValueKind.Object &&
+                entry.TryGetProperty("type", out var typeEl) &&
+                string.Equals(typeEl.GetString(), type, StringComparison.Ordinal))
+            {
+                return entry;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"lane=projection_seed_collapse seed={seedFile} manifest={manifestId} mapping={type} missing");
+    }
+}
+
+internal sealed class ProjectionLaneSpyDbNotifyRepository() : DbNotifyRepository(NullLogger<DbNotifyRepository>.Instance)
+{
+    public int CallCount { get; private set; }
+    public string? LastTableId { get; private set; }
+    public string? LastTableRegistryId { get; private set; }
+    public Guid? LastManifestId { get; private set; }
+
+    public override Task NotifyAsync(string? tableId, string? tableRegistryId, Guid? manifestId, CancellationToken ct = default)
+    {
+        CallCount++;
+        LastTableId = tableId;
+        LastTableRegistryId = tableRegistryId;
+        LastManifestId = manifestId;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class ProjectionLaneScreenTopologyRepository : TopologyRepository
+{
+    public ProjectionLaneScreenTopologyRepository() : base(NullLogger<TopologyRepository>.Instance, "test-double") { }
+
+    public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
+    {
+        if (key is "demo:screen_list:read" or "seed-projection-lane-structure-map")
+        {
+            return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
+                StructureMapId: "seed-projection-lane-structure-map",
+                AttractorKey: key,
+                PackageId: TopologyRepository.DefaultPackageId,
+                SchemaId: TopologyRepository.DefaultSchemaId,
+                ComponentIds: [TopologyRepository.DefaultComponentId],
+                StatePolicyJson: null));
+        }
+
+        return base.LoadStructureMapAsync(key, ct);
     }
 }
 
@@ -1346,7 +1485,7 @@ internal sealed class AxesFilteredStubManifestRepository : ManifestRepository
     }
 
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
-        Task.FromResult<ManifestRecord?>(null);
+        Task.FromResult<ManifestRecord?>(_manifest.ManifestId == manifestId ? _manifest : null);
 
     public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(string? statusFilter, CancellationToken ct = default) =>
         ManifestRepositoryStubDefaults.EmptyList(statusFilter, ct);
