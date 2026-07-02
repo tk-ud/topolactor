@@ -101,14 +101,20 @@ reverse_lookup:
       - ssot_structure_policy_contract
     runner_surfaces:
       - .agent/tests/check-docs-ssot-connectivity.sh
+      - .agent/tests/check-ssot-proof-surface-connectivity.sh
+      - .agent/tests/check-no-ruby-dependency.sh
       - .agent/tests/check-structure.sh
     proves_lookup_for:
       - docs/ SSOT reachability from agent index/route/test/prompt/protocol/workflow surfaces
       - manifest-driven required path / required term structure gate wiring
       - workflow yml referenced-script existence
+      - general repo directory surface JSON observation (docs/ and .agent/tests/ on the same observation plane)
+      - docs/ SSOT candidate connectivity to a reachable executable proof surface (ssot-map.yaml reference alone does not count)
+      - repo governance tooling Ruby-dependency exclusion (Python3 stdlib only)
     does_not_prove:
       - semantic sufficiency of any mapped SSOT read set
       - implementation completion of any roadmap bundle
+      - legitimacy of any future product-code Ruby usage outside repo governance tooling
 
   - bundle_id: frontend-admin-projection-expression-e2e-completion
     roadmap_bundle_refs:

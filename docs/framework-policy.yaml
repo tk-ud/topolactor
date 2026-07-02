@@ -1,5 +1,29 @@
 framework_policy:
 
+  repo_governance_tooling_dependency_policy:
+    role: repo_governance_tooling_structured_processing_dependency_boundary
+    scope: agent_governance_checks_under_dotagent_tests_and_dotagent_scripts
+    allowed_structured_processing_dependency: python3_stdlib_only
+    bash_role: ci_entrypoint_orchestration_and_delegated_subcheck_invocation_only
+    prohibited_required_dependencies:
+      - jq
+      - node
+      - ruby
+      - pip_install
+      - npm_install
+      - gem_install
+    ruby_prohibition:
+      rule: ruby_is_prohibited_as_a_repo_governance_tooling_dependency
+      guard: .agent/tests/check-no-ruby-dependency.sh
+      existing_ruby_product_code_justification: not_decided_in_this_pr_report_as_follow_up
+    rationale: >-
+      JSON/YAML emit, parse, length, filtering, and mapping validation in
+      repo governance tooling (docs/ and .agent/tests/ directory JSON
+      observation, SSOT proof surface connectivity gate) must be Python3
+      stdlib rather than bash/awk/sed, and must not depend on Ruby or other
+      third-party runtimes as a required dependency. This does not govern
+      application runtime dependencies (backend/frontend product code).
+
   ci_attention_operational_policy:
     ci_interpretation:
       - hidden_fallback_is_not_acceptable_as_ci_operational_behavior
