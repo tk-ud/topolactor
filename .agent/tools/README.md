@@ -102,6 +102,10 @@ Do not use `.agent/tools` to:
 - treat todo or roadmap text as proof;
 - replace required SSOT reads, protocol judgment, semantic audit, or structure checks.
 
+## Proof / structure gate connectivity
+
+`.agent/tools` existence, executable permission, thin read-only entrypoint boundary, mutation-argument rejection, and no-authority-claim baseline output are gated by `.agent/tests/check-agent-tools-surface.sh` (structured verification delegated to `.agent/scripts/check_agent_tools_surface.py`), which is called as a delegated subcheck from `.agent/tests/check-structure.sh`. `.agent/tools`, `.agent/scripts/agent_tools/`, and the dedicated checker are enumerated in `.agent/docs/required-paths.yaml`. The connection is recorded in `.agent/docs/test-bundles.yaml` under the `agent-tools-proof-and-structure-gate` bundle against the `ssot_structure_policy_contract` proof edge in `docs/design/test-proof-manifest-ssot.yaml` (whose `required_when.changed_files` already covers `.agent/**`). This dedicated check verifies `.agent/tools`' own structural / read-only / no-authority contract only; it does not become SSOT authority, proof completion, or completion judgment for anything `.agent/tools` observes.
+
 ## Planned follow-up
 
-The follow-up child bundle `agent-tools-proof-and-structure-gate` is expected to connect this surface to the proof / structure gate surfaces. That later work owns required-paths, test-bundles, proof-manifest, and dedicated checker wiring; those connections are intentionally not implemented by this initial read-only observation bundle.
+The follow-up child bundle `agent-tools-advanced-surface-maps` remains future scope for advanced observation maps (`change-impact-map`, `dependency-surface-map`, `orphan-surface-map`), which require separate schema and judgment-boundary design before implementation.

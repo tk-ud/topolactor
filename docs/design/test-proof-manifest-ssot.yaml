@@ -81,12 +81,14 @@ chronological_scope_index:
       - .agent/tests/check-structure.sh
       - .agent/tests/check-ssot-vocabulary-contract.sh
       - .agent/tests/check-test-proof-manifest-integrity.sh
+      - .agent/tests/check-agent-tools-surface.sh
     evidence_inputs:
       - AGENTS.md
       - .agent/rules/rule.md
       - .agent/README.md
       - .agent/prompt/design-change.md
       - .agent/protocols/design-change.md
+      - .agent/tools/README.md
     workflow_jobs:
       - .github/workflows/structure-check.yml::structure-check
     required_when:
@@ -106,10 +108,12 @@ chronological_scope_index:
     proves:
       - governance structure and manifest integrity can be audited before claiming proof completion
       - proof graph shape, dependency references, and field separation are machine-checked
+      - .agent/tools existence, executable permission, thin read-only entrypoint boundary, mutation-argument rejection, and no-authority-claim baseline output are gated by check-agent-tools-surface.sh
     does_not_prove:
       - DB schema behavior
       - backend runtime behavior
       - external, instance, admin, or frontend runtime behavior
+      - semantic correctness of .agent/tools observation output content
 
   - proof_id: db_schema_seed_contract
     proof_order: 20

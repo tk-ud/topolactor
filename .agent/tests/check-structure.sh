@@ -454,6 +454,12 @@ else
   fail "Subcheck failed: .agent/tests/check-no-ruby-dependency.sh"
 fi
 
+if bash "$REPO_ROOT/.agent/tests/check-agent-tools-surface.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-agent-tools-surface.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-agent-tools-surface.sh"
+fi
+
 if bash "$REPO_ROOT/.agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"; then
   echo "OK  [subcheck] .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
 else

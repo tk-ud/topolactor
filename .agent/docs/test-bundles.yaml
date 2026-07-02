@@ -96,6 +96,23 @@ reverse_lookup:
     does_not_prove:
       - instance settings topology, primitive authority, runtime instance selection, or execution authority enforcement
 
+  - bundle_id: agent-tools-proof-and-structure-gate
+    roadmap_bundle_refs:
+      - agent-tools-proof-and-structure-gate
+    proof_refs:
+      - ssot_structure_policy_contract
+    runner_surfaces:
+      - .agent/tests/check-agent-tools-surface.sh
+      - .agent/tests/check-structure.sh
+    proves_lookup_for:
+      - .agent/tools required entrypoint existence and executable permission
+      - .agent/tools thin read-only entrypoint boundary (delegates to .agent/scripts/agent_tools/readonly_observation.py instead of forking structured processing)
+      - .agent/tools mutation-argument rejection (e.g. --output)
+      - .agent/tools baseline output free of SSOT authority / proof completion / completion judgment / semantic audit judgment / implemented-partial-not_started status claims
+    does_not_prove:
+      - semantic correctness of any .agent/tools observation output content
+      - SSOT authority, proof completion, or implementation status of any bundle observed through .agent/tools
+
   - bundle_id: docs-ssot-connectivity-structure-manifest-and-ci-workflow-gate
     proof_refs:
       - ssot_structure_policy_contract
