@@ -721,10 +721,11 @@ aggregate_trigger_substrate_known_gaps:
       - backend_runtime_function_contract
     unblocks:
       - aggregate-trigger-substrate-implementation
-    known_gap_reason: SSOT is defined, but executable tests and implementation for idempotent event append, atomic aggregate upsert, threshold evaluation, controlled materialization, and duplicate guard are intentionally not implemented in this design-only change.
+    known_gap_reason: Partial implementation and local contract tests now exist for the backend runtime, validator, repository fixed SQL templates, DB DDL, frontend structured authoring helper, idempotent event append, atomic aggregate upsert, threshold evaluation, controlled materialization, and duplicate guard. This known gap remains open because those local contract proofs do not yet constitute full executable proof across Admin contents Step3 UI enforcement, live PostgreSQL application, AdminRuntime definition persistence, cron/hook/client scheduler-to-manifest DB routing, and end-to-end event -> aggregate -> threshold -> materialization execution.
     proves: []
     does_not_prove:
-      - backend runtime execution
-      - repository SQL template correctness
-      - admin Step3 UI enforcement
-      - materialization duplicate prevention at runtime
+      - Admin contents Step3 UI enforcement against saved Step2 logical entity and Step2.5 relation definition targets
+      - live PostgreSQL application proof for runtime_orchestration aggregate trigger tables and repository statements
+      - AdminRuntime definition persistence route for aggregate trigger definitions
+      - cron/hook/client scheduler-to-manifest DB route
+      - full executable event -> aggregate -> threshold -> materialization proof across admin, runtime, repository, and DB boundaries

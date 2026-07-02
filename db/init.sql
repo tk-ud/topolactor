@@ -48,3 +48,6 @@
 
 \echo '[init.sql] applying demo_seed.sql'
 \i /db/demo_seed.sql
+
+\echo '[init.sql] applying runtime_orchestration_tables.sql'
+\i /db/runtime_orchestration_tables.sql
