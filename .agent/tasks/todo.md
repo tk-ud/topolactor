@@ -107,7 +107,7 @@
 ### 子Bundle `agent-tools-core-readonly-observation`
 
 **Worktype:** implementation_change
-**Status:** blocked_by_design
+**Status:** implemented
 **Depends on:** `agent-tools-governance-contract`
 
 - Scope: 初期 read-only tool surface を追加する。
@@ -115,6 +115,7 @@
 - 目的: 初期tool `directory-map`, `ssot-map-query`, `proof-surface-map` を追加する。
 - 改善方針: `.agent/tools` は thin entrypoint。構造処理は `.agent/scripts` の Python3 stdlib 実装を再利用する。既存 `.agent/scripts/emit-directory-tree-json.py` は移動しない。`directory-map` では `--output` など file mutation option を露出しない、または拒否する。
 - 対応資料: `.agent/scripts/emit-directory-tree-json.py`, `.agent/docs/ssot-map.yaml`, `docs/design/test-proof-manifest-ssot.yaml`, `.agent/scripts/check_ssot_proof_surface_connectivity.py`
+- 完了記録: 初期 read-only observation tool surface として `.agent/tools/README.md`, `directory-map`, `ssot-map-query`, `proof-surface-map` を追加済み。`directory-map` は既存 `.agent/scripts/emit-directory-tree-json.py` を thin wrapper として再利用し、`.agent/tools` surface では `--output` など mutation/file-write option を拒否する。`ssot-map-query` は `.agent/docs/ssot-map.yaml` を JSON stdout で観測し、`proof-surface-map` は `docs/design/test-proof-manifest-ssot.yaml` と `.agent/docs/test-bundles.yaml` を read-only に観測する。各toolは Python3 stdlib only で、出力metadataに SSOT authority / proof completion / completion judgment / semantic audit judgment / implemented 判定ではない境界を含める。proof gate / required-paths / test-bundles / test-proof-manifest への本格接続は後続 `agent-tools-proof-and-structure-gate` scope のまま。
 
 ### 子Bundle `agent-tools-proof-and-structure-gate`
 
