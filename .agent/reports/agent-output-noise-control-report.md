@@ -14,17 +14,22 @@ Date: 2026-07-03
 
 ## Coverage Boundary
 
-全 `.agent/tests/*.sh` 相当の母集団は以下から突き合わせた。
+Tree-equivalent surface inventory was checked for:
 
-- GitHub tree-equivalent code search: `path:.agent/tests extension:sh`
+- `.agent/tests/*.sh`: GitHub code search `path:.agent/tests extension:sh`
+- `.agent/scripts/**/*`: GitHub code search `path:.agent/scripts`
+- `.github/workflows/*.yml`: GitHub code search `path:.github/workflows extension:yml`
 - `.agent/docs/required-paths.yaml`
 - `.agent/docs/test-bundles.yaml`
-- `.github/workflows/*.yml`
-- repo code search for additional `.agent/tests/check-*.sh`
+- workflow references to tests/scripts
 
-Observed test shell surface: 34 files.
+Observed surface count:
 
-This report lists **implementation target files only**. Checked files whose success output is already short enough and whose failure path keeps details are not listed as implementation targets.
+- `.agent/tests/*.sh`: 34 files
+- `.agent/scripts/**/*`: 18 files
+- `.github/workflows/*.yml`: 9 files
+
+This report lists **implementation target files only**. Checked files whose success output is already short enough, whose output is explicit artifact output, or whose failure path must remain operationally verbose are not listed as implementation targets unless they affect normal Agent / CI success paths.
 
 Explicit non-target after tree-equivalent check:
 - `.agent/tests/check-static-ssot-purity.sh`: success output is one line; failure path prints forbidden pattern and matching lines.
@@ -33,7 +38,14 @@ Explicit non-target after tree-equivalent check:
 - `.agent/tests/check-ssot-vocabulary-contract.sh`: thin wrapper; target is `.agent/scripts/check_ssot_vocabulary_contract.py`.
 - `.agent/tests/check-ssot-proof-surface-connectivity.sh`: thin wrapper / compact summary.
 - `.agent/tests/check-system-roadmap.sh`: thin wrapper; target is `.agent/scripts/check_system_roadmap.py`.
-- small grep/assertion checks are non-target only when success output remains short and failure output is specific; if shared helper adoption touches them, keep behavior equivalent.
+- `.agent/scripts/lib/minimal_yaml.py`: library only; no normal stdout surface.
+- `.agent/scripts/create-tmp.sh`, `.agent/scripts/delete-tmp.sh`, `.agent/scripts/cleanup-topology-seed-discussion-artifacts.sh`: explicit local cleanup/create helpers; success output is bounded and operational.
+- `.agent/scripts/advance-workflow-phase.sh`: deprecated optional local memo; output is bounded and not CI/proof authority.
+- `.agent/scripts/pre-tool-edit-guard.sh`: hook reminder output is intentional and bounded; do not route it into proof/completion output.
+- `.agent/scripts/bootstrap-local-tools.sh`, `.agent/scripts/bootstrap-local-postgres.sh`: opt-in local bootstrap; operational install/docker output is not normal CI success proof. Keep failure detail if touched separately.
+- `.github/workflows/structure-check.yml`: delegates to target scripts; fix underlying scripts, keep `check-structure.sh` last.
+- `.github/workflows/frontend-types.yml`, `.github/workflows/default-entity-search.yml`, `.github/workflows/runtime-semantics.yml`: delegate to target test scripts; no direct workflow change needed unless script routing changes.
+- `.github/workflows/unified-test-gate.yml`: delegates to target orchestrator/scripts; no direct workflow change needed unless lane routing changes.
 
 ## Governance Boundary
 
@@ -304,6 +316,11 @@ Required change:
 - Avoid forcing full tree JSON in normal success path.
 - Preserve explicit full-output behavior when requested.
 
+#### `.agent/scripts/emit-directory-tree-json.sh`
+
+Required change:
+- If this wrapper delegates full tree output, keep explicit full-output behavior but do not make normal success paths depend on reading the full tree.
+
 #### `.agent/scripts/emit-docs-tree-json.sh`
 
 Required change:
@@ -315,20 +332,33 @@ Required change:
 #### `.github/workflows/backend-tests.yml`
 
 Reason:
+- Runs `sudo apt-get update && sudo apt-get install -y postgresql-client` directly.
 - Runs multiple `psql -f ...` commands directly before delegating to `.agent/tests/check-backend-tests.sh`.
 
 Required change:
-- Capture schema application output.
+- Capture apt/psql output where practical.
 - Keep success quiet/summary only.
-- Replay psql output on failure.
+- Replay apt/psql output on failure.
+
+#### `.github/workflows/db-schema-check.yml`
+
+Reason:
+- Runs `sudo apt-get update && sudo apt-get install -y postgresql-client` directly.
+
+Required change:
+- Keep install success quiet/summary only.
+- Preserve apt failure details.
 
 #### `.github/workflows/bootstrap-validation.yml`
 
 Reason:
-- Has direct docker compose validation / smoke surfaces.
+- Runs `sudo apt-get update && sudo apt-get install -y postgresql-client` directly.
+- Has `docker compose -f infra/docker-compose.yml config > /dev/null`.
+- Compose smoke runs docker compose commands directly.
 
 Required change:
-- Keep configuration validation quiet on success, but capture output for failure if useful.
+- Keep install/config/smoke success quiet or summarized.
+- Capture output for failure where useful.
 - Do not hide failure cause.
 
 #### `.github/workflows/projection-lane-seed-hardening.yml`
@@ -363,6 +393,7 @@ Examples of non-target posture:
 - thin wrappers that only delegate to Python and print one final pass line
 - small grep checks with one or two success lines and specific failure messages
 - manifest integrity checks that already emit one compact pass summary
+- local bootstrap / cleanup scripts where operational progress output is intentional and not normal CI/proof output
 
 ## OK Axis
 
@@ -377,7 +408,7 @@ Examples of non-target posture:
 
 ## NG Axis
 
-- Success path still prints per-file, per-term, full runner stdout/stderr, full warning list, full GAP list, or full JSON dumps by default.
+- Success path still prints per-file, per-term, full runner stdout/stderr, full warning list, full GAP list, full install logs, full docker logs, or full JSON dumps by default.
 - Error detail is hidden while reducing output.
 - `/dev/null` is used where it can remove failure evidence.
 - Only one small script is fixed and Bundle-wide surfaces remain noisy.
