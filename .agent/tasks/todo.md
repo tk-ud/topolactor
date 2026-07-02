@@ -120,7 +120,7 @@
 ### 子Bundle `agent-tools-ssot-driven-seed-structure-generator`
 
 **Worktype:** design_change -> implementation_change
-**Status:** not_started
+**Status:** implemented
 **Depends on:** `agent-tools-core-readonly-observation`
 
 - Scope: `topology-seed-discussion` を、SSOT YAML から seed structure candidate JSON と bit質問schemaを生成する tool へ方針転換する。
@@ -138,6 +138,8 @@
 - 対象関数/単位: `QUESTION_SPACE_ORDER`, `QUESTION_SPACE_META`, `SPACE_BIT_KEYS`, `_fragment_for_space_key`, `inspect`, `inspect --space`, `expand`, `build-template`, `build`, SSOT YAML traversal, seed candidate structural validate, SeedRuntime validate/preview/import e2e fixture
 - OK軸: SSOT YAML から question schema と seed structure candidate JSON を生成できる。各要素に `source_ref` / `path` / `question` / `json_fragment` がある。bit回答から生成した tmp seed candidate JSON が構造的に壊れない。SeedRuntime validate / preview に通せる fixture がある。import可能 fixture は e2e pipeline で通る。不正seedは fail-close する。tool output は discussion draft / candidate JSON のみで、SSOT authority / proof / seed adoption / implemented judgment にならない。tool は repo file / seed SQL / Manifest / SSOT / todo / roadmap を書かず、DB/API/AI APIへ接続しない。
 - NG軸: UI実装から雰囲気で質問を作る。SSOTにない構造を正本扱いする。手書き `SPACE_BIT_KEYS` の追加だけで generator と称する。seed JSON が構造的に壊れる。validate / preview / import pipeline の e2e がない。不正seedを silent fallback で通す。tool が seed を直接DBへ apply する。DB/API/AI APIへ接続する。
+- 完了記録: `topology-seed-discussion` は Stage 1 / Stage 2 を維持したまま SSOT YAML traversal 由来の schema 生成へ転換済み。`docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/sql-attention-logs-ssot.yaml`, `docs/design/db-schema.yaml` の object/list/scalar を stable `source_ref` + `path` element に正規化し、各 element は `source_ref`, `path`, `key`, `question`, `answer_type`, `json_fragment`, `category`, `validation_ref` を持つ。`build-template` は bit 回答で選ばれた SSOT element の nested JSON fragment だけを deep merge し stdout に tmp seed candidate template を返す。tool は repo file / seed SQL / Manifest / SSOT / todo / roadmap / tmp.json を書かず、DB/API/AI API に接続しない。SeedRuntime validate / preview / controlled empty-import pipeline fixture と recursive import fail-close fixture を追加済み。親Bundleは `agent-tools-proof-and-structure-gate` が blocked_by_design、`agent-tools-advanced-surface-maps` が future のため partial のまま。
+
 
 ### 子Bundle `agent-tools-proof-and-structure-gate`
 
