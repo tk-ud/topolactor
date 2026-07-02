@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
 using Topolactor.Runtime;
@@ -7,6 +9,62 @@ namespace Topolactor.Runtime.Tests;
 
 public class SeedRuntimeTopologySeedDiscussionTests
 {
+
+    [Fact]
+    public async Task GeneratedSeedCandidate_FromStageFixtures_ValidatesPreviewsAndImportsThroughControlledPipeline()
+    {
+        var buildTemplate = RunTool("build-template", "--answers", FixturePath("stage2-admin-contents.json"));
+        using var templateDoc = JsonDocument.Parse(buildTemplate);
+        var tmpTemplate = templateDoc.RootElement.GetProperty("tmp_json_template").GetRawText();
+
+        var tmpAnswers = Path.Combine(Path.GetTempPath(), "topology-seed-discussion-" + Guid.NewGuid().ToString("N") + ".tmp.json");
+        await File.WriteAllTextAsync(tmpAnswers, tmpTemplate);
+        try
+        {
+            var built = RunTool("build", "--answers", tmpAnswers);
+            using var builtDoc = JsonDocument.Parse(built);
+            var seedCandidate = builtDoc.RootElement.GetProperty("seed_candidate_payload").GetRawText();
+
+            using var workspace = new TempSeedWorkspace(seedCandidate, fromGeneratedJson: true);
+            var runtime = workspace.CreateRuntime();
+
+            var validation = await runtime.ValidateAsync();
+            var preview = await runtime.PreviewAsync();
+            var import = await runtime.ImportAsync();
+
+            Assert.True(validation.IsValid);
+            Assert.True(preview.Success);
+            Assert.True(import.Success);
+            Assert.Equal(0, import.ValidatedRuntimeCount);
+        }
+        finally
+        {
+            if (File.Exists(tmpAnswers)) File.Delete(tmpAnswers);
+        }
+    }
+
+    [Fact]
+    public async Task Build_InvalidGeneratedSeedCandidate_FailsCloseBeforeSeedRuntime()
+    {
+        var invalidTmp = Path.Combine(Path.GetTempPath(), "topology-seed-discussion-invalid-" + Guid.NewGuid().ToString("N") + ".tmp.json");
+        await File.WriteAllTextAsync(invalidTmp, """
+            {
+              "schema_id": "topology_seed_discussion_ssot_seed_structure_v1",
+              "question_space": "admin_contents_authoring",
+              "enabled_keys": [],
+              "seed_candidate_payload": { "runtimes": "not-an-array" }
+            }
+            """);
+        try
+        {
+            var result = RunToolExpectFailure("build", "--answers", invalidTmp);
+            Assert.Contains("invalid seed_candidate_payload", result.StandardError);
+        }
+        finally
+        {
+            if (File.Exists(invalidTmp)) File.Delete(invalidTmp);
+        }
+    }
     [Fact]
     public async Task ValidateAndPreview_AcceptImportableEmptyRuntimeFixture()
     {
@@ -61,9 +119,15 @@ public class SeedRuntimeTopologySeedDiscussionTests
         {
             _dir = Path.Combine(Path.GetTempPath(), "topolactor-seedruntime-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_dir);
-            var repoRoot = FindRepoRoot();
-            var source = Path.Combine(repoRoot, ".agent", "tests", "fixtures", "topology-seed-discussion", fixtureName);
+            var source = FixturePath(fixtureName);
             File.Copy(source, Path.Combine(_dir, "seed.json"));
+        }
+
+        public TempSeedWorkspace(string seedJson, bool fromGeneratedJson)
+        {
+            _dir = Path.Combine(Path.GetTempPath(), "topolactor-seedruntime-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_dir);
+            File.WriteAllText(Path.Combine(_dir, "seed.json"), seedJson);
         }
 
         public SeedRuntime CreateRuntime()
@@ -78,16 +142,59 @@ public class SeedRuntimeTopologySeedDiscussionTests
             if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
         }
 
-        private static string FindRepoRoot()
-        {
-            var dir = new DirectoryInfo(AppContext.BaseDirectory);
-            while (dir is not null)
-            {
-                if (File.Exists(Path.Combine(dir.FullName, "AGENTS.md")) && Directory.Exists(Path.Combine(dir.FullName, ".agent")))
-                    return dir.FullName;
-                dir = dir.Parent;
-            }
-            throw new InvalidOperationException("Repository root not found from test base directory.");
-        }
     }
+
+    private static string FixturePath(string fixtureName)
+        => Path.Combine(FindRepoRoot(), ".agent", "tests", "fixtures", "topology-seed-discussion", fixtureName);
+
+    private static string RunTool(params string[] args)
+    {
+        var result = RunToolProcess(args);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"tool failed with {result.ExitCode}: {result.StandardError}");
+        return result.StandardOutput;
+    }
+
+    private static ToolResult RunToolExpectFailure(params string[] args)
+    {
+        var result = RunToolProcess(args);
+        if (result.ExitCode == 0)
+            throw new InvalidOperationException("tool unexpectedly succeeded");
+        return result;
+    }
+
+    private static ToolResult RunToolProcess(string[] args)
+    {
+        var repoRoot = FindRepoRoot();
+        var psi = new ProcessStartInfo
+        {
+            FileName = Path.Combine(repoRoot, ".agent", "tools", "topology-seed-discussion"),
+            WorkingDirectory = repoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var arg in args) psi.ArgumentList.Add(arg);
+
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException("failed to start topology-seed-discussion");
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return new ToolResult(process.ExitCode, stdout, stderr);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "AGENTS.md")) && Directory.Exists(Path.Combine(dir.FullName, ".agent")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        throw new InvalidOperationException("Repository root not found from test base directory.");
+    }
+
+    private sealed record ToolResult(int ExitCode, string StandardOutput, string StandardError);
+
 }

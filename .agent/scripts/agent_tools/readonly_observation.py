@@ -524,6 +524,48 @@ def _base_template(space: str):
     }
 
 
+
+def _empty_seed_candidate_payload(space: str, enabled_keys: list[str]):
+    return {
+        "version": 1,
+        "runtimes": [],
+        "discussion_metadata": {
+            "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
+            "question_space": space,
+            "enabled_keys": enabled_keys,
+            "source_tool": "topology-seed-discussion",
+            "status": "seed_candidate_draft_not_adopted",
+        },
+    }
+
+
+def _validate_seed_candidate_payload(payload):
+    errors = []
+    if not isinstance(payload, dict):
+        return ["seed_candidate_payload must be an object"]
+    if "version" not in payload:
+        errors.append("seed_candidate_payload.version is required")
+    if "runtimes" not in payload:
+        errors.append("seed_candidate_payload.runtimes is required")
+    elif not isinstance(payload.get("runtimes"), list):
+        errors.append("seed_candidate_payload.runtimes must be an array")
+    else:
+        for idx, runtime in enumerate(payload["runtimes"]):
+            if not isinstance(runtime, dict):
+                errors.append(f"seed_candidate_payload.runtimes[{idx}] must be an object")
+                continue
+            for field in ("name", "target", "layer", "action"):
+                if not isinstance(runtime.get(field), str) or not runtime.get(field, "").strip():
+                    errors.append(f"seed_candidate_payload.runtimes[{idx}].{field} must be a non-empty string")
+            destination = runtime.get("runtimeDestination", "topology_transform_runtime")
+            if destination not in ("topology_transform_runtime", "admin_runtime"):
+                errors.append(f"seed_candidate_payload.runtimes[{idx}].runtimeDestination is not allowed")
+            if (str(runtime.get("target", "")).lower() == "admin" and
+                    str(runtime.get("layer", "")).lower() == "seed_runtime" and
+                    str(runtime.get("action", "")).lower() == "import"):
+                errors.append(f"seed_candidate_payload.runtimes[{idx}] recursive seed import route is forbidden")
+    return errors
+
 def _build_tmp_template(space: str, bits):
     schema_bits = topology_seed_question_bits(space)
     enabled_indexes = _normalize_enabled_indexes(bits, schema_bits)
@@ -537,6 +579,13 @@ def _build_tmp_template(space: str, bits):
         else:
             disabled_keys.append(bit["key"])
     template["enabled_keys"] = enabled_keys
+    template["discussion_metadata"] = {
+        "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
+        "question_space": space,
+        "enabled_keys": enabled_keys,
+        "status": "discussion_draft",
+    }
+    template["seed_candidate_payload"] = _empty_seed_candidate_payload(space, enabled_keys)
     return enabled_keys, disabled_keys, template
 
 
@@ -629,6 +678,8 @@ def topology_seed_discussion(argv: list[str]) -> int:
             "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
             "enabled_keys": enabled_keys,
             "disabled_keys": disabled_keys,
+            "discussion_metadata": template["discussion_metadata"],
+            "seed_candidate_payload": template["seed_candidate_payload"],
             "tmp_json_template": template,
             "usage_note": "Caller may redirect stdout to /tmp/topology-seed-discussion.tmp.json. This tool does not write files.",
         })
@@ -657,11 +708,25 @@ def topology_seed_discussion(argv: list[str]) -> int:
     candidate_sections = {k: v if isinstance(v, dict) else {} for k, v in candidate_sections.items()}
     unresolved = tmp_json.get("unresolved_questions", []) if isinstance(tmp_json.get("unresolved_questions", []), list) else []
     enabled_keys = tmp_json.get("enabled_keys", []) if isinstance(tmp_json.get("enabled_keys", []), list) else []
+    seed_candidate_payload = tmp_json.get("seed_candidate_payload")
+    if seed_candidate_payload is None:
+        seed_candidate_payload = _empty_seed_candidate_payload(str(tmp_json.get("question_space") or "unknown"), enabled_keys)
+    seed_errors = _validate_seed_candidate_payload(seed_candidate_payload)
+    if seed_errors:
+        sys.stderr.write("FAIL: invalid seed_candidate_payload: " + "; ".join(seed_errors) + "\n")
+        return 1
+    discussion_metadata = tmp_json.get("discussion_metadata") if isinstance(tmp_json.get("discussion_metadata"), dict) else {
+        "schema_id": tmp_json.get("schema_id"),
+        "question_space": tmp_json.get("question_space"),
+        "enabled_keys": enabled_keys,
+        "status": "discussion_draft",
+    }
     return _json({
         "tool": "topology-seed-discussion",
         "mode": "build",
         "source_file": str(answers_path),
         "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
+        "discussion_metadata": discussion_metadata,
         "discussion_result": {
             "status": "discussion_draft",
             "question_space": tmp_json.get("question_space"),
@@ -669,7 +734,8 @@ def topology_seed_discussion(argv: list[str]) -> int:
             "candidates": candidate_sections,
             "unresolved_questions": unresolved,
         },
-        "candidate_seed_json": {"discussion_only": True, **candidate_sections},
+        "seed_candidate_payload": seed_candidate_payload,
+        "candidate_seed_json": seed_candidate_payload,
         "adoption_boundary": {
             "requires_separate_human_judgment_or_change": True,
             "this_tool_writes_seed_sql": False,
