@@ -171,10 +171,11 @@ def proof_surface_map(argv: list[str]) -> int:
     })
 
 
-TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID = "topology_seed_discussion_admin_ui_v2"
+TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID = "topology_seed_discussion_ssot_seed_structure_v1"
 
 TOPOLOGY_SEED_DISCUSSION_BOUNDARY = BOUNDARY | {
     "discussion_draft_only": True,
+    "candidate_seed_json_only": True,
     "seed_adoption_judgment": False,
     "proof_completion_judgment": False,
     "db_connection": False,
@@ -183,6 +184,7 @@ TOPOLOGY_SEED_DISCUSSION_BOUNDARY = BOUNDARY | {
     "writes_seed_sql": False,
     "writes_manifest": False,
     "writes_ssot": False,
+    "writes_tmp_json": False,
     "adoption_requires_separate_human_judgment_or_change": True,
 }
 
@@ -199,125 +201,155 @@ QUESTION_SPACE_ORDER = [
 
 QUESTION_SPACE_META = {
     "sql_attention_observation": {
-        "surface": "docs/design/sql-attention-logs-ssot.yaml",
-        "question": "SQL Attention observation / evidence seed discussion を扱うか",
+        "ssot_sources": ["docs/design/sql-attention-logs-ssot.yaml"],
+        "validation_refs": ["db/sql_attention_logs_tables.sql", "backend/runtime/SeedRuntime.cs"],
+        "question": "SQL Attention SSOT elements を seed discussion candidate に含めるか",
         "root": "sql_attention_observation",
     },
     "topology_manifest_authoring": {
-        "surface": "hubs.topology_manifests / hubs.hub_relations",
-        "question": "topology manifest / hub relation authoring seed discussion を扱うか",
+        "ssot_sources": ["docs/design/db-schema.yaml", "docs/design/admin-console-workflow-ssot.yaml"],
+        "validation_refs": ["db/topology_tables.sql", "db/manifest_tables.sql", "frontend/islands/ManifestsAdmin.tsx"],
+        "question": "topology manifest / hub relation SSOT elements を seed discussion candidate に含めるか",
         "root": "topology_manifest_authoring",
     },
     "admin_contents_authoring": {
-        "surface": "/admin/contents",
-        "question": "sequential contents pipeline seed discussion を扱うか",
+        "ssot_sources": ["docs/design/admin-console-workflow-ssot.yaml", "docs/design/db-schema.yaml"],
+        "validation_refs": ["frontend/islands/ContentsScreenDesignPanel.tsx", "db/topology_tables.sql", "db/seed_empty.sql"],
+        "question": "/admin/contents SSOT elements を seed discussion candidate に含めるか",
         "root": "admin_contents",
     },
     "admin_ui_builder_authoring": {
-        "surface": "/admin/ui-builder",
-        "question": "canvas UI builder authoring seed discussion を扱うか",
+        "ssot_sources": ["docs/design/admin-console-workflow-ssot.yaml", "docs/design/db-schema.yaml"],
+        "validation_refs": ["frontend/islands/UiBuilderAdmin.tsx", "db/topology_tables.sql"],
+        "question": "/admin/ui-builder SSOT elements を seed discussion candidate に含めるか",
         "root": "admin_ui_builder",
     },
     "admin_manifests_navigation": {
-        "surface": "/admin/manifests",
-        "question": "post-contents manifest navigation management seed discussion を扱うか",
+        "ssot_sources": ["docs/design/admin-console-workflow-ssot.yaml", "docs/design/db-schema.yaml"],
+        "validation_refs": ["frontend/islands/ManifestsAdmin.tsx", "frontend/islands/HubNavigationAdmin.tsx", "db/topology_tables.sql"],
+        "question": "/admin/manifests navigation SSOT elements を seed discussion candidate に含めるか",
         "root": "admin_manifests",
     },
     "runtime_manifest_dispatch": {
-        "surface": "runtime manifest dispatch",
-        "question": "runtime manifest dispatch route seed discussion を扱うか",
+        "ssot_sources": ["docs/design/runtime-orchestration-ssot.yaml"],
+        "validation_refs": ["backend/runtime/SeedRuntime.cs", "db/manifest_tables.sql", "db/seed_empty.sql"],
+        "question": "runtime manifest dispatch SSOT elements を seed discussion candidate に含めるか",
         "root": "runtime_manifest_dispatch",
     },
     "seed_runtime_import": {
-        "surface": "SeedRuntime / SeedImportApplyRepository",
-        "question": "seed runtime import boundary seed discussion を扱うか",
+        "ssot_sources": ["docs/design/runtime-orchestration-ssot.yaml"],
+        "validation_refs": ["backend/runtime/SeedRuntime.cs", "backend/repository/SeedImportApplyRepository.cs", "db/seed_empty.sql"],
+        "question": "SeedRuntime import boundary SSOT elements を seed discussion candidate に含めるか",
         "root": "seed_runtime_import",
     },
     "db_topology_wiring": {
-        "surface": "topology/hubs DB wiring",
-        "question": "DB topology wiring seed discussion を扱うか",
+        "ssot_sources": ["docs/design/db-schema.yaml", "docs/design/runtime-orchestration-ssot.yaml"],
+        "validation_refs": ["db/topology_tables.sql", "db/manifest_tables.sql", "db/seed_empty.sql"],
+        "question": "DB topology wiring SSOT elements を seed discussion candidate に含めるか",
         "root": "db_topology_wiring",
     },
 }
 
-SPACE_BIT_KEYS = {
-    "sql_attention_observation": [
-        "logs.diff.source_event", "logs.diff.physical_table_pressure", "logs.current.norm_basis",
-        "logs.current.norm_trigger", "resolver.physical_table_manifest_bindings", "resolver.no_implicit_manifest_fallback",
-        "hubs.hub_relations.exploration", "logs.attention.append_only_evidence", "logs.attention.phase_vector_json",
-        "phaseAT.evidence_generation", "mutation_boundary.no_automatic_topology_manifest_registry_mutation",
-        "observation_does_not_prove.runtime_completion",
-    ],
-    "topology_manifest_authoring": [
-        "hubs.topology_manifests.topology_manifest_id", "hubs.topology_manifests.hub_id",
-        "hubs.topology_manifests.manifest_key", "hubs.topology_manifests.status",
-        "hubs.topology_manifests.topology_jsonb", "hubs.hub.hub_id", "hubs.hub.relation_jsonb",
-        "hubs.hub_relations.related_hub_id", "hubs.hub_relations.sequence_position",
-        "hubs.hub_relations.relation_config", "hubs.hub_relations.status", "authoring.deprecate_old_manifest",
-    ],
-    "admin_contents_authoring": [
-        "step1.manifest_shell.draft_id", "step1.topology_label.user_facing_label", "step1.local_cache.tmp_state",
-        "step1.draft_lifecycle.status", "step2.logical_tables.table_ref", "step2.logical_tables.add_remove",
-        "step2.columns.column_name", "step2.columns.data_type", "step2.columns.nullable_required",
-        "step2.columns.enum_group_ref", "step2_5.relations.local_table_ref", "step2_5.relations.local_key",
-        "step2_5.relations.draft_remote_table_ref", "step2_5.relations.active_remote_manifest_target",
-        "step2_5.relations.remote_target_ambiguity_check", "step2_5.relations.relation_config",
-        "step3.physical_table_binding.table_ref", "step3.page_binding.screen_label", "step3.initial_data.rows",
-        "step3.initial_data.import_preview", "step3.initial_data.lineage", "step3.initial_data.uuid_policy",
-        "step3.initial_data.enum_backed_values", "step3.operation_bindings.operation_kinds",
-        "step3.operation_bindings.entity_target_columns", "step3.display_columns.derivation",
-        "step3.aggregation.enabled", "step3.aggregation.aggregation_key", "step3.aggregation.aggregation_measures",
-        "step3.aggregation.having_conditions", "step3.search.enabled", "step3.search.search_key_columns",
-        "step3.search.search_conditions", "step3.search.logical_connector", "step3.raw_input.prohibited_sql_case_where",
-        "step3.sample_preview.operation_projection",
-    ],
-    "admin_ui_builder_authoring": [
-        "route_key.selection", "left_panel.component_bucket_panel", "left_panel.html_tag_panel",
-        "package.package_id", "package.auto_generation", "layout.layout_id", "wiring.wiring_id",
-        "component.auto_registration", "component.auto_removal", "canvas.node_contract.node_id",
-        "canvas.node_contract.parent_node_id", "canvas.node_contract.slot_key", "canvas.node_contract.order_index",
-        "canvas.catalog_component_nodes", "canvas.structural_html_nodes", "layer_inspector.visibility",
-        "design_inspector.cssTokenRefs", "design_inspector.responsiveTokenRefs", "design_inspector.typography",
-        "design_inspector.spacing", "design_inspector.layoutClassRefs", "design_inspector.inlineText",
-        "design_inspector.linkHref", "design_inspector.linkTarget", "design_inspector.reactionIntent",
-        "tmp.autosave", "layout_patch.preview", "layout_patch.validate", "layout_patch.apply",
-        "promotion.promoted_design_boundary",
-    ],
-    "admin_manifests_navigation": [
-        "created_page_list.source", "manifest_selector.active_manifest", "hub_relation_list.rows",
-        "hub.create", "hub.update", "hub.deprecate", "hub_relation.create", "hub_relation.update",
-        "hub_relation.deprecate", "hub_relation.reorder", "hub_relation.related_hub_select",
-        "hub_relation.sequence_position.auto_append", "hub_relation.sequence_position.advanced_direct_input",
-        "hub_relation.relation_config", "navigation.page_group_continuity", "navigation.remote_relationship_target",
-        "result_handling.success", "result_handling.error",
-    ],
-    "runtime_manifest_dispatch": [
-        "axes.role", "axes.target", "axes.layer", "axes.action", "axes.manifest_id",
-        "dispatcher_mapping.entry", "runtime_mapping.runtime_destination", "runtime_mapping.destination_allowlist",
-        "db_notify_projection_mapping.manifest_id_required", "projection_constructor_mapping.projection_definition",
-        "screen_data_shape.operationEntityBindings", "screen_data_shape.displayColumns", "screen_data_shape.searchConditions",
-        "screen_data_shape.aggregationMeasures", "conflict.active_manifest_conflict", "fail_close.missing_manifest",
-        "seed_empty_routes.admin_contents_manifest_create", "seed_empty_routes.admin_contents_logical_table_define",
-        "seed_empty_routes.admin_contents_relationship_configure", "seed_empty_routes.admin_contents_physical_bind",
-        "seed_empty_routes.admin_ui_builder_workspace", "seed_empty_routes.admin_manifests_navigation",
-    ],
-    "seed_runtime_import": [
-        "storage_seed_json.candidate_path", "storage_seed_json.version", "storage_seed_json.runtimes_array",
-        "runtime_destination.allowlist", "recursive_import.forbidden", "preview.mode", "preview.diff_summary",
-        "import_apply.boundary", "import_apply.conflict_check", "import_apply.fail_close", "import_apply.no_partial_silent_success",
-        "seed_runtime.runtime_registration", "seed_runtime.import_result_errors",
-    ],
-    "db_topology_wiring": [
-        "topology.physical_tables.physical_table_id", "topology.physical_tables.table_ref",
-        "topology.physical_table_manifest_bindings.binding_id", "topology.physical_table_manifest_bindings.physical_table_id",
-        "topology.physical_table_manifest_bindings.topology_manifest_id", "topology.physical_table_manifest_bindings.no_implicit_fallback",
-        "topology.wiring_physical_to_package.physical_table_binding", "topology.wiring_physical_to_package.package_binding",
-        "topology.wiring_physical_to_package.layout_binding", "topology.wiring_physical_to_package.screen_data_shape",
-        "public.manifest.compatibility_only", "public.manifest.not_canonical_authority", "hubs.topology_manifests.canonical_grouping",
-        "hubs.hub_relations.sequence_authority", "fallback.no_oldest_manifest_fallback",
-    ],
+SPACE_PATH_HINTS = {
+    "admin_contents_authoring": ("content", "contents", "step", "screen", "entity", "relation", "table", "column", "aggregation", "search"),
+    "admin_ui_builder_authoring": ("ui", "builder", "canvas", "component", "layout", "package", "wiring", "design", "css", "html"),
+    "admin_manifests_navigation": ("manifest", "hub", "navigation", "relation", "sequence"),
+    "topology_manifest_authoring": ("topology", "manifest", "hub", "relation"),
+    "runtime_manifest_dispatch": ("runtime", "dispatch", "dispatcher", "manifest", "projection", "route"),
+    "seed_runtime_import": ("seed", "import", "runtime", "validate", "preview", "fail", "fallback"),
+    "db_topology_wiring": ("topology", "manifest", "hub", "physical", "binding", "wiring", "table"),
+    "sql_attention_observation": ("sql", "attention", "logs", "current", "diff", "candidate", "evidence", "norm", "phase"),
 }
 
+
+def _ssot_scalar_preview(value):
+    if isinstance(value, (dict, list)):
+        return None
+    return value
+
+
+def _path_join(base: str, key: str) -> str:
+    return f"{base}.{key}" if base else key
+
+
+def _walk_ssot_elements(source_ref: str, obj, cur_path: str = ""):
+    if isinstance(obj, dict):
+        yield cur_path or "$", "object", obj
+        for key in sorted(obj.keys(), key=str):
+            yield from _walk_ssot_elements(source_ref, obj[key], _path_join(cur_path, str(key)))
+    elif isinstance(obj, list):
+        yield cur_path or "$", "list", obj
+        for idx, value in enumerate(obj):
+            yield from _walk_ssot_elements(source_ref, value, f"{cur_path}[{idx}]")
+    else:
+        yield cur_path or "$", "scalar", obj
+
+
+def _safe_key(source_ref: str, path: str) -> str:
+    raw = f"{Path(source_ref).stem}.{path}"
+    return "".join(ch if ch.isalnum() else "_" for ch in raw).strip("_")[:180]
+
+
+def _path_tokens(path: str):
+    return [t for t in path.replace("[", ".").replace("]", "").replace("-", "_").split(".") if t and not t.isdigit()]
+
+
+def _ssot_fragment(root: str, source_ref: str, path: str, kind: str, value):
+    node = {root: {"ssot_elements": {}}}
+    cur = node[root]["ssot_elements"]
+    for token in _path_tokens(path):
+        cur = cur.setdefault(token, {})
+    cur["__source_ref"] = source_ref
+    cur["__ssot_path"] = path
+    cur["__kind"] = kind
+    cur["value"] = _ssot_scalar_preview(value)
+    return node
+
+
+def _category_for(kind: str, path: str) -> str:
+    top = path.split(".", 1)[0].split("[", 1)[0] if path else "$"
+    return f"ssot_{kind}:{top}"
+
+
+def _matches_space(space: str, source_ref: str, path: str, value) -> bool:
+    if space == "sql_attention_observation":
+        return True
+    text = f"{source_ref} {path} {value if not isinstance(value, (dict, list)) else ''}".lower()
+    hints = SPACE_PATH_HINTS.get(space, ())
+    return any(h in text for h in hints)
+
+
+def _ssot_elements_for_space(space: str):
+    meta = QUESTION_SPACE_META[space]
+    elements = []
+    seen = set()
+    for source_ref in meta["ssot_sources"]:
+        data = yaml.load_file(str(REPO_ROOT / source_ref))
+        for path, kind, value in _walk_ssot_elements(source_ref, data):
+            if path == "$" or not _matches_space(space, source_ref, path, value):
+                continue
+            key = _safe_key(source_ref, path)
+            dedupe = (source_ref, path)
+            if dedupe in seen:
+                continue
+            seen.add(dedupe)
+            elements.append({
+                "index": len(elements),
+                "source_ref": source_ref,
+                "path": path,
+                "key": key,
+                "question_space": space,
+                "question": f"SSOT {source_ref}:{path} ({kind}) を {space} seed structure candidate に含めるか",
+                "answer_type": "0_or_1",
+                "json_fragment": _ssot_fragment(meta["root"], source_ref, path, kind, value),
+                "category": _category_for(kind, path),
+                "validation_ref": meta["validation_refs"],
+            })
+    return elements
+
+
+def _space_bit_count(space: str) -> int:
+    return len(_ssot_elements_for_space(space))
 
 def _nested_fragment(root: str, dotted_path: str):
     cur = {root: {}}
@@ -362,7 +394,7 @@ def question_space_selectors():
         selectors.append({
             "index": index,
             "question_space": space,
-            "surface": meta["surface"],
+            "surface": meta["ssot_sources"],
             "question": meta["question"],
             "answer_type": "0_or_1",
         })
@@ -370,20 +402,9 @@ def question_space_selectors():
 
 
 def topology_seed_question_bits(space: str):
-    if space not in SPACE_BIT_KEYS:
+    if space not in QUESTION_SPACE_META:
         raise ValueError(f"unknown question_space: {space}")
-    surface = QUESTION_SPACE_META[space]["surface"]
-    bits = []
-    for index, key in enumerate(SPACE_BIT_KEYS[space]):
-        bits.append({
-            "index": index,
-            "key": key,
-            "question_space": space,
-            "surface": surface,
-            "question": f"{space}.{key} を seed discussion に含めるか",
-            "json_fragment": _fragment_for_space_key(space, key),
-        })
-    return bits
+    return _ssot_elements_for_space(space)
 
 
 def stage1_schema():
@@ -503,6 +524,60 @@ def _base_template(space: str):
     }
 
 
+
+def _runtime_declarations_for_seed_candidate(space: str, enabled_keys: list[str]):
+    if not enabled_keys:
+        return []
+    return [{
+        "name": f"topology-seed-discussion:{space}:selected-ssot-elements",
+        "target": "topology_seed_discussion",
+        "layer": space,
+        "action": "selected_ssot_elements",
+        "runtimeDestination": "topology_transform_runtime",
+    }]
+
+
+def _empty_seed_candidate_payload(space: str, enabled_keys: list[str]):
+    return {
+        "version": 1,
+        "runtimes": _runtime_declarations_for_seed_candidate(space, enabled_keys),
+        "discussion_metadata": {
+            "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
+            "question_space": space,
+            "enabled_keys": enabled_keys,
+            "source_tool": "topology-seed-discussion",
+            "status": "seed_candidate_draft_not_adopted",
+        },
+    }
+
+
+def _validate_seed_candidate_payload(payload):
+    errors = []
+    if not isinstance(payload, dict):
+        return ["seed_candidate_payload must be an object"]
+    if "version" not in payload:
+        errors.append("seed_candidate_payload.version is required")
+    if "runtimes" not in payload:
+        errors.append("seed_candidate_payload.runtimes is required")
+    elif not isinstance(payload.get("runtimes"), list):
+        errors.append("seed_candidate_payload.runtimes must be an array")
+    else:
+        for idx, runtime in enumerate(payload["runtimes"]):
+            if not isinstance(runtime, dict):
+                errors.append(f"seed_candidate_payload.runtimes[{idx}] must be an object")
+                continue
+            for field in ("name", "target", "layer", "action"):
+                if not isinstance(runtime.get(field), str) or not runtime.get(field, "").strip():
+                    errors.append(f"seed_candidate_payload.runtimes[{idx}].{field} must be a non-empty string")
+            destination = runtime.get("runtimeDestination", "topology_transform_runtime")
+            if destination not in ("topology_transform_runtime", "admin_runtime"):
+                errors.append(f"seed_candidate_payload.runtimes[{idx}].runtimeDestination is not allowed")
+            if (str(runtime.get("target", "")).lower() == "admin" and
+                    str(runtime.get("layer", "")).lower() == "seed_runtime" and
+                    str(runtime.get("action", "")).lower() == "import"):
+                errors.append(f"seed_candidate_payload.runtimes[{idx}] recursive seed import route is forbidden")
+    return errors
+
 def _build_tmp_template(space: str, bits):
     schema_bits = topology_seed_question_bits(space)
     enabled_indexes = _normalize_enabled_indexes(bits, schema_bits)
@@ -516,6 +591,13 @@ def _build_tmp_template(space: str, bits):
         else:
             disabled_keys.append(bit["key"])
     template["enabled_keys"] = enabled_keys
+    template["discussion_metadata"] = {
+        "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
+        "question_space": space,
+        "enabled_keys": enabled_keys,
+        "status": "discussion_draft",
+    }
+    template["seed_candidate_payload"] = _empty_seed_candidate_payload(space, enabled_keys)
     return enabled_keys, disabled_keys, template
 
 
@@ -550,8 +632,8 @@ def topology_seed_discussion(argv: list[str]) -> int:
                     "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
                     "stage": 2,
                     "question_space": args.space,
-                    "bits": [0 for _ in SPACE_BIT_KEYS[args.space]],
-                    "counts": {"total_bits": len(SPACE_BIT_KEYS[args.space])},
+                    "bits": [0 for _ in topology_seed_question_bits(args.space)],
+                    "counts": {"total_bits": _space_bit_count(args.space)},
                     "ids": {},
                     "notes": {},
                 },
@@ -608,6 +690,8 @@ def topology_seed_discussion(argv: list[str]) -> int:
             "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
             "enabled_keys": enabled_keys,
             "disabled_keys": disabled_keys,
+            "discussion_metadata": template["discussion_metadata"],
+            "seed_candidate_payload": template["seed_candidate_payload"],
             "tmp_json_template": template,
             "usage_note": "Caller may redirect stdout to /tmp/topology-seed-discussion.tmp.json. This tool does not write files.",
         })
@@ -636,11 +720,25 @@ def topology_seed_discussion(argv: list[str]) -> int:
     candidate_sections = {k: v if isinstance(v, dict) else {} for k, v in candidate_sections.items()}
     unresolved = tmp_json.get("unresolved_questions", []) if isinstance(tmp_json.get("unresolved_questions", []), list) else []
     enabled_keys = tmp_json.get("enabled_keys", []) if isinstance(tmp_json.get("enabled_keys", []), list) else []
+    seed_candidate_payload = tmp_json.get("seed_candidate_payload")
+    if seed_candidate_payload is None:
+        seed_candidate_payload = _empty_seed_candidate_payload(str(tmp_json.get("question_space") or "unknown"), enabled_keys)
+    seed_errors = _validate_seed_candidate_payload(seed_candidate_payload)
+    if seed_errors:
+        sys.stderr.write("FAIL: invalid seed_candidate_payload: " + "; ".join(seed_errors) + "\n")
+        return 1
+    discussion_metadata = tmp_json.get("discussion_metadata") if isinstance(tmp_json.get("discussion_metadata"), dict) else {
+        "schema_id": tmp_json.get("schema_id"),
+        "question_space": tmp_json.get("question_space"),
+        "enabled_keys": enabled_keys,
+        "status": "discussion_draft",
+    }
     return _json({
         "tool": "topology-seed-discussion",
         "mode": "build",
         "source_file": str(answers_path),
         "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
+        "discussion_metadata": discussion_metadata,
         "discussion_result": {
             "status": "discussion_draft",
             "question_space": tmp_json.get("question_space"),
@@ -648,7 +746,8 @@ def topology_seed_discussion(argv: list[str]) -> int:
             "candidates": candidate_sections,
             "unresolved_questions": unresolved,
         },
-        "candidate_seed_json": {"discussion_only": True, **candidate_sections},
+        "seed_candidate_payload": seed_candidate_payload,
+        "candidate_seed_json": seed_candidate_payload,
         "adoption_boundary": {
             "requires_separate_human_judgment_or_change": True,
             "this_tool_writes_seed_sql": False,

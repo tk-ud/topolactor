@@ -71,14 +71,14 @@ Example:
 
 ### `topology-seed-discussion`
 
-Maps seed discussion into a two-stage, read-only question flow. Stage 1 selects a `question_space` such as `sql_attention_observation`, `topology_manifest_authoring`, `admin_contents_authoring`, `admin_ui_builder_authoring`, `admin_manifests_navigation`, `runtime_manifest_dispatch`, `seed_runtime_import`, or `db_topology_wiring`. Stage 2 emits the detailed bit schema and per-bit JSON fragments for the selected space.
+Maps seed discussion into a two-stage, read-only question flow. Stage 1 selects a `question_space` such as `sql_attention_observation`, `topology_manifest_authoring`, `admin_contents_authoring`, `admin_ui_builder_authoring`, `admin_manifests_navigation`, `runtime_manifest_dispatch`, `seed_runtime_import`, or `db_topology_wiring`. Stage 2 is generated from SSOT YAML (`docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/sql-attention-logs-ssot.yaml`, and `docs/design/db-schema.yaml`) rather than UI-derived hand-written question keys. Each YAML object/list/scalar is normalized to a stable `source_ref` + `path` element with `key`, `question`, `answer_type`, `json_fragment`, `category`, and implementation/DB `validation_ref` metadata.
 
 - `inspect`: emits the Stage 1 `question_space_selector` plus a binary answers template.
 - `inspect --space <question_space>`: emits the Stage 2 indexed bit schema for that space.
 - `expand --answers <stage1_answers.json>`: reads Stage 1 answers and returns Stage 2 schemas for selected spaces.
-- `build-template --space <question_space> --bits '[1,0,1,...]'` or `build-template --answers <stage2_answers.json>`: deep-merges enabled JSON fragments and prints a tmp JSON template for an AI/human to fill. The tool does not write `tmp.json`; callers may redirect stdout to `/tmp/...json`.
-- `build --answers <tmp.json>`: reads an AI-filled tmp JSON file and prints candidate discussion JSON.
-- Boundary: output is a discussion draft only; it is not SSOT authority, seed adoption, proof completion, or implemented status evidence. The tool does not write seed SQL, manifests, SSOT, TODO, or roadmap files and does not connect to a DB, external API, or AI API.
+- `build-template --space <question_space> --bits '[1,0,1,...]'` or `build-template --answers <stage2_answers.json>`: deep-merges only the selected SSOT element JSON fragments and prints separate `discussion_metadata` and `seed_candidate_payload` objects plus a structurally valid tmp template for an AI/human to fill. `seed_candidate_payload` is shaped for SeedRuntime (`version` + `runtimes`), includes a non-empty runtime declaration when bits are selected, and remains a candidate only. The tool does not write `tmp.json`; callers may redirect stdout to `/tmp/...json`.
+- `build --answers <tmp.json>`: reads an AI-filled tmp JSON file, fail-closes invalid `seed_candidate_payload`, and prints separated discussion output plus SeedRuntime-shaped seed candidate JSON.
+- Boundary: output is a discussion draft only; it is not SSOT authority, seed adoption, proof completion, or implemented status evidence. The tool does not write seed SQL, manifests, SSOT, TODO, or roadmap files and does not connect to a DB, external API, or AI API. Generated local artifacts matching `topology-seed-discussion*.tmp.json`, `topology-seed-discussion*.seed.json`, or `.agent/tmp/topology-seed-discussion*.json` are ignored; use `.agent/scripts/cleanup-topology-seed-discussion-artifacts.sh` to remove them without deleting tracked fixtures.
 
 Examples:
 

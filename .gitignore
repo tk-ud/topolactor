@@ -22,3 +22,8 @@ frontend/.env
 
 # Windows reserved device names (accidental redirect artifacts)
 nul
+
+# topology-seed-discussion generated local artifacts
+.agent/tmp/topology-seed-discussion*.json
+topology-seed-discussion*.tmp.json
+topology-seed-discussion*.seed.json

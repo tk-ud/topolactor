@@ -1,0 +1,23 @@
+{
+  "discussion_metadata": {
+    "enabled_keys": [
+      "admin_console_workflow_ssot_admin_console_workflow_ssot_authority_canonical_routes_2",
+      "admin_console_workflow_ssot_admin_console_workflow_ssot_canonical_authoring_order_canvas_workspace_entry_entered_after",
+      "admin_console_workflow_ssot_admin_console_workflow_ssot_canonical_authoring_order_contents_pipeline_0"
+    ],
+    "question_space": "admin_contents_authoring",
+    "schema_id": "topology_seed_discussion_ssot_seed_structure_v1",
+    "source_tool": "topology-seed-discussion",
+    "status": "seed_candidate_draft_not_adopted"
+  },
+  "runtimes": [
+    {
+      "action": "selected_ssot_elements",
+      "layer": "admin_contents_authoring",
+      "name": "topology-seed-discussion:admin_contents_authoring:selected-ssot-elements",
+      "runtimeDestination": "topology_transform_runtime",
+      "target": "topology_seed_discussion"
+    }
+  ],
+  "version": 1
+}

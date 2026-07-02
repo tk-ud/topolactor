@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "runtimes": [
+    {
+      "name": "recursive import must fail close",
+      "target": "admin",
+      "layer": "seed_runtime",
+      "action": "import",
+      "runtimeDestination": "admin_runtime"
+    }
+  ]
+}
