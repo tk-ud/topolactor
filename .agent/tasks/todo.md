@@ -108,6 +108,7 @@
   20. `.agent/tasks/todo.md`
 - 親Bundle完了条件: 子Bundle `agent-tools-governance-contract`、`agent-tools-core-readonly-observation`、`agent-tools-ssot-driven-seed-structure-generator`、`agent-tools-proof-and-structure-gate`、`agent-tools-advanced-surface-maps` が完了していること。
 - 備考: `agent-tools-advanced-surface-maps` は future 子Bundle扱いでもよい。初期完了を狙う場合は、advanced surface maps を親Bundle初期完了条件から外す判断も許可する。ただし判断理由をtodo内に残す。
+- 親Bundle status判断（本PR時点）: `agent-tools-governance-contract` / `agent-tools-core-readonly-observation` / `agent-tools-ssot-driven-seed-structure-generator` / `agent-tools-proof-and-structure-gate` の4子Bundleが implemented になった。残る blocking child は `agent-tools-advanced-surface-maps`（status: future、未着手）のみ。上記備考により advanced-surface-maps を親Bundle初期完了条件から除外する判断も許可されているが、本PRのscopeは `agent-tools-proof-and-structure-gate` 単体であり、親Bundleの完了条件を再定義する判断（advanced-surface-maps の切り出し/除外）は design_change 相当の別判断であるため本PRでは実行しない。親Bundle Statusは `partial` のまま維持し、advanced-surface-maps の着手判断は別途 todo_maintenance または design_change worktype で行う。
 
 ### 子Bundle `agent-tools-governance-contract`
 
@@ -161,7 +162,7 @@
 ### 子Bundle `agent-tools-proof-and-structure-gate`
 
 **Worktype:** implementation_change
-**Status:** blocked_by_design
+**Status:** implemented
 **Depends on:** `agent-tools-governance-contract`, `agent-tools-core-readonly-observation`
 
 - Scope: `.agent/tools` の存在・禁止事項・依存境界を proof surface に接続する。
@@ -169,6 +170,8 @@
 - 目的: `.agent/tools` を structure check / required paths / test bundle / proof manifest に接続する。
 - 改善方針: dedicated check `check-agent-tools-surface.sh` を追加する。structured processing が必要なら Python3 stdlib script に委譲する。`check-structure.sh` から delegated subcheck として呼ぶ。
 - 対応資料: `.agent/docs/required-paths.yaml`, `.agent/docs/test-bundles.yaml`, `docs/design/test-proof-manifest-ssot.yaml`, `.agent/tests/check-structure.sh`, `.agent/tests/check-no-ruby-dependency.sh`, `docs/framework-policy.yaml`
+- 完了記録: dedicated check `.agent/tests/check-agent-tools-surface.sh`（bash CI entrypoint/orchestration wrapperのみ）と、構造化検証を担う `.agent/scripts/check_agent_tools_surface.py`（Python3 stdlib only、`--self-test` 付き）を追加し、`.agent/tests/check-structure.sh` から delegated subcheck として呼び出すよう接続した。この check は `.agent/tools` 4entrypoint（`directory-map`/`ssot-map-query`/`proof-surface-map`/`topology-seed-discussion`）の存在・実行権限・thin entrypoint境界（`.agent/scripts/agent_tools/readonly_observation.py` への delegation、非空行10行以下、構造化処理の直書き禁止）・mutation引数（`--output` 等）拒否・readonly_observation.py の no-write-call・baseline出力の authority-boundary metadata（`read_only`/`writes_repo_files`/`authority_boundary` disclaimer/`prohibited_judgments` 語彙）を実際にサブプロセス実行して検証する。`directory-map` は既存の安定 JSON array shape を維持するため boundary metadata 出力対象から意図的に除外し、shape検証のみ行う。`.agent/docs/required-paths.yaml` に `.agent/tools`・`.agent/scripts/agent_tools` ディレクトリ、`.agent/tools/*` 4entrypoint・`README.md`、`readonly_observation.py`、新規 check 2ファイルの required_files と、対応する required_content_terms を追加した。`docs/design/test-proof-manifest-ssot.yaml` の `ssot_structure_policy_contract`（`required_when.changed_files` に既存の `.agent/**` を含む proof_id）の `runner_surfaces` に `check-agent-tools-surface.sh` を追加し、`evidence_inputs` に `.agent/tools/README.md` を追加し、`proves`/`does_not_prove` を更新した。`.agent/docs/test-bundles.yaml` に reverse lookup entry `agent-tools-proof-and-structure-gate`（`proof_refs: [ssot_structure_policy_contract]`、`runner_surfaces: [check-agent-tools-surface.sh, check-structure.sh]`）を追加した。`.agent/tools/README.md` の「Planned follow-up」節を実装済みの接続内容を説明する節に更新した。`bash .agent/tests/check-no-ruby-dependency.sh`、`bash .agent/tests/check-ssot-proof-surface-connectivity.sh`、`bash .agent/tests/check-structure.sh`、`python3 .agent/scripts/check_agent_tools_surface.py --self-test` をすべて実行し PASS を確認した。`.agent/tools` の read-only境界・mutation拒否・no-authority境界・`.agent/scripts` との責務境界、既存4toolの基本flowはいずれも変更していない。
+- 残scope: なし（本子Bundle scope内は完了）。`agent-tools-advanced-surface-maps`（advanced観測map追加）は別子Bundle scopeであり本Bundle完了条件に含まれない。`agent-output-noise-control` は別Bundleであり本PRでは扱っていない。
 
 ### 子Bundle `agent-tools-advanced-surface-maps`
 

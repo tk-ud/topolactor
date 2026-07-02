@@ -48,6 +48,8 @@ required_directories:
     - .agent/checklists/fixtures/policy-judgment
     - .agent/checklists/fixtures/boundary-identity
     - .agent/scripts
+    - .agent/scripts/agent_tools
+    - .agent/tools
     - .agent/tmp
   docs:
     - docs
@@ -206,6 +208,14 @@ required_files:
     - .agent/scripts/check_ssot_proof_surface_connectivity.py
     - .agent/tests/check-ssot-proof-surface-connectivity.sh
     - .agent/tests/check-no-ruby-dependency.sh
+    - .agent/tools/README.md
+    - .agent/tools/directory-map
+    - .agent/tools/ssot-map-query
+    - .agent/tools/proof-surface-map
+    - .agent/tools/topology-seed-discussion
+    - .agent/scripts/agent_tools/readonly_observation.py
+    - .agent/scripts/check_agent_tools_surface.py
+    - .agent/tests/check-agent-tools-surface.sh
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml
@@ -752,4 +762,26 @@ required_content_terms:
     - "check-docs-ssot-connectivity.sh"
     - "check-ssot-proof-surface-connectivity.sh"
     - "check-no-ruby-dependency.sh"
+    - "check-agent-tools-surface.sh"
     - "required-paths.yaml"
+  .agent/tools/README.md:
+    - "read-only repository observation surface"
+    - "must not mutate repository files"
+    - "Tool output is observation data only"
+    - "SSOT authority."
+    - "proof completion evidence by itself."
+    - "implemented / partial / not_started status evidence by itself."
+  .agent/scripts/agent_tools/readonly_observation.py:
+    - "BOUNDARY"
+    - "_reject_mutation_args"
+    - "authority_boundary"
+    - "prohibited_judgments"
+  .agent/tests/check-agent-tools-surface.sh:
+    - "check_agent_tools_surface.py"
+    - "agent_repo_observation_tools_surface"
+  .agent/scripts/check_agent_tools_surface.py:
+    - "REQUIRED_TOOL_ENTRYPOINTS"
+    - "mutation_rejection_failures"
+    - "boundary_metadata_failures"
+    - "thin_wrapper_failures"
+    - "--self-test"
