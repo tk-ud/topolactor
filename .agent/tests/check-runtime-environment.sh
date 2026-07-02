@@ -18,6 +18,25 @@ require_tool curl
 require_tool dotnet
 require_tool psql
 
+PHASE_COUNT=0
+RELATION_COUNT=0
+LIVE_API_COUNT=0
+SSE_COUNT=0
+NOISE_LOG="$(mktemp)"
+exec 3>&1 4>&2 >"$NOISE_LOG" 2>&1
+noise_finish() {
+  local code=$?
+  exec 1>&3 2>&4
+  if [ "$code" -eq 0 ]; then
+    rm -f "$NOISE_LOG"
+    echo "PASS runtime-environment phases=${PHASE_COUNT} relations=${RELATION_COUNT} live_api=${LIVE_API_COUNT} sse=${SSE_COUNT}"
+  else
+    echo "FAIL runtime-environment exit=${code}" >&2
+    cat "$NOISE_LOG" >&2 || true
+    rm -f "$NOISE_LOG"
+  fi
+  return "$code"
+}
 assert_relation_exists() {
   local relation="$1"
   local exists
@@ -27,14 +46,20 @@ assert_relation_exists() {
     docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "\dt public.*" || true
     exit 1
   fi
-  echo "OK: relation exists -> ${relation}"
+  RELATION_COUNT=$((RELATION_COUNT + 1))
 }
 
 cleanup() {
   compose down -v --remove-orphans || true
   rm -f "${RUNTIME_ENV_FILE}" || true
 }
-trap cleanup EXIT
+
+on_exit() {
+  local code=$?
+  cleanup || true
+  return "$code"
+}
+trap 'code=$?; cleanup || true; (exit "$code"); noise_finish' EXIT
 
 cd "${REPO_ROOT}"
 
@@ -57,34 +82,35 @@ dump_logs() {
   compose logs postgres >&2 || true
 }
 
-echo "=== [RUNTIME_ENV] Start postgres/backend via docker compose ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 compose up -d postgres backend
 
-echo "=== [RUNTIME_ENV] Wait for postgres health ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 for _ in $(seq 1 30); do
-  status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-postgres 2>/dev/null || true)"
+  status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-postgres || true)"
   if [ "${status}" = "healthy" ]; then
-    echo "Postgres is healthy"
+    PHASE_COUNT=$((PHASE_COUNT + 1))
     break
   fi
   sleep 2
 done
 
-status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-postgres 2>/dev/null || true)"
+status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-postgres || true)"
 if [ "${status}" != "healthy" ]; then
   echo "ERROR: postgres health check failed (status=${status})" >&2
     dump_logs
     exit 1
 fi
 
-echo "=== [RUNTIME_ENV] Verify DB connectivity and required schema relations ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "SELECT 1;"
+PHASE_COUNT=$((PHASE_COUNT + 1))
 assert_relation_exists "public.manifest"
 assert_relation_exists "auth.users"
 assert_relation_exists "auth.credentials"
 assert_relation_exists "topology.topology_edit_log"
 
-echo "=== [RUNTIME_ENV] Run UI topology migration regression against live DB ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 POSTGRES_HOST=127.0.0.1 \
 POSTGRES_PORT=5432 \
 POSTGRES_DB=topolactor_demo \
@@ -92,29 +118,29 @@ POSTGRES_USER=topolactor_demo \
 POSTGRES_PASSWORD=topolactor_demo \
   bash .agent/tests/check-migration-ui-topology.sh
 
-echo "=== [RUNTIME_ENV] Run integration tests against live DB ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 DATABASE_URL='Host=127.0.0.1;Port=5432;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo' \
   dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
   --nologo --verbosity minimal
 
-echo "=== [RUNTIME_ENV] Wait for backend health ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 for _ in $(seq 1 40); do
-  status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-backend 2>/dev/null || true)"
+  status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-backend || true)"
   if [ "${status}" = "healthy" ]; then
-    echo "Backend is healthy"
+    PHASE_COUNT=$((PHASE_COUNT + 1))
     break
   fi
   sleep 2
 done
 
-status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-backend 2>/dev/null || true)"
+status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-backend || true)"
 if [ "${status}" != "healthy" ]; then
   echo "ERROR: backend health check failed (status=${status})" >&2
   dump_logs
   exit 1
 fi
 
-echo "=== [RUNTIME_ENV] Verify seed storage volume read/write ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 docker exec topolactor-demo-backend sh -lc "echo runtime-seed-check > /storage/runtime-seed-check.txt"
 seed_value="$(docker exec topolactor-demo-backend sh -lc "cat /storage/runtime-seed-check.txt")"
 if [ "${seed_value}" != "runtime-seed-check" ]; then
@@ -131,7 +157,7 @@ if [ -z "${BACKEND_BASE_URL}" ]; then
 fi
 BACKEND_URL="http://${BACKEND_BASE_URL}"
 
-echo "=== [RUNTIME_ENV] Live API E2E user /auth/login (demo_public) ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 user_login_response="$(cat <<'JSON' | curl -sS -X POST "${BACKEND_URL}/auth/login" -H "Content-Type: application/json" --data-binary @-
 {"username":"demo_public","password":"demo_public_password"}
 JSON
@@ -143,9 +169,9 @@ if [ -z "${user_token}" ] || [ "${user_token}" = "null" ]; then
   dump_logs
   exit 1
 fi
-echo "OK: user /auth/login succeeded"
+LIVE_API_COUNT=$((LIVE_API_COUNT + 1))
 
-echo "=== [RUNTIME_ENV] Live API E2E admin /super_auth/login -> /dispatch ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 login_response="$(cat <<'JSON' | curl -sS -X POST "${BACKEND_URL}/super_auth/login" -H "Content-Type: application/json" --data-binary @-
 {"username":"demo_admin","password":"demo_admin_password"}
 JSON
@@ -236,7 +262,7 @@ if [ "${dispatch_structure_map_id}" != "${expected_structure_map_id}" ]; then
   exit 1
 fi
 
-echo "=== [RUNTIME_ENV] Live verification: AdminRuntime.ExecuteDataAsync (admin route) ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 admin_response="$(jq -n \
   '{operationType:"List",target:"admin",layer:"context_token_registry",action:"list",idOrHubId:null,payload:null,context:null}' | curl -sS -X POST "${BACKEND_URL}/dispatch" \
   -H "Authorization: Bearer ${token}" \
@@ -250,9 +276,9 @@ if [ "${admin_success}" != "true" ]; then
   dump_logs
   exit 1
 fi
-echo "OK: AdminRuntime.ExecuteDataAsync returned success"
+LIVE_API_COUNT=$((LIVE_API_COUNT + 1))
 
-echo "=== [RUNTIME_ENV] Live verification: OutputLaneRouter db_notify -> pg_notify -> LISTEN -> scheduler -> SSE ==="
+PHASE_COUNT=$((PHASE_COUNT + 1))
 notify_channel="topolactor_topology_changed"
 seed_manifest_id="$(docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -tA -c "
 SELECT manifest_id::text
@@ -323,8 +349,8 @@ if [ "${event_observed}" != "true" ]; then
   exit 1
 fi
 
-echo "OK: observed live SSE projection event for channel=${notify_channel} probe_id=${probe_id}"
+SSE_COUNT=$((SSE_COUNT + 1))
 cleanup_sse
 trap - RETURN
 
-echo "=== Runtime environment check passed ==="
+LIVE_API_COUNT=$((LIVE_API_COUNT + 1))

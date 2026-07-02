@@ -25,6 +25,23 @@ fail() {
   FAILURES=$((FAILURES + 1))
 }
 
+NOISE_LOG="$(mktemp)"
+exec 3>&1 4>&2 >"$NOISE_LOG" 2>&1
+noise_finish() {
+  local code=$?
+  exec 1>&3 2>&4
+  if [ "$code" -eq 0 ]; then
+    rm -f "$NOISE_LOG"
+    echo "PASS check-migration-ui-topology"
+  else
+    echo "FAIL check-migration-ui-topology exit=$code" >&2
+    cat "$NOISE_LOG" >&2 || true
+    rm -f "$NOISE_LOG"
+  fi
+  return "$code"
+}
+trap noise_finish EXIT
+
 check_content() {
   local file="$REPO_ROOT/$1"
   local term="$2"
@@ -123,7 +140,7 @@ query_equals_zero() {
   local label="$1"
   local sql="$2"
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2); then
     fail "Query failed: $label"
     return
   fi
@@ -139,7 +156,7 @@ query_equals_one() {
   local label="$1"
   local sql="$2"
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2); then
     fail "Query failed: $label"
     return
   fi
@@ -158,7 +175,7 @@ run_sql_file() {
     fail "SQL file missing: $sql_file"
     return
   fi
-  if "${PSQL_BASE[@]}" --file "$full_path" >/dev/null; then
+  if "${PSQL_BASE[@]}" --file "$full_path" ; then
     PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "Failed executing SQL file: $sql_file"
@@ -408,7 +425,7 @@ $$;
 ROLLBACK;
 ENDSQL
 
-if "${PSQL_BASE[@]}" --file "$CONFLICT_SIM_SQL" >/dev/null; then
+if "${PSQL_BASE[@]}" --file "$CONFLICT_SIM_SQL" ; then
   PASS_COUNT=$((PASS_COUNT + 1)) # OK
 else
   fail "conflict-case FK and tensor parent remapping simulation failed"

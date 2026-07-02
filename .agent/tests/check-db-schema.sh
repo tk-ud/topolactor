@@ -39,6 +39,23 @@ if ! command -v psql >/dev/null 2>&1; then
   exit 1
 fi
 
+NOISE_LOG="$(mktemp)"
+exec 3>&1 4>&2 >"$NOISE_LOG" 2>&1
+noise_finish() {
+  local code=$?
+  exec 1>&3 2>&4
+  if [ "$code" -eq 0 ]; then
+    rm -f "$NOISE_LOG"
+    echo "PASS check-db-schema"
+  else
+    echo "FAIL check-db-schema exit=$code" >&2
+    cat "$NOISE_LOG" >&2 || true
+    rm -f "$NOISE_LOG"
+  fi
+  return "$code"
+}
+trap noise_finish EXIT
+
 export PGPASSWORD="$POSTGRES_PASSWORD"
 PSQL_BASE=(
   psql
@@ -60,7 +77,7 @@ run_sql_file() {
   fi
 
   echo "Running SQL: $sql_file"
-  if "${PSQL_BASE[@]}" --file "$full_path" >/dev/null; then
+  if "${PSQL_BASE[@]}" --file "$full_path" ; then
     PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "Failed executing SQL file: $sql_file"
@@ -72,7 +89,7 @@ query_equals_zero() {
   local sql="$2"
 
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2); then
     fail "Query failed: $label"
     return
   fi
@@ -90,7 +107,7 @@ query_equals_one() {
   local sql="$2"
 
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2); then
     fail "Query failed: $label"
     return
   fi
@@ -104,7 +121,7 @@ query_equals_one() {
 }
 
 echo "=== Validating topology_tables.sql bootstrap safety ==="
-if rg -n "DROP TABLE IF EXISTS.*CASCADE" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
+if rg -n "DROP TABLE IF EXISTS.*CASCADE" "$REPO_ROOT/db/topology_tables.sql" ; then
   fail "db/topology_tables.sql must not contain destructive DROP TABLE ... CASCADE"
 else
   PASS_COUNT=$((PASS_COUNT + 1)) # OK
@@ -116,7 +133,7 @@ if [ ! -f "$HUB_REL_MIGRATION" ]; then
 else
   PASS_COUNT=$((PASS_COUNT + 1)) # OK
 fi
-if rg -n "DROP TABLE IF EXISTS.*CASCADE|DROP TABLE .* CASCADE" "$HUB_REL_MIGRATION" >/dev/null; then
+if rg -n "DROP TABLE IF EXISTS.*CASCADE|DROP TABLE .* CASCADE" "$HUB_REL_MIGRATION" ; then
   fail "hub_relations migration must not use DROP TABLE ... CASCADE"
 else
   PASS_COUNT=$((PASS_COUNT + 1)) # OK
@@ -196,7 +213,7 @@ END;
 ROLLBACK;
 EOF
 
-if "${PSQL_BASE[@]}" --file "$LEGACY_MIGRATION_SIM_SQL" >/dev/null; then
+if "${PSQL_BASE[@]}" --file "$LEGACY_MIGRATION_SIM_SQL" ; then
   PASS_COUNT=$((PASS_COUNT + 1)) # OK
 else
   fail "hub_relations legacy migration simulation failed"

@@ -16,7 +16,7 @@ noise_run() {
     return "$code"
   fi
   rm -f "$tmp"
-  echo "PASS ${label}"
+  [ "${NOISE_QUIET_SUCCESS:-0}" = "1" ] || echo "PASS ${label}"
 }
 
 noise_run_bash() {
@@ -35,5 +35,5 @@ noise_run_bash() {
     return "$code"
   fi
   rm -f "$tmp"
-  echo "PASS ${label}"
+  [ "${NOISE_QUIET_SUCCESS:-0}" = "1" ] || echo "PASS ${label}"
 }

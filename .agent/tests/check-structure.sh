@@ -188,7 +188,6 @@ manifest_content_terms() {
   ' "$MANIFEST"
 }
 
-echo ""
 DIR_COUNT=0
 while IFS= read -r d; do
   [ -n "$d" ] || continue
@@ -201,7 +200,6 @@ else
   SUCCESSES=$((SUCCESSES + 1))
 fi
 
-echo ""
 FILE_COUNT=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
@@ -214,7 +212,6 @@ else
   SUCCESSES=$((SUCCESSES + 1))
 fi
 
-echo ""
 TERM_COUNT=0
 while IFS=$'\t' read -r f term; do
   [ -n "$f" ] || continue
@@ -255,11 +252,9 @@ run_subcheck ".agent/tests/check-topology-layout-class-ssot.sh"
 
 run_subcheck ".agent/tests/check-ui-ux-executable-component-slice.sh"
 
-echo ""
 check_checklist_template_clean "$REPO_ROOT/.agent/checklists/policy-judgment.md"
 check_checklist_template_clean "$REPO_ROOT/.agent/checklists/boundary-identity.md"
 
-echo ""
 run_command_subcheck() {
   local label="$1"; shift
   local tmp
@@ -438,8 +433,6 @@ fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
-echo ""
-echo ""
 run_subcheck ".agent/tests/check-worktype-routing.sh"
 
 run_subcheck ".agent/tests/check-docs-ssot-connectivity.sh"

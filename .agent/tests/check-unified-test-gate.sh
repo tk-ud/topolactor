@@ -44,8 +44,7 @@ source .agent/scripts/lib/noise_control.sh
 run_lane() {
   local label="$1"
   local cmd="$2"
-  echo "processing unified-test-gate lane=${label}"
-  if noise_run_bash "unified_test_gate lane=${label}" "$cmd"; then
+  if NOISE_QUIET_SUCCESS=1 noise_run_bash "unified_test_gate lane=${label}" "$cmd"; then
     return 0
   fi
   fail "[${label}] lane failed"
@@ -63,8 +62,6 @@ run_lane "CATALOG_SSOT_ALIGNMENT" "deno test frontend/tests/componentCatalogSeed
 run_lane "SSOT_VOCABULARY_CONTRACT" "bash .agent/tests/check-ssot-vocabulary-contract.sh"
 run_lane "RECOMMENDATION_PRESSURE_LANE" "bash .agent/tests/check-recommendation-pressure-lane-boundary.sh"
 run_lane "FRONTEND_ALL_TESTS" "bash .agent/tests/check-frontend-all-tests.sh"
-
-echo "REMAINING_TODO runtime-environment-gate covers docker-compose/DB/migration; env / volume / live API-route E2E is still not included"
 
 if [ "${FAILURES}" -eq 0 ]; then
   echo "PASS unified-test-gate lanes=9 remaining_todo=1"
