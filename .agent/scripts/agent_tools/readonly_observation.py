@@ -78,7 +78,8 @@ def directory_map(argv: list[str]) -> int:
         return rejected
     parser = argparse.ArgumentParser(description="Read-only repo directory surface observation as JSON stdout.")
     parser.add_argument("--root", default="docs")
-    parser.add_argument("--depth", type=int, default=None)
+    parser.add_argument("--depth", type=int, default=2)
+    parser.add_argument("--full", action="store_true", help="Emit the full tree instead of the bounded default depth.")
     args = parser.parse_args(argv)
 
     try:
@@ -93,7 +94,7 @@ def directory_map(argv: list[str]) -> int:
     assert spec.loader is not None
     spec.loader.exec_module(mod)
     # Reuse the emitter body without exposing its --output file-write option.
-    return mod.main(["--root", safe_root, *( ["--depth", str(args.depth)] if args.depth is not None else [] )])
+    return mod.main(["--root", safe_root, *( ["--full"] if args.full else ["--depth", str(args.depth)] )])
 
 
 def _kind_value(value) -> str:

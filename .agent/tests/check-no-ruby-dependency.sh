@@ -43,7 +43,7 @@ run_guard() {
 
   local failures=0
   fail() { echo "FAIL: $1" >&2; failures=$((failures + 1)); }
-  ok()   { echo "OK  $1"; }
+  ok()   { :; }
 
   local prune_dirs=(.git node_modules vendor dist build coverage .cache _fresh bin obj)
   local prune_expr=()
@@ -98,13 +98,13 @@ run_guard() {
   done < <(grep -rnE '^[[:space:]]*ruby\b|\bgem install\b|\bbundle (exec|install)\b' \
       --include='*.sh' --include='*.yml' --include='*.yaml' --include='*.md' . 2>/dev/null \
     | sed 's#^\./##' \
-    | grep -vE '^\.agent/tests/check-no-ruby-dependency\.sh:' \
+    | grep -vE '^(\.agent/tests/check-no-ruby-dependency\.sh:|node_modules/|\.deno/)' \
     | sort)
   [ "$invocation_hits" -eq 0 ] && ok "[invocation] no ruby/gem/bundle command invocation found"
 
   echo ""
   if [ "$failures" -eq 0 ]; then
-    echo "=== Ruby-dependency exclusion guard passed (no Ruby found in repo governance tooling) ==="
+    echo "PASS check-no-ruby-dependency"
     return 0
   else
     echo "=== $failures Ruby-dependency finding(s) ===" >&2

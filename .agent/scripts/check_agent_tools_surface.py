@@ -108,6 +108,7 @@ FORBIDDEN_TOP_LEVEL_TRUE_KEYS = {
 
 def thin_wrapper_failures(name: str, text: str) -> list[str]:
     failures = []
+    pass_count = 0
     non_blank_lines = [line for line in text.splitlines() if line.strip()]
     if len(non_blank_lines) > THIN_WRAPPER_MAX_LINES:
         failures.append(
@@ -251,6 +252,7 @@ def fail(msg: str) -> None:
 def main() -> int:
     os.chdir(REPO_ROOT)
     failures: list[str] = []
+    pass_count = 0
 
     source_text = ""
     if not READONLY_OBSERVATION.is_file():
@@ -260,11 +262,11 @@ def main() -> int:
         if "BOUNDARY" not in source_text or "_reject_mutation_args" not in source_text:
             failures.append("readonly_observation.py missing BOUNDARY / _reject_mutation_args contract")
         else:
-            print("OK  [contract] readonly_observation.py declares BOUNDARY / _reject_mutation_args")
+            pass_count += 1
         write_findings = write_operation_findings(source_text)
         failures.extend(write_findings)
         if not write_findings:
-            print("OK  [no-write] readonly_observation.py contains no file-mutation calls")
+            pass_count += 1
 
     readme = TOOLS_DIR / "README.md"
     readme_text = ""
@@ -272,7 +274,7 @@ def main() -> int:
         failures.append("missing .agent/tools/README.md")
     else:
         readme_text = readme.read_text(encoding="utf-8")
-        print("OK  [file] .agent/tools/README.md present")
+        pass_count += 1
 
     removed_failures = removed_tool_failures(source_text, readme_text)
     for name in REMOVED_TOOL_ENTRYPOINTS:
@@ -280,7 +282,7 @@ def main() -> int:
             removed_failures.append(f"{name}: retired tool entrypoint must not exist at .agent/tools/{name}")
     failures.extend(removed_failures)
     if not removed_failures:
-        print(f"OK  [removed] retired tool entrypoints ({', '.join(REMOVED_TOOL_ENTRYPOINTS)}) stay removed")
+        pass_count += 1
 
     for name in REQUIRED_TOOL_ENTRYPOINTS:
         entry = TOOLS_DIR / name
@@ -291,13 +293,13 @@ def main() -> int:
         if not os.access(entry, os.X_OK):
             failures.append(f".agent/tools/{name} is not executable (chmod +x required)")
         else:
-            print(f"OK  [exec] .agent/tools/{name} is executable")
+            pass_count += 1
 
         text = entry.read_text(encoding="utf-8")
         wrapper_failures = thin_wrapper_failures(name, text)
         failures.extend(wrapper_failures)
         if not wrapper_failures:
-            print(f"OK  [thin] .agent/tools/{name} delegates to readonly_observation.py")
+            pass_count += 1
 
         try:
             mut_proc = subprocess.run(
@@ -309,7 +311,7 @@ def main() -> int:
             mut_failures = mutation_rejection_failures(name, mut_proc.returncode, mut_proc.stderr)
             failures.extend(mut_failures)
             if not mut_failures:
-                print(f"OK  [no-mutation] .agent/tools/{name} rejects --output")
+                pass_count += 1
 
         try:
             baseline_proc = subprocess.run(
@@ -332,17 +334,17 @@ def main() -> int:
             shape_failures = array_shape_failures(name, result)
             failures.extend(shape_failures)
             if not shape_failures:
-                print(f"OK  [shape] {name} baseline output keeps the stable JSON array shape")
+                pass_count += 1
         else:
             boundary_failures = boundary_metadata_failures(name, result)
             failures.extend(boundary_failures)
             if not boundary_failures:
-                print(f"OK  [no-authority] {name} output declares boundary metadata without an authority claim")
+                pass_count += 1
             if name in SECTION_QUERY_TOOLS:
                 minimal_failures = default_minimal_output_failures(name, result)
                 failures.extend(minimal_failures)
                 if not minimal_failures:
-                    print(f"OK  [minimal-output] {name} baseline output is a minimal section list, not full YAML")
+                    pass_count += 1
 
         if name == "yaml-section-query":
             try:
@@ -363,7 +365,7 @@ def main() -> int:
                         amb_failures = ambiguous_handling_failures(name, amb_result)
                         failures.extend(amb_failures)
                         if not amb_failures:
-                            print(f"OK  [ambiguous] {name} returns candidates without a resolved value on a multi-hit --section query")
+                            pass_count += 1
 
         if name in ("directory-map", "yaml-section-query"):
             escape_args = DIRECTORY_MAP_ESCAPE_PROBE_ARGS if name == "directory-map" else ["--file", "../etc/passwd"]
@@ -377,7 +379,7 @@ def main() -> int:
                 escape_failures = path_escape_rejection_failures(name, escape_proc.returncode, escape_proc.stdout, escape_proc.stderr)
                 failures.extend(escape_failures)
                 if not escape_failures:
-                    print(f"OK  [boundary] {name} fail-closes a repo-escaping path argument")
+                    pass_count += 1
 
         if name == "proof-surface-map":
             try:
@@ -398,15 +400,14 @@ def main() -> int:
                         ssot_failures = proof_ssot_lookup_failures(name, ssot_result)
                         failures.extend(ssot_failures)
                         if not ssot_failures:
-                            print(f"OK  [ssot-lookup] {name} --ssot matches beyond exact ssot_refs via required_when.changed_files")
+                            pass_count += 1
 
-    print("")
     if failures:
         for msg in failures:
             fail(msg)
         sys.stderr.write(f"=== {len(failures)} .agent/tools surface check(s) failed ===\n")
         return 1
-    print("=== .agent/tools surface checks passed ===")
+    print(f"PASS agent-tools-surface assertions={pass_count}")
     return 0
 
 

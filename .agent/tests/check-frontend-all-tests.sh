@@ -13,9 +13,6 @@ if ! command -v deno &>/dev/null; then
 fi
 
 cd "${REPO_ROOT}"
+source .agent/scripts/lib/noise_control.sh
 
-echo "=== [FRONTEND_ALL_TESTS] Running all frontend tests in frontend/tests/ ==="
-deno test frontend/tests/ --allow-read --allow-env
-
-echo ""
-echo "=== [FRONTEND_ALL_TESTS] PASSED ==="
+noise_run "frontend_all_tests scope=frontend/tests" deno test frontend/tests/ --allow-read --allow-env

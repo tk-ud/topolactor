@@ -3,6 +3,7 @@
 # Executes db/init.sql-derived SQL against a provided Postgres service with ON_ERROR_STOP=1. This script does not run docker compose.
 
 set -euo pipefail
+PASS_COUNT=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -68,7 +69,7 @@ for table_name in "${required_public_tables[@]}"; do
     echo "ERROR: required public table missing after bootstrap: ${table_name}" >&2
     exit 1
   fi
-  echo "OK  [public table] ${table_name}"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 done
 
 required_enum_tables=(
@@ -83,7 +84,7 @@ for table_name in "${required_enum_tables[@]}"; do
     echo "ERROR: required enum table missing after bootstrap: enum.${table_name}" >&2
     exit 1
   fi
-  echo "OK  [enum table] enum.${table_name}"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 done
 
 required_topology_tables=(
@@ -97,7 +98,7 @@ for table_name in "${required_topology_tables[@]}"; do
     echo "ERROR: required topology table missing after bootstrap: ${table_name}" >&2
     exit 1
   fi
-  echo "OK  [topology table] ${table_name}"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 done
 
-echo "=== Bootstrap validation checks passed ==="
+echo "PASS check-bootstrap-validation.sh assertions=${PASS_COUNT}"

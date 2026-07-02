@@ -73,7 +73,6 @@ def main():
         bad = v - allowed[k]
         if bad:
             fail(f"catalog {k} not in SSOT: " + ", ".join(sorted(bad)))
-    print("OK  component catalog classification vocabulary subset check")
 
     ss = req(sysci, "system_ci_admin_runtime_callable_surface_ssot")
     ops = set(x["operation"] for x in req(ss, "allowed_operations"))
@@ -102,7 +101,6 @@ def main():
     for st in statuses:
         if st not in contracts:
             fail(f"SystemCiStatus missing value: {st}")
-    print("OK  system_ci admin callable surface vocabulary subset check")
 
     lanes = req(pipe, "pipeline_continuity_ssot", "lanes")
     if not lanes:
@@ -130,7 +128,6 @@ def main():
             fail(f"check-pipeline-continuity.sh missing token: {tk}")
         if tk not in prohibited:
             fail(f"token not in SSOT lane prohibited: {tk}")
-    print("OK  pipeline required_identity/prohibited vocabulary subset check")
 
     rv = req(runtime, "runtime_orchestration_ssot", "runtime_vocabulary_contract")
     map_types = set(str(x) for x in yaml.arr(req(rv, "mapping_types")))
@@ -152,7 +149,6 @@ def main():
     bad = seed_types - map_types
     if bad:
         fail("seed mapping type not in SSOT: " + ", ".join(sorted(bad)))
-    print("OK  DB seed runtime_destination/type vocabulary subset check")
 
     seed_class_rows = re.findall(r'"classification"\s*:\s*\{([^}]*)\}', seed, re.S)
     if not seed_class_rows:
@@ -180,8 +176,8 @@ def main():
         bad = vals - allowed[k]
         if bad:
             fail(f"seed classification {k} not in SSOT: " + ", ".join(sorted(bad)))
-    print("OK  topology.components_bucket seed classification vocabulary subset check")
 
 
 if __name__ == "__main__":
     main()
+    print("PASS check-ssot-vocabulary-contract assertions=5")

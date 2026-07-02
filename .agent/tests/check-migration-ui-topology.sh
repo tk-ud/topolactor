@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 FAILURES=0
+PASS_COUNT=0
 
 fail() {
   echo "FAIL: $1" >&2
@@ -32,7 +33,7 @@ check_content() {
     return
   fi
   if grep -qF -- "$term" "$file"; then
-    echo "OK  [term] $1 → \"$term\""
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "Term not found in $1: \"$term\""
   fi
@@ -93,7 +94,7 @@ if [ "$DB_VARS_PRESENT" = "false" ]; then
   echo ""
   echo "=== DB env vars absent — skipping live DB regression tests ==="
   if [ "$FAILURES" -eq 0 ]; then
-    echo "=== Static migration checks passed ==="
+    echo "PASS check-migration-ui-topology.sh assertions=${PASS_COUNT}"
     exit 0
   else
     echo "=== Static migration checks failed: $FAILURES failure(s) ===" >&2
@@ -128,7 +129,7 @@ query_equals_zero() {
   fi
   result="$(echo "$result" | tr -d '[:space:]')"
   if [ "$result" = "0" ]; then
-    echo "OK  [data] $label"
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "$label (expected 0, got: ${result:-empty})"
   fi
@@ -144,7 +145,7 @@ query_equals_one() {
   fi
   result="$(echo "$result" | tr -d '[:space:]')"
   if [ "$result" = "1" ]; then
-    echo "OK  [data] $label"
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "$label (expected 1, got: ${result:-empty})"
   fi
@@ -158,7 +159,7 @@ run_sql_file() {
     return
   fi
   if "${PSQL_BASE[@]}" --file "$full_path" >/dev/null; then
-    echo "OK  [sql]  $sql_file"
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "Failed executing SQL file: $sql_file"
   fi
@@ -193,7 +194,7 @@ query_equals_zero "public.ui_package_component_map absent" \
 echo ""
 echo "=== DB: migration idempotency (re-run is a no-op) ==="
 run_sql_file "db/migrations/ui_topology_to_canonical_schema.sql"
-echo "OK  [idempotent] ui_topology_to_canonical_schema.sql re-run succeeded"
+PASS_COUNT=$((PASS_COUNT + 1)) # OK
 
 echo ""
 echo "=== DB: conflict-case simulation (child FK remapped to canonical UUID) ==="
@@ -408,14 +409,14 @@ ROLLBACK;
 ENDSQL
 
 if "${PSQL_BASE[@]}" --file "$CONFLICT_SIM_SQL" >/dev/null; then
-  echo "OK  [sim] conflict-case FK and tensor parent remapping simulation passed (rolled back)"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 else
   fail "conflict-case FK and tensor parent remapping simulation failed"
 fi
 
 if [ "$FAILURES" -eq 0 ]; then
   echo ""
-  echo "=== Migration regression checks passed ==="
+  echo "PASS check-migration-ui-topology.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo ""

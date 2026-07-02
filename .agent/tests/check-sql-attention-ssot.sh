@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+PASS_COUNT=0
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
@@ -40,7 +41,7 @@ for ssot_file in "$SSOT_YAML" "$SSOT_MD"; do
     exit 1
   fi
 done
-echo "OK: SQL Attention SSOT files contain no progress/status vocabulary"
+PASS_COUNT=$((PASS_COUNT + 1))
 
 logs_repo_boundary_present=0
 npgsql_boundary_present=0
@@ -73,7 +74,7 @@ grep -qF "topology.physical_table_manifest_bindings" db/topology_tables.sql || {
 grep -qF "LoadHubRelationExplorationCandidatesAsync" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: canonical hubs.hub_relations candidate loader missing" >&2; exit 1; }
 grep -qF "source_attention_id" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: append-only generation lineage source_attention_id missing" >&2; exit 1; }
 grep -qF "draft_projection" backend/runtime/SqlAttentionEvidencePromotionRuntime.cs || { echo "FAIL: explicit Draft promotion runtime missing" >&2; exit 1; }
-echo "OK: write_logs_attention and canonical generation-line implementation boundary checks passed"
+PASS_COUNT=$((PASS_COUNT + 1))
 # phase_vector TODO requirement is conditional:
 # - implementation boundary complete -> TODO is not required
 # - implementation boundary incomplete -> TODO entry is required
@@ -92,9 +93,9 @@ if [ "$phase_vector_impl_ready" -eq 0 ]; then
     echo "FAIL: TODO missing phase_vector generation item while phase_vector implementation boundary is incomplete" >&2
     exit 1
   }
-  echo "OK: phase_vector implementation boundary is incomplete; TODO carry-over requirement is satisfied"
+  PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "OK: phase_vector implementation boundary is present; TODO carry-over is not required"
+  PASS_COUNT=$((PASS_COUNT + 1))
 fi
 
 if grep -qF "policy caps を用いた phase_vector" "$TODO_FILE"; then
@@ -121,7 +122,7 @@ for bad in "phase movement is manifest" "phase movement is policy" "phase_moveme
   fi
 done
 
-echo "OK: TODO alignment and dangerous phrase checks passed"
+PASS_COUNT=$((PASS_COUNT + 1))
 
 HUBS_HIERARCHY_MD="$REPO_ROOT/docs/design/sql-attention-logs-ssot.md"
 if ! grep -qF "hubs.topology_manifests" "$HUBS_HIERARCHY_MD" || ! grep -qF "hubs.hub_relations" "$HUBS_HIERARCHY_MD"; then
@@ -132,7 +133,7 @@ if ! grep -qi "manifest-scoped" "$HUBS_HIERARCHY_MD"; then
   echo "FAIL: SQL Attention SSOT md must describe manifest-scoped hub sequence exploration" >&2
   exit 1
 fi
-echo "OK: hubs space hierarchy and manifest-scoped exploration documented in SSOT md"
+PASS_COUNT=$((PASS_COUNT + 1))
 
 SQL_ATTENTION_SQL="$REPO_ROOT/db/sql_attention_logs_tables.sql"
 if ! grep -qF "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id" "$SQL_ATTENTION_SQL"; then
@@ -143,7 +144,7 @@ if grep -qE "hub_relations hr WHERE hr\.hub_id|WHERE hr\.hub_id = h\.hub_id" "$S
   echo "FAIL: refresh_hub_current must not count hub_relations via hr.hub_id source authority" >&2
   exit 1
 fi
-echo "OK: refresh_hub_current deprecated support cache uses manifest-scoped hub_relations count"
+PASS_COUNT=$((PASS_COUNT + 1))
 
 CONTENT_BUNDLE_REPO="$REPO_ROOT/backend/repository/NpgsqlContentBundleRepository.cs"
 if grep -qE "hub_relations WHERE hub_id|hr\.hub_id::text" "$CONTENT_BUNDLE_REPO"; then
@@ -154,4 +155,6 @@ if ! grep -qF "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.t
   echo "FAIL: NpgsqlContentBundleRepository must JOIN topology_manifests for hub_relations" >&2
   exit 1
 fi
-echo "OK: content bundle repository uses manifest-scoped hub_relations queries"
+PASS_COUNT=$((PASS_COUNT + 1))
+
+echo "PASS check-sql-attention-ssot.sh assertions=${PASS_COUNT}"
