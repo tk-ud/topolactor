@@ -49,19 +49,43 @@ READONLY_OBSERVATION = REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "reado
 
 REQUIRED_TOOL_ENTRYPOINTS = [
     "directory-map",
-    "ssot-map-query",
+    "yaml-section-query",
     "proof-surface-map",
     "topology-seed-discussion",
 ]
+
+# ssot-map-query was retired in favor of yaml-section-query --file
+# .agent/docs/ssot-map.yaml; gate against it silently reappearing as either
+# an entrypoint file or a readonly_observation.py dispatch target.
+REMOVED_TOOL_ENTRYPOINTS = ["ssot-map-query"]
+
+# Tools whose baseline output is a generic YAML section-query projection
+# (dict with mode/boundary/sections), gated by default_minimal_output_failures
+# in addition to the generic boundary_metadata_failures check.
+SECTION_QUERY_TOOLS = {"yaml-section-query"}
 
 # Baseline args chosen so every tool exits 0 and emits JSON without touching
 # unrelated repository semantics (deliberately unmatched query/id probes).
 BASELINE_ARGS = {
     "directory-map": ["--root", "docs", "--depth", "0"],
-    "ssot-map-query": ["--query", "__check_agent_tools_surface_probe__"],
+    "yaml-section-query": ["--file", ".agent/docs/ssot-map.yaml"],
     "proof-surface-map": ["--proof-id", "__check_agent_tools_surface_probe__"],
     "topology-seed-discussion": ["inspect"],
 }
+
+# Probe chosen because .agent/docs/ssot-map.yaml has a "protocols" key
+# repeated across many mapping[] entries, guaranteeing an ambiguous multi-hit.
+AMBIGUOUS_PROBE_ARGS = ["--file", ".agent/docs/ssot-map.yaml", "--section", "protocols"]
+
+# "../" is rejected by directory-map's own boundary check before it ever
+# reaches the emitter, regardless of what exists above the repo root.
+DIRECTORY_MAP_ESCAPE_PROBE_ARGS = ["--root", "../"]
+
+# backend/runtime/RuntimeExecutor.cs is not listed verbatim in any proof's
+# ssot_refs/missing_ssot_blocking/evidence_inputs; it only matches through the
+# required_when.changed_files glob (e.g. "backend/**/*.cs"), so this probe
+# fails if --ssot regresses to exact-field-only matching.
+PROOF_SURFACE_SSOT_PROBE_ARGS = ["--ssot", "backend/runtime/RuntimeExecutor.cs"]
 
 MUTATION_PROBE_ARGS = ["--output", "/tmp/check-agent-tools-surface-should-not-write.json"]
 
@@ -145,6 +169,81 @@ def array_shape_failures(tool_name: str, result) -> list[str]:
     return []
 
 
+def default_minimal_output_failures(tool_name: str, result: dict) -> list[str]:
+    """Verifies the default (no explicit section/path) invocation stays a
+    minimal section listing rather than dumping full YAML content."""
+    failures = []
+    if not isinstance(result, dict):
+        return [f"{tool_name}: baseline output must be a JSON object"]
+    if result.get("mode") != "list_sections":
+        failures.append(f"{tool_name}: baseline (no --path/--section) output must have mode=='list_sections', got {result.get('mode')!r}")
+    if "value" in result:
+        failures.append(f"{tool_name}: baseline output must not include a resolved 'value' (full YAML dump)")
+    sections = result.get("sections")
+    if not isinstance(sections, list) or not sections:
+        failures.append(f"{tool_name}: baseline output missing a non-empty 'sections' list")
+    return failures
+
+
+def ambiguous_handling_failures(tool_name: str, result: dict) -> list[str]:
+    """Verifies a multi-hit --section query returns candidates only, never a
+    silently-picked value."""
+    failures = []
+    if not isinstance(result, dict):
+        return [f"{tool_name}: ambiguous probe output must be a JSON object"]
+    if result.get("mode") != "ambiguous":
+        failures.append(f"{tool_name}: ambiguous probe expected mode=='ambiguous', got {result.get('mode')!r}")
+    if "value" in result or "selected_section" in result:
+        failures.append(f"{tool_name}: ambiguous result must not include a resolved value/selected_section")
+    candidates = result.get("candidates")
+    if not isinstance(candidates, list) or len(candidates) < 2:
+        failures.append(f"{tool_name}: ambiguous result must include at least 2 candidates")
+    return failures
+
+
+def path_escape_rejection_failures(tool_name: str, returncode: int, stdout: str, stderr: str) -> list[str]:
+    """Verifies a repo-escaping --root/--file argument is fail-closed rather
+    than silently walked (or silently returning empty as if it were valid)."""
+    failures = []
+    if returncode == 0:
+        failures.append(f"{tool_name}: path-escape probe was accepted (exit 0) instead of rejected")
+    combined = (stdout + stderr).lower()
+    if "outside" not in combined:
+        failures.append(f"{tool_name}: path-escape rejection does not explain the repo-boundary failure")
+    return failures
+
+
+def proof_ssot_lookup_failures(tool_name: str, result: dict) -> list[str]:
+    """Verifies --ssot lookup reaches beyond exact ssot_refs/missing_ssot_blocking
+    matching into a required_when.changed_files glob match."""
+    failures = []
+    if not isinstance(result, dict):
+        return [f"{tool_name}: --ssot probe output must be a JSON object"]
+    surfaces = result.get("proof_surfaces")
+    if not isinstance(surfaces, list) or not surfaces:
+        return [f"{tool_name}: --ssot probe expected at least one matched proof surface"]
+    if not any(
+        isinstance(entry, dict) and "required_when.changed_files" in entry.get("ssot_match_fields", [])
+        for entry in surfaces
+    ):
+        failures.append(f"{tool_name}: --ssot probe expected a required_when.changed_files glob match")
+    return failures
+
+
+def removed_tool_failures(readonly_observation_source: str, readme_text: str) -> list[str]:
+    """Gates retired tool names (e.g. ssot-map-query) against silently
+    reappearing as a readonly_observation.py dispatch target or documentation.
+    Entrypoint-file existence is checked separately in main() (disk I/O),
+    keeping this function pure text analysis for --self-test."""
+    failures = []
+    for name in REMOVED_TOOL_ENTRYPOINTS:
+        if f'"{name}"' in readonly_observation_source:
+            failures.append(f"{name}: retired tool must not be dispatched from readonly_observation.py")
+        if f"### `{name}`" in readme_text:
+            failures.append(f"{name}: retired tool must not have an '### `{name}`' available-tool heading in README.md")
+    return failures
+
+
 def fail(msg: str) -> None:
     sys.stderr.write(f"FAIL: {msg}\n")
 
@@ -153,6 +252,7 @@ def main() -> int:
     os.chdir(REPO_ROOT)
     failures: list[str] = []
 
+    source_text = ""
     if not READONLY_OBSERVATION.is_file():
         failures.append("missing .agent/scripts/agent_tools/readonly_observation.py")
     else:
@@ -167,10 +267,20 @@ def main() -> int:
             print("OK  [no-write] readonly_observation.py contains no file-mutation calls")
 
     readme = TOOLS_DIR / "README.md"
+    readme_text = ""
     if not readme.is_file():
         failures.append("missing .agent/tools/README.md")
     else:
+        readme_text = readme.read_text(encoding="utf-8")
         print("OK  [file] .agent/tools/README.md present")
+
+    removed_failures = removed_tool_failures(source_text, readme_text)
+    for name in REMOVED_TOOL_ENTRYPOINTS:
+        if (TOOLS_DIR / name).exists():
+            removed_failures.append(f"{name}: retired tool entrypoint must not exist at .agent/tools/{name}")
+    failures.extend(removed_failures)
+    if not removed_failures:
+        print(f"OK  [removed] retired tool entrypoints ({', '.join(REMOVED_TOOL_ENTRYPOINTS)}) stay removed")
 
     for name in REQUIRED_TOOL_ENTRYPOINTS:
         entry = TOOLS_DIR / name
@@ -228,6 +338,67 @@ def main() -> int:
             failures.extend(boundary_failures)
             if not boundary_failures:
                 print(f"OK  [no-authority] {name} output declares boundary metadata without an authority claim")
+            if name in SECTION_QUERY_TOOLS:
+                minimal_failures = default_minimal_output_failures(name, result)
+                failures.extend(minimal_failures)
+                if not minimal_failures:
+                    print(f"OK  [minimal-output] {name} baseline output is a minimal section list, not full YAML")
+
+        if name == "yaml-section-query":
+            try:
+                amb_proc = subprocess.run(
+                    [str(entry), *AMBIGUOUS_PROBE_ARGS], capture_output=True, text=True, cwd=REPO_ROOT, timeout=30
+                )
+            except OSError as exc:
+                failures.append(f"{name}: failed to execute ambiguous probe: {exc}")
+            else:
+                if amb_proc.returncode != 0:
+                    failures.append(f"{name}: ambiguous probe failed (exit {amb_proc.returncode}): {amb_proc.stderr.strip()}")
+                else:
+                    try:
+                        amb_result = json.loads(amb_proc.stdout)
+                    except json.JSONDecodeError as exc:
+                        failures.append(f"{name}: ambiguous probe did not emit valid JSON: {exc}")
+                    else:
+                        amb_failures = ambiguous_handling_failures(name, amb_result)
+                        failures.extend(amb_failures)
+                        if not amb_failures:
+                            print(f"OK  [ambiguous] {name} returns candidates without a resolved value on a multi-hit --section query")
+
+        if name in ("directory-map", "yaml-section-query"):
+            escape_args = DIRECTORY_MAP_ESCAPE_PROBE_ARGS if name == "directory-map" else ["--file", "../etc/passwd"]
+            try:
+                escape_proc = subprocess.run(
+                    [str(entry), *escape_args], capture_output=True, text=True, cwd=REPO_ROOT, timeout=30
+                )
+            except OSError as exc:
+                failures.append(f"{name}: failed to execute path-escape probe: {exc}")
+            else:
+                escape_failures = path_escape_rejection_failures(name, escape_proc.returncode, escape_proc.stdout, escape_proc.stderr)
+                failures.extend(escape_failures)
+                if not escape_failures:
+                    print(f"OK  [boundary] {name} fail-closes a repo-escaping path argument")
+
+        if name == "proof-surface-map":
+            try:
+                ssot_proc = subprocess.run(
+                    [str(entry), *PROOF_SURFACE_SSOT_PROBE_ARGS], capture_output=True, text=True, cwd=REPO_ROOT, timeout=30
+                )
+            except OSError as exc:
+                failures.append(f"{name}: failed to execute --ssot probe: {exc}")
+            else:
+                if ssot_proc.returncode != 0:
+                    failures.append(f"{name}: --ssot probe failed (exit {ssot_proc.returncode}): {ssot_proc.stderr.strip()}")
+                else:
+                    try:
+                        ssot_result = json.loads(ssot_proc.stdout)
+                    except json.JSONDecodeError as exc:
+                        failures.append(f"{name}: --ssot probe did not emit valid JSON: {exc}")
+                    else:
+                        ssot_failures = proof_ssot_lookup_failures(name, ssot_result)
+                        failures.extend(ssot_failures)
+                        if not ssot_failures:
+                            print(f"OK  [ssot-lookup] {name} --ssot matches beyond exact ssot_refs via required_when.changed_files")
 
     print("")
     if failures:
@@ -310,6 +481,67 @@ def _self_test() -> int:
     # array_shape_failures
     expect("list result must PASS array shape", array_shape_failures("t", []) == [])
     expect("dict result must FAIL array shape", len(array_shape_failures("t", {})) == 1)
+
+    # default_minimal_output_failures
+    good_listing = {"mode": "list_sections", "sections": [{"key": "a"}]}
+    expect("minimal section listing must PASS", default_minimal_output_failures("t", good_listing) == [])
+
+    full_dump = {"mode": "list_sections", "sections": [{"key": "a"}], "value": {"huge": "dump"}}
+    expect("baseline output containing 'value' must FAIL", len(default_minimal_output_failures("t", full_dump)) >= 1)
+
+    wrong_mode = {"mode": "section", "sections": [{"key": "a"}]}
+    expect("baseline output with non-list_sections mode must FAIL", len(default_minimal_output_failures("t", wrong_mode)) >= 1)
+
+    empty_sections = {"mode": "list_sections", "sections": []}
+    expect("baseline output with empty sections must FAIL", len(default_minimal_output_failures("t", empty_sections)) >= 1)
+
+    # ambiguous_handling_failures
+    good_ambiguous = {"mode": "ambiguous", "candidates": [{"key": "a"}, {"key": "b"}]}
+    expect("well-formed ambiguous result must PASS", ambiguous_handling_failures("t", good_ambiguous) == [])
+
+    single_hit_result = {"mode": "section", "selected_section": {"value": 1}}
+    expect("silently-resolved single value on ambiguous probe must FAIL", len(ambiguous_handling_failures("t", single_hit_result)) >= 1)
+
+    too_few_candidates = {"mode": "ambiguous", "candidates": [{"key": "a"}]}
+    expect("ambiguous result with <2 candidates must FAIL", len(ambiguous_handling_failures("t", too_few_candidates)) >= 1)
+
+    # removed_tool_failures
+    clean_source = 'if tool == "yaml-section-query":\n    return yaml_section_query(rest)\n'
+    clean_readme = "### `yaml-section-query`\n\nThin wrapper.\n"
+    expect("source/readme without retired tool must PASS", removed_tool_failures(clean_source, clean_readme) == [])
+
+    dispatch_regression = 'if tool == "ssot-map-query":\n    return ssot_map_query(rest)\n'
+    expect("dispatch mentioning retired tool must FAIL", len(removed_tool_failures(dispatch_regression, clean_readme)) >= 1)
+
+    readme_regression = "### `ssot-map-query`\n\nAlias.\n"
+    expect("README documenting retired tool must FAIL", len(removed_tool_failures(clean_source, readme_regression)) >= 1)
+
+    readme_mention_only = "> `ssot-map-query` was retired: use `yaml-section-query` instead.\n"
+    expect("README mentioning retired tool in prose (no heading) must PASS", removed_tool_failures(clean_source, readme_mention_only) == [])
+
+    # path_escape_rejection_failures
+    expect(
+        "rejected path escape (exit!=0, mentions outside) must PASS",
+        path_escape_rejection_failures("t", 2, "", "FAIL: path_outside_repo: --root must resolve inside the repository: ../") == [],
+    )
+    expect(
+        "accepted path escape (exit 0) must FAIL",
+        len(path_escape_rejection_failures("t", 0, "[]", "")) >= 1,
+    )
+    expect(
+        "rejection without boundary explanation must FAIL",
+        len(path_escape_rejection_failures("t", 2, "", "FAIL: unknown option")) >= 1,
+    )
+
+    # proof_ssot_lookup_failures
+    glob_only_result = {"proof_surfaces": [{"proof_id": "x", "ssot_match_fields": ["required_when.changed_files"]}]}
+    expect("glob-only --ssot match must PASS", proof_ssot_lookup_failures("t", glob_only_result) == [])
+
+    empty_result = {"proof_surfaces": []}
+    expect("empty --ssot match must FAIL", len(proof_ssot_lookup_failures("t", empty_result)) >= 1)
+
+    exact_only_result = {"proof_surfaces": [{"proof_id": "x", "ssot_match_fields": ["ssot_refs"]}]}
+    expect("exact-only match without glob coverage must FAIL", len(proof_ssot_lookup_failures("t", exact_only_result)) >= 1)
 
     print(f"[self-test] {checks} assertions run, {len(problems)} failed")
     if problems:

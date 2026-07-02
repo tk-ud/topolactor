@@ -130,13 +130,28 @@ agent_repo_observation_tools_surface:
       - tool implementation files
       - initial tool command bodies
       - proof gate implementation
+    note: >-
+      ssot-map-query was later retired by agent-tools-advanced-surface-maps
+      in favor of the generic yaml-section-query --file
+      .agent/docs/ssot-map.yaml; this list records the original design-time
+      candidate set, not the current tool inventory.
   advanced_followup_tool_candidates:
     future_bundle: agent-tools-advanced-surface-maps
-    candidates:
+    status: implemented_with_deferred_candidates
+    implemented_candidate: yaml-section-query
+    implemented_candidate_role: generic_read_only_hierarchical_yaml_section_path_observation
+    deferred_candidates:
       - change-impact-map
       - dependency-surface-map
       - orphan-surface-map
-    boundary: advanced maps require separate schema and judgment-boundary design before implementation
+    deferred_reason: >-
+      impact/dependency/orphan surface maps tended toward a thin grep/rg
+      wrapper and require separate schema and judgment-boundary design before
+      implementation; they remain out of scope for this bundle.
+    boundary: >-
+      yaml-section-query is a generic read-only YAML section/path observation
+      tool, not impact, dependency, or orphan analysis; it does not replace
+      or implement the deferred candidates.
 
 semantic_closure:
   entities:

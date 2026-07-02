@@ -210,7 +210,7 @@ required_files:
     - .agent/tests/check-no-ruby-dependency.sh
     - .agent/tools/README.md
     - .agent/tools/directory-map
-    - .agent/tools/ssot-map-query
+    - .agent/tools/yaml-section-query
     - .agent/tools/proof-surface-map
     - .agent/tools/topology-seed-discussion
     - .agent/scripts/agent_tools/readonly_observation.py
@@ -771,17 +771,28 @@ required_content_terms:
     - "SSOT authority."
     - "proof completion evidence by itself."
     - "implemented / partial / not_started status evidence by itself."
+    - "yaml-section-query"
+    - "canonical path selector"
+    - "ambiguous"
   .agent/scripts/agent_tools/readonly_observation.py:
     - "BOUNDARY"
     - "_reject_mutation_args"
     - "authority_boundary"
     - "prohibited_judgments"
+    - "yaml_section_query"
+    - "_PathError"
   .agent/tests/check-agent-tools-surface.sh:
     - "check_agent_tools_surface.py"
     - "agent_repo_observation_tools_surface"
   .agent/scripts/check_agent_tools_surface.py:
     - "REQUIRED_TOOL_ENTRYPOINTS"
+    - "REMOVED_TOOL_ENTRYPOINTS"
     - "mutation_rejection_failures"
     - "boundary_metadata_failures"
     - "thin_wrapper_failures"
+    - "ambiguous_handling_failures"
+    - "default_minimal_output_failures"
+    - "removed_tool_failures"
+    - "path_escape_rejection_failures"
+    - "proof_ssot_lookup_failures"
     - "--self-test"

@@ -6,6 +6,7 @@ Python3 stdlib only. These helpers emit JSON to stdout and do not write files.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import importlib.util
 import json
 import os
@@ -31,13 +32,44 @@ def _json(data) -> int:
 
 
 def _reject_mutation_args(argv: list[str]) -> int | None:
-    mutation_args = {"--output", "-o", "--write", "--save", "--in-place", "--apply", "--update-seed", "--update-manifest", "--db-url", "--connection-string"}
+    mutation_args = {
+        "--output", "-o", "--write", "--save", "--in-place", "--apply", "--update",
+        "--update-seed", "--update-manifest", "--delete", "--db-url", "--connection-string",
+    }
     for arg in argv:
         opt = arg.split("=", 1)[0]
         if opt in mutation_args:
             sys.stderr.write(f"FAIL: mutation/file-write option is not exposed by .agent/tools: {opt}\n")
             return 2
     return None
+
+
+class _PathError(Exception):
+    """Carries the explicit error taxonomy required by the section-query contract."""
+
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+
+
+def _resolve_repo_relative_root(root_arg: str) -> str:
+    """Validates --root (directory-map) stays within the repository and
+    returns the safe repo-relative root string to forward to the emitter.
+    Rejects absolute paths, "../" escapes, and symlink escapes with an
+    explicit fail-close instead of silently walking outside the repo."""
+    raw = Path(root_arg)
+    candidate = raw if raw.is_absolute() else (REPO_ROOT / raw)
+    try:
+        resolved = candidate.resolve(strict=False)
+    except OSError as exc:
+        raise _PathError("invalid_path", f"cannot resolve --root: {exc}") from exc
+    try:
+        rel = resolved.relative_to(REPO_ROOT)
+    except ValueError:
+        raise _PathError("path_outside_repo", f"--root must resolve inside the repository: {root_arg}")
+    rel_str = str(rel)
+    return "." if rel_str == "." else rel_str
 
 
 def directory_map(argv: list[str]) -> int:
@@ -49,67 +81,307 @@ def directory_map(argv: list[str]) -> int:
     parser.add_argument("--depth", type=int, default=None)
     args = parser.parse_args(argv)
 
+    try:
+        safe_root = _resolve_repo_relative_root(args.root)
+    except _PathError as exc:
+        sys.stderr.write(f"FAIL: {exc.kind}: {exc.message}\n")
+        return 2
+
     emitter_path = SCRIPT_DIR / "emit-directory-tree-json.py"
     spec = importlib.util.spec_from_file_location("emit_directory_tree_json", emitter_path)
     mod = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(mod)
     # Reuse the emitter body without exposing its --output file-write option.
-    return mod.main(["--root", args.root, *( ["--depth", str(args.depth)] if args.depth is not None else [] )])
+    return mod.main(["--root", safe_root, *( ["--depth", str(args.depth)] if args.depth is not None else [] )])
 
 
-def _walk_matches(obj, query: str, cur_path: str = ""):
-    q = query.lower()
-    matches = []
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            path = f"{cur_path}.{key}" if cur_path else str(key)
-            key_hit = q in str(key).lower()
-            val_hit = not isinstance(value, (dict, list)) and q in str(value).lower()
-            if key_hit or val_hit:
-                matches.append({"path": path, "key": key, "value": value})
-            matches.extend(_walk_matches(value, query, path))
-    elif isinstance(obj, list):
-        for idx, value in enumerate(obj):
-            path = f"{cur_path}[{idx}]"
-            if not isinstance(value, (dict, list)) and q in str(value).lower():
-                matches.append({"path": path, "value": value})
-            matches.extend(_walk_matches(value, query, path))
-    return matches
+def _kind_value(value) -> str:
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "list"
+    return "scalar"
 
 
-def ssot_map_query(argv: list[str]) -> int:
+def _child_count(value) -> int:
+    return len(value) if isinstance(value, (dict, list)) else 0
+
+
+def _preview_value(value, max_len: int = 160):
+    if isinstance(value, dict):
+        keys = list(value.keys())
+        return {"keys": keys[:20], "key_count": len(keys)}
+    if isinstance(value, list):
+        return {"item_count": len(value)}
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    text = str(value)
+    return text if len(text) <= max_len else text[:max_len] + "…(truncated)"
+
+
+def _pointer_escape(token: str) -> str:
+    return token.replace("~", "~0").replace("/", "~1")
+
+
+def _pointer_unescape(token: str) -> str:
+    return token.replace("~1", "/").replace("~0", "~")
+
+
+def _path_to_pointer(path_list: list) -> str:
+    if not path_list:
+        return "/"
+    return "/" + "/".join(
+        str(seg) if isinstance(seg, int) else _pointer_escape(str(seg)) for seg in path_list
+    )
+
+
+def _parse_pointer(text: str) -> list[str]:
+    if text in ("", "/"):
+        return []
+    if not text.startswith("/"):
+        raise _PathError("invalid_path", "--path must be JSON-Pointer style, e.g. '/root/child/0/name'")
+    return [_pointer_unescape(t) for t in text.split("/")[1:]]
+
+
+def _resolve_path(data, tokens: list) -> tuple[list, object]:
+    """Walks tokens against data. List index vs object key is decided by the
+    current node's type at each step (never by the token's own type), so
+    dotted/slash-bearing dict keys and numeric-looking dict keys are never
+    misread as list indices."""
+    cur = data
+    resolved: list = []
+    for token in tokens:
+        if isinstance(cur, list):
+            try:
+                idx = int(token)
+            except (TypeError, ValueError):
+                raise _PathError("invalid_path", f"list index expected, got {token!r}")
+            if idx < 0 or idx >= len(cur):
+                raise _PathError("not_found", f"list index out of range: {idx}")
+            resolved.append(idx)
+            cur = cur[idx]
+        elif isinstance(cur, dict):
+            key = str(token)
+            if key not in cur:
+                raise _PathError("not_found", f"key not found: {key}")
+            resolved.append(key)
+            cur = cur[key]
+        else:
+            raise _PathError("invalid_path", f"cannot descend into a scalar with remaining path element {token!r}")
+    return resolved, cur
+
+
+def _find_key_occurrences(value, key_name: str, path: list | None = None) -> list[tuple[list, object]]:
+    path = path or []
+    results: list[tuple[list, object]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = path + [key]
+            if str(key) == key_name:
+                results.append((child_path, child))
+            results.extend(_find_key_occurrences(child, key_name, child_path))
+    elif isinstance(value, list):
+        for idx, child in enumerate(value):
+            results.extend(_find_key_occurrences(child, key_name, path + [idx]))
+    return results
+
+
+def _collect_sections(base_value, base_path: list, max_depth: int) -> list[dict]:
+    sections: list[dict] = []
+
+    def walk(value, path, depth):
+        if not isinstance(value, (dict, list)):
+            return
+        items = value.items() if isinstance(value, dict) else enumerate(value)
+        for key, child in items:
+            child_path = path + [key]
+            sections.append({
+                "path": child_path,
+                "path_text": _path_to_pointer(child_path),
+                "key": key,
+                "kind": _kind_value(child),
+                "depth": depth,
+                "child_count": _child_count(child),
+                "preview": _preview_value(child),
+            })
+            if depth < max_depth:
+                walk(child, child_path, depth + 1)
+
+    walk(base_value, list(base_path), 1)
+    return sections
+
+
+def _bounded_copy(value, depth_remaining: int | None, counter: list[int], max_nodes: int = 400):
+    """Returns (transformed_value, truncated). Depth-limits and node-budget-limits
+    the copy so explicit section reads cannot dump unbounded YAML."""
+    if not isinstance(value, (dict, list)):
+        return value, False
+    if depth_remaining is not None and depth_remaining <= 0:
+        return {"kind": _kind_value(value), "child_count": _child_count(value), "truncated_summary": True}, True
+    next_depth = None if depth_remaining is None else depth_remaining - 1
+    truncated = False
+    if isinstance(value, dict):
+        result: dict = {}
+        for key, child in value.items():
+            if counter[0] > max_nodes:
+                result["__omitted_child_count"] = len(value) - len(result)
+                truncated = True
+                break
+            counter[0] += 1
+            child_val, child_trunc = _bounded_copy(child, next_depth, counter, max_nodes)
+            result[str(key)] = child_val
+            truncated = truncated or child_trunc
+        return result, truncated
+    result_list: list = []
+    for child in value:
+        if counter[0] > max_nodes:
+            result_list.append({"__omitted_tail_count": len(value) - len(result_list)})
+            truncated = True
+            break
+        counter[0] += 1
+        child_val, child_trunc = _bounded_copy(child, next_depth, counter, max_nodes)
+        result_list.append(child_val)
+        truncated = truncated or child_trunc
+    return result_list, truncated
+
+
+def _resolve_yaml_file(file_arg: str | None) -> Path:
+    if not file_arg:
+        raise _PathError("invalid_path", "--file is required")
+    raw = Path(file_arg)
+    candidate = raw if raw.is_absolute() else (REPO_ROOT / raw)
+    try:
+        resolved = candidate.resolve(strict=False)
+    except OSError as exc:
+        raise _PathError("invalid_path", f"cannot resolve --file: {exc}") from exc
+    try:
+        resolved.relative_to(REPO_ROOT)
+    except ValueError:
+        raise _PathError("path_outside_repo", f"--file must resolve inside the repository: {file_arg}")
+    if resolved.suffix.lower() not in (".yaml", ".yml"):
+        raise _PathError("unsupported_file_type", f"only *.yaml/*.yml files are supported: {file_arg}")
+    if not resolved.is_file():
+        raise _PathError("not_found", f"file does not exist: {file_arg}")
+    return resolved
+
+
+def _emit_error(tool_name: str, source_file_text: str, err: "_PathError") -> int:
+    sys.stdout.write(json.dumps({
+        "tool": tool_name,
+        "source_file": source_file_text,
+        "boundary": BOUNDARY,
+        "mode": "error",
+        "error": err.kind,
+        "message": err.message,
+    }, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    return 1
+
+
+def yaml_section_query(argv: list[str], tool_name: str = "yaml-section-query") -> int:
     rejected = _reject_mutation_args(argv)
     if rejected is not None:
         return rejected
-    parser = argparse.ArgumentParser(description="Read-only .agent/docs/ssot-map.yaml observation query.")
-    parser.add_argument("--query", default=None, help="Case-insensitive text query over keys/scalars.")
-    parser.add_argument("--surface", default=None, help="Filter mapping entries by change_surfaces text.")
-    parser.add_argument("--path", default=None, help="Filter mapping entries by required/supporting doc or protocol path text.")
+    parser = argparse.ArgumentParser(description="Read-only hierarchical YAML section/path observation.")
+    parser.add_argument("--file", required=True, help="Repo-relative *.yaml/*.yml path.")
+    parser.add_argument("--list-sections", action="store_true", help="Return a section listing instead of a resolved value.")
+    parser.add_argument("--path-json", default=None, help="Canonical path selector: JSON array, e.g. '[\"mapping\",0,\"work_type\"]'.")
+    parser.add_argument("--path", default=None, help="Canonical path selector: JSON-Pointer style, e.g. '/mapping/0/work_type'.")
+    parser.add_argument("--section", default=None, help="Convenience alias: exact key-name search across the whole file.")
+    parser.add_argument("--depth", type=int, default=None, help="Relative depth from the selected path (list-sections) or expansion depth (section value).")
+    parser.add_argument("--format", choices=["json"], default="json")
     args = parser.parse_args(argv)
 
-    source = ".agent/docs/ssot-map.yaml"
-    data = yaml.load_file(str(REPO_ROOT / source))
-    entries = yaml.arr(data.get("mapping")) if isinstance(data, dict) else []
-    filtered = []
-    for entry in entries:
-        text = json.dumps(entry, ensure_ascii=False).lower()
-        if args.query and args.query.lower() not in text:
-            continue
-        if args.surface and args.surface.lower() not in " ".join(str(x) for x in yaml.arr(entry.get("change_surfaces"))).lower():
-            continue
-        if args.path:
-            paths = yaml.arr(entry.get("required_docs")) + yaml.arr(entry.get("supporting_docs")) + yaml.arr(entry.get("protocols"))
-            if args.path.lower() not in " ".join(str(x) for x in paths).lower():
-                continue
-        filtered.append(entry)
+    try:
+        resolved_path = _resolve_yaml_file(args.file)
+    except _PathError as exc:
+        return _emit_error(tool_name, args.file or "", exc)
+
+    try:
+        data = yaml.load_file(str(resolved_path))
+    except Exception as exc:  # minimal_yaml raises plain exceptions on malformed content
+        return _emit_error(tool_name, args.file, _PathError("parse_error", str(exc)))
+
+    source_file = str(resolved_path.relative_to(REPO_ROOT))
+
+    selectors = [x for x in (args.path_json, args.path, args.section) if x is not None]
+    if len(selectors) > 1:
+        return _emit_error(tool_name, source_file, _PathError("invalid_path", "specify only one of --path-json, --path, --section"))
+
+    base_path: list = []
+    base_value = data
+
+    try:
+        if args.path_json is not None:
+            try:
+                tokens = json.loads(args.path_json)
+            except json.JSONDecodeError as exc:
+                raise _PathError("invalid_path", f"--path-json must be a JSON array: {exc}") from exc
+            if not isinstance(tokens, list) or any(t is None or isinstance(t, (float, bool)) for t in tokens):
+                raise _PathError("invalid_path", "--path-json must be a JSON array of strings/integers")
+            base_path, base_value = _resolve_path(data, tokens)
+        elif args.path is not None:
+            tokens = _parse_pointer(args.path)
+            base_path, base_value = _resolve_path(data, tokens)
+        elif args.section is not None:
+            occurrences = _find_key_occurrences(data, args.section)
+            if len(occurrences) == 0:
+                raise _PathError("not_found", f"no section named {args.section!r}")
+            if len(occurrences) > 1:
+                candidates = [{
+                    "path": path,
+                    "path_text": _path_to_pointer(path),
+                    "key": path[-1],
+                    "kind": _kind_value(value),
+                    "depth": len(path),
+                    "preview": _preview_value(value),
+                } for path, value in occurrences]
+                return _json({
+                    "tool": tool_name,
+                    "source_file": source_file,
+                    "boundary": BOUNDARY,
+                    "mode": "ambiguous",
+                    "query": {"section": args.section},
+                    "candidates": candidates,
+                })
+            base_path, base_value = occurrences[0]
+    except _PathError as exc:
+        return _emit_error(tool_name, source_file, exc)
+
+    if selectors and not args.list_sections:
+        counter = [0]
+        value_out, truncated = _bounded_copy(base_value, args.depth, counter)
+        selected = {
+            "path": base_path,
+            "path_text": _path_to_pointer(base_path),
+            "key": base_path[-1] if base_path else None,
+            "kind": _kind_value(base_value),
+            "depth": len(base_path),
+            "value": value_out,
+        }
+        if truncated:
+            selected["truncated"] = True
+        return _json({
+            "tool": tool_name,
+            "source_file": source_file,
+            "boundary": BOUNDARY,
+            "mode": "section",
+            "selected_section": selected,
+        })
+
+    max_depth = args.depth if args.depth is not None else 1
+    if max_depth < 1:
+        return _emit_error(tool_name, source_file, _PathError("invalid_path", "--depth must be >= 1 for section listing"))
+    sections = _collect_sections(base_value, base_path, max_depth)
     return _json({
-        "tool": "ssot-map-query",
-        "source_file": source,
-        "query": {"query": args.query, "surface": args.surface, "path": args.path},
+        "tool": tool_name,
+        "source_file": source_file,
         "boundary": BOUNDARY,
-        "matched_count": len(filtered),
-        "matched_entries": filtered,
+        "mode": "list_sections",
+        "selected_path": base_path,
+        "selected_path_text": _path_to_pointer(base_path),
+        "requested_depth": max_depth,
+        "sections": sections,
     })
 
 
@@ -121,8 +393,9 @@ def proof_surface_map(argv: list[str]) -> int:
     parser.add_argument("--all", action="store_true", help="Return all observed proof entries.")
     parser.add_argument("--proof-id", default=None, help="Filter by proof_id.")
     parser.add_argument("--bundle-id", default=None, help="Filter by reverse lookup bundle_id.")
+    parser.add_argument("--ssot", default=None, help="Filter by repo-relative SSOT path referenced in ssot_refs, missing_ssot_blocking, evidence_inputs, or matched by a required_when.changed_files glob.")
     args = parser.parse_args(argv)
-    if not args.all and not args.proof_id and not args.bundle_id:
+    if not args.all and not args.proof_id and not args.bundle_id and not args.ssot:
         args.all = True
 
     manifest_source = "docs/design/test-proof-manifest-ssot.yaml"
@@ -139,6 +412,8 @@ def proof_surface_map(argv: list[str]) -> int:
         for proof_ref in yaml.arr(bundle.get("proof_refs")):
             bundle_by_proof.setdefault(proof_ref, []).append(bundle)
 
+    normalized_ssot = args.ssot.lstrip("./") if args.ssot else None
+
     observed = []
     for proof in proofs:
         pid = proof.get("proof_id")
@@ -146,25 +421,49 @@ def proof_surface_map(argv: list[str]) -> int:
             continue
         if args.bundle_id and pid not in bundle_by_proof:
             continue
-        observed.append({
+        ssot_refs = yaml.arr(proof.get("ssot_refs"))
+        missing_ssot_blocking = yaml.arr(proof.get("missing_ssot_blocking"))
+        evidence_inputs = yaml.arr(proof.get("evidence_inputs"))
+        required_when = proof.get("required_when") if isinstance(proof.get("required_when"), dict) else {}
+        changed_file_globs = yaml.arr(required_when.get("changed_files"))
+
+        ssot_match_fields: list[str] = []
+        if normalized_ssot is not None:
+            if normalized_ssot in {str(r).lstrip("./") for r in ssot_refs}:
+                ssot_match_fields.append("ssot_refs")
+            if normalized_ssot in {str(r).lstrip("./") for r in missing_ssot_blocking}:
+                ssot_match_fields.append("missing_ssot_blocking")
+            if normalized_ssot in {str(r).lstrip("./") for r in evidence_inputs}:
+                ssot_match_fields.append("evidence_inputs")
+            if any(fnmatch.fnmatch(normalized_ssot, str(pattern).lstrip("./")) for pattern in changed_file_globs):
+                ssot_match_fields.append("required_when.changed_files")
+            if not ssot_match_fields:
+                continue
+
+        entry = {
             "proof_id": pid,
             "proof_order": proof.get("proof_order"),
             "scope_phase": proof.get("scope_phase"),
             "domain": proof.get("domain"),
             "proof_type": proof.get("proof_type"),
-            "ssot_refs": yaml.arr(proof.get("ssot_refs")),
+            "ssot_refs": ssot_refs,
+            "missing_ssot_blocking": missing_ssot_blocking,
             "implementation_files": yaml.arr(proof.get("implementation_files")),
             "test_files": yaml.arr(proof.get("test_files")),
             "runner_surfaces": yaml.arr(proof.get("runner_surfaces")),
-            "evidence_inputs": yaml.arr(proof.get("evidence_inputs")),
+            "evidence_inputs": evidence_inputs,
+            "required_when_changed_files": changed_file_globs,
             "workflow_jobs": yaml.arr(proof.get("workflow_jobs")),
             "does_not_prove": yaml.arr(proof.get("does_not_prove")),
             "reverse_lookup_bundles": bundle_by_proof.get(pid, []),
-        })
+        }
+        if normalized_ssot is not None:
+            entry["ssot_match_fields"] = ssot_match_fields
+        observed.append(entry)
     return _json({
         "tool": "proof-surface-map",
         "source_files": [manifest_source, bundles_source],
-        "query": {"all": args.all, "proof_id": args.proof_id, "bundle_id": args.bundle_id},
+        "query": {"all": args.all, "proof_id": args.proof_id, "bundle_id": args.bundle_id, "ssot": args.ssot},
         "boundary": BOUNDARY | {"runner_execution": False, "proof_completion_judgment": False},
         "observed_count": len(observed),
         "proof_surfaces": observed,
@@ -766,8 +1065,8 @@ def main(argv=None) -> int:
     tool, rest = argv[0], argv[1:]
     if tool == "directory-map":
         return directory_map(rest)
-    if tool == "ssot-map-query":
-        return ssot_map_query(rest)
+    if tool == "yaml-section-query":
+        return yaml_section_query(rest)
     if tool == "proof-surface-map":
         return proof_surface_map(rest)
     if tool == "topology-seed-discussion":
