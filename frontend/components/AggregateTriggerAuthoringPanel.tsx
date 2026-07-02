@@ -54,12 +54,16 @@ export default function AggregateTriggerAuthoringPanel({
     defaultMaterializationKey,
   );
 
-  const aggregateTarget =
-    aggregateTriggerTargetFromKey(targets, aggregateTargetKey) ?? targets[0] ??
-      null;
-  const materializationTarget =
-    aggregateTriggerTargetFromKey(targets, materializationTargetKey) ??
-      targets[1] ?? targets[0] ?? null;
+  const aggregateTarget = aggregateTriggerTargetFromKey(
+    targets,
+    aggregateTargetKey,
+  );
+  const materializationTarget = aggregateTriggerTargetFromKey(
+    targets,
+    materializationTargetKey,
+  );
+  const hasInvalidTargetSelection = targets.length > 0 &&
+    (!aggregateTarget || !materializationTarget);
   const payload = aggregateTarget && materializationTarget
     ? [buildAggregateTriggerDefinition({
       triggerDefinitionId: "00000000-0000-0000-0000-000000000001",
@@ -109,13 +113,14 @@ export default function AggregateTriggerAuthoringPanel({
         judgment は backend runtime authority です。
       </p>
 
-      {targets.length === 0 && (
+      {(targets.length === 0 || hasInvalidTargetSelection) && (
         <p
           class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-amber-900"
           role="alert"
         >
-          Step2 logical entity または Step2.5 relation
-          の保存済み対象がないため、aggregate trigger payload は作成されません。
+          {targets.length === 0
+            ? "Step2 logical entity または Step2.5 relation の保存済み対象がないため、aggregate trigger payload は作成されません。"
+            : "未定義targetが選択されたため、aggregate trigger payload は作成されません。"}
         </p>
       )}
 
@@ -195,6 +200,10 @@ export default function AggregateTriggerAuthoringPanel({
             value={materializationTarget
               ? aggregateTriggerTargetKey(materializationTarget)
               : ""}
+            onInput={(e) =>
+              setMaterializationTargetKey(
+                (e.target as HTMLSelectElement).value,
+              )}
             onChange={(e) =>
               setMaterializationTargetKey(
                 (e.target as HTMLSelectElement).value,

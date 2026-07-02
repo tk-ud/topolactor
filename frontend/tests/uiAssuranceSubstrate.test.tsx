@@ -9,6 +9,7 @@ import ContentsAdminRoute from "../routes/admin/contents.tsx";
 import UiBuilderAdminRoute from "../routes/admin/ui-builder.tsx";
 import ManifestsAdminRoute from "../routes/admin/manifests.tsx";
 import ContentsAdmin from "../islands/ContentsAdmin.tsx";
+import ContentsScreenDesignPanel from "../islands/ContentsScreenDesignPanel.tsx";
 import UiBuilderAdmin from "../islands/UiBuilderAdmin.tsx";
 import ManifestsAdmin from "../islands/ManifestsAdmin.tsx";
 import AggregateTriggerAuthoringPanel from "../components/AggregateTriggerAuthoringPanel.tsx";
@@ -29,6 +30,7 @@ import {
   materializationPayloadMapAllowedSources,
   type StepTarget,
   triggerSourceDetailKinds,
+  aggregateTriggerTargetFromKey,
 } from "../lib/aggregateTriggerAuthoring.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -120,6 +122,99 @@ function assertBackendAggregateTriggerShape(
   assert("approval_policy" in payload);
 }
 
+
+function dispatchInputValue(element: Element, value: string) {
+  (element as HTMLInputElement).value = value;
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function dispatchSelectValue(element: Element, value: string) {
+  (element as HTMLSelectElement).value = value;
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function buttonByText(container: Element, text: string): HTMLButtonElement {
+  const buttons = Array.from(container.querySelectorAll("button"));
+  const button = (buttons.find((b) => b.textContent?.trim() === text) ??
+    buttons.find((b) => b.textContent?.includes(text))) as
+      | HTMLButtonElement
+      | undefined;
+  assert(button, `button not found: ${text}`);
+  return button;
+}
+
+async function clickAndFlush(button: HTMLButtonElement) {
+  button.click();
+  await flushUpdates();
+  await flushUpdates();
+}
+
+async function confirmOpenDialog(container: Element) {
+  const confirm = buttonByText(container, "実行する");
+  await clickAndFlush(confirm);
+}
+
+type CapturedDispatch = Record<string, unknown> & {
+  layer?: string;
+  action?: string;
+  payload?: Record<string, unknown>;
+};
+
+function installAdminDispatchMock(captured: CapturedDispatch[], manifestId: string) {
+  let topologyRawJson = "[]";
+  const original = globalThis.fetch;
+  globalThis.fetch = (_url, init) => {
+    const body = JSON.parse(String((init as { body?: BodyInit })?.body ?? "{}"));
+    captured.push(body);
+    const layer = body.layer;
+    const action = body.action;
+    const payload = body.payload ?? {};
+    if (layer === "manifest" && action === "assign_screen_data_shape") {
+      topologyRawJson = JSON.stringify([{ type: "screen_data_shape", ...payload }]);
+    }
+    const detail = {
+      manifestId,
+      status: "draft",
+      relationRegistryId: null,
+      summary: { entryTypes: ["screen_data_shape"] },
+      topologyRawJson,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-01T00:00:00Z",
+    };
+    const data = layer === "manifest" && action === "list"
+      ? [{ manifestId, status: "draft", relationRegistryId: null, role: null, target: null, layer: null, action: null, runtimeDestination: null, createdAt: detail.createdAt, updatedAt: detail.updatedAt }]
+      : layer === "manifest" && action === "get"
+      ? detail
+      : layer === "manifest" && action === "list_relationship_remote_targets"
+      ? []
+      : layer === "enum_dictionary" && action === "get_group"
+      ? { groupId: payload.groupId, groupName: "demo", items: [] }
+      : layer === "enum_dictionary" && action === "list_groups"
+      ? []
+      : layer === "admin_csv_json_import" &&
+          (action === "list_manifests" || action === "list_schemas")
+      ? []
+      : layer === "ui_component_bucket" && action === "list"
+      ? []
+      : layer === "ui_topology" && action === "promoted_palette"
+      ? []
+      : layer === "hub_navigation" && action === "list_manifests"
+      ? []
+      : detail;
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, emission: { data } }), {
+        status: 200,
+      }),
+    );
+  };
+  return () => {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+  };
+}
+
 const step2Targets: StepTarget[] = [
   {
     targetSource: "step2_logical_entity_definition",
@@ -184,22 +279,50 @@ Deno.test("admin workflow UI assurance substrate: route wrappers and workflow bo
   }
 });
 
-Deno.test("admin workflow UI assurance substrate: connected components/helpers are used by actual route body modules", async () => {
-  for (const routeCase of adminWorkflowCases) {
-    const sourcePath = routeCase.routePath === "/admin/contents"
-      ? "../islands/ContentsAdmin.tsx"
-      : routeCase.routePath === "/admin/ui-builder"
-      ? "../islands/UiBuilderAdmin.tsx"
-      : "../islands/ManifestsAdmin.tsx";
-    const source = await Deno.readTextFile(
-      new URL(sourcePath, import.meta.url),
+Deno.test("admin workflow UI assurance substrate: route body operations dispatch through client-trigger UI paths", async () => {
+  const manifestId = "00000000-0000-0000-0000-000000000542";
+  const captured: CapturedDispatch[] = [];
+  const restoreFetch = installAdminDispatchMock(captured, manifestId);
+
+  const uiEnv = setupDom();
+  try {
+    render(h(UiBuilderAdmin, {}), uiEnv.container);
+    await flushUpdates();
+    await flushUpdates();
+    await clickAndFlush(buttonByText(uiEnv.container, "一覧を再読み込み"));
+    assert(
+      captured.some((body) =>
+        body.layer === "ui_component_bucket" &&
+        body.action === "list" &&
+        body.triggerKind === "client" &&
+        !("role" in body)
+      ),
+      "ui-builder UI operation must dispatch through the client-trigger admin lane",
     );
-    for (const marker of routeCase.boundaryMarkers) {
-      assert(
-        source.includes(marker),
-        `${routeCase.routePath}: body module must connect ${marker}`,
-      );
-    }
+  } finally {
+    render(null, uiEnv.container);
+    uiEnv.cleanup();
+  }
+
+  const manifestEnv = setupDom();
+  try {
+    render(h(ManifestsAdmin, {}), manifestEnv.container);
+    await flushUpdates();
+    await flushUpdates();
+    await clickAndFlush(buttonByText(manifestEnv.container, "再読み込み"));
+    assert(
+      captured.some((body) =>
+        body.layer === "hub_navigation" &&
+        body.action === "list_manifests" &&
+        body.triggerKind === "client" &&
+        !("role" in body)
+      ),
+      "manifests UI operation must dispatch through the client-trigger hub navigation lane",
+    );
+  } finally {
+    render(null, manifestEnv.container);
+    manifestEnv.cleanup();
+    restoreFetch();
   }
 });
 
@@ -249,6 +372,139 @@ Deno.test("contents workflow substrate: Step2 → Step2.5 → Step3 targets are 
   assertNoForbiddenPayloadVocabulary(payload.aggregateTriggerDefinitions);
 });
 
+Deno.test("contents workflow UI substrate: Step2 → Step2.5 → Step3 save path emits UI-derived aggregate trigger payload", async () => {
+  const manifestId = "00000000-0000-0000-0000-000000000542";
+  const captured: CapturedDispatch[] = [];
+  const restoreFetch = installAdminDispatchMock(captured, manifestId);
+  const { container, cleanup } = setupDom();
+  try {
+    render(
+      h(ContentsScreenDesignPanel, {
+        sharedManifestId: manifestId,
+        onSharedManifestIdChange: () => {},
+        manifests: [{
+          manifestId,
+          status: "draft",
+          relationRegistryId: null,
+          role: null,
+          target: null,
+          layer: null,
+          action: null,
+          runtimeDestination: null,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        }],
+        onManifestsChange: () => {},
+        manifestsVersion: 1,
+        onManifestsReload: () => {},
+      }),
+      container,
+    );
+    await flushUpdates();
+    await flushUpdates();
+    await flushUpdates();
+    await flushUpdates();
+
+    await clickAndFlush(buttonByText(container, "Step 2"));
+    await flushUpdates();
+    await flushUpdates();
+    const tableNameInputs = () =>
+      Array.from(container.querySelectorAll('input[placeholder="例: employees"]'));
+    const columnNameInputs = () =>
+      Array.from(container.querySelectorAll('input[placeholder="項目名"]'));
+    dispatchInputValue(tableNameInputs()[0], "orders");
+    await flushUpdates();
+    dispatchInputValue(columnNameInputs()[0], "id");
+    await flushUpdates();
+    await clickAndFlush(buttonByText(container, "テーブルを追加"));
+    dispatchInputValue(tableNameInputs()[1], "customers");
+    await flushUpdates();
+    dispatchInputValue(columnNameInputs()[1], "id");
+    await flushUpdates();
+    await clickAndFlush(buttonByText(container, "Step 2 を保存"));
+    await confirmOpenDialog(container);
+
+    assert(
+      captured.some((body) =>
+        body.layer === "manifest" &&
+        body.action === "assign_screen_data_shape" &&
+        Array.isArray(body.payload?.logicalTables) &&
+        (body.payload?.logicalTables as Array<{ tableName?: string }>).some((t) =>
+          t.tableName === "orders"
+        )
+      ),
+      "Step2 UI save must send logicalTables through assign_screen_data_shape",
+    );
+
+    await clickAndFlush(buttonByText(container, "関連付けを追加"));
+    const relationSelects = Array.from(container.querySelectorAll("select"));
+    dispatchSelectValue(relationSelects[1], "orders");
+    await flushUpdates();
+    dispatchSelectValue(relationSelects[2], "id");
+    await flushUpdates();
+    dispatchSelectValue(relationSelects[4], "customers");
+    await flushUpdates();
+    const relationSelectsAfterRemote = Array.from(container.querySelectorAll("select"));
+    dispatchSelectValue(relationSelectsAfterRemote[5], "id");
+    await flushUpdates();
+    await clickAndFlush(buttonByText(container, "Step 2.5 を保存"));
+    await confirmOpenDialog(container);
+
+    assert(
+      captured.some((body) =>
+        body.layer === "manifest" &&
+        body.action === "assign_screen_data_shape" &&
+        Array.isArray(body.payload?.relationIntents) &&
+        (body.payload?.relationIntents as Array<{ localTableRef?: string; joinTableRef?: string }>).some((r) =>
+          r.localTableRef === "orders" && r.joinTableRef === "customers"
+        )
+      ),
+      "Step2.5 UI save must send relationIntents through assign_screen_data_shape",
+    );
+
+    const aggregateSelect = container.querySelector(
+      'select[aria-label="aggregate target binding"]',
+    );
+    const materializationSelect = container.querySelector(
+      'select[aria-label="aggregate materialization target binding"]',
+    );
+    assert(aggregateSelect);
+    assert(materializationSelect);
+    const aggregateOptions = Array.from(aggregateSelect.querySelectorAll("option"))
+      .map((o) => (o as HTMLOptionElement).value);
+    assertEquals(aggregateOptions, [
+      "step2_logical_entity_definition:orders",
+      "step2_logical_entity_definition:customers",
+      "step2_5_relation_definition:orders->customers",
+    ]);
+    assertFalse(aggregateOptions.includes("step2_logical_entity_definition:undefined-target"));
+    dispatchSelectValue(aggregateSelect, "step2_logical_entity_definition:customers");
+    await flushUpdates();
+    dispatchSelectValue(materializationSelect, "step2_5_relation_definition:orders->customers");
+    await flushUpdates();
+    await clickAndFlush(buttonByText(container, "Step 3 を保存"));
+    await confirmOpenDialog(container);
+
+    const step3Assign = captured.filter((body) =>
+      body.layer === "manifest" && body.action === "assign_screen_data_shape"
+    ).at(-1);
+    const definitions = step3Assign?.payload
+      ?.aggregateTriggerDefinitions as AggregateTriggerDefinitionPayload[] | undefined;
+    assert(definitions?.[0], "Step3 save must include UI-derived aggregateTriggerDefinitions");
+    assertEquals(definitions[0].aggregate_target_binding.target_id, "customers");
+    assertEquals(
+      definitions[0].materialization_target_binding.target_id,
+      "orders->customers",
+    );
+    assertBackendAggregateTriggerShape(definitions[0]);
+    assertNoForbiddenPayloadVocabulary(step3Assign?.payload);
+  } finally {
+    render(null, container);
+    cleanup();
+    restoreFetch();
+  }
+});
+
 Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and assign payload", async () => {
   const seen: AggregateTriggerDefinitionPayload[][] = [];
   const { container, cleanup } = setupDom();
@@ -295,6 +551,7 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
       "orders->customers",
     );
     assert(container.textContent?.includes('"target_id": "invoices"'));
+
   } finally {
     render(null, container);
     cleanup();
@@ -373,6 +630,13 @@ Deno.test("admin workflow invalid-input substrate: undefined targets and forbidd
   assertFalse(triggerSourceDetailKinds.includes("scheduler_event" as never));
   assertFalse(
     materializationPayloadMapAllowedSources.includes("raw_sql" as never),
+  );
+  assertEquals(
+    aggregateTriggerTargetFromKey(
+      step2Targets,
+      "step2_logical_entity_definition:undefined-target",
+    ),
+    null,
   );
 
   const captured: Record<string, unknown>[] = [];
