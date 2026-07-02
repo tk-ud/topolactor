@@ -11,7 +11,7 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | not_started | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `aggregate-trigger-substrate` | 集計トリガー基盤 | not_started | 1 | `docs/design/runtime-orchestration-ssot.yaml` |
-| `agent-readonly-repo-observation-tools-surface` | Agent read-only repo observation tools surface | partial | 4 | `docs/governance/agent-governance-routing-ssot.yaml` |
+| `agent-readonly-repo-observation-tools-surface` | Agent read-only repo observation tools surface | partial | 5 | `docs/governance/agent-governance-routing-ssot.yaml` |
 
 ---
 
@@ -89,7 +89,7 @@
   18. `.agent/tests/check-no-ruby-dependency.sh`
   19. `.agent/tests/check-structure.sh`
   20. `.agent/tasks/todo.md`
-- 親Bundle完了条件: 子Bundle `agent-tools-governance-contract`、`agent-tools-core-readonly-observation`、`agent-tools-proof-and-structure-gate`、`agent-tools-advanced-surface-maps` が完了していること。
+- 親Bundle完了条件: 子Bundle `agent-tools-governance-contract`、`agent-tools-core-readonly-observation`、`agent-tools-advanced-authoring-schema-generator`、`agent-tools-proof-and-structure-gate`、`agent-tools-advanced-surface-maps` が完了していること。
 - 備考: `agent-tools-advanced-surface-maps` は future 子Bundle扱いでもよい。初期完了を狙う場合は、advanced surface maps を親Bundle初期完了条件から外す判断も許可する。ただし判断理由をtodo内に残す。
 
 ### 子Bundle `agent-tools-governance-contract`
@@ -116,6 +116,29 @@
 - 改善方針: `.agent/tools` は thin entrypoint。構造処理は `.agent/scripts` の Python3 stdlib 実装を再利用する。既存 `.agent/scripts/emit-directory-tree-json.py` は移動しない。`directory-map` では `--output` など file mutation option を露出しない、または拒否する。
 - 対応資料: `.agent/scripts/emit-directory-tree-json.py`, `.agent/docs/ssot-map.yaml`, `docs/design/test-proof-manifest-ssot.yaml`, `.agent/scripts/check_ssot_proof_surface_connectivity.py`
 - 完了記録: 初期 read-only observation tool surface として `.agent/tools/README.md`, `directory-map`, `ssot-map-query`, `proof-surface-map`, `topology-seed-discussion` を追加済み。`directory-map` は既存 `.agent/scripts/emit-directory-tree-json.py` を thin wrapper として再利用し、既存 emitter の stable JSON array shape を維持する。`.agent/tools` surface では `--output` など mutation/file-write option を拒否する。`ssot-map-query` は `.agent/docs/ssot-map.yaml` を JSON stdout で観測し、`proof-surface-map` は `docs/design/test-proof-manifest-ssot.yaml` と `.agent/docs/test-bundles.yaml` を read-only に観測する。`topology-seed-discussion` は Stage 1 で `sql_attention_observation`, `topology_manifest_authoring`, `admin_contents_authoring`, `admin_ui_builder_authoring`, `admin_manifests_navigation`, `runtime_manifest_dispatch`, `seed_runtime_import`, `db_topology_wiring` の question_space を選択し、Stage 2 で選択spaceごとの詳細bit schemaと階層化された JSON fragment を展開する lightweight read-only tool。`build-template` は question_space 単位で有効bitの fragment を deep merge し、AI が埋める seed discussion 用 tmp JSON 雛形を stdout に返す。tool 自身は file write / seed SQL / Manifest / SSOT / todo / roadmap 更新 / DB/API/AI API 接続 / seed adoption judgment をしない。各toolは Python3 stdlib only。`ssot-map-query` / `proof-surface-map` / `topology-seed-discussion` は出力metadataに authority boundary を含める。`directory-map` は既存 emitter の stable JSON array shape を維持し、README と tool boundary で no authority / no proof / no judgment を明示する。proof gate / required-paths / test-bundles / test-proof-manifest への本格接続は後続 `agent-tools-proof-and-structure-gate` scope のまま。
+
+### 子Bundle `agent-tools-advanced-authoring-schema-generator`
+
+**Worktype:** design_change -> implementation_change
+**Status:** not_started
+**Depends on:** `agent-tools-core-readonly-observation`
+
+- Scope: `topology-seed-discussion` を初期二段階質問schemaから advanced authoring-schema generator へ拡張する。
+- 問題点: PR547で Stage 1 question_space selector / Stage 2 bit schema / JSON fragment merge は実装済みだが、現状は `SPACE_BIT_KEYS` と `_fragment_for_space_key` の手書き schema に留まる。admin UI / SQL Attention / topology manifest / runtime manifest dispatch / seed runtime import / DB topology wiring の操作面を、SSOT・frontend実装・DB/seed実装から十分に抽出して維持できる generator には未達。
+- 目的: `sql_attention_observation`, `topology_manifest_authoring`, `admin_contents_authoring`, `admin_ui_builder_authoring`, `admin_manifests_navigation`, `runtime_manifest_dispatch`, `seed_runtime_import`, `db_topology_wiring` の主方向ごとに、SSOT/UI/DB/runtime実装から詳細質問schemaと nested JSON template を生成し、AIが tmp JSON の空欄補完に集中できる authoring discussion surface を作る。
+- 改善方針: `.agent/tools` は引き続き read-only / stdout JSON / no authority とする。structured processing は `.agent/scripts/agent_tools/readonly_observation.py` または専用 Python3 stdlib helper に置く。`inspect --space` は手書き固定配列だけでなく、最低限 SSOT・frontend・DB/seed surface 由来の catalog metadata を持つ。`build-template` は question_space ごとに階層を壊さず fragment を merge し、tool 自身は tmp.json を書かない。
+- 不足一覧:
+  - `admin_contents_authoring`: Step1 draft/label/local cache、Step2 logical table/column/enum/nullable/add-remove、Step2.5 local/remote relation/active manifest target、Step3 initial data/import preview/apply/snapshot reload/row lineage/uuid/enum、operation bindings/display derivation、aggregation block/sourceRef/measure function、search operator別入力、HAVING、raw searchTargets/aggregationSpec、sample preview を UI操作単位で抽出する。
+  - `admin_ui_builder_authoring`: left panel component bucket / html tag palette、canvas node contract、layer inspector selection / drag reparent / reorder、design inspector `cssTokenRefs` / `responsiveTokenRefs` / typography / spacing / `layoutClassRefs` / `inlineText` / `linkHref` / `linkTarget` / `reactionIntent`、component auto-registration / auto-removal、`_tmp` autosave、layout_patch preview/validate/apply、promotion boundary を UI操作単位で抽出する。
+  - `admin_manifests_navigation`: created page list、manifest selector、hub relation list、create/update/deprecate/reorder、related hub select、sequence position auto append / advanced direct input、relation_config、result/error handling を操作単位で抽出する。
+  - `sql_attention_observation`: `logs.diff` / `logs.current` / norm trigger / `topology.physical_table_manifest_bindings` resolver / `hubs.hub_relations` exploration / `logs.attention` append-only evidence / phaseAT evidence / no automatic topology-manifest-registry mutation boundary を質問空間として抽出する。
+  - `topology_manifest_authoring` / `db_topology_wiring`: `hubs.topology_manifests`, `hubs.hub_relations`, `topology.physical_tables`, `topology.physical_table_manifest_bindings`, `topology.wiring_physical_to_package`, `manifest` compatibility-only boundary, no implicit / oldest fallback を分離して抽出する。
+  - `runtime_manifest_dispatch` / `seed_runtime_import`: `role` / `target` / `layer` / `action` / `manifest_id`, dispatcher/runtime/db_notify/projection_constructor/screen_data_shape mappings、`seed_empty.sql` の concrete admin runtime routes、`SeedRuntime` validate/preview/import、`SeedImportApplyRepository` apply/conflict/fail-close boundary を抽出する。
+- 対応資料: `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/sql-attention-logs-ssot.yaml`, `docs/design/db-schema.yaml`, `db/topology_tables.sql`, `db/manifest_tables.sql`, `db/sql_attention_logs_tables.sql`, `db/seed_empty.sql`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/components/ContentsDataEditor.tsx`, `frontend/components/ContentsAggregationMeasuresEditor.tsx`, `frontend/components/AggregationBlockConditionsEditor.tsx`, `frontend/islands/UiBuilderAdmin.tsx`, `frontend/islands/ManifestsAdmin.tsx`, `frontend/islands/HubNavigationAdmin.tsx`, `backend/runtime/SeedRuntime.cs`, `backend/repository/SeedImportApplyRepository.cs`, `.agent/scripts/agent_tools/readonly_observation.py`, `.agent/tools/README.md`
+- 対象ファイル: `.agent/scripts/agent_tools/readonly_observation.py`, `.agent/tools/topology-seed-discussion`, `.agent/tools/README.md`, 必要なら `.agent/scripts/agent_tools/authoring_schema_generator.py`, `.agent/tests/check-agent-tools-surface.sh`, `.agent/tests/fixtures/**`
+- 対象関数/単位: `QUESTION_SPACE_ORDER`, `QUESTION_SPACE_META`, `SPACE_BIT_KEYS`, `_fragment_for_space_key`, `question_space_selectors`, `topology_seed_question_bits`, `stage1_schema`, `stage2_schema`, `expand`, `build-template`, `build`, `admin_contents_authoring`, `admin_ui_builder_authoring`, `admin_manifests_navigation`, `sql_attention_observation`, `topology_manifest_authoring`, `runtime_manifest_dispatch`, `seed_runtime_import`, `db_topology_wiring`
+- OK軸: 主方向選択後に対象spaceだけ詳細展開し、SSOT/UI/DB/runtime surface由来の catalog metadata と nested JSON fragment を保持し、AIに渡す tmp JSON がUI操作面・DB/runtime境界・禁止事項を落とさず表現する。tool output は discussion draft のみで、SSOT authority / proof / seed adoption / implemented judgment にならない。tool は repo file / seed SQL / Manifest / SSOT / todo / roadmap を書かず、DB/API/AI APIへ接続しない。
+- NG軸: 手書き `SPACE_BIT_KEYS` の追加だけで generator と呼ぶ、admin UI操作面を大分類bitだけで済ませる、SQL Attention と admin UI authoring を同一質問空間に混ぜる、`manifest` compatibility table を canonical wiring authority と誤扱いする、`logs.attention` evidence を Draft/adopted state と誤扱いする、tool自身が tmp.json / seed SQL / Manifest / SSOT / todo / roadmap を書く、DB/API/AI APIへ接続する。
 
 ### 子Bundle `agent-tools-proof-and-structure-gate`
 
