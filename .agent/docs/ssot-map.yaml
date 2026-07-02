@@ -765,9 +765,17 @@ mapping:
       - required paths manifest
       - orphan workflow candidate detection
       - orphan test candidate detection
+      - general repo directory surface JSON observation
+      - executable proof surface JSON observation
+      - SSOT proof surface connectivity gate
+      - repo governance tooling Ruby-dependency exclusion
       - .agent/docs/required-paths.yaml
       - .agent/scripts/emit-docs-tree-json.sh
+      - .agent/scripts/emit-directory-tree-json.py
+      - .agent/scripts/check_ssot_proof_surface_connectivity.py
       - .agent/tests/check-docs-ssot-connectivity.sh
+      - .agent/tests/check-ssot-proof-surface-connectivity.sh
+      - .agent/tests/check-no-ruby-dependency.sh
       - .agent/tests/check-structure.sh
       - .github/workflows/structure-check.yml
       - .github/workflows/unified-test-gate.yml
@@ -776,6 +784,7 @@ mapping:
       - docs/file-structure.yaml
     supporting_docs:
       - docs/design/test-proof-manifest-ssot.yaml
+      - docs/framework-policy.yaml
     protocols:
       - .agent/protocols/completion.md
 

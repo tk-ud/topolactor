@@ -196,6 +196,16 @@ required_files:
     - .agent/routes/worktype-required-protocols.yaml
     - .agent/scripts/emit-docs-tree-json.sh
     - .agent/tests/check-docs-ssot-connectivity.sh
+    - .agent/scripts/emit-directory-tree-json.py
+    - .agent/scripts/emit-directory-tree-json.sh
+    - .agent/scripts/lib/minimal_yaml.py
+    - .agent/scripts/check_ssot_vocabulary_contract.py
+    - .agent/scripts/check_sql_attention_ssot_yaml.py
+    - .agent/scripts/check_system_roadmap.py
+    - .agent/scripts/check_test_proof_manifest_integrity.py
+    - .agent/scripts/check_ssot_proof_surface_connectivity.py
+    - .agent/tests/check-ssot-proof-surface-connectivity.sh
+    - .agent/tests/check-no-ruby-dependency.sh
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml
@@ -394,6 +404,9 @@ required_content_terms:
   docs/framework-policy.yaml:
     - "registry_table_role: semantic_matrix"
     - "registry_tensor_principle"
+    - "repo_governance_tooling_dependency_policy"
+    - "python3_stdlib_only"
+    - "ruby_is_prohibited_as_a_repo_governance_tooling_dependency"
   docs/design/context-route-recommendation.md:
     - "registry table は単なる辞書/設定/metadata ではなく"
   docs/design/context-route-recommendation.yaml:
@@ -708,6 +721,33 @@ required_content_terms:
     - "is_ssot"
     - "is_dynamic_reference"
     - "docs/system-roadmap.yaml"
+  .agent/scripts/emit-directory-tree-json.py:
+    - "is_ssot"
+    - "is_dynamic_reference"
+    - "is_executable_test"
+    - "is_governance_test"
+    - "surface_kind"
+    - "Python3 standard library only"
+  .agent/scripts/lib/minimal_yaml.py:
+    - "Python3 stdlib only"
+    - "does not implement anchors/aliases"
+  .agent/tests/check-ssot-proof-surface-connectivity.sh:
+    - "emit-directory-tree-json.py"
+    - "is_executable_test"
+    - "ssot-map.yaml reference does not count"
+  .agent/scripts/check_ssot_proof_surface_connectivity.py:
+    - "UNCONNECTED_SSOT_ALLOWLIST"
+    - "runner_surfaces"
+    - "is_executable_test"
+    - "_self_test"
+  .agent/tests/check-no-ruby-dependency.sh:
+    - "Ruby source file present"
+    - "Ruby Gemfile present"
+    - "ruby shebang present"
+    - "ruby/gem/bundle command invocation present"
+    - "--self-test"
   .agent/tests/check-structure.sh:
     - "check-docs-ssot-connectivity.sh"
+    - "check-ssot-proof-surface-connectivity.sh"
+    - "check-no-ruby-dependency.sh"
     - "required-paths.yaml"

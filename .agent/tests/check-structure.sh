@@ -442,6 +442,18 @@ else
   fail "Subcheck failed: .agent/tests/check-docs-ssot-connectivity.sh"
 fi
 
+if bash "$REPO_ROOT/.agent/tests/check-ssot-proof-surface-connectivity.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-ssot-proof-surface-connectivity.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-ssot-proof-surface-connectivity.sh"
+fi
+
+if bash "$REPO_ROOT/.agent/tests/check-no-ruby-dependency.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-no-ruby-dependency.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-no-ruby-dependency.sh"
+fi
+
 if bash "$REPO_ROOT/.agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"; then
   echo "OK  [subcheck] .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
 else
