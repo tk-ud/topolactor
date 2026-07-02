@@ -16,12 +16,24 @@ Date: 2026-07-03
 
 全 `.agent/tests/*.sh` 相当の母集団は以下から突き合わせた。
 
+- GitHub tree-equivalent code search: `path:.agent/tests extension:sh`
 - `.agent/docs/required-paths.yaml`
 - `.agent/docs/test-bundles.yaml`
 - `.github/workflows/*.yml`
 - repo code search for additional `.agent/tests/check-*.sh`
 
-この report は **修正該当ファイルのみ** 列挙する。点検済みでも、成功時出力が短く error 詳細を維持できている thin wrapper / small check は実装対象から除外する。
+Observed test shell surface: 34 files.
+
+This report lists **implementation target files only**. Checked files whose success output is already short enough and whose failure path keeps details are not listed as implementation targets.
+
+Explicit non-target after tree-equivalent check:
+- `.agent/tests/check-static-ssot-purity.sh`: success output is one line; failure path prints forbidden pattern and matching lines.
+- `.agent/tests/check-test-proof-manifest-integrity.sh`: thin wrapper / compact pass summary.
+- `.agent/tests/check-agent-tools-surface.sh`: thin wrapper; target is `.agent/scripts/check_agent_tools_surface.py`.
+- `.agent/tests/check-ssot-vocabulary-contract.sh`: thin wrapper; target is `.agent/scripts/check_ssot_vocabulary_contract.py`.
+- `.agent/tests/check-ssot-proof-surface-connectivity.sh`: thin wrapper / compact summary.
+- `.agent/tests/check-system-roadmap.sh`: thin wrapper; target is `.agent/scripts/check_system_roadmap.py`.
+- small grep/assertion checks are non-target only when success output remains short and failure output is specific; if shared helper adoption touches them, keep behavior equivalent.
 
 ## Governance Boundary
 
@@ -239,6 +251,17 @@ Required change:
 
 ### P3: Python helper output under test wrappers
 
+#### `.agent/scripts/check_system_roadmap.py`
+
+Reason:
+- Called by `.agent/tests/check-system-roadmap.sh`.
+- Prints all warnings even when the check passes.
+
+Required change:
+- On clean success, print one compact PASS summary.
+- On warning-only success, print warning count and bounded sample or pointer; avoid unbounded warning flood.
+- Preserve all failure details when failures exist.
+
 #### `.agent/scripts/check_ssot_vocabulary_contract.py`
 
 Reason:
@@ -354,7 +377,7 @@ Examples of non-target posture:
 
 ## NG Axis
 
-- Success path still prints per-file, per-term, full runner stdout/stderr, full GAP list, or full JSON dumps by default.
+- Success path still prints per-file, per-term, full runner stdout/stderr, full warning list, full GAP list, or full JSON dumps by default.
 - Error detail is hidden while reducing output.
 - `/dev/null` is used where it can remove failure evidence.
 - Only one small script is fixed and Bundle-wide surfaces remain noisy.
