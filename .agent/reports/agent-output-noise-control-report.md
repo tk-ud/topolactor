@@ -18,6 +18,7 @@ Tree-equivalent surface inventory was checked for:
 
 - `.agent/tests/*.sh`: GitHub code search `path:.agent/tests extension:sh`
 - `.agent/scripts/**/*`: GitHub code search `path:.agent/scripts`
+- `.agent/tools/*`: GitHub code search `path:.agent/tools`
 - `.github/workflows/*.yml`: GitHub code search `path:.github/workflows extension:yml`
 - `.agent/docs/required-paths.yaml`
 - `.agent/docs/test-bundles.yaml`
@@ -27,6 +28,7 @@ Observed surface count:
 
 - `.agent/tests/*.sh`: 34 files
 - `.agent/scripts/**/*`: 18 files
+- `.agent/tools/*`: 5 files
 - `.github/workflows/*.yml`: 9 files
 
 This report lists **implementation target files only**. Checked files whose success output is already short enough, whose output is explicit artifact output, or whose failure path must remain operationally verbose are not listed as implementation targets unless they affect normal Agent / CI success paths.
@@ -43,6 +45,8 @@ Explicit non-target after tree-equivalent check:
 - `.agent/scripts/advance-workflow-phase.sh`: deprecated optional local memo; output is bounded and not CI/proof authority.
 - `.agent/scripts/pre-tool-edit-guard.sh`: hook reminder output is intentional and bounded; do not route it into proof/completion output.
 - `.agent/scripts/bootstrap-local-tools.sh`, `.agent/scripts/bootstrap-local-postgres.sh`: opt-in local bootstrap; operational install/docker output is not normal CI success proof. Keep failure detail if touched separately.
+- `.agent/tools/README.md`: documentation only.
+- `.agent/tools/directory-map`, `.agent/tools/proof-surface-map`, `.agent/tools/yaml-section-query`, `.agent/tools/topology-seed-discussion`: explicit read-only observation entrypoints, not success logs. Do not suppress explicit user/tool output; inspect only default/no-selector large-output behavior through `.agent/scripts/agent_tools/readonly_observation.py`.
 - `.github/workflows/structure-check.yml`: delegates to target scripts; fix underlying scripts, keep `check-structure.sh` last.
 - `.github/workflows/frontend-types.yml`, `.github/workflows/default-entity-search.yml`, `.github/workflows/runtime-semantics.yml`: delegate to target test scripts; no direct workflow change needed unless script routing changes.
 - `.github/workflows/unified-test-gate.yml`: delegates to target orchestrator/scripts; no direct workflow change needed unless lane routing changes.
@@ -394,6 +398,7 @@ Examples of non-target posture:
 - small grep checks with one or two success lines and specific failure messages
 - manifest integrity checks that already emit one compact pass summary
 - local bootstrap / cleanup scripts where operational progress output is intentional and not normal CI/proof output
+- `.agent/tools` entrypoints whose stdout is the requested observation artifact, not a success log
 
 ## OK Axis
 
@@ -404,11 +409,13 @@ Examples of non-target posture:
 - No new external dependency is added.
 - `.agent/tools` remains observation only.
 - Agent does not need to read full successful stdout/stderr or huge JSON in normal success paths.
+- Explicit `.agent/tools` JSON/artifact output is preserved when requested.
 - This report is deleted when implementation is complete.
 
 ## NG Axis
 
 - Success path still prints per-file, per-term, full runner stdout/stderr, full warning list, full GAP list, full install logs, full docker logs, or full JSON dumps by default.
+- Explicit `.agent/tools` output is suppressed, or is treated as SSOT/proof/completion authority.
 - Error detail is hidden while reducing output.
 - `/dev/null` is used where it can remove failure evidence.
 - Only one small script is fixed and Bundle-wide surfaces remain noisy.
