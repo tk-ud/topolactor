@@ -252,6 +252,82 @@ public class AdminRuntimeManifestManagementTests
     }
 
     [Fact]
+    public async Task AssignScreenDataShape_Validates_AggregateTriggerDefinitions_Before_Persisting()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, DraftTopologyWithLogicalTables("orders", "id"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            logicalTables = new[]
+            {
+                new
+                {
+                    tableName = "orders",
+                    columns = new[] { new { name = "id", dataType = "text", nullable = false } },
+                },
+            },
+            aggregateTriggerDefinitions = new[]
+            {
+                ValidAggregateTriggerDefinition("missing_target", "orders"),
+            },
+        });
+
+        var (_, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null),
+            default);
+
+        Assert.NotNull(error);
+        Assert.Equal("AGGREGATE_TARGET_INVALID", error!.Code);
+    }
+
+    [Fact]
+    public async Task AssignScreenDataShape_Persists_ValidatorAccepted_AggregateTriggerDefinitions()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, DraftTopologyWithLogicalTables("orders", "id"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            logicalTables = new[]
+            {
+                new
+                {
+                    tableName = "orders",
+                    columns = new[] { new { name = "id", dataType = "text", nullable = false } },
+                },
+            },
+            aggregateTriggerDefinitions = new[]
+            {
+                ValidAggregateTriggerDefinition("orders", "orders"),
+            },
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null),
+            default);
+
+        Assert.Null(error);
+        var entries = JsonSerializer.Deserialize<JsonElement[]>(
+            data!.Value.GetProperty("topologyRawJson").GetString() ?? "[]")!;
+        var shapeEntry = entries.First(e =>
+            e.TryGetProperty("type", out var t) && t.GetString() == "screen_data_shape");
+        var definitions = shapeEntry.GetProperty("aggregateTriggerDefinitions").EnumerateArray().ToList();
+        Assert.Single(definitions);
+        Assert.Equal("orders", definitions[0].GetProperty("aggregate_target_binding").GetProperty("target_id").GetString());
+    }
+
+    [Fact]
     public async Task AssignScreenDataShape_Persists_SearchConditions_HavingConditions_DisplayColumnMode()
     {
         var repo = new InMemoryManifestAdminRepository();
@@ -577,6 +653,57 @@ public class AdminRuntimeManifestManagementTests
         Assert.Contains(InMemoryEnumDictionaryRepository.DemoGroupId.ToString(), groupIds);
         Assert.Contains(InMemoryEnumDictionaryRepository.UserStatusGroupId.ToString(), groupIds);
     }
+
+    private static object ValidAggregateTriggerDefinition(string aggregateTargetId, string materializationTargetId) => new
+    {
+        trigger_definition_id = Guid.NewGuid(),
+        trigger_source = new
+        {
+            canonical_trigger_kind = "client",
+            trigger_source_detail_kind = "client_operation_event",
+        },
+        processing_function_scope = new
+        {
+            function_id = "aggregate_trigger_authoring_function",
+            operation_definition_id = "contents_step3_operation",
+            accepted_event_schema_ref = "contents.step3.aggregate_trigger.event.v1",
+            allowed_source_kinds = new[] { "function_input_event" },
+            materialization_policy_ref = "backend_runtime_authority_required",
+        },
+        execution_scope = "single_event",
+        transaction_boundary = "event_append_only",
+        aggregate_target_binding = new
+        {
+            target_source = "step2_logical_entity_definition",
+            target_id = aggregateTargetId,
+        },
+        conflict_key_fields = new[] { "operation_definition_id" },
+        delta_map = new Dictionary<string, decimal> { ["event_count"] = 1m },
+        threshold_policy = new
+        {
+            minimum_trial_count = 1,
+            ratio_numerator_field = "event_count",
+            ratio_denominator_field = "event_count",
+            comparison_operator = ">=",
+            target_ratio = 1m,
+        },
+        materialization_target_binding = new
+        {
+            target_source = "step2_logical_entity_definition",
+            target_id = materializationTargetId,
+        },
+        materialization_payload_map = new[]
+        {
+            new
+            {
+                target_field = "operation_definition_id",
+                source = "function_input_event",
+                source_field = "operation_definition_id",
+            },
+        },
+        approval_policy = "auto_materialize_when_threshold_passes",
+        evidence_policy = "structured_authoring_preview_only",
+    };
 
     private static AdminRuntime CreateRuntime(
         InMemoryManifestAdminRepository manifestRepo,

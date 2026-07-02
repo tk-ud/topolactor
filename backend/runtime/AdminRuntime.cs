@@ -2619,6 +2619,24 @@ public partial class AdminRuntime
                 return (null, relationErrors[0]);
         }
 
+        if (request.AggregateTriggerDefinitions is { Count: > 0 } aggregateTriggerDefinitions)
+        {
+            var step2Ids = new HashSet<string>(
+                draftTables.Select(t => t.TableName).Where(s => !string.IsNullOrWhiteSpace(s)),
+                StringComparer.OrdinalIgnoreCase);
+            var step25Ids = new HashSet<string>(
+                relationIntents
+                    .Where(r => !string.IsNullOrWhiteSpace(r.LocalTableRef) && !string.IsNullOrWhiteSpace(r.JoinTableRef))
+                    .Select(r => $"{r.LocalTableRef!.Trim()}->{r.JoinTableRef!.Trim()}"),
+                StringComparer.OrdinalIgnoreCase);
+            foreach (var definition in aggregateTriggerDefinitions)
+            {
+                var aggregateErrors = AggregateTriggerDefinitionValidator
+                    .Validate(definition, step2Ids, step25Ids);
+                if (aggregateErrors.Count > 0) return (null, aggregateErrors[0]);
+            }
+        }
+
         var tableRef = !string.IsNullOrWhiteSpace(request.TableRef)
             ? request.TableRef.Trim()
             : request.DbTableName?.Trim();
@@ -2661,6 +2679,7 @@ public partial class AdminRuntime
             searchConditions = request.SearchConditions ?? Array.Empty<AdminManifestSearchConditionDto>(),
             havingConditions = request.HavingConditions ?? Array.Empty<AdminManifestHavingConditionDto>(),
             displayColumnMode = request.DisplayColumnMode,
+            aggregateTriggerDefinitions = request.AggregateTriggerDefinitions ?? Array.Empty<AggregateTriggerDefinition>(),
             screenReadQueryWiring = ScreenReadQueryWiringBuilder.Build(
                 request.SearchConditions,
                 request.HavingConditions,
