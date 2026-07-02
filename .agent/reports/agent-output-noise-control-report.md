@@ -12,6 +12,17 @@ Date: 2026-07-03
 
 この report は調査中の一時 surface であり、Bundle 実装完了時に削除する。
 
+## Coverage Boundary
+
+全 `.agent/tests/*.sh` 相当の母集団は以下から突き合わせた。
+
+- `.agent/docs/required-paths.yaml`
+- `.agent/docs/test-bundles.yaml`
+- `.github/workflows/*.yml`
+- repo code search for additional `.agent/tests/check-*.sh`
+
+この report は **修正該当ファイルのみ** 列挙する。点検済みでも、成功時出力が短く error 詳細を維持できている thin wrapper / small check は実装対象から除外する。
+
 ## Governance Boundary
 
 - SSOT / governance:
@@ -43,29 +54,25 @@ processing unified-test-gate lane=backend-tests 40%
 
 Failure paths must emit enough detail to reproduce and classify the failure. Success minimization must not remove error evidence.
 
-## Priority Inventory
+## Implementation Target Files
 
-### P0: Success path currently likely to flood stdout
+### P0: structural / orchestrator success flood
 
 #### `.agent/tests/check-structure.sh`
 
-Current surface:
-- Prints `OK` per directory.
-- Prints `OK` per required file.
-- Prints `OK` per required content term.
-- Prints delegated subcheck OK lines.
-- Ends with multiple guidance / hint lines.
+Reason:
+- Prints `OK` per directory, required file, required content term, delegated subcheck, and guidance line.
 
 Required change:
 - Replace per-item success output with one structured PASS summary.
 - Keep exact missing directory/file/content term details on failure.
 - Keep delegated subcheck failure output.
-- Run this check last as repository entry contract requires.
+- Keep this check last.
 
 #### `.agent/tests/check-local-ci.sh`
 
-Current surface:
-- Captures child check output but echoes full child output on success.
+Reason:
+- Captures child output but echoes full child output on success.
 
 Required change:
 - Capture child output.
@@ -74,8 +81,8 @@ Required change:
 
 #### `.agent/tests/check-unified-test-gate.sh`
 
-Current surface:
-- Prints multiple lane headers and lets lower dotnet / deno / bash check output pass through on success.
+Reason:
+- Orchestrates multiple lanes and lets lower dotnet / deno / bash output pass through on success.
 
 Required change:
 - Capture each lane.
@@ -85,7 +92,7 @@ Required change:
 
 #### `.agent/scripts/check_agent_tools_surface.py`
 
-Current surface:
+Reason:
 - Prints multiple OK lines per tool and per contract axis.
 
 Required change:
@@ -93,12 +100,9 @@ Required change:
 - Preserve per-tool failure details.
 - Preserve no-mutation / no-authority / output-shape diagnostics.
 
-### P1: Per-term / per-section OK loops
+### P1: per-term / per-section OK loops
 
 #### `.agent/tests/check-completion-judgment.sh`
-
-Current surface:
-- Prints OK per required term and file.
 
 Required change:
 - Summary count on success.
@@ -106,17 +110,11 @@ Required change:
 
 #### `.agent/tests/check-worktype-routing.sh`
 
-Current surface:
-- Prints OK for each file/reference/term.
-
 Required change:
 - Summary by route category on success.
 - Missing reference/term detail on failure.
 
 #### `.agent/tests/check-runtime-bundle-ssots.sh`
-
-Current surface:
-- Prints OK per SSOT file, section, term, and forbidden-pattern absence.
 
 Required change:
 - Summary by SSOT phase on success.
@@ -124,17 +122,11 @@ Required change:
 
 #### `.agent/tests/check-cli-mcp-port-implementation-ssot.sh`
 
-Current surface:
-- Prints OK per section, field, tool, resource, and audit term.
-
 Required change:
 - Summary by proof category on success.
 - Preserve exact missing path/term on failure.
 
 #### `.agent/tests/check-docs-ssot-connectivity.sh`
-
-Current surface:
-- Prints OK per connected SSOT, workflow, script, and test.
 
 Required change:
 - Summary counts on success.
@@ -142,19 +134,32 @@ Required change:
 
 #### `.agent/tests/check-sql-attention-ssot.sh`
 
-Current surface:
-- Prints multiple OK lines from shell and Python validation.
-
 Required change:
 - Summary by semantic/SQL/proof lane on success.
 - Preserve missing term and forbidden-hit detail on failure.
 
-### P2: Runner / DB / docker surfaces where failure detail must be preserved
+#### `.agent/tests/check-pipeline-continuity.sh`
+
+Reason:
+- Prints lane headers, many OK lines, roadmap entry OK lines, and full `GAP` enumeration on normal success.
+
+Required change:
+- Summary by body / hardcode_guard / wiring_audit / gap_status on success.
+- Preserve exact missing lane/term/file detail on failure.
+- Replace full success GAP dump with count + pointer to SSOT unless explicitly requested.
+
+#### `.agent/tests/check-system-ci-admin-runtime-callable-ssot.sh`
+
+Reason:
+- Prints OK per file and required term.
+
+Required change:
+- Summary count on success.
+- Preserve missing file/term detail on failure.
+
+### P2: runner / DB / docker surfaces where failure detail must be preserved
 
 #### `.agent/tests/check-backend-tests.sh`
-
-Current surface:
-- Runs `dotnet test --verbosity minimal` directly.
 
 Required change:
 - Capture runner output.
@@ -163,18 +168,12 @@ Required change:
 
 #### `.agent/tests/check-frontend-types.sh`
 
-Current surface:
-- Runs `deno check` across multiple frontend files directly.
-
 Required change:
 - Capture runner output.
 - On success, print checked file count.
 - On failure, replay Deno diagnostics.
 
 #### `.agent/tests/check-frontend-all-tests.sh`
-
-Current surface:
-- Runs Deno tests directly.
 
 Required change:
 - Capture runner output.
@@ -183,18 +182,12 @@ Required change:
 
 #### `.agent/tests/check-runtime-semantics.sh`
 
-Current surface:
-- Runs dotnet / Deno runtime semantic tests directly.
-
 Required change:
 - Capture per runner.
 - On success, print short semantic lane summary.
 - On failure, replay full runner output.
 
 #### `.agent/tests/check-default-entity-search.sh`
-
-Current surface:
-- Runs dotnet / Deno checks directly and prints section output.
 
 Required change:
 - Capture per section.
@@ -203,19 +196,22 @@ Required change:
 
 #### `.agent/tests/check-projection-lane-seed-hardening.sh`
 
-Current surface:
-- Dedicated script exists and runs multiple dotnet / Deno sections.
-
 Required change:
 - Capture per section.
 - On success, print short section summary.
 - On failure, replay full runner output.
 
-#### `.agent/tests/check-db-schema.sh`
+#### `.agent/tests/check-recommendation-pressure-lane-boundary.sh`
 
-Current surface:
-- Some SQL file output is redirected to `/dev/null` on success.
-- Query checks print OK per assertion.
+Reason:
+- Runs Deno test directly.
+
+Required change:
+- Capture runner output.
+- On success, print short summary.
+- On failure, replay Deno diagnostics.
+
+#### `.agent/tests/check-db-schema.sh`
 
 Required change:
 - Use temporary capture instead of blind discard where failure evidence is at risk.
@@ -224,18 +220,11 @@ Required change:
 
 #### `.agent/tests/check-bootstrap-validation.sh`
 
-Current surface:
-- Some psql output is discarded.
-- Prints OK per bootstrap table/assertion.
-
 Required change:
 - Capture and replay on failure.
 - Summarize success by assertion count.
 
 #### `.agent/tests/check-migration-ui-topology.sh`
-
-Current surface:
-- Mixes static term checks, DB query checks, and simulation checks.
 
 Required change:
 - Summary by static/db/simulation lanes on success.
@@ -243,86 +232,90 @@ Required change:
 
 #### `.agent/tests/check-runtime-environment.sh`
 
-Current surface:
-- Live docker / DB / API / SSE check.
-- Failure path emits response bodies and docker logs.
-
 Required change:
 - Keep failure dumps.
 - Add bounded progress lines for long live-runtime phases.
 - Avoid expanding existing dependency surface.
 
-### P3: Explicit observation JSON surfaces
+### P3: Python helper output under test wrappers
 
-These are not normal success logs. They are explicit tool outputs, but no-arg/default behavior must not force Agent to read huge payloads during normal success paths.
+#### `.agent/scripts/check_ssot_vocabulary_contract.py`
 
-#### `.agent/tools/directory-map`
-#### `.agent/scripts/emit-directory-tree-json.py`
+Reason:
+- Called by `.agent/tests/check-ssot-vocabulary-contract.sh`; emits multiple success OK lines.
 
-Current surface:
-- Can emit full directory JSON to stdout.
+Required change:
+- Aggregate successful checks into one short PASS summary.
+- Preserve exact vocabulary mismatch details on failure.
+
+#### `.agent/scripts/check_sql_attention_ssot_yaml.py`
+
+Reason:
+- Called by `.agent/tests/check-sql-attention-ssot.sh`; emits success OK lines before shell-level success summary.
+
+Required change:
+- Aggregate success output or let parent script capture/summarize it.
+- Preserve parser/contract mismatch details on failure.
+
+### P4: explicit observation JSON / tree surfaces
+
+These are not normal success logs. They are explicit tool outputs, but default/no-arg behavior must not force Agent to read huge payloads during normal success paths.
+
+#### `.agent/scripts/agent_tools/readonly_observation.py`
+
+Applies to:
+- `.agent/tools/directory-map`
+- `.agent/tools/proof-surface-map`
+- `.agent/tools/yaml-section-query`
+- `.agent/tools/topology-seed-discussion`
 
 Required change:
 - Do not suppress explicit JSON output.
-- If default/no-arg mode is too large, prefer bounded summary default plus explicit full-output flag, or document current explicit-output expectation.
-
-#### `.agent/tools/proof-surface-map`
-
-Current surface:
-- Can emit all proof surface mappings when no selector is provided.
-
-Required change:
 - Do not treat output as proof completion.
-- Prefer bounded default summary or require explicit selector/full flag if implementation chooses to change behavior.
+- Keep `.agent/tools` read-only observation boundary.
+- For default/no-selector large output, prefer bounded summary default plus explicit full-output flag, or document explicit-output expectation.
 
-#### `.agent/tools/yaml-section-query`
-
-Current surface:
-- Already has bounded traversal behavior and explicit error JSON modes.
+#### `.agent/scripts/emit-directory-tree-json.py`
 
 Required change:
-- No major noise change required unless consistency cleanup is done with sibling tools.
+- Avoid forcing full tree JSON in normal success path.
+- Preserve explicit full-output behavior when requested.
 
-#### `.agent/tools/topology-seed-discussion`
-
-Current surface:
-- Build-template / candidate outputs may be intentionally large.
+#### `.agent/scripts/emit-docs-tree-json.sh`
 
 Required change:
-- Treat as explicit discussion artifact output.
-- Do not suppress explicit user-requested template output.
-- Avoid using this output as completion judgment.
+- Avoid forcing full docs tree JSON in normal success path.
+- Preserve explicit full-output behavior when requested.
 
-## Workflow Surfaces
+### P5: workflow files with direct noisy commands or bypassed script surface
 
-### `.github/workflows/structure-check.yml`
+#### `.github/workflows/backend-tests.yml`
 
-Required change:
-- Prefer fixing underlying scripts.
-- Keep `check-structure.sh` last.
-
-### `.github/workflows/unified-test-gate.yml`
+Reason:
+- Runs multiple `psql -f ...` commands directly before delegating to `.agent/tests/check-backend-tests.sh`.
 
 Required change:
-- Prefer fixing `.agent/tests/check-unified-test-gate.sh` and underlying runner scripts.
-- Workflow should not require reading full successful test logs.
+- Capture schema application output.
+- Keep success quiet/summary only.
+- Replay psql output on failure.
 
-### `.github/workflows/projection-lane-seed-hardening.yml`
+#### `.github/workflows/bootstrap-validation.yml`
 
-Current surface:
-- Runs direct dotnet / Deno commands in workflow jobs, bypassing the dedicated script surface.
-
-Required change:
-- Route through `.agent/tests/check-projection-lane-seed-hardening.sh` if possible, then apply capture-on-success / replay-on-failure there.
-
-### `.github/workflows/bootstrap-validation.yml`
-
-Current surface:
-- Has `docker compose config > /dev/null` and docker smoke surfaces.
+Reason:
+- Has direct docker compose validation / smoke surfaces.
 
 Required change:
 - Keep configuration validation quiet on success, but capture output for failure if useful.
 - Do not hide failure cause.
+
+#### `.github/workflows/projection-lane-seed-hardening.yml`
+
+Reason:
+- Runs direct dotnet / Deno commands in workflow jobs, bypassing `.agent/tests/check-projection-lane-seed-hardening.sh`.
+
+Required change:
+- Route through `.agent/tests/check-projection-lane-seed-hardening.sh` if possible.
+- Apply capture-on-success / replay-on-failure in the script surface.
 
 ## Implementation Scope
 
@@ -334,10 +327,19 @@ Recommended order:
 2. Convert P0 structural/orchestrator surfaces.
 3. Convert P1 per-term OK loops.
 4. Convert P2 runner/DB/docker surfaces with capture-on-success and replay-on-failure.
-5. Review P3 `.agent/tools` defaults without changing authority boundary.
-6. Adjust workflows only where they bypass fixed script surfaces.
+5. Convert P3 helper/tool defaults without changing authority boundary.
+6. Adjust only P5 workflows that bypass fixed script surfaces or run direct noisy commands.
 7. Run required checks.
 8. Delete this report after Bundle completion.
+
+## Non-target Principle
+
+Do not touch checked files whose success output is already short enough and whose failure path keeps detail, unless a target conversion requires shared helper adoption across the same local pattern.
+
+Examples of non-target posture:
+- thin wrappers that only delegate to Python and print one final pass line
+- small grep checks with one or two success lines and specific failure messages
+- manifest integrity checks that already emit one compact pass summary
 
 ## OK Axis
 
@@ -352,7 +354,7 @@ Recommended order:
 
 ## NG Axis
 
-- Success path still prints per-file, per-term, full runner stdout/stderr, or full JSON dumps by default.
+- Success path still prints per-file, per-term, full runner stdout/stderr, full GAP list, or full JSON dumps by default.
 - Error detail is hidden while reducing output.
 - `/dev/null` is used where it can remove failure evidence.
 - Only one small script is fixed and Bundle-wide surfaces remain noisy.
