@@ -211,7 +211,6 @@ required_files:
     - .agent/tools/README.md
     - .agent/tools/directory-map
     - .agent/tools/yaml-section-query
-    - .agent/tools/ssot-map-query
     - .agent/tools/proof-surface-map
     - .agent/tools/topology-seed-discussion
     - .agent/scripts/agent_tools/readonly_observation.py
@@ -787,9 +786,11 @@ required_content_terms:
     - "agent_repo_observation_tools_surface"
   .agent/scripts/check_agent_tools_surface.py:
     - "REQUIRED_TOOL_ENTRYPOINTS"
+    - "REMOVED_TOOL_ENTRYPOINTS"
     - "mutation_rejection_failures"
     - "boundary_metadata_failures"
     - "thin_wrapper_failures"
     - "ambiguous_handling_failures"
     - "default_minimal_output_failures"
+    - "removed_tool_failures"
     - "--self-test"

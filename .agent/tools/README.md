@@ -24,6 +24,17 @@ Todo and roadmap statuses may appear only as observed text. They must not be tre
 
 `.agent/scripts` owns CI/gate/helper implementation bodies and reusable structured-processing code. `.agent/tools` may expose thin read-only entrypoints over those bodies, but must not duplicate structural processing logic already owned by `.agent/scripts`.
 
+## Recommended usage order
+
+`.agent/tools` is not an autonomous exploration entrypoint — read prompt/protocol/todo required-reads first (see `## Prohibited uses` below). When a task needs repository observation beyond those required reads, the intended chain is:
+
+1. **`directory-map`** — see the repo/docs/`.agent` directory structure and find a promising YAML/doc file.
+2. **`yaml-section-query`** — list that file's top-level sections (cheap), then read only the specific section path you need instead of the whole file.
+3. **`proof-surface-map`** — from a `proof_id`, `bundle_id`, or an SSOT path found via step 2, look up the related proof/runner/test/bundle candidates.
+4. **`topology-seed-discussion`** — only when the task is specifically seed-structure discussion; it is SSOT-driven and independent of steps 1-3.
+
+Each step is optional and skippable; this is a suggested order for combining the tools, not a mandatory workflow gate.
+
 ## Available tools
 
 ### `directory-map`
@@ -69,28 +80,22 @@ Examples:
 .agent/tools/yaml-section-query --file .agent/docs/ssot-map.yaml --section protocols
 ```
 
-### `ssot-map-query`
-
-Thin alias over `yaml-section-query` fixed to `.agent/docs/ssot-map.yaml`, kept for backward-compatible discoverability. It owns no structured processing of its own and is not a dedicated `ssot-map.yaml`-only search implementation — it forwards to the same generic engine and accepts the same `--list-sections`/`--path-json`/`--path`/`--section`/`--depth` arguments as `yaml-section-query`, minus `--file`.
-
-Example:
-
-```sh
-.agent/tools/ssot-map-query --section work_type
-```
+> `ssot-map-query` was retired: use `yaml-section-query --file .agent/docs/ssot-map.yaml ...` instead. It was a thin alias with no structured processing of its own, so removing it does not lose any capability — `check-agent-tools-surface.sh` gates that it stays removed (no entrypoint file, no dispatch target, no README documentation).
 
 ### `proof-surface-map`
 
 Observes proof graph surfaces from `docs/design/test-proof-manifest-ssot.yaml` and reverse lookup data from `.agent/docs/test-bundles.yaml`.
 
-- Inputs: `--all`, `--proof-id <proof_id>`, or `--bundle-id <bundle_id>`.
+- Inputs: `--all`, `--proof-id <proof_id>`, `--bundle-id <bundle_id>`, or `--ssot <repo-relative-path>`.
+  - `--ssot <repo-relative-path>`: looks up proof entries whose `ssot_refs` or `missing_ssot_blocking` contains that exact path, so a target SSOT file (e.g. one found via `yaml-section-query`) resolves directly to its related proof/runner/test/bundle candidates.
 - Output: JSON object containing observed `proof_id`, runner surfaces, SSOT refs, test files, and `does_not_prove` fields.
-- Boundary: does not execute runners, judge proof completion, or claim implemented status.
+- Boundary: does not execute runners, judge proof completion, or claim implemented status. An empty `--ssot` match means no proof edge currently references that path — not that the SSOT is unproven or invalid.
 
-Example:
+Examples:
 
 ```sh
 .agent/tools/proof-surface-map --all
+.agent/tools/proof-surface-map --ssot docs/design/db-schema.yaml
 ```
 
 

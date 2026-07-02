@@ -359,18 +359,6 @@ def yaml_section_query(argv: list[str], tool_name: str = "yaml-section-query") -
     })
 
 
-def ssot_map_query(argv: list[str]) -> int:
-    """Thin alias: delegates to yaml_section_query fixed to .agent/docs/ssot-map.yaml.
-
-    Kept for backward-compatible discoverability; it is not a dedicated
-    ssot-map.yaml-only search implementation and owns no structured processing
-    of its own."""
-    rejected = _reject_mutation_args(argv)
-    if rejected is not None:
-        return rejected
-    return yaml_section_query(["--file", ".agent/docs/ssot-map.yaml", *argv], tool_name="ssot-map-query")
-
-
 def proof_surface_map(argv: list[str]) -> int:
     rejected = _reject_mutation_args(argv)
     if rejected is not None:
@@ -379,8 +367,9 @@ def proof_surface_map(argv: list[str]) -> int:
     parser.add_argument("--all", action="store_true", help="Return all observed proof entries.")
     parser.add_argument("--proof-id", default=None, help="Filter by proof_id.")
     parser.add_argument("--bundle-id", default=None, help="Filter by reverse lookup bundle_id.")
+    parser.add_argument("--ssot", default=None, help="Filter by repo-relative SSOT path referenced in ssot_refs or missing_ssot_blocking.")
     args = parser.parse_args(argv)
-    if not args.all and not args.proof_id and not args.bundle_id:
+    if not args.all and not args.proof_id and not args.bundle_id and not args.ssot:
         args.all = True
 
     manifest_source = "docs/design/test-proof-manifest-ssot.yaml"
@@ -397,6 +386,8 @@ def proof_surface_map(argv: list[str]) -> int:
         for proof_ref in yaml.arr(bundle.get("proof_refs")):
             bundle_by_proof.setdefault(proof_ref, []).append(bundle)
 
+    normalized_ssot = args.ssot.lstrip("./") if args.ssot else None
+
     observed = []
     for proof in proofs:
         pid = proof.get("proof_id")
@@ -404,13 +395,20 @@ def proof_surface_map(argv: list[str]) -> int:
             continue
         if args.bundle_id and pid not in bundle_by_proof:
             continue
+        ssot_refs = yaml.arr(proof.get("ssot_refs"))
+        missing_ssot_blocking = yaml.arr(proof.get("missing_ssot_blocking"))
+        if normalized_ssot is not None:
+            candidate_paths = {str(r).lstrip("./") for r in (ssot_refs + missing_ssot_blocking)}
+            if normalized_ssot not in candidate_paths:
+                continue
         observed.append({
             "proof_id": pid,
             "proof_order": proof.get("proof_order"),
             "scope_phase": proof.get("scope_phase"),
             "domain": proof.get("domain"),
             "proof_type": proof.get("proof_type"),
-            "ssot_refs": yaml.arr(proof.get("ssot_refs")),
+            "ssot_refs": ssot_refs,
+            "missing_ssot_blocking": missing_ssot_blocking,
             "implementation_files": yaml.arr(proof.get("implementation_files")),
             "test_files": yaml.arr(proof.get("test_files")),
             "runner_surfaces": yaml.arr(proof.get("runner_surfaces")),
@@ -422,7 +420,7 @@ def proof_surface_map(argv: list[str]) -> int:
     return _json({
         "tool": "proof-surface-map",
         "source_files": [manifest_source, bundles_source],
-        "query": {"all": args.all, "proof_id": args.proof_id, "bundle_id": args.bundle_id},
+        "query": {"all": args.all, "proof_id": args.proof_id, "bundle_id": args.bundle_id, "ssot": args.ssot},
         "boundary": BOUNDARY | {"runner_execution": False, "proof_completion_judgment": False},
         "observed_count": len(observed),
         "proof_surfaces": observed,
@@ -1026,8 +1024,6 @@ def main(argv=None) -> int:
         return directory_map(rest)
     if tool == "yaml-section-query":
         return yaml_section_query(rest)
-    if tool == "ssot-map-query":
-        return ssot_map_query(rest)
     if tool == "proof-surface-map":
         return proof_surface_map(rest)
     if tool == "topology-seed-discussion":

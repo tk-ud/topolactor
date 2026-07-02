@@ -50,22 +50,25 @@ READONLY_OBSERVATION = REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "reado
 REQUIRED_TOOL_ENTRYPOINTS = [
     "directory-map",
     "yaml-section-query",
-    "ssot-map-query",
     "proof-surface-map",
     "topology-seed-discussion",
 ]
 
+# ssot-map-query was retired in favor of yaml-section-query --file
+# .agent/docs/ssot-map.yaml; gate against it silently reappearing as either
+# an entrypoint file or a readonly_observation.py dispatch target.
+REMOVED_TOOL_ENTRYPOINTS = ["ssot-map-query"]
+
 # Tools whose baseline output is a generic YAML section-query projection
 # (dict with mode/boundary/sections), gated by default_minimal_output_failures
 # in addition to the generic boundary_metadata_failures check.
-SECTION_QUERY_TOOLS = {"yaml-section-query", "ssot-map-query"}
+SECTION_QUERY_TOOLS = {"yaml-section-query"}
 
 # Baseline args chosen so every tool exits 0 and emits JSON without touching
 # unrelated repository semantics (deliberately unmatched query/id probes).
 BASELINE_ARGS = {
     "directory-map": ["--root", "docs", "--depth", "0"],
     "yaml-section-query": ["--file", ".agent/docs/ssot-map.yaml"],
-    "ssot-map-query": [],
     "proof-surface-map": ["--proof-id", "__check_agent_tools_surface_probe__"],
     "topology-seed-discussion": ["inspect"],
 }
@@ -188,6 +191,20 @@ def ambiguous_handling_failures(tool_name: str, result: dict) -> list[str]:
     return failures
 
 
+def removed_tool_failures(readonly_observation_source: str, readme_text: str) -> list[str]:
+    """Gates retired tool names (e.g. ssot-map-query) against silently
+    reappearing as a readonly_observation.py dispatch target or documentation.
+    Entrypoint-file existence is checked separately in main() (disk I/O),
+    keeping this function pure text analysis for --self-test."""
+    failures = []
+    for name in REMOVED_TOOL_ENTRYPOINTS:
+        if f'"{name}"' in readonly_observation_source:
+            failures.append(f"{name}: retired tool must not be dispatched from readonly_observation.py")
+        if f"### `{name}`" in readme_text:
+            failures.append(f"{name}: retired tool must not have an '### `{name}`' available-tool heading in README.md")
+    return failures
+
+
 def fail(msg: str) -> None:
     sys.stderr.write(f"FAIL: {msg}\n")
 
@@ -196,6 +213,7 @@ def main() -> int:
     os.chdir(REPO_ROOT)
     failures: list[str] = []
 
+    source_text = ""
     if not READONLY_OBSERVATION.is_file():
         failures.append("missing .agent/scripts/agent_tools/readonly_observation.py")
     else:
@@ -210,10 +228,20 @@ def main() -> int:
             print("OK  [no-write] readonly_observation.py contains no file-mutation calls")
 
     readme = TOOLS_DIR / "README.md"
+    readme_text = ""
     if not readme.is_file():
         failures.append("missing .agent/tools/README.md")
     else:
+        readme_text = readme.read_text(encoding="utf-8")
         print("OK  [file] .agent/tools/README.md present")
+
+    removed_failures = removed_tool_failures(source_text, readme_text)
+    for name in REMOVED_TOOL_ENTRYPOINTS:
+        if (TOOLS_DIR / name).exists():
+            removed_failures.append(f"{name}: retired tool entrypoint must not exist at .agent/tools/{name}")
+    failures.extend(removed_failures)
+    if not removed_failures:
+        print(f"OK  [removed] retired tool entrypoints ({', '.join(REMOVED_TOOL_ENTRYPOINTS)}) stay removed")
 
     for name in REQUIRED_TOOL_ENTRYPOINTS:
         entry = TOOLS_DIR / name
@@ -402,6 +430,20 @@ def _self_test() -> int:
 
     too_few_candidates = {"mode": "ambiguous", "candidates": [{"key": "a"}]}
     expect("ambiguous result with <2 candidates must FAIL", len(ambiguous_handling_failures("t", too_few_candidates)) >= 1)
+
+    # removed_tool_failures
+    clean_source = 'if tool == "yaml-section-query":\n    return yaml_section_query(rest)\n'
+    clean_readme = "### `yaml-section-query`\n\nThin wrapper.\n"
+    expect("source/readme without retired tool must PASS", removed_tool_failures(clean_source, clean_readme) == [])
+
+    dispatch_regression = 'if tool == "ssot-map-query":\n    return ssot_map_query(rest)\n'
+    expect("dispatch mentioning retired tool must FAIL", len(removed_tool_failures(dispatch_regression, clean_readme)) >= 1)
+
+    readme_regression = "### `ssot-map-query`\n\nAlias.\n"
+    expect("README documenting retired tool must FAIL", len(removed_tool_failures(clean_source, readme_regression)) >= 1)
+
+    readme_mention_only = "> `ssot-map-query` was retired: use `yaml-section-query` instead.\n"
+    expect("README mentioning retired tool in prose (no heading) must PASS", removed_tool_failures(clean_source, readme_mention_only) == [])
 
     print(f"[self-test] {checks} assertions run, {len(problems)} failed")
     if problems:

@@ -130,6 +130,11 @@ agent_repo_observation_tools_surface:
       - tool implementation files
       - initial tool command bodies
       - proof gate implementation
+    note: >-
+      ssot-map-query was later retired by agent-tools-advanced-surface-maps
+      in favor of the generic yaml-section-query --file
+      .agent/docs/ssot-map.yaml; this list records the original design-time
+      candidate set, not the current tool inventory.
   advanced_followup_tool_candidates:
     future_bundle: agent-tools-advanced-surface-maps
     status: implemented_with_deferred_candidates
