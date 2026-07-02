@@ -95,13 +95,14 @@
 ### 子Bundle `agent-tools-governance-contract`
 
 **Worktype:** design_change
-**Status:** not_started
+**Status:** implemented
 
 - Scope: `.agent/tools` の正本上の位置づけを確定する。
 - 問題点: `.agent/tools` の責務・禁止事項・`.agent/scripts` との境界・proof接続が未定義。このまま実装すると便利script置き場化し、SSOT authority / proof / semantic judgment と混同される。
 - 目的: `.agent/tools` を Agent向け read-only repo observation surface として governance / policy / rule 上で定義する。
 - 改善方針: `.agent/tools` は read-only observation interface。`.agent/scripts` は CI / gate / helper implementation body。tool output は SSOT authority / proof / completion judgment ではない。tool は semantic completion / implemented / partial 判定をしない。Python3 stdlib only policy を `.agent/tools` に接続する。
 - 対応資料: `docs/governance/agent-governance-routing-ssot.yaml`, `.agent/README.md`, `.agent/docs/structure-map.yaml`, `docs/framework-policy.yaml`, `.agent/rules/rule.md`, `.agent/protocols/audit.md`
+- 完了記録: `.agent/tools` を Agent向け read-only repo observation surface として governance / policy / rule / structure 上で正本化済み。`.agent/tools` と `.agent/scripts` の責務境界、read-only / no mutation / no semantic judgment、tool output が SSOT authority / proof / completion judgment ではない境界、Python3 stdlib only policy 接続、後続 `directory-map` / `ssot-map-query` / `proof-surface-map` 実装方針を定義済み。実装本体・初期tool・proof gate は後続子Bundle scope のまま。
 
 ### 子Bundle `agent-tools-core-readonly-observation`
 

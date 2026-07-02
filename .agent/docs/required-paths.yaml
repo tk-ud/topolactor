@@ -491,6 +491,8 @@ required_content_terms:
     - "Directory Responsibilities"
     - "`protocols/`: judgment gates (blocking/pass semantics only)."
     - ".agent Directory Map"
+    - "`tools/`: Agent-facing read-only repo observation entrypoints."
+    - "Tools may expose thin wrappers over `.agent/scripts`"
   .agent/skills/agent-workflow.md:
     - "STRUCTURE_CHECK"
     - "SCENARIO_CONTRACT"

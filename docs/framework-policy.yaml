@@ -2,7 +2,7 @@ framework_policy:
 
   repo_governance_tooling_dependency_policy:
     role: repo_governance_tooling_structured_processing_dependency_boundary
-    scope: agent_governance_checks_under_dotagent_tests_and_dotagent_scripts
+    scope: agent_governance_checks_under_dotagent_tests_dotagent_scripts_and_dotagent_tools
     allowed_structured_processing_dependency: python3_stdlib_only
     bash_role: ci_entrypoint_orchestration_and_delegated_subcheck_invocation_only
     prohibited_required_dependencies:
@@ -19,10 +19,13 @@ framework_policy:
     rationale: >-
       JSON/YAML emit, parse, length, filtering, and mapping validation in
       repo governance tooling (docs/ and .agent/tests/ directory JSON
-      observation, SSOT proof surface connectivity gate) must be Python3
+      observation, SSOT proof surface connectivity gate, and .agent/tools
+      read-only observation entrypoints) must be Python3
       stdlib rather than bash/awk/sed, and must not depend on Ruby or other
       third-party runtimes as a required dependency. This does not govern
-      application runtime dependencies (backend/frontend product code).
+      application runtime dependencies (backend/frontend product code). .agent/tools
+      are read-only observation entrypoints only; their output is not SSOT
+      authority, proof completion, or semantic completion judgment.
 
   ci_attention_operational_policy:
     ci_interpretation:
