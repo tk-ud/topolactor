@@ -96,6 +96,20 @@ reverse_lookup:
     does_not_prove:
       - instance settings topology, primitive authority, runtime instance selection, or execution authority enforcement
 
+  - bundle_id: docs-ssot-connectivity-structure-manifest-and-ci-workflow-gate
+    proof_refs:
+      - ssot_structure_policy_contract
+    runner_surfaces:
+      - .agent/tests/check-docs-ssot-connectivity.sh
+      - .agent/tests/check-structure.sh
+    proves_lookup_for:
+      - docs/ SSOT reachability from agent index/route/test/prompt/protocol/workflow surfaces
+      - manifest-driven required path / required term structure gate wiring
+      - workflow yml referenced-script existence
+    does_not_prove:
+      - semantic sufficiency of any mapped SSOT read set
+      - implementation completion of any roadmap bundle
+
   - bundle_id: frontend-admin-projection-expression-e2e-completion
     roadmap_bundle_refs:
       - frontend-admin-projection-expression-e2e-completion

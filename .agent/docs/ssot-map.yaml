@@ -738,6 +738,47 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: ui_ux_primitive_catalog_vocabulary
+    change_surfaces:
+      - ui ux primitive catalog
+      - UI_UX_PRIMITIVE_CATALOG_IDENTITIES
+      - frontend/components/catalog.ts
+      - frontend/runtime/layoutPatchPreviewUtils.ts
+      - frontend/tests/catalogSubsetCheck.test.ts
+      - frontend/tests/documentCanvasCatalogCheck.test.ts
+      - frontend/tests/ssotReaderCatalog.test.ts
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+    required_docs:
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+    supporting_docs:
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/topology-layout-class-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+    protocols: []
+
+  - work_type: docs_ssot_connectivity_structure_manifest_ci_gate
+    change_surfaces:
+      - docs-ssot-connectivity-structure-manifest-and-ci-workflow-gate
+      - docs SSOT connectivity gate
+      - docs tree JSON observation
+      - structure check manifest
+      - required paths manifest
+      - orphan workflow candidate detection
+      - orphan test candidate detection
+      - .agent/docs/required-paths.yaml
+      - .agent/scripts/emit-docs-tree-json.sh
+      - .agent/tests/check-docs-ssot-connectivity.sh
+      - .agent/tests/check-structure.sh
+      - .github/workflows/structure-check.yml
+      - .github/workflows/unified-test-gate.yml
+    required_docs:
+      - docs/governance/agent-governance-routing-ssot.yaml
+      - docs/file-structure.yaml
+    supporting_docs:
+      - docs/design/test-proof-manifest-ssot.yaml
+    protocols:
+      - .agent/protocols/completion.md
+
 worktypes:
   ids:
     - audit
