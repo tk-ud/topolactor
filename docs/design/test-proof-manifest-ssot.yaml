@@ -109,6 +109,7 @@ chronological_scope_index:
       - governance structure and manifest integrity can be audited before claiming proof completion
       - proof graph shape, dependency references, and field separation are machine-checked
       - .agent/tools existence, executable permission, thin read-only entrypoint boundary, mutation-argument rejection, and no-authority-claim baseline output are gated by check-agent-tools-surface.sh
+      - yaml-section-query default output stays a minimal section listing (not a full YAML dump), and an ambiguous multi-hit --section query returns candidates only, never a silently-picked value; ssot-map-query remains a thin alias fixed to .agent/docs/ssot-map.yaml with no structured processing of its own
     does_not_prove:
       - DB schema behavior
       - backend runtime behavior

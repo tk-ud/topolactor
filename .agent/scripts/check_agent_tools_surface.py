@@ -49,19 +49,30 @@ READONLY_OBSERVATION = REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "reado
 
 REQUIRED_TOOL_ENTRYPOINTS = [
     "directory-map",
+    "yaml-section-query",
     "ssot-map-query",
     "proof-surface-map",
     "topology-seed-discussion",
 ]
 
+# Tools whose baseline output is a generic YAML section-query projection
+# (dict with mode/boundary/sections), gated by default_minimal_output_failures
+# in addition to the generic boundary_metadata_failures check.
+SECTION_QUERY_TOOLS = {"yaml-section-query", "ssot-map-query"}
+
 # Baseline args chosen so every tool exits 0 and emits JSON without touching
 # unrelated repository semantics (deliberately unmatched query/id probes).
 BASELINE_ARGS = {
     "directory-map": ["--root", "docs", "--depth", "0"],
-    "ssot-map-query": ["--query", "__check_agent_tools_surface_probe__"],
+    "yaml-section-query": ["--file", ".agent/docs/ssot-map.yaml"],
+    "ssot-map-query": [],
     "proof-surface-map": ["--proof-id", "__check_agent_tools_surface_probe__"],
     "topology-seed-discussion": ["inspect"],
 }
+
+# Probe chosen because .agent/docs/ssot-map.yaml has a "protocols" key
+# repeated across many mapping[] entries, guaranteeing an ambiguous multi-hit.
+AMBIGUOUS_PROBE_ARGS = ["--file", ".agent/docs/ssot-map.yaml", "--section", "protocols"]
 
 MUTATION_PROBE_ARGS = ["--output", "/tmp/check-agent-tools-surface-should-not-write.json"]
 
@@ -143,6 +154,38 @@ def array_shape_failures(tool_name: str, result) -> list[str]:
     if not isinstance(result, list):
         return [f"{tool_name}: expected a stable JSON array shape, got {type(result).__name__}"]
     return []
+
+
+def default_minimal_output_failures(tool_name: str, result: dict) -> list[str]:
+    """Verifies the default (no explicit section/path) invocation stays a
+    minimal section listing rather than dumping full YAML content."""
+    failures = []
+    if not isinstance(result, dict):
+        return [f"{tool_name}: baseline output must be a JSON object"]
+    if result.get("mode") != "list_sections":
+        failures.append(f"{tool_name}: baseline (no --path/--section) output must have mode=='list_sections', got {result.get('mode')!r}")
+    if "value" in result:
+        failures.append(f"{tool_name}: baseline output must not include a resolved 'value' (full YAML dump)")
+    sections = result.get("sections")
+    if not isinstance(sections, list) or not sections:
+        failures.append(f"{tool_name}: baseline output missing a non-empty 'sections' list")
+    return failures
+
+
+def ambiguous_handling_failures(tool_name: str, result: dict) -> list[str]:
+    """Verifies a multi-hit --section query returns candidates only, never a
+    silently-picked value."""
+    failures = []
+    if not isinstance(result, dict):
+        return [f"{tool_name}: ambiguous probe output must be a JSON object"]
+    if result.get("mode") != "ambiguous":
+        failures.append(f"{tool_name}: ambiguous probe expected mode=='ambiguous', got {result.get('mode')!r}")
+    if "value" in result or "selected_section" in result:
+        failures.append(f"{tool_name}: ambiguous result must not include a resolved value/selected_section")
+    candidates = result.get("candidates")
+    if not isinstance(candidates, list) or len(candidates) < 2:
+        failures.append(f"{tool_name}: ambiguous result must include at least 2 candidates")
+    return failures
 
 
 def fail(msg: str) -> None:
@@ -228,6 +271,32 @@ def main() -> int:
             failures.extend(boundary_failures)
             if not boundary_failures:
                 print(f"OK  [no-authority] {name} output declares boundary metadata without an authority claim")
+            if name in SECTION_QUERY_TOOLS:
+                minimal_failures = default_minimal_output_failures(name, result)
+                failures.extend(minimal_failures)
+                if not minimal_failures:
+                    print(f"OK  [minimal-output] {name} baseline output is a minimal section list, not full YAML")
+
+        if name == "yaml-section-query":
+            try:
+                amb_proc = subprocess.run(
+                    [str(entry), *AMBIGUOUS_PROBE_ARGS], capture_output=True, text=True, cwd=REPO_ROOT, timeout=30
+                )
+            except OSError as exc:
+                failures.append(f"{name}: failed to execute ambiguous probe: {exc}")
+            else:
+                if amb_proc.returncode != 0:
+                    failures.append(f"{name}: ambiguous probe failed (exit {amb_proc.returncode}): {amb_proc.stderr.strip()}")
+                else:
+                    try:
+                        amb_result = json.loads(amb_proc.stdout)
+                    except json.JSONDecodeError as exc:
+                        failures.append(f"{name}: ambiguous probe did not emit valid JSON: {exc}")
+                    else:
+                        amb_failures = ambiguous_handling_failures(name, amb_result)
+                        failures.extend(amb_failures)
+                        if not amb_failures:
+                            print(f"OK  [ambiguous] {name} returns candidates without a resolved value on a multi-hit --section query")
 
     print("")
     if failures:
@@ -310,6 +379,29 @@ def _self_test() -> int:
     # array_shape_failures
     expect("list result must PASS array shape", array_shape_failures("t", []) == [])
     expect("dict result must FAIL array shape", len(array_shape_failures("t", {})) == 1)
+
+    # default_minimal_output_failures
+    good_listing = {"mode": "list_sections", "sections": [{"key": "a"}]}
+    expect("minimal section listing must PASS", default_minimal_output_failures("t", good_listing) == [])
+
+    full_dump = {"mode": "list_sections", "sections": [{"key": "a"}], "value": {"huge": "dump"}}
+    expect("baseline output containing 'value' must FAIL", len(default_minimal_output_failures("t", full_dump)) >= 1)
+
+    wrong_mode = {"mode": "section", "sections": [{"key": "a"}]}
+    expect("baseline output with non-list_sections mode must FAIL", len(default_minimal_output_failures("t", wrong_mode)) >= 1)
+
+    empty_sections = {"mode": "list_sections", "sections": []}
+    expect("baseline output with empty sections must FAIL", len(default_minimal_output_failures("t", empty_sections)) >= 1)
+
+    # ambiguous_handling_failures
+    good_ambiguous = {"mode": "ambiguous", "candidates": [{"key": "a"}, {"key": "b"}]}
+    expect("well-formed ambiguous result must PASS", ambiguous_handling_failures("t", good_ambiguous) == [])
+
+    single_hit_result = {"mode": "section", "selected_section": {"value": 1}}
+    expect("silently-resolved single value on ambiguous probe must FAIL", len(ambiguous_handling_failures("t", single_hit_result)) >= 1)
+
+    too_few_candidates = {"mode": "ambiguous", "candidates": [{"key": "a"}]}
+    expect("ambiguous result with <2 candidates must FAIL", len(ambiguous_handling_failures("t", too_few_candidates)) >= 1)
 
     print(f"[self-test] {checks} assertions run, {len(problems)} failed")
     if problems:

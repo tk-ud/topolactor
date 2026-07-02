@@ -26,7 +26,7 @@ _NULLS = {"null", "Null", "NULL", "~"}
 _BLOCK_MARKERS = {">", ">-", ">+", "|", "|-", "|+"}
 _INT_RE = re.compile(r"^-?\d+$")
 _FLOAT_RE = re.compile(r"^-?\d+\.\d+$")
-_KEY_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
+_KEY_RE = re.compile(r"^[A-Za-z0-9_.\-/]+$")
 
 
 def _strip_comment(line: str) -> str:
