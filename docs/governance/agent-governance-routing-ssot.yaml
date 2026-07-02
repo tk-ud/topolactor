@@ -58,7 +58,85 @@ directory_structure:
       docs: agent_resume_and_index_surface
       routes: worktype_route_map_surface
       skills: task_procedure_surface
-      scripts: helper_script_surface
+      tools: agent_read_only_repo_observation_surface
+      scripts: ci_gate_and_helper_implementation_body_surface
+
+agent_repo_observation_tools_surface:
+  canonical_directory: .agent/tools
+  role: agent_read_only_repo_observation_surface
+  status: governance_contract_defined_without_initial_tool_implementation
+  target_user: repository_agent
+  purpose:
+    - expose stable, agent-facing entrypoints for observing repository governance, structure, SSOT indexes, and proof-surface maps
+    - keep observation commands discoverable without making .agent/scripts a convenience-command namespace
+  responsibility_boundary:
+    tools:
+      owns:
+        - thin read-only command entrypoints for agent repo observation
+        - argument validation that rejects mutation-oriented options
+        - human/JSON observation formatting for agent consumption
+      must_not_own:
+        - CI gate authority
+        - proof authority
+        - SSOT authority
+        - completion judgment
+        - semantic implementation-status judgment
+        - duplicated structural processing bodies already owned by scripts
+    scripts:
+      owns:
+        - CI and local gate executable bodies
+        - reusable helper implementation bodies
+        - structured parsing, tree emission, connectivity checks, and delegated subcheck implementation
+      may_be_called_by_tools: true
+      boundary: tools may wrap scripts as thin read-only entrypoints, but must not fork or duplicate the structural processing body
+  immutability_contract:
+    read_only: true
+    prohibited_mutations:
+      - writing repository files
+      - editing TODO, roadmap, SSOT, proof manifest, or generated reports
+      - creating temp artifacts that persist after command completion
+      - exposing --output or equivalent file-write options unless explicitly rejected by the tool
+  judgment_boundary:
+    tool_output_is_not:
+      - SSOT authority
+      - proof completion
+      - completion judgment
+      - semantic audit judgment
+      - implemented_or_partial_status_evidence_by_itself
+    prohibited_judgments:
+      - semantic completion
+      - implemented
+      - partial
+      - not_started
+      - proof_passed_from_observation_only
+    todo_and_roadmap_status_boundary: todo and roadmap status may be displayed as observed text only and must not be treated as proof or implementation reality
+  dependency_policy:
+    structured_processing_dependency: python3_stdlib_only
+    inherited_from: docs/framework-policy.yaml#repo_governance_tooling_dependency_policy
+    prohibited_required_dependencies:
+      - jq
+      - node
+      - ruby
+      - pip_install
+      - npm_install
+      - gem_install
+  initial_followup_tool_candidates:
+    next_bundle: agent-tools-core-readonly-observation
+    in_scope_later:
+      - directory-map
+      - ssot-map-query
+      - proof-surface-map
+    out_of_scope_for_this_design_change:
+      - tool implementation files
+      - initial tool command bodies
+      - proof gate implementation
+  advanced_followup_tool_candidates:
+    future_bundle: agent-tools-advanced-surface-maps
+    candidates:
+      - change-impact-map
+      - dependency-surface-map
+      - orphan-surface-map
+    boundary: advanced maps require separate schema and judgment-boundary design before implementation
 
 semantic_closure:
   entities:
@@ -73,6 +151,7 @@ semantic_closure:
     - report
     - todo
     - output_sink
+    - observation_tool
     - completion_state
     - blocking_state
   allowed_edges:
@@ -83,6 +162,7 @@ semantic_closure:
         - authority_boundary
         - grep_key_policy
         - ci_check_contract
+        - observation_surface_boundary
     rule:
       decides:
         - worktype
