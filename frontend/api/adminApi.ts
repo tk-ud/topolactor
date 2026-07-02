@@ -382,6 +382,8 @@ export type HavingConditionInput = {
   valueSource?: ConditionValueSourceInput;
 };
 
+export type AggregateTriggerDefinitionInput = Record<string, unknown>;
+
 export type AdminManifestScreenDataShapeInput = {
   manifestId: string;
   tableRef?: string;
@@ -426,6 +428,8 @@ export type AdminManifestScreenDataShapeInput = {
   havingConditions?: HavingConditionInput[];
   /** Explicit display column mode: selected | all | none. */
   displayColumnMode?: string;
+  /** Step3 structured aggregate trigger authoring payload; backend validator remains runtime authority. */
+  aggregateTriggerDefinitions?: AggregateTriggerDefinitionInput[];
 };
 
 const RUNTIME_DESTINATION_OPTIONS = [

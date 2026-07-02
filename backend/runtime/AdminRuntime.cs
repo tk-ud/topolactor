@@ -2661,6 +2661,7 @@ public partial class AdminRuntime
             searchConditions = request.SearchConditions ?? Array.Empty<AdminManifestSearchConditionDto>(),
             havingConditions = request.HavingConditions ?? Array.Empty<AdminManifestHavingConditionDto>(),
             displayColumnMode = request.DisplayColumnMode,
+            aggregateTriggerDefinitions = request.AggregateTriggerDefinitions ?? Array.Empty<AggregateTriggerDefinition>(),
             screenReadQueryWiring = ScreenReadQueryWiringBuilder.Build(
                 request.SearchConditions,
                 request.HavingConditions,
