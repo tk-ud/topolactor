@@ -71,10 +71,12 @@ Example:
 
 ### `topology-seed-discussion`
 
-Maps admin UI authoring surfaces to a binary question bit schema for topology seed discussion. It covers `/admin/contents`, `/admin/ui-builder`, `/admin/manifests`, and runtime manifest dispatch axes.
+Maps seed discussion into a two-stage, read-only question flow. Stage 1 selects a `question_space` such as `sql_attention_observation`, `topology_manifest_authoring`, `admin_contents_authoring`, `admin_ui_builder_authoring`, `admin_manifests_navigation`, `runtime_manifest_dispatch`, `seed_runtime_import`, or `db_topology_wiring`. Stage 2 emits the detailed bit schema and per-bit JSON fragments for the selected space.
 
-- `inspect`: emits the indexed `question_bit_schema` plus a binary `answers_template`.
-- `build-template --bits '[1,0,1,...]'` or `build-template --answers <answers.json>`: merges the enabled bits' JSON fragments and prints a tmp JSON template for an AI/human to fill. The tool does not write `tmp.json`; callers may redirect stdout to `/tmp/...json`.
+- `inspect`: emits the Stage 1 `question_space_selector` plus a binary answers template.
+- `inspect --space <question_space>`: emits the Stage 2 indexed bit schema for that space.
+- `expand --answers <stage1_answers.json>`: reads Stage 1 answers and returns Stage 2 schemas for selected spaces.
+- `build-template --space <question_space> --bits '[1,0,1,...]'` or `build-template --answers <stage2_answers.json>`: deep-merges enabled JSON fragments and prints a tmp JSON template for an AI/human to fill. The tool does not write `tmp.json`; callers may redirect stdout to `/tmp/...json`.
 - `build --answers <tmp.json>`: reads an AI-filled tmp JSON file and prints candidate discussion JSON.
 - Boundary: output is a discussion draft only; it is not SSOT authority, seed adoption, proof completion, or implemented status evidence. The tool does not write seed SQL, manifests, SSOT, TODO, or roadmap files and does not connect to a DB, external API, or AI API.
 
@@ -82,7 +84,9 @@ Examples:
 
 ```sh
 .agent/tools/topology-seed-discussion inspect
-.agent/tools/topology-seed-discussion build-template --bits '[1,1,0,1]' > /tmp/topology-seed-discussion.tmp.json
+.agent/tools/topology-seed-discussion inspect --space admin_ui_builder_authoring
+.agent/tools/topology-seed-discussion expand --answers /tmp/stage1.json
+.agent/tools/topology-seed-discussion build-template --space admin_ui_builder_authoring --bits '[1,1,0,1]' > /tmp/topology-seed-discussion.tmp.json
 .agent/tools/topology-seed-discussion build --answers /tmp/topology-seed-discussion.tmp.json
 ```
 
