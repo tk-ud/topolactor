@@ -107,7 +107,7 @@
 ### 子Bundle `agent-tools-core-readonly-observation`
 
 **Worktype:** implementation_change
-**Status:** blocked_by_design
+**Status:** implemented
 **Depends on:** `agent-tools-governance-contract`
 
 - Scope: 初期 read-only tool surface を追加する。
@@ -115,6 +115,7 @@
 - 目的: 初期tool `directory-map`, `ssot-map-query`, `proof-surface-map` を追加する。
 - 改善方針: `.agent/tools` は thin entrypoint。構造処理は `.agent/scripts` の Python3 stdlib 実装を再利用する。既存 `.agent/scripts/emit-directory-tree-json.py` は移動しない。`directory-map` では `--output` など file mutation option を露出しない、または拒否する。
 - 対応資料: `.agent/scripts/emit-directory-tree-json.py`, `.agent/docs/ssot-map.yaml`, `docs/design/test-proof-manifest-ssot.yaml`, `.agent/scripts/check_ssot_proof_surface_connectivity.py`
+- 完了記録: 初期 read-only observation tool surface として `.agent/tools/README.md`, `directory-map`, `ssot-map-query`, `proof-surface-map`, `topology-seed-discussion` を追加済み。`directory-map` は既存 `.agent/scripts/emit-directory-tree-json.py` を thin wrapper として再利用し、既存 emitter の stable JSON array shape を維持する。`.agent/tools` surface では `--output` など mutation/file-write option を拒否する。`ssot-map-query` は `.agent/docs/ssot-map.yaml` を JSON stdout で観測し、`proof-surface-map` は `docs/design/test-proof-manifest-ssot.yaml` と `.agent/docs/test-bundles.yaml` を read-only に観測する。`topology-seed-discussion` は Stage 1 で `sql_attention_observation`, `topology_manifest_authoring`, `admin_contents_authoring`, `admin_ui_builder_authoring`, `admin_manifests_navigation`, `runtime_manifest_dispatch`, `seed_runtime_import`, `db_topology_wiring` の question_space を選択し、Stage 2 で選択spaceごとの詳細bit schemaと階層化された JSON fragment を展開する lightweight read-only tool。`build-template` は question_space 単位で有効bitの fragment を deep merge し、AI が埋める seed discussion 用 tmp JSON 雛形を stdout に返す。tool 自身は file write / seed SQL / Manifest / SSOT / todo / roadmap 更新 / DB/API/AI API 接続 / seed adoption judgment をしない。各toolは Python3 stdlib only。`ssot-map-query` / `proof-surface-map` / `topology-seed-discussion` は出力metadataに authority boundary を含める。`directory-map` は既存 emitter の stable JSON array shape を維持し、README と tool boundary で no authority / no proof / no judgment を明示する。proof gate / required-paths / test-bundles / test-proof-manifest への本格接続は後続 `agent-tools-proof-and-structure-gate` scope のまま。
 
 ### 子Bundle `agent-tools-proof-and-structure-gate`
 
