@@ -71,17 +71,19 @@ Example:
 
 ### `topology-seed-discussion`
 
-Builds discussion-only JSON for topology seed candidate review. It does not generate seed SQL, write manifests, write SSOTs, connect to a DB/API, call an AI API, or make an adoption judgment.
+Maps admin UI authoring surfaces to a binary question bit schema for topology seed discussion. It covers `/admin/contents`, `/admin/ui-builder`, `/admin/manifests`, and runtime manifest dispatch axes.
 
-- Inputs: `inspect` or `build --answers <answers.json>`.
-- Output: JSON object containing either seed discussion templates (`inspect`) or candidate discussion JSON (`build`).
-- Boundary: output is a discussion draft only; it is not SSOT authority, seed adoption, proof completion, or implemented status evidence.
+- `inspect`: emits the indexed `question_bit_schema` plus a binary `answers_template`.
+- `build-template --bits '[1,0,1,...]'` or `build-template --answers <answers.json>`: merges the enabled bits' JSON fragments and prints a tmp JSON template for an AI/human to fill. The tool does not write `tmp.json`; callers may redirect stdout to `/tmp/...json`.
+- `build --answers <tmp.json>`: reads an AI-filled tmp JSON file and prints candidate discussion JSON.
+- Boundary: output is a discussion draft only; it is not SSOT authority, seed adoption, proof completion, or implemented status evidence. The tool does not write seed SQL, manifests, SSOT, TODO, or roadmap files and does not connect to a DB, external API, or AI API.
 
 Examples:
 
 ```sh
 .agent/tools/topology-seed-discussion inspect
-.agent/tools/topology-seed-discussion build --answers /path/to/answers.json
+.agent/tools/topology-seed-discussion build-template --bits '[1,1,0,1]' > /tmp/topology-seed-discussion.tmp.json
+.agent/tools/topology-seed-discussion build --answers /tmp/topology-seed-discussion.tmp.json
 ```
 
 ## Prohibited uses

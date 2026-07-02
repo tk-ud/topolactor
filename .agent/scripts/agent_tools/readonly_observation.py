@@ -171,6 +171,8 @@ def proof_surface_map(argv: list[str]) -> int:
     })
 
 
+TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID = "topology_seed_discussion_admin_ui_v1"
+
 TOPOLOGY_SEED_DISCUSSION_BOUNDARY = BOUNDARY | {
     "discussion_draft_only": True,
     "seed_adoption_judgment": False,
@@ -184,30 +186,232 @@ TOPOLOGY_SEED_DISCUSSION_BOUNDARY = BOUNDARY | {
     "adoption_requires_separate_human_judgment_or_change": True,
 }
 
-TOPOLOGY_SEED_REFERENCE_FILES = [
-    "docs/design/db-schema.yaml",
-    "docs/design/runtime-orchestration-ssot.yaml",
-    "docs/design/pipeline-continuity-ssot.yaml",
-    "docs/design/admin-console-workflow-ssot.yaml",
-    "docs/design/test-proof-manifest-ssot.yaml",
-    "db/topology_tables.sql",
-    "db/manifest_tables.sql",
-    "db/seed_empty.sql",
-    "db/demo_seed.sql",
-    "backend/runtime/SeedRuntime.cs",
-    "backend/repository/SeedJsonRepository.cs",
-    "backend/repository/SeedImportApplyRepository.cs",
-    "backend/repository/ManifestRepository.cs",
-    "backend/repository/ManifestTopologyValidator.cs",
-    "backend/runtime/ManifestDispatcher.cs",
-]
+TOPOLOGY_SEED_BASE_TEMPLATE = {
+    "discussion_only": True,
+    "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
+    "enabled_keys": [],
+    "authoring_mode": {},
+    "admin_contents": {},
+    "admin_ui_builder": {},
+    "admin_manifests": {},
+    "runtime_manifest_dispatch": {},
+    "unresolved_questions": [],
+}
 
 
-def _file_observation(path: str):
-    full = REPO_ROOT / path
-    if not full.is_file():
-        return {"path": path, "exists": False, "size_bytes": None}
-    return {"path": path, "exists": True, "size_bytes": full.stat().st_size}
+def _fragment_for_key(key: str):
+    parts = key.split(".")
+    leaf = parts[-1]
+    if key.startswith("authoring."):
+        return {"authoring_mode": {leaf: None}}
+    if key == "contents.step2.logical_tables":
+        return {
+            "admin_contents": {
+                "step2_logical_tables": {
+                    "logical_table_count": None,
+                    "tables": [
+                        {
+                            "tableRef": None,
+                            "columns": [
+                                {
+                                    "columnName": None,
+                                    "dataType": None,
+                                    "enumGroupId": None,
+                                    "required": None,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            }
+        }
+    if key.startswith("contents.step1."):
+        return {"admin_contents": {"step1_manifest_shell": {leaf: None}}}
+    if key.startswith("contents.step2."):
+        return {"admin_contents": {"step2_logical_tables": {leaf: None}}}
+    if key.startswith("contents.step2_5."):
+        return {"admin_contents": {"step2_5_relationship_configuration": {leaf: None}}}
+    if key.startswith("contents.step3."):
+        return {"admin_contents": {"step3_physical_table_and_page_binding": {leaf: None}}}
+    if key.startswith("contents.aggregation."):
+        return {"admin_contents": {"aggregation": {leaf: None}}}
+    if key.startswith("contents.search."):
+        return {"admin_contents": {"search": {leaf: None}}}
+    if key.startswith("ui_builder."):
+        return {"admin_ui_builder": {leaf: None}}
+    if key.startswith("manifests."):
+        return {"admin_manifests": {leaf: None}}
+    if key.startswith("runtime."):
+        return {"runtime_manifest_dispatch": {leaf: None}}
+    return {"unmapped": {key: None}}
+
+
+def _bit(key: str, surface: str, question: str):
+    return {"key": key, "surface": surface, "question": question, "json_fragment": _fragment_for_key(key)}
+
+
+def topology_seed_question_bits():
+    raw_bits = [
+        _bit("authoring.new_create", "authoring-mode", "新規作成として seed discussion に含めるか"),
+        _bit("authoring.canonical_clone", "authoring-mode", "canonical clone として seed discussion に含めるか"),
+        _bit("authoring.replacement_clone", "authoring-mode", "replacement clone として seed discussion に含めるか"),
+        _bit("authoring.demo_seed", "authoring-mode", "demo seed 用候補として含めるか"),
+        _bit("authoring.default_bootstrap", "authoring-mode", "default bootstrap 用候補として含めるか"),
+        _bit("authoring.production_bootstrap_candidate", "authoring-mode", "production bootstrap candidate として含めるか"),
+        _bit("authoring.preserve_ids", "authoring-mode", "既存ID保持を議論対象に含めるか"),
+        _bit("authoring.regenerate_ids", "authoring-mode", "ID再生成を議論対象に含めるか"),
+        _bit("authoring.deprecate_old_manifest", "authoring-mode", "旧manifest deprecate を議論対象に含めるか"),
+        _bit("contents.step1.manifest_shell", "/admin/contents", "step1 manifest shell を seed discussion に含めるか"),
+        _bit("contents.step1.topology_label", "/admin/contents", "step1 topology label を seed discussion に含めるか"),
+        _bit("contents.step1.draft_lifecycle", "/admin/contents", "step1 draft lifecycle を seed discussion に含めるか"),
+        _bit("contents.step2.logical_tables", "/admin/contents", "logical table definitions を含めるか"),
+        _bit("contents.step2.multiple_logical_tables", "/admin/contents", "複数 logical table を含めるか"),
+        _bit("contents.step2.columns", "/admin/contents", "column definitions を含めるか"),
+        _bit("contents.step2.enum_columns", "/admin/contents", "enum columns を含めるか"),
+        _bit("contents.step2.enum_group_refs", "/admin/contents", "enum group refs を含めるか"),
+        _bit("contents.step2_5.relations", "/admin/contents", "step2.5 relations を含めるか"),
+        _bit("contents.step2_5.local_relation", "/admin/contents", "local relation side を含めるか"),
+        _bit("contents.step2_5.draft_remote_relation", "/admin/contents", "draft remote relation を含めるか"),
+        _bit("contents.step2_5.active_remote_manifest_relation", "/admin/contents", "active remote manifest relation を含めるか"),
+        _bit("contents.step2_5.relation_config", "/admin/contents", "relation_config を含めるか"),
+        _bit("contents.step2_5.remote_target_ambiguity_check", "/admin/contents", "remote target ambiguity check を含めるか"),
+        _bit("contents.step3.physical_table_binding", "/admin/contents", "physical table binding を含めるか"),
+        _bit("contents.step3.multiple_physical_tables", "/admin/contents", "複数 physical table を含めるか"),
+        _bit("contents.step3.page_screen_label", "/admin/contents", "page/screen label を含めるか"),
+        _bit("contents.step3.operation_kinds", "/admin/contents", "operation kinds を含めるか"),
+        _bit("contents.step3.operation_entity_bindings", "/admin/contents", "operation entity bindings を含めるか"),
+        _bit("contents.step3.initial_data_rows", "/admin/contents", "initial data rows を含めるか"),
+        _bit("contents.step3.enum_backed_initial_data", "/admin/contents", "enum backed initial data を含めるか"),
+        _bit("contents.step3.display_columns_derivation", "/admin/contents", "display columns derivation を含めるか"),
+        _bit("contents.step3.display_column_mode", "/admin/contents", "displayColumnMode を含めるか"),
+        _bit("contents.aggregation.enabled", "/admin/contents", "aggregation を含めるか"),
+        _bit("contents.aggregation.aggregation_key", "/admin/contents", "aggregation key を含めるか"),
+        _bit("contents.aggregation.aggregation_measures", "/admin/contents", "aggregation measures を含めるか"),
+        _bit("contents.aggregation.having_conditions", "/admin/contents", "having conditions を含めるか"),
+        _bit("contents.search.enabled", "/admin/contents", "search を含めるか"),
+        _bit("contents.search.search_key_columns", "/admin/contents", "search key columns を含めるか"),
+        _bit("contents.search.search_conditions", "/admin/contents", "search conditions を含めるか"),
+        _bit("contents.search.logical_connector", "/admin/contents", "logical connector を含めるか"),
+        _bit("ui_builder.route_key", "/admin/ui-builder", "route key を含めるか"),
+        _bit("ui_builder.package", "/admin/ui-builder", "package を含めるか"),
+        _bit("ui_builder.package_auto_generation", "/admin/ui-builder", "package auto generation を含めるか"),
+        _bit("ui_builder.layout", "/admin/ui-builder", "layout を含めるか"),
+        _bit("ui_builder.wiring", "/admin/ui-builder", "wiring を含めるか"),
+        _bit("ui_builder.component_auto_registration", "/admin/ui-builder", "component auto registration を含めるか"),
+        _bit("ui_builder.canvas_nodes", "/admin/ui-builder", "canvas nodes を含めるか"),
+        _bit("ui_builder.catalog_component_nodes", "/admin/ui-builder", "catalog component nodes を含めるか"),
+        _bit("ui_builder.structural_html_nodes", "/admin/ui-builder", "structural html nodes を含めるか"),
+        _bit("ui_builder.parent_node_id", "/admin/ui-builder", "parent node id を含めるか"),
+        _bit("ui_builder.slot_key", "/admin/ui-builder", "slot key を含めるか"),
+        _bit("ui_builder.order_index", "/admin/ui-builder", "order index を含めるか"),
+        _bit("ui_builder.tmp_draft", "/admin/ui-builder", "tmp draft を含めるか"),
+        _bit("ui_builder.layout_patch_preview_validate_apply", "/admin/ui-builder", "layout patch preview/validate/apply を含めるか"),
+        _bit("ui_builder.component_style_design", "/admin/ui-builder", "component style design を含めるか"),
+        _bit("ui_builder.promoted_design_boundary", "/admin/ui-builder", "promoted design boundary を含めるか"),
+        _bit("manifests.hub", "/admin/manifests", "hub を含めるか"),
+        _bit("manifests.existing_hub", "/admin/manifests", "existing hub を含めるか"),
+        _bit("manifests.new_hub", "/admin/manifests", "new hub を含めるか"),
+        _bit("manifests.topology_manifest", "/admin/manifests", "topology manifest を含めるか"),
+        _bit("manifests.hub_relations", "/admin/manifests", "hub relations を含めるか"),
+        _bit("manifests.related_hub", "/admin/manifests", "related hub を含めるか"),
+        _bit("manifests.sequence_position", "/admin/manifests", "sequence position を含めるか"),
+        _bit("manifests.relation_config", "/admin/manifests", "relation config を含めるか"),
+        _bit("manifests.navigation", "/admin/manifests", "navigation を含めるか"),
+        _bit("manifests.page_group_continuity", "/admin/manifests", "page group continuity を含めるか"),
+        _bit("manifests.remote_relationship_target", "/admin/manifests", "remote relationship target を含めるか"),
+        _bit("runtime.dispatcher_mapping", "runtime-manifest-dispatch", "dispatcher mapping を含めるか"),
+        _bit("runtime.role", "runtime-manifest-dispatch", "role axis を含めるか"),
+        _bit("runtime.target", "runtime-manifest-dispatch", "target axis を含めるか"),
+        _bit("runtime.layer", "runtime-manifest-dispatch", "layer axis を含めるか"),
+        _bit("runtime.action", "runtime-manifest-dispatch", "action axis を含めるか"),
+        _bit("runtime.runtime_mapping", "runtime-manifest-dispatch", "runtime mapping を含めるか"),
+        _bit("runtime.runtime_destination", "runtime-manifest-dispatch", "runtime destination を含めるか"),
+        _bit("runtime.db_notify_projection_mapping", "runtime-manifest-dispatch", "db_notify projection mapping を含めるか"),
+        _bit("runtime.projection_constructor_mapping", "runtime-manifest-dispatch", "projection constructor mapping を含めるか"),
+        _bit("runtime.screen_data_shape", "runtime-manifest-dispatch", "screen data shape を含めるか"),
+        _bit("runtime.active_manifest_conflict", "runtime-manifest-dispatch", "active manifest conflict check を含めるか"),
+        _bit("runtime.fail_close_missing_manifest", "runtime-manifest-dispatch", "missing manifest fail-close を含めるか"),
+    ]
+    return [{"index": i, **bit} for i, bit in enumerate(raw_bits)]
+
+
+def topology_seed_question_schema():
+    return {
+        "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
+        "answer_format": "binary_array",
+        "bits": topology_seed_question_bits(),
+    }
+
+
+def _deep_merge(dst, src):
+    for key, value in src.items():
+        if isinstance(value, dict) and isinstance(dst.get(key), dict):
+            _deep_merge(dst[key], value)
+        elif isinstance(value, dict):
+            dst[key] = json.loads(json.dumps(value))
+        elif isinstance(value, list) and isinstance(dst.get(key), list):
+            if not dst[key]:
+                dst[key] = json.loads(json.dumps(value))
+        else:
+            dst[key] = json.loads(json.dumps(value))
+    return dst
+
+
+def _load_json_file(path_value: str):
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    with open(path, "r", encoding="utf-8") as f:
+        return path, json.load(f)
+
+
+def _bits_from_answers(answers):
+    if not isinstance(answers, dict) or "bits" not in answers:
+        raise ValueError("answers JSON must be an object with a bits array")
+    bits = answers["bits"]
+    if not isinstance(bits, list):
+        raise ValueError("answers.bits must be an array")
+    return bits
+
+
+def _parse_bits(bits_text: str):
+    try:
+        bits = json.loads(bits_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"--bits must be a JSON array: {exc}") from exc
+    if not isinstance(bits, list):
+        raise ValueError("--bits must be a JSON array")
+    return bits
+
+
+def _normalize_enabled_indexes(bits, schema_bits):
+    enabled = []
+    for idx, value in enumerate(bits):
+        if idx >= len(schema_bits):
+            raise ValueError(f"bits array has index outside schema: {idx}")
+        if value in (1, True, "1", "true", "True"):
+            enabled.append(idx)
+        elif value in (0, False, "0", "false", "False", None):
+            continue
+        else:
+            raise ValueError(f"bits[{idx}] must be 0 or 1")
+    return enabled
+
+
+def _build_tmp_template(bits):
+    schema_bits = topology_seed_question_bits()
+    enabled_indexes = _normalize_enabled_indexes(bits, schema_bits)
+    template = json.loads(json.dumps(TOPOLOGY_SEED_BASE_TEMPLATE))
+    enabled_keys = []
+    disabled_keys = []
+    for bit in schema_bits:
+        if bit["index"] in enabled_indexes:
+            enabled_keys.append(bit["key"])
+            _deep_merge(template, bit["json_fragment"])
+        else:
+            disabled_keys.append(bit["key"])
+    template["enabled_keys"] = enabled_keys
+    return enabled_keys, disabled_keys, template
 
 
 def topology_seed_discussion(argv: list[str]) -> int:
@@ -216,99 +420,71 @@ def topology_seed_discussion(argv: list[str]) -> int:
         return rejected
     parser = argparse.ArgumentParser(description="Read-only topology seed discussion JSON draft helper.")
     sub = parser.add_subparsers(dest="mode", required=True)
-    sub.add_parser("inspect", help="Emit seed discussion JSON templates from read-only repo observation.")
-    build_parser = sub.add_parser("build", help="Build candidate discussion JSON from answers JSON.")
-    build_parser.add_argument("--answers", required=True, help="Path to answers JSON to read; never modified.")
+    sub.add_parser("inspect", help="Emit admin UI question bit schema for seed discussion.")
+    template_parser = sub.add_parser("build-template", help="Merge enabled bit fragments into a tmp JSON template.")
+    template_source = template_parser.add_mutually_exclusive_group(required=True)
+    template_source.add_argument("--bits", help="JSON binary array, e.g. '[1,0,1]'.")
+    template_source.add_argument("--answers", help="Answers JSON file containing a bits array; read-only.")
+    build_parser = sub.add_parser("build", help="Build candidate discussion JSON from AI-filled tmp JSON.")
+    build_parser.add_argument("--answers", required=True, help="Path to AI-filled tmp JSON to read; never modified.")
     args = parser.parse_args(argv)
 
+    schema = topology_seed_question_schema()
     if args.mode == "inspect":
         return _json({
             "tool": "topology-seed-discussion",
             "mode": "inspect",
             "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
-            "observed_reference_files": [_file_observation(path) for path in TOPOLOGY_SEED_REFERENCE_FILES],
-            "manifest_template": {
-                "manifest_id": "discussion-only-placeholder",
-                "role": "<role-axis>",
-                "target": "<target-axis>",
-                "layer": "<layer-axis>",
-                "action": "<action-axis>",
-                "runtime_destination": "<registered-runtime-destination>",
-                "topology_entries": [],
-                "notes": "Draft only; not a manifest adoption decision and not written by this tool.",
+            "question_bit_schema": schema,
+            "answers_template": {
+                "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
+                "bits": [0 for _ in schema["bits"]],
+                "counts": {
+                    "total_bits": len(schema["bits"]),
+                    "admin_contents_bits": sum(1 for b in schema["bits"] if b["surface"] == "/admin/contents"),
+                    "admin_ui_builder_bits": sum(1 for b in schema["bits"] if b["surface"] == "/admin/ui-builder"),
+                    "admin_manifests_bits": sum(1 for b in schema["bits"] if b["surface"] == "/admin/manifests"),
+                },
+                "ids": {},
+                "notes": {},
             },
-            "seed_candidate_template": {
-                "candidate_id": "<discussion-candidate-id>",
-                "candidate_scope": "<what seed surface is being discussed>",
-                "source_files_considered": TOPOLOGY_SEED_REFERENCE_FILES,
-                "proposed_records": [],
-                "non_goals": [
-                    "Do not generate or save seed SQL from this tool.",
-                    "Do not reverse existing implementation into authority.",
-                ],
-            },
-            "ssot_link_template": {
-                "db_schema_refs": ["docs/design/db-schema.yaml"],
-                "runtime_refs": ["docs/design/runtime-orchestration-ssot.yaml", "docs/design/pipeline-continuity-ssot.yaml"],
-                "admin_refs": ["docs/design/admin-console-workflow-ssot.yaml"],
-                "proof_refs": ["docs/design/test-proof-manifest-ssot.yaml"],
-                "authority_note": "Links are discussion references only; output is not SSOT authority.",
-            },
-            "topology_axis_template": {
-                "hub": "<hub meaning space>",
-                "topology_manifest": "<manifest grouping>",
-                "physical_table": "<physical table binding if applicable>",
-                "runtime_axis": {"role": "<role>", "target": "<target>", "layer": "<layer>", "action": "<action>"},
-                "ui_axis": {"package": "<package>", "layout": "<layout>", "wiring": "<wiring>"},
-            },
-            "implementation_reference_template": {
-                "seed_runtime": "backend/runtime/SeedRuntime.cs",
-                "seed_json_repository": "backend/repository/SeedJsonRepository.cs",
-                "seed_import_apply_repository": "backend/repository/SeedImportApplyRepository.cs",
-                "manifest_repository": "backend/repository/ManifestRepository.cs",
-                "manifest_validator": "backend/repository/ManifestTopologyValidator.cs",
-                "manifest_dispatcher": "backend/runtime/ManifestDispatcher.cs",
-            },
-            "evidence_reference_template": {
-                "seed_files": ["db/seed_empty.sql", "db/demo_seed.sql"],
-                "schema_files": ["db/topology_tables.sql", "db/manifest_tables.sql"],
-                "does_not_prove": [
-                    "Seed presence alone does not prove runtime behavior.",
-                    "Discussion output does not prove proof completion.",
-                ],
-            },
-            "questions": [
-                "Which topology meaning space is the proposed seed candidate meant to discuss?",
-                "Which SSOT references constrain the candidate?",
-                "Which manifest axes are required before any adoption decision?",
-                "Which existing implementation files are reference-only context?",
-                "What remains unresolved before a human adoption decision or separate change?",
-            ],
         })
 
-    answers_path = Path(args.answers)
-    if not answers_path.is_absolute():
-        answers_path = Path.cwd() / answers_path
+    if args.mode == "build-template":
+        try:
+            bits = _parse_bits(args.bits) if args.bits is not None else _bits_from_answers(_load_json_file(args.answers)[1])
+            enabled_keys, disabled_keys, template = _build_tmp_template(bits)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            sys.stderr.write(f"FAIL: {exc}\n")
+            return 1
+        return _json({
+            "tool": "topology-seed-discussion",
+            "mode": "build-template",
+            "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
+            "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
+            "enabled_keys": enabled_keys,
+            "disabled_keys": disabled_keys,
+            "tmp_json_template": template,
+            "usage_note": "Caller may redirect stdout to /tmp/topology-seed-discussion.tmp.json. This tool does not write files.",
+        })
+
     try:
-        with open(answers_path, "r", encoding="utf-8") as f:
-            answers = json.load(f)
+        answers_path, tmp_json = _load_json_file(args.answers)
     except OSError as exc:
         sys.stderr.write(f"FAIL: cannot read answers JSON: {exc}\n")
         return 1
     except json.JSONDecodeError as exc:
         sys.stderr.write(f"FAIL: invalid answers JSON: {exc}\n")
         return 1
-
-    unresolved = []
-    if isinstance(answers, dict):
-        unresolved = [q for q in answers.get("unresolved_questions", []) if str(q).strip()]
-        candidate_input = answers.get("candidate_seed_json", answers.get("candidate", {}))
-        discussion_notes = answers.get("discussion_notes", [])
-    else:
-        candidate_input = {}
-        discussion_notes = []
-        unresolved = ["answers JSON root is not an object"]
-
+    if not isinstance(tmp_json, dict):
+        sys.stderr.write("FAIL: answers JSON root must be an object\n")
+        return 1
+    enabled_keys = tmp_json.get("enabled_keys", []) if isinstance(tmp_json.get("enabled_keys", []), list) else []
+    admin_contents = tmp_json.get("admin_contents", {}) if isinstance(tmp_json.get("admin_contents", {}), dict) else {}
+    admin_ui_builder = tmp_json.get("admin_ui_builder", {}) if isinstance(tmp_json.get("admin_ui_builder", {}), dict) else {}
+    admin_manifests = tmp_json.get("admin_manifests", {}) if isinstance(tmp_json.get("admin_manifests", {}), dict) else {}
+    runtime_manifest_dispatch = tmp_json.get("runtime_manifest_dispatch", {}) if isinstance(tmp_json.get("runtime_manifest_dispatch", {}), dict) else {}
+    unresolved = tmp_json.get("unresolved_questions", []) if isinstance(tmp_json.get("unresolved_questions", []), list) else []
     return _json({
         "tool": "topology-seed-discussion",
         "mode": "build",
@@ -316,16 +492,20 @@ def topology_seed_discussion(argv: list[str]) -> int:
         "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
         "discussion_result": {
             "status": "discussion_draft",
-            "notes": discussion_notes,
-            "not_authority": [
-                "Not SSOT authority.",
-                "Not seed adoption judgment.",
-                "Not proof completion.",
-                "Not implemented / partial / not_started evidence.",
-            ],
+            "enabled_keys": enabled_keys,
+            "admin_contents_candidate": admin_contents,
+            "admin_ui_builder_candidate": admin_ui_builder,
+            "admin_manifests_candidate": admin_manifests,
+            "runtime_manifest_dispatch_candidate": runtime_manifest_dispatch,
+            "unresolved_questions": unresolved,
         },
-        "candidate_seed_json": candidate_input,
-        "unresolved_questions": unresolved,
+        "candidate_seed_json": {
+            "discussion_only": True,
+            "admin_contents": admin_contents,
+            "admin_ui_builder": admin_ui_builder,
+            "admin_manifests": admin_manifests,
+            "runtime_manifest_dispatch": runtime_manifest_dispatch,
+        },
         "adoption_boundary": {
             "requires_separate_human_judgment_or_change": True,
             "this_tool_writes_seed_sql": False,
