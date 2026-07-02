@@ -44,6 +44,7 @@ Observes a repository directory surface and writes JSON to stdout.
 - Inputs: `--root <dir>` and optional `--depth <n>`.
 - Output: JSON array using the stable element shape from `.agent/scripts/emit-directory-tree-json.py`.
 - Implementation boundary: reuses `.agent/scripts/emit-directory-tree-json.py`; does not expose or forward `--output`.
+- Boundary: `--root` is normalized to a repo-relative path and validated to resolve inside the repository (including through symlinks) before being forwarded to the emitter; absolute paths, `../` escapes, and symlink escapes fail-close with a non-zero exit instead of walking outside the repo.
 
 Example:
 
@@ -87,7 +88,7 @@ Examples:
 Observes proof graph surfaces from `docs/design/test-proof-manifest-ssot.yaml` and reverse lookup data from `.agent/docs/test-bundles.yaml`.
 
 - Inputs: `--all`, `--proof-id <proof_id>`, `--bundle-id <bundle_id>`, or `--ssot <repo-relative-path>`.
-  - `--ssot <repo-relative-path>`: looks up proof entries whose `ssot_refs` or `missing_ssot_blocking` contains that exact path, so a target SSOT file (e.g. one found via `yaml-section-query`) resolves directly to its related proof/runner/test/bundle candidates.
+  - `--ssot <repo-relative-path>`: looks up proof entries related to a target SSOT/implementation path (e.g. one found via `yaml-section-query`), matching against `ssot_refs` (exact), `missing_ssot_blocking` (exact), `evidence_inputs` (exact), and `required_when.changed_files` (glob, e.g. `backend/**/*.cs`). Each returned entry includes `ssot_match_fields` listing which of those fields matched, so the match reason stays auditable.
 - Output: JSON object containing observed `proof_id`, runner surfaces, SSOT refs, test files, and `does_not_prove` fields.
 - Boundary: does not execute runners, judge proof completion, or claim implemented status. An empty `--ssot` match means no proof edge currently references that path — not that the SSOT is unproven or invalid.
 

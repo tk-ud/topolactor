@@ -793,4 +793,6 @@ required_content_terms:
     - "ambiguous_handling_failures"
     - "default_minimal_output_failures"
     - "removed_tool_failures"
+    - "path_escape_rejection_failures"
+    - "proof_ssot_lookup_failures"
     - "--self-test"

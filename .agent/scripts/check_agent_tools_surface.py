@@ -77,6 +77,16 @@ BASELINE_ARGS = {
 # repeated across many mapping[] entries, guaranteeing an ambiguous multi-hit.
 AMBIGUOUS_PROBE_ARGS = ["--file", ".agent/docs/ssot-map.yaml", "--section", "protocols"]
 
+# "../" is rejected by directory-map's own boundary check before it ever
+# reaches the emitter, regardless of what exists above the repo root.
+DIRECTORY_MAP_ESCAPE_PROBE_ARGS = ["--root", "../"]
+
+# backend/runtime/RuntimeExecutor.cs is not listed verbatim in any proof's
+# ssot_refs/missing_ssot_blocking/evidence_inputs; it only matches through the
+# required_when.changed_files glob (e.g. "backend/**/*.cs"), so this probe
+# fails if --ssot regresses to exact-field-only matching.
+PROOF_SURFACE_SSOT_PROBE_ARGS = ["--ssot", "backend/runtime/RuntimeExecutor.cs"]
+
 MUTATION_PROBE_ARGS = ["--output", "/tmp/check-agent-tools-surface-should-not-write.json"]
 
 THIN_WRAPPER_MAX_LINES = 10
@@ -188,6 +198,35 @@ def ambiguous_handling_failures(tool_name: str, result: dict) -> list[str]:
     candidates = result.get("candidates")
     if not isinstance(candidates, list) or len(candidates) < 2:
         failures.append(f"{tool_name}: ambiguous result must include at least 2 candidates")
+    return failures
+
+
+def path_escape_rejection_failures(tool_name: str, returncode: int, stdout: str, stderr: str) -> list[str]:
+    """Verifies a repo-escaping --root/--file argument is fail-closed rather
+    than silently walked (or silently returning empty as if it were valid)."""
+    failures = []
+    if returncode == 0:
+        failures.append(f"{tool_name}: path-escape probe was accepted (exit 0) instead of rejected")
+    combined = (stdout + stderr).lower()
+    if "outside" not in combined:
+        failures.append(f"{tool_name}: path-escape rejection does not explain the repo-boundary failure")
+    return failures
+
+
+def proof_ssot_lookup_failures(tool_name: str, result: dict) -> list[str]:
+    """Verifies --ssot lookup reaches beyond exact ssot_refs/missing_ssot_blocking
+    matching into a required_when.changed_files glob match."""
+    failures = []
+    if not isinstance(result, dict):
+        return [f"{tool_name}: --ssot probe output must be a JSON object"]
+    surfaces = result.get("proof_surfaces")
+    if not isinstance(surfaces, list) or not surfaces:
+        return [f"{tool_name}: --ssot probe expected at least one matched proof surface"]
+    if not any(
+        isinstance(entry, dict) and "required_when.changed_files" in entry.get("ssot_match_fields", [])
+        for entry in surfaces
+    ):
+        failures.append(f"{tool_name}: --ssot probe expected a required_when.changed_files glob match")
     return failures
 
 
@@ -326,6 +365,41 @@ def main() -> int:
                         if not amb_failures:
                             print(f"OK  [ambiguous] {name} returns candidates without a resolved value on a multi-hit --section query")
 
+        if name in ("directory-map", "yaml-section-query"):
+            escape_args = DIRECTORY_MAP_ESCAPE_PROBE_ARGS if name == "directory-map" else ["--file", "../etc/passwd"]
+            try:
+                escape_proc = subprocess.run(
+                    [str(entry), *escape_args], capture_output=True, text=True, cwd=REPO_ROOT, timeout=30
+                )
+            except OSError as exc:
+                failures.append(f"{name}: failed to execute path-escape probe: {exc}")
+            else:
+                escape_failures = path_escape_rejection_failures(name, escape_proc.returncode, escape_proc.stdout, escape_proc.stderr)
+                failures.extend(escape_failures)
+                if not escape_failures:
+                    print(f"OK  [boundary] {name} fail-closes a repo-escaping path argument")
+
+        if name == "proof-surface-map":
+            try:
+                ssot_proc = subprocess.run(
+                    [str(entry), *PROOF_SURFACE_SSOT_PROBE_ARGS], capture_output=True, text=True, cwd=REPO_ROOT, timeout=30
+                )
+            except OSError as exc:
+                failures.append(f"{name}: failed to execute --ssot probe: {exc}")
+            else:
+                if ssot_proc.returncode != 0:
+                    failures.append(f"{name}: --ssot probe failed (exit {ssot_proc.returncode}): {ssot_proc.stderr.strip()}")
+                else:
+                    try:
+                        ssot_result = json.loads(ssot_proc.stdout)
+                    except json.JSONDecodeError as exc:
+                        failures.append(f"{name}: --ssot probe did not emit valid JSON: {exc}")
+                    else:
+                        ssot_failures = proof_ssot_lookup_failures(name, ssot_result)
+                        failures.extend(ssot_failures)
+                        if not ssot_failures:
+                            print(f"OK  [ssot-lookup] {name} --ssot matches beyond exact ssot_refs via required_when.changed_files")
+
     print("")
     if failures:
         for msg in failures:
@@ -444,6 +518,30 @@ def _self_test() -> int:
 
     readme_mention_only = "> `ssot-map-query` was retired: use `yaml-section-query` instead.\n"
     expect("README mentioning retired tool in prose (no heading) must PASS", removed_tool_failures(clean_source, readme_mention_only) == [])
+
+    # path_escape_rejection_failures
+    expect(
+        "rejected path escape (exit!=0, mentions outside) must PASS",
+        path_escape_rejection_failures("t", 2, "", "FAIL: path_outside_repo: --root must resolve inside the repository: ../") == [],
+    )
+    expect(
+        "accepted path escape (exit 0) must FAIL",
+        len(path_escape_rejection_failures("t", 0, "[]", "")) >= 1,
+    )
+    expect(
+        "rejection without boundary explanation must FAIL",
+        len(path_escape_rejection_failures("t", 2, "", "FAIL: unknown option")) >= 1,
+    )
+
+    # proof_ssot_lookup_failures
+    glob_only_result = {"proof_surfaces": [{"proof_id": "x", "ssot_match_fields": ["required_when.changed_files"]}]}
+    expect("glob-only --ssot match must PASS", proof_ssot_lookup_failures("t", glob_only_result) == [])
+
+    empty_result = {"proof_surfaces": []}
+    expect("empty --ssot match must FAIL", len(proof_ssot_lookup_failures("t", empty_result)) >= 1)
+
+    exact_only_result = {"proof_surfaces": [{"proof_id": "x", "ssot_match_fields": ["ssot_refs"]}]}
+    expect("exact-only match without glob coverage must FAIL", len(proof_ssot_lookup_failures("t", exact_only_result)) >= 1)
 
     print(f"[self-test] {checks} assertions run, {len(problems)} failed")
     if problems:

@@ -6,6 +6,7 @@ Python3 stdlib only. These helpers emit JSON to stdout and do not write files.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import importlib.util
 import json
 import os
@@ -43,6 +44,34 @@ def _reject_mutation_args(argv: list[str]) -> int | None:
     return None
 
 
+class _PathError(Exception):
+    """Carries the explicit error taxonomy required by the section-query contract."""
+
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+
+
+def _resolve_repo_relative_root(root_arg: str) -> str:
+    """Validates --root (directory-map) stays within the repository and
+    returns the safe repo-relative root string to forward to the emitter.
+    Rejects absolute paths, "../" escapes, and symlink escapes with an
+    explicit fail-close instead of silently walking outside the repo."""
+    raw = Path(root_arg)
+    candidate = raw if raw.is_absolute() else (REPO_ROOT / raw)
+    try:
+        resolved = candidate.resolve(strict=False)
+    except OSError as exc:
+        raise _PathError("invalid_path", f"cannot resolve --root: {exc}") from exc
+    try:
+        rel = resolved.relative_to(REPO_ROOT)
+    except ValueError:
+        raise _PathError("path_outside_repo", f"--root must resolve inside the repository: {root_arg}")
+    rel_str = str(rel)
+    return "." if rel_str == "." else rel_str
+
+
 def directory_map(argv: list[str]) -> int:
     rejected = _reject_mutation_args(argv)
     if rejected is not None:
@@ -52,22 +81,19 @@ def directory_map(argv: list[str]) -> int:
     parser.add_argument("--depth", type=int, default=None)
     args = parser.parse_args(argv)
 
+    try:
+        safe_root = _resolve_repo_relative_root(args.root)
+    except _PathError as exc:
+        sys.stderr.write(f"FAIL: {exc.kind}: {exc.message}\n")
+        return 2
+
     emitter_path = SCRIPT_DIR / "emit-directory-tree-json.py"
     spec = importlib.util.spec_from_file_location("emit_directory_tree_json", emitter_path)
     mod = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(mod)
     # Reuse the emitter body without exposing its --output file-write option.
-    return mod.main(["--root", args.root, *( ["--depth", str(args.depth)] if args.depth is not None else [] )])
-
-
-class _PathError(Exception):
-    """Carries the explicit error taxonomy required by the section-query contract."""
-
-    def __init__(self, kind: str, message: str):
-        super().__init__(message)
-        self.kind = kind
-        self.message = message
+    return mod.main(["--root", safe_root, *( ["--depth", str(args.depth)] if args.depth is not None else [] )])
 
 
 def _kind_value(value) -> str:
@@ -367,7 +393,7 @@ def proof_surface_map(argv: list[str]) -> int:
     parser.add_argument("--all", action="store_true", help="Return all observed proof entries.")
     parser.add_argument("--proof-id", default=None, help="Filter by proof_id.")
     parser.add_argument("--bundle-id", default=None, help="Filter by reverse lookup bundle_id.")
-    parser.add_argument("--ssot", default=None, help="Filter by repo-relative SSOT path referenced in ssot_refs or missing_ssot_blocking.")
+    parser.add_argument("--ssot", default=None, help="Filter by repo-relative SSOT path referenced in ssot_refs, missing_ssot_blocking, evidence_inputs, or matched by a required_when.changed_files glob.")
     args = parser.parse_args(argv)
     if not args.all and not args.proof_id and not args.bundle_id and not args.ssot:
         args.all = True
@@ -397,11 +423,24 @@ def proof_surface_map(argv: list[str]) -> int:
             continue
         ssot_refs = yaml.arr(proof.get("ssot_refs"))
         missing_ssot_blocking = yaml.arr(proof.get("missing_ssot_blocking"))
+        evidence_inputs = yaml.arr(proof.get("evidence_inputs"))
+        required_when = proof.get("required_when") if isinstance(proof.get("required_when"), dict) else {}
+        changed_file_globs = yaml.arr(required_when.get("changed_files"))
+
+        ssot_match_fields: list[str] = []
         if normalized_ssot is not None:
-            candidate_paths = {str(r).lstrip("./") for r in (ssot_refs + missing_ssot_blocking)}
-            if normalized_ssot not in candidate_paths:
+            if normalized_ssot in {str(r).lstrip("./") for r in ssot_refs}:
+                ssot_match_fields.append("ssot_refs")
+            if normalized_ssot in {str(r).lstrip("./") for r in missing_ssot_blocking}:
+                ssot_match_fields.append("missing_ssot_blocking")
+            if normalized_ssot in {str(r).lstrip("./") for r in evidence_inputs}:
+                ssot_match_fields.append("evidence_inputs")
+            if any(fnmatch.fnmatch(normalized_ssot, str(pattern).lstrip("./")) for pattern in changed_file_globs):
+                ssot_match_fields.append("required_when.changed_files")
+            if not ssot_match_fields:
                 continue
-        observed.append({
+
+        entry = {
             "proof_id": pid,
             "proof_order": proof.get("proof_order"),
             "scope_phase": proof.get("scope_phase"),
@@ -412,11 +451,15 @@ def proof_surface_map(argv: list[str]) -> int:
             "implementation_files": yaml.arr(proof.get("implementation_files")),
             "test_files": yaml.arr(proof.get("test_files")),
             "runner_surfaces": yaml.arr(proof.get("runner_surfaces")),
-            "evidence_inputs": yaml.arr(proof.get("evidence_inputs")),
+            "evidence_inputs": evidence_inputs,
+            "required_when_changed_files": changed_file_globs,
             "workflow_jobs": yaml.arr(proof.get("workflow_jobs")),
             "does_not_prove": yaml.arr(proof.get("does_not_prove")),
             "reverse_lookup_bundles": bundle_by_proof.get(pid, []),
-        })
+        }
+        if normalized_ssot is not None:
+            entry["ssot_match_fields"] = ssot_match_fields
+        observed.append(entry)
     return _json({
         "tool": "proof-surface-map",
         "source_files": [manifest_source, bundles_source],

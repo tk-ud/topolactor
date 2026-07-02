@@ -110,7 +110,8 @@ reverse_lookup:
       - .agent/tools mutation-argument rejection (e.g. --output)
       - .agent/tools baseline output free of SSOT authority / proof completion / completion judgment / semantic audit judgment / implemented-partial-not_started status claims
       - yaml-section-query hierarchical YAML section/path observation over repo *.yaml files, with a canonical path selector, minimal default section listing, and ambiguous multi-hit --section handling that returns candidates instead of a silently-picked value; ssot-map-query is retired in favor of yaml-section-query --file .agent/docs/ssot-map.yaml and its removal (entrypoint file, dispatch target, README documentation) is gated
-      - proof-surface-map --ssot <repo-relative-path> looks up proof/runner/test/bundle candidates from a target SSOT path (matched against ssot_refs / missing_ssot_blocking)
+      - proof-surface-map --ssot <repo-relative-path> looks up proof/runner/test/bundle candidates from a target SSOT path (matched against ssot_refs / missing_ssot_blocking / evidence_inputs / required_when.changed_files glob, with per-entry ssot_match_fields)
+      - directory-map --root and yaml-section-query --file normalize to a repo-relative path and fail-close (non-zero exit, explicit boundary message) on absolute paths, "../" escapes, or symlink escapes instead of reading/walking outside the repository
     does_not_prove:
       - semantic correctness of any .agent/tools observation output content
       - SSOT authority, proof completion, or implementation status of any bundle observed through .agent/tools
