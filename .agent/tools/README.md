@@ -68,11 +68,29 @@ Example:
 .agent/tools/proof-surface-map --all
 ```
 
+
+### `topology-seed-discussion`
+
+Builds discussion-only JSON for topology seed candidate review. It does not generate seed SQL, write manifests, write SSOTs, connect to a DB/API, call an AI API, or make an adoption judgment.
+
+- Inputs: `inspect` or `build --answers <answers.json>`.
+- Output: JSON object containing either seed discussion templates (`inspect`) or candidate discussion JSON (`build`).
+- Boundary: output is a discussion draft only; it is not SSOT authority, seed adoption, proof completion, or implemented status evidence.
+
+Examples:
+
+```sh
+.agent/tools/topology-seed-discussion inspect
+.agent/tools/topology-seed-discussion build --answers /path/to/answers.json
+```
+
 ## Prohibited uses
 
 Do not use `.agent/tools` to:
 
 - write repository files or persistent artifacts;
+- write seed SQL, manifests, SSOTs, TODO, or roadmap files;
+- connect to a DB, external API, or AI API;
 - bypass `.agent/scripts` / `.agent/tests` gate implementations;
 - claim proof passed, completion, implemented, partial, or not_started status;
 - treat todo or roadmap text as proof;
