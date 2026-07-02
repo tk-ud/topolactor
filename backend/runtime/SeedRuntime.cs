@@ -20,7 +20,7 @@ public class SeedRuntime
 {
     private readonly ILogger<SeedRuntime> _logger;
     private readonly SeedJsonRepository _seedRepository;
-    private readonly SeedImportApplyRepository _seedImportApplyRepository;
+    private readonly ISeedImportApplyBoundary _seedImportApplyBoundary;
 
     private static readonly HashSet<string> AllowedRuntimeDestinations =
         new(StringComparer.OrdinalIgnoreCase)
@@ -32,11 +32,11 @@ public class SeedRuntime
     public SeedRuntime(
         ILogger<SeedRuntime> logger,
         SeedJsonRepository seedRepository,
-        SeedImportApplyRepository seedImportApplyRepository)
+        ISeedImportApplyBoundary seedImportApplyBoundary)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _seedRepository = seedRepository ?? throw new ArgumentNullException(nameof(seedRepository));
-        _seedImportApplyRepository = seedImportApplyRepository ?? throw new ArgumentNullException(nameof(seedImportApplyRepository));
+        _seedImportApplyBoundary = seedImportApplyBoundary ?? throw new ArgumentNullException(nameof(seedImportApplyBoundary));
     }
 
     public async Task<SeedSaveResult> SaveAsync(string json, CancellationToken ct = default)
@@ -199,7 +199,7 @@ public class SeedRuntime
                 ? destEl.GetString() ?? "topology_transform_runtime"
                 : "topology_transform_runtime";
 
-            var apply = await _seedImportApplyRepository.ApplyRuntimeDeclarationAsync(
+            var apply = await _seedImportApplyBoundary.ApplyRuntimeDeclarationAsync(
                 target,
                 layer,
                 action,

@@ -25,8 +25,9 @@ public class SeedRuntimeTopologySeedDiscussionTests
             using var builtDoc = JsonDocument.Parse(built);
             var seedCandidate = builtDoc.RootElement.GetProperty("seed_candidate_payload").GetRawText();
 
+            var apply = new RecordingSeedImportApplyBoundary(SeedImportApplyStatus.Inserted);
             using var workspace = new TempSeedWorkspace(seedCandidate, fromGeneratedJson: true);
-            var runtime = workspace.CreateRuntime();
+            var runtime = workspace.CreateRuntime(apply);
 
             var validation = await runtime.ValidateAsync();
             var preview = await runtime.PreviewAsync();
@@ -35,7 +36,9 @@ public class SeedRuntimeTopologySeedDiscussionTests
             Assert.True(validation.IsValid);
             Assert.True(preview.Success);
             Assert.True(import.Success);
-            Assert.Equal(0, import.ValidatedRuntimeCount);
+            Assert.True(import.ValidatedRuntimeCount > 0);
+            Assert.Single(apply.Calls);
+            Assert.Equal("topology_seed_discussion", apply.Calls[0].Target);
         }
         finally
         {
@@ -65,6 +68,71 @@ public class SeedRuntimeTopologySeedDiscussionTests
             if (File.Exists(invalidTmp)) File.Delete(invalidTmp);
         }
     }
+
+
+    [Fact]
+    public async Task Import_GeneratedNonEmptyRuntimeFixtureUsesApplyBoundaryWithoutLiveDb()
+    {
+        var apply = new RecordingSeedImportApplyBoundary(SeedImportApplyStatus.Inserted);
+        using var workspace = new TempSeedWorkspace("seedruntime-generated-nonempty-import.json");
+        var runtime = workspace.CreateRuntime(apply);
+
+        var validation = await runtime.ValidateAsync();
+        var preview = await runtime.PreviewAsync();
+        var import = await runtime.ImportAsync();
+
+        Assert.True(validation.IsValid);
+        Assert.True(preview.Success);
+        Assert.Equal(1, preview.Data!.RuntimeCount);
+        Assert.True(import.Success);
+        Assert.Equal(1, import.ValidatedRuntimeCount);
+        Assert.Single(apply.Calls);
+    }
+
+    [Fact]
+    public async Task Import_GeneratedNonEmptyRuntimeCandidateConflictFailsCloseWithoutLiveDb()
+    {
+        var buildTemplate = RunTool("build-template", "--answers", FixturePath("stage2-admin-contents.json"));
+        using var templateDoc = JsonDocument.Parse(buildTemplate);
+        var tmpTemplate = templateDoc.RootElement.GetProperty("tmp_json_template").GetRawText();
+        using var workspace = new TempSeedWorkspace(ExtractSeedCandidateFromBuild(tmpTemplate), fromGeneratedJson: true);
+        var runtime = workspace.CreateRuntime(new RecordingSeedImportApplyBoundary(
+            SeedImportApplyStatus.Conflict,
+            "conflicting active mapping from fake apply boundary"));
+
+        var import = await runtime.ImportAsync();
+
+        Assert.False(import.Success);
+        Assert.Contains(import.Errors, e => e.Code == "SEED_IMPORT_CONFLICTING_ACTIVE_MAPPING");
+    }
+
+    [Fact]
+    public async Task Validate_UnsupportedRuntimeDestinationFailsClose()
+    {
+        using var workspace = new TempSeedWorkspace("""
+            {
+              "version": 1,
+              "runtimes": [
+                {
+                  "name": "unsupported destination",
+                  "target": "topology_seed_discussion",
+                  "layer": "admin_contents_authoring",
+                  "action": "selected_ssot_elements",
+                  "runtimeDestination": "unsupported_destination"
+                }
+              ]
+            }
+            """, fromGeneratedJson: true);
+        var runtime = workspace.CreateRuntime(new RecordingSeedImportApplyBoundary(SeedImportApplyStatus.Inserted));
+
+        var validation = await runtime.ValidateAsync();
+        var import = await runtime.ImportAsync();
+
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Errors, e => e.Code == "SEED_RUNTIME_DESTINATION_UNKNOWN");
+        Assert.False(import.Success);
+    }
+
     [Fact]
     public async Task ValidateAndPreview_AcceptImportableEmptyRuntimeFixture()
     {
@@ -130,11 +198,13 @@ public class SeedRuntimeTopologySeedDiscussionTests
             File.WriteAllText(Path.Combine(_dir, "seed.json"), seedJson);
         }
 
-        public SeedRuntime CreateRuntime()
+        public SeedRuntime CreateRuntime(ISeedImportApplyBoundary? applyBoundary = null)
         {
             var seedRepository = new SeedJsonRepository(NullLogger<SeedJsonRepository>.Instance, _dir);
-            var applyRepository = new SeedImportApplyRepository("Host=127.0.0.1;Database=topolactor_seedruntime_test;Username=unused;Password=unused");
-            return new SeedRuntime(NullLogger<SeedRuntime>.Instance, seedRepository, applyRepository);
+            return new SeedRuntime(
+                NullLogger<SeedRuntime>.Instance,
+                seedRepository,
+                applyBoundary ?? new RecordingSeedImportApplyBoundary(SeedImportApplyStatus.Inserted));
         }
 
         public void Dispose()
@@ -146,6 +216,49 @@ public class SeedRuntimeTopologySeedDiscussionTests
 
     private static string FixturePath(string fixtureName)
         => Path.Combine(FindRepoRoot(), ".agent", "tests", "fixtures", "topology-seed-discussion", fixtureName);
+
+    private static string ExtractSeedCandidateFromBuild(string tmpTemplateJson)
+    {
+        var tmpAnswers = Path.Combine(Path.GetTempPath(), "topology-seed-discussion-" + Guid.NewGuid().ToString("N") + ".tmp.json");
+        File.WriteAllText(tmpAnswers, tmpTemplateJson);
+        try
+        {
+            var built = RunTool("build", "--answers", tmpAnswers);
+            using var builtDoc = JsonDocument.Parse(built);
+            return builtDoc.RootElement.GetProperty("seed_candidate_payload").GetRawText();
+        }
+        finally
+        {
+            if (File.Exists(tmpAnswers)) File.Delete(tmpAnswers);
+        }
+    }
+
+    private sealed class RecordingSeedImportApplyBoundary : ISeedImportApplyBoundary
+    {
+        private readonly SeedImportApplyStatus _status;
+        private readonly string? _message;
+
+        public RecordingSeedImportApplyBoundary(SeedImportApplyStatus status, string? message = null)
+        {
+            _status = status;
+            _message = message;
+        }
+
+        public List<ApplyCall> Calls { get; } = [];
+
+        public Task<SeedImportApplyResult> ApplyRuntimeDeclarationAsync(
+            string target,
+            string layer,
+            string action,
+            string runtimeDestination,
+            CancellationToken ct = default)
+        {
+            Calls.Add(new ApplyCall(target, layer, action, runtimeDestination));
+            return Task.FromResult(new SeedImportApplyResult(_status, _message));
+        }
+    }
+
+    private sealed record ApplyCall(string Target, string Layer, string Action, string RuntimeDestination);
 
     private static string RunTool(params string[] args)
     {

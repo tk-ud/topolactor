@@ -525,10 +525,22 @@ def _base_template(space: str):
 
 
 
+def _runtime_declarations_for_seed_candidate(space: str, enabled_keys: list[str]):
+    if not enabled_keys:
+        return []
+    return [{
+        "name": f"topology-seed-discussion:{space}:selected-ssot-elements",
+        "target": "topology_seed_discussion",
+        "layer": space,
+        "action": "selected_ssot_elements",
+        "runtimeDestination": "topology_transform_runtime",
+    }]
+
+
 def _empty_seed_candidate_payload(space: str, enabled_keys: list[str]):
     return {
         "version": 1,
-        "runtimes": [],
+        "runtimes": _runtime_declarations_for_seed_candidate(space, enabled_keys),
         "discussion_metadata": {
             "schema_id": TOPOLOGY_SEED_DISCUSSION_SCHEMA_ID,
             "question_space": space,
