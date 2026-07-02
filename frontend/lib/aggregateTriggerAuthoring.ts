@@ -55,8 +55,8 @@ export type AggregateTriggerTargetBindingPayload = {
 export type AggregateTriggerDefinitionPayload = {
   trigger_definition_id: string;
   trigger_source: {
-    canonical_trigger_kind: string;
-    trigger_source_detail_kind: string;
+    canonical_trigger_kind: typeof canonicalTriggerKinds[number];
+    trigger_source_detail_kind: typeof triggerSourceDetailKinds[number];
   };
   processing_function_scope: {
     function_id: string;
@@ -74,17 +74,17 @@ export type AggregateTriggerDefinitionPayload = {
     minimum_trial_count: number;
     ratio_numerator_field: string;
     ratio_denominator_field: string;
-    comparison_operator: string;
+    comparison_operator: typeof comparisonOperatorAllowedValues[number];
     target_ratio: number;
   };
   materialization_target_binding: AggregateTriggerTargetBindingPayload;
   materialization_payload_map: Array<{
     target_field: string;
-    source: string;
+    source: typeof materializationPayloadMapAllowedSources[number];
     source_field?: string;
     constant_value?: unknown;
   }>;
-  approval_policy: string;
+  approval_policy: typeof approvalPolicyAllowedValues[number];
   evidence_policy?: string;
 };
 
@@ -94,9 +94,22 @@ export function aggregateTriggerTargetOptions(
 ): StepTarget[] {
   return [...step2LogicalEntityDefinitions, ...step25RelationDefinitions]
     .filter((target) =>
-      target.targetSource === "step2_logical_entity_definition" ||
-      target.targetSource === "step2_5_relation_definition"
+      (target.targetSource === "step2_logical_entity_definition" ||
+        target.targetSource === "step2_5_relation_definition") &&
+      target.targetId.trim().length > 0
     );
+}
+
+export function aggregateTriggerTargetKey(target: StepTarget): string {
+  return `${target.targetSource}:${target.targetId}`;
+}
+
+export function aggregateTriggerTargetFromKey(
+  targets: StepTarget[],
+  key: string,
+): StepTarget | null {
+  return targets.find((target) => aggregateTriggerTargetKey(target) === key) ??
+    null;
 }
 
 function toTargetBinding(
@@ -107,8 +120,8 @@ function toTargetBinding(
 
 export function buildAggregateTriggerDefinition(input: {
   triggerDefinitionId: string;
-  canonicalTriggerKind: string;
-  triggerSourceDetailKind: string;
+  canonicalTriggerKind: typeof canonicalTriggerKinds[number];
+  triggerSourceDetailKind: typeof triggerSourceDetailKinds[number];
   aggregateTargetBinding: StepTarget;
   materializationTargetBinding: StepTarget;
   functionId: string;
@@ -150,8 +163,8 @@ export function buildAggregateTriggerDefinition(input: {
 }
 
 export function previewAggregateTriggerDefinition(input: {
-  canonicalTriggerKind: string;
-  triggerSourceDetailKind: string;
+  canonicalTriggerKind: typeof canonicalTriggerKinds[number];
+  triggerSourceDetailKind: typeof triggerSourceDetailKinds[number];
   aggregateTargetBinding: StepTarget;
   materializationTargetBinding: StepTarget;
 }) {

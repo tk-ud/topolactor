@@ -675,21 +675,25 @@ chronological_scope_index:
       - live browser click simulation against deployed admin route
       - unknown props global policy beyond existing projection constructor schema checks
 
-  - proof_id: admin_contents_workflow_ui_assurance_substrate_contract
+  - proof_id: admin_workflow_ui_assurance_substrate_contract
     proof_order: 135
-    scope_phase: admin_contents_workflow_ui_assurance
+    scope_phase: admin_workflow_ui_assurance
     domain: frontend
     proof_type: executable_test_proof
-    source_contract: admin contents Step2 / Step2.5 / Step3 structured authoring boundary
-    target_contract: route/island/component connection and UI-formed payload contract
+    source_contract: admin contents / ui-builder / manifests workflow surfaces
+    target_contract: rendered route wrapper + workflow body + UI-derived payload contract
     ssot_refs:
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/pipeline-continuity-ssot.yaml
     implementation_files:
       - frontend/routes/admin/contents.tsx
+      - frontend/routes/admin/ui-builder.tsx
+      - frontend/routes/admin/manifests.tsx
       - frontend/islands/ContentsAdmin.tsx
       - frontend/islands/ContentsScreenDesignPanel.tsx
+      - frontend/islands/UiBuilderAdmin.tsx
+      - frontend/islands/ManifestsAdmin.tsx
       - frontend/components/AggregateTriggerAuthoringPanel.tsx
       - frontend/lib/aggregateTriggerAuthoring.ts
       - frontend/lib/contentsAssign.ts
@@ -706,6 +710,8 @@ chronological_scope_index:
       changed_files:
         - frontend/routes/admin/**
         - frontend/islands/Contents*.tsx
+        - frontend/islands/UiBuilderAdmin.tsx
+        - frontend/islands/ManifestsAdmin.tsx
         - frontend/components/AggregateTriggerAuthoringPanel.tsx
         - frontend/lib/aggregateTriggerAuthoring.ts
         - frontend/tests/uiAssuranceSubstrate.test.tsx
@@ -714,14 +720,15 @@ chronological_scope_index:
       - frontend_projection_expression_contract
     unblocks: []
     proves:
-      - admin contents route mounts the contents workflow island tree
-      - Step3 workflow UI imports and renders the reusable UI assurance component marker instead of helper-only proof
-      - aggregate trigger initial application exposes structured selectors, structured preview, and UI-formed payload matching backend AggregateTriggerContracts field names
-      - Step3 selectors are formed from saved Step2 logical entity and Step2.5 relation targets supplied to the workflow harness
-      - scheduler_event, raw_sql, CASE, WHERE, arbitrary SQL/table-expression vocabulary are not selectable or emitted by the UI-authored payload where tests assert it
-      - frontend preview remains structured-authoring only and does not claim threshold/materialization/approval final judgment
+      - /admin/contents, /admin/ui-builder, and /admin/manifests route wrappers render through the admin auth-gated route shell and their workflow body components render route-specific workflow markers in executable render tests
+      - contents workflow substrate verifies Step2 logical entity and Step2.5 relation candidates feed Step3 aggregate trigger target choices and Step3 assign payload
+      - aggregate trigger Step3 UI selection changes canonical trigger kind, source detail kind, aggregate target, materialization target, structured preview, and emitted assign payload
+      - ui-builder payload substrate verifies layout patch and manifest package target references remain frontend projection/client-trigger payloads without runtime_destination or forbidden SQL vocabulary where tests assert it
+      - manifests payload substrate verifies hub navigation admin client command shape remains client-triggered and does not carry role/runtime authority fields where tests assert it
+      - scheduler_event, raw_sql, CASE, WHERE, arbitrary SQL/table-expression vocabulary, undefined-target, undefined-manifest, and undefined-binding are excluded from asserted UI payloads
     does_not_prove:
       - live browser automation against a deployed admin route
+      - complete interaction coverage for every ui-builder control or manifests child control
       - live PostgreSQL application proof for aggregate trigger tables and repository statements
       - AdminRuntime persistence route beyond carrying aggregateTriggerDefinitions inside the Step3 screen-data-shape payload
       - cron/hook/client scheduler-to-manifest DB route
@@ -773,7 +780,7 @@ aggregate_trigger_substrate_known_gaps:
       - backend_runtime_function_contract
     unblocks:
       - aggregate-trigger-substrate-implementation
-    known_gap_reason: Partial implementation and local contract tests now exist for the backend runtime, validator, repository fixed SQL templates, DB DDL, frontend structured authoring helper, idempotent event append, atomic aggregate upsert, threshold evaluation, controlled materialization, and duplicate guard. This known gap remains open because those local contract proofs and the initial Admin contents Step3 UI assurance proof do not yet constitute full executable proof across live PostgreSQL application, AdminRuntime definition persistence, cron/hook/client scheduler-to-manifest DB routing, and end-to-end event -> aggregate -> threshold -> materialization execution.
+    known_gap_reason: Partial implementation and local contract tests now exist for the backend runtime, validator, repository fixed SQL templates, DB DDL, frontend structured authoring helper, idempotent event append, atomic aggregate upsert, threshold evaluation, controlled materialization, and duplicate guard. This known gap remains open because those local contract proofs and the admin workflow UI assurance substrate do not yet constitute full executable proof across live PostgreSQL application, AdminRuntime definition persistence, cron/hook/client scheduler-to-manifest DB routing, and end-to-end event -> aggregate -> threshold -> materialization execution.
     proves: []
     does_not_prove:
       - live PostgreSQL application proof for runtime_orchestration aggregate trigger tables and repository statements

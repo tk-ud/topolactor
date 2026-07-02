@@ -1,7 +1,9 @@
 import { JSX } from "preact";
-import { useEffect } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import {
   type AggregateTriggerDefinitionPayload,
+  aggregateTriggerTargetFromKey,
+  aggregateTriggerTargetKey,
   aggregateTriggerTargetOptions,
   approvalPolicyAllowedValues,
   buildAggregateTriggerDefinition,
@@ -20,24 +22,49 @@ type Props = {
   onPayloadChange?: (payload: AggregateTriggerDefinitionPayload[]) => void;
 };
 
-const FIRST = 0;
-
 export default function AggregateTriggerAuthoringPanel({
   step2LogicalEntityDefinitions,
   step25RelationDefinitions,
   onPayloadChange,
 }: Props): JSX.Element {
-  const targets = aggregateTriggerTargetOptions(
-    step2LogicalEntityDefinitions,
-    step25RelationDefinitions,
+  const targets = useMemo(
+    () =>
+      aggregateTriggerTargetOptions(
+        step2LogicalEntityDefinitions,
+        step25RelationDefinitions,
+      ),
+    [step2LogicalEntityDefinitions, step25RelationDefinitions],
   );
-  const aggregateTarget = targets[FIRST];
-  const materializationTarget = targets[1] ?? targets[FIRST];
+  const defaultAggregateKey = targets[0]
+    ? aggregateTriggerTargetKey(targets[0])
+    : "";
+  const defaultMaterializationKey = targets[1]
+    ? aggregateTriggerTargetKey(targets[1])
+    : defaultAggregateKey;
+  const [canonicalTriggerKind, setCanonicalTriggerKind] = useState<
+    typeof canonicalTriggerKinds[number]
+  >("client");
+  const [triggerSourceDetailKind, setTriggerSourceDetailKind] = useState<
+    typeof triggerSourceDetailKinds[number]
+  >("client_operation_event");
+  const [aggregateTargetKey, setAggregateTargetKey] = useState(
+    defaultAggregateKey,
+  );
+  const [materializationTargetKey, setMaterializationTargetKey] = useState(
+    defaultMaterializationKey,
+  );
+
+  const aggregateTarget =
+    aggregateTriggerTargetFromKey(targets, aggregateTargetKey) ?? targets[0] ??
+      null;
+  const materializationTarget =
+    aggregateTriggerTargetFromKey(targets, materializationTargetKey) ??
+      targets[1] ?? targets[0] ?? null;
   const payload = aggregateTarget && materializationTarget
     ? [buildAggregateTriggerDefinition({
       triggerDefinitionId: "00000000-0000-0000-0000-000000000001",
-      canonicalTriggerKind: "client",
-      triggerSourceDetailKind: "client_operation_event",
+      canonicalTriggerKind,
+      triggerSourceDetailKind,
       aggregateTargetBinding: aggregateTarget,
       materializationTargetBinding: materializationTarget,
       operationDefinitionId: "contents_step3_operation",
@@ -62,6 +89,7 @@ export default function AggregateTriggerAuthoringPanel({
       ],
     })]
     : [];
+
   useEffect(() => {
     onPayloadChange?.(payload);
   }, [JSON.stringify(payload)]);
@@ -81,13 +109,33 @@ export default function AggregateTriggerAuthoringPanel({
         judgment は backend runtime authority です。
       </p>
 
+      {targets.length === 0 && (
+        <p
+          class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-amber-900"
+          role="alert"
+        >
+          Step2 logical entity または Step2.5 relation
+          の保存済み対象がないため、aggregate trigger payload は作成されません。
+        </p>
+      )}
+
       <div class="mt-3 grid gap-2 sm:grid-cols-2">
         <label class="block">
           canonical trigger kind
           <select
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
             aria-label="aggregate canonical trigger kind"
-            value="client"
+            value={canonicalTriggerKind}
+            onInput={(e) =>
+              setCanonicalTriggerKind(
+                (e.target as HTMLSelectElement)
+                  .value as typeof canonicalTriggerKinds[number],
+              )}
+            onChange={(e) =>
+              setCanonicalTriggerKind(
+                (e.target as HTMLSelectElement)
+                  .value as typeof canonicalTriggerKinds[number],
+              )}
           >
             {canonicalTriggerKinds.map((kind) => (
               <option key={kind} value={kind}>{kind}</option>
@@ -99,7 +147,17 @@ export default function AggregateTriggerAuthoringPanel({
           <select
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
             aria-label="aggregate trigger source detail kind"
-            value="client_operation_event"
+            value={triggerSourceDetailKind}
+            onInput={(e) =>
+              setTriggerSourceDetailKind(
+                (e.target as HTMLSelectElement)
+                  .value as typeof triggerSourceDetailKinds[number],
+              )}
+            onChange={(e) =>
+              setTriggerSourceDetailKind(
+                (e.target as HTMLSelectElement)
+                  .value as typeof triggerSourceDetailKinds[number],
+              )}
           >
             {triggerSourceDetailKinds.map((kind) => (
               <option key={kind} value={kind}>{kind}</option>
@@ -112,13 +170,17 @@ export default function AggregateTriggerAuthoringPanel({
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
             aria-label="aggregate target binding"
             value={aggregateTarget
-              ? `${aggregateTarget.targetSource}:${aggregateTarget.targetId}`
+              ? aggregateTriggerTargetKey(aggregateTarget)
               : ""}
+            onInput={(e) =>
+              setAggregateTargetKey((e.target as HTMLSelectElement).value)}
+            onChange={(e) =>
+              setAggregateTargetKey((e.target as HTMLSelectElement).value)}
           >
             {targets.map((target) => (
               <option
-                key={`${target.targetSource}:${target.targetId}`}
-                value={`${target.targetSource}:${target.targetId}`}
+                key={aggregateTriggerTargetKey(target)}
+                value={aggregateTriggerTargetKey(target)}
               >
                 {target.label}
               </option>
@@ -131,13 +193,17 @@ export default function AggregateTriggerAuthoringPanel({
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
             aria-label="aggregate materialization target binding"
             value={materializationTarget
-              ? `${materializationTarget.targetSource}:${materializationTarget.targetId}`
+              ? aggregateTriggerTargetKey(materializationTarget)
               : ""}
+            onChange={(e) =>
+              setMaterializationTargetKey(
+                (e.target as HTMLSelectElement).value,
+              )}
           >
             {targets.map((target) => (
               <option
-                key={`${target.targetSource}:${target.targetId}`}
-                value={`${target.targetSource}:${target.targetId}`}
+                key={aggregateTriggerTargetKey(target)}
+                value={aggregateTriggerTargetKey(target)}
               >
                 {target.label}
               </option>
