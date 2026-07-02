@@ -35,12 +35,6 @@ fail() {
 # Implemented in check-default-entity-search.sh (dotnet + deno) running in the
 # default-entity-search.yml workflow. This check confirms the script is present.
 
-echo ""
-echo "=== [pipeline.body] data-driven vertical slice: default:entity:search ==="
-echo "    Body test: .agent/tests/check-default-entity-search.sh (default-entity-search.yml)"
-echo "    Fixture:   EndpointRequestDto{target=default,layer=entity,action=Search}"
-echo "    Verifies:  structureMapId / packageId / schemaId / componentIds survive full dispatch"
-
 BODY_SCRIPT="$SCRIPT_DIR/check-default-entity-search.sh"
 if [ -f "$BODY_SCRIPT" ]; then
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -132,9 +126,6 @@ fi
 # Allowed count and exceptions defined in:
 #   docs/design/pipeline-continuity-ssot.yaml hardcode_guard.checks.target_dispatch_branching
 
-echo ""
-echo "=== [pipeline.hardcode_guard] dispatcher bypass and hardcode detection ==="
-
 RUNTIME_EXEC="$REPO_ROOT/backend/runtime/RuntimeExecutor.cs"
 
 if [ ! -f "$RUNTIME_EXEC" ]; then
@@ -182,8 +173,6 @@ fi
 # Not failures — these enumerate nodes that are not yet implemented.
 # To implement a node: add file to SSOT files[], update status, add pipeline body test.
 
-echo ""
-
 # frontend_component_event_log_lane minimal gate: presence/CI registration/SSOT references only
 if ! grep -q "frontend_component_event_log_lane" "$SSOT"; then
   fail "[pipeline.component_event_lane] lane definition missing"
@@ -203,9 +192,6 @@ fi
 # Each lane audits a specific SSOT contract boundary (not execution semantics).
 # Defined in docs/system-roadmap.yaml: system_ci.dotnet_ssot_wiring_audit_tests.
 # Tests must exist in the dotnet test project to satisfy the completion conditions.
-
-echo ""
-echo "=== [ssot.wiring_audit] SSOT wiring audit CI lane presence check ==="
 
 TEST_DIR="$REPO_ROOT/backend/tests/Topolactor.Runtime.Tests"
 
@@ -240,20 +226,15 @@ else
   fail "[ssot.wiring_audit] docs/system-roadmap.yaml not found"
 fi
 
-echo "=== [pipeline.gap_status] known gaps (from pipeline-continuity-ssot.yaml) ==="
 if [ -f "$SSOT" ]; then
-  sed -n '/^  gap_summary:/,$ { /^ *- "/ p }' "$SSOT" \
-    | sed 's/^ *- "//;s/"$//' \
-    | while IFS= read -r line; do
-        echo "GAP  $line"
-      done
+  GAP_COUNT="$(sed -n '/^  gap_summary:/,$ { /^ *- "/ p }' "$SSOT" | wc -l | tr -d '[:space:]')"
 else
+  GAP_COUNT=0
   fail "[pipeline.gap_status] pipeline-continuity-ssot.yaml not found"
 fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
-echo ""
 if [ "$FAILURES" -gt 0 ]; then
   echo "=== $FAILURES pipeline continuity failure(s) ===" >&2
   exit 1
