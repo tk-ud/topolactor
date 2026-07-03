@@ -12,7 +12,7 @@
 - Do not implement before the relevant SSOT, wiring, and test/proof surface are defined.
 - Do not treat `docs/system-roadmap.yaml` or `.agent/tasks/todo.md` as the authoritative source for implementation state. Read actual code and related tests to determine current state; roadmap and todo are dynamic reference points subject to constant change.
 - Do not treat `.agent/tools` output as SSOT authority, proof completion, completion judgment, semantic audit judgment, or implemented / partial / not_started status evidence by itself.
-- Do not use `.agent/tools` for repository mutation; `.agent/tools` is an Agent-facing read-only repo observation surface, while `.agent/scripts` owns CI / gate / helper implementation bodies.
+- Do not use ordinary `.agent/tools` observation flow to mutate Topolactor product/runtime/source implementation surfaces. Tool/governance-side writes are allowed only when the applicable SSOT and task scope explicitly require them.
 
 ## Minimal Workflow Invariant
 
@@ -41,7 +41,8 @@ Rules:
 - Reuse existing tools before adding a new tool.
 - Add a new tool only when existing tools cannot express the required SSOT contract or workflow boundary.
 - Tool output is still not SSOT authority, proof completion, semantic completion, or implemented / partial / not_started judgment by itself.
-- Ordinary `.agent/tools` use must preserve the repository mutation boundary.
+- Ordinary observation tool use must not mutate Topolactor product/runtime/source implementation surfaces.
+- Tool-side and governance-side writes, such as Agent UI evidence files or tool-owned state, require explicit SSOT/task scope and must stay inside that boundary.
 
 READ_ENTRY environment trigger note:
 - When the executing agent is Claude Code on the web / remote execution environment, READ_ENTRY includes reading `.agent/protocols/claude.md` as a condition-triggered environment prerequisite.
