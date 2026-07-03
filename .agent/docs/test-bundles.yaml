@@ -40,7 +40,7 @@ reverse_lookup:
       - aggregate_trigger_substrate_live_db_executable_proof
       - aggregate_trigger_substrate_step3_dynamic_authoring_proof
       - aggregate_trigger_substrate_processing_function_authority_proof
-      - aggregate_trigger_substrate_executable_proof_gap
+      - aggregate_trigger_substrate_step3_processing_function_selector_proof
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
       - .agent/tests/check-unified-test-gate.sh
@@ -104,18 +104,20 @@ reverse_lookup:
     does_not_prove:
       - instance settings topology, primitive authority, runtime instance selection, or execution authority enforcement
 
-  - bundle_id: aggregate_trigger_substrate_known_gap
-    roadmap_bundle_refs:
-      - aggregate-trigger-substrate
+  - bundle_id: aggregate_trigger_substrate_contract
     proof_refs:
       - aggregate_trigger_substrate_live_db_executable_proof
       - aggregate_trigger_substrate_step3_dynamic_authoring_proof
       - aggregate_trigger_substrate_processing_function_authority_proof
-      - aggregate_trigger_substrate_executable_proof_gap
+      - aggregate_trigger_substrate_step3_processing_function_selector_proof
     runner_surfaces:
+      - .agent/tests/check-backend-tests.sh
+      - .agent/tests/check-frontend-all-tests.sh
       - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - a frontend admin/contents Step3 live dropdown selector that lists registered topology.abstract_function_manifests rows for function_id selection; no admin listing operation for that registry exists yet (backend registry authority -- fail-close validation of function_id against the registry and backend derivation of operation_definition_id from topologySystemName -- is closed, see aggregate_trigger_substrate_processing_function_authority_proof; live PostgreSQL, AdminRuntime persistence, scheduler-to-manifest DB routing, and Step3 structured authoring for conflict_key_fields/delta_map/threshold_policy/materialization_payload_map proofs are also closed, see aggregate_trigger_substrate_live_db_executable_proof and aggregate_trigger_substrate_step3_dynamic_authoring_proof)
+      - full-text search or pagination over the abstract_function_manifests registry selector
+      - live browser automation against a deployed admin route
+      - a dedicated autonomous cron/hook scheduling loop that resolves trigger_definition_id from runtime_orchestration.aggregate_trigger_definitions on a schedule; trigger origination remains the responsibility of the processing function / operation definition that owns scope
 
   - bundle_id: agent-tools-proof-and-structure-gate
     roadmap_bundle_refs:

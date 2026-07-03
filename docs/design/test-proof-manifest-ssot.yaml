@@ -776,7 +776,7 @@ chronological_scope_index:
       - cron/hook/client scheduler-to-manifest DB route (see aggregate_trigger_substrate_live_db_executable_proof)
       - full event -> aggregate -> threshold -> materialization execution (see aggregate_trigger_substrate_live_db_executable_proof)
       - admin/contents Step3 UI authoring for conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map (see aggregate_trigger_substrate_step3_dynamic_authoring_proof)
-      - admin/contents Step3 UI selector that lists registered processing-function options for interactive selection; backend registry authority and operation_definition_id derivation are proven separately (see aggregate_trigger_substrate_processing_function_authority_proof), and the remaining frontend selector-UX gap is tracked in aggregate_trigger_substrate_executable_proof_gap known_gap
+      - admin/contents Step3 UI selector that lists registered processing-function options for interactive selection (see aggregate_trigger_substrate_step3_processing_function_selector_proof); backend registry authority and operation_definition_id derivation are proven separately (see aggregate_trigger_substrate_processing_function_authority_proof)
 
   - proof_id: aggregate_trigger_substrate_live_db_executable_proof
     proof_order: 136
@@ -835,7 +835,7 @@ chronological_scope_index:
       - representative event -> aggregate -> threshold -> materialization scenarios (threshold_not_satisfied, materialized, duplicate_event_evidence, duplicate_materialization_guard, approval_required then granted) execute against a live database across the runtime, repository, and DB boundaries
     does_not_prove:
       - admin/contents Step3 UI authoring for conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map (see aggregate_trigger_substrate_step3_dynamic_authoring_proof)
-      - admin/contents Step3 UI selector that lists registered processing-function options for interactive selection; backend registry authority and operation_definition_id derivation are proven separately (see aggregate_trigger_substrate_processing_function_authority_proof), and the remaining frontend selector-UX gap is tracked in aggregate_trigger_substrate_executable_proof_gap known_gap
+      - admin/contents Step3 UI selector that lists registered processing-function options for interactive selection (see aggregate_trigger_substrate_step3_processing_function_selector_proof); backend registry authority and operation_definition_id derivation are proven separately (see aggregate_trigger_substrate_processing_function_authority_proof)
       - a dedicated autonomous cron/hook scheduling loop that resolves trigger_definition_id from runtime_orchestration.aggregate_trigger_definitions on a schedule; trigger origination remains the responsibility of the processing function / operation definition that owns scope per aggregate_trigger_substrate_contract.authority_boundary
 
   - proof_id: aggregate_trigger_substrate_step3_dynamic_authoring_proof
@@ -881,7 +881,7 @@ chronological_scope_index:
       - the panel does not emit a payload until conflict_key_fields and materialization_payload_map each have at least one entry, and rejects unsafe identifiers client-side before backend validation ever sees them
       - processing_function_scope.function_id / operation_definition_id are authored via safe-identifier-validated structured text input rather than hardcoded constants; backend AggregateTriggerDefinitionValidator remains the authority that rejects invalid values
     does_not_prove:
-      - selection of function_id/operation_definition_id from a bounded processing-function registry via a live dropdown fed by an admin registry-listing operation (see aggregate_trigger_substrate_processing_function_authority_proof for the backend registry that now exists, and aggregate_trigger_substrate_executable_proof_gap known_gap for the remaining frontend selector UX gap)
+      - selection of function_id/operation_definition_id from a bounded processing-function registry via a live dropdown fed by an admin registry-listing operation (see aggregate_trigger_substrate_step3_processing_function_selector_proof)
       - live browser automation against a deployed admin route
 
   - proof_id: aggregate_trigger_substrate_processing_function_authority_proof
@@ -929,7 +929,60 @@ chronological_scope_index:
       - AggregateTriggerRuntime invokes this authority check before appending event evidence when an IAbstractFunctionManifestRepository is wired (the production route via RuntimeTimelineScheduler -> ManifestDispatcher does wire it), and the four cron/hook/client scenario tests in AggregateTriggerSubstrateRouteLiveDbTests now seed a valid registry row and exercise this check end to end rather than skipping it
       - AdminRuntime.assign_screen_data_shape derives processing_function_scope.operation_definition_id from the manifest's topologySystemName and overrides any client-submitted value before validation and persistence, and rejects assignment with AGGREGATE_PROCESSING_FUNCTION_NOT_FOUND (persisting nothing) when function_id is not a registered abstract function
     does_not_prove:
-      - a frontend admin/contents Step3 selector that lists registered abstract_function_manifests rows for interactive selection; the Step3 function_id input remains a safe-identifier-validated free-text field validated by this backend authority check (see aggregate_trigger_substrate_executable_proof_gap known_gap)
+      - a frontend admin/contents Step3 selector that lists registered abstract_function_manifests rows for interactive selection (see aggregate_trigger_substrate_step3_processing_function_selector_proof)
+
+  - proof_id: aggregate_trigger_substrate_step3_processing_function_selector_proof
+    proof_order: 139
+    scope_phase: aggregate_trigger_substrate_step3_processing_function_selector
+    domain: frontend_backend
+    proof_type: executable_test_proof
+    source_contract: docs/design/admin-console-workflow-ssot.yaml aggregate_trigger_step3_extension_contract
+    target_contract: admin/contents Step3 processing_function_scope.function_id selection (select_processing_function_or_operation_definition) from a bounded topology.abstract_function_manifests registry listing
+    ssot_refs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/abstract-function-primitive-registry-ssot.yaml
+    implementation_files:
+      - backend/runtime/AbstractFunctionRuntime.cs
+      - backend/repository/NpgsqlAbstractFunctionManifestRepository.cs
+      - backend/runtime/AdminRuntime.cs
+      - backend/schema/ManifestManagementContracts.cs
+      - frontend/api/adminApi.ts
+      - frontend/components/AggregateTriggerAuthoringPanel.tsx
+      - frontend/islands/ContentsScreenDesignPanel.tsx
+    test_files:
+      - backend/tests/Topolactor.Integration.Tests/AggregateTriggerProcessingFunctionCandidateListLiveDbTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
+      - frontend/tests/uiAssuranceSubstrate.test.tsx
+    runner_surfaces:
+      - .agent/tests/check-backend-tests.sh
+      - .agent/tests/check-frontend-all-tests.sh
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs: []
+    workflow_jobs:
+      - .github/workflows/backend-tests.yml::backend-tests
+      - .github/workflows/unified-test-gate.yml::test-gate
+    required_when:
+      changed_files:
+        - backend/repository/NpgsqlAbstractFunctionManifestRepository.cs
+        - backend/runtime/AdminRuntime.cs
+        - frontend/api/adminApi.ts
+        - frontend/components/AggregateTriggerAuthoringPanel.tsx
+        - frontend/islands/ContentsScreenDesignPanel.tsx
+    depends_on:
+      - aggregate_trigger_substrate_processing_function_authority_proof
+      - admin_workflow_ui_assurance_substrate_contract
+    unblocks: []
+    proves:
+      - NpgsqlAbstractFunctionManifestRepository.ListActiveByRuntimeLaneAsync queries topology.abstract_function_manifests live, filtering to runtime_lane=aggregate_trigger_runtime and active=true, excluding inactive and other-lane rows (verified against a live database, including a negative check that inactive/other-lane function_keys never appear)
+      - AdminRuntime exposes this registry as the read-only admin action manifest:list_aggregate_trigger_processing_functions, returning empty (not an error) when no abstract-function-manifest repository is wired
+      - admin/contents Step3's function_id is a <select> populated only from this registry response, not a free-text <input>; the option list excludes inactive candidates and the selected value always resolves to one of the registered candidates
+      - when no candidates are registered, the selector is disabled, resolves to an empty value, and the panel never emits an aggregate trigger payload with a fabricated or empty function_id
+      - selection here remains projection only -- AggregateTriggerDefinitionValidator.ValidateProcessingFunctionAuthorityAsync (aggregate_trigger_substrate_processing_function_authority_proof) is unchanged and remains the sole backend authority over function_id at assign_screen_data_shape time
+    does_not_prove:
+      - full-text search or pagination over the abstract_function_manifests registry; the selector lists the entire active/runtime_lane-filtered result set, which is expected to remain small
+      - live browser automation against a deployed admin route
 
 maintenance_rules:
   - Add or update a proof_id before claiming a new proof boundary.
@@ -938,59 +991,3 @@ maintenance_rules:
   - Known gaps and missing SSOTs MUST NOT be mixed into implemented proof edges.
   - Known gaps MUST be connected to unfinished todo Bundles through todo_bundle_refs and .agent/tasks/todo.md evidence_inputs; a reason-only known_gap is invalid.
   - CI gates MUST run manifest integrity checks and MUST NOT claim proof completion from fixed test lists alone.
-
-aggregate_trigger_substrate_known_gaps:
-  - proof_id: aggregate_trigger_substrate_executable_proof_gap
-    proof_order: 140
-    scope_phase: aggregate_trigger_substrate_processing_function_registry
-    domain: frontend
-    proof_type: known_gap
-    source_contract: docs/design/admin-console-workflow-ssot.yaml aggregate_trigger_step3_extension_contract
-    target_contract: admin/contents Step3 processing_function_scope selection (select_processing_function_or_operation_definition)
-    ssot_refs:
-      - docs/design/runtime-orchestration-ssot.yaml
-      - docs/design/admin-console-workflow-ssot.yaml
-      - docs/design/db-schema.yaml
-      - docs/design/abstract-function-primitive-registry-ssot.yaml
-    implementation_files:
-      - frontend/components/AggregateTriggerAuthoringPanel.tsx
-      - frontend/lib/aggregateTriggerAuthoring.ts
-    test_files: []
-    runner_surfaces:
-      - .agent/tests/check-test-proof-manifest-integrity.sh
-    evidence_inputs:
-      - .agent/tasks/todo.md
-    todo_bundle_refs:
-      - aggregate-trigger-substrate
-    workflow_jobs: []
-    required_when:
-      changed_files:
-        - docs/design/admin-console-workflow-ssot.yaml
-        - frontend/components/AggregateTriggerAuthoringPanel.tsx
-        - frontend/lib/aggregateTriggerAuthoring.ts
-    depends_on:
-      - db_schema_seed_contract
-      - backend_runtime_function_contract
-    unblocks: []
-    known_gap_reason: >-
-      Backend runtime/validator/repository, live PostgreSQL application, the aggregate upsert +
-      materialization evidence append single-transaction boundary, AdminRuntime canonical
-      definition persistence with full processing_function_scope round-trip
-      (runtime_orchestration.aggregate_trigger_definitions), cron/hook/client
-      scheduler-to-manifest-dispatcher-to-runtime route proofs (see
-      aggregate_trigger_substrate_live_db_executable_proof), and Step3 structured authoring for
-      conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map (see
-      aggregate_trigger_substrate_step3_dynamic_authoring_proof) are now closed. This known gap
-      remains open narrowly because admin/contents Step3
-      (AggregateTriggerAuthoringPanel.tsx function_id / operation_definition_id inputs) authors
-      processing_function_scope.function_id and .operation_definition_id as
-      safe-identifier-validated free text rather than a selection from a bounded
-      processing-function registry, because no such registry surface exists yet anywhere in this
-      codebase (there is no processing-function or operation-definition catalog table/admin
-      screen to select from). Backend AggregateTriggerDefinitionValidator remains the validation
-      authority over these two fields regardless. This gap should be closed if/when a
-      processing-function registry is introduced elsewhere in the system; until then, inventing a
-      registry solely for this selector would fabricate authority data that does not exist.
-    proves: []
-    does_not_prove:
-      - admin/contents Step3 selection of processing_function_scope.function_id / operation_definition_id from a bounded processing-function registry (no such registry exists in this codebase)

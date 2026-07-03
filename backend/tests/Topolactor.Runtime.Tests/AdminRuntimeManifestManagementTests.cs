@@ -869,7 +869,8 @@ public class AdminRuntimeManifestManagementTests
     private static AdminRuntime CreateRuntime(
         InMemoryManifestAdminRepository manifestRepo,
         EnumDictionaryRepository? enumRepo = null,
-        AggregateTriggerRepository? aggregateTriggerRepo = null)
+        AggregateTriggerRepository? aggregateTriggerRepo = null,
+        IAbstractFunctionManifestRepository? abstractFunctionRepo = null)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "Host=localhost");
         var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
@@ -893,7 +894,51 @@ public class AdminRuntimeManifestManagementTests
             null,
             topoRepo,
             enumRepo,
-            aggregateTriggerRepository: aggregateTriggerRepo);
+            aggregateTriggerRepository: aggregateTriggerRepo,
+            abstractFunctionManifestRepository: abstractFunctionRepo);
+    }
+
+    private sealed class FakeAbstractFunctionManifestCandidateRepository(
+        IReadOnlyList<AbstractFunctionManifestCandidate> candidates) : IAbstractFunctionManifestRepository
+    {
+        public Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default) =>
+            throw new NotSupportedException("not used by the candidate-listing tests");
+
+        public Task<IReadOnlyList<AbstractFunctionManifestCandidate>> ListActiveByRuntimeLaneAsync(string runtimeLane, CancellationToken ct = default) =>
+            Task.FromResult(candidates);
+    }
+
+    [Fact]
+    public async Task ListAggregateTriggerProcessingFunctions_ReturnsRegistryBackedCandidates()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var candidates = new List<AbstractFunctionManifestCandidate>
+        {
+            new("registered_function", "orders", true, 2),
+        };
+        var runtime = CreateRuntime(repo, abstractFunctionRepo: new FakeAbstractFunctionManifestCandidateRepository(candidates));
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "list_aggregate_trigger_processing_functions", null, "admin", null, null));
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.Contains("registered_function", data!.Value.GetRawText());
+        Assert.Contains("orders", data.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task ListAggregateTriggerProcessingFunctions_NoRepositoryWired_ReturnsEmptyListNotError()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var runtime = CreateRuntime(repo);
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "list_aggregate_trigger_processing_functions", null, "admin", null, null));
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.Equal("[]", data!.Value.GetRawText());
     }
 }
 

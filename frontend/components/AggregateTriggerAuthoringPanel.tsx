@@ -1,5 +1,6 @@
 import { JSX } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
+import type { AggregateTriggerProcessingFunctionCandidate } from "../api/adminApi.ts";
 import {
   type AggregateTriggerDefinitionPayload,
   aggregateTriggerTargetFromKey,
@@ -21,6 +22,13 @@ type Props = {
   step2LogicalEntityDefinitions: StepTarget[];
   step25RelationDefinitions: StepTarget[];
   topologySystemName?: string;
+  /**
+   * processing_function_scope.function_id selector candidates from
+   * topology.abstract_function_manifests (runtime_lane=aggregate_trigger_runtime, active only).
+   * Selection here is projection only; backend AggregateTriggerDefinitionValidator remains the
+   * sole authority over function_id at assign_screen_data_shape time.
+   */
+  processingFunctionCandidates?: AggregateTriggerProcessingFunctionCandidate[];
   onPayloadChange?: (payload: AggregateTriggerDefinitionPayload[]) => void;
 };
 
@@ -42,8 +50,12 @@ export default function AggregateTriggerAuthoringPanel({
   step2LogicalEntityDefinitions,
   step25RelationDefinitions,
   topologySystemName,
+  processingFunctionCandidates,
   onPayloadChange,
 }: Props): JSX.Element {
+  const activeFunctionCandidates = (processingFunctionCandidates ?? []).filter((c) =>
+    c.active
+  );
   const targets = useMemo(
     () =>
       aggregateTriggerTargetOptions(
@@ -98,9 +110,7 @@ export default function AggregateTriggerAuthoringPanel({
   const [materializationTargetKey, setMaterializationTargetKey] = useState(
     defaultMaterializationKey,
   );
-  const [functionId, setFunctionId] = useState(
-    "aggregate_trigger_authoring_function",
-  );
+  const [functionId, setFunctionId] = useState("");
   // operation_definition_id is not authored here: AdminRuntime.assign_screen_data_shape
   // derives it from the manifest's topologySystemName (admin/contents Step1) and overrides
   // any submitted value, per runtime-orchestration-ssot.yaml
@@ -216,6 +226,15 @@ export default function AggregateTriggerAuthoringPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(deltaMapFieldNames)]);
+
+  // function_id must always resolve to a currently-registered candidate (or be empty when
+  // none are available); never retain a stale/unregistered value across a candidate list change.
+  useEffect(() => {
+    if (!activeFunctionCandidates.some((c) => c.functionKey === functionId)) {
+      setFunctionId(activeFunctionCandidates[0]?.functionKey ?? "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFunctionCandidates.map((c) => c.functionKey).join("|")]);
 
   const toggleConflictKeyField = (field: string) => {
     setConflictKeyFields((prev) =>
@@ -460,15 +479,34 @@ export default function AggregateTriggerAuthoringPanel({
         </label>
         <label class="block">
           processing_function_scope.function_id
-          <input
+          <select
             class={`mt-1 w-full rounded border px-2 py-1 font-mono ${
               functionIdValid ? "" : "border-red-400"
             }`}
             aria-label="aggregate processing function id"
+            disabled={activeFunctionCandidates.length === 0}
             value={functionId}
             onInput={(e) =>
-              setFunctionId((e.target as HTMLInputElement).value)}
-          />
+              setFunctionId((e.target as HTMLSelectElement).value)}
+            onChange={(e) =>
+              setFunctionId((e.target as HTMLSelectElement).value)}
+          >
+            {activeFunctionCandidates.length === 0 && (
+              <option value="">
+                （登録済み processing function がありません）
+              </option>
+            )}
+            {activeFunctionCandidates.map((candidate) => (
+              <option key={candidate.functionKey} value={candidate.functionKey}>
+                {candidate.functionKey}
+              </option>
+            ))}
+          </select>
+          <p class="mt-1 text-xs text-slate-500">
+            topology.abstract_function_manifests(runtime_lane=aggregate_trigger_runtime,
+            active のみ)から選択します。backend が
+            missing/inactive/runtime_lane/authority_scope 不一致を fail-close で検証します。
+          </p>
         </label>
         <label class="block">
           processing_function_scope.operation_definition_id

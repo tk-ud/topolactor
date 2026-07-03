@@ -123,6 +123,18 @@ public record AdminManifestListRelationshipRemoteTargetsRequestDto(
     [property: JsonPropertyName("excludeManifestId")] string? ExcludeManifestId
 );
 
+/// <summary>
+/// Registered abstract_function_manifests candidate for admin authoring selectors that must choose
+/// a function_key by runtime_lane (e.g. aggregate_trigger_substrate_contract.processing_function_scope)
+/// rather than accept frontend free text as authority.
+/// </summary>
+public record AdminAggregateTriggerProcessingFunctionCandidateDto(
+    [property: JsonPropertyName("functionKey")] string FunctionKey,
+    [property: JsonPropertyName("authorityScope")] string AuthorityScope,
+    [property: JsonPropertyName("active")] bool Active,
+    [property: JsonPropertyName("activeStepCount")] int ActiveStepCount
+);
+
 public record AdminManifestOperationEntityBindingDto(
     [property: JsonPropertyName("operationKind")] string OperationKind,
     [property: JsonPropertyName("entityTargetColumn")] string? EntityTargetColumn,

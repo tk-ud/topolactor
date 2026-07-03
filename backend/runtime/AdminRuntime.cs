@@ -294,6 +294,7 @@ public partial class AdminRuntime
             "manifest:assign_screen_data_shape"           => await DataManifestAssignScreenDataShapeAsync(vector, ct),
             "manifest:list_screen_read_query_wiring"      => await DataManifestListScreenReadQueryWiringAsync(vector, ct),
             "manifest:list_relationship_remote_targets"   => await DataManifestListRelationshipRemoteTargetsAsync(vector, ct),
+            "manifest:list_aggregate_trigger_processing_functions" => await DataManifestListAggregateTriggerProcessingFunctionsAsync(ct),
             "enum_dictionary:list_groups"                 => await DataEnumDictionaryListGroupsAsync(ct),
             "enum_dictionary:get_group"                   => await DataEnumDictionaryGetGroupAsync(vector, ct),
             "enum_dictionary:create_group"                => await DataEnumDictionaryCreateGroupAsync(vector, ct),
@@ -3386,6 +3387,27 @@ public partial class AdminRuntime
         }
 
         return (JsonSerializer.SerializeToElement(targets), null);
+    }
+
+    /// <summary>
+    /// admin/contents Step3 processing_function_scope.function_id selector candidates: active
+    /// topology.abstract_function_manifests rows registered for aggregate_trigger_runtime. This is a
+    /// projection of the registry AggregateTriggerDefinitionValidator.ValidateProcessingFunctionAuthorityAsync
+    /// validates against; frontend selection from this list is not itself authority, backend validation
+    /// remains the sole authority at assign_screen_data_shape time.
+    /// </summary>
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestListAggregateTriggerProcessingFunctionsAsync(CancellationToken ct)
+    {
+        if (_abstractFunctionManifestRepository is null)
+            return (JsonSerializer.SerializeToElement(Array.Empty<AdminAggregateTriggerProcessingFunctionCandidateDto>()), null);
+
+        var candidates = await _abstractFunctionManifestRepository.ListActiveByRuntimeLaneAsync(
+            AggregateTriggerVocabulary.RuntimeDestination, ct);
+
+        var dtos = candidates.Select(c => new AdminAggregateTriggerProcessingFunctionCandidateDto(
+            c.FunctionKey, c.AuthorityScope, c.Active, c.ActiveStepCount)).ToList();
+
+        return (JsonSerializer.SerializeToElement(dtos), null);
     }
 
     private async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> RefreshManifestDispatcherFromExtensionsAsync(
