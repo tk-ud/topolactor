@@ -26,7 +26,7 @@ Canonical route:
 - `tasks/`: unresolved work queue.
 - `tmp/`: temporary artifacts only.
 - `skills/`: task procedures.
-- `tools/`: Agent-facing tool entrypoints. Existing observation tools are read-only over repository/product surfaces. Tool-side or governance-side writes require explicit SSOT/task scope and must not touch Topolactor product/runtime/source implementation surfaces during ordinary tool use.
+- `tools/`: Agent-facing read-only repo observation entrypoints. Tools may expose thin wrappers over `.agent/scripts`, but they must not mutate repository state, own proof authority, or make semantic completion / implemented / partial judgments.
 - `scripts/`: CI / gate / helper implementation bodies. Scripts may provide reusable structured-processing bodies for tools, but `.agent/scripts` is not the Agent-facing convenience-command surface.
 
 ## Boundary Notes
