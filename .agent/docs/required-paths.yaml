@@ -777,8 +777,11 @@ required_content_terms:
     - "check-agent-tools-surface.sh"
     - "required-paths.yaml"
   .agent/tools/README.md:
-    - "read-only repository observation surface"
-    - "must not mutate repository files"
+    - "Agent-facing repository tool surface"
+    - "Existing observation tools"
+    - "Tool-side or governance-side writes are different"
+    - "applicable SSOT and task scope explicitly require it"
+    - "ordinary mutation of Topolactor product/runtime/source implementation surfaces"
     - "Tool output is observation data only"
     - "SSOT authority."
     - "proof completion evidence by itself."
