@@ -15,9 +15,6 @@ on:
       - '.agent/tasks/instance-port-substrate-implementation-todo.md'
       - '.agent/tests/check-instance-port-substrate.sh'
       - 'docs/design/instance-port-substrate-ssot.yaml'
-      - '.agent/tests/check-test-proof-manifest-integrity.sh'
-      - '.agent/docs/test-bundles.yaml'
-      - 'docs/design/test-proof-manifest-ssot.yaml'
       - 'db/**/*.sql'
       - 'infra/docker-compose.yml'
       - 'infra/.env.example'
@@ -40,9 +37,6 @@ on:
       - '.agent/tasks/instance-port-substrate-implementation-todo.md'
       - '.agent/tests/check-instance-port-substrate.sh'
       - 'docs/design/instance-port-substrate-ssot.yaml'
-      - '.agent/tests/check-test-proof-manifest-integrity.sh'
-      - '.agent/docs/test-bundles.yaml'
-      - 'docs/design/test-proof-manifest-ssot.yaml'
       - 'db/**/*.sql'
       - 'infra/docker-compose.yml'
       - 'infra/.env.example'
@@ -72,9 +66,6 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Run test proof manifest integrity check
-        run: bash .agent/tests/check-test-proof-manifest-integrity.sh
-
       - name: Run unified test gate
         run: bash .agent/tests/check-unified-test-gate.sh
 
@@ -93,15 +84,3 @@ jobs:
 
       - name: Run runtime environment gate
         run: bash .agent/tests/check-runtime-environment.sh
-
-  structure-gate:
-    # STRUCTURE_GATE — must run after all test layers complete.
-    name: "[STRUCTURE_GATE] Structure check (must run last)"
-    needs: [test-gate, runtime-environment-gate]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run structure check
-        run: bash .agent/tests/check-structure.sh

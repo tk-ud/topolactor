@@ -4,11 +4,29 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
 PASS_COUNT=0
+VERBOSE="${CHECK_VERBOSE:-0}"
 fail(){ echo "FAIL: $1" >&2; FAILURES=$((FAILURES+1)); }
-pass(){ echo "OK  : $1"; }
+pass(){ PASS_COUNT=$((PASS_COUNT+1)); if [ "$VERBOSE" = "1" ]; then echo "OK  : $1"; fi; }
 check_term(){ local f="$REPO_ROOT/$1" t="$2"; grep -qF -- "$t" "$f" && pass "$1 -> $t" || fail "$1 missing: $t"; }
+run_quiet_subcheck(){
+  local script="$1" tmp code
+  tmp="$(mktemp)"
+  set +e
+  CHECK_VERBOSE="$VERBOSE" bash "$REPO_ROOT/$script" >"$tmp" 2>&1
+  code=$?
+  set -e
+  if [ "$code" -eq 0 ]; then
+    PASS_COUNT=$((PASS_COUNT+1))
+    if [ "$VERBOSE" = "1" ]; then cat "$tmp"; fi
+  else
+    echo "FAIL subcheck script=$script exit=$code" >&2
+    cat "$tmp" >&2
+    FAILURES=$((FAILURES+1))
+  fi
+  rm -f "$tmp"
+}
 
-echo "=== Completion Judgment Invariant/Vocabulary Guard Check ==="
+if [ "$VERBOSE" = "1" ]; then echo "=== Completion Judgment Invariant/Vocabulary Guard Check ==="; fi
 
 check_term ".agent/rules/rule.md" "Workflow Order Invariant"
 check_term ".agent/rules/rule.md" "JUDGMENT"
@@ -83,8 +101,13 @@ check_term ".agent/prompt/audit.md" "- todo_granularity_judgment"
 check_term ".agent/prompt/implementation-change.md" "scope, implementation delta, protocol decisions, todo_granularity_judgment, check results"
 
 if [ "$FAILURES" -eq 0 ]; then
-  bash "$REPO_ROOT/.agent/tests/check-abstract-function-completion-alignment.sh"
-  echo "PASS check-completion-judgment.sh assertions=${PASS_COUNT}"
+  run_quiet_subcheck ".agent/tests/check-abstract-function-completion-alignment.sh"
+  if [ "$FAILURES" -eq 0 ]; then
+    echo "PASS check-completion-judgment.sh assertions=${PASS_COUNT}"
+  else
+    echo "=== $FAILURES completion judgment subcheck(s) failed ===" >&2
+    exit 1
+  fi
   exit 0
 else
   echo "=== $FAILURES completion judgment check(s) failed ===" >&2

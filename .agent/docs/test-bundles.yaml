@@ -84,14 +84,14 @@ reverse_lookup:
 
   - bundle_id: external_intake_bundle_gate
     roadmap_bundle_refs:
-      - future-external-bundle-gate
+      - product.external_optional_surface_bundle_gate
     proof_refs:
       - external_intake_surface_contract
       - external_bundle_specific_proofs_gap
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - Notion/Sheets/Slack/GitHub/Webhook/REST connector behavior until gap proof edges are replaced by executable proofs
+      - Notion/Sheets/Slack/GitHub/Webhook/REST connector behavior; optional external connector surfaces remain design-boundary/non-proof scope until connector-specific executable proofs exist
 
   - bundle_id: instance_substrate_gate
     proof_refs:

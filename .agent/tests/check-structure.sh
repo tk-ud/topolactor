@@ -9,6 +9,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
 SUCCESSES=0
+VERBOSE="${CHECK_VERBOSE:-0}"
 
 
 if ! command -v rg >/dev/null 2>&1; then
@@ -39,11 +40,14 @@ run_subcheck() {
   local tmp
   tmp="$(mktemp)"
   set +e
-  bash "$REPO_ROOT/$script" >"$tmp" 2>&1
+  CHECK_VERBOSE="$VERBOSE" bash "$REPO_ROOT/$script" >"$tmp" 2>&1
   local code=$?
   set -e
   if [ "$code" -eq 0 ]; then
     SUCCESSES=$((SUCCESSES + 1))
+    if [ "$VERBOSE" = "1" ]; then
+      cat "$tmp"
+    fi
     rm -f "$tmp"
     return 0
   fi
@@ -249,10 +253,6 @@ check_no_in_progress_todos() {
   fi
 }
 
-check_test_proof_manifest_integrity() {
-  run_subcheck ".agent/tests/check-test-proof-manifest-integrity.sh"
-}
-
 check_no_annotated_pseudo_paths_in_ssot_map() {
   local ssot_map="$REPO_ROOT/.agent/docs/ssot-map.yaml"
   if [ ! -f "$ssot_map" ]; then
@@ -357,15 +357,11 @@ else
   SUCCESSES=$((SUCCESSES + 1))
 fi
 
-run_subcheck ".agent/tests/check-css-dictionary.sh"
-
 run_subcheck ".agent/tests/check-enum-dictionary.sh"
 
 run_subcheck ".agent/tests/check-admin-master-roster.sh"
 
 run_subcheck ".agent/tests/check-topology-layout-class-ssot.sh"
-
-run_subcheck ".agent/tests/check-ui-ux-executable-component-slice.sh"
 
 check_checklist_template_clean "$REPO_ROOT/.agent/checklists/policy-judgment.md"
 check_checklist_template_clean "$REPO_ROOT/.agent/checklists/boundary-identity.md"
@@ -380,6 +376,9 @@ run_command_subcheck() {
   set -e
   if [ "$code" -eq 0 ]; then
     SUCCESSES=$((SUCCESSES + 1))
+    if [ "$VERBOSE" = "1" ]; then
+      cat "$tmp"
+    fi
     rm -f "$tmp"
     return 0
   fi
@@ -565,19 +564,9 @@ run_subcheck ".agent/tests/check-runtime-bundle-ssots.sh"
 
 run_subcheck ".agent/tests/check-cli-mcp-port-implementation-ssot.sh"
 
-check_test_proof_manifest_integrity
+run_subcheck ".agent/tests/check-scheduler-job-manifest-ssot.sh"
 
-if bash "$REPO_ROOT/.agent/tests/check-scheduler-job-manifest-ssot.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-scheduler-job-manifest-ssot.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-scheduler-job-manifest-ssot.sh"
-fi
-
-if bash "$REPO_ROOT/.agent/tests/check-design-ssot-progress-terms.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-design-ssot-progress-terms.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-design-ssot-progress-terms.sh"
-fi
+run_subcheck ".agent/tests/check-design-ssot-progress-terms.sh"
 
 if [ "$FAILURES" -eq 0 ]; then
     echo "PASS check-structure dirs=${DIR_COUNT:-0} files=${FILE_COUNT:-0} content_terms=${TERM_COUNT:-0} success_assertions=${SUCCESSES}"

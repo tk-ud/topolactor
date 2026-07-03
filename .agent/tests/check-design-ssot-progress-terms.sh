@@ -11,6 +11,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
+PASS_COUNT=0
+VERBOSE="${CHECK_VERBOSE:-0}"
 
 fail() {
   echo "FAIL: $1" >&2
@@ -26,7 +28,10 @@ check_absent() {
   if grep -qF -- "$term" "$file"; then
     fail "Progress term found in $1: \"$term\""
   else
-    echo "OK  [absent] $1 ∌ \"$term\""
+    PASS_COUNT=$((PASS_COUNT + 1))
+    if [ "$VERBOSE" = "1" ]; then
+      echo "OK  [absent] $1 excludes \"$term\""
+    fi
   fi
 }
 
@@ -81,8 +86,10 @@ AGENT_SSOTS=(
   ".agent/docs/structure-map.yaml"
 )
 
-echo ""
-echo "=== Design SSOTs: no progress management terms ==="
+if [ "$VERBOSE" = "1" ]; then
+  echo ""
+  echo "=== Design SSOTs: no progress management terms ==="
+fi
 
 for f in "${DESIGN_SSOTS[@]}"; do
   for term in "${FORBIDDEN_PROGRESS_TERMS[@]}"; do
@@ -90,8 +97,10 @@ for f in "${DESIGN_SSOTS[@]}"; do
   done
 done
 
-echo ""
-echo "=== Agent SSOT docs: no progress management terms ==="
+if [ "$VERBOSE" = "1" ]; then
+  echo ""
+  echo "=== Agent SSOT docs: no progress management terms ==="
+fi
 
 for f in "${AGENT_SSOTS[@]}"; do
   for term in "${FORBIDDEN_PROGRESS_TERMS[@]}"; do
@@ -99,8 +108,10 @@ for f in "${AGENT_SSOTS[@]}"; do
   done
 done
 
-echo ""
-echo "=== Design SSOTs: no duplicate YAML keys ==="
+if [ "$VERBOSE" = "1" ]; then
+  echo ""
+  echo "=== Design SSOTs: no duplicate YAML keys ==="
+fi
 
 check_no_duplicate_keys() {
   local file="$REPO_ROOT/$1"
@@ -152,7 +163,10 @@ check_no_duplicate_keys() {
     END { if (dup != "") print dup; else print "OK" }
   ' "$file")
   if [[ "$result" == OK ]]; then
-    echo "OK  [no-dup-keys] $1"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    if [ "$VERBOSE" = "1" ]; then
+      echo "OK  [no-dup-keys] $1"
+    fi
   else
     fail "Duplicate YAML key in $1: $result"
   fi
@@ -162,9 +176,9 @@ for f in "${DESIGN_SSOTS[@]}"; do
   check_no_duplicate_keys "$f"
 done
 
-echo ""
+if [ "$VERBOSE" = "1" ]; then echo ""; fi
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== check-design-ssot-progress-terms.sh: all checks passed ==="
+  echo "PASS check-design-ssot-progress-terms.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo "=== check-design-ssot-progress-terms.sh: $FAILURES check(s) failed ===" >&2
