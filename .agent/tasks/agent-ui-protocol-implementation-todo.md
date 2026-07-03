@@ -46,7 +46,7 @@ tool は以下を満たす。
 3. tool出力は必要最低限にし、実行log垂れ流しを禁止する。
 4. prompt/protocol全文を無制限に出さず、worktype prompt と指定SSOT sectionのみ出す。
 5. `docs/governance/logs/tool.log` は compact one-line evidence log とし、checklist本文やscenario-contract本文は保存しない。
-6. tool は source mutation をしない。ただし usage log append はSSOT上の明示例外として扱う。
+6. read-only は Topolactor本体の application/runtime/product source 観測面に適用する。`.agent/tools` 自身、tool用test、governance-tool SSOT、tool.log はこのBundleのscope内で更新してよい。
 7. local test flow は worktype別test → checklist interview → check → pass の順にする。
 
 ### 対応資料
@@ -92,6 +92,8 @@ tool は以下を満たす。
 
 既存 `.agent/tasks/todo.md` は触らない。
 
+Topolactor本体の application/runtime/product source は通常使用時に tool が変更しないこと。
+
 ### 対象関数名 / コマンド名候補
 
 - `main`
@@ -133,6 +135,7 @@ Bundle単位で処理する。小粒PR化は禁止。
 - [ ] 実行log垂れ流しを避け、tool出力を必要最低限にする。
 - [ ] tool.log に checklist本文 / scenario-contract本文 / verbose実行logを保存しない。
 - [ ] `.agent/tests/check-agent-ui-route.sh` または同等checkを追加する。
+- [ ] tool通常使用時に Topolactor本体 application/runtime/product source を変更しない guard を置く。
 
 ### OK軸
 
@@ -143,6 +146,8 @@ Bundle単位で処理する。小粒PR化は禁止。
 - worktype prompt と指定SSOT sectionだけを出せる。
 - quit時に scenario-contract を要求する。
 - local-test が worktype別test → checklist interview → check → pass の順で動く。
+- `.agent/tools` 自身とtool用governance surfaceはBundle scope内で更新できる。
+- 通常使用時、Topolactor本体 application/runtime/product source をtoolが変更しない。
 - `docs/governance/agent-ui-protocol-ssot.yaml` と矛盾しない。
 
 ### NG軸
@@ -154,6 +159,8 @@ Bundle単位で処理する。小粒PR化は禁止。
 - SSOT全体を毎回dumpする。
 - checklist本文やscenario-contract本文を `tool.log` に保存する。
 - toolが implemented / partial / not_started 判定を行う。
+- read-only を `.agent/tools` 自身の更新禁止として扱う。
+- 通常使用時に Topolactor本体 application/runtime/product source をtoolが変更する。
 - 既存 `.agent/tasks/todo.md` を更新する。
 
 ### Agent向け実行指示
