@@ -2,7 +2,8 @@
 # check-agent-ui-tool.sh — Agent UI tool implementation contract gate
 #
 # This is intentionally implementation-facing. It fails until the Agent UI tool
-# entrypoints required by the Agent UI protocol are implemented.
+# entrypoints required by docs/governance/agent-ui-protocol-ssot.yaml are
+# implemented.
 
 set -euo pipefail
 
