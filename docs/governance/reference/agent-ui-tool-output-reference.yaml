@@ -1,0 +1,148 @@
+# agent-ui-tool-output-reference.yaml
+#
+# Compact reference for Agent UI tool output. This is rebuilt for tool output
+# and must not be a dump of legacy prompt/protocol/checklist files.
+
+version: 1
+status: draft_reference
+scope: agent_ui_tool_output
+canonical_path: docs/governance/reference/agent-ui-tool-output-reference.yaml
+
+reference_policy:
+  source_ssot: docs/governance/agent-ui-protocol-ssot.yaml
+  legacy_text_surfaces_are_fallback:
+    - .agent/prompt/*.md
+    - .agent/protocols/*.md
+    - .agent/checklists/*.md
+  output_rule:
+    - Emit compact structured output per tool step.
+    - Do not emit verbose execution logs.
+    - Do not dump full legacy files.
+    - Prefer fields, short excerpts, and selected SSOT sections.
+
+common_metadata:
+  fields:
+    - datetime
+    - uuid
+    - task_name
+    - worktype
+  reuse_required:
+    - PR body
+    - summary
+    - docs/governance/logs/tool.log
+
+initial_contract_outputs:
+  step_1_task_name:
+    emits:
+      - task_name
+      - uuid
+      - datetime
+    compact_note: usage_metadata_partial
+  step_2_worktype:
+    emits:
+      - worktype
+      - worktype_prompt_path
+      - usage_metadata_completed
+  step_3_prompt:
+    emits:
+      - selected_prompt_excerpt
+      - required_reads_from_prompt
+      - protocol_trigger_hints
+    constraints:
+      - Use short excerpt only.
+      - Do not dump full prompt unless explicitly requested.
+  step_4_target_ssot:
+    emits:
+      - target_ssot_name
+      - target_ssot_path
+      - ssot_resolution_status
+  step_5_section_list:
+    emits:
+      - section_list
+    constraints:
+      - Output section names only.
+      - Do not output section bodies here.
+  step_6_section_selection:
+    input_format: "[section_a,section_b]"
+    emits:
+      - selected_section_names
+  step_7_selected_sections:
+    emits:
+      - selected_section_subtrees
+      - selected_ssot_sections_summary
+    constraints:
+      - Output selected section subtrees only.
+      - Avoid full-file output unless all sections are explicitly selected.
+  step_8_continue_or_quit:
+    emits:
+      - current_selected_ssot_sections
+      - missing_required_selection_if_any
+  step_9_scenario_contract:
+    emits:
+      - scenario_contract_template
+      - scenario_contract_result
+      - missing_evidence_if_any
+    constraints:
+      - Do not store scenario-contract body in tool.log.
+  step_10_initial_contract_end:
+    emits:
+      - initial_contract_summary
+      - datetime
+      - uuid
+      - task_name
+      - worktype
+
+implementation_phase_outputs:
+  start:
+    emits:
+      - implementation_start_metadata
+      - selected_ssot_sections_summary
+      - scenario_contract_summary
+  end:
+    emits:
+      - implementation_end_metadata
+      - selected_ssot_sections_summary
+      - scenario_contract_summary
+
+local_test_outputs:
+  step_1_worktype_tests:
+    emits:
+      - worktype_test_commands
+      - worktype_test_result
+    constraints:
+      - Summarize result.
+      - Do not dump full logs.
+  step_2_checklist_interview:
+    emits:
+      - checklist_interview_items
+      - checklist_result
+      - missing_checklist_answers_if_any
+    constraints:
+      - Do not write checklist answers to tool.log.
+  step_3_checks:
+    emits:
+      - check_commands
+      - check_result
+      - missing_evidence_if_any
+  step_4_pass:
+    emits:
+      - pass_or_fail
+      - completion_summary
+      - datetime
+      - uuid
+      - task_name
+      - worktype
+      - selected_ssot_sections
+      - scenario_contract_summary
+      - checklist_result
+      - check_result
+      - missing_evidence_if_any
+
+log_record_reference:
+  path: docs/governance/logs/tool.log
+  record_format: "<datetime> <uuid> <task_name> <worktype>"
+  forbidden_contents:
+    - verbose execution logs
+    - checklist answers
+    - scenario-contract body
+    - full prompt/protocol/checklist dumps
