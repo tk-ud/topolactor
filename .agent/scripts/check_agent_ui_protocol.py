@@ -42,11 +42,10 @@ REQUIRED_TERMS = {
     ],
     "docs/governance/agent-ui-protocol-ssot.yaml": [
         "mutation_boundary",
-        "allowed_in_agent_ui_scope",
+        "allowed_when_in_agent_ui_scope",
         ".agent/tools implementation files",
         "docs/governance/logs/tool.log",
         "senario-tmp.md",
-        "tool_generated",
     ],
     "docs/governance/reference/agent-ui-tool-output-reference.yaml": [
         "authority_split",
