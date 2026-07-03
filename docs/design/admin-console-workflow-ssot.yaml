@@ -797,9 +797,10 @@ admin_console_workflow_ssot:
             fail_close: errors must surface explicitly; no silent fallback
         - component_auto_registration:
             trigger: catalog component card dropped onto canvas (or keyboard add equivalent)
-            backend: ui_component_bucket:create (if absent) then package_generator:promote_package with new bucketItemId
-            rule: skip when component already in package (idempotent)
-            effect: component bound to route package, then catalog_component node placed on canvas
+            backend: component_registration:register_or_update_projection_component as canonical registration/update readback contract
+            legacy_backend_sequence: ui_component_bucket:create (if absent) then package_generator:promote_package with new bucketItemId
+            rule: skip when component already in package (idempotent); readback must include projectionDefinition for projection constructor consumers
+            effect: component registration/update is acknowledged by AdminRuntime, projectionDefinition is read back, then catalog_component node can be placed on canvas
         - component_auto_removal:
             trigger: canvas node deleted and no remaining canvas nodes share the same componentKey
             backend: package_generator:detach_package_components for route_key + componentKey
@@ -1310,7 +1311,7 @@ admin_console_workflow_ssot:
       entered_after: /admin/contents contents pipeline completion
       domain_ownership:
         - route_key gate + implicit package auto-generation (package_generator:promote_package shell)
-        - canvas drop auto-registration (ui_component_bucket:create + promote_package additive)
+        - canvas drop auto-registration via component_registration:register_or_update_projection_component readback contract (legacy sequence: ui_component_bucket:create + promote_package additive)
         - package-only canvas workspace (配置・色・形・リアクション等 in docked inspector panels)
         - canvas_workspace_contract: full-width canvas + docked panels (ref ui_builder_canvas_workspace.canvas_workspace_contract)
         - component-level wiring from registry references
@@ -1638,3 +1639,42 @@ admin_console_workflow_ssot:
       - provider_specific_credential_ui_outside_port_record_context
       - external_integration_fixed_wiring_without_authoring_configurable_trigger_and_target
       - treating_trigger_ui_and_target_ui_as_same_concept
+
+aggregate_trigger_step3_extension_contract:
+  status: design_contract_confirmed_for_future_implementation
+  owning_step: admin_contents_step3_operation_definition
+  connected_ssot: docs/design/runtime-orchestration-ssot.yaml#aggregate_trigger_substrate_contract
+  purpose: expose aggregate trigger substrate as public structured operation authoring, not as application-specific tooling.
+  ui_authoring_boundary:
+    allowed:
+      - select_trigger_source_kind
+      - select_processing_function_or_operation_definition
+      - select_execution_scope_from_registered_options
+      - select_transaction_boundary_from_registered_options
+      - select_aggregate_target_from_step2_or_step2_5
+      - select_conflict_key_fields_from_target
+      - configure_delta_map_from_declared_event_and_target_fields
+      - configure_threshold_policy_minimum_trial_count_ratio_operator
+      - select_materialization_target_from_step2_or_step2_5
+      - configure_materialization_payload_map_from_allowed_sources
+      - select_approval_policy
+    prohibited:
+      - storing_raw_sql
+      - storing_case_expression
+      - storing_where_clause
+      - accepting_arbitrary_table_name
+      - deciding_threshold_or_materialization_in_frontend
+  target_candidate_rule:
+    aggregate_target_binding: Step3 candidates are only Step2 logical entities and Step2.5 relation definitions already saved in the same admin contents workflow.
+    materialization_target_binding: Step3 candidates are only Step2 logical entities and Step2.5 relation definitions already saved in the same admin contents workflow.
+  materialization_payload_map_authoring:
+    allowed_sources:
+      - function_input_event
+      - aggregate_current_row
+      - selected_step2_entity_fields
+      - selected_step2_5_relation_fields
+      - constant
+      - generated_value
+      - runtime_actor_source_metadata
+    validation_owner: backend_runtime
+    frontend_role: structured_selector_and_preview_only

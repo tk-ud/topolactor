@@ -7,6 +7,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROUTE_FILE="$REPO_ROOT/.agent/routes/worktype-required-protocols.yaml"
 FAILURES=0
+PASS_COUNT=0
 
 fail(){ echo "FAIL: $1" >&2; FAILURES=$((FAILURES+1)); }
 pass(){ echo "OK  : $1"; }
@@ -106,7 +107,7 @@ check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" ".agent/tasks/todo.m
 check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "docs/system-roadmap.yaml"
 
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== Work-type routing checks passed ==="
+  echo "PASS check-worktype-routing.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo "=== $FAILURES work-type routing check(s) failed ===" >&2

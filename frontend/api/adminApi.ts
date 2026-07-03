@@ -426,6 +426,47 @@ export type HavingConditionInput = {
   valueSource?: ConditionValueSourceInput;
 };
 
+export type AggregateTriggerTargetBindingInput = {
+  target_source: "step2_logical_entity_definition" | "step2_5_relation_definition";
+  target_id: string;
+};
+
+export type AggregateTriggerDefinitionInput = {
+  trigger_definition_id: string;
+  trigger_source: {
+    canonical_trigger_kind: "cron" | "hook" | "client";
+    trigger_source_detail_kind: "client_operation_event" | "hook_event" | "scheduled_cron_event" | "runtime_function_event";
+  };
+  processing_function_scope: {
+    function_id: string;
+    operation_definition_id: string;
+    accepted_event_schema_ref: string;
+    allowed_source_kinds: string[];
+    materialization_policy_ref: string;
+  };
+  execution_scope: string;
+  transaction_boundary: string;
+  aggregate_target_binding: AggregateTriggerTargetBindingInput;
+  conflict_key_fields: string[];
+  delta_map: Record<string, number>;
+  threshold_policy: {
+    minimum_trial_count: number;
+    ratio_numerator_field: string;
+    ratio_denominator_field: string;
+    comparison_operator: ">" | ">=" | "<" | "<=" | "=" | "!=";
+    target_ratio: number;
+  };
+  materialization_target_binding: AggregateTriggerTargetBindingInput;
+  materialization_payload_map: Array<{
+    target_field: string;
+    source: "function_input_event" | "aggregate_current_row" | "selected_step2_entity_fields" | "selected_step2_5_relation_fields" | "constant" | "generated_value" | "runtime_actor_source_metadata";
+    source_field?: string;
+    constant_value?: unknown;
+  }>;
+  approval_policy: "auto_materialize_when_threshold_passes" | "require_backend_approval_before_materialization" | "require_human_approval_before_materialization";
+  evidence_policy?: string;
+};
+
 export type AdminManifestScreenDataShapeInput = {
   manifestId: string;
   tableRef?: string;
@@ -472,6 +513,8 @@ export type AdminManifestScreenDataShapeInput = {
   havingConditions?: HavingConditionInput[];
   /** Explicit display column mode: selected | all | none. */
   displayColumnMode?: string;
+  /** Step3 structured aggregate trigger authoring payload; backend validator remains runtime authority. */
+  aggregateTriggerDefinitions?: AggregateTriggerDefinitionInput[];
 };
 
 const RUNTIME_DESTINATION_OPTIONS = [

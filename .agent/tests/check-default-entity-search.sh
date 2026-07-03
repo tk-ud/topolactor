@@ -22,48 +22,13 @@ require_tool() {
 require_tool dotnet
 require_tool deno
 
-echo ""
-echo "=== Backend integration test: default:entity:search ==="
-if dotnet test "${REPO_ROOT}/backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj" \
-    --nologo --verbosity minimal; then
-  echo "OK  [backend] integration tests passed"
-else
-  echo "FAIL: backend integration tests failed" >&2
-  FAILURES=$((FAILURES + 1))
-fi
-
-echo ""
-echo "=== Frontend contract test: default:entity:search ==="
-if deno test "${REPO_ROOT}/frontend/tests/defaultEntitySearch.test.ts" --allow-read; then
-  echo "OK  [frontend] contract test passed"
-else
-  echo "FAIL: frontend contract test failed" >&2
-  FAILURES=$((FAILURES + 1))
-fi
-
-echo ""
-echo "=== Frontend contract test: admin API client ==="
-if deno test "${REPO_ROOT}/frontend/tests/adminApi.test.ts" --allow-read; then
-  echo "OK  [frontend] admin API client test passed"
-else
-  echo "FAIL: admin API client test failed" >&2
-  FAILURES=$((FAILURES + 1))
-fi
-
-echo ""
-echo "=== Frontend pipeline continuity test: SSE dispatcher / scheduler / projection identity ==="
-if deno test "${REPO_ROOT}/frontend/tests/pipelineContinuity.test.ts" --allow-read; then
-  echo "OK  [frontend] pipeline continuity test passed"
-else
-  echo "FAIL: frontend pipeline continuity test failed" >&2
-  FAILURES=$((FAILURES + 1))
-fi
-
-echo ""
-if [ "${FAILURES}" -eq 0 ]; then
-  echo "=== All default:entity:search checks passed ==="
-  exit 0
-else
-  echo "=== ${FAILURES} check(s) failed ===" >&2
-  exit 1
-fi
+cd "${REPO_ROOT}"
+source .agent/scripts/lib/noise_control.sh
+FAILURES=0
+run_lane(){ if ! noise_run "$1" ${@:2}; then FAILURES=$((FAILURES+1)); fi; }
+run_lane "default_entity_search lane=backend_integration" dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --nologo --verbosity minimal
+run_lane "default_entity_search lane=frontend_default_entity" deno test frontend/tests/defaultEntitySearch.test.ts --allow-read
+run_lane "default_entity_search lane=frontend_admin_api" deno test frontend/tests/adminApi.test.ts --allow-read
+run_lane "default_entity_search lane=frontend_pipeline_continuity" deno test frontend/tests/pipelineContinuity.test.ts --allow-read
+[ "$FAILURES" -eq 0 ] && { echo "PASS default-entity-search lanes=4"; exit 0; }
+echo "FAIL default-entity-search failures=$FAILURES" >&2; exit 1

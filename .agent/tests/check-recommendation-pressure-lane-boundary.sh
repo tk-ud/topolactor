@@ -16,6 +16,7 @@ require_tool() {
 require_tool deno
 
 cd "$REPO_ROOT"
+source .agent/scripts/lib/noise_control.sh
 deno test frontend/tests/recommendationPressureLaneGuard.test.ts --allow-read
 
-echo "=== Recommendation pressure lane boundary check passed ==="
+noise_run "recommendation_pressure_lane_boundary files=1" deno test frontend/tests/recommendationPressureLaneGuard.test.ts --allow-read

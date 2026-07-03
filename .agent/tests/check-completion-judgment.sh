@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
+PASS_COUNT=0
 fail(){ echo "FAIL: $1" >&2; FAILURES=$((FAILURES+1)); }
 pass(){ echo "OK  : $1"; }
 check_term(){ local f="$REPO_ROOT/$1" t="$2"; grep -qF -- "$t" "$f" && pass "$1 -> $t" || fail "$1 missing: $t"; }
@@ -83,7 +84,7 @@ check_term ".agent/prompt/implementation-change.md" "scope, implementation delta
 
 if [ "$FAILURES" -eq 0 ]; then
   bash "$REPO_ROOT/.agent/tests/check-abstract-function-completion-alignment.sh"
-  echo "=== Completion judgment checks passed ==="
+  echo "PASS check-completion-judgment.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo "=== $FAILURES completion judgment check(s) failed ===" >&2

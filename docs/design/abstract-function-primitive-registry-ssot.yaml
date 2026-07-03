@@ -1138,3 +1138,36 @@ registry_summary:
     - frontend runtime abstract functions (hardcoded shapes per runtime-orchestration-ssot.yaml)
     - backend topology function interface (runtime-orchestration-ssot.yaml abstract_function_contract)
     - backend execute_abstract_function primitive executor (runtime-orchestration-ssot.yaml dispatch boundary)
+
+aggregate_trigger_function_vocabulary:
+  status: design_contract_confirmed_for_future_implementation
+  mutation_boundary_types_added:
+    aggregate_event_append: append-only idempotent event evidence; no current-row mutation by itself
+    aggregate_current_atomic_upsert: atomic current-row mutation through fixed repository template
+    controlled_materialization: backend-authorized target entity/relation mutation with duplicate guard and evidence
+  functions:
+    validate_aggregate_trigger_definition:
+      signature: "validate_aggregate_trigger_definition(definition, step2_entities, step2_5_relations) -> validation_result"
+      output_kind: validation_result
+      mutation_boundary: readonly
+    append_aggregate_trigger_event_evidence:
+      signature: "append_aggregate_trigger_event_evidence(definition, event, runtime_metadata) -> event_evidence_result"
+      output_kind: mutation_result
+      mutation_boundary: aggregate_event_append
+    upsert_aggregate_current:
+      signature: "upsert_aggregate_current(definition, event_evidence, delta_map) -> aggregate_current_row"
+      output_kind: mutation_result
+      mutation_boundary: aggregate_current_atomic_upsert
+    evaluate_aggregate_threshold:
+      signature: "evaluate_aggregate_threshold(threshold_policy, aggregate_current_row) -> threshold_result"
+      output_kind: validation_result
+      mutation_boundary: readonly
+    materialize_aggregate_trigger_target:
+      signature: "materialize_aggregate_trigger_target(definition, aggregate_current_row, payload_map, approval_state) -> materialization_result"
+      output_kind: mutation_result
+      mutation_boundary: controlled_materialization
+  boundary_rules:
+    - event_input_is_not_scope_owner
+    - frontend_must_not_own_threshold_or_materialization_judgment
+    - repository_uses_fixed_parameterized_templates_only
+    - materialization_payload_map_sources_are_limited_by_runtime_orchestration_ssot

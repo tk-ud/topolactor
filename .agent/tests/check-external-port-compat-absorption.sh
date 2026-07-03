@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SSOT: docs/design/external-port-substrate-ssot.yaml (compatibility absorption seed boundary)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

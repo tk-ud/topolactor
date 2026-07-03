@@ -184,7 +184,8 @@ public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("initialDataRows")] IReadOnlyList<System.Text.Json.JsonElement>? InitialDataRows,
     [property: JsonPropertyName("searchConditions")] IReadOnlyList<AdminManifestSearchConditionDto>? SearchConditions,
     [property: JsonPropertyName("havingConditions")] IReadOnlyList<AdminManifestHavingConditionDto>? HavingConditions,
-    [property: JsonPropertyName("displayColumnMode")] string? DisplayColumnMode
+    [property: JsonPropertyName("displayColumnMode")] string? DisplayColumnMode,
+    [property: JsonPropertyName("aggregateTriggerDefinitions")] IReadOnlyList<AggregateTriggerDefinition>? AggregateTriggerDefinitions = null
 );
 
 public record AdminManifestUpdateDraftRequestDto(

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SSOT: docs/design/external-port-substrate-ssot.yaml (generic credential vault refresher boundary)
 set -euo pipefail
 
 forbidden_classes='(FreeeRefresher|FreeeApiClient|RefreshFreeeAccessTokenAsync|StripeRefresher)'

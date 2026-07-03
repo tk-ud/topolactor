@@ -1,8 +1,39 @@
-# required-paths.yaml — Structure Check SSOT Reference
+# required-paths.yaml — Structure Check Manifest SSOT
 #
-# This file documents the required paths and content terms that
-# .agent/tests/check-structure.sh enforces.
-# The shell script is the executable SSOT; this file is the human-readable reference.
+# This file is the canonical machine-readable enumeration input for
+# .agent/tests/check-structure.sh:
+#   - required_directories: directories that must exist
+#   - required_files: files that must exist (including .github/workflows/*.yml)
+#   - required_content_terms: literal terms that must appear in the listed file
+#
+# .agent/tests/check-structure.sh reads this manifest and executes the checks;
+# the shell script is the check executor/orchestrator, this manifest is the
+# enumeration source of truth. Complex guards (forbidden terms, semantic drift
+# guards, DB-specific structural guards, awk-based section checks) intentionally
+# stay in the shell script and are NOT manifest-driven.
+#
+# Parsing contract (bash/awk, no yq):
+#   - top-level sections end with ':' at column 0
+#   - group keys are indented 2 spaces (grouping is documentation only)
+#   - path list items are indented 4 spaces ('    - path')
+#   - in required_content_terms, file keys are indented 2 spaces and terms are
+#     double-quoted list items indented 4 spaces
+#   - terms must not contain double quotes, backslashes, or tabs
+#
+# Boundary notes:
+#   - Being listed here is not a signal to read all docs/ content; read routing
+#     stays with .agent/docs/ssot-map.yaml and worktype prompts.
+#   - Temporary Scenario Contract artifacts live under .agent/tmp/ and only
+#     .agent/tmp/.gitkeep may remain tracked; check-structure.sh enforces this
+#     directly (state check, not manifest enumeration).
+#   - Runtime Boundary Failure Matrix and routine inspection surfaces are
+#     routed via .agent/protocols/runtime-boundary-matrix.md and
+#     .agent/protocols/report-surfaces.md.
+#   - docs/system-roadmap.yaml and .agent/tasks/todo.md are dynamic reference
+#     points, not implementation-state authority; they are intentionally not
+#     treated as SSOT by .agent/tests/check-docs-ssot-connectivity.sh.
+
+version: 2
 
 required_directories:
   agent:
@@ -18,6 +49,8 @@ required_directories:
     - .agent/checklists/fixtures/boundary-identity
     - .agent/scripts
     - .agent/tmp
+    - .agent/scripts/agent_tools
+    - .agent/tools
   docs:
     - docs
   db:
@@ -87,6 +120,12 @@ required_files:
     - docs/design/runtime-bundle-secret-credential-ssot.md
     - docs/design/external-port-substrate-ssot.yaml
     - docs/design/instance-port-substrate-ssot.yaml
+    - docs/design/ci-contract-ssot.yaml
+    - docs/design/pipeline-continuity-ssot.yaml
+    - docs/design/cli-mcp-port-implementation-ssot.yaml
+    - docs/design/cli-mcp-port-implementation-ssot.md
+    - docs/governance/agent-governance-routing-ssot.md
+    - docs/governance/agent-governance-routing-ssot.yaml
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml
@@ -147,6 +186,41 @@ required_files:
     - .agent/checklists/fixtures/policy-judgment/fail-partial-diff.md
     - .agent/checklists/fixtures/policy-judgment/fail-local-checks.md
     - .agent/checklists/fixtures/policy-judgment/fail-remaining-todos.md
+    - .agent/docs/test-bundles.yaml
+    - .agent/tests/check-css-dictionary.sh
+    - .agent/tests/check-enum-dictionary.sh
+    - .agent/tests/check-admin-master-roster.sh
+    - .agent/tests/check-topology-layout-class-ssot.sh
+    - .agent/tests/check-ui-ux-executable-component-slice.sh
+    - .agent/tests/check-test-proof-manifest-integrity.sh
+    - .agent/checklists/README.md
+    - .agent/tests/check-bootstrap-validation.sh
+    - .agent/tests/check-pipeline-continuity.sh
+    - .agent/tests/check-unified-test-gate.sh
+    - .agent/tests/check-sql-attention-ssot.sh
+    - .agent/tests/check-recommendation-pressure-lane-boundary.sh
+    - .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh
+    - .agent/tests/check-cli-mcp-port-implementation-ssot.sh
+    - .agent/scripts/emit-docs-tree-json.sh
+    - .agent/tests/check-docs-ssot-connectivity.sh
+    - .agent/scripts/emit-directory-tree-json.py
+    - .agent/scripts/emit-directory-tree-json.sh
+    - .agent/scripts/lib/minimal_yaml.py
+    - .agent/scripts/check_ssot_vocabulary_contract.py
+    - .agent/scripts/check_sql_attention_ssot_yaml.py
+    - .agent/scripts/check_system_roadmap.py
+    - .agent/scripts/check_test_proof_manifest_integrity.py
+    - .agent/scripts/check_ssot_proof_surface_connectivity.py
+    - .agent/tests/check-ssot-proof-surface-connectivity.sh
+    - .agent/tests/check-no-ruby-dependency.sh
+    - .agent/tools/README.md
+    - .agent/tools/directory-map
+    - .agent/tools/yaml-section-query
+    - .agent/tools/proof-surface-map
+    - .agent/tools/topology-seed-discussion
+    - .agent/scripts/agent_tools/readonly_observation.py
+    - .agent/scripts/check_agent_tools_surface.py
+    - .agent/tests/check-agent-tools-surface.sh
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml
@@ -155,6 +229,8 @@ required_files:
     - .github/workflows/unified-test-gate.yml
     - .github/workflows/bootstrap-validation.yml
     - .github/workflows/runtime-semantics.yml
+    - .github/workflows/db-schema-check.yml
+    - .github/workflows/projection-lane-seed-hardening.yml
   db:
     - db/schema.sql
     - db/topology_tables.sql
@@ -162,6 +238,7 @@ required_files:
     - db/sql_attention_logs_tables.sql
     - db/seed_empty.sql
     - db/README.md
+    - db/ui_topology_tables.sql
   backend:
     - backend/endpoint/DispatchEndpoint.cs
     - backend/runtime/RuntimeExecutor.cs
@@ -183,6 +260,9 @@ required_files:
     - backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs
     - backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj
     - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
+    - backend/endpoint/SseEndpoint.cs
+    - backend/scheduler/RuntimeTimelineScheduler.cs
+    - backend/runtime/ManifestDispatcher.cs
   frontend:
     - deno.json
     - frontend/routes/index.tsx
@@ -202,6 +282,10 @@ required_files:
     - frontend/README.md
     - frontend/tests/defaultEntitySearch.test.ts
     - frontend/tests/pipelineContinuity.test.ts
+    - frontend/runtime/frontendScheduler.ts
+    - frontend/runtime/sseReceiver.ts
+    - frontend/runtime/sseDispatcher.ts
+    - frontend/routes/api/sse.ts
   infra:
     - infra/docker-compose.yml
     - infra/nginx.conf
@@ -221,14 +305,17 @@ required_content_terms:
     - "Policy Judgment Gate"
     - "Temporary Scenario Contract"
   .agent/rules/rule.md:
-    - "Data-defined topology is the architecture subject"
-    - "OperationVector is internal runtime representation"
-    - "Broken refs are explicit errors"
-    - "Runtime Boundary Failure Matrix"
-    - "scenario contract"
-    - "Policy Judgment Gate"
-    - "End-to-End Boundary Identity"
-    - "Multi-instance leakage"
+    - "Workflow Order Invariant"
+    - "## Prohibitions"
+    - "## Minimal Workflow Invariant"
+    - "## Worktype Decision"
+    - "READ_TASK_MATERIALS"
+    - "READ_TARGET_SURFACES"
+    - "DEFINE_SCOPE"
+    - "Do not treat structure check as semantic judgment."
+    - "SCENARIO_CONTRACT"
+    - "## Branch to Prompt"
+    - "worktype-required-protocols.yaml"
   .agent/protocols/index.yaml:
     - "grep route"
     - "not a judgment SSOT"
@@ -240,12 +327,25 @@ required_content_terms:
     - "boundary_keys:"
     - "read_when"
     - "manual paste unit"
+    - "Section-level grep route"
+    - "completion"
+    - "todo-carry-over"
+    - "report-surfaces"
+    - "completion-summary"
   .agent/protocols/completion.md:
     - "Completion Sequence"
     - "Recursive Verification Gate"
     - "Remote CI Equivalence Gate"
     - "Structure Check is the always-on required gate."
     - "scope-irrelevant workflow-level skip is not blocking."
+    - "NOT_REQUIRED / OUT_OF_SCOPE declarations must be explicit"
+    - "Audit Gap Response Gate"
+    - "Failure Triage Self-Recursion Gate"
+    - "failure triage result"
+    - "Apply Failure Triage Self-Recursion Gate"
+    - "Required Check Scope Declaration Gate"
+    - "required check scope declaration"
+    - "REQUIRED_EXECUTED"
   .agent/protocols/policy-judgment.md:
     - "Policy Judgment Gate"
     - "Recursive Verification Gate"
@@ -258,6 +358,8 @@ required_content_terms:
     - "Multi-instance leakage"
     - "Frontend projection identity"
     - "UI action identity"
+    - "Precondition: Workflow Order Invariant Gate"
+    - "docs/ SSOT reload"
   .agent/protocols/runtime-boundary-matrix.md:
     - "Runtime Boundary Failure Matrix"
     - "Recursive Verification Gate"
@@ -272,6 +374,8 @@ required_content_terms:
     - "routine inspection reports"
   .agent/protocols/todo-carry-over.md:
     - ".agent/tasks/todo.md"
+    - "foundation_ssot_read_gate"
+    - "canonical TODO carry-over は roadmap completion bundle 単位"
   .agent/scripts/create-tmp.sh:
     - "Blocking failures found:"
     - "Runtime Boundary Failure Matrix"
@@ -294,19 +398,24 @@ required_content_terms:
     - "routine inspection"
     - ".agent/tmp/"
     - ".agent/tmp/.gitkeep"
+    - ".agent/protocols/runtime-boundary-matrix.md"
   .agent/docs/ssot-map.yaml:
-    - "change-surface"
+    - "change_surfaces"
     - "required_docs"
     - "supporting_docs"
     - "protocols"
+    - "worktypes:"
+    - "protocols:"
   .agent/skills/agent-workflow.md:
     - "READ_TASK_MATERIALS"
     - "READ_TARGET_SURFACES"
     - "DEFINE_SCOPE"
     - "STRUCTURE_CHECK"
     - "completion summary must include remaining TODO"
+    - "SCENARIO_CONTRACT"
+    - "READ_ENTRY"
   .agent/tests/check-completion-judgment.sh:
-    - "Completion Judgment Gate Check"
+    - "Completion Judgment Invariant/Vocabulary Guard Check"
     - "Workflow Order Invariant"
     - "docs/ SSOT reload"
   .agent/reports/README.md:
@@ -329,6 +438,8 @@ required_content_terms:
     - "Broken refs are explicit validation errors"
     - "not CRUD"
     - "frontend must not become source of truth"
+    - "components bucket"
+    - "package generator"
   docs/promotion-manifest-editor-specification.md:
     - "Promotion manifest editor"
     - "controlled manifest editing boundary"
@@ -352,10 +463,13 @@ required_content_terms:
   docs/design/admin-console-workflow-ssot.yaml:
     - "admin_console_workflow_ssot"
     - "page_responsibility"
-    - "canonical_workflow"
     - "hub_navigation_ordering"
+    - "canonical_authoring_order"
   .github/workflows/structure-check.yml:
     - ".agent/tests/check-structure.sh"
+    - "check-completion-judgment.sh"
+    - "check-pipeline-continuity.sh"
+    - "check-sql-attention-ssot.sh"
   .github/workflows/backend-tests.yml:
     - "bash .agent/tests/check-backend-tests.sh"
   .github/workflows/frontend-types.yml:
@@ -418,12 +532,282 @@ required_content_terms:
   frontend/tests/defaultEntitySearch.test.ts:
     - "renderEmission"
     - "ATTRACTOR_RESOLVE_FAILED"
+  .agent/tests/check-local-ci.sh:
+    - "set -euo pipefail"
+    - "check-unified-test-gate.sh"
+    - "check-runtime-environment.sh"
+    - "check-structure.sh"
+    - "must run last"
+  db/schema.sql:
+    - "CREATE SCHEMA IF NOT EXISTS logs"
+    - "CREATE SCHEMA IF NOT EXISTS topology"
+    - "CREATE SCHEMA IF NOT EXISTS hubs"
+  db/sql_attention_logs_tables.sql:
+    - "statistics_json"
+    - "phase_vector_json"
+    - "logs.attention"
+    - "logs.current"
+    - "logs.hub_current"
+    - "score_band"
+    - "neighbor_score"
+    - "hub_current_id"
+  db/seed_empty.sql:
+    - "sql_attention_topology_projection"
+    - "default_policy"
+  docs/design/sql-attention-logs-ssot.md:
+    - "logs.current"
+    - "logs.attention"
+    - "l2 norm"
+    - "physical table"
+    - "norm-level"
+    - "phase_expansion_limit"
+    - "neighbor_score_min"
+    - "phase_vector_json"
+    - "SQL Attention is not topology search"
+    - "hub-attractor exploration"
+    - "SQL Attention is not registry search"
+    - "projection"
+    - "Tensor"
+    - "attractor_key"
+  .agent/protocols/registry-tensor-policy.md:
+    - "Registry Tensor Policy"
+    - "tensor basis / vector basis"
+    - "Drift / GAP classification"
+    - "registry table must be explained as semantic matrix"
+  docs/framework-policy.yaml:
+    - "registry_table_role: semantic_matrix"
+    - "registry_tensor_principle"
+    - "repo_governance_tooling_dependency_policy"
+    - "python3_stdlib_only"
+    - "ruby_is_prohibited_as_a_repo_governance_tooling_dependency"
+  docs/design/context-route-recommendation.md:
+    - "registry table は単なる辞書/設定/metadata ではなく"
+  docs/design/context-route-recommendation.yaml:
+    - "registry_table_role: semantic_matrix"
+  .github/workflows/runtime-semantics.yml:
+    - "docs/design/runtime-orchestration-ssot.yaml"
+    - ".agent/tests/check-runtime-semantics.sh"
+  .github/workflows/bootstrap-validation.yml:
+    - "db/**/*.sql"
+    - "infra/docker-compose.yml"
+    - "docker compose -f infra/docker-compose.yml config"
+    - "compose smoke"
+    - "bash .agent/tests/check-bootstrap-validation.sh"
+  .agent/tests/check-bootstrap-validation.sh:
+    - "ON_ERROR_STOP=1"
+    - "db/init.sql"
+    - "sed 's#/db/#db/#g' db/init.sql"
+    - "mktemp"
+    - "trap cleanup EXIT"
+    - "manifest"
+    - "components_bucket"
+    - "ui_topology_tensor"
+    - "context_event"
+    - "context_hub_recommendation_current"
+  docs/design/ci-contract-ssot.yaml:
+    - "CI_SSOT_VOCABULARY_MEMBERSHIP_ASSERTION"
+    - "CI_ATTENTION"
+  docs/design/css-dictionary-ssot.yaml:
+    - "css_dictionary_ssot"
+  docs/design/enum-dictionary-ssot.yaml:
+    - "enum_dictionary_ssot"
+  docs/design/admin-master-roster-management-ssot.yaml:
+    - "admin_master_roster_management_ssot"
+  .agent/README.md:
+    - "Directory Responsibilities"
+    - "`protocols/`: judgment gates (blocking/pass semantics only)."
+    - ".agent Directory Map"
+    - "`tools/`: Agent-facing read-only repo observation entrypoints."
+    - "Tools may expose thin wrappers over `.agent/scripts`"
+  .agent/protocols/implementation-change.md:
+    - "foundation_ssot_read_gate"
+    - "todo_granularity_guard"
+  .agent/protocols/audit.md:
+    - "foundation_ssot_read_gate"
+    - "roadmap completion bundle"
+    - "## required_output_contract"
+    - "- todo_granularity_judgment"
+  .agent/prompt/implementation-change.md:
+    - "foundation_ssot_read_judgment"
+    - "docs/framework-core.yaml"
+    - "docs/design/runtime-orchestration-ssot.yaml"
+    - "docs/design/pipeline-continuity-ssot.yaml"
+    - "todo_granularity_judgment"
+    - "scope, implementation delta, protocol decisions, todo_granularity_judgment, check results"
+  .agent/prompt/audit.md:
+    - "foundation_ssot_read_judgment"
+    - "todo_granularity_judgment"
+    - "## output_shape"
+    - "- todo_granularity_judgment"
+  .agent/prompt/todo-maintenance.md:
+    - "foundation_ssot_read_judgment"
+  docs/design/pipeline-continuity-ssot.yaml:
+    - "pipeline_continuity_ssot"
+    - "api_command_lane"
+    - "sse_projection_lane"
+    - "contract_guard"
+    - "required_identity"
+    - "hardcode_guard"
+    - "canonical_route_identity_and_boundary_contract"
+    - "pipeline_body_test"
+  .agent/tests/check-pipeline-continuity.sh:
+    - "check-default-entity-search.sh"
+    - "hardcode_guard"
+  frontend/runtime/frontendScheduler.ts:
+    - "queueClientCommand"
+  frontend/runtime/sseDispatcher.ts:
+    - "SseDispatcher"
+  frontend/runtime/sseReceiver.ts:
+    - "SseReceiver"
+  frontend/routes/api/sse.ts:
+    - "text/event-stream"
+  frontend/tests/pipelineContinuity.test.ts:
+    - "sseDispatcher"
+    - "queueClientCommand"
+  backend/scheduler/RuntimeTimelineScheduler.cs:
+    - "RuntimeTimelineScheduler"
+  backend/runtime/ManifestDispatcher.cs:
+    - "ManifestDispatcher"
+  backend/endpoint/SseEndpoint.cs:
+    - "text/event-stream"
+  .github/workflows/unified-test-gate.yml:
+    - "FUNCTION_BOUNDARY"
+    - "RUNTIME_INTEGRATION"
+    - "FRONTEND_CONTRACT"
+    - "STRUCTURE_GATE"
+    - "bash .agent/tests/check-unified-test-gate.sh"
+    - "bash .agent/tests/check-structure.sh"
+  .agent/tests/check-unified-test-gate.sh:
+    - "FUNCTION_BOUNDARY"
+    - "RUNTIME_INTEGRATION"
+    - "FRONTEND_CONTRACT"
+    - "NOT_COVERED"
+    - "dotnet test"
+    - "deno test"
+    - "missing tool is not a pass"
+  db/ui_topology_tables.sql:
+    - "components_bucket"
+    - "ui_topology_tensor"
+  .agent/routes/worktype-required-protocols.yaml:
+    - "specific:"
+    - "existing_pr_update:"
+    - "audit:"
+    - "todo_maintenance"
+    - "design_change"
+    - "implementation_change"
+    - "required_protocols"
+  docs/design/cli-model-context-protocols-port-ssot.yaml:
+    - "cli_model_context_protocols_port_ssot"
+    - "core_invariant"
+    - "explicitly_out_of_scope"
+    - "email_send"
+    - "audit_log"
+    - "export_job"
+  docs/design/cli-model-context-protocols-port-ssot.md:
+    - "read/export port surface"
+    - "out of scope"
+  docs/design/extended-runtime-bundle-registry-ssot.yaml:
+    - "extended_runtime_bundle_registry_ssot"
+    - "core_runtime_bundles"
+    - "future_optional_external_surface_bundles"
+    - "future_bundle_policy"
+    - "requires_separate_ssot"
+    - "owner"
+    - "intake_snapshot_shape"
+    - "validation_boundary"
+    - "approval_boundary"
+    - "scheduler_boundary"
+    - "audit_log_boundary"
+    - "placeholder_policy"
+  docs/design/user-facing-helper-manual-ssot.yaml:
+    - "user_facing_helper_manual_ssot"
+    - "authority_boundary"
+    - "explicitly_out_of_scope"
+    - "safety_boundary"
+  docs/design/user-facing-helper-manual-ssot.md:
+    - "runtime authority"
+    - "Out of Scope"
+  .agent/tests/check-worktype-routing.sh:
+    - "routing existence"
+    - "reference integrity"
+    - "required vocabulary"
+  .agent/tests/check-docs-ssot-connectivity.sh:
+    - "emit-docs-tree-json.sh"
+    - "is_ssot"
+    - "orphan workflow candidate"
+    - "orphan test candidate"
+  .agent/scripts/emit-docs-tree-json.sh:
+    - "is_ssot"
+    - "is_dynamic_reference"
+    - "docs/system-roadmap.yaml"
+  .agent/scripts/emit-directory-tree-json.py:
+    - "is_ssot"
+    - "is_dynamic_reference"
+    - "is_executable_test"
+    - "is_governance_test"
+    - "surface_kind"
+    - "Python3 standard library only"
+  .agent/scripts/lib/minimal_yaml.py:
+    - "Python3 stdlib only"
+    - "does not implement anchors/aliases"
+  .agent/tests/check-ssot-proof-surface-connectivity.sh:
+    - "emit-directory-tree-json.py"
+    - "is_executable_test"
+    - "ssot-map.yaml reference does not count"
+  .agent/scripts/check_ssot_proof_surface_connectivity.py:
+    - "UNCONNECTED_SSOT_ALLOWLIST"
+    - "runner_surfaces"
+    - "is_executable_test"
+    - "_self_test"
+  .agent/tests/check-no-ruby-dependency.sh:
+    - "Ruby source file present"
+    - "Ruby Gemfile present"
+    - "ruby shebang present"
+    - "ruby/gem/bundle command invocation present"
+    - "--self-test"
+  .agent/tests/check-structure.sh:
+    - "check-docs-ssot-connectivity.sh"
+    - "check-ssot-proof-surface-connectivity.sh"
+    - "check-no-ruby-dependency.sh"
+    - "check-agent-tools-surface.sh"
+    - "required-paths.yaml"
+  .agent/tools/README.md:
+    - "read-only repository observation surface"
+    - "must not mutate repository files"
+    - "Tool output is observation data only"
+    - "SSOT authority."
+    - "proof completion evidence by itself."
+    - "implemented / partial / not_started status evidence by itself."
+    - "yaml-section-query"
+    - "canonical path selector"
+    - "ambiguous"
+  .agent/scripts/agent_tools/readonly_observation.py:
+    - "BOUNDARY"
+    - "_reject_mutation_args"
+    - "authority_boundary"
+    - "prohibited_judgments"
+    - "yaml_section_query"
+    - "_PathError"
+  .agent/tests/check-agent-tools-surface.sh:
+    - "check_agent_tools_surface.py"
+    - "agent_repo_observation_tools_surface"
+  .agent/scripts/check_agent_tools_surface.py:
+    - "REQUIRED_TOOL_ENTRYPOINTS"
+    - "REMOVED_TOOL_ENTRYPOINTS"
+    - "mutation_rejection_failures"
+    - "boundary_metadata_failures"
+    - "thin_wrapper_failures"
+    - "ambiguous_handling_failures"
+    - "default_minimal_output_failures"
+    - "removed_tool_failures"
+    - "path_escape_rejection_failures"
+    - "proof_ssot_lookup_failures"
+    - "--self-test"
 
 notes:
   README_policy:
     - "README.md required terms are intentionally minimal and external-facing only."
     - "Internal governance / CI verification vocabulary belongs under .agent/protocols and .agent/docs, not README.md."
-
   .agent/routes/worktype-required-protocols.yaml:
     - "todo_maintenance"
     - "design_change"

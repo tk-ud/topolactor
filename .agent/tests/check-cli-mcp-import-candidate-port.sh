@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SSOT: docs/design/cli-mcp-port-implementation-ssot.yaml (import-candidate lane)
 set -euo pipefail
 check(){ local f="$1" p="$2"; if ! grep -Eq "$p" "$f"; then echo "missing pattern in $f: $p" >&2; exit 1; fi; }
 absent(){ local f="$1" p="$2"; if grep -Eq "$p" "$f"; then echo "forbidden pattern in $f: $p" >&2; exit 1; fi; }
