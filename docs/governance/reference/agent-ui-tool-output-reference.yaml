@@ -20,31 +20,56 @@ reference_policy:
     - Do not dump full legacy files.
     - Prefer fields, short excerpts, and selected SSOT sections.
 
+authority_split:
+  ai_authored:
+    - implementation_name
+    - tool_operation_inputs
+    - senario_content
+    - implementation_changes
+  tool_generated:
+    - uuid
+    - datetime
+    - worktype
+    - docs/governance/logs/tool.log record
+  rule: >-
+    AI writes semantic inputs and implementation content. The tool generates
+    metadata and writes the log. AI must not hand-write uuid, datetime,
+    worktype metadata, or tool.log records.
+
 common_metadata:
   fields:
     - datetime
     - uuid
-    - task_name
+    - implementation_name
     - worktype
+  generated_by_tool:
+    - datetime
+    - uuid
+    - worktype
+  authored_by_ai:
+    - implementation_name
   reuse_required:
     - PR body
     - summary
     - docs/governance/logs/tool.log
 
 initial_contract_outputs:
-  step_1_task_name:
-    emits:
-      - task_name
+  step_1_implementation_name:
+    ai_input:
+      - implementation_name
+    tool_emits:
       - uuid
       - datetime
     compact_note: usage_metadata_partial
   step_2_worktype:
-    emits:
+    ai_input:
+      - worktype_number_selection
+    tool_emits:
       - worktype
       - worktype_prompt_path
       - usage_metadata_completed
   step_3_prompt:
-    emits:
+    tool_emits:
       - selected_prompt_excerpt
       - required_reads_from_prompt
       - protocol_trigger_hints
@@ -52,88 +77,96 @@ initial_contract_outputs:
       - Use short excerpt only.
       - Do not dump full prompt unless explicitly requested.
   step_4_target_ssot:
-    emits:
+    ai_input:
       - target_ssot_name
+    tool_emits:
       - target_ssot_path
       - ssot_resolution_status
   step_5_section_list:
-    emits:
+    tool_emits:
       - section_list
     constraints:
       - Output section names only.
       - Do not output section bodies here.
   step_6_section_selection:
     input_format: "[section_a,section_b]"
-    emits:
+    ai_input:
       - selected_section_names
   step_7_selected_sections:
-    emits:
+    tool_emits:
       - selected_section_subtrees
       - selected_ssot_sections_summary
     constraints:
       - Output selected section subtrees only.
       - Avoid full-file output unless all sections are explicitly selected.
   step_8_continue_or_quit:
-    emits:
+    ai_input:
+      - continue_or_quit
+    tool_emits:
       - current_selected_ssot_sections
       - missing_required_selection_if_any
-  step_9_scenario_contract:
-    emits:
-      - scenario_contract_template
-      - scenario_contract_result
+  step_9_senario_contract:
+    ai_authored:
+      - senario_content
+    tool_emits:
+      - senario_contract_template
       - missing_evidence_if_any
     constraints:
-      - Do not store scenario-contract body in tool.log.
+      - Do not store senario body in tool.log.
   step_10_initial_contract_end:
-    emits:
+    tool_emits:
       - initial_contract_summary
       - datetime
       - uuid
-      - task_name
+      - implementation_name
       - worktype
 
 implementation_phase_outputs:
   start:
-    emits:
+    ai_authored:
+      - implementation_changes
+    tool_emits:
       - implementation_start_metadata
       - selected_ssot_sections_summary
-      - scenario_contract_summary
+      - senario_contract_summary
   end:
-    emits:
+    tool_emits:
       - implementation_end_metadata
       - selected_ssot_sections_summary
-      - scenario_contract_summary
+      - senario_contract_summary
 
 local_test_outputs:
   step_1_worktype_tests:
-    emits:
+    tool_emits:
       - worktype_test_commands
       - worktype_test_result
     constraints:
       - Summarize result.
       - Do not dump full logs.
   step_2_checklist_interview:
-    emits:
+    ai_authored:
+      - checklist_interview_answers
+    tool_emits:
       - checklist_interview_items
       - checklist_result
       - missing_checklist_answers_if_any
     constraints:
       - Do not write checklist answers to tool.log.
   step_3_checks:
-    emits:
+    tool_emits:
       - check_commands
       - check_result
       - missing_evidence_if_any
   step_4_pass:
-    emits:
+    tool_emits:
       - pass_or_fail
       - completion_summary
       - datetime
       - uuid
-      - task_name
+      - implementation_name
       - worktype
       - selected_ssot_sections
-      - scenario_contract_summary
+      - senario_contract_summary
       - checklist_result
       - check_result
       - missing_evidence_if_any
@@ -146,6 +179,7 @@ log_record_reference:
     - If missing during tool execution, create it before appending.
     - Create docs/governance/logs directory if it does not exist.
   write_rule:
+    - Tool writes the log record, not AI.
     - Append only.
     - One tool usage equals one line.
     - Do not rewrite historical records.
@@ -159,10 +193,14 @@ log_record_reference:
     note: >-
       tool.log is append-only for the tool. Periodic cleanup is a human
       governance operation.
-  record_format: "<datetime> <uuid> <task_name> <worktype>"
+  record_format: "<datetime> <uuid> <implementation_name> <worktype>"
   datetime_format: ISO-8601
   forbidden_contents:
+    - AI-authored uuid
+    - AI-authored datetime
+    - AI-authored worktype metadata
+    - AI-authored tool.log records
     - verbose execution logs
     - checklist answers
-    - scenario-contract body
+    - senario body
     - full prompt/protocol/checklist dumps
