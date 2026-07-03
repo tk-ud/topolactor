@@ -3,9 +3,11 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
+PASS_COUNT=0
+VERBOSE="${CHECK_VERBOSE:-0}"
 
 fail() { echo "FAIL: $1" >&2; FAILURES=$((FAILURES + 1)); }
-pass() { echo "OK  : $1"; }
+pass() { PASS_COUNT=$((PASS_COUNT + 1)); if [ "$VERBOSE" = "1" ]; then echo "OK  : $1"; fi; }
 
 check_file() {
   local path="$1"
@@ -34,7 +36,7 @@ check_absent() {
   fi
 }
 
-echo "=== Scheduler job manifest substrate (implemented) wiring check ==="
+if [ "$VERBOSE" = "1" ]; then echo "=== Scheduler job manifest substrate (implemented) wiring check ==="; fi
 
 # ── SSOT ────────────────────────────────────────────────────────────────────
 check_file "docs/design/scheduler-job-manifest-ssot.yaml"
@@ -136,7 +138,7 @@ check_file "backend/tests/Topolactor.Runtime.Tests/SchedulerJobManifestRepositor
 check_file "frontend/tests/schedulerJobManifestProjection.test.ts"
 
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== Scheduler job manifest substrate wiring check passed ==="
+  echo "PASS check-scheduler-job-manifest-ssot.sh assertions=${PASS_COUNT}"
 else
   echo "=== $FAILURES scheduler job manifest wiring check(s) failed ===" >&2
   exit 1

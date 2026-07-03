@@ -3,8 +3,10 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
+PASS_COUNT=0
+VERBOSE="${CHECK_VERBOSE:-0}"
 fail(){ echo "FAIL: $1" >&2; FAILURES=$((FAILURES+1)); }
-pass(){ echo "OK  : $1"; }
+pass(){ PASS_COUNT=$((PASS_COUNT+1)); if [ "$VERBOSE" = "1" ]; then echo "OK  : $1"; fi; }
 
 check_file(){ local f="$1"; [ -f "$REPO_ROOT/$f" ] && pass "file exists: $f" || fail "missing file: $f"; }
 check_term(){ local f="$1" t="$2"; grep -qF -- "$t" "$REPO_ROOT/$f" && pass "$f -> $t" || fail "$f missing: $t"; }
@@ -16,7 +18,7 @@ section(){ awk -v start="$2" -v end="$3" '
   in_section && $0 ~ end { exit }
 ' "$REPO_ROOT/$1"; }
 
-echo "=== Abstract function completion alignment evidence check ==="
+if [ "$VERBOSE" = "1" ]; then echo "=== Abstract function completion alignment evidence check ==="; fi
 
 check_file ".agent/protocols/completion.md"
 check_file "backend/tests/Topolactor.Runtime.Tests/AbstractFunctionExecutorTests.cs"
@@ -125,7 +127,7 @@ check_absent "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "cas
 check_absent "backend/repository/NpgsqlExternalPortDbFunctionRepository.cs" "topology.fs_record_export_job"
 
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== Abstract function completion alignment evidence check passed ==="
+  echo "PASS check-abstract-function-completion-alignment.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo "=== $FAILURES abstract function completion alignment check(s) failed ===" >&2
