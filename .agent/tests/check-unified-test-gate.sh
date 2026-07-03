@@ -53,7 +53,7 @@ run_lane() {
 
 
 # Compact lane execution; failure replay is handled by noise_run_bash.
-run_lane "TEST_PROOF_MANIFEST_INTEGRITY" "bash .agent/tests/check-test-proof-manifest-integrity.sh"
+# Test proof manifest integrity is owned by .github/workflows/structure-check.yml, not this runner.
 run_lane "FUNCTION_BOUNDARY" "dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --nologo --verbosity minimal"
 run_lane "RUNTIME_INTEGRATION" "dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --nologo --verbosity minimal"
 run_lane "FRONTEND_CONTRACT" "deno test frontend/tests/adminApi.test.ts frontend/tests/adminImport.test.ts frontend/tests/adminUxGuard.test.ts frontend/tests/defaultEntitySearch.test.ts frontend/tests/pipelineContinuity.test.ts frontend/tests/emissionUserFacingResult.test.ts frontend/tests/uiBuilderStepper.test.ts --allow-read"
@@ -68,7 +68,7 @@ run_lane "INSTANCE_PORT_SUBSTRATE_DESIGN" "bash .agent/tests/check-instance-port
 # env / volume / live API-route E2E is still not included.
 
 if [ "${FAILURES}" -eq 0 ]; then
-  echo "PASS unified-test-gate lanes=10 remaining_todo=1"
+  echo "PASS unified-test-gate lanes=9 remaining_todo=1"
   exit 0
 fi
 

@@ -674,9 +674,8 @@ required_content_terms:
     - "FUNCTION_BOUNDARY"
     - "RUNTIME_INTEGRATION"
     - "FRONTEND_CONTRACT"
-    - "STRUCTURE_GATE"
     - "bash .agent/tests/check-unified-test-gate.sh"
-    - "bash .agent/tests/check-structure.sh"
+    - "bash .agent/tests/check-runtime-environment.sh"
   .agent/tests/check-unified-test-gate.sh:
     - "FUNCTION_BOUNDARY"
     - "RUNTIME_INTEGRATION"
