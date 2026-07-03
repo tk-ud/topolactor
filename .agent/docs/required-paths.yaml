@@ -126,6 +126,11 @@ required_files:
     - docs/design/cli-mcp-port-implementation-ssot.md
     - docs/governance/agent-governance-routing-ssot.md
     - docs/governance/agent-governance-routing-ssot.yaml
+    - docs/governance/agent-ui-protocol-ssot.yaml
+    - docs/governance/reference/agent-ui-tool-output-reference.yaml
+    - docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+    - docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+    - docs/governance/logs/tool.log
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml
@@ -212,6 +217,7 @@ required_files:
     - .agent/scripts/check_test_proof_manifest_integrity.py
     - .agent/scripts/check_ssot_proof_surface_connectivity.py
     - .agent/tests/check-ssot-proof-surface-connectivity.sh
+    - .agent/tests/check-agent-ui-protocol-ssot.sh
     - .agent/tests/check-no-ruby-dependency.sh
     - .agent/tools/README.md
     - .agent/tools/directory-map

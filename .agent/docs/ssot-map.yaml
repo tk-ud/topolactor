@@ -1149,6 +1149,21 @@ mapping:
       - docs/framework-policy.yaml
     protocols:
       - .agent/protocols/completion.md
+  - work_type: agent_ui_protocol_governance
+    change_surfaces:
+      - Agent UI tool contract
+      - docs/governance/logs/tool.log
+      - senario-tmp.md
+      - Agent UI protocol UI
+      - Agent UI governance reference
+    required_docs:
+      - docs/governance/agent-ui-protocol-ssot.yaml
+    supporting_docs:
+      - docs/governance/reference/agent-ui-tool-output-reference.yaml
+      - docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+      - docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+    protocols: []
+
 worktypes:
   ids:
     - audit
