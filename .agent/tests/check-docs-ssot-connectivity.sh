@@ -26,8 +26,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 FAILURES=0
+PASS_COUNT=0
 fail() { echo "FAIL: $1" >&2; FAILURES=$((FAILURES + 1)); }
-ok()   { echo "OK  $1"; }
+ok()   { PASS_COUNT=$((PASS_COUNT + 1)); }
 
 TREE_JSON="$(mktemp)"
 cleanup() { rm -f "$TREE_JSON"; }
@@ -183,7 +184,7 @@ done
 
 echo ""
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== docs SSOT connectivity checks passed ==="
+  echo "PASS check-docs-ssot-connectivity.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo "=== $FAILURES docs SSOT connectivity check(s) failed ===" >&2

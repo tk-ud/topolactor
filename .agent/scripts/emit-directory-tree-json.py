@@ -159,7 +159,8 @@ def render(entries) -> str:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument("--root", default="docs")
-    parser.add_argument("--depth", type=int, default=None)
+    parser.add_argument("--depth", type=int, default=2)
+    parser.add_argument("--full", action="store_true", help="Emit the full tree instead of the bounded default depth.")
     parser.add_argument("--output", default=None)
     args = parser.parse_args(argv)
 
@@ -172,7 +173,8 @@ def main(argv=None) -> int:
         sys.stderr.write(f"FAIL: --depth must be a non-negative integer: {args.depth}\n")
         return 2
 
-    entries = walk(repo_root, root_rel, args.depth)
+    effective_depth = None if args.full else args.depth
+    entries = walk(repo_root, root_rel, effective_depth)
     output_text = render(entries)
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:

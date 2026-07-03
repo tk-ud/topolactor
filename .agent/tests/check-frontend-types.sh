@@ -6,6 +6,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
+source .agent/scripts/lib/noise_control.sh
 
 if ! command -v deno >/dev/null 2>&1; then
   echo "ERROR: Deno is required for frontend type check. Install Deno and retry." >&2
@@ -13,7 +14,7 @@ if ! command -v deno >/dev/null 2>&1; then
   exit 1
 fi
 
-deno check \
+noise_run "frontend_types files=25" deno check \
   frontend/routes/index.tsx \
   frontend/routes/admin/index.tsx \
   frontend/routes/admin/manifests.tsx \

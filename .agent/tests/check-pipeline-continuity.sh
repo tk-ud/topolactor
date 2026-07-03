@@ -23,6 +23,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 SSOT="$REPO_ROOT/docs/design/pipeline-continuity-ssot.yaml"
 
 FAILURES=0
+PASS_COUNT=0
 
 fail() {
   echo "FAIL: $1" >&2
@@ -34,15 +35,9 @@ fail() {
 # Implemented in check-default-entity-search.sh (dotnet + deno) running in the
 # default-entity-search.yml workflow. This check confirms the script is present.
 
-echo ""
-echo "=== [pipeline.body] data-driven vertical slice: default:entity:search ==="
-echo "    Body test: .agent/tests/check-default-entity-search.sh (default-entity-search.yml)"
-echo "    Fixture:   EndpointRequestDto{target=default,layer=entity,action=Search}"
-echo "    Verifies:  structureMapId / packageId / schemaId / componentIds survive full dispatch"
-
 BODY_SCRIPT="$SCRIPT_DIR/check-default-entity-search.sh"
 if [ -f "$BODY_SCRIPT" ]; then
-  echo "OK  [pipeline.body] check-default-entity-search.sh present"
+  PASS_COUNT=$((PASS_COUNT + 1))
 else
   fail "[pipeline.body] check-default-entity-search.sh not found — pipeline body test missing"
 fi
@@ -50,14 +45,14 @@ fi
 
 PROJECTION_TEST="$REPO_ROOT/frontend/tests/projectionConstructor.test.ts"
 if [ -f "$PROJECTION_TEST" ]; then
-  echo "OK  [pipeline.body] projection constructor test file present"
+  PASS_COUNT=$((PASS_COUNT + 1))
 else
   fail "[pipeline.body] frontend/tests/projectionConstructor.test.ts not found — projection constructor lane body test missing"
 fi
 
 if [ -f "$SSOT" ]; then
   if grep -q '^    frontend_projection_constructor_lane:' "$SSOT"; then
-    echo "OK  [pipeline.body] frontend_projection_constructor_lane present in SSOT"
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
     fail "[pipeline.body] frontend_projection_constructor_lane missing in SSOT"
   fi
@@ -75,7 +70,7 @@ if [ -f "$SSOT" ]; then
   if [ -z "$PROJECTION_LANE_BLOCK" ]; then
     fail "[pipeline.body] failed to extract frontend_projection_constructor_lane block from SSOT"
   else
-    echo "OK  [pipeline.body] extracted frontend_projection_constructor_lane block"
+    PASS_COUNT=$((PASS_COUNT + 1))
   fi
 
   for identity_key in componentId component_kind parameter_schema event_binding; do
@@ -85,7 +80,7 @@ if [ -f "$SSOT" ]; then
       fail "[pipeline.body] frontend_projection_constructor_lane.required_identity missing key: ${identity_key}"
     fi
   done
-  echo "OK  [pipeline.body] lane-scoped required_identity minimum keys present"
+  PASS_COUNT=$((PASS_COUNT + 1))
 
   for prohibited_key in \
     componentId_drift \
@@ -100,22 +95,22 @@ if [ -f "$SSOT" ]; then
       fail "[pipeline.body] frontend_projection_constructor_lane.prohibited missing key: ${prohibited_key}"
     fi
   done
-  echo "OK  [pipeline.body] lane-scoped prohibited guard keys present"
+  PASS_COUNT=$((PASS_COUNT + 1))
 
   if printf '%s\n' "$PROJECTION_LANE_BLOCK" | grep -q '^[[:space:]]*pipeline_body_test:'; then
-    echo "OK  [pipeline.body] lane-scoped pipeline_body_test section present"
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
     fail "[pipeline.body] frontend_projection_constructor_lane.pipeline_body_test missing"
   fi
 
   if printf '%s\n' "$PROJECTION_LANE_BLOCK" | grep -q '^[[:space:]]*kind:[[:space:]]*unit_boundary_contract$'; then
-    echo "OK  [pipeline.body] lane-scoped pipeline_body_test.kind is unit_boundary_contract"
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
     fail "[pipeline.body] frontend_projection_constructor_lane.pipeline_body_test.kind must be unit_boundary_contract"
   fi
 
   if printf '%s\n' "$PROJECTION_LANE_BLOCK" | grep -q '^[[:space:]]*-[[:space:]]frontend/tests/projectionConstructor.test.ts$'; then
-    echo "OK  [pipeline.body] lane-scoped pipeline_body_test.test_files includes projectionConstructor test"
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
     fail "[pipeline.body] frontend_projection_constructor_lane.pipeline_body_test.test_files missing frontend/tests/projectionConstructor.test.ts"
   fi
@@ -130,9 +125,6 @@ fi
 #
 # Allowed count and exceptions defined in:
 #   docs/design/pipeline-continuity-ssot.yaml hardcode_guard.checks.target_dispatch_branching
-
-echo ""
-echo "=== [pipeline.hardcode_guard] dispatcher bypass and hardcode detection ==="
 
 RUNTIME_EXEC="$REPO_ROOT/backend/runtime/RuntimeExecutor.cs"
 
@@ -151,14 +143,14 @@ else
   if [ "$TOTAL" -gt "$ALLOWED" ]; then
     fail "[hardcode.guard] $TOTAL target-dispatch branches in RuntimeExecutor.cs (allowed: up to $ALLOWED; excess indicates hardcoded routing replacing manifest_dispatcher)"
   else
-    echo "OK  [hardcode.guard] target-dispatch branches: $TOTAL (allowed: up to $ALLOWED; 0 is preferred)"
+    PASS_COUNT=$((PASS_COUNT + 1))
   fi
 
   # Check for silent fallback to default target.
   if grep -q '?? "default"' "$RUNTIME_EXEC"; then
     fail "[hardcode.guard] silent fallback '?? \"default\"' found in RuntimeExecutor.cs"
   else
-    echo "OK  [hardcode.guard] no silent fallback to default target"
+    PASS_COUNT=$((PASS_COUNT + 1))
   fi
 
   # Check that fixed topology ID literals do not appear in production runtime paths.
@@ -172,7 +164,7 @@ else
   if [ -n "$FIXED_ID" ]; then
     fail "[hardcode.guard] fixed topology fixture ID found in production runtime/endpoint/mapper (must stay in tests only): $FIXED_ID"
   else
-    echo "OK  [hardcode.guard] no fixed topology fixture IDs in production runtime"
+    PASS_COUNT=$((PASS_COUNT + 1))
   fi
 fi
 
@@ -180,8 +172,6 @@ fi
 # Known gaps from pipeline-continuity-ssot.yaml gap_summary.
 # Not failures — these enumerate nodes that are not yet implemented.
 # To implement a node: add file to SSOT files[], update status, add pipeline body test.
-
-echo ""
 
 # frontend_component_event_log_lane minimal gate: presence/CI registration/SSOT references only
 if ! grep -q "frontend_component_event_log_lane" "$SSOT"; then
@@ -203,9 +193,6 @@ fi
 # Defined in docs/system-roadmap.yaml: system_ci.dotnet_ssot_wiring_audit_tests.
 # Tests must exist in the dotnet test project to satisfy the completion conditions.
 
-echo ""
-echo "=== [ssot.wiring_audit] SSOT wiring audit CI lane presence check ==="
-
 TEST_DIR="$REPO_ROOT/backend/tests/Topolactor.Runtime.Tests"
 
 for lane_file in \
@@ -215,7 +202,7 @@ for lane_file in \
   "SsotWiringAuditComponentRegistrationTests.cs" \
   "SsotWiringAuditDiagnosticsEligibilityTests.cs"; do
   if [ -f "$TEST_DIR/$lane_file" ]; then
-    echo "OK  [ssot.wiring_audit] $lane_file present"
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
     fail "[ssot.wiring_audit] $lane_file not found — SSOT wiring audit CI lane missing"
   fi
@@ -230,7 +217,7 @@ if [ -f "$ROADMAP" ]; then
     "system_ci.scheduler_runtime" \
     "system_ci.component_registration"; do
     if grep -q "^    ${lane_key}:" "$ROADMAP"; then
-      echo "OK  [ssot.wiring_audit] roadmap entry present: $lane_key"
+      PASS_COUNT=$((PASS_COUNT + 1))
     else
       fail "[ssot.wiring_audit] roadmap entry missing: $lane_key"
     fi
@@ -239,23 +226,18 @@ else
   fail "[ssot.wiring_audit] docs/system-roadmap.yaml not found"
 fi
 
-echo "=== [pipeline.gap_status] known gaps (from pipeline-continuity-ssot.yaml) ==="
 if [ -f "$SSOT" ]; then
-  sed -n '/^  gap_summary:/,$ { /^ *- "/ p }' "$SSOT" \
-    | sed 's/^ *- "//;s/"$//' \
-    | while IFS= read -r line; do
-        echo "GAP  $line"
-      done
+  GAP_COUNT="$(sed -n '/^  gap_summary:/,$ { /^ *- "/ p }' "$SSOT" | wc -l | tr -d '[:space:]')"
 else
+  GAP_COUNT=0
   fail "[pipeline.gap_status] pipeline-continuity-ssot.yaml not found"
 fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
-echo ""
 if [ "$FAILURES" -gt 0 ]; then
   echo "=== $FAILURES pipeline continuity failure(s) ===" >&2
   exit 1
 fi
 
-echo "=== Pipeline continuity: hardcode guard OK | see gap_status for not-implemented nodes ==="
+echo "PASS check-pipeline-continuity.sh assertions=${PASS_COUNT} gap_count=${GAP_COUNT}"

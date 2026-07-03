@@ -6,6 +6,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
+PASS_COUNT=0
 
 fail() {
   echo "FAIL: $1" >&2
@@ -17,7 +18,7 @@ require_env() {
   if [ -z "${!var_name:-}" ]; then
     fail "Required environment variable is not set: $var_name"
   else
-    echo "OK  [env]  $var_name"
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   fi
 }
 
@@ -37,6 +38,23 @@ if ! command -v psql >/dev/null 2>&1; then
   echo "FAIL: psql command not found. Install PostgreSQL client tools." >&2
   exit 1
 fi
+
+NOISE_LOG="$(mktemp)"
+exec 3>&1 4>&2 >"$NOISE_LOG" 2>&1
+noise_finish() {
+  local code=$?
+  exec 1>&3 2>&4
+  if [ "$code" -eq 0 ]; then
+    rm -f "$NOISE_LOG"
+    echo "PASS check-db-schema"
+  else
+    echo "FAIL check-db-schema exit=$code" >&2
+    cat "$NOISE_LOG" >&2 || true
+    rm -f "$NOISE_LOG"
+  fi
+  return "$code"
+}
+trap noise_finish EXIT
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
 PSQL_BASE=(
@@ -59,8 +77,8 @@ run_sql_file() {
   fi
 
   echo "Running SQL: $sql_file"
-  if "${PSQL_BASE[@]}" --file "$full_path" >/dev/null; then
-    echo "OK  [sql]  $sql_file"
+  if "${PSQL_BASE[@]}" --file "$full_path" ; then
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "Failed executing SQL file: $sql_file"
   fi
@@ -71,14 +89,14 @@ query_equals_zero() {
   local sql="$2"
 
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql"); then
     fail "Query failed: $label"
     return
   fi
 
   result="$(echo "$result" | tr -d '[:space:]')"
   if [ "$result" = "0" ]; then
-    echo "OK  [data] $label"
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "$label (expected count=0, got: ${result:-empty})"
   fi
@@ -89,36 +107,36 @@ query_equals_one() {
   local sql="$2"
 
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql"); then
     fail "Query failed: $label"
     return
   fi
 
   result="$(echo "$result" | tr -d '[:space:]')"
   if [ "$result" = "1" ]; then
-    echo "OK  [data] $label"
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "$label (expected count=1, got: ${result:-empty})"
   fi
 }
 
 echo "=== Validating topology_tables.sql bootstrap safety ==="
-if rg -n "DROP TABLE IF EXISTS.*CASCADE" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
+if rg -n "DROP TABLE IF EXISTS.*CASCADE" "$REPO_ROOT/db/topology_tables.sql" ; then
   fail "db/topology_tables.sql must not contain destructive DROP TABLE ... CASCADE"
 else
-  echo "OK  [sql] topology_tables.sql destructive DROP TABLE CASCADE absent"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 fi
 
 HUB_REL_MIGRATION="$REPO_ROOT/db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
 if [ ! -f "$HUB_REL_MIGRATION" ]; then
   fail "hub_relations legacy migration SQL missing: db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
 else
-  echo "OK  [sql] hub_relations legacy migration SQL present"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 fi
-if rg -n "DROP TABLE IF EXISTS.*CASCADE|DROP TABLE .* CASCADE" "$HUB_REL_MIGRATION" >/dev/null; then
+if rg -n "DROP TABLE IF EXISTS.*CASCADE|DROP TABLE .* CASCADE" "$HUB_REL_MIGRATION" ; then
   fail "hub_relations migration must not use DROP TABLE ... CASCADE"
 else
-  echo "OK  [sql] hub_relations migration destructive DROP TABLE CASCADE absent"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 fi
 
 echo "=== Executing schema SQL files ==="
@@ -195,8 +213,8 @@ END;
 ROLLBACK;
 EOF
 
-if "${PSQL_BASE[@]}" --file "$LEGACY_MIGRATION_SIM_SQL" >/dev/null; then
-  echo "OK  [sql] hub_relations legacy migration simulation passed (rolled back)"
+if "${PSQL_BASE[@]}" --file "$LEGACY_MIGRATION_SIM_SQL" ; then
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 else
   fail "hub_relations legacy migration simulation failed"
 fi
@@ -275,7 +293,7 @@ query_equals_one "unique constraint: hub_relations(topology_manifest_id, sequenc
   "SELECT COUNT(*) FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid JOIN pg_namespace n ON t.relnamespace = n.oid WHERE n.nspname = 'hubs' AND t.relname = 'hub_relations' AND c.contype = 'u' AND pg_get_constraintdef(c.oid) LIKE '%topology_manifest_id%' AND pg_get_constraintdef(c.oid) LIKE '%sequence_position%';"
 
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== DB schema check passed ==="
+  echo "PASS check-db-schema.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo "=== DB schema check failed: $FAILURES failure(s) ===" >&2

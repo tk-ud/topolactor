@@ -18,11 +18,42 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 FAILURES=0
+PASS_COUNT=0
 
 fail() {
   echo "FAIL: $1" >&2
   FAILURES=$((FAILURES + 1))
 }
+
+NOISE_LOG="$(mktemp)"
+exec 3>&1 4>&2 >"$NOISE_LOG" 2>&1
+noise_finish() {
+  local code=$?
+  exec 1>&3 2>&4
+  if [ "$code" -eq 0 ]; then
+    rm -f "$NOISE_LOG"
+    echo "PASS check-migration-ui-topology"
+  else
+    echo "FAIL check-migration-ui-topology exit=$code" >&2
+    cat "$NOISE_LOG" >&2 || true
+    rm -f "$NOISE_LOG"
+  fi
+  return "$code"
+}
+
+CLEANUP_FILES=()
+cleanup() {
+  local f
+  for f in "${CLEANUP_FILES[@]}"; do
+    [ -n "$f" ] && rm -f "$f"
+  done
+}
+finish() {
+  local code=$?
+  cleanup || true
+  (exit "$code"); noise_finish
+}
+trap finish EXIT
 
 check_content() {
   local file="$REPO_ROOT/$1"
@@ -32,7 +63,7 @@ check_content() {
     return
   fi
   if grep -qF -- "$term" "$file"; then
-    echo "OK  [term] $1 → \"$term\""
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "Term not found in $1: \"$term\""
   fi
@@ -93,7 +124,7 @@ if [ "$DB_VARS_PRESENT" = "false" ]; then
   echo ""
   echo "=== DB env vars absent — skipping live DB regression tests ==="
   if [ "$FAILURES" -eq 0 ]; then
-    echo "=== Static migration checks passed ==="
+    echo "PASS check-migration-ui-topology.sh assertions=${PASS_COUNT}"
     exit 0
   else
     echo "=== Static migration checks failed: $FAILURES failure(s) ===" >&2
@@ -122,13 +153,13 @@ query_equals_zero() {
   local label="$1"
   local sql="$2"
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql"); then
     fail "Query failed: $label"
     return
   fi
   result="$(echo "$result" | tr -d '[:space:]')"
   if [ "$result" = "0" ]; then
-    echo "OK  [data] $label"
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "$label (expected 0, got: ${result:-empty})"
   fi
@@ -138,13 +169,13 @@ query_equals_one() {
   local label="$1"
   local sql="$2"
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql"); then
     fail "Query failed: $label"
     return
   fi
   result="$(echo "$result" | tr -d '[:space:]')"
   if [ "$result" = "1" ]; then
-    echo "OK  [data] $label"
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "$label (expected 1, got: ${result:-empty})"
   fi
@@ -157,8 +188,8 @@ run_sql_file() {
     fail "SQL file missing: $sql_file"
     return
   fi
-  if "${PSQL_BASE[@]}" --file "$full_path" >/dev/null; then
-    echo "OK  [sql]  $sql_file"
+  if "${PSQL_BASE[@]}" --file "$full_path" ; then
+    PASS_COUNT=$((PASS_COUNT + 1)) # OK
   else
     fail "Failed executing SQL file: $sql_file"
   fi
@@ -193,12 +224,12 @@ query_equals_zero "public.ui_package_component_map absent" \
 echo ""
 echo "=== DB: migration idempotency (re-run is a no-op) ==="
 run_sql_file "db/migrations/ui_topology_to_canonical_schema.sql"
-echo "OK  [idempotent] ui_topology_to_canonical_schema.sql re-run succeeded"
+PASS_COUNT=$((PASS_COUNT + 1)) # OK
 
 echo ""
 echo "=== DB: conflict-case simulation (child FK remapped to canonical UUID) ==="
 CONFLICT_SIM_SQL="$(mktemp)"
-trap 'rm -f "$CONFLICT_SIM_SQL"' EXIT
+CLEANUP_FILES+=("$CONFLICT_SIM_SQL")
 
 cat > "$CONFLICT_SIM_SQL" <<'ENDSQL'
 BEGIN;
@@ -407,15 +438,15 @@ $$;
 ROLLBACK;
 ENDSQL
 
-if "${PSQL_BASE[@]}" --file "$CONFLICT_SIM_SQL" >/dev/null; then
-  echo "OK  [sim] conflict-case FK and tensor parent remapping simulation passed (rolled back)"
+if "${PSQL_BASE[@]}" --file "$CONFLICT_SIM_SQL" ; then
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 else
   fail "conflict-case FK and tensor parent remapping simulation failed"
 fi
 
 if [ "$FAILURES" -eq 0 ]; then
   echo ""
-  echo "=== Migration regression checks passed ==="
+  echo "PASS check-migration-ui-topology.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo ""

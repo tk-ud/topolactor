@@ -7,6 +7,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
+PASS_COUNT=0
 
 fail() {
   echo "FAIL: $1" >&2
@@ -16,7 +17,7 @@ fail() {
 check_file() {
   local f="$REPO_ROOT/$1"
   if [ -f "$f" ]; then
-    echo "OK  [file] $1"
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
     fail "File missing: $1"
   fi
@@ -30,7 +31,7 @@ check_content() {
     return
   fi
   if grep -qF -- "$term" "$file"; then
-    echo "OK  [term] $1 → \"$term\""
+    PASS_COUNT=$((PASS_COUNT + 1))
   else
     fail "Term not found in $1: \"$term\""
   fi
@@ -45,7 +46,7 @@ check_absent() {
   if grep -qF -- "$term" "$file"; then
     fail "Forbidden term found in $1: \"$term\""
   else
-    echo "OK  [absent] $1 does not contain \"$term\""
+    PASS_COUNT=$((PASS_COUNT + 1))
   fi
 }
 
@@ -230,7 +231,7 @@ done
 
 echo ""
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== check-runtime-bundle-ssots.sh: all checks passed ==="
+  echo "PASS check-runtime-bundle-ssots.sh assertions=${PASS_COUNT}"
   exit 0
 else
   echo "=== check-runtime-bundle-ssots.sh: $FAILURES check(s) failed ===" >&2

@@ -168,15 +168,20 @@ def main():
             else:
                 failures.append(f"marker found in unregistered file: {norm}")
 
-    print("=== system roadmap check ===")
-    for w in warnings:
-        print(f"WARN: {w}")
-    for f in failures:
-        print(f"FAIL: {f}")
     if failures:
+        print("=== system roadmap check ===")
+        for w in warnings:
+            print(f"WARN: {w}")
+        for f in failures:
+            print(f"FAIL: {f}")
         print(f"=== {len(failures)} failure(s), {len(warnings)} warning(s) ===")
         return 1
-    print(f"=== PASS ({len(warnings)} warning(s)) ===")
+    if warnings:
+        sample = "; ".join(warnings[:3])
+        suffix = "" if len(warnings) <= 3 else "; ..."
+        print(f"PASS system-roadmap warnings={len(warnings)} sample={sample}{suffix}")
+    else:
+        print("PASS system-roadmap warnings=0")
     return 0
 
 

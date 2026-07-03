@@ -104,7 +104,6 @@ def main():
         fail("phase_attention_function_contract.calculation.y must reference topology_manifest_id")
     if "hub_id" not in str(pa_calc.get("z", "")):
         fail("phase_attention_function_contract.calculation.z must reference hub_id")
-    print("OK: phase_attention canonical axis checks passed")
 
     detailed = dig(roadmap, "system_roadmap_ssot", "related_surfaces", "detailed_design_ssot")
     for v in ["docs/design/sql-attention-logs-ssot.md", "docs/design/sql-attention-logs-ssot.yaml"]:
@@ -126,8 +125,8 @@ def main():
         if not (isinstance(registry, dict) and k in registry):
             fail(f"implementation_registry missing {k}")
 
-    print("OK: SQL Attention SSOT YAML and roadmap alignment checks passed")
 
 
 if __name__ == "__main__":
     main()
+    print("PASS check-sql-attention-ssot-yaml assertions=2")

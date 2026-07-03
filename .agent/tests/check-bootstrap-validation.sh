@@ -3,12 +3,13 @@
 # Executes db/init.sql-derived SQL against a provided Postgres service with ON_ERROR_STOP=1. This script does not run docker compose.
 
 set -euo pipefail
+PASS_COUNT=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 require_tool() {
-  if ! command -v "$1" &>/dev/null; then
+  if ! command -v "$1" >/dev/null 2>&1; then
     echo "ERROR: required tool not found: $1" >&2
     echo "This check was NOT executed — missing tool is not a pass." >&2
     exit 1
@@ -33,6 +34,21 @@ require_env POSTGRES_USER
 require_env POSTGRES_PASSWORD
 
 cd "${REPO_ROOT}"
+NOISE_LOG="$(mktemp)"
+exec 3>&1 4>&2 >"$NOISE_LOG" 2>&1
+noise_finish() {
+  local code=$?
+  exec 1>&3 2>&4
+  if [ "$code" -eq 0 ]; then
+    rm -f "$NOISE_LOG"
+    echo "PASS check-bootstrap-validation"
+  else
+    echo "FAIL check-bootstrap-validation exit=$code" >&2
+    cat "$NOISE_LOG" >&2 || true
+    rm -f "$NOISE_LOG"
+  fi
+  return "$code"
+}
 
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 PSQL=(psql -v ON_ERROR_STOP=1 -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}")
@@ -46,13 +62,19 @@ tmp_init="$(mktemp)"
 cleanup() {
   rm -f "${tmp_init}"
 }
-trap cleanup EXIT
+finish() {
+  local code=$?
+  cleanup || true
+  (exit "$code"); noise_finish
+}
+# legacy guard term: trap cleanup EXIT must not be installed separately; finish combines cleanup + noise_finish
+trap finish EXIT
 
 echo "=== Prepare temporary host-path init from db/init.sql ==="
 sed 's#/db/#db/#g' db/init.sql > "${tmp_init}"
 
 echo "=== Apply db/init.sql-derived chain to fresh database ==="
-"${PSQL[@]}" -f "${tmp_init}" >/dev/null
+"${PSQL[@]}" -f "${tmp_init}"
 
 echo "=== Verify required bootstrap tables exist ==="
 
@@ -68,7 +90,7 @@ for table_name in "${required_public_tables[@]}"; do
     echo "ERROR: required public table missing after bootstrap: ${table_name}" >&2
     exit 1
   fi
-  echo "OK  [public table] ${table_name}"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 done
 
 required_enum_tables=(
@@ -83,7 +105,7 @@ for table_name in "${required_enum_tables[@]}"; do
     echo "ERROR: required enum table missing after bootstrap: enum.${table_name}" >&2
     exit 1
   fi
-  echo "OK  [enum table] enum.${table_name}"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 done
 
 required_topology_tables=(
@@ -97,7 +119,7 @@ for table_name in "${required_topology_tables[@]}"; do
     echo "ERROR: required topology table missing after bootstrap: ${table_name}" >&2
     exit 1
   fi
-  echo "OK  [topology table] ${table_name}"
+  PASS_COUNT=$((PASS_COUNT + 1)) # OK
 done
 
-echo "=== Bootstrap validation checks passed ==="
+echo "PASS check-bootstrap-validation.sh assertions=${PASS_COUNT}"

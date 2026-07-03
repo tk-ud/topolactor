@@ -47,7 +47,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp)"
+          if sudo apt-get update >"$tmp" 2>&1 && sudo apt-get install -y postgresql-client >>"$tmp" 2>&1; then
+            echo "PASS apt install=postgresql-client"
+            rm -f "$tmp"
+          else
+            code=$?
+            echo "FAIL apt install=postgresql-client exit=$code" >&2
+            cat "$tmp" >&2
+            rm -f "$tmp"
+            exit "$code"
+          fi
 
       - name: Run DB schema check
         run: bash .agent/tests/check-db-schema.sh
