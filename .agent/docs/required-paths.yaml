@@ -224,9 +224,17 @@ required_files:
     - .agent/tools/yaml-section-query
     - .agent/tools/proof-surface-map
     - .agent/tools/topology-seed-discussion
+    - .agent/tools/agent-ui-initial-contract
+    - .agent/tools/agent-ui-local-test
     - .agent/scripts/agent_tools/readonly_observation.py
+    - .agent/scripts/agent_tools/agent_ui_common.py
+    - .agent/scripts/agent_tools/agent_ui_initial_contract.py
+    - .agent/scripts/agent_tools/agent_ui_local_test.py
     - .agent/scripts/check_agent_tools_surface.py
     - .agent/tests/check-agent-tools-surface.sh
+    - .agent/scripts/check_agent_ui_protocol.py
+    - .agent/scripts/check_agent_ui_tool.py
+    - .agent/tests/check-agent-ui-tool.sh
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml

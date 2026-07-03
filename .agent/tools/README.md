@@ -123,6 +123,35 @@ Examples:
 .agent/tools/topology-seed-discussion build --answers /tmp/topology-seed-discussion.tmp.json
 ```
 
+## Agent UI protocol tools
+
+`agent-ui-initial-contract` and `agent-ui-local-test` implement the Agent UI protocol's `initial_contract` and `local_test` steps from `docs/governance/agent-ui-protocol-ssot.yaml`. They are governance/tool-side tools, not ordinary observation tools: the SSOT and this task scope explicitly permit them to write `senario-tmp.md` and append to `docs/governance/logs/tool.log`, but they still do not mutate Topolactor application/runtime/product source, and they do not expose an `--output` mutation escape hatch.
+
+### `agent-ui-initial-contract`
+
+- `worktypes`: lists canonical worktype ids with their routed prompt path and required checks (from `.agent/routes/worktype-required-protocols.yaml`).
+- `start --task-name <name> --worktype <worktype>`: resolves the worktype route and emits tool-generated `uuid`/`datetime` plus a short prompt excerpt and protocol trigger hints. The AI must reuse these tool-generated values verbatim in later steps rather than hand-authoring them.
+- `resolve-ssot --target <name>`: resolves a target SSOT name to a repo-relative path and lists its top-level sections (delegates to `yaml-section-query` for the actual read).
+- `sections --file <path> --select '["a","b"]'`: outputs only the selected section subtrees (delegates to `yaml-section-query --section` per selected key).
+- `end --task-name ... --worktype ... --uuid ... --datetime ... --target-file ... --senario-summary ... [--ng-boundary ...]`: requires a senario contract, writes `senario-tmp.md` from the reference template, and appends the compact usage record to `docs/governance/logs/tool.log`.
+
+### `agent-ui-local-test`
+
+- `run-worktype-tests --worktype <worktype>`: runs the `required_checks` routed for a worktype and summarizes pass/fail with a bounded tail, not raw logs.
+- `read-senario-tmp`: outputs `senario-tmp.md`, or an explicit Error if it cannot be checked.
+- `checklist [--files <a,b>]`: lists existing checklist interview item headings (default: `policy-judgment.md`, `boundary-identity.md`); it does not evaluate free-form checklist answers itself.
+- `checks`: runs `.agent/tests/check-structure.sh` and summarizes pass/fail.
+- `summary --task-name ... --worktype ... --uuid ... --datetime ...`: runs worktype tests + structure check + senario-tmp presence and emits a compact `pass_or_fail` completion summary. `pass_or_fail` reflects required-check pass only; it is not an implemented/partial/not_started judgment.
+
+Examples:
+
+```sh
+.agent/tools/agent-ui-initial-contract worktypes
+.agent/tools/agent-ui-initial-contract start --task-name "fix-x" --worktype existing_pr_update
+.agent/tools/agent-ui-local-test checks
+.agent/tools/agent-ui-local-test summary --task-name "fix-x" --worktype existing_pr_update --uuid <uuid> --datetime <datetime>
+```
+
 ## Prohibited uses
 
 Do not use ordinary observation `.agent/tools` to:

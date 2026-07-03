@@ -2,7 +2,7 @@
 
 ## Bundle `agent-ui-protocol-tooling`
 
-**Status:** not_started  
+**Status:** partial (agent-ui-initial-contract-tool and agent-ui-local-test-tool implemented; agent-ui-reference-and-route-replacement not started)  
 **Worktype:** implementation_change  
 **Primary SSOT:** `docs/governance/agent-ui-protocol-ssot.yaml`  
 **Reference:** `docs/governance/reference/agent-ui-tool-output-reference.yaml`, `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`, `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`  
@@ -38,7 +38,9 @@ AI は意味入力と実装を担当し、tool は metadata / log / route output
 
 ## SubBundle `agent-ui-initial-contract-tool`
 
-**Status:** not_started
+**Status:** implemented (`.agent/tools/agent-ui-initial-contract`, body in `.agent/scripts/agent_tools/agent_ui_initial_contract.py`)
+
+**Implementation note:** `worktype` selection is by canonical worktype id string (validated against `.agent/routes/worktype-required-protocols.yaml`), not a numbered choice — the `worktypes` subcommand lists ids for the AI to pick from. `sections`/`resolve-ssot` delegate to the existing `yaml-section-query` tool per the Existing Tool Usage rule rather than reimplementing YAML traversal. Verified via `.agent/scripts/check_agent_ui_tool.py` (contract: executable, `--help` terms, `--output` mutation-probe rejection) and manual `worktypes`/`start`/`resolve-ssot`/`sections`/`end` invocations (senario-tmp.md + tool.log write verified, then reverted before commit).
 
 ### 目的
 
@@ -120,7 +122,9 @@ Agent 作業開始時の route / SSOT selection / senario contract / usage metad
 
 ## SubBundle `agent-ui-local-test-tool`
 
-**Status:** not_started
+**Status:** implemented (`.agent/tools/agent-ui-local-test`, body in `.agent/scripts/agent_tools/agent_ui_local_test.py`)
+
+**Implementation note:** `checklist` lists existing checklist item headings only; it does not evaluate free-form checklist answers (those remain an AI/human interview, per the existing checklist protocol). `summary` re-runs worktype-routed checks + `check-structure.sh` + senario-tmp presence rather than accepting prior step state, keeping the CLI stateless like the existing `topology-seed-discussion` tool. `pass_or_fail` is explicitly documented as required-check pass only, not an implemented/partial/not_started judgment.
 
 ### 目的
 
