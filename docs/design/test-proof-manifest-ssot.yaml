@@ -445,9 +445,9 @@ chronological_scope_index:
     proof_order: 90
     scope_phase: instance_substrate
     domain: instance
-    proof_type: known_gap
+    proof_type: runner_gate_proof
     source_contract: instance settings / primitive / runtime / execution authority contract
-    target_contract: instance runtime authority proof bundle
+    target_contract: instance port substrate design/runtime wiring gate
     ssot_refs:
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/runtime-orchestration-ssot.yaml
@@ -457,16 +457,16 @@ chronological_scope_index:
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
       - .agent/tests/check-instance-port-substrate.sh
-    evidence_inputs:
-      - .agent/tasks/todo.md
-    todo_bundle_refs:
-      - instance-substrate-executable-proof
+    evidence_inputs: []
     workflow_jobs:
       - .github/workflows/structure-check.yml::structure-check
     required_when:
       changed_files:
         - docs/design/admin-console-workflow-ssot.yaml
         - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/instance-port-substrate-ssot.yaml
+        - backend/runtime/InstancePortRuntime.cs
+        - backend/repository/NpgsqlInstancePortPolicyRepository.cs
     depends_on:
       - ssot_structure_policy_contract
       - runtime_trigger_scheduler_contract
@@ -474,14 +474,11 @@ chronological_scope_index:
     unblocks:
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
-    known_gap_reason: instance-port substrate SSOT and design-only guard (check-instance-port-substrate.sh) exist, but no executable instance runtime authority/execution proof exists yet
-    proves: []
+    proves:
+      - instance-port substrate SSOT, roadmap retirement from active TODO, runtime lane, credential-backed primitive adapters, repository policy reads, Design Inspector approved-candidate source, and fail-close guard/test wiring are audited by check-instance-port-substrate.sh
     does_not_prove:
-      - instance settings topology
-      - primitive registry authority
-      - runtime instance selection
-      - execution authority enforcement
-      - credential/secret boundary behavior
+      - live generic instance integration acceptance against production credentials or external instance infrastructure
+      - frontend/admin projection expression beyond the checked instance operation authoring and validation wiring
 
   - proof_id: admin_registration_promotion_contract
     proof_order: 100

@@ -13,7 +13,6 @@
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `aggregate-trigger-substrate` | 集計トリガー基盤 | in_progress | 1 | - | `docs/design/runtime-orchestration-ssot.yaml` |
-| `instance-substrate-executable-proof` | instance substrate executable proof / production-readiness evidence | partial | 1 | `product.instance_port_substrate` | `docs/design/instance-port-substrate-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
@@ -126,22 +125,6 @@ implementation_change で、SSOTに従って helper schema / seed artifact を�
 
 ---
 
-## Bundle `instance-substrate-executable-proof`
-
-**Status:** partial
-**Roadmap/status SSOT:** `product.instance_port_substrate`
-**Primary SSOT:** `docs/design/instance-port-substrate-ssot.yaml`
-**Known gap proof edge:** `instance_substrate_contract_gap`
-
-- [ ] instance substrate executable proof / production-readiness evidence bundle
-  - 問題点: Design SSOT、DDL/seed surface、runtime lane、primitive adapters、authority/allowlist/sanitize/timeout guards、regression checks are implemented, but `docs/design/test-proof-manifest-ssot.yaml` intentionally keeps `instance_substrate_contract_gap` as a `known_gap` until executable instance runtime authority / execution proof and generic live instance integration acceptance are connected.
-  - 目的: known_gap を実装済み主張へ格上げせず、residual proof scope を Bundle 単位で固定し、future executable proof replacement が完了するまで CI で追跡可能にする。
-  - 改善方針: `check-instance-port-substrate.sh` の design-only guard と既存 runtime tests を過剰主張せず、credential-backed instance selection / runtime authority / execution enforcement / credential boundary behavior の executable proof surface を追加・接続した時点で known_gap を executable proof edge に置換する。
-  - 対応資料: `docs/design/instance-port-substrate-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/test-proof-manifest-ssot.yaml`, `.agent/tests/check-instance-port-substrate.sh`
-  - OK軸: `instance_substrate_contract_gap` が未完 Bundle に接続され、完了済み Bundle を known_gap の参照先にせず、future proof replacement が instance authority / execution / credential boundary を executable proof として示す。
-  - NG軸: design-only guard、seed presence、runtime adapter existence、roadmap implemented status、または known_gap_reason のみで executable instance proof 完了とみなす。
-
----
 
 ## Bundle `aggregate-trigger-substrate`
 

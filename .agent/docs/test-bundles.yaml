@@ -94,8 +94,6 @@ reverse_lookup:
       - Notion/Sheets/Slack/GitHub/Webhook/REST connector behavior until gap proof edges are replaced by executable proofs
 
   - bundle_id: instance_substrate_gate
-    roadmap_bundle_refs:
-      - instance-substrate-executable-proof
     proof_refs:
       - instance_substrate_contract_gap
     runner_surfaces:
