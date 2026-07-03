@@ -19,6 +19,7 @@ frontend/.env
 # Agent temporary planning memo (must not be committed)
 .agent/tmp/*
 !.agent/tmp/.gitkeep
+senario-tmp.md
 
 # Windows reserved device names (accidental redirect artifacts)
 nul
