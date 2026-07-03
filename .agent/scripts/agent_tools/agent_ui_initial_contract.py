@@ -41,11 +41,12 @@ from agent_ui_common import (
 
 SENARIO_TMP_TEMPLATE = """# contracts
 ## 対象file名
-- [ ] {target_file}
+- [x] {target_file}
+- [x] 作業概要: {senario_summary}
 
 # negative cases
 ## NG boundary
-- [ ] {ng_boundary}
+- [x] {ng_boundary}
 """
 
 TOOL_NAME = "agent-ui-initial-contract"
@@ -214,6 +215,7 @@ def _cmd_end(args: argparse.Namespace) -> int:
 
     content = SENARIO_TMP_TEMPLATE.format(
         target_file=args.target_file.strip(),
+        senario_summary=args.senario_summary.strip(),
         ng_boundary=(args.ng_boundary or "N/A").strip(),
     )
     SENARIO_TMP_PATH.write_text(content, encoding="utf-8")
@@ -230,6 +232,7 @@ def _cmd_end(args: argparse.Namespace) -> int:
             "task_name": args.task_name,
             "worktype": args.worktype,
             "selected_ssot_sections": args.selected_sections.split(",") if args.selected_sections else [],
+            "scenario_contract_summary": args.senario_summary.strip(),
             "senario_tmp_path": str(SENARIO_TMP_PATH.relative_to(REPO_ROOT)),
             "tool_log_appended": True,
         },

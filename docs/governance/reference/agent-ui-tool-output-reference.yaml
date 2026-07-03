@@ -22,7 +22,7 @@ reference_policy:
 
 authority_split:
   ai_authored:
-    - implementation_name
+    - task_name
     - tool_operation_inputs
     - senario_content
     - implementation_changes
@@ -40,30 +40,30 @@ common_metadata:
   fields:
     - datetime
     - uuid
-    - implementation_name
+    - task_name
     - worktype
   generated_by_tool:
     - datetime
     - uuid
     - worktype
   authored_by_ai:
-    - implementation_name
+    - task_name
   reuse_required:
     - PR body
     - summary
     - docs/governance/logs/tool.log
 
 initial_contract_outputs:
-  step_1_implementation_name:
+  step_1_task_name:
     ai_input:
-      - implementation_name
+      - task_name
     tool_emits:
       - uuid
       - datetime
     compact_note: usage_metadata_partial
   step_2_worktype:
     ai_input:
-      - worktype_number_selection
+      - worktype_id_selection
     tool_emits:
       - worktype
       - worktype_prompt_path
@@ -118,7 +118,7 @@ initial_contract_outputs:
       - initial_contract_summary
       - datetime
       - uuid
-      - implementation_name
+      - task_name
       - worktype
 
 implementation_phase_outputs:
@@ -163,7 +163,7 @@ local_test_outputs:
       - completion_summary
       - datetime
       - uuid
-      - implementation_name
+      - task_name
       - worktype
       - selected_ssot_sections
       - senario_contract_summary
@@ -193,7 +193,7 @@ log_record_reference:
     note: >-
       tool.log is append-only for the tool. Periodic cleanup is a human
       governance operation.
-  record_format: "<datetime> <uuid> <implementation_name> <worktype>"
+  record_format: "<datetime> <uuid> <task_name> <worktype>"
   datetime_format: ISO-8601
   forbidden_contents:
     - AI-authored uuid

@@ -10,6 +10,9 @@ Worktype is `existing_pr_update`, including:
 - merge前後の残ズレ修正
 - PR #xxx 差分に対する追加commit/追加prompt作成
 
+## tool_first_entry
+When `.agent/tools/agent-ui-initial-contract` is usable, run `start --task-name <name> --worktype existing_pr_update` first to get the routed prompt excerpt and protocol trigger hints; this file remains the fallback router when the tool is not usable.
+
 ## required_reads
 - PR diff or patch
 - changed files

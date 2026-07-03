@@ -59,7 +59,7 @@ agent_protocols:
   flow_order:
     initial_contract:
       - task_name_input
-      - worktype_number_select
+      - worktype_id_select
       - emit_worktype_prompt
       - target_ssot_name_input
       - output_section_list

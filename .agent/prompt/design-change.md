@@ -6,6 +6,9 @@ SSOT/docs/external contract change.
 ## trigger_condition
 Worktype is `design_change`.
 
+## tool_first_entry
+When `.agent/tools/agent-ui-initial-contract` is usable, run `start --task-name <name> --worktype design_change` first to get the routed prompt excerpt and protocol trigger hints; this file remains the fallback router when the tool is not usable.
+
 ## required_reads
 - docs/governance/agent-governance-routing-ssot.yaml
 - docs/governance/agent-governance-routing-ssot.md

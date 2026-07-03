@@ -59,11 +59,13 @@ Choose one canonical worktype id:
 - `todo_maintenance`
 - `existing_pr_update`
 
-Use `.agent/routes/worktype-required-protocols.yaml` as executable reference for prompt/protocol/check mapping.
+Use `.agent/routes/worktype-required-protocols.yaml` as executable reference for prompt/protocol/check mapping. When `.agent/tools/agent-ui-initial-contract` is usable, its `worktypes` subcommand lists these canonical ids with their routed prompt/checks directly from that file.
 
 ## Branch to Prompt
 
-After worktype decision, open only matching prompt router:
+Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, run its `worktypes`/`start` subcommands to resolve the worktype route, prompt path, and prompt excerpt (see `.agent/tools/README.md` and `.agent/routes/worktype-required-protocols.yaml`'s `agent_ui_tool_entry`) instead of manually reading every prompt router below.
+
+Fallback: after worktype decision, open only matching prompt router:
 
 - `.agent/prompt/audit.md`
 - `.agent/prompt/specific.md`

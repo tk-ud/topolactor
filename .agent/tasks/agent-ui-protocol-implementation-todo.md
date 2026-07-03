@@ -2,7 +2,7 @@
 
 ## Bundle `agent-ui-protocol-tooling`
 
-**Status:** partial (agent-ui-initial-contract-tool and agent-ui-local-test-tool implemented; agent-ui-reference-and-route-replacement not started)  
+**Status:** implemented (all three SubBundles processed: agent-ui-initial-contract-tool, agent-ui-local-test-tool, agent-ui-reference-and-route-replacement; see Bundle-level acceptance below)  
 **Worktype:** implementation_change  
 **Primary SSOT:** `docs/governance/agent-ui-protocol-ssot.yaml`  
 **Reference:** `docs/governance/reference/agent-ui-tool-output-reference.yaml`, `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`, `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`  
@@ -198,7 +198,9 @@ Agent 実装後に、worktype tests / senario-tmp output / checklist interview /
 
 ## SubBundle `agent-ui-reference-and-route-replacement`
 
-**Status:** not_started
+**Status:** implemented
+
+**Implementation note:** `AGENTS.md` Entry Route, `.agent/rules/rule.md` Worktype Decision/Branch to Prompt, `.agent/routes/worktype-required-protocols.yaml` (new `agent_ui_tool_entry` key), and the `implementation-change`/`design-change`/`existing-pr-update` prompt routers now each carry a "tool-first, fallback to manual reads" bullet pointing at `.agent/tools/agent-ui-initial-contract`. `.agent/README.md`'s `tools/` line was shrunk to a one-line pointer at `.agent/tools/README.md` (no authority/mutation-boundary detail in the directory map, per scope). Legacy `.agent/prompt`, `.agent/protocols`, `.agent/checklists` files are untouched and remain the fallback route. `docs/governance/reference/agent-ui-tool-output-reference.yaml` was aligned from `implementation_name`/`worktype_number_selection` to the SSOT's `task_name`/`worktype_id_selection` vocabulary; `docs/governance/agent-ui-protocol-ssot.yaml`'s `flow_order.initial_contract` step was renamed `worktype_number_select` -> `worktype_id_select` to match the implemented canonical-id (not numbered) worktype selection. `senario-tmp.md` spelling and the legacy `scenario-contract.md` filename were left as-is. `agent-ui-initial-contract end` now folds `--senario-summary` into the written `senario-tmp.md` contract body (previously validated but discarded) and echoes it back as `scenario_contract_summary`; `agent-ui-local-test summary` reads it back from the file.
 
 ### 目的
 
@@ -249,24 +251,24 @@ PR #560 で設計・配線した Agent UI protocol を、既存 Agent 導線へ 
 
 ### 実装scope
 
-- [ ] `AGENTS.md` の Entry Route を tool-first に寄せる。ただし tool 非対応 Agent 向け fallback を残す。
-- [ ] `.agent/rules/rule.md` に Agent UI protocol の trigger / prohibition / authority split を最小差分で反映する。
-- [ ] `.agent/README.md` の directory map に `.agent/tools` の Agent UI tool role を追加する。
-- [ ] `.agent/routes/worktype-required-protocols.yaml` へ必要なら Agent UI tool route を接続する。
-- [ ] worktype prompt は tool が使える場合の入口を Agent UI protocol 優先に寄せる。
-- [ ] Reference 内の `task_name` / `implementation_name` など命名ズレがあれば最小差分で整える。
-- [ ] `senario` 綴りは既存設計に合わせ、`senario-tmp.md` を正として扱う。既存 legacy `scenario-contract.md` ファイル名は安易に変更しない。
-- [ ] `.agent/tests/check-agent-ui-protocol-ssot.sh` は将来 Reference 増加に備え、配列 + loop 構成を維持・拡張する。
+- [x] `AGENTS.md` の Entry Route を tool-first に寄せる。ただし tool 非対応 Agent 向け fallback を残す。
+- [x] `.agent/rules/rule.md` に Agent UI protocol の trigger / prohibition / authority split を最小差分で反映する（Prohibitions/Existing Tool Usage は既存commit分、Worktype Decision/Branch to Promptへtool-first routingを本SubBundleで追加）。
+- [x] `.agent/README.md` の directory map に `.agent/tools` の Agent UI tool role を追加する（一行紹介のみ、詳細は `.agent/tools/README.md` 側）。
+- [x] `.agent/routes/worktype-required-protocols.yaml` へ Agent UI tool route (`agent_ui_tool_entry`) を接続する。
+- [x] worktype prompt (`implementation-change.md` / `design-change.md` / `existing-pr-update.md`) は tool が使える場合の入口を Agent UI protocol 優先に寄せる。
+- [x] Reference 内の `task_name` / `implementation_name` 命名ズレを `task_name` へ統一、`worktype_number_select(ion)` を `worktype_id_select(ion)` へ最小差分で整える。
+- [x] `senario` 綴りは既存設計に合わせ、`senario-tmp.md` を正として扱う。既存 legacy `scenario-contract.md` ファイル名は変更していない。
+- [x] `.agent/tests/check-agent-ui-protocol-ssot.sh` は未変更のまま配列 + loop 構成を維持（将来 Reference 増加に対応可能な形のまま）。
 
 ### OK軸
 
-- [ ] Agent が tool 利用可能な場合、Agent UI protocol を先に通る導線になっている。
-- [ ] tool 非対応 Agent 向け legacy fallback が残っている。
-- [ ] SSOT は軽量な契約 / 順序 / Reference 配線のまま。
-- [ ] Reference が output fields / templates / checklist interview wording を持つ。
-- [ ] `.agent/tasks/todo.md` は触っていない。
-- [ ] 既存 prompt / protocols / checklists を削除していない。
-- [ ] Structure Check が pass する。
+- [x] Agent が tool 利用可能な場合、Agent UI protocol を先に通る導線になっている。
+- [x] tool 非対応 Agent 向け legacy fallback が残っている。
+- [x] SSOT は軽量な契約 / 順序 / Reference 配線のまま（語彙修正のみ、template詳細は追加していない）。
+- [x] Reference が output fields / templates / checklist interview wording を持つ。
+- [x] `.agent/tasks/todo.md` は触っていない。
+- [x] 既存 prompt / protocols / checklists を削除していない。
+- [x] Structure Check が pass する。
 
 ### NG軸
 
@@ -281,14 +283,14 @@ PR #560 で設計・配線した Agent UI protocol を、既存 Agent 導線へ 
 
 ## Bundle-level acceptance
 
-- [ ] `agent-ui-initial-contract-tool` が実装され、usage metadata / selected SSOT section / senario-tmp / tool.log append まで到達する。
-- [ ] `agent-ui-local-test-tool` が実装され、worktype tests / senario-tmp output / checklist interview / required checks を compact に実行・要約する。
-- [ ] Reference 不足・命名ズレが最小差分で整理されている。
-- [ ] `AGENTS.md` / `.agent/rules/rule.md` / `.agent/README.md` / worktype route が tool-first に置換されている。
-- [ ] legacy fallback が残っている。
-- [ ] `docs/governance/logs/tool.log` は append-only compact metadata であり、cleanup は human periodic operation のまま。
-- [ ] `senario-tmp.md` は gitignore 済み local temporary file のまま。
-- [ ] `bash .agent/tests/check-structure.sh` が pass する。
+- [x] `agent-ui-initial-contract-tool` が実装され、usage metadata / selected SSOT section / senario-tmp / tool.log append まで到達する。
+- [x] `agent-ui-local-test-tool` が実装され、worktype tests / senario-tmp output / checklist interview / required checks を compact に実行・要約する。
+- [x] Reference 不足・命名ズレが最小差分で整理されている。
+- [x] `AGENTS.md` / `.agent/rules/rule.md` / `.agent/README.md` / worktype route が tool-first に接続されている（legacy全文置換ではなく、tool-first bullet + fallback保持）。
+- [x] legacy fallback が残っている。
+- [x] `docs/governance/logs/tool.log` は append-only compact metadata であり、cleanup は human periodic operation のまま。
+- [x] `senario-tmp.md` は gitignore 済み local temporary file のまま。
+- [x] `bash .agent/tests/check-structure.sh` が pass する。
 
 ## Bundle-level NG
 

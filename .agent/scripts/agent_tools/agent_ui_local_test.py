@@ -133,8 +133,17 @@ def _cmd_summary(args: argparse.Namespace) -> int:
     check_result = _run_check(STRUCTURE_CHECK)
 
     missing_evidence: list[str] = []
+    scenario_contract_summary = None
+    senario_tmp_path = None
     if not SENARIO_TMP_PATH.is_file():
         missing_evidence.append("senario-tmp.md missing")
+    else:
+        senario_tmp_path = str(SENARIO_TMP_PATH.relative_to(REPO_ROOT))
+        for line in SENARIO_TMP_PATH.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- [x] 作業概要:"):
+                scenario_contract_summary = stripped.split(":", 1)[1].strip()
+                break
     if not all(r["pass"] for r in worktype_results):
         missing_evidence.append("one or more worktype-routed checks failed")
     if not check_result["pass"]:
@@ -151,6 +160,8 @@ def _cmd_summary(args: argparse.Namespace) -> int:
         "task_name": args.task_name,
         "worktype": args.worktype,
         "worktype_test_result": worktype_results,
+        "scenario_contract_summary": scenario_contract_summary,
+        "senario_tmp_path": senario_tmp_path,
         "checklist_result": "requires_ai_interview_using_listed_items",
         "check_result": check_result,
         "missing_evidence_if_any": missing_evidence,
