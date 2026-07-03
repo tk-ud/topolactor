@@ -1,6 +1,7 @@
 # agent-ui-protocol-ssot.yaml
 #
-# Draft SSOT for using .agent tools as the Agent-facing protocol UI.
+# SSOT contract for routing Agents into the Agent UI tool.
+# Details and emitted templates live under docs/governance/reference.
 
 version: 1
 status: draft_ssot
@@ -8,306 +9,101 @@ scope: repository_agent_governance_agent_ui
 canonical_path: docs/governance/agent-ui-protocol-ssot.yaml
 
 agent_protocols:
-  file_description:
-    section_rule: >-
-      This file explains the Agent tool protocol in this one section. Do not
-      spread file-level explanation across multiple narrative sections.
-    summary: >-
-      Define how AGENTS.md and .agent/rules/rule.md route Agents into tools,
-      how tools issue prompt/protocol material by condition, and how tool usage
-      leaves compact evidence for PRs and summaries.
-
   purpose:
-    - Use the route from ./AGENTS.md and .agent/rules/rule.md to make Agents use the tool.
-    - When an Agent uses the tool, issue a usage id and log datetime, uuid, task_name, and worktype to docs/governance/logs/tool.log.
+    - Route Agents from ./AGENTS.md and .agent/rules/rule.md into the Agent UI tool.
+    - Issue a usage id when the tool is used.
+    - Append datetime, uuid, task_name, and worktype to docs/governance/logs/tool.log.
     - Require PRs and summaries to include datetime, uuid, task_name, and worktype.
 
-  design_split:
-    flow_controller: >-
-      The user-facing tool flow owns input order and transitions: initial_contract,
-      implementation phase, and agent_local_test.
-    output_layer: >-
-      Each flow step must emit compact structured output: selected prompt,
-      selected SSOT sections, scenario-contract template/result, checklist result,
-      check result, missing evidence, and completion metadata.
-    adoption_rule: >-
-      The flow controller is the outer frame. The output layer is attached to
-      each step of that frame; it is not a separate competing workflow.
+  reference_wiring:
+    directory: docs/governance/reference
+    tool_output_reference: docs/governance/reference/agent-ui-tool-output-reference.yaml
+    senario_tmp_reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+    negative_boundary_reference: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+    rule: >-
+      This SSOT owns the contract and order. Reference files own detailed output
+      fields, templates, and checklist interview wording.
 
-  legacy_text_surface_policy:
-    keep_existing_files_for:
-      - Agents that cannot use the tool.
-      - Manual fallback reading.
-      - Audit comparison against existing governance text.
-    examples:
+  legacy_surface_policy:
+    fallback_only:
       - .agent/prompt/*.md
       - .agent/protocols/*.md
       - .agent/checklists/*.md
     rule: >-
-      Existing prompt/protocol/checklist files remain available, but they are not
-      the primary output reference for the tool UI. Tool-facing references are
-      rebuilt under docs/governance/reference.
+      Existing .agent prompt/protocol/checklist files remain for Agents that
+      cannot use the tool. Tool output references are rebuilt under
+      docs/governance/reference and are not legacy full-file dumps.
 
-  governance_reference_policy:
-    canonical_directory: docs/governance/reference
-    purpose: >-
-      Store compact tool-output references that are designed for the Agent UI
-      tool to emit. These references are rebuilt for tool output and are not a
-      dump of legacy prompt/protocol/checklist files.
-    initial_reference:
-      - docs/governance/reference/agent-ui-tool-output-reference.yaml
-      - docs/governance/reference/agent-ui-senario-tmp-reference.yaml
-    rules:
-      - Keep references compact.
-      - Organize references by tool output step, not by legacy file layout.
-      - Do not copy full prompt/protocol/checklist bodies into references.
-      - Prefer output fields, templates, and minimal excerpts.
-      - Existing .agent files remain fallback material for non-tool Agents.
+  tool_principles:
+    - Keep output minimal to reduce context load.
+    - Do not stream raw execution logs into Agent context.
+    - Tool output is Agent UI output, not SSOT authority or completion judgment.
+    - Tool must not judge implemented / partial / not_started status.
+    - Read-only applies to Topolactor application/runtime/product source during ordinary tool use, not to the Agent UI tool implementation itself.
 
-  tool_overview:
-    tool_principles:
-      - Keep output minimal and reduce context load.
-      - Do not dump execution logs into Agent context.
-      - Tool output is an Agent-facing protocol UI, not SSOT authority by itself.
-      - Tool may append compact usage evidence to docs/governance/logs/tool.log.
-      - Read-only applies to Topolactor application/runtime/product source surfaces observed by the tool, not to the tool's own implementation or governance-tool maintenance surfaces.
-      - Tool self-update and governance-tool evolution are allowed when the work scope is this agent-ui/tool bundle and the Agent is explicitly implementing the tool.
-      - During ordinary use, the tool must not mutate Topolactor application/runtime/product source files.
-      - Tool must not judge implemented / partial / not_started status.
-      - Tool must not duplicate full prompt/protocol bodies when a short emitted prompt section is enough.
-    mutation_boundary:
-      read_only_target:
-        - Topolactor application/runtime/product source surfaces observed by the tool
-      allowed_when_in_scope:
-        - .agent/tools implementation files
-        - .agent/tests for tool checks
-        - docs/governance agent-tool SSOT files
-        - docs/governance/reference tool-output reference files
-        - docs/governance/logs/tool.log compact usage evidence
-        - senario-tmp.md local temporary scenario contract file
-      ordinary_use_prohibited_mutations:
-        - backend runtime/product code
-        - frontend runtime/product code
-        - db product schema/seed code
-        - docs/design product/runtime SSOT files
-        - roadmap/todo files outside an explicit governance-tool maintenance scope
-    ng_examples:
-      - Behavior that streams raw execution logs into Agent context.
-      - Behavior that forces the Agent to read unnecessary protocol/prompt bodies.
-      - Behavior that treats tool output alone as completion proof.
-      - Treating read-only as a ban on updating .agent/tools while implementing this tool bundle.
-      - Treating legacy prompt/protocol/checklist files as the tool output reference without rebuilding compact governance/reference material.
-      - Committing senario-tmp.md.
+  mutation_boundary:
+    ordinary_use_read_only_target:
+      - Topolactor application/runtime/product source surfaces observed by the tool
+    allowed_when_in_agent_ui_scope:
+      - .agent/tools implementation files
+      - .agent/tests for tool checks
+      - docs/governance agent-tool SSOT files
+      - docs/governance/reference tool-output reference files
+      - docs/governance/logs/tool.log compact usage evidence
+      - senario-tmp.md local temporary file
+    ordinary_use_prohibited:
+      - product runtime/source mutation by the tool
+      - verbose execution log output into Agent context
+      - committing senario-tmp.md
 
-  tool_initial_contract_flow:
-    name: initial_contract
-    steps:
-      - number: 1
-        action: Ask the Agent to enter a task_name when using the tool.
-        output_layer:
-          - usage_metadata_partial
-      - number: 2
-        action: Ask the Agent to select a worktype number.
-        output_layer:
-          - worktype
-          - worktype_prompt_path
-          - usage_metadata_completed
-      - number: 3
-        action: Emit the prompt corresponding to the selected worktype.
-        output_layer:
-          - selected_prompt_excerpt
-          - required_reads_from_prompt
-          - protocol_trigger_hints
-      - number: 4
-        action: Ask the Agent to enter a target SSOT name.
-        output_layer:
-          - target_ssot_name
-          - target_ssot_path
-          - ssot_resolution_status
-      - number: 5
-        action: Output the section list for the target SSOT.
-        output_layer:
-          - section_list
-      - number: 6
-        action: Allow the Agent to specify multiple section names, for example [abc,def].
-        output_layer:
-          - selected_section_names
-      - number: 7
-        action: Concatenate and output the selected section subtrees only.
-        output_layer:
-          - selected_section_subtrees
-          - selected_ssot_sections_summary
-      - number: 8
-        action: Return to step 4, or allow quit.
-        output_layer:
-          - current_selected_ssot_sections
-          - missing_required_selection_if_any
-      - number: 9
-        action: When quit is selected, require the Agent to write a scenario-contract.
-        output_layer:
-          - scenario_contract_template
-          - scenario_contract_result
-          - missing_evidence_if_any
-      - number: 10
-        action: Create senario-tmp.md and end initial contract.
-        output_layer:
-          - senario_tmp_path
-          - senario_tmp_created
-          - initial_contract_summary
-          - datetime
-          - uuid
-          - task_name
-          - worktype
+  flow_order:
+    initial_contract:
+      - task_name_input
+      - worktype_number_select
+      - emit_worktype_prompt
+      - target_ssot_name_input
+      - output_section_list
+      - select_sections
+      - output_selected_section_subtrees
+      - return_to_ssot_selection_or_quit
+      - require_scenario_contract_on_quit
+      - create_senario_tmp_md_and_end
+    implementation:
+      - agent_implementation_start
+      - agent_implementation_end
+    local_test:
+      - run_worktype_tests
+      - checklist_interview
+      - run_checks
+      - pass_if_all_required_items_pass
 
   senario_tmp_contract:
     path: senario-tmp.md
     gitignore_required: true
-    created_when: quit from initial_contract after scenario-contract is written
-    purpose: >-
-      Store local temporary scenario-contract checklist content for the Agent
-      implementation phase. This file is a local working artifact and must not
-      be committed.
-    required_markdown_shape:
-      - heading: contracts
-        level: 1
-      - heading: target_file_name
-        level: 2
-        checklist_item_format: "- [ ] work summary"
-      - heading: negative cases
-        level: 1
-      - heading: NG authority
-        level: 2
-        checklist_item_format: "- [ ] not NG authority"
-    template: |-
-      # contracts
-      ## <target file name>
-      - [ ] <work summary>
+    shape_reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+    boundary_reference: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+    rule: >-
+      senario-tmp.md is a local temporary scenario checklist. It is created at
+      initial_contract end, read by checklist interview, and must not be committed.
 
-      # negative cases
-      ## NG authority
-      - [ ] not NG authority
-    constraints:
-      - Must be listed in .gitignore.
-      - Must not be committed.
-      - tool.log must not contain scenario-contract body.
-      - checklist interview reads senario-tmp.md before asking framework questions.
-      - checklist interview must output Error when senario-tmp.md cannot be read or does not match the required markdown shape.
+  checklist_interview_contract:
+    order:
+      - output_senario_tmp_md
+      - output_error_if_senario_tmp_cannot_be_checked
+      - ask_framework_questions_using_existing_checklists
+    reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
 
-  agent_implementation_phase:
-    start:
-      - Agent begins implementation after initial_contract ends.
-      - Agent follows the emitted worktype prompt, selected SSOT sections, scenario-contract, and senario-tmp.md.
-    end:
-      - Agent finishes implementation before running the local-test tool flow.
-      - Agent must preserve the tool usage metadata for PR and summary output.
-    output_layer:
-      - implementation_start_metadata
-      - implementation_end_metadata
-      - selected_ssot_sections_summary
-      - scenario_contract_summary
-      - senario_tmp_path
-
-  tool_agent_local_test_flow:
-    name: agent_local_test
-    steps:
-      - number: 1
-        action: Run tests matching the selected worktype.
-        output_layer:
-          - worktype_test_commands
-          - worktype_test_result
-      - number: 2
-        action: Run checklist interview.
-        details:
-          - Read senario-tmp.md.
-          - Output Error when senario-tmp.md cannot be checked.
-          - Ask questions following the framework, referring to existing checklists.
-        output_layer:
-          - senario_tmp_check_result
-          - checklist_interview_items
-          - checklist_result
-          - missing_checklist_answers_if_any
-      - number: 3
-        action: Run checks.
-        output_layer:
-          - check_commands
-          - check_result
-          - missing_evidence_if_any
-      - number: 4
-        action: If all required items pass, emit pass.
-        output_layer:
-          - pass_or_fail
-          - completion_summary
-          - datetime
-          - uuid
-          - task_name
-          - worktype
-          - selected_ssot_sections
-          - scenario_contract_summary
-          - senario_tmp_path
-          - checklist_result
-          - check_result
-          - missing_evidence_if_any
-
-  usage_log_contract:
+  log_contract:
     path: docs/governance/logs/tool.log
-    append_required: true
-    record_fields:
+    fields:
       - datetime
       - uuid
       - task_name
       - worktype
-    output_reuse_required:
-      - PR body
-      - summary
-    constraints:
-      - Use compact one-line records.
-      - Do not write verbose execution logs.
-      - Do not store checklist answers or scenario-contract body in tool.log.
+    rule: compact metadata only
 
-  worktype_selection_contract:
-    source: .agent/rules/rule.md
-    values:
-      - number: 1
-        id: audit
-      - number: 2
-        id: specific
-      - number: 3
-        id: implementation_change
-      - number: 4
-        id: design_change
-      - number: 5
-        id: todo_maintenance
-      - number: 6
-        id: existing_pr_update
-    prompt_source:
-      audit: .agent/prompt/audit.md
-      specific: .agent/prompt/specific.md
-      implementation_change: .agent/prompt/implementation-change.md
-      design_change: .agent/prompt/design-change.md
-      todo_maintenance: .agent/prompt/todo-maintenance.md
-      existing_pr_update: .agent/prompt/existing-pr-update.md
-
-  ssot_section_contract:
-    input:
-      - target_ssot_name
-      - section_names
-    output:
-      - section_list
-      - selected_section_subtrees
-    constraints:
-      - Output only requested sections after section selection.
-      - Allow multiple section names in one request.
-      - Return to SSOT selection until quit.
-      - Avoid full-file dump unless the Agent explicitly selects all sections.
-
-  scenario_contract_gate:
-    trigger: quit from initial_contract
-    required_output: scenario-contract
-    temporary_file: senario-tmp.md
-    purpose: Fix implementation route intent before Agent implementation begins.
-
-  completion_output_contract:
-    required_fields:
+  completion_contract:
+    required_summary_fields:
       - datetime
       - uuid
       - task_name
@@ -316,8 +112,6 @@ agent_protocols:
       - scenario_contract_summary
       - senario_tmp_path
       - local_test_result
-      - senario_tmp_check_result
       - checklist_result
       - check_result
       - missing_evidence_if_any
-    pass_rule: agent_local_test flow must pass before completion is reported as pass.
