@@ -409,9 +409,9 @@ chronological_scope_index:
     proof_order: 80
     scope_phase: external_bundle_specific_proofs
     domain: external
-    proof_type: known_gap
-    source_contract: bundle-specific external SSOTs
-    target_contract: implemented external connector proof bundles
+    proof_type: design_boundary_proof
+    source_contract: optional future external connector SSOT boundary
+    target_contract: non-proof boundary for connector-specific optional surfaces
     ssot_refs:
       - docs/design/runtime-bundle-email-ssot.yaml
       - docs/design/runtime-bundle-stripe-ssot.yaml
@@ -424,10 +424,7 @@ chronological_scope_index:
     test_files: []
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
-    evidence_inputs:
-      - .agent/tasks/todo.md
-    todo_bundle_refs:
-      - future-external-bundle-gate
+    evidence_inputs: []
     workflow_jobs:
       - .github/workflows/structure-check.yml::structure-check
     required_when:
@@ -436,10 +433,18 @@ chronological_scope_index:
     depends_on:
       - external_intake_surface_contract
     unblocks: []
-    known_gap_reason: bundle-specific external connector proof suites are not implemented yet
-    proves: []
+    proves:
+      - optional Notion/Sheets/Slack/GitHub/Webhook/REST connector behavior remains outside implemented proof scope until connector-specific SSOT, validate-preview-apply boundary, and executable proof surfaces exist
+      - runtime-bundle shared substrates and external intake contracts are not evidence of provider-specific connector behavior by themselves
     does_not_prove:
-      - any specific external connector behavior
+      - Notion connector behavior, authentication, payload validation, preview, apply, or runtime event ingestion
+      - Google Sheets connector behavior, authentication, payload validation, preview, apply, or runtime event ingestion
+      - Slack connector behavior, authentication, payload validation, preview, apply, or runtime event ingestion
+      - GitHub connector behavior, authentication, payload validation, preview, apply, or runtime event ingestion
+      - generic REST connector behavior, authentication, payload validation, preview, apply, or runtime event ingestion
+      - connector implementation
+      - instance authority enforcement
+      - final frontend/admin E2E visual DOM completion
 
   - proof_id: instance_substrate_contract_gap
     proof_order: 90
