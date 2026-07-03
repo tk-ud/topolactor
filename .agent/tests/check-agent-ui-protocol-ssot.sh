@@ -59,6 +59,7 @@ required_files=(
   "docs/governance/reference/agent-ui-senario-tmp-reference.yaml"
   "docs/governance/reference/agent-ui-negative-boundary-reference.yaml"
   "docs/governance/logs/tool.log"
+  ".agent/scripts/check_agent_ui_protocol.py"
 )
 
 for path in "${required_files[@]}"; do
@@ -130,6 +131,12 @@ gitignore_terms=(
 for term in "${gitignore_terms[@]}"; do
   require_term ".gitignore" "$term"
 done
+
+if python3 "$REPO_ROOT/.agent/scripts/check_agent_ui_protocol.py"; then
+  ok
+else
+  fail "Python Agent UI protocol boundary check failed"
+fi
 
 echo ""
 if [ "$FAILURES" -eq 0 ]; then
