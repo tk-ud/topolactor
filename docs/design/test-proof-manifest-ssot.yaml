@@ -52,6 +52,24 @@ proof_model:
     runner_surfaces: local agent scripts or CI gate scripts that execute or audit tests
     evidence_inputs: seed, schema fixture, static fixture, or input files consumed as evidence but not executable tests
     workflow_jobs: GitHub workflow jobs that run the runner/audit surface
+    todo_bundle_refs: known_gap-only links to unresolved Bundle IDs in .agent/tasks/todo.md; referenced bundles must exist and remain in an unfinished status
+  known_gap_required_fields:
+    - known_gap_reason
+    - todo_bundle_refs
+  known_gap_todo_policy:
+    todo_source: .agent/tasks/todo.md
+    allowed_todo_statuses:
+      - not_started
+      - partial
+      - in_progress
+      - acceptance_pending
+    rules:
+      - proof_type known_gap must have a non-empty known_gap_reason.
+      - proof_type known_gap must keep proves empty and must not be treated as executable proof.
+      - proof_type known_gap must have non-empty todo_bundle_refs.
+      - Each todo_bundle_refs entry must match a Bundle ID in .agent/tasks/todo.md.
+      - Referenced todo Bundles must be unfinished; implemented or other completion-equivalent statuses are invalid for known_gap.
+      - proof_type known_gap must include .agent/tasks/todo.md in evidence_inputs so the residual scope is explicitly auditable.
   prohibited_claims:
     - DB seed presence alone proves runtime behavior.
     - Backend unit success alone proves scheduler/external/frontend route behavior.
@@ -408,6 +426,8 @@ chronological_scope_index:
       - .agent/tests/check-test-proof-manifest-integrity.sh
     evidence_inputs:
       - .agent/tasks/todo.md
+    todo_bundle_refs:
+      - future-external-bundle-gate
     workflow_jobs:
       - .github/workflows/structure-check.yml::structure-check
     required_when:
@@ -425,9 +445,9 @@ chronological_scope_index:
     proof_order: 90
     scope_phase: instance_substrate
     domain: instance
-    proof_type: known_gap
+    proof_type: runner_gate_proof
     source_contract: instance settings / primitive / runtime / execution authority contract
-    target_contract: instance runtime authority proof bundle
+    target_contract: instance port substrate design/runtime wiring gate
     ssot_refs:
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/runtime-orchestration-ssot.yaml
@@ -444,6 +464,9 @@ chronological_scope_index:
       changed_files:
         - docs/design/admin-console-workflow-ssot.yaml
         - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/instance-port-substrate-ssot.yaml
+        - backend/runtime/InstancePortRuntime.cs
+        - backend/repository/NpgsqlInstancePortPolicyRepository.cs
     depends_on:
       - ssot_structure_policy_contract
       - runtime_trigger_scheduler_contract
@@ -451,14 +474,11 @@ chronological_scope_index:
     unblocks:
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
-    known_gap_reason: instance-port substrate SSOT and design-only guard (check-instance-port-substrate.sh) exist, but no executable instance runtime authority/execution proof exists yet
-    proves: []
+    proves:
+      - instance-port substrate SSOT, roadmap retirement from active TODO, runtime lane, credential-backed primitive adapters, repository policy reads, Design Inspector approved-candidate source, and fail-close guard/test wiring are audited by check-instance-port-substrate.sh
     does_not_prove:
-      - instance settings topology
-      - primitive registry authority
-      - runtime instance selection
-      - execution authority enforcement
-      - credential/secret boundary behavior
+      - live generic instance integration acceptance against production credentials or external instance infrastructure
+      - frontend/admin projection expression beyond the checked instance operation authoring and validation wiring
 
   - proof_id: admin_registration_promotion_contract
     proof_order: 100
@@ -756,6 +776,7 @@ maintenance_rules:
   - Keep proof_order, depends_on, and unblocks acyclic and aligned in the same change.
   - DB/backend/runtime/external/instance/admin/frontend proof gaps must remain explicit.
   - Known gaps and missing SSOTs MUST NOT be mixed into implemented proof edges.
+  - Known gaps MUST be connected to unfinished todo Bundles through todo_bundle_refs and .agent/tasks/todo.md evidence_inputs; a reason-only known_gap is invalid.
   - CI gates MUST run manifest integrity checks and MUST NOT claim proof completion from fixed test lists alone.
 
 aggregate_trigger_substrate_known_gaps:
@@ -781,7 +802,10 @@ aggregate_trigger_substrate_known_gaps:
     test_files: []
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
-    evidence_inputs: []
+    evidence_inputs:
+      - .agent/tasks/todo.md
+    todo_bundle_refs:
+      - aggregate-trigger-substrate
     workflow_jobs: []
     required_when:
       changed_files:
@@ -795,8 +819,7 @@ aggregate_trigger_substrate_known_gaps:
     depends_on:
       - db_schema_seed_contract
       - backend_runtime_function_contract
-    unblocks:
-      - aggregate-trigger-substrate-implementation
+    unblocks: []
     known_gap_reason: Partial implementation and local contract tests now exist for the backend runtime, validator, repository fixed SQL templates, DB DDL, frontend structured authoring helper, admin workflow UI assurance substrate, AdminRuntime assign_screen_data_shape validator gate, idempotent event append, atomic aggregate upsert, threshold evaluation, controlled materialization, and duplicate guard. This known gap remains open because those local contract proofs do not yet constitute full executable proof across live PostgreSQL application, aggregate trigger definition persistence beyond validated screen_data_shape serialization, cron/hook/client scheduler-to-manifest DB routing, and end-to-end event -> aggregate -> threshold -> materialization execution.
     proves: []
     does_not_prove:

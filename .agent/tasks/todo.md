@@ -125,6 +125,7 @@ implementation_change で、SSOTに従って helper schema / seed artifact を�
 
 ---
 
+
 ## Bundle `aggregate-trigger-substrate`
 
 **Status:** in_progress

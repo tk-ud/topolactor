@@ -37,6 +37,7 @@ reverse_lookup:
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
       - frontend_admin_projection_expression_e2e_contract
+      - aggregate_trigger_substrate_executable_proof_gap
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
       - .agent/tests/check-unified-test-gate.sh
@@ -99,6 +100,16 @@ reverse_lookup:
       - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
       - instance settings topology, primitive authority, runtime instance selection, or execution authority enforcement
+
+  - bundle_id: aggregate_trigger_substrate_known_gap
+    roadmap_bundle_refs:
+      - aggregate-trigger-substrate
+    proof_refs:
+      - aggregate_trigger_substrate_executable_proof_gap
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    does_not_prove:
+      - executable aggregate trigger proof across live PostgreSQL, AdminRuntime persistence, scheduler-to-manifest DB routing, or end-to-end materialization
 
   - bundle_id: agent-tools-proof-and-structure-gate
     roadmap_bundle_refs:
