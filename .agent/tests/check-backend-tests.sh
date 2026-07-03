@@ -22,6 +22,6 @@ if [[ -n "${TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY:-}" ]]; then
     exit 1
   fi
   noise_run "backend_db_continuity_tests" dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
-    --filter "UiTopologyRegistrationContinuityIntegrationTests|ComponentEventAppendIntegrationTests|LayoutProjectionContinuityLiveDbEndToEndTests|ExternalPortPolicyRepositoryLiveDbTests|AuditApprovalPortConsumerLiveDbTests|EmailPortConsumerLiveDbTests|StripePortConsumerLiveDbTests" \
+    --filter "UiTopologyRegistrationContinuityIntegrationTests|ComponentEventAppendIntegrationTests|LayoutProjectionContinuityLiveDbEndToEndTests|ExternalPortPolicyRepositoryLiveDbTests|AuditApprovalPortConsumerLiveDbTests|EmailPortConsumerLiveDbTests|StripePortConsumerLiveDbTests|AggregateTriggerRepositoryLiveDbTests|AggregateTriggerSubstrateRouteLiveDbTests|AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests" \
     --nologo --verbosity minimal
 fi

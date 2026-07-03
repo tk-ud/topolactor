@@ -43,6 +43,16 @@ db_schema:
       - db/physical_details_inline_editor_md_generator_preset_seed.sql
       - db/aggregate_dashboard_preset_seed.sql
       - db/ui_component_registry_preset_catalog_bootstrap.sql
+      - db/runtime_orchestration_tables.sql
+    canonical_bootstrap_files_note: >-
+      db/init.sql applies additional canonical files not yet listed above
+      (db/backend_error_evidence_tables.sql, db/demo_seed.sql,
+      db/external_port_compat_absorption_seed.sql, db/file_attachment_crud_preset_seed.sql,
+      db/file_storage_export_job_preset_seed.sql, db/export_sftp_transfer_preset_seed.sql,
+      db/audit_approval_form_preset_seed.sql, db/email_approval_form_preset_seed.sql,
+      db/stripe_webhook_intake_preset_seed.sql, db/external_port_result_context_mapping_seed.sql,
+      db/backend_error_notify_hook_port_seed.sql); this is a pre-existing list staleness
+      outside aggregate_trigger_substrate scope and is not resolved by this change.
 
   source_files:
     - db/schema.sql
@@ -64,6 +74,7 @@ db_schema:
     - db/physical_details_inline_editor_md_generator_preset_seed.sql
     - db/aggregate_dashboard_preset_seed.sql
     - db/ui_component_registry_preset_catalog_bootstrap.sql
+    - db/runtime_orchestration_tables.sql
 
   categories:
     - topology_definition
@@ -82,12 +93,13 @@ db_schema:
     abstract_function_manifests:
       category: abstract_function_manifest
       source_file: db/topology_tables.sql
-      role: execute_abstract_function manifest authority for runtime lane, authority scope, output shape, and projection deny keys
+      role: execute_abstract_function manifest authority for runtime lane, authority scope, output shape, and projection deny keys; also the registry AggregateTriggerDefinitionValidator.ValidateProcessingFunctionAuthorityAsync loads against for aggregate_trigger_substrate_contract.processing_function_scope.function_id authority (aggregate_trigger_runtime rows are an authority lookup source here, not dispatched through AbstractFunctionExecutor)
       authority_rules:
         - frontend_payload_is_not_table_column_join_output_authority
         - raw_sql_payload_is_prohibited
-        - runtime_lane_must_be_external_port_runtime_or_admin_runtime_or_runtime_executor
+        - runtime_lane_must_be_one_of_external_port_runtime_instance_port_runtime_admin_runtime_runtime_executor_scheduler_job_runtime_or_aggregate_trigger_runtime
         - secret_projection_denied_for_credential_signed_url_bucket_endpoint_storage_path_raw_storage_refs
+        - aggregate_trigger_runtime_rows_require_authority_scope_equal_to_the_aggregate_trigger_definitions_operation_definition_id
     abstract_function_steps:
       category: abstract_function_manifest
       source_file: db/topology_tables.sql
@@ -1419,8 +1431,16 @@ recommend_target_boundary:
   interpretation: recommendation_uses_topology_and_context_learning_surfaces
 
 aggregate_trigger_table_contracts:
-  status: design_contract_only_no_sql_implementation_in_this_change
+  status: canonical_active
   namespace: runtime_orchestration
+  source_file: db/runtime_orchestration_tables.sql
+  repository_implementation:
+    - backend/repository/AggregateTriggerRepository.cs
+    - backend/repository/NpgsqlAggregateTriggerRepository.cs
+  live_db_proof:
+    - backend/tests/Topolactor.Integration.Tests/AggregateTriggerRepositoryLiveDbTests.cs
+    - backend/tests/Topolactor.Integration.Tests/AggregateTriggerSubstrateRouteLiveDbTests.cs
+    - backend/tests/Topolactor.Integration.Tests/AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests.cs
   schema_qualified_tables:
     aggregate_trigger_definitions: runtime_orchestration.aggregate_trigger_definitions
     aggregate_trigger_event_evidence: runtime_orchestration.aggregate_trigger_event_evidence
@@ -1429,10 +1449,14 @@ aggregate_trigger_table_contracts:
   tables:
     runtime_orchestration.aggregate_trigger_definitions:
       role: canonical structured aggregate trigger definition store
+      persistence_route: AdminRuntime validates admin/contents Step3 aggregate trigger definitions then calls AggregateTriggerRepository.SaveDefinitionAsync; screen_data_shape topology entry retains the same validated definitions as the Step3 authoring-draft projection for form re-hydration, not as execution authority.
       required_columns:
         - trigger_definition_id
         - processing_function_id
         - operation_definition_id
+        - accepted_event_schema_ref
+        - allowed_source_kinds_json
+        - materialization_policy_ref
         - trigger_source_kind
         - execution_scope
         - transaction_boundary
@@ -1466,3 +1490,4 @@ aggregate_trigger_table_contracts:
     - atomic_upsert_for_aggregate_current
     - idempotent_append_for_event_evidence
     - duplicate_materialization_guard
+    - aggregate_current_upsert_and_materialization_evidence_append_share_one_backend_transaction_when_materialization_is_attempted

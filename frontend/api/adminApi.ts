@@ -389,6 +389,14 @@ export type RelationshipRemoteTarget = {
   logicalTables: RelationshipRemoteTargetTable[];
 };
 
+/** Registered topology.abstract_function_manifests candidate for a runtime_lane selector. */
+export type AggregateTriggerProcessingFunctionCandidate = {
+  functionKey: string;
+  authorityScope: string;
+  active: boolean;
+  activeStepCount: number;
+};
+
 export type LogicalTableInput = {
   tableName: string;
   columns: AdminManifestScreenColumnInput[];
@@ -640,6 +648,35 @@ export async function listRelationshipRemoteTargets(
   }
 
   return (result.emission?.data ?? []) as RelationshipRemoteTarget[];
+}
+
+/**
+ * Registered processing_function_scope.function_id candidates for admin/contents Step3
+ * (topology.abstract_function_manifests rows with runtime_lane=aggregate_trigger_runtime, active
+ * only). Selection from this list is not itself authority — AggregateTriggerDefinitionValidator
+ * remains the backend authority at assign_screen_data_shape time.
+ */
+export async function listAggregateTriggerProcessingFunctions(): Promise<
+  AggregateTriggerProcessingFunctionCandidate[] | null
+> {
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer: "manifest",
+    action: "list_aggregate_trigger_processing_functions",
+    payload: undefined,
+  }, getToken());
+
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
+    const msg = result.errors?.[0]
+      ? validationErrorText(result.errors[0])
+      : "manifest list_aggregate_trigger_processing_functions failed";
+    throw new Error(msg);
+  }
+
+  return (result.emission?.data ?? []) as AggregateTriggerProcessingFunctionCandidate[];
 }
 
 export async function validateAdminManifest(manifestId: string): Promise<AdminManifestValidateResult | null> {

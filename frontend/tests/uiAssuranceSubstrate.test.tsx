@@ -189,6 +189,13 @@ function installAdminDispatchMock(captured: CapturedDispatch[], manifestId: stri
       ? detail
       : layer === "manifest" && action === "list_relationship_remote_targets"
       ? []
+      : layer === "manifest" && action === "list_aggregate_trigger_processing_functions"
+      ? [{
+        functionKey: "aggregate_trigger_authoring_function",
+        authorityScope: "orders",
+        active: true,
+        activeStepCount: 1,
+      }]
       : layer === "enum_dictionary" && action === "get_group"
       ? { groupId: payload.groupId, groupName: "demo", items: [] }
       : layer === "enum_dictionary" && action === "list_groups"
@@ -220,17 +227,20 @@ const step2Targets: StepTarget[] = [
     targetSource: "step2_logical_entity_definition",
     targetId: "orders",
     label: "Step2 logical entity: orders",
+    fields: ["id", "order_status"],
   },
   {
     targetSource: "step2_logical_entity_definition",
     targetId: "invoices",
     label: "Step2 logical entity: invoices",
+    fields: ["id", "invoice_status"],
   },
 ];
 const step25Targets: StepTarget[] = [{
   targetSource: "step2_5_relation_definition",
   targetId: "orders->customers",
   label: "Step2.5 relation: orders → customers",
+  fields: ["id", "customer_id"],
 }];
 
 function buildUiSelectedAggregatePayload(): AggregateTriggerDefinitionPayload[] {
@@ -492,6 +502,33 @@ Deno.test("contents workflow UI substrate: Step2 → Step2.5 → Step3 save path
     await flushUpdates();
     dispatchSelectValue(materializationSelect, "step2_5_relation_definition:orders->customers");
     await flushUpdates();
+
+    // conflict_key_fields and materialization_payload_map require at least one
+    // structured selection each before the panel emits a payload.
+    const conflictKeyCheckbox = container.querySelector(
+      'input[aria-label="conflict key field id"]',
+    ) as HTMLInputElement;
+    assert(conflictKeyCheckbox, "customers target must expose an 'id' conflict key field checkbox");
+    conflictKeyCheckbox.checked = true;
+    conflictKeyCheckbox.dispatchEvent(new Event("click", { bubbles: true }));
+    conflictKeyCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushUpdates();
+
+    await clickAndFlush(
+      buttonByText(container, "+ materialization payload entry を追加"),
+    );
+    const payloadSourceField = container.querySelector(
+      'input[aria-label="materialization payload source field 0"]',
+    ) as HTMLInputElement;
+    assert(payloadSourceField, "added payload map row must expose a source_field input");
+    dispatchInputValue(payloadSourceField, "id");
+    await flushUpdates();
+    // Effect-driven onPayloadChange propagation to parent state lags one flush cycle
+    // behind the triggering DOM event in this preact-hooks test harness; a no-op
+    // re-dispatch nudges the pending effect through before the save click reads state.
+    dispatchInputValue(payloadSourceField, "id");
+    await flushUpdates();
+
     await clickAndFlush(buttonByText(container, "Step 3 を保存"));
     await confirmOpenDialog(container);
 
@@ -506,6 +543,8 @@ Deno.test("contents workflow UI substrate: Step2 → Step2.5 → Step3 save path
       definitions[0].materialization_target_binding.target_id,
       "orders->customers",
     );
+    assertEquals(definitions[0].conflict_key_fields, ["id"]);
+    assertEquals(definitions[0].materialization_payload_map[0].target_field, "id");
     assertBackendAggregateTriggerShape(definitions[0]);
     assertNoForbiddenPayloadVocabulary(step3Assign?.payload);
   } finally {
@@ -523,6 +562,13 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
       h(AggregateTriggerAuthoringPanel, {
         step2LogicalEntityDefinitions: step2Targets,
         step25RelationDefinitions: step25Targets,
+        topologySystemName: "orders",
+        processingFunctionCandidates: [{
+          functionKey: "aggregate_trigger_authoring_function",
+          authorityScope: "orders",
+          active: true,
+          activeStepCount: 1,
+        }],
         onPayloadChange: (payload) => seen.push(payload),
       }),
       container,
@@ -530,22 +576,59 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
     await flushUpdates();
 
     const selects = Array.from(container.querySelectorAll("select"));
-    assertEquals(selects.length, 4);
+    assertEquals(selects.length, 11);
     (selects[0] as HTMLSelectElement).value = "hook";
     selects[0].dispatchEvent(new Event("input", { bubbles: true }));
     selects[0].dispatchEvent(new Event("change", { bubbles: true }));
     (selects[1] as HTMLSelectElement).value = "hook_event";
     selects[1].dispatchEvent(new Event("input", { bubbles: true }));
     selects[1].dispatchEvent(new Event("change", { bubbles: true }));
-    (selects[2] as HTMLSelectElement).value =
-      "step2_logical_entity_definition:invoices";
+    (selects[2] as HTMLSelectElement).value = "operation_instance";
     selects[2].dispatchEvent(new Event("input", { bubbles: true }));
     selects[2].dispatchEvent(new Event("change", { bubbles: true }));
     (selects[3] as HTMLSelectElement).value =
-      "step2_5_relation_definition:orders->customers";
+      "event_append_aggregate_upsert_and_materialization";
     selects[3].dispatchEvent(new Event("input", { bubbles: true }));
     selects[3].dispatchEvent(new Event("change", { bubbles: true }));
+    (selects[4] as HTMLSelectElement).value =
+      "require_backend_approval_before_materialization";
+    selects[4].dispatchEvent(new Event("input", { bubbles: true }));
+    selects[4].dispatchEvent(new Event("change", { bubbles: true }));
+    (selects[5] as HTMLSelectElement).value =
+      "step2_logical_entity_definition:invoices";
+    selects[5].dispatchEvent(new Event("input", { bubbles: true }));
+    selects[5].dispatchEvent(new Event("change", { bubbles: true }));
+    (selects[6] as HTMLSelectElement).value =
+      "step2_5_relation_definition:orders->customers";
+    selects[6].dispatchEvent(new Event("input", { bubbles: true }));
+    selects[6].dispatchEvent(new Event("change", { bubbles: true }));
     await flushUpdates();
+    await flushUpdates();
+
+    // conflict_key_fields and materialization_payload_map require at least one
+    // structured selection each before the panel emits a payload.
+    const conflictKeyCheckbox = container.querySelector(
+      'input[aria-label="conflict key field id"]',
+    ) as HTMLInputElement;
+    assert(conflictKeyCheckbox, "invoices target must expose an 'id' conflict key field checkbox");
+    conflictKeyCheckbox.checked = true;
+    conflictKeyCheckbox.dispatchEvent(new Event("click", { bubbles: true }));
+    conflictKeyCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushUpdates();
+
+    await clickAndFlush(
+      buttonByText(container, "+ materialization payload entry を追加"),
+    );
+    const payloadSourceField = container.querySelector(
+      'input[aria-label="materialization payload source field 0"]',
+    ) as HTMLInputElement;
+    assert(payloadSourceField, "added payload map row must expose a source_field input");
+    dispatchInputValue(payloadSourceField, "id");
+    await flushUpdates();
+    // Effect-driven onPayloadChange propagation lags one flush cycle behind the
+    // triggering DOM event in this preact-hooks test harness; a no-op re-dispatch
+    // nudges the pending effect through before reading the captured payload.
+    dispatchInputValue(payloadSourceField, "id");
     await flushUpdates();
 
     const latest = seen.at(-1)?.[0];
@@ -555,13 +638,109 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
       latest.trigger_source.trigger_source_detail_kind,
       "hook_event",
     );
+    assertEquals(latest.execution_scope, "operation_instance");
+    assertEquals(
+      latest.transaction_boundary,
+      "event_append_aggregate_upsert_and_materialization",
+    );
+    assertEquals(
+      latest.approval_policy,
+      "require_backend_approval_before_materialization",
+    );
     assertEquals(latest.aggregate_target_binding.target_id, "invoices");
     assertEquals(
       latest.materialization_target_binding.target_id,
       "orders->customers",
     );
+    assertEquals(latest.conflict_key_fields, ["id"]);
+    assertEquals(latest.materialization_payload_map[0].target_field, "id");
     assert(container.textContent?.includes('"target_id": "invoices"'));
 
+  } finally {
+    render(null, container);
+    cleanup();
+  }
+});
+
+Deno.test("contents aggregate trigger Step3 UI: function_id is a registered-candidate selector, never frontend free text", async () => {
+  const { container, cleanup } = setupDom();
+  try {
+    render(
+      h(AggregateTriggerAuthoringPanel, {
+        step2LogicalEntityDefinitions: step2Targets,
+        step25RelationDefinitions: step25Targets,
+        topologySystemName: "orders",
+        processingFunctionCandidates: [
+          { functionKey: "registered_function_a", authorityScope: "orders", active: true, activeStepCount: 1 },
+          { functionKey: "registered_function_b", authorityScope: "orders", active: true, activeStepCount: 1 },
+          { functionKey: "inactive_function", authorityScope: "orders", active: false, activeStepCount: 0 },
+        ],
+        onPayloadChange: () => {},
+      }),
+      container,
+    );
+    await flushUpdates();
+
+    const functionIdSelect = container.querySelector(
+      'select[aria-label="aggregate processing function id"]',
+    ) as HTMLSelectElement;
+    assert(functionIdSelect, "function_id must be a <select>, not a free-text <input>");
+    assert(
+      !container.querySelector('input[aria-label="aggregate processing function id"]'),
+      "function_id must not also expose a free-text input",
+    );
+
+    const optionValues = Array.from(functionIdSelect.querySelectorAll("option")).map((o) =>
+      (o as HTMLOptionElement).value
+    );
+    assertEquals(optionValues, ["registered_function_a", "registered_function_b"]);
+    assert(
+      !optionValues.includes("inactive_function"),
+      "inactive candidates must not appear as selectable options",
+    );
+    assertEquals(functionIdSelect.value, "registered_function_a");
+  } finally {
+    render(null, container);
+    cleanup();
+  }
+});
+
+Deno.test("contents aggregate trigger Step3 UI: no registered candidates means no payload is emitted (never fabricates a function_id)", async () => {
+  const seen: AggregateTriggerDefinitionPayload[][] = [];
+  const { container, cleanup } = setupDom();
+  try {
+    render(
+      h(AggregateTriggerAuthoringPanel, {
+        step2LogicalEntityDefinitions: step2Targets,
+        step25RelationDefinitions: step25Targets,
+        topologySystemName: "orders",
+        processingFunctionCandidates: [],
+        onPayloadChange: (payload) => seen.push(payload),
+      }),
+      container,
+    );
+    await flushUpdates();
+
+    const functionIdSelect = container.querySelector(
+      'select[aria-label="aggregate processing function id"]',
+    ) as HTMLSelectElement;
+    assert(functionIdSelect.disabled, "function_id selector must be disabled when no candidates are registered");
+    assertEquals(functionIdSelect.value, "");
+
+    // conflict_key_fields + materialization_payload_map alone are not enough to emit a payload;
+    // an empty function_id must still block emission.
+    const conflictKeyCheckbox = container.querySelector(
+      'input[aria-label="conflict key field id"]',
+    ) as HTMLInputElement;
+    if (conflictKeyCheckbox) {
+      conflictKeyCheckbox.checked = true;
+      conflictKeyCheckbox.dispatchEvent(new Event("click", { bubbles: true }));
+      conflictKeyCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+      await flushUpdates();
+    }
+
+    const latest = seen.at(-1)?.[0];
+    assertEquals(latest, undefined);
   } finally {
     render(null, container);
     cleanup();

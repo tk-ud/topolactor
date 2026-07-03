@@ -507,7 +507,7 @@ CREATE TABLE IF NOT EXISTS topology.external_port_policies (
 CREATE TABLE IF NOT EXISTS topology.abstract_function_manifests (
     abstract_function_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     function_key         TEXT NOT NULL UNIQUE,
-    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime', 'instance_port_runtime', 'admin_runtime', 'runtime_executor', 'scheduler_job_runtime')),
+    runtime_lane         TEXT NOT NULL CHECK (runtime_lane IN ('external_port_runtime', 'instance_port_runtime', 'admin_runtime', 'runtime_executor', 'scheduler_job_runtime', 'aggregate_trigger_runtime')),
     authority_scope      TEXT NOT NULL,
     output_shape         JSONB NOT NULL DEFAULT '{}'::jsonb,
     projection_deny_keys TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
@@ -521,7 +521,7 @@ ALTER TABLE topology.abstract_function_manifests
     DROP CONSTRAINT IF EXISTS abstract_function_manifests_runtime_lane_check;
 ALTER TABLE topology.abstract_function_manifests
     ADD CONSTRAINT abstract_function_manifests_runtime_lane_check
-    CHECK (runtime_lane IN ('external_port_runtime', 'instance_port_runtime', 'admin_runtime', 'runtime_executor', 'scheduler_job_runtime'));
+    CHECK (runtime_lane IN ('external_port_runtime', 'instance_port_runtime', 'admin_runtime', 'runtime_executor', 'scheduler_job_runtime', 'aggregate_trigger_runtime'));
 
 CREATE TABLE IF NOT EXISTS topology.abstract_function_steps (
     abstract_function_step_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

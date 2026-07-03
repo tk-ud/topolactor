@@ -77,6 +77,36 @@ public sealed class NpgsqlAbstractFunctionManifestRepository : IAbstractFunction
         return new AbstractFunctionManifest(manifestId, functionKey, runtimeLane, authorityScope, steps, deniedProjectionKeys, active, authorityBindings, outputShape);
     }
 
+    public async Task<IReadOnlyList<AbstractFunctionManifestCandidate>> ListActiveByRuntimeLaneAsync(string runtimeLane, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT m.function_key, m.authority_scope,
+                   count(s.abstract_function_step_id) FILTER (WHERE s.active) AS active_step_count
+            FROM topology.abstract_function_manifests m
+            LEFT JOIN topology.abstract_function_steps s ON s.abstract_function_id = m.abstract_function_id
+            WHERE m.runtime_lane = @runtimeLane AND m.active
+            GROUP BY m.function_key, m.authority_scope
+            ORDER BY m.function_key ASC
+            """;
+        cmd.Parameters.AddWithValue("runtimeLane", runtimeLane);
+
+        var result = new List<AbstractFunctionManifestCandidate>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            result.Add(new AbstractFunctionManifestCandidate(
+                reader.GetString(reader.GetOrdinal("function_key")),
+                reader.GetString(reader.GetOrdinal("authority_scope")),
+                true,
+                (int)reader.GetInt64(reader.GetOrdinal("active_step_count"))));
+        }
+        return result;
+    }
+
     private static async Task<IReadOnlyList<AbstractFunctionAuthorityBinding>> LoadAuthorityBindingsAsync(
         NpgsqlConnection conn,
         Guid manifestId,

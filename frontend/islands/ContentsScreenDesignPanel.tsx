@@ -3,6 +3,7 @@ import { JSX } from "preact";
 import {
   type AdminManifestDetail,
   type AdminManifestListItem,
+  type AggregateTriggerProcessingFunctionCandidate,
   assignAdminManifestScreenDataShape,
   type CloneReplacementValidateResult,
   type CloneSourceEvidence,
@@ -14,6 +15,7 @@ import {
   getAdminManifest,
   getEnumDictionaryGroup,
   listAdminManifests,
+  listAggregateTriggerProcessingFunctions,
   listEnumDictionaryGroups,
   listRelationshipRemoteTargets,
   loadCloneSourceEvidence,
@@ -442,6 +444,11 @@ export default function ContentsScreenDesignPanel({
   const [manifestLabels, setManifestLabels] = useState<Record<string, string>>({});
   const [remoteTargets, setRemoteTargets] = useState<RelationshipRemoteTarget[]>([]);
   const [remoteTargetsError, setRemoteTargetsError] = useState<string | null>(null);
+  const [aggregateTriggerFunctionCandidates, setAggregateTriggerFunctionCandidates] = useState<
+    AggregateTriggerProcessingFunctionCandidate[]
+  >([]);
+  const [aggregateTriggerFunctionCandidatesError, setAggregateTriggerFunctionCandidatesError] =
+    useState<string | null>(null);
   const [enumGroups, setEnumGroups] = useState<
     { groupId: string; groupName: string }[]
   >([]);
@@ -500,6 +507,26 @@ export default function ContentsScreenDesignPanel({
       }
     })();
   }, [activeStep, selectedId]);
+
+  useEffect(() => {
+    if (activeStep !== 3) return;
+    void (async () => {
+      const candidates = await listAggregateTriggerProcessingFunctions();
+      if (candidates === null) {
+        setAggregateTriggerFunctionCandidates([]);
+        setAggregateTriggerFunctionCandidatesError(
+          "登録済み processing function 一覧を読み込めませんでした。",
+        );
+      } else {
+        setAggregateTriggerFunctionCandidates(candidates);
+        setAggregateTriggerFunctionCandidatesError(
+          candidates.length === 0
+            ? "runtime_lane=aggregate_trigger_runtime で登録済みの abstract function がありません。"
+            : null,
+        );
+      }
+    })();
+  }, [activeStep]);
 
   const isCloneMode = entryMode === "clone_active_as_replacement_draft" ||
     entryMode === "clone_active_as_new_topology_draft";
@@ -972,6 +999,7 @@ export default function ContentsScreenDesignPanel({
       targetSource: "step2_logical_entity_definition",
       targetId: table.tableName.trim(),
       label: `Step2 logical entity: ${table.tableName.trim()}`,
+      fields: table.columns.map((c) => c.name.trim()).filter(Boolean),
     }));
   const aggregateStep25Targets: StepTarget[] = design.relationIntents
     .filter((rel) => rel.localTableRef.trim() && rel.joinTableRef.trim())
@@ -979,6 +1007,7 @@ export default function ContentsScreenDesignPanel({
       targetSource: "step2_5_relation_definition",
       targetId: `${rel.localTableRef.trim()}->${rel.joinTableRef.trim()}`,
       label: `Step2.5 relation: ${rel.localTableRef.trim()} → ${rel.joinTableRef.trim()}`,
+      fields: [rel.localKey.trim(), rel.remoteKey.trim()].filter(Boolean),
     }));
   const toggleOperationKind = (kind: ScreenOperationKind) => {
     const has = design.operationKinds.includes(kind);
@@ -1591,9 +1620,16 @@ export default function ContentsScreenDesignPanel({
               </label>
             ))}
           </div>
+          {aggregateTriggerFunctionCandidatesError && (
+            <p class="mb-2 text-xs text-amber-700">
+              {aggregateTriggerFunctionCandidatesError}
+            </p>
+          )}
           <AggregateTriggerAuthoringPanel
             step2LogicalEntityDefinitions={aggregateStep2Targets}
             step25RelationDefinitions={aggregateStep25Targets}
+            topologySystemName={design.topologySystemName}
+            processingFunctionCandidates={aggregateTriggerFunctionCandidates}
             onPayloadChange={setAggregateTriggerDefinitions}
           />
 

@@ -47,6 +47,32 @@ public static class AggregateTriggerDefinitionValidator
         var v = value.Trim();
         if (!SafeIdentifier.IsMatch(v) || SqlFragments.Any(f => v.Contains(f, StringComparison.OrdinalIgnoreCase))) errors.Add(new(code, "raw SQL, CASE, WHERE, or arbitrary table-name expressions are prohibited."));
     }
+
+    /// <summary>
+    /// processing_function_scope.function_id authority check against the existing
+    /// topology.abstract_function_manifests registry (the same registry execute_abstract_function
+    /// resolves against). Safe-identifier validation in <see cref="Validate"/> is a syntactic guard
+    /// only; this is the backend authority check and is fail-close on missing/inactive/wrong-lane/
+    /// scope-mismatch. Mirrors the manifest.AuthorityScope == context.AuthorityScope check
+    /// AbstractFunctionExecutor already enforces for execute_abstract_function.
+    /// </summary>
+    public static async Task<ValidationError?> ValidateProcessingFunctionAuthorityAsync(
+        AggregateTriggerDefinition definition,
+        IAbstractFunctionManifestRepository abstractFunctionManifestRepository,
+        CancellationToken ct = default)
+    {
+        var functionId = definition.ProcessingFunctionScope.FunctionId;
+        var manifest = await abstractFunctionManifestRepository.LoadAsync(functionId, ct);
+        if (manifest is null)
+            return new("AGGREGATE_PROCESSING_FUNCTION_NOT_FOUND", $"processing_function_scope.function_id '{functionId}' is not a registered abstract function.");
+        if (!manifest.Active)
+            return new("AGGREGATE_PROCESSING_FUNCTION_INACTIVE", $"processing_function_scope.function_id '{functionId}' is registered but inactive.");
+        if (!string.Equals(manifest.RuntimeLane, AggregateTriggerVocabulary.RuntimeDestination, StringComparison.Ordinal))
+            return new("AGGREGATE_PROCESSING_FUNCTION_RUNTIME_LANE_INVALID", $"processing_function_scope.function_id '{functionId}' runtime_lane must be {AggregateTriggerVocabulary.RuntimeDestination}.");
+        if (!string.Equals(manifest.AuthorityScope, definition.ProcessingFunctionScope.OperationDefinitionId, StringComparison.Ordinal))
+            return new("AGGREGATE_PROCESSING_FUNCTION_AUTHORITY_SCOPE_MISMATCH", $"processing_function_scope.function_id '{functionId}' authority_scope does not match operation_definition_id '{definition.ProcessingFunctionScope.OperationDefinitionId}'.");
+        return null;
+    }
 }
 
 public static class AggregateTriggerConditionEvaluator

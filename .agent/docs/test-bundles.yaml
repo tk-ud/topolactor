@@ -37,7 +37,10 @@ reverse_lookup:
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
       - frontend_admin_projection_expression_e2e_contract
-      - aggregate_trigger_substrate_executable_proof_gap
+      - aggregate_trigger_substrate_live_db_executable_proof
+      - aggregate_trigger_substrate_step3_dynamic_authoring_proof
+      - aggregate_trigger_substrate_processing_function_authority_proof
+      - aggregate_trigger_substrate_step3_processing_function_selector_proof
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
       - .agent/tests/check-unified-test-gate.sh
@@ -101,15 +104,20 @@ reverse_lookup:
     does_not_prove:
       - instance settings topology, primitive authority, runtime instance selection, or execution authority enforcement
 
-  - bundle_id: aggregate_trigger_substrate_known_gap
-    roadmap_bundle_refs:
-      - aggregate-trigger-substrate
+  - bundle_id: aggregate_trigger_substrate_contract
     proof_refs:
-      - aggregate_trigger_substrate_executable_proof_gap
+      - aggregate_trigger_substrate_live_db_executable_proof
+      - aggregate_trigger_substrate_step3_dynamic_authoring_proof
+      - aggregate_trigger_substrate_processing_function_authority_proof
+      - aggregate_trigger_substrate_step3_processing_function_selector_proof
     runner_surfaces:
+      - .agent/tests/check-backend-tests.sh
+      - .agent/tests/check-frontend-all-tests.sh
       - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - executable aggregate trigger proof across live PostgreSQL, AdminRuntime persistence, scheduler-to-manifest DB routing, or end-to-end materialization
+      - full-text search or pagination over the abstract_function_manifests registry selector
+      - live browser automation against a deployed admin route
+      - a dedicated autonomous cron/hook scheduling loop that resolves trigger_definition_id from runtime_orchestration.aggregate_trigger_definitions on a schedule; trigger origination remains the responsibility of the processing function / operation definition that owns scope
 
   - bundle_id: agent-tools-proof-and-structure-gate
     roadmap_bundle_refs:

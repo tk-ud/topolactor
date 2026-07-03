@@ -26,6 +26,9 @@ public sealed class AbstractFunctionFailCloseException : InvalidOperationExcepti
 
 public sealed record AbstractFunctionManifest(Guid AbstractFunctionId, string FunctionKey, string RuntimeLane, string AuthorityScope, IReadOnlyList<AbstractFunctionStep> Steps, IReadOnlyList<string> DeniedProjectionKeys, bool Active, IReadOnlyList<AbstractFunctionAuthorityBinding>? AuthorityBindings = null, IReadOnlyDictionary<string, string>? OutputShape = null);
 
+/// <summary>Candidate row for admin authoring selectors that pick a function_key by runtime_lane (e.g. aggregate_trigger_substrate_contract.processing_function_scope).</summary>
+public sealed record AbstractFunctionManifestCandidate(string FunctionKey, string AuthorityScope, bool Active, int ActiveStepCount);
+
 public sealed record AbstractFunctionStep(Guid AbstractFunctionStepId, int StepOrder, string PrimitiveKey, IReadOnlyDictionary<string, string> StepConfig, IReadOnlyList<AbstractFunctionInputBinding> InputBindings, string? ResultContextKey, bool Active, bool IsCompensationStep = false, string? ExternalContextKey = null);
 
 public sealed record AbstractFunctionInputBinding(string InputKey, string BindingSource, string BindingPath, bool Required, bool Secret);
@@ -201,6 +204,15 @@ public sealed class AbstractFunctionExecutionContext
 public interface IAbstractFunctionManifestRepository
 {
     Task<AbstractFunctionManifest?> LoadAsync(string functionKey, CancellationToken ct = default);
+
+    /// <summary>
+    /// Lists active manifests for a runtime_lane, for admin authoring selectors that must choose a
+    /// function_key from the registry rather than accept arbitrary free text. Default implementation
+    /// returns empty so existing fakes/test doubles that only implement LoadAsync keep compiling;
+    /// NpgsqlAbstractFunctionManifestRepository provides the real query.
+    /// </summary>
+    Task<IReadOnlyList<AbstractFunctionManifestCandidate>> ListActiveByRuntimeLaneAsync(string runtimeLane, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<AbstractFunctionManifestCandidate>>(Array.Empty<AbstractFunctionManifestCandidate>());
 }
 
 public interface IAbstractFunctionPrimitiveAdapter

@@ -1067,6 +1067,21 @@ aggregate_trigger_substrate_contract:
       - allowed_source_kinds
       - materialization_policy_ref
     rule: scope is resolved from registered processing function / operation definition, not from event origin.
+    function_id_authority_binding:
+      registry: topology.abstract_function_manifests
+      match_fields:
+        function_key: function_id
+        runtime_lane: aggregate_trigger_runtime
+        authority_scope: operation_definition_id
+      fail_close_on:
+        - function_key_not_found
+        - manifest_inactive
+        - runtime_lane_not_aggregate_trigger_runtime
+        - authority_scope_not_equal_operation_definition_id
+      frontend_role: structured_input_only_backend_is_sole_authority
+    operation_definition_id_authority_binding:
+      source: admin_contents_step1_topologysystemname
+      rule: backend derives operation_definition_id from the manifest topologySystemName at assign_screen_data_shape time and overrides any client-submitted value; frontend input is never authority.
   execution_scope:
     owner: processing_function_or_operation_definition
     allowed_values:

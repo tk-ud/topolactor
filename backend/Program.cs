@@ -274,7 +274,9 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<MockPresetRepository>(),
         sp.GetRequiredService<TeamMarkdownRepository>(),
         sp.GetRequiredService<ISchedulerJobManifestRepository>(),
-        sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
+        sp.GetRequiredService<IBackendErrorEvidenceAppender>(),
+        sp.GetRequiredService<AggregateTriggerRepository>(),
+        sp.GetRequiredService<IAbstractFunctionManifestRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
     new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>()));
