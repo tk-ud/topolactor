@@ -19,7 +19,7 @@ markdown_template: |-
 
   # negative cases
   ## NG boundary
-  - [ ] within NG boundary
+  - [ ] does not cross NG boundary
 
 negative_boundary:
   source: prompt NG axis
