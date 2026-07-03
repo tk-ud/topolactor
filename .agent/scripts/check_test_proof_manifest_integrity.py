@@ -4,6 +4,7 @@
 Python3 stdlib structured-processing counterpart of the Ruby heredoc
 previously embedded in check-test-proof-manifest-integrity.sh.
 """
+import glob
 import os
 import sys
 
@@ -12,6 +13,29 @@ import minimal_yaml as yaml  # noqa: E402
 
 dig = yaml.dig
 arr = yaml.arr
+
+
+def parse_todo_bundle_index(path):
+    bundles = {}
+    if not os.path.isfile(path):
+        return bundles
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if not stripped.startswith("|") or "`" not in stripped:
+                continue
+            cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+            if len(cells) < 3:
+                continue
+            bundle_cell = cells[0]
+            status_cell = cells[2]
+            if not (bundle_cell.startswith("`") and bundle_cell.endswith("`")):
+                continue
+            bundle_id = bundle_cell.strip("`").strip()
+            status = status_cell.strip("`").strip()
+            if bundle_id and bundle_id != "Bundle ID":
+                bundles[bundle_id] = status
+    return bundles
 
 
 def main():
@@ -24,14 +48,28 @@ def main():
     ssot_map = yaml.load_file(ssot_map_path)
     failures = []
 
-    proofs = manifest.get("chronological_scope_index")
-    if proofs is None:
+    chronological_proofs = manifest.get("chronological_scope_index")
+    if chronological_proofs is None:
         failures.append("missing chronological_scope_index")
-        proofs = []
+        chronological_proofs = []
+
+    proofs = list(arr(chronological_proofs))
+    for top_level_key, value in manifest.items():
+        if top_level_key == "chronological_scope_index":
+            continue
+        if top_level_key.endswith("_known_gaps"):
+            for proof in arr(value):
+                if isinstance(proof, dict) and proof.get("proof_id"):
+                    proofs.append(proof)
     required = dig(manifest, "proof_model", "required_fields") or []
     proof_types = dig(manifest, "proof_model", "proof_types") or []
     ids = {}
     orders = []
+    unfinished_todo_statuses = set(
+        arr(dig(manifest, "proof_model", "known_gap_todo_policy", "allowed_todo_statuses"))
+        or ["not_started", "partial", "in_progress", "acceptance_pending"]
+    )
+    todo_bundles = parse_todo_bundle_index(".agent/tasks/todo.md")
 
     def workflow_file_for(workflow_job):
         return str(workflow_job).split("::", 1)[0]
@@ -67,7 +105,10 @@ def main():
             failures.append(f"{label}: required_when.changed_files must be a non-empty list")
 
         for path in arr(proof.get("implementation_files")):
-            if not os.path.exists(path):
+            if any(marker in path for marker in ["*", "?", "["]):
+                if not glob.glob(path, recursive=True):
+                    failures.append(f"{label}: implementation_files glob does not match any path: {path}")
+            elif not os.path.exists(path):
                 failures.append(f"{label}: implementation_files path does not exist: {path}")
 
         for path in arr(proof.get("runner_surfaces")):
@@ -104,6 +145,20 @@ def main():
                 failures.append(f"{label}: known_gap must have known_gap_reason")
             if len(arr(proof.get("proves"))) != 0:
                 failures.append(f"{label}: known_gap must not claim proves entries")
+            todo_refs = arr(proof.get("todo_bundle_refs"))
+            if len(todo_refs) == 0:
+                failures.append(f"{label}: known_gap must have non-empty todo_bundle_refs")
+            if ".agent/tasks/todo.md" not in arr(proof.get("evidence_inputs")):
+                failures.append(f"{label}: known_gap must include .agent/tasks/todo.md in evidence_inputs")
+            for todo_ref in todo_refs:
+                todo_status = todo_bundles.get(str(todo_ref))
+                if todo_status is None:
+                    failures.append(f"{label}: known_gap todo_bundle_refs unknown Bundle ID in .agent/tasks/todo.md: {todo_ref}")
+                elif todo_status not in unfinished_todo_statuses:
+                    failures.append(
+                        f"{label}: known_gap todo_bundle_refs {todo_ref} has completed/invalid status {todo_status!r}; "
+                        f"expected one of {sorted(unfinished_todo_statuses)}"
+                    )
         else:
             if len(arr(proof.get("proves"))) == 0:
                 failures.append(f"{label}: implemented/design proof must have at least one proves entry")
