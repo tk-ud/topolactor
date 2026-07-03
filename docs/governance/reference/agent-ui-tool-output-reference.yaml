@@ -19,12 +19,31 @@ reference_policy:
     - Do not emit verbose execution logs.
     - Do not dump full legacy files.
     - Prefer fields, short excerpts, and selected SSOT sections.
+    - Expose this Reference's basis as structured fields (reference_basis),
+      not markdown wording; a UI may render markdown from those fields, but
+      the fields are the authority, not the rendered text.
+
+reference_basis_field:
+  meaning: >-
+    reference_basis is a structured tool-output field (not prose) pointing
+    at the Reference files that ground the current tool step's contract.
+  emitted_by:
+    - agent-ui-initial-contract start
+    - agent-ui-initial-contract end
+    - agent-ui-local-test read-senario-tmp
+    - agent-ui-local-test summary
+  value_shape:
+    tool_output_reference: docs/governance/reference/agent-ui-tool-output-reference.yaml
+    senario_tmp_reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+    negative_boundary_reference: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
 
 authority_split:
   ai_authored:
     - task_name
     - tool_operation_inputs
-    - senario_content
+    - target_file
+    - senario_summary
+    - ng_boundary
     - implementation_changes
   tool_generated:
     - uuid
@@ -68,6 +87,7 @@ initial_contract_outputs:
       - worktype
       - worktype_prompt_path
       - usage_metadata_completed
+      - reference_basis
   step_3_prompt:
     tool_emits:
       - selected_prompt_excerpt
@@ -107,7 +127,9 @@ initial_contract_outputs:
       - missing_required_selection_if_any
   step_9_senario_contract:
     ai_authored:
-      - senario_content
+      - target_file
+      - senario_summary
+      - ng_boundary
     tool_emits:
       - senario_contract_template
       - missing_evidence_if_any
@@ -116,10 +138,15 @@ initial_contract_outputs:
   step_10_initial_contract_end:
     tool_emits:
       - initial_contract_summary
+      - reference_basis
       - datetime
       - uuid
       - task_name
       - worktype
+      - target_file
+      - senario_summary
+      - ng_boundary
+      - senario_tmp_path
 
 implementation_phase_outputs:
   start:
@@ -128,12 +155,12 @@ implementation_phase_outputs:
     tool_emits:
       - implementation_start_metadata
       - selected_ssot_sections_summary
-      - senario_contract_summary
+      - senario_summary
   end:
     tool_emits:
       - implementation_end_metadata
       - selected_ssot_sections_summary
-      - senario_contract_summary
+      - senario_summary
 
 local_test_outputs:
   step_1_worktype_tests:
@@ -161,12 +188,16 @@ local_test_outputs:
     tool_emits:
       - pass_or_fail
       - completion_summary
+      - reference_basis
       - datetime
       - uuid
       - task_name
       - worktype
       - selected_ssot_sections
-      - senario_contract_summary
+      - target_file
+      - senario_summary
+      - ng_boundary
+      - senario_tmp_path
       - checklist_result
       - check_result
       - missing_evidence_if_any

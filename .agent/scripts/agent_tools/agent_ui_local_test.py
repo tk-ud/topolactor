@@ -19,10 +19,12 @@ import sys
 
 from agent_ui_common import (
     BOUNDARY,
+    REFERENCE_BASIS,
     REPO_ROOT,
     SENARIO_TMP_PATH,
     emit_json,
     fail,
+    parse_senario_tmp,
     reject_output_flag,
     tail_lines,
     worktypes,
@@ -79,12 +81,19 @@ def _cmd_read_senario_tmp(_args: argparse.Namespace) -> int:
         )
         return 1
     content = SENARIO_TMP_PATH.read_text(encoding="utf-8")
+    parsed = parse_senario_tmp(content)
     return emit_json({
         "tool": TOOL_NAME,
         "boundary": BOUNDARY,
         "mode": "read_senario_tmp",
+        "reference_basis": REFERENCE_BASIS,
         "senario_tmp_path": str(SENARIO_TMP_PATH.relative_to(REPO_ROOT)),
+        "target_file": parsed["target_file"],
+        "target_files": parsed["target_files"],
+        "senario_summary": parsed["senario_summary"],
+        "ng_boundary": parsed["ng_boundary"],
         "senario_tmp_content": content,
+        "senario_tmp_content_note": "senario_tmp_content is the raw markdown for UI rendering only; the fields above are the structured evidence.",
     })
 
 
@@ -133,17 +142,20 @@ def _cmd_summary(args: argparse.Namespace) -> int:
     check_result = _run_check(STRUCTURE_CHECK)
 
     missing_evidence: list[str] = []
-    scenario_contract_summary = None
+    senario_summary = None
+    target_file = None
+    ng_boundary = None
     senario_tmp_path = None
     if not SENARIO_TMP_PATH.is_file():
         missing_evidence.append("senario-tmp.md missing")
     else:
         senario_tmp_path = str(SENARIO_TMP_PATH.relative_to(REPO_ROOT))
-        for line in SENARIO_TMP_PATH.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("- [x] 作業概要:"):
-                scenario_contract_summary = stripped.split(":", 1)[1].strip()
-                break
+        parsed = parse_senario_tmp(SENARIO_TMP_PATH.read_text(encoding="utf-8"))
+        senario_summary = parsed["senario_summary"]
+        target_file = parsed["target_file"]
+        ng_boundary = parsed["ng_boundary"]
+        if not senario_summary:
+            missing_evidence.append("senario-tmp.md has no 作業概要/senario_summary contract item")
     if not all(r["pass"] for r in worktype_results):
         missing_evidence.append("one or more worktype-routed checks failed")
     if not check_result["pass"]:
@@ -155,12 +167,15 @@ def _cmd_summary(args: argparse.Namespace) -> int:
         "tool": TOOL_NAME,
         "boundary": BOUNDARY,
         "mode": "summary",
+        "reference_basis": REFERENCE_BASIS,
         "datetime": args.datetime,
         "uuid": args.uuid,
         "task_name": args.task_name,
         "worktype": args.worktype,
         "worktype_test_result": worktype_results,
-        "scenario_contract_summary": scenario_contract_summary,
+        "target_file": target_file,
+        "senario_summary": senario_summary,
+        "ng_boundary": ng_boundary,
         "senario_tmp_path": senario_tmp_path,
         "checklist_result": "requires_ai_interview_using_listed_items",
         "check_result": check_result,

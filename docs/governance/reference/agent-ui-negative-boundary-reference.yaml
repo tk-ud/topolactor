@@ -22,3 +22,11 @@ checklist_interview:
     - output senario-tmp.md
     - output Error if the file cannot be checked
     - ask framework questions based on existing checklists
+
+structured_evidence_fields:
+  rule: >-
+    ng_boundary must be surfaced by tools as a structured field extracted
+    from boundary_item, not left inside markdown prose only.
+  fields:
+    - ng_boundary
+    - reference_basis

@@ -27,6 +27,7 @@ from pathlib import Path
 
 from agent_ui_common import (
     BOUNDARY,
+    REFERENCE_BASIS,
     REPO_ROOT,
     SENARIO_TMP_PATH,
     YAML_SECTION_QUERY_TOOL,
@@ -107,6 +108,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
         "selected_prompt_excerpt": excerpt_lines,
         "required_reads_from_prompt": ["AGENTS.md", ".agent/rules/rule.md", prompt_path],
         "protocol_trigger_hints": protocol_trigger_hints,
+        "reference_basis": REFERENCE_BASIS,
     })
 
 
@@ -226,13 +228,16 @@ def _cmd_end(args: argparse.Namespace) -> int:
         "tool": TOOL_NAME,
         "boundary": BOUNDARY,
         "mode": "end",
+        "reference_basis": REFERENCE_BASIS,
         "initial_contract_summary": {
             "datetime": args.datetime,
             "uuid": args.uuid,
             "task_name": args.task_name,
             "worktype": args.worktype,
             "selected_ssot_sections": args.selected_sections.split(",") if args.selected_sections else [],
-            "scenario_contract_summary": args.senario_summary.strip(),
+            "target_file": args.target_file.strip(),
+            "senario_summary": args.senario_summary.strip(),
+            "ng_boundary": (args.ng_boundary or "N/A").strip(),
             "senario_tmp_path": str(SENARIO_TMP_PATH.relative_to(REPO_ROOT)),
             "tool_log_appended": True,
         },

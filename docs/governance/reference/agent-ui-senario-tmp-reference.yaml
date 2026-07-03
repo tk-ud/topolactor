@@ -25,6 +25,19 @@ negative_boundary:
   source: prompt NG axis
   meaning: negative cases list the task's top boundary from the prompt NG axis
 
+structured_evidence_fields:
+  rule: >-
+    senario-tmp.md is the human/UI-rendering markdown surface, not the
+    authority. Tools that read or write it must expose these as structured
+    output fields (a UI may render markdown from the fields, not the
+    other way around).
+  fields:
+    - target_file
+    - senario_summary
+    - ng_boundary
+    - senario_tmp_path
+    - reference_basis
+
 checklist_interview:
   order:
     - output_senario_tmp_md

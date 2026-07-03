@@ -27,6 +27,23 @@ TOOL_LOG_PATH = REPO_ROOT / "docs" / "governance" / "logs" / "tool.log"
 SENARIO_TMP_PATH = REPO_ROOT / "senario-tmp.md"
 YAML_SECTION_QUERY_TOOL = REPO_ROOT / ".agent" / "tools" / "yaml-section-query"
 
+# Structured pointer to the Reference basis this tool implements. Exposed as a
+# tool output field (not markdown prose) so a UI/AI consumer can trace tool
+# output back to its governing Reference files without parsing markdown.
+REFERENCE_BASIS = {
+    "tool_output_reference": "docs/governance/reference/agent-ui-tool-output-reference.yaml",
+    "senario_tmp_reference": "docs/governance/reference/agent-ui-senario-tmp-reference.yaml",
+    "negative_boundary_reference": "docs/governance/reference/agent-ui-negative-boundary-reference.yaml",
+}
+
+# senario-tmp.md heading/prefix contract, per
+# docs/governance/reference/agent-ui-negative-boundary-reference.yaml's
+# senario_tmp_markdown block. Markdown is the human/UI-rendering surface;
+# parse_senario_tmp() below is what turns it back into structured evidence.
+SENARIO_TMP_TARGET_FILE_HEADING = "## 対象file名"
+SENARIO_TMP_BOUNDARY_HEADING = "## NG boundary"
+SENARIO_SUMMARY_PREFIX = "作業概要:"
+
 BOUNDARY = {
     "authority_boundary": (
         "agent_ui_tool_output_not_ssot_authority_not_proof_completion_not_"
@@ -96,3 +113,48 @@ def append_tool_log(datetime_value: str, uuid_value: str, task_name: str, workty
 def tail_lines(text: str, count: int = 20) -> list[str]:
     lines = text.splitlines()
     return lines[-count:] if len(lines) > count else lines
+
+
+def parse_senario_tmp(content: str) -> dict:
+    """Deterministically extracts structured contract fields from senario-tmp.md.
+
+    The markdown file is the human/UI-rendering surface. This parser is the
+    tool/runtime-side structured evidence extraction: it walks the fixed
+    heading/checkbox contract (## 対象file名 / ## NG boundary) rather than
+    treating markdown wording itself as the authority. Callers should surface
+    these fields directly, not re-derive them ad hoc from raw text.
+    """
+    section: str | None = None
+    target_files: list[str] = []
+    senario_summary: str | None = None
+    ng_boundary: str | None = None
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if line == SENARIO_TMP_TARGET_FILE_HEADING:
+            section = "target_file"
+            continue
+        if line == SENARIO_TMP_BOUNDARY_HEADING:
+            section = "ng_boundary"
+            continue
+        if line.startswith("#"):
+            section = None
+            continue
+        if not line.startswith("- [") or "]" not in line:
+            continue
+
+        item_text = line.split("]", 1)[1].strip()
+        if section == "target_file":
+            if item_text.startswith(SENARIO_SUMMARY_PREFIX):
+                senario_summary = item_text[len(SENARIO_SUMMARY_PREFIX):].strip()
+            elif item_text and item_text != "作業概要":
+                target_files.append(item_text)
+        elif section == "ng_boundary" and item_text:
+            ng_boundary = item_text
+
+    return {
+        "target_file": target_files[0] if target_files else None,
+        "target_files": target_files,
+        "senario_summary": senario_summary,
+        "ng_boundary": ng_boundary,
+    }

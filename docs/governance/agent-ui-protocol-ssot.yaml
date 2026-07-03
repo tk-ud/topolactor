@@ -108,8 +108,11 @@ agent_protocols:
       - uuid
       - task_name
       - worktype
+      - reference_basis
       - selected_ssot_sections
-      - scenario_contract_summary
+      - target_file
+      - senario_summary
+      - ng_boundary
       - senario_tmp_path
       - local_test_result
       - checklist_result
