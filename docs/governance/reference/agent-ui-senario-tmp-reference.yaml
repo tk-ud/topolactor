@@ -1,0 +1,37 @@
+# agent-ui-senario-tmp-reference.yaml
+
+version: 1
+status: draft_reference
+scope: agent_ui_senario_tmp
+canonical_path: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+
+senario_tmp:
+  path: senario-tmp.md
+  created_by: .agent/tools/agent-ui initial-contract
+  created_at: step_10
+  gitignore_required: true
+  git_tracked: false
+  purpose: Local temporary scenario-contract working file for Agent implementation.
+
+initial_contract:
+  step_9:
+    action: Require scenario-contract.
+  step_10:
+    action: Create senario-tmp.md and end.
+    emits:
+      - senario_tmp_path
+      - senario_tmp_created
+      - initial_contract_summary
+      - datetime
+      - uuid
+      - task_name
+      - worktype
+
+usage_log:
+  path: docs/governance/logs/tool.log
+  fields:
+    - datetime
+    - uuid
+    - task_name
+    - worktype
+  compact_only: true
