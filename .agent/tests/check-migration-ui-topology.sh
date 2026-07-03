@@ -40,7 +40,20 @@ noise_finish() {
   fi
   return "$code"
 }
-trap noise_finish EXIT
+
+CLEANUP_FILES=()
+cleanup() {
+  local f
+  for f in "${CLEANUP_FILES[@]}"; do
+    [ -n "$f" ] && rm -f "$f"
+  done
+}
+finish() {
+  local code=$?
+  cleanup || true
+  (exit "$code"); noise_finish
+}
+trap finish EXIT
 
 check_content() {
   local file="$REPO_ROOT/$1"
@@ -140,7 +153,7 @@ query_equals_zero() {
   local label="$1"
   local sql="$2"
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql"); then
     fail "Query failed: $label"
     return
   fi
@@ -156,7 +169,7 @@ query_equals_one() {
   local label="$1"
   local sql="$2"
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql"); then
     fail "Query failed: $label"
     return
   fi
@@ -216,7 +229,7 @@ PASS_COUNT=$((PASS_COUNT + 1)) # OK
 echo ""
 echo "=== DB: conflict-case simulation (child FK remapped to canonical UUID) ==="
 CONFLICT_SIM_SQL="$(mktemp)"
-trap 'rm -f "$CONFLICT_SIM_SQL"' EXIT
+CLEANUP_FILES+=("$CONFLICT_SIM_SQL")
 
 cat > "$CONFLICT_SIM_SQL" <<'ENDSQL'
 BEGIN;

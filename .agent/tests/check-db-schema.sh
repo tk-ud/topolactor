@@ -89,7 +89,7 @@ query_equals_zero() {
   local sql="$2"
 
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql"); then
     fail "Query failed: $label"
     return
   fi
@@ -107,7 +107,7 @@ query_equals_one() {
   local sql="$2"
 
   local result
-  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2); then
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql"); then
     fail "Query failed: $label"
     return
   fi

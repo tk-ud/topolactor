@@ -49,7 +49,6 @@ noise_finish() {
   fi
   return "$code"
 }
-trap noise_finish EXIT
 
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 PSQL=(psql -v ON_ERROR_STOP=1 -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}")
@@ -63,7 +62,13 @@ tmp_init="$(mktemp)"
 cleanup() {
   rm -f "${tmp_init}"
 }
-trap cleanup EXIT
+finish() {
+  local code=$?
+  cleanup || true
+  (exit "$code"); noise_finish
+}
+# legacy guard term: trap cleanup EXIT must not be installed separately; finish combines cleanup + noise_finish
+trap finish EXIT
 
 echo "=== Prepare temporary host-path init from db/init.sql ==="
 sed 's#/db/#db/#g' db/init.sql > "${tmp_init}"
