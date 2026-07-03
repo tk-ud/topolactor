@@ -26,7 +26,13 @@ Worktype is `audit`, including any of:
 - roadmap target milestone/unlocks and related implementation_registry entry
 - diff-target implementation files
 - .agent/protocols/audit.md
+- .agent/protocols/audit-tool-evidence.md
 - Gate 0 architecture substrate / reusable abstraction conformance from `.agent/protocols/audit.md`
+- Agent UI tool evidence for audit route / target PR when applicable:
+  - `.agent/tools/agent-ui-initial-contract` start/end structured output
+  - `.agent/tools/agent-ui-local-test` summary output when available
+  - `docs/governance/logs/tool.log` compact metadata entry when tool use is claimed
+  - explicit fallback reason when tool was not used or unavailable
 - target-specific SSOT discovery after top-level baseline:
   - .agent/docs/ssot-map.yaml (surface-specific discovery; do not replace top-level baseline reads)
 
@@ -37,6 +43,7 @@ Worktype is `audit`, including any of:
 
 ## protocol_triggers
 - always: .agent/protocols/audit.md
+- always: .agent/protocols/audit-tool-evidence.md
 - conditional: .agent/protocols/todo-carry-over.md when TODO/Roadmap Finalization Judgment updates, closes, reclassifies, or carries over canonical TODO/roadmap state
 - conditional: policy/scenario/runtime protocols only when touched
 
@@ -53,6 +60,17 @@ Worktype is `audit`, including any of:
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
 - Repo implementation checked: yes/no (yes は実際に読んだ実装ファイル・テストのリストを出力必須; リストなしの yes は無効)
+- Agent UI tool evidence checked:
+  - tool_used: yes/no/not_available
+  - datetime:
+  - uuid:
+  - task_name:
+  - worktype:
+  - reference_basis:
+  - senario_tmp_path:
+  - tool_log_entry_checked: yes/no/not_applicable
+  - fallback_reason_if_not_used:
+  - evidence_judgment: pass/partial/fail + evidence
 - Architecture substrate judgment:
   - runtime port hardcode:
   - UI surface:
@@ -85,6 +103,7 @@ Worktype is `audit`, including any of:
 - replacing semantic audit with structure check
 - summary-only judgment
 - metadata-only (PR metadata/mergeability only) judgment
+- treating Agent UI tool evidence as SSOT authority, semantic completion, or implemented / partial / not_started judgment
 
 ## todo_granularity_judgment
 - roadmap entry（`docs/system-roadmap.yaml`）
