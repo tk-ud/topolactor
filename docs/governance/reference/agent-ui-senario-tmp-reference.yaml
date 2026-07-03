@@ -8,24 +8,28 @@ canonical_path: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
 senario_tmp:
   path: senario-tmp.md
   created_by: .agent/tools/agent-ui initial-contract
-  created_at: step_10
+  created_at: initial_contract_end
   gitignore_required: true
   git_tracked: false
-  purpose: Local temporary scenario-contract working file for Agent implementation.
 
-initial_contract:
-  step_9:
-    action: Require scenario-contract.
-  step_10:
-    action: Create senario-tmp.md and end.
-    emits:
-      - senario_tmp_path
-      - senario_tmp_created
-      - initial_contract_summary
-      - datetime
-      - uuid
-      - task_name
-      - worktype
+markdown_template: |-
+  # contracts
+  ## 対象file名
+  - [ ] 作業概要
+
+  # negative cases
+  ## NG boundary
+  - [ ] within NG boundary
+
+negative_boundary:
+  source: prompt NG axis
+  meaning: negative cases list the task's top boundary from the prompt NG axis
+
+checklist_interview:
+  order:
+    - output_senario_tmp_md
+    - output_Error_if_senario_tmp_cannot_be_checked
+    - ask_framework_questions_using_existing_checklists
 
 usage_log:
   path: docs/governance/logs/tool.log
@@ -34,4 +38,4 @@ usage_log:
     - uuid
     - task_name
     - worktype
-  compact_only: true
+  rule: compact metadata only
