@@ -1,0 +1,49 @@
+name: projection-lane-seed-hardening
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - 'db/**/*.sql'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
+      - 'docs/design/pipeline-continuity-ssot.yaml'
+      - '.agent/tests/check-projection-lane-seed-hardening.sh'
+      - '.github/workflows/projection-lane-seed-hardening.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - 'db/**/*.sql'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
+      - 'docs/design/pipeline-continuity-ssot.yaml'
+      - '.agent/tests/check-projection-lane-seed-hardening.sh'
+      - '.github/workflows/projection-lane-seed-hardening.yml'
+
+jobs:
+  projection-lane-seed-hardening:
+    name: "projection lane seed hardening"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run projection lane seed hardening checks
+        run: bash .agent/tests/check-projection-lane-seed-hardening.sh

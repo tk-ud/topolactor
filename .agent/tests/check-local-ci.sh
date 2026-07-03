@@ -8,20 +8,19 @@ run_check() {
   local cmd="$2"
   local required_mode="${3:-required}"
 
-  echo ""
-  echo "=== [LOCAL_CI] ${label} ==="
-
   local out
   set +e
   out="$(bash -c "$cmd" 2>&1)"
   code=$?
   set -e
-  echo "$out"
 
   if [ "$code" -eq 0 ]; then
-    echo "RESULT [${label}] PASS"
+    echo "PASS local_ci label=${label}"
     return
   fi
+
+  echo "FAIL local_ci label=${label} exit=${code} command=${cmd}" >&2
+  echo "$out" >&2
 
   if [ "$label" = "RUNTIME_ENVIRONMENT" ] && echo "$out" | grep -qE "docker.sock|docker API|daemon is running"; then
     echo "RESULT [${label}] REQUIRED_NOT_EXECUTED (docker runtime unavailable; not PASS)" >&2
@@ -51,7 +50,7 @@ run_check "STRUCTURE_CHECK_LAST" "bash .agent/tests/check-structure.sh" "require
 
 echo ""
 if [ "${FAILURES}" -eq 0 ]; then
-  echo "=== [LOCAL_CI] PASS (all checks passed) ==="
+  echo "PASS local_ci checks=3"
   exit 0
 fi
 

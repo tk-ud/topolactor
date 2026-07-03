@@ -64,6 +64,8 @@ builder.Services.AddSingleton<DbNotifyRepository>(sp =>
     new NpgsqlDbNotifyRepository(
         sp.GetRequiredService<ILogger<NpgsqlDbNotifyRepository>>(),
         connectionString));
+builder.Services.AddSingleton<AggregateTriggerRepository>(_ =>
+    new NpgsqlAggregateTriggerRepository(connectionString));
 builder.Services.AddSingleton<SqlAttentionLogsRepository>(sp =>
     new NpgsqlSqlAttentionLogsRepository(
         sp.GetRequiredService<ILogger<NpgsqlSqlAttentionLogsRepository>>(),
@@ -312,6 +314,7 @@ builder.Services.AddSingleton<RegistryAttractorDispatchRuntime>(sp =>
         sp.GetRequiredService<ILogger<RegistryAttractorDispatchRuntime>>(),
         sp.GetRequiredService<HubAttractorExplorationRuntime>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>()));
+builder.Services.AddSingleton<AggregateTriggerRuntime>();
 builder.Services.AddSingleton<ManifestDispatcher>(sp =>
 {
     var handlers = new Dictionary<string, IDispatchableRuntime>
@@ -323,6 +326,7 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         ["external_port_runtime"]      = sp.GetRequiredService<ExternalPortDispatchRuntime>(),
         ["instance_port_runtime"]      = sp.GetRequiredService<InstancePortDispatchRuntime>(),
         ["cli_reader_port_runtime"]   = sp.GetRequiredService<AuthorizedCliReaderPortRuntime>(),
+        ["aggregate_trigger_runtime"] = sp.GetRequiredService<AggregateTriggerRuntime>(),
     };
     return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
@@ -343,7 +347,7 @@ builder.Services.AddSingleton<SeedJsonRepository>(sp =>
     new SeedJsonRepository(
         sp.GetRequiredService<ILogger<SeedJsonRepository>>(),
         seedStoragePath));
-builder.Services.AddSingleton<SeedImportApplyRepository>(sp =>
+builder.Services.AddSingleton<ISeedImportApplyBoundary>(sp =>
     new SeedImportApplyRepository(connectionString));
 builder.Services.AddSingleton<SeedRuntime>();
 
@@ -825,6 +829,34 @@ app.MapPost("/draft-preview/preview", async (
     });
 });
 
+// GET /sql-attention/topology-projection — SQL Attention topology projection read surface (JWT-guarded).
+app.MapGet("/sql-attention/topology-projection", async (
+    HttpContext ctx,
+    string? sourceSetId,
+    SqlAttentionTopologyProjectionRuntime projectionRuntime,
+    JwtGuard jwtGuard) =>
+{
+    var token = ExtractBearerToken(ctx);
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
+
+    if (string.IsNullOrWhiteSpace(sourceSetId))
+    {
+        return Results.Json(new
+        {
+            success = false,
+            errors = new[] { new ValidationError("SOURCE_SET_ID_REQUIRED", "Query parameter 'sourceSetId' is required.") }
+        }, statusCode: 400);
+    }
+
+    var result = await projectionRuntime.ProjectAsync(sourceSetId.Trim(), ctx.RequestAborted);
+    return Results.Json(new { success = true, result });
+});
+
+// GET /sse — SSE projection lane (JWT-guarded runtime-adjacent surface).
+// Streams projection events from DbNotifyListener via SseEventBroadcaster.
+// Guarded to keep reader authorization boundary explicit for runtime/admin projections.
 app.MapGet("/sse", async (HttpContext ctx, SseEndpoint sse, JwtGuard jwtGuard) =>
 {
     var token = ExtractBearerToken(ctx);

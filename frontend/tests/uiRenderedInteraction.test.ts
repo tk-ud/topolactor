@@ -73,6 +73,7 @@ import RegistryVectorValidator from "../islands/RegistryVectorValidator.tsx";
 import ContentsPromotionPanel from "../islands/ContentsPromotionPanel.tsx";
 import ContentsScreenDesignPanel from "../islands/ContentsScreenDesignPanel.tsx";
 import AuthPanel from "../islands/AuthPanel.tsx";
+import { ProjectionView } from "../components/ProjectionView.tsx";
 
 // ─── Preact effect scheduling shim ───────────────────────────────────────────
 // Preact checks typeof requestAnimationFrame at hooks module load time and falls
@@ -375,6 +376,26 @@ Deno.test("OperationPanel render: component source has error/success display sur
   assert(src.includes("setDispatchSuccess("), "component must track success state");
   assert(src.includes("alert-warn") || src.includes("エラーまたは部分失敗"), "component must display error/partial-failure state");
   assert(src.includes("成功"), "component must display success state");
+});
+
+Deno.test("ProjectionView user-facing render: projectionDefinition is consumed in visible output", () => {
+  const html = renderHtml(ProjectionView, {
+    emission: {
+      componentIds: [],
+      data: { seedLabel: "projection-lane-visible" },
+      projectionDefinition: {
+        constructorKey: "user-facing-render-test",
+        packageIds: ["00000000-0000-0000-0000-000000000001"],
+        outputKind: "form_inputs",
+        fieldDefs: [{ key: "seedLabel", label: "Seed label", kind: "text", required: true }],
+      },
+    },
+  });
+
+  assert(
+    html.includes("ProjectionDefinition projection") && html.includes("projection-lane-visible"),
+    "lane=frontend_user_facing_render component=ProjectionView mapping=projection_constructor_mapping seed=user-facing-render-test must display projectionDefinition-derived value",
+  );
 });
 
 Deno.test("TeamMarkdownDashboard DOM: malformed search response shows explicit error without card-state crash", async () => {

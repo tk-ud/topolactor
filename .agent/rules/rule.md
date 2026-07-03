@@ -8,6 +8,8 @@
 - Do not use silent fallback for runtime boundary failures.
 - Do not read all prompt/protocol/docs bundles by default.
 - Do not treat `docs/system-roadmap.yaml` or `.agent/tasks/todo.md` as the authoritative source for implementation state. Read actual code and related tests to determine current state; roadmap and todo are dynamic reference points subject to constant change.
+- Do not treat `.agent/tools` output as SSOT authority, proof completion, completion judgment, semantic audit judgment, or implemented / partial / not_started status evidence by itself.
+- Do not use `.agent/tools` for repository mutation; `.agent/tools` is an Agent-facing read-only repo observation surface, while `.agent/scripts` owns CI / gate / helper implementation bodies.
 
 ## Minimal Workflow Invariant
 

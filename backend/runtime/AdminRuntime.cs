@@ -236,6 +236,7 @@ public partial class AdminRuntime
             "registry_vector:validate"         => await DataValidateRegistryVectorAsync(vector, ct),
             "ui_component_bucket:create"       => await DataCreateBucketItemAsync(vector, ct),
             "ui_component_bucket:list"         => await DataListBucketItemsAsync(vector, ct),
+            "component_registration:register_or_update_projection_component" => await DataRegisterOrUpdateProjectionComponentAsync(vector, ct),
             "package_generator:generate"        => await DataGenerateAsync(vector, ct),
             "package_generator:promote"         => await DataPromoteAsync(vector, ct),
             "package_generator:promote_package" => await DataPromotePackageAsync(vector, ct),
@@ -687,6 +688,100 @@ public partial class AdminRuntime
             .ToList();
 
         return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataRegisterOrUpdateProjectionComponentAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED",
+                "payload is required for component_registration:register_or_update_projection_component"));
+
+        ComponentRegistrationProjectionRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<ComponentRegistrationProjectionRequestDto>(
+                vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+
+        if (request is null)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
+        if (string.IsNullOrWhiteSpace(request.ComponentKey))
+            return (null, new ValidationError("COMPONENT_KEY_REQUIRED", "componentKey is required"));
+        if (string.IsNullOrWhiteSpace(request.SourcePath))
+            return (null, new ValidationError("SOURCE_PATH_REQUIRED", "sourcePath is required"));
+        if (string.IsNullOrWhiteSpace(request.ComponentKind))
+            return (null, new ValidationError("COMPONENT_KIND_REQUIRED", "componentKind is required"));
+        if (request.ProjectionDefinition.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("PROJECTION_DEFINITION_REQUIRED", "projectionDefinition object is required"));
+
+        var definition = request.ProjectionDefinition;
+        if (!definition.TryGetProperty("constructorKey", out var constructorKeyEl) || string.IsNullOrWhiteSpace(constructorKeyEl.GetString()))
+            return (null, new ValidationError("PROJECTION_CONSTRUCTOR_KEY_REQUIRED", "projectionDefinition.constructorKey is required"));
+        if (!definition.TryGetProperty("outputKind", out var outputKindEl) || outputKindEl.GetString() != "component_projection")
+            return (null, new ValidationError("PROJECTION_OUTPUT_KIND_UNSUPPORTED", "projectionDefinition.outputKind must be component_projection"));
+        if (!definition.TryGetProperty("componentDefinition", out var componentDefinition) || componentDefinition.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("COMPONENT_DEFINITION_REQUIRED", "projectionDefinition.componentDefinition is required"));
+        if (!componentDefinition.TryGetProperty("componentKey", out var defKeyEl) || defKeyEl.GetString() != request.ComponentKey)
+            return (null, new ValidationError("COMPONENT_KEY_MISMATCH", "payload.componentKey must match projectionDefinition.componentDefinition.componentKey"));
+        if (!componentDefinition.TryGetProperty("component_kind", out var defKindEl) || defKindEl.GetString() != request.ComponentKind)
+            return (null, new ValidationError("COMPONENT_KIND_MISMATCH", "payload.componentKind must match projectionDefinition.componentDefinition.component_kind"));
+
+        var metadataJson = request.MetadataJson;
+        if (string.IsNullOrWhiteSpace(metadataJson))
+        {
+            metadataJson = JsonSerializer.Serialize(new
+            {
+                routeKey = request.RouteKey,
+                projectionDefinition = request.ProjectionDefinition,
+            });
+        }
+
+        UiComponentBucketCreateResult result;
+        try
+        {
+            result = await _uiTopologyRepository.RegisterOrUpdateProjectionComponentAsync(
+                request.ComponentKey, request.SourcePath, request.ComponentKind, metadataJson, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminRuntime.DataRegisterOrUpdateProjectionComponentAsync: repository unavailable.");
+            return (null, new ValidationError("REPOSITORY_UNAVAILABLE", ex.Message));
+        }
+
+        if (result.Code != UiComponentBucketCreateCode.Success || result.Record is null)
+        {
+            var code = result.Code switch
+            {
+                UiComponentBucketCreateCode.ConstraintViolation => "COMPONENT_REGISTRATION_CONSTRAINT_VIOLATION",
+                UiComponentBucketCreateCode.MalformedMetadataJson => "MALFORMED_METADATA_JSON",
+                UiComponentBucketCreateCode.DbUnavailable => "REPOSITORY_UNAVAILABLE",
+                _ => "COMPONENT_REGISTRATION_FAILED",
+            };
+            return (null, new ValidationError(code, result.Message ?? "Component registration/update failed."));
+        }
+
+        var componentIds = new List<string>();
+        if (definition.TryGetProperty("componentId", out var rootComponentIdEl) && !string.IsNullOrWhiteSpace(rootComponentIdEl.GetString()))
+            componentIds.Add(rootComponentIdEl.GetString()!);
+        else if (componentDefinition.TryGetProperty("componentId", out var defComponentIdEl) && !string.IsNullOrWhiteSpace(defComponentIdEl.GetString()))
+            componentIds.Add(defComponentIdEl.GetString()!);
+
+        var row = result.Record;
+        var readback = new ComponentRegistrationProjectionReadbackDto(
+            true,
+            "component_registration:register_or_update_projection_component",
+            new UiComponentBucketItemDto(row.BucketItemId.ToString(), row.ComponentKey, row.SourcePath, row.ComponentKind, row.Status),
+            request.ProjectionDefinition,
+            request.Data ?? JsonSerializer.SerializeToElement(new { }),
+            componentIds);
+
+        return (JsonSerializer.SerializeToElement(readback), null);
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataCreateBucketItemAsync(
@@ -3055,6 +3150,24 @@ public partial class AdminRuntime
             ? topologySystemName
             : existingTopologySystemName;
 
+        if (request.AggregateTriggerDefinitions is { Count: > 0 } aggregateTriggerDefinitions)
+        {
+            var step2Ids = new HashSet<string>(
+                draftTables.Select(t => t.TableName).Where(s => !string.IsNullOrWhiteSpace(s)),
+                StringComparer.OrdinalIgnoreCase);
+            var step25Ids = new HashSet<string>(
+                relationIntents
+                    .Where(r => !string.IsNullOrWhiteSpace(r.LocalTableRef) && !string.IsNullOrWhiteSpace(r.JoinTableRef))
+                    .Select(r => $"{r.LocalTableRef!.Trim()}->{r.JoinTableRef!.Trim()}"),
+                StringComparer.OrdinalIgnoreCase);
+            foreach (var definition in aggregateTriggerDefinitions)
+            {
+                var aggregateErrors = AggregateTriggerDefinitionValidator
+                    .Validate(definition, step2Ids, step25Ids);
+                if (aggregateErrors.Count > 0) return (null, aggregateErrors[0]);
+            }
+        }
+
         var tableRef = !string.IsNullOrWhiteSpace(request.TableRef)
             ? request.TableRef.Trim()
             : request.DbTableName?.Trim();
@@ -3098,6 +3211,7 @@ public partial class AdminRuntime
             searchConditions = request.SearchConditions ?? Array.Empty<AdminManifestSearchConditionDto>(),
             havingConditions = request.HavingConditions ?? Array.Empty<AdminManifestHavingConditionDto>(),
             displayColumnMode = request.DisplayColumnMode,
+            aggregateTriggerDefinitions = request.AggregateTriggerDefinitions ?? Array.Empty<AggregateTriggerDefinition>(),
             screenReadQueryWiring = ScreenReadQueryWiringBuilder.Build(
                 request.SearchConditions,
                 request.HavingConditions,

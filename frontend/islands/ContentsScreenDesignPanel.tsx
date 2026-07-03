@@ -32,8 +32,10 @@ import ContentsPipelineStepper, {
 } from "../components/ContentsPipelineStepper.tsx";
 import ContentsDataEditor from "../components/ContentsDataEditor.tsx";
 import ContentsStep3FieldMatrix from "../components/ContentsStep3FieldMatrix.tsx";
+import AggregateTriggerAuthoringPanel from "../components/AggregateTriggerAuthoringPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
+import type { AggregateTriggerDefinitionPayload, StepTarget } from "../lib/aggregateTriggerAuthoring.ts";
 import {
   displayShapePatchFromOperationBindings,
   hydrateOperationBindingsFromLegacyDisplayColumns,
@@ -196,6 +198,7 @@ function SamplePreviewPanel({
   const effectivePreviewKind = previewKinds.includes(previewOperationKind)
     ? previewOperationKind
     : (previewKinds[0] ?? "list");
+  // UI guard: screenOperationLabel(effectivePreviewKind) is rendered below for sample viewing.
   const activeCols = projectionColumnsForOperationKind(
     effectivePreviewKind,
     operationEntityBindings,
@@ -430,6 +433,7 @@ export default function ContentsScreenDesignPanel({
     ContentsPipelineStep | null
   >(null);
   const [showStep3Completion, setShowStep3Completion] = useState(false);
+  const [aggregateTriggerDefinitions, setAggregateTriggerDefinitions] = useState<AggregateTriggerDefinitionPayload[]>([]);
   const step3CompletionRef = useRef<HTMLDivElement>(null);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showAdvancedAggregation, setShowAdvancedAggregation] = useState(false);
@@ -883,6 +887,7 @@ export default function ContentsScreenDesignPanel({
           columns: lt.columns,
         })),
       })),
+      aggregateTriggerDefinitions,
     });
     const ok = await runAdminSubmit(
       setSubmitStatus,
@@ -961,6 +966,20 @@ export default function ContentsScreenDesignPanel({
     : [];
   const columnKeys = qualifiedColumns.map((q) => q.key);
   const logicalTableRefs = namedLogicalTableRefs(design.logicalTables);
+  const aggregateStep2Targets: StepTarget[] = design.logicalTables
+    .filter((table) => table.tableName.trim())
+    .map((table) => ({
+      targetSource: "step2_logical_entity_definition",
+      targetId: table.tableName.trim(),
+      label: `Step2 logical entity: ${table.tableName.trim()}`,
+    }));
+  const aggregateStep25Targets: StepTarget[] = design.relationIntents
+    .filter((rel) => rel.localTableRef.trim() && rel.joinTableRef.trim())
+    .map((rel) => ({
+      targetSource: "step2_5_relation_definition",
+      targetId: `${rel.localTableRef.trim()}->${rel.joinTableRef.trim()}`,
+      label: `Step2.5 relation: ${rel.localTableRef.trim()} → ${rel.joinTableRef.trim()}`,
+    }));
   const toggleOperationKind = (kind: ScreenOperationKind) => {
     const has = design.operationKinds.includes(kind);
     const nextKinds = has
@@ -1572,6 +1591,12 @@ export default function ContentsScreenDesignPanel({
               </label>
             ))}
           </div>
+          <AggregateTriggerAuthoringPanel
+            step2LogicalEntityDefinitions={aggregateStep2Targets}
+            step25RelationDefinitions={aggregateStep25Targets}
+            onPayloadChange={setAggregateTriggerDefinitions}
+          />
+
           <div class="mt-3">
             {design.operationKinds.length === 0
               ? (

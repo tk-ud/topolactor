@@ -8,6 +8,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
+SUCCESSES=0
 
 
 if ! command -v rg >/dev/null 2>&1; then
@@ -33,10 +34,30 @@ fail() {
   FAILURES=$((FAILURES + 1))
 }
 
+run_subcheck() {
+  local script="$1"
+  local tmp
+  tmp="$(mktemp)"
+  set +e
+  bash "$REPO_ROOT/$script" >"$tmp" 2>&1
+  local code=$?
+  set -e
+  if [ "$code" -eq 0 ]; then
+    SUCCESSES=$((SUCCESSES + 1))
+    rm -f "$tmp"
+    return 0
+  fi
+  echo "FAIL subcheck script=$script exit=$code" >&2
+  cat "$tmp" >&2
+  rm -f "$tmp"
+  fail "Subcheck failed: $script"
+  return 0
+}
+
 check_dir() {
   local d="$REPO_ROOT/$1"
   if [ -d "$d" ]; then
-    echo "OK  [dir]  $1"
+    SUCCESSES=$((SUCCESSES + 1))
   else
     fail "Directory missing: $1"
   fi
@@ -45,7 +66,7 @@ check_dir() {
 check_file() {
   local f="$REPO_ROOT/$1"
   if [ -f "$f" ]; then
-    echo "OK  [file] $1"
+    SUCCESSES=$((SUCCESSES + 1))
   else
     fail "File missing: $1"
   fi
@@ -59,7 +80,7 @@ check_content() {
     return
   fi
   if grep -qF -- "$term" "$file"; then
-    echo "OK  [term] $1 → \"$term\""
+    SUCCESSES=$((SUCCESSES + 1))
   else
     fail "Term not found in $1: \"$term\""
   fi
@@ -75,7 +96,7 @@ check_checklist_template_clean() {
     fail "$file contains filled Answer values; template must remain blank"
     return
   fi
-  echo "OK  [template-clean] $file"
+  SUCCESSES=$((SUCCESSES + 1))
 }
 
 tmp_path_kind() {
@@ -177,7 +198,7 @@ check_tmp_runtime_artifacts() {
   mapfile -t leftovers < <(find "$tmp_dir" -mindepth 1 \( -type f -o -type d \) ! -path "$tmp_dir/.gitkeep" | sort || true)
 
   if [ "${#leftovers[@]}" -eq 0 ]; then
-    echo "OK  [tmp]  runtime artifacts cleaned (.gitkeep only)"
+    SUCCESSES=$((SUCCESSES + 1))
     return
   fi
 
@@ -202,7 +223,7 @@ check_tmp_tracked_files() {
   done
 
   if [ "${#invalid_tracked[@]}" -eq 0 ]; then
-    echo "OK  [tmp]  tracked files in .agent/tmp are limited to .gitkeep"
+    SUCCESSES=$((SUCCESSES + 1))
     return
   fi
 
@@ -224,8 +245,12 @@ check_no_in_progress_todos() {
   if rg -n "^\s*<!--\s*agent:in-progress\s*-->\s*$" "$todo_file" >/dev/null; then
     fail ".agent/tasks/todo.md contains unfinished in-progress marker: <!-- agent:in-progress -->"
   else
-    echo "OK  [todo] no in-progress marker in .agent/tasks/todo.md"
+    SUCCESSES=$((SUCCESSES + 1))
   fi
+}
+
+check_test_proof_manifest_integrity() {
+  run_subcheck ".agent/tests/check-test-proof-manifest-integrity.sh"
 }
 
 check_no_annotated_pseudo_paths_in_ssot_map() {
@@ -237,617 +262,141 @@ check_no_annotated_pseudo_paths_in_ssot_map() {
   if rg -n '^[[:space:]]*-[[:space:]]+[^#]*\.(md|yaml|sh)[[:space:]]{2,}[^#]+' "$ssot_map" >/dev/null; then
     fail ".agent/docs/ssot-map.yaml contains inline-annotated pseudo-path entries (.md/.yaml/.sh path + trailing description)"
   else
-    echo "OK  [ssot-map] no inline-annotated pseudo-path entries (.md/.yaml/.sh)"
+    SUCCESSES=$((SUCCESSES + 1))
   fi
 }
 
-# ─── Required directories ────────────────────────────────────────────────────
+# ─── Manifest-driven required paths and content terms ────────────────────────
+# Enumeration SSOT: .agent/docs/required-paths.yaml
+# This script is the check executor/orchestrator; the manifest owns the
+# required directory / required file / required content term enumerations.
+# Complex guards (forbidden terms, drift guards, DB-specific structural checks)
+# intentionally stay below as explicit shell checks.
 
-echo ""
-echo "=== Directory checks ==="
-check_dir ".agent/docs"
-check_dir ".agent/rules"
-check_dir ".agent/protocols"
-check_dir ".agent/skills"
-check_dir ".agent/tests"
-check_dir ".agent/tasks"
-check_dir ".agent/reports"
-check_dir ".agent/checklists"
-check_dir ".agent/checklists/fixtures/policy-judgment"
-check_dir ".agent/checklists/fixtures/boundary-identity"
-check_dir "docs"
-check_dir "db"
-check_dir "backend/endpoint"
-check_dir "backend/runtime"
-check_dir "backend/mapper"
-check_dir "backend/repository"
-check_dir "backend/guard"
-check_dir "backend/schema"
-check_dir "frontend/routes"
-check_dir "frontend/islands"
-check_dir "frontend/components"
-check_dir "frontend/package"
-check_dir "frontend/schema"
-check_dir "frontend/registry"
-check_dir "frontend/runtime"
-check_dir "frontend/api"
-check_dir "infra"
+MANIFEST="$REPO_ROOT/.agent/docs/required-paths.yaml"
+if [ ! -f "$MANIFEST" ]; then
+  fail "Manifest missing: .agent/docs/required-paths.yaml (enumeration SSOT for structure checks)"
+fi
 
-# ─── Required files ───────────────────────────────────────────────────────────
+manifest_paths() {
+  # $1: top-level section name (required_directories | required_files)
+  awk -v section="$1" '
+    { sub(/\r$/, "") }
+    /^[^[:space:]]/ { in_section = ($0 == section ":"); next }
+    in_section && /^    - / { line = $0; sub(/^    - /, "", line); sub(/[[:space:]]+$/, "", line); print line }
+  ' "$MANIFEST"
+}
 
-echo ""
-echo "=== File checks ==="
-check_file "README.md"
-check_file "AGENTS.md"
+manifest_content_terms() {
+  # Emits tab-separated "<file>\t<term>" pairs from required_content_terms.
+  awk '
+    { sub(/\r$/, "") }
+    /^[^[:space:]]/ { in_section = ($0 == "required_content_terms:"); next }
+    !in_section { next }
+    /^  [^[:space:]].*:[[:space:]]*$/ { file = $0; sub(/^  /, "", file); sub(/:[[:space:]]*$/, "", file); next }
+    /^    - "/ {
+      term = $0
+      sub(/^    - "/, "", term)
+      sub(/"[[:space:]]*$/, "", term)
+      printf "%s\t%s\n", file, term
+    }
+  ' "$MANIFEST"
+}
 
-check_file "docs/agent-development-os.md"
-check_file "docs/framework-core.yaml"
-check_file "docs/framework-policy.yaml"
-check_file "docs/file-structure.yaml"
-check_file "docs/registrar-admin-ui-specification.md"
-check_file "docs/design/runtime-orchestration-ssot.yaml"
-check_file "docs/design/ci-contract-ssot.yaml"
-check_file "docs/design/db-schema.yaml"
-check_file "docs/design/sql-attention-logs-ssot.md"
-check_file "docs/design/sql-attention-logs-ssot.yaml"
-check_file "docs/design/admin-console-workflow-ssot.yaml"
-check_file "docs/design/scheduler-job-manifest-ssot.yaml"
+DIR_COUNT=0
+while IFS= read -r d; do
+  [ -n "$d" ] || continue
+  check_dir "$d"
+  DIR_COUNT=$((DIR_COUNT + 1))
+done < <(manifest_paths required_directories)
+if [ "$DIR_COUNT" -lt 25 ]; then
+  fail "Manifest required_directories suspiciously small ($DIR_COUNT entries); manifest parse or content broken"
+else
+  SUCCESSES=$((SUCCESSES + 1))
+fi
 
-check_file ".agent/README.md"
-check_file ".agent/docs/structure-map.yaml"
-check_file ".agent/docs/required-paths.yaml"
-check_file ".agent/docs/ssot-map.yaml"
-check_file ".agent/docs/test-bundles.yaml"
-check_file ".agent/rules/rule.md"
-check_file ".agent/protocols/completion.md"
-check_file ".agent/protocols/index.yaml"
-check_file ".agent/protocols/policy-judgment.md"
-check_file ".agent/protocols/scenario-contract.md"
-check_file ".agent/protocols/runtime-boundary-matrix.md"
-check_file ".agent/protocols/reports-and-todos.md"
-check_file ".agent/protocols/todo-carry-over.md"
-check_file ".agent/protocols/registry-tensor-policy.md"
-check_file ".agent/skills/agent-workflow.md"
-check_file ".agent/skills/structure-check.md"
-check_file ".agent/tests/check-structure.sh"
-check_file ".agent/tests/check-backend-tests.sh"
-check_file ".agent/tests/check-frontend-types.sh"
-check_file ".agent/tests/check-completion-judgment.sh"
-check_file ".agent/tests/check-css-dictionary.sh"
-check_file ".agent/tests/check-enum-dictionary.sh"
-check_file ".agent/tests/check-admin-master-roster.sh"
-check_file ".agent/tests/check-topology-layout-class-ssot.sh"
-check_file ".agent/tests/check-ui-ux-executable-component-slice.sh"
-check_file ".agent/tests/check-worktype-routing.sh"
-check_file ".agent/tests/check-local-ci.sh"
-check_file ".agent/tasks/todo.md"
-check_file ".agent/reports/README.md"
-check_file ".agent/checklists/policy-judgment.md"
-check_file ".agent/checklists/boundary-identity.md"
-check_file ".agent/checklists/check-boundary-identity.sh"
-check_file ".agent/checklists/check-policy-judgment.sh"
-check_file ".agent/checklists/README.md"
-check_file ".agent/checklists/fixtures/policy-judgment/pass.md"
-check_file ".agent/checklists/fixtures/policy-judgment/fail-unanswered.md"
-check_file ".agent/checklists/fixtures/policy-judgment/fail-policy-violation.md"
-check_file ".agent/checklists/fixtures/policy-judgment/fail-partial-diff.md"
-check_file ".agent/checklists/fixtures/policy-judgment/fail-local-checks.md"
-check_file ".agent/checklists/fixtures/policy-judgment/fail-remaining-todos.md"
+FILE_COUNT=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  check_file "$f"
+  FILE_COUNT=$((FILE_COUNT + 1))
+done < <(manifest_paths required_files)
+if [ "$FILE_COUNT" -lt 150 ]; then
+  fail "Manifest required_files suspiciously small ($FILE_COUNT entries); manifest parse or content broken"
+else
+  SUCCESSES=$((SUCCESSES + 1))
+fi
 
-check_file ".agent/checklists/fixtures/boundary-identity/pass.md"
-check_file ".agent/checklists/fixtures/boundary-identity/fail-unanswered.md"
-check_file ".agent/checklists/fixtures/boundary-identity/fail-missing-identity.md"
-check_file ".agent/checklists/fixtures/boundary-identity/fail-missing-leakage-test.md"
-check_file ".agent/checklists/fixtures/boundary-identity/fail-missing-todo-update.md"
-
-check_file ".github/workflows/structure-check.yml"
-check_file ".github/workflows/backend-tests.yml"
-check_file ".github/workflows/frontend-types.yml"
-check_file ".github/workflows/default-entity-search.yml"
-check_file ".github/workflows/runtime-semantics.yml"
-check_file ".github/workflows/bootstrap-validation.yml"
-check_file ".agent/tests/check-default-entity-search.sh"
-check_file ".agent/tests/check-bootstrap-validation.sh"
-check_file ".agent/tests/check-pipeline-continuity.sh"
-check_file ".agent/tests/check-unified-test-gate.sh"
-check_file ".agent/tests/check-sql-attention-ssot.sh"
-check_file ".agent/tests/check-recommendation-pressure-lane-boundary.sh"
-check_file ".agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
-check_file ".agent/tests/check-scheduler-job-manifest-ssot.sh"
-check_file "docs/design/pipeline-continuity-ssot.yaml"
-check_file "docs/design/cli-model-context-protocols-port-ssot.yaml"
-check_file "docs/design/cli-model-context-protocols-port-ssot.md"
-check_file "docs/design/extended-runtime-bundle-registry-ssot.yaml"
-check_file "docs/design/extended-runtime-bundle-registry-ssot.md"
-check_file "docs/design/user-facing-helper-manual-ssot.yaml"
-check_file "docs/design/user-facing-helper-manual-ssot.md"
-check_file "docs/design/runtime-bundle-email-ssot.yaml"
-check_file "docs/design/runtime-bundle-email-ssot.md"
-check_file "docs/design/runtime-bundle-stripe-ssot.yaml"
-check_file "docs/design/runtime-bundle-stripe-ssot.md"
-check_file "docs/design/runtime-bundle-file-storage-ssot.yaml"
-check_file "docs/design/runtime-bundle-file-storage-ssot.md"
-check_file "docs/design/runtime-bundle-export-sftp-ssot.yaml"
-check_file "docs/design/runtime-bundle-export-sftp-ssot.md"
-check_file "docs/design/runtime-bundle-webhook-inbox-ssot.yaml"
-check_file "docs/design/runtime-bundle-webhook-inbox-ssot.md"
-check_file "docs/design/runtime-bundle-job-scheduler-ssot.yaml"
-check_file "docs/design/runtime-bundle-job-scheduler-ssot.md"
-check_file "docs/design/runtime-bundle-audit-approval-ssot.yaml"
-check_file "docs/design/runtime-bundle-audit-approval-ssot.md"
-check_file "docs/design/runtime-bundle-secret-credential-ssot.yaml"
-check_file "docs/design/runtime-bundle-secret-credential-ssot.md"
-check_file "docs/design/external-port-substrate-ssot.yaml"
-check_file ".agent/tests/check-runtime-bundle-ssots.sh"
-check_file ".agent/tests/check-design-ssot-progress-terms.sh"
-check_file "docs/design/cli-mcp-port-implementation-ssot.yaml"
-check_file "docs/design/cli-mcp-port-implementation-ssot.md"
-check_file ".agent/tests/check-cli-mcp-port-implementation-ssot.sh"
-
-check_content ".agent/tests/check-local-ci.sh" "set -euo pipefail"
-check_content ".agent/tests/check-local-ci.sh" "check-unified-test-gate.sh"
-check_content ".agent/tests/check-local-ci.sh" "check-runtime-environment.sh"
-check_content ".agent/tests/check-local-ci.sh" "check-structure.sh"
-check_content ".agent/tests/check-local-ci.sh" "must run last"
-
-check_file ".github/workflows/unified-test-gate.yml"
-
-check_file ".agent/scripts/create-tmp.sh"
-check_file ".agent/scripts/delete-tmp.sh"
-check_file ".agent/tmp/.gitkeep"
-
-check_file "db/schema.sql"
-check_content "db/schema.sql" "CREATE SCHEMA IF NOT EXISTS logs"
-check_content "db/schema.sql" "CREATE SCHEMA IF NOT EXISTS topology"
-check_content "db/schema.sql" "CREATE SCHEMA IF NOT EXISTS hubs"
-check_file "db/topology_tables.sql"
-check_file "db/ui_topology_tables.sql"
-check_file "db/promotion_tables.sql"
-check_file "db/sql_attention_logs_tables.sql"
-check_file "db/seed_empty.sql"
-check_file "db/README.md"
-check_content "db/sql_attention_logs_tables.sql" "statistics_json"
-check_content "db/sql_attention_logs_tables.sql" "phase_vector_json"
-check_content "db/sql_attention_logs_tables.sql" "logs.attention"
-check_content "db/sql_attention_logs_tables.sql" "logs.current"
-check_content "db/sql_attention_logs_tables.sql" "logs.hub_current"
-check_content "db/sql_attention_logs_tables.sql" "score_band"
-check_content "db/sql_attention_logs_tables.sql" "neighbor_score"
-check_content "db/sql_attention_logs_tables.sql" "hub_current_id"
-check_content "db/sql_attention_logs_tables.sql" "logs.sql_attention_draft_candidate"
-check_content "db/sql_attention_logs_tables.sql" "manifest_topology_key_expansion_draft_lane"
-check_content "db/sql_attention_logs_tables.sql" "run_sql_attention_manifest_topology_key_expansion_draft_lane"
-check_content "db/seed_empty.sql" "sql_attention_topology_projection"
-check_content "db/seed_empty.sql" "sql_attention_manifest_topology_key_expansion"
-check_content "db/seed_empty.sql" "default_policy"
-
-check_file "backend/endpoint/DispatchEndpoint.cs"
-check_file "backend/endpoint/SseEndpoint.cs"
-check_file "backend/scheduler/RuntimeTimelineScheduler.cs"
-check_file "backend/runtime/ManifestDispatcher.cs"
-check_file "backend/runtime/RuntimeExecutor.cs"
-check_file "backend/runtime/OperationVectorResolver.cs"
-check_file "backend/runtime/AttractorResolver.cs"
-check_file "backend/runtime/StructureMapResolver.cs"
-check_file "backend/runtime/PackageResolver.cs"
-check_file "backend/runtime/SchemaResolver.cs"
-check_file "backend/runtime/EmissionBuilder.cs"
-check_file "backend/mapper/SemanticMapper.cs"
-check_file "backend/repository/TopologyRepository.cs"
-check_file "backend/repository/DiffLogRepository.cs"
-check_file "backend/guard/RuntimeGuard.cs"
-check_file "backend/schema/Contracts.cs"
-check_file "backend/README.md"
-check_file "backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj"
-check_file "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs"
-check_file "backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs"
-check_file "backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs"
-check_file "backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj"
-check_file "backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs"
-
-check_file "deno.json"
-check_file "frontend/routes/index.tsx"
-check_file "frontend/routes/admin/index.tsx"
-check_file "frontend/routes/runtime-status.tsx"
-check_file "frontend/islands/OperationPanel.tsx"
-check_file "frontend/components/ProjectionView.tsx"
-check_file "frontend/components/EmissionView.tsx"
-check_file "frontend/package/defaultPackage.ts"
-check_file "frontend/schema/defaultSchema.ts"
-check_file "frontend/registry/componentRegistry.ts"
-check_file "frontend/runtime/resolveOperationVector.ts"
-check_file "frontend/runtime/renderEmission.ts"
-check_file "frontend/runtime/restoreResume.ts"
-check_file "frontend/runtime/frontendScheduler.ts"
-check_file "frontend/runtime/sseReceiver.ts"
-check_file "frontend/runtime/sseDispatcher.ts"
-check_file "frontend/routes/api/sse.ts"
-check_file "frontend/api/dispatch.ts"
-check_file "frontend/structure_map.ts"
-check_file "frontend/README.md"
-check_file "frontend/tests/defaultEntitySearch.test.ts"
-check_file "frontend/tests/pipelineContinuity.test.ts"
-
-check_file "infra/docker-compose.yml"
-check_file "infra/nginx.conf"
-check_file "infra/.env.example"
-
-# ─── Required content terms ───────────────────────────────────────────────────
-
-echo ""
-echo "=== Content checks ==="
-check_content "README.md" "data-driven topology runtime"
-check_content "README.md" "docs/agent-development-os.md"
-
-check_content "docs/agent-development-os.md" "external overview and agenda"
-check_content "docs/agent-development-os.md" "governance layer"
-check_content "docs/agent-development-os.md" "not application runtime logic"
-check_content "docs/agent-development-os.md" "AGENTS.md"
-
-check_content "AGENTS.md" ".agent/rules/rule.md"
-check_content "AGENTS.md" ".agent/tests/check-structure.sh"
-
-check_content "AGENTS.md" "Agent Contract"
-check_content "AGENTS.md" "Runtime Boundary Failure Matrix"
-
-check_content "docs/design/sql-attention-logs-ssot.md" "logs.current"
-check_content "docs/design/sql-attention-logs-ssot.md" "logs.attention"
-check_content "docs/design/sql-attention-logs-ssot.md" "l2 norm"
-check_content "docs/design/sql-attention-logs-ssot.md" "physical table"
-check_content "docs/design/sql-attention-logs-ssot.md" "norm-level"
-check_content "docs/design/sql-attention-logs-ssot.md" "phase_expansion_limit"
-check_content "docs/design/sql-attention-logs-ssot.md" "neighbor_score_min"
-check_content "docs/design/sql-attention-logs-ssot.md" "phase_vector_json"
-check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not topology search"
-check_content "docs/design/sql-attention-logs-ssot.md" "hub-attractor exploration"
-check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not registry search"
-check_content "docs/design/sql-attention-logs-ssot.md" "projection"
-check_content "docs/design/sql-attention-logs-ssot.md" "Tensor"
-check_content "docs/design/sql-attention-logs-ssot.md" "attractor_key"
-
-check_content ".agent/rules/rule.md" "Workflow Order Invariant"
-check_content ".agent/protocols/runtime-boundary-matrix.md" "Runtime Boundary Failure Matrix"
-check_content ".agent/protocols/index.yaml" "Section-level grep route"
-check_content ".agent/protocols/index.yaml" "not a judgment SSOT"
-check_content ".agent/protocols/index.yaml" "version: 2"
-check_content ".agent/protocols/index.yaml" "completion"
-check_content ".agent/protocols/index.yaml" "todo-carry-over"
-check_content ".agent/protocols/index.yaml" "report-surfaces"
-check_content ".agent/protocols/index.yaml" "completion-summary"
-check_content ".agent/protocols/completion.md" "Completion Sequence"
-check_content ".agent/protocols/policy-judgment.md" "Policy Judgment Gate"
-check_content ".agent/protocols/scenario-contract.md" "Temporary Scenario Contract"
-check_content ".agent/protocols/report-surfaces.md" "routine inspection reports"
-check_content ".agent/protocols/completion.md" "Recursive Verification Gate"
-check_content ".agent/protocols/registry-tensor-policy.md" "Registry Tensor Policy"
-check_content ".agent/protocols/registry-tensor-policy.md" "tensor basis / vector basis"
-check_content ".agent/protocols/registry-tensor-policy.md" "Drift / GAP classification"
-check_content "docs/framework-policy.yaml" "registry_table_role: semantic_matrix"
-check_content "docs/design/context-route-recommendation.md" "registry table は単なる辞書/設定/metadata ではなく"
-check_content "docs/design/context-route-recommendation.yaml" "registry_table_role: semantic_matrix"
-check_content ".agent/protocols/registry-tensor-policy.md" "registry table must be explained as semantic matrix"
-check_content ".agent/protocols/registry-tensor-policy.md" "Registry Tensor Policy"
-check_content "docs/framework-policy.yaml" "registry_tensor_principle"
-check_content ".agent/scripts/create-tmp.sh" "Runtime Boundary Failure Matrix"
-check_content ".agent/docs/structure-map.yaml" "temporary scenario contract"
-check_content ".agent/docs/structure-map.yaml" "periodic audit"
-check_content ".agent/docs/required-paths.yaml" ".agent/protocols/runtime-boundary-matrix.md"
-check_content ".agent/docs/ssot-map.yaml" "required_docs"
-check_content ".agent/docs/ssot-map.yaml" "worktypes:"
-check_content ".agent/docs/ssot-map.yaml" "protocols:"
-check_content ".github/workflows/runtime-semantics.yml" "docs/design/runtime-orchestration-ssot.yaml"
-check_content ".github/workflows/runtime-semantics.yml" ".agent/tests/check-runtime-semantics.sh"
-check_content ".github/workflows/bootstrap-validation.yml" "db/**/*.sql"
-check_content ".github/workflows/bootstrap-validation.yml" "infra/docker-compose.yml"
-check_content ".github/workflows/bootstrap-validation.yml" "docker compose -f infra/docker-compose.yml config"
-check_content ".github/workflows/bootstrap-validation.yml" "compose smoke"
-check_content ".github/workflows/bootstrap-validation.yml" "bash .agent/tests/check-bootstrap-validation.sh"
-check_content ".agent/tests/check-bootstrap-validation.sh" "ON_ERROR_STOP=1"
-check_content ".agent/tests/check-bootstrap-validation.sh" "db/init.sql"
-check_content ".agent/tests/check-bootstrap-validation.sh" "sed 's#/db/#db/#g' db/init.sql"
-check_content ".agent/tests/check-bootstrap-validation.sh" "mktemp"
-check_content ".agent/tests/check-bootstrap-validation.sh" "trap cleanup EXIT"
-check_content ".agent/tests/check-bootstrap-validation.sh" "manifest"
-check_content ".agent/tests/check-bootstrap-validation.sh" "components_bucket"
-check_content ".agent/tests/check-bootstrap-validation.sh" "ui_topology_tensor"
-check_content ".agent/tests/check-bootstrap-validation.sh" "context_event"
-check_content ".agent/tests/check-bootstrap-validation.sh" "context_hub_recommendation_current"
-check_content "docs/design/runtime-orchestration-ssot.yaml" "runtime_orchestration_ssot"
-check_content "docs/design/ci-contract-ssot.yaml" "CI_SSOT_VOCABULARY_MEMBERSHIP_ASSERTION"
-check_content "docs/design/ci-contract-ssot.yaml" "CI_ATTENTION"
-check_content "docs/design/css-dictionary-ssot.yaml" "css_dictionary_ssot"
-check_content "docs/design/enum-dictionary-ssot.yaml" "enum_dictionary_ssot"
-check_content "docs/design/auth-db-session-credential-ssot.yaml" "secure:"
-check_content "backend/Program.cs" "COOKIE_SECURE"
-check_content "backend/Program.cs" "; Secure"
-check_content "docs/design/admin-master-roster-management-ssot.yaml" "admin_master_roster_management_ssot"
-check_content "docs/design/runtime-orchestration-ssot.yaml" "runtime_timeline_scheduler"
-check_content "docs/design/runtime-orchestration-ssot.yaml" "manifest_dispatcher"
-check_content "docs/design/runtime-orchestration-ssot.yaml" "topology_transform_runtime"
-check_content "docs/design/db-schema.yaml" "db_schema"
-check_content "docs/design/db-schema.yaml" "topology_definition"
-check_content "docs/design/db-schema.yaml" "manifest"
-check_content "docs/design/db-schema.yaml" "wiring_definition_for_dispatcher_and_projection"
-check_content "docs/design/admin-console-workflow-ssot.yaml" "admin_console_workflow_ssot"
-check_content "docs/design/admin-console-workflow-ssot.yaml" "page_responsibility"
-check_content "docs/design/admin-console-workflow-ssot.yaml" "canonical_authoring_order"
-check_content "docs/design/admin-console-workflow-ssot.yaml" "hub_navigation_ordering"
-check_content ".agent/reports/README.md" "routine inspection reports"
-check_content ".agent/reports/README.md" "Do not use this directory as the default place for normal PR summaries"
-check_content ".agent/README.md" "Directory Responsibilities"
-check_content ".agent/README.md" '`protocols/`: judgment gates (blocking/pass semantics only).'
-check_content ".agent/README.md" ".agent Directory Map"
-check_content ".agent/skills/agent-workflow.md" "STRUCTURE_CHECK"
-check_content ".agent/skills/agent-workflow.md" "SCENARIO_CONTRACT"
-check_content ".agent/skills/agent-workflow.md" "READ_ENTRY"
-check_content ".agent/skills/agent-workflow.md" "READ_TASK_MATERIALS"
-check_content ".agent/skills/agent-workflow.md" "READ_TARGET_SURFACES"
-check_content ".agent/skills/agent-workflow.md" "DEFINE_SCOPE"
-
-check_content ".agent/rules/rule.md" "## Prohibitions"
-check_content ".agent/rules/rule.md" "## Minimal Workflow Invariant"
-check_content ".agent/rules/rule.md" "## Worktype Decision"
-check_content ".agent/rules/rule.md" "Workflow Order Invariant"
-check_content ".agent/rules/rule.md" "READ_TASK_MATERIALS"
-check_content ".agent/rules/rule.md" "READ_TARGET_SURFACES"
-check_content ".agent/rules/rule.md" "DEFINE_SCOPE"
-check_content ".agent/rules/rule.md" "Do not treat structure check as semantic judgment."
-check_content ".agent/protocols/scenario-contract.md" "Precondition: Workflow Order Invariant Gate"
-check_content ".agent/protocols/scenario-contract.md" "docs/ SSOT reload"
-check_content ".agent/protocols/implementation-change.md" "foundation_ssot_read_gate"
-check_content ".agent/protocols/audit.md" "foundation_ssot_read_gate"
-check_content ".agent/protocols/todo-carry-over.md" "foundation_ssot_read_gate"
-check_content ".agent/prompt/implementation-change.md" "foundation_ssot_read_judgment"
-check_content ".agent/prompt/audit.md" "foundation_ssot_read_judgment"
-check_content ".agent/prompt/todo-maintenance.md" "foundation_ssot_read_judgment"
-check_content ".agent/prompt/implementation-change.md" "docs/framework-core.yaml"
-check_content ".agent/prompt/implementation-change.md" "docs/design/runtime-orchestration-ssot.yaml"
-check_content ".agent/prompt/implementation-change.md" "docs/design/pipeline-continuity-ssot.yaml"
-
-check_content "docs/file-structure.yaml" "data_defined_topology_is_the_architecture_subject"
-check_content "docs/file-structure.yaml" "operation_vector_is_internal_runtime_representation"
-
-check_content "backend/runtime/RuntimeExecutor.cs" "RuntimeExecutor"
-check_content "backend/runtime/RuntimeExecutor.cs" "OperationVectorResolver"
-check_content "backend/runtime/RuntimeExecutor.cs" "AttractorResolver"
-check_content "backend/runtime/RuntimeExecutor.cs" "StructureMapResolver"
-check_content "backend/runtime/RuntimeExecutor.cs" "PackageResolver"
-check_content "backend/runtime/RuntimeExecutor.cs" "SchemaResolver"
-check_content "backend/runtime/RuntimeExecutor.cs" "EmissionBuilder"
-
-check_content "frontend/runtime/resolveOperationVector.ts" "OperationVector"
-check_content "frontend/runtime/resolveOperationVector.ts" "attractorKey"
-
-check_content "db/topology_tables.sql" "structure_maps"
-check_content "db/topology_tables.sql" "attractor_key"
-
-check_content ".github/workflows/structure-check.yml" "check-completion-judgment.sh"
-check_content ".github/workflows/structure-check.yml" ".agent/tests/check-structure.sh"
-
-check_content ".github/workflows/backend-tests.yml" "bash .agent/tests/check-backend-tests.sh"
-check_content ".github/workflows/frontend-types.yml" "bash .agent/tests/check-frontend-types.sh"
-check_content ".agent/tests/check-backend-tests.sh" "dotnet test"
-check_content ".agent/tests/check-frontend-types.sh" "deno check"
-check_content "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs" "default:entity:search"
-check_content "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs" "ATTRACTOR_RESOLVE_FAILED"
-check_content "backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs" "default:entity:search"
-
-check_content ".agent/tests/check-default-entity-search.sh" "dotnet test"
-check_content ".agent/tests/check-default-entity-search.sh" "deno test"
-check_content ".github/workflows/default-entity-search.yml" "bash .agent/tests/check-default-entity-search.sh"
-check_content ".github/workflows/structure-check.yml" "check-pipeline-continuity.sh"
-check_content "docs/design/pipeline-continuity-ssot.yaml" "pipeline_continuity_ssot"
-check_content "docs/design/pipeline-continuity-ssot.yaml" "api_command_lane"
-check_content "docs/design/pipeline-continuity-ssot.yaml" "sse_projection_lane"
-check_content "docs/design/pipeline-continuity-ssot.yaml" "contract_guard"
-check_content "docs/design/pipeline-continuity-ssot.yaml" "required_identity"
-check_content "docs/design/pipeline-continuity-ssot.yaml" "hardcode_guard"
-check_content "docs/design/pipeline-continuity-ssot.yaml" "canonical_route_identity_and_boundary_contract"
-check_content "docs/design/pipeline-continuity-ssot.yaml" "pipeline_body_test"
-check_content ".agent/tests/check-pipeline-continuity.sh" "check-default-entity-search.sh"
-check_content ".agent/tests/check-pipeline-continuity.sh" "hardcode_guard"
-check_content "frontend/runtime/frontendScheduler.ts" "queueClientCommand"
-check_content "frontend/runtime/sseDispatcher.ts" "SseDispatcher"
-check_content "frontend/runtime/sseReceiver.ts" "SseReceiver"
-check_content "frontend/routes/api/sse.ts" "text/event-stream"
-check_content "frontend/tests/pipelineContinuity.test.ts" "sseDispatcher"
-check_content "frontend/tests/pipelineContinuity.test.ts" "queueClientCommand"
-check_content "backend/scheduler/RuntimeTimelineScheduler.cs" "RuntimeTimelineScheduler"
-check_content "backend/runtime/ManifestDispatcher.cs" "ManifestDispatcher"
-check_content "backend/endpoint/SseEndpoint.cs" "text/event-stream"
-check_content "backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs" "default:entity:search"
-check_content "backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs" "ATTRACTOR_RESOLVE_FAILED"
-check_content "frontend/tests/defaultEntitySearch.test.ts" "renderEmission"
-check_content "frontend/tests/defaultEntitySearch.test.ts" "ATTRACTOR_RESOLVE_FAILED"
-
-check_content ".github/workflows/unified-test-gate.yml" "FUNCTION_BOUNDARY"
-check_content ".github/workflows/unified-test-gate.yml" "RUNTIME_INTEGRATION"
-check_content ".github/workflows/unified-test-gate.yml" "FRONTEND_CONTRACT"
-check_content ".github/workflows/unified-test-gate.yml" "STRUCTURE_GATE"
-check_content ".github/workflows/unified-test-gate.yml" "bash .agent/tests/check-unified-test-gate.sh"
-check_content ".github/workflows/unified-test-gate.yml" "bash .agent/tests/check-structure.sh"
-check_content ".agent/tests/check-unified-test-gate.sh" "FUNCTION_BOUNDARY"
-check_content ".agent/tests/check-unified-test-gate.sh" "RUNTIME_INTEGRATION"
-check_content ".agent/tests/check-unified-test-gate.sh" "FRONTEND_CONTRACT"
-check_content ".agent/tests/check-unified-test-gate.sh" "NOT_COVERED"
-check_content ".agent/tests/check-unified-test-gate.sh" "dotnet test"
-check_content ".agent/tests/check-unified-test-gate.sh" "deno test"
-check_content ".agent/tests/check-unified-test-gate.sh" "missing tool is not a pass"
-
-check_content "docs/registrar-admin-ui-specification.md" "Registrar admin UI"
-check_content "docs/registrar-admin-ui-specification.md" "controlled registration boundary"
-check_content "docs/registrar-admin-ui-specification.md" "Draft registration"
-check_content "docs/registrar-admin-ui-specification.md" "Validate refs"
-check_content "docs/registrar-admin-ui-specification.md" "Promote to active registry state"
-check_content "docs/registrar-admin-ui-specification.md" "Broken refs are explicit validation errors"
-check_content "docs/registrar-admin-ui-specification.md" "not CRUD"
-check_content "docs/registrar-admin-ui-specification.md" "frontend must not become source of truth"
-check_content "docs/registrar-admin-ui-specification.md" "components bucket"
-check_content "docs/registrar-admin-ui-specification.md" "package generator"
-check_content "db/ui_topology_tables.sql" "components_bucket"
-check_content "db/ui_topology_tables.sql" "ui_topology_tensor"
-
-check_file "docs/promotion-manifest-editor-specification.md"
-check_file "docs/design/context-route-recommendation.md"
-check_file "docs/design/context-route-recommendation.yaml"
-check_content "docs/promotion-manifest-editor-specification.md" "Promotion manifest editor"
-check_content "docs/promotion-manifest-editor-specification.md" "controlled manifest editing boundary"
-check_content "docs/promotion-manifest-editor-specification.md" "Draft manifest"
-check_content "docs/promotion-manifest-editor-specification.md" "Validate refs and disclosure requirements"
-check_content "docs/promotion-manifest-editor-specification.md" "Promote manifest version"
-check_content "docs/promotion-manifest-editor-specification.md" "Broken refs must remain explicit validation errors"
-check_content "docs/promotion-manifest-editor-specification.md" "frontend must not become source of truth"
-check_content "docs/promotion-manifest-editor-specification.md" "disclosure text must be explicit"
-check_content "docs/promotion-manifest-editor-specification.md" "editor does not execute runtime"
-
-check_content ".agent/checklists/policy-judgment.md" "Q1"
-check_content ".agent/checklists/policy-judgment.md" "Q15"
-check_content ".agent/checklists/policy-judgment.md" "Answer:"
-check_content ".agent/checklists/check-policy-judgment.sh" "Answer:"
-check_content ".agent/checklists/check-policy-judgment.sh" "--self-test"
-check_content ".agent/checklists/boundary-identity.md" "End-to-End Boundary Identity"
-check_content ".agent/checklists/boundary-identity.md" "Multi-instance leakage"
-check_content ".agent/checklists/boundary-identity.md" "minimum leakage detection test"
-check_content ".agent/checklists/boundary-identity.md" "repository mutation identity"
-check_content ".agent/checklists/boundary-identity.md" "Frontend projection identity"
-check_content ".agent/checklists/boundary-identity.md" "UI action identity"
-check_content ".agent/checklists/check-boundary-identity.sh" "Q1=yes AND Q12=no AND Q13=no"
-check_content ".agent/checklists/check-boundary-identity.sh" "--self-test"
-check_content "AGENTS.md" "check-policy-judgment.sh"
-check_content "AGENTS.md" "Policy Judgment Gate"
-check_content ".agent/protocols/completion.md" "Remote CI Equivalence Gate"
-check_content ".agent/protocols/completion.md" "Structure Check is the always-on required gate."
-check_content ".agent/protocols/completion.md" "scope-irrelevant workflow-level skip is not blocking."
-check_content ".agent/protocols/completion.md" "NOT_REQUIRED / OUT_OF_SCOPE declarations must be explicit"
-check_content ".agent/protocols/policy-judgment.md" "CI queued/in_progress is not PASS"
-check_content ".agent/protocols/policy-judgment.md" "scope-irrelevant workflow-level skip is not blocking"
-check_content ".agent/checklists/policy-judgment.md" "equivalent remote CI success"
-check_content ".agent/checklists/policy-judgment.md" "Structure Check is always-on"
-check_content ".agent/scripts/create-tmp.sh" "Remote CI Equivalence Gate"
-
-
-check_content "AGENTS.md" "Temporary Scenario Contract"
-check_content ".agent/rules/rule.md" "SCENARIO_CONTRACT"
-check_content ".agent/rules/rule.md" "SCENARIO_CONTRACT"
-check_content ".agent/scripts/create-tmp.sh" "Temporary Scenario Contract"
-
-check_content "AGENTS.md" "Recursive Verification Gate"
-check_content ".agent/protocols/completion.md" "Recursive Verification Gate"
-check_content ".agent/protocols/policy-judgment.md" "Recursive Verification Gate"
-check_content ".agent/protocols/scenario-contract.md" "Recursive Verification Gate"
-check_content ".agent/protocols/runtime-boundary-matrix.md" "Recursive Verification Gate"
-check_content ".agent/checklists/policy-judgment.md" "recursion to fix phase"
-check_content ".agent/scripts/create-tmp.sh" "Blocking failures found:"
-check_content ".agent/scripts/create-tmp.sh" "Expected read / write / append / cache / return order"
-check_content ".agent/protocols/scenario-contract.md" "Boundary Extension Scenario"
-check_content ".agent/protocols/scenario-contract.md" "Multi-instance leakage"
-check_content ".agent/protocols/scenario-contract.md" "Frontend projection identity"
-check_content ".agent/protocols/scenario-contract.md" "UI action identity"
-check_content ".agent/protocols/runtime-boundary-matrix.md" "End-to-End Boundary Identity"
-check_content ".agent/protocols/runtime-boundary-matrix.md" "Repository mutation identity"
-check_content ".agent/protocols/runtime-boundary-matrix.md" "Frontend projection identity"
-check_content ".agent/protocols/runtime-boundary-matrix.md" "UI action identity"
-check_content ".agent/rules/rule.md" "## Branch to Prompt"
-check_content ".agent/routes/worktype-required-protocols.yaml" "specific:"
-check_content ".agent/scripts/create-tmp.sh" "Boundary Extension Scenario"
-check_content ".agent/scripts/create-tmp.sh" "Multi-instance leakage scenario"
-check_content ".agent/scripts/create-tmp.sh" "Frontend projection identity"
-check_content ".agent/scripts/create-tmp.sh" "UI action identity"
-check_content ".agent/checklists/policy-judgment.md" "scenario contract"
-check_content ".agent/checklists/check-policy-judgment.sh" "scenario contract"
-check_content ".github/workflows/structure-check.yml" "check-sql-attention-ssot.sh"
-
-check_content "docs/design/cli-model-context-protocols-port-ssot.yaml" "cli_model_context_protocols_port_ssot"
-check_content "docs/design/cli-model-context-protocols-port-ssot.yaml" "core_invariant"
-check_content "docs/design/cli-model-context-protocols-port-ssot.yaml" "explicitly_out_of_scope"
-check_content "docs/design/cli-model-context-protocols-port-ssot.yaml" "email_send"
-check_content "docs/design/cli-model-context-protocols-port-ssot.yaml" "audit_log"
-check_content "docs/design/cli-model-context-protocols-port-ssot.yaml" "export_job"
-check_content "docs/design/cli-model-context-protocols-port-ssot.md" "read/export port surface"
-check_content "docs/design/cli-model-context-protocols-port-ssot.md" "out of scope"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "extended_runtime_bundle_registry_ssot"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "core_runtime_bundles"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "future_optional_external_surface_bundles"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "future_bundle_policy"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "requires_separate_ssot"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "owner"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "intake_snapshot_shape"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "validation_boundary"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "approval_boundary"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "scheduler_boundary"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "audit_log_boundary"
-check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "placeholder_policy"
-check_content "docs/design/user-facing-helper-manual-ssot.yaml" "user_facing_helper_manual_ssot"
-check_content "docs/design/user-facing-helper-manual-ssot.yaml" "authority_boundary"
-check_content "docs/design/user-facing-helper-manual-ssot.yaml" "explicitly_out_of_scope"
-check_content "docs/design/user-facing-helper-manual-ssot.yaml" "safety_boundary"
-check_content "docs/design/user-facing-helper-manual-ssot.md" "runtime authority"
-check_content "docs/design/user-facing-helper-manual-ssot.md" "Out of Scope"
+TERM_COUNT=0
+while IFS=$'\t' read -r f term; do
+  [ -n "$f" ] || continue
+  [ -n "$term" ] || continue
+  check_content "$f" "$term"
+  TERM_COUNT=$((TERM_COUNT + 1))
+done < <(manifest_content_terms)
+if [ "$TERM_COUNT" -lt 250 ]; then
+  fail "Manifest required_content_terms suspiciously small ($TERM_COUNT terms); manifest parse or content broken"
+fi
 
 # CLI/MCP port out-of-scope boundary guard: email_send must be declared in explicitly_out_of_scope
 if ! grep -qF "email_send" "$REPO_ROOT/docs/design/cli-model-context-protocols-port-ssot.yaml"; then
   fail "cli-model-context-protocols-port-ssot.yaml: email_send must be declared (as out_of_scope boundary)"
 else
-  echo "OK  [boundary] cli-mcp-port: email_send declared in boundary"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 # email_send must not appear under mcp_surface tools (allowed MCP tools)
 if awk '/^  mcp_surface:/,/^  [a-z]/' "$REPO_ROOT/docs/design/cli-model-context-protocols-port-ssot.yaml" | grep -qF "email_send"; then
   fail "cli-model-context-protocols-port-ssot.yaml: email_send must not appear under mcp_surface tools"
 else
-  echo "OK  [boundary] cli-mcp-port: email_send absent from mcp_surface tools"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 # payment_approval must be declared in explicitly_out_of_scope
 if ! grep -qF "payment_approval" "$REPO_ROOT/docs/design/cli-model-context-protocols-port-ssot.yaml"; then
   fail "cli-model-context-protocols-port-ssot.yaml: payment_approval must be declared (as out_of_scope boundary)"
 else
-  echo "OK  [boundary] cli-mcp-port: payment_approval declared in boundary"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 
-if bash "$REPO_ROOT/.agent/tests/check-css-dictionary.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-css-dictionary.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-css-dictionary.sh"
-fi
+run_subcheck ".agent/tests/check-css-dictionary.sh"
 
-if bash "$REPO_ROOT/.agent/tests/check-enum-dictionary.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-enum-dictionary.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-enum-dictionary.sh"
-fi
+run_subcheck ".agent/tests/check-enum-dictionary.sh"
 
-if bash "$REPO_ROOT/.agent/tests/check-admin-master-roster.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-admin-master-roster.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-admin-master-roster.sh"
-fi
+run_subcheck ".agent/tests/check-admin-master-roster.sh"
 
-if bash "$REPO_ROOT/.agent/tests/check-topology-layout-class-ssot.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-topology-layout-class-ssot.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-topology-layout-class-ssot.sh"
-fi
+run_subcheck ".agent/tests/check-topology-layout-class-ssot.sh"
 
-if bash "$REPO_ROOT/.agent/tests/check-ui-ux-executable-component-slice.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-ui-ux-executable-component-slice.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-ui-ux-executable-component-slice.sh"
-fi
+run_subcheck ".agent/tests/check-ui-ux-executable-component-slice.sh"
 
-echo ""
-echo "=== Template checklist pollution guard ==="
 check_checklist_template_clean "$REPO_ROOT/.agent/checklists/policy-judgment.md"
 check_checklist_template_clean "$REPO_ROOT/.agent/checklists/boundary-identity.md"
 
-echo ""
-echo "=== Checklist self-tests ==="
-bash "$REPO_ROOT/.agent/checklists/check-policy-judgment.sh" --self-test
-bash "$REPO_ROOT/.agent/checklists/check-boundary-identity.sh" --self-test
+run_command_subcheck() {
+  local label="$1"; shift
+  local tmp
+  tmp="$(mktemp)"
+  set +e
+  "$@" >"$tmp" 2>&1
+  local code=$?
+  set -e
+  if [ "$code" -eq 0 ]; then
+    SUCCESSES=$((SUCCESSES + 1))
+    rm -f "$tmp"
+    return 0
+  fi
+  echo "FAIL subcheck label=$label exit=$code command=$*" >&2
+  cat "$tmp" >&2
+  rm -f "$tmp"
+  fail "Subcheck failed: $label"
+}
+
+run_command_subcheck "policy-judgment-self-test" bash "$REPO_ROOT/.agent/checklists/check-policy-judgment.sh" --self-test
+run_command_subcheck "boundary-identity-self-test" bash "$REPO_ROOT/.agent/checklists/check-boundary-identity.sh" --self-test
 
 TMP_MEMO_PATH="$REPO_ROOT/.agent/tmp/tmp.txt"
 if [ -f "$TMP_MEMO_PATH" ]; then
   fail "Temporary scenario contract must be deleted before completion: .agent/tmp/tmp.txt"
 else
-  echo "OK  [tmp]  .agent/tmp/tmp.txt absent"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 
 check_tmp_runtime_artifacts
@@ -860,40 +409,15 @@ check_no_annotated_pseudo_paths_in_ssot_map
 if grep -q "## Completion Sequence (Mandatory)" "$REPO_ROOT/.agent/rules/rule.md"; then
   fail "rule.md must not contain long-form Completion Sequence section; keep procedure in .agent/protocols/completion.md"
 else
-  echo "OK  [split] rule.md completion procedure remains split"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 
 
-check_content ".agent/protocols/completion.md" "Audit Gap Response Gate"
-check_content ".agent/protocols/completion.md" "Audit Gap Response Gate"
-
-check_content ".agent/protocols/completion.md" "Failure Triage Self-Recursion Gate"
-check_content ".agent/protocols/completion.md" "failure triage result"
-check_content ".agent/protocols/completion.md" "Apply Failure Triage Self-Recursion Gate"
-check_content ".agent/protocols/completion.md" "Failure Triage Self-Recursion Gate"
-check_content ".agent/protocols/completion.md" "Required Check Scope Declaration Gate"
-check_content ".agent/protocols/completion.md" "required check scope declaration"
-check_content ".agent/protocols/completion.md" "REQUIRED_EXECUTED"
-check_content ".agent/protocols/completion.md" "required check scope declaration"
-
-check_content ".agent/rules/rule.md" "worktype-required-protocols.yaml"
-check_content ".agent/routes/worktype-required-protocols.yaml" "existing_pr_update:"
-check_content ".agent/routes/worktype-required-protocols.yaml" "audit:"
-check_content ".agent/protocols/audit.md" "roadmap completion bundle"
-check_content ".agent/protocols/implementation-change.md" "todo_granularity_guard"
-check_content ".agent/protocols/todo-carry-over.md" "canonical TODO carry-over は roadmap completion bundle 単位"
-check_content ".agent/prompt/audit.md" "todo_granularity_judgment"
-check_content ".agent/prompt/implementation-change.md" "todo_granularity_judgment"
-check_content ".agent/protocols/audit.md" "## required_output_contract"
-check_content ".agent/protocols/audit.md" "- todo_granularity_judgment"
-check_content ".agent/prompt/audit.md" "## output_shape"
-check_content ".agent/prompt/audit.md" "- todo_granularity_judgment"
-check_content ".agent/prompt/implementation-change.md" "scope, implementation delta, protocol decisions, todo_granularity_judgment, check results"
 
 if rg -n "REQUIRED_EXECUTED|required check failure|expected negative test|Governance Gaps|Proposed Governance Improvements|Completion Eligibility" "$REPO_ROOT/.agent/rules/rule.md" >/dev/null; then
   fail "rule.md must remain compact for gate details; move detailed classifications/sections to protocols"
 else
-  echo "OK  [compact] rule.md gate details remain in protocols"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 
 
@@ -901,28 +425,28 @@ fi
 if rg -n "logs\.registry_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "registry_current should not remain in SQL Attention SSOT"
 else
-  echo "OK  [ssot] registry_current removed from SQL Attention target docs"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "registry-neighbor exploration" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "registry-neighbor exploration should not remain as SQL Attention target"
 else
-  echo "OK  [ssot] registry-neighbor exploration removed from SQL Attention target docs"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "registry_composition_neighbors|registry_composition_tables" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "registry_composition_neighbors/tables should not remain"
 else
-  echo "OK  [ssot] registry_composition_neighbors/tables should not remain"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "scheduler_runtime_registry_neighbor_exploration" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "scheduler_runtime_registry_neighbor_exploration should not remain"
 else
-  echo "OK  [ssot] scheduler_runtime_registry_neighbor_exploration should not remain"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 
 if rg -n "Initial registry_kind candidates" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "Initial registry_kind candidates should not remain"
 else
-  echo "OK  [ssot] Initial registry_kind candidates removed"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if awk '
   BEGIN { in_dep=0; found=0 }
@@ -933,124 +457,115 @@ if awk '
 ' "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml"; then
   fail "logs.hub_current must not be in deprecated_or_rejected"
 else
-  echo "OK  [ssot] logs.hub_current not in deprecated_or_rejected"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if ! rg -n "physical_tables" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null || ! rg -n "logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "physical_tables must include logs.hub_current"
 else
-  echo "OK  [ssot] physical_tables includes logs.hub_current"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "\bregistry_table\b|\bregistry_id\b" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "registry_table/registry_id should not remain in SQL Attention attention contract"
 else
-  echo "OK  [ssot] registry_table/registry_id removed from SQL Attention attention contract"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "\btopologys\b" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "topologys (naming drift) must not appear in SQL Attention SSOT files; use topology (canonical)"
 else
-  echo "OK  [ssot] topologys naming drift absent from SQL Attention SSOT files"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "^\s+x_y_z:\s+hub_side_record_count_bases" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "old Phase Attention axis (x_y_z: hub_side_record_count_bases) must not remain as canonical; use hubs.hub_relations/hubs.hub/hubs.topology_manifests per phase_attention_axis_mapping"
 else
-  echo "OK  [ssot] old Phase Attention x_y_z canonical axis removed from SQL Attention SSOT"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 
 if ! rg -q "topology_manifest_id" "$REPO_ROOT/db/topology_tables.sql"; then
   fail "hubs.hub_relations must reference topology_manifest_id in db/topology_tables.sql"
 else
-  echo "OK  [db] hub_relations includes topology_manifest_id FK"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if ! rg -q "UNIQUE \\(topology_manifest_id, sequence_position\\)" "$REPO_ROOT/db/topology_tables.sql"; then
   fail "hubs.hub_relations must enforce UNIQUE(topology_manifest_id, sequence_position)"
 else
-  echo "OK  [db] hub_relations unique constraint on topology_manifest_id + sequence_position"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "hub_relations.*hub_id.*REFERENCES hubs\\.hub \\(hub_id\\)" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
   fail "hubs.hub_relations must not use hub_id as source authority column"
 else
-  echo "OK  [db] hub_relations hub_id source authority column absent"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if awk '/CREATE TABLE hubs\.hub_relations/,/;/' "$REPO_ROOT/db/topology_tables.sql" | rg -n "target_hub_id|relation_registry_id|^\s+hub_id\s" >/dev/null; then
   fail "hubs.hub_relations must not retain hub_id, target_hub_id, or relation_registry_id columns"
 else
-  echo "OK  [db] hub_relations old global graph columns absent"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "DROP TABLE IF EXISTS.*CASCADE" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
   fail "db/topology_tables.sql must not contain destructive DROP TABLE ... CASCADE (bootstrap-only CREATE TABLE IF NOT EXISTS required)"
 else
-  echo "OK  [db] topology_tables.sql destructive DROP TABLE CASCADE absent"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 HUB_REL_MIGRATION="$REPO_ROOT/db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql"
 if [ ! -f "$HUB_REL_MIGRATION" ]; then
   fail "hub_relations legacy migration SQL missing: db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql"
 else
-  echo "OK  [db] hub_relations legacy migration SQL present"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "DROP TABLE IF EXISTS.*CASCADE|DROP TABLE .* CASCADE" "$HUB_REL_MIGRATION" >/dev/null; then
   fail "hub_relations migration must not use DROP TABLE ... CASCADE"
 else
-  echo "OK  [db] hub_relations migration destructive DROP TABLE CASCADE absent"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if ! rg -q "hub_relations_has_legacy_shape" "$HUB_REL_MIGRATION"; then
   fail "hub_relations migration must expose legacy shape detection (hub_relations_has_legacy_shape)"
 else
-  echo "OK  [db] hub_relations legacy shape detection present"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if ! rg -q "RAISE EXCEPTION" "$HUB_REL_MIGRATION"; then
   fail "hub_relations migration must fail explicitly on ambiguous/unmigratable cases"
 else
-  echo "OK  [db] hub_relations migration explicit failure paths present"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if ! rg -q "hub_relations_legacy_columns_absent|DROP COLUMN IF EXISTS hub_id" "$HUB_REL_MIGRATION"; then
   fail "hub_relations migration must remove legacy columns and validate absence"
 else
-  echo "OK  [db] hub_relations migration legacy column removal validated"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if ! rg -q "db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql" "$REPO_ROOT/db/topology_tables.sql"; then
   fail "db/topology_tables.sql must reference db/legacy_utils/hub_relations_legacy_to_manifest_scoped.sql for legacy DB migration"
 else
-  echo "OK  [db] topology_tables.sql references hub_relations legacy migration path"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "weight.*sequence|sequence.*weight" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
   fail "weight must not remain as sequence authority in topology_tables.sql"
 else
-  echo "OK  [db] weight is not sequence authority in topology_tables.sql"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 if rg -n "hubs\\.hubs|topologys\\." "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
   fail "non-canonical schema names (hubs.hubs, topologys.*) must not appear in topology_tables.sql"
 else
-  echo "OK  [db] canonical schema names in topology_tables.sql"
+  SUCCESSES=$((SUCCESSES + 1))
 fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
-echo ""
-echo ""
-echo "=== Delegated routing checks ==="
-if bash "$REPO_ROOT/.agent/tests/check-worktype-routing.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-worktype-routing.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-worktype-routing.sh"
-fi
+run_subcheck ".agent/tests/check-worktype-routing.sh"
 
-if bash "$REPO_ROOT/.agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
-fi
+run_subcheck ".agent/tests/check-docs-ssot-connectivity.sh"
 
-if bash "$REPO_ROOT/.agent/tests/check-runtime-bundle-ssots.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-runtime-bundle-ssots.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-runtime-bundle-ssots.sh"
-fi
+run_subcheck ".agent/tests/check-ssot-proof-surface-connectivity.sh"
 
-if bash "$REPO_ROOT/.agent/tests/check-cli-mcp-port-implementation-ssot.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-cli-mcp-port-implementation-ssot.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-cli-mcp-port-implementation-ssot.sh"
-fi
+run_subcheck ".agent/tests/check-no-ruby-dependency.sh"
+
+run_subcheck ".agent/tests/check-agent-tools-surface.sh"
+
+run_subcheck ".agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
+
+run_subcheck ".agent/tests/check-runtime-bundle-ssots.sh"
+
+run_subcheck ".agent/tests/check-cli-mcp-port-implementation-ssot.sh"
+
+check_test_proof_manifest_integrity
 
 if bash "$REPO_ROOT/.agent/tests/check-scheduler-job-manifest-ssot.sh"; then
   echo "OK  [subcheck] .agent/tests/check-scheduler-job-manifest-ssot.sh"
@@ -1065,10 +580,7 @@ else
 fi
 
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== All checks passed ==="
-  echo "AGENT_HINT: Final completion summary must use .agent/protocols/completion-summary.md."
-  echo "AGENT_HINT: Use .agent/protocols/todo-carry-over.md only when remaining TODO classification is needed."
-  echo "AGENT_HINT: PR body or make_pr output does not replace the final completion summary."
+    echo "PASS check-structure dirs=${DIR_COUNT:-0} files=${FILE_COUNT:-0} content_terms=${TERM_COUNT:-0} success_assertions=${SUCCESSES}"
   exit 0
 else
   echo "=== $FAILURES check(s) failed ===" >&2

@@ -63,6 +63,9 @@
 \echo '[init.sql] applying seed_empty.sql'
 \i /db/seed_empty.sql
 
+\echo '[init.sql] applying demo_seed.sql'
+\i /db/demo_seed.sql
+
 \echo '[init.sql] applying external_port_compat_absorption_seed.sql'
 \i /db/external_port_compat_absorption_seed.sql
 
@@ -104,3 +107,6 @@
 
 \echo '[init.sql] applying backend_error_notify_hook_port_seed.sql'
 \i /db/backend_error_notify_hook_port_seed.sql
+
+\echo '[init.sql] applying runtime_orchestration_tables.sql'
+\i /db/runtime_orchestration_tables.sql

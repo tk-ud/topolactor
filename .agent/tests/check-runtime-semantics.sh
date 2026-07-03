@@ -19,14 +19,8 @@ require_tool dotnet
 require_tool deno
 
 cd "${REPO_ROOT}"
-
-echo "=== Backend runtime semantics (.NET runtime tests) ==="
-dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --nologo --verbosity minimal
-
-echo "=== Backend integration semantics (default route path) ==="
-dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --nologo --verbosity minimal
-
-echo "=== Frontend API proxy semantics ==="
-deno test frontend/tests/adminApi.test.ts frontend/tests/defaultEntitySearch.test.ts frontend/tests/pipelineContinuity.test.ts --allow-read
-
-echo "=== Runtime semantics checks passed ==="
+source .agent/scripts/lib/noise_control.sh
+noise_run "runtime_semantics lane=backend_runtime" dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --nologo --verbosity minimal
+noise_run "runtime_semantics lane=backend_integration" dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --nologo --verbosity minimal
+noise_run "runtime_semantics lane=frontend_api" deno test frontend/tests/adminApi.test.ts frontend/tests/defaultEntitySearch.test.ts frontend/tests/pipelineContinuity.test.ts --allow-read
+echo "PASS runtime-semantics lanes=3"

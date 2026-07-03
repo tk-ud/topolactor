@@ -11,8 +11,9 @@ if ! command -v dotnet &>/dev/null; then
 fi
 
 cd "${REPO_ROOT}"
+source .agent/scripts/lib/noise_control.sh
 
-dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --nologo --verbosity minimal
+noise_run "backend_runtime_tests" dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --nologo --verbosity minimal
 
 # Integration continuity proof for UI topology registration boundary.
 if [[ -n "${TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY:-}" ]]; then
@@ -20,7 +21,7 @@ if [[ -n "${TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY:-}" ]]; then
     echo "ERROR: TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY is set but TOPOLACTOR_TEST_DB_CONNECTION is empty." >&2
     exit 1
   fi
-  dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
+  noise_run "backend_db_continuity_tests" dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
     --filter "UiTopologyRegistrationContinuityIntegrationTests|ComponentEventAppendIntegrationTests|LayoutProjectionContinuityLiveDbEndToEndTests|ExternalPortPolicyRepositoryLiveDbTests|AuditApprovalPortConsumerLiveDbTests|EmailPortConsumerLiveDbTests|StripePortConsumerLiveDbTests" \
     --nologo --verbosity minimal
 fi

@@ -33,5 +33,8 @@ jobs:
       - name: Run UI/UX executable component slice check
         run: bash .agent/tests/check-ui-ux-executable-component-slice.sh
 
+      - name: Run test proof manifest integrity check
+        run: bash .agent/tests/check-test-proof-manifest-integrity.sh
+
       - name: Run structure check
         run: bash .agent/tests/check-structure.sh

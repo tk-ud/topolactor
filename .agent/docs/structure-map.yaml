@@ -90,7 +90,8 @@ layers:
       protocols: .agent/protocols/ # procedure protocols / expanded verification guidance
       skills:   .agent/skills/    # agent skill notes
       tests:    .agent/tests/     # local check scripts
-      scripts:  .agent/scripts/   # agent helper scripts
+      tools:    .agent/tools/     # Agent read-only repo observation entrypoints; no mutation/proof/semantic judgment
+      scripts:  .agent/scripts/   # CI/gate/helper implementation bodies; reusable structured processing
       tmp:      .agent/tmp/       # temporary scenario contract surface (tmp.txt is non-persistent)
       tasks:    .agent/tasks/     # remaining task list
       reports:  .agent/reports/   # persistent routine inspection / scheduled maintenance / periodic audit reports

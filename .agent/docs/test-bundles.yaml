@@ -1,24 +1,160 @@
-# test-bundles.yaml — roadmap completion bundle → test evidence index
-#
-# Purpose:
-#   Agent-facing reverse-lookup map: given a roadmap completion bundle,
-#   immediately find which tests prove which completion conditions
-#   and what is explicitly NOT proven.
-#
-# Usage (PR audit):
-#   1. Identify the roadmap unlock key or milestone (e.g., data_binding_to_document_canvas).
-#   2. Look up bundle_id referenced in docs/system-roadmap.yaml test_bundle_refs.
-#   3. Read test_files / test_cases / proves / does_not_prove.
+# test-bundles.yaml -- roadmap completion bundle / proof reverse lookup
 #
 # Boundary:
-#   - This file is a lightweight index only. Not a SSOT for design or runtime rules.
-#   - For SSOT read routing at task time, use ssot-map.yaml instead.
-#   - pipeline-continuity-ssot.yaml already declares test_files per lane;
-#     ssot_refs below point to those definitions rather than duplicating them.
-#   - proves and does_not_prove MUST both be explicit to prevent over-claiming.
-#   - test_cases use the exact Deno.test or [ClassName] test name strings.
+#   - This file is NOT the proof SSOT.
+#   - The authoritative proof graph, proof_order, proof_type, field semantics,
+#     known gaps, and missing SSOT handling live in docs/design/test-proof-manifest-ssot.yaml.
+#   - reverse_lookup below maps roadmap/test-bundle labels to proof_id entries in that SSOT.
+#   - bundles below is the rec-a worldline (PR367-536) bundle-level test-evidence index,
+#     kept because check-instance-port-substrate.sh and other rec-a-era checks read
+#     explicit bundle_id / test_files / test_cases / proves / does_not_prove detail from it.
+#   - Both sections are lightweight index/lookup surfaces only, not SSOT for design or runtime rules.
 
-version: 1
+version: 2
+authority_boundary:
+  ssot: docs/design/test-proof-manifest-ssot.yaml
+  role: reverse_lookup_index_only
+  prohibited_use:
+    - Do not claim proof completion from this file alone.
+    - Do not add SSOT/seed/implementation paths to test_files here; use manifest fields in the SSOT.
+    - Do not override proof_type, proof_order, depends_on, or known_gap state from this file.
+
+reverse_lookup:
+  - bundle_id: test-proof-manifest-ci-gate
+    roadmap_bundle_refs:
+      - test-proof-manifest-ci-gate
+    proof_refs:
+      - ssot_structure_policy_contract
+      - db_schema_seed_contract
+      - backend_runtime_function_contract
+      - backend_runtime_integration_contract
+      - runtime_trigger_scheduler_contract
+      - manifest_dispatch_runtime_route_contract
+      - external_intake_surface_contract
+      - external_bundle_specific_proofs_gap
+      - instance_substrate_contract_gap
+      - admin_registration_promotion_contract
+      - admin_projection_readback_contract
+      - frontend_projection_expression_contract
+      - frontend_admin_projection_expression_e2e_contract
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+      - .agent/tests/check-unified-test-gate.sh
+      - .agent/tests/check-structure.sh
+    proves_lookup_for:
+      - system-wide proof graph integrity
+      - CI audit wiring for the manifest itself
+    does_not_prove:
+      - frontend/admin E2E completion
+      - any known_gap edge listed by proof_type in the SSOT
+
+  - bundle_id: db_schema_seed_contract
+    proof_refs:
+      - db_schema_seed_contract
+    runner_surfaces:
+      - .agent/tests/check-db-schema.sh
+      - .agent/tests/check-unified-test-gate.sh
+    does_not_prove:
+      - runtime behavior from seed presence alone
+
+  - bundle_id: backend_runtime_contracts
+    proof_refs:
+      - backend_runtime_function_contract
+      - backend_runtime_integration_contract
+    runner_surfaces:
+      - .agent/tests/check-backend-tests.sh
+      - .agent/tests/check-runtime-semantics.sh
+      - .agent/tests/check-unified-test-gate.sh
+    does_not_prove:
+      - scheduler/external/frontend behavior outside the listed SSOT proof edges
+
+  - bundle_id: runtime_scheduler_and_dispatch_route
+    proof_refs:
+      - runtime_trigger_scheduler_contract
+      - manifest_dispatch_runtime_route_contract
+    runner_surfaces:
+      - .agent/tests/check-runtime-semantics.sh
+      - .agent/tests/check-unified-test-gate.sh
+      - .agent/tests/check-projection-lane-seed-hardening.sh
+    does_not_prove:
+      - external connector implementation
+      - instance authority enforcement
+      - final frontend/admin E2E visual DOM completion
+
+  - bundle_id: external_intake_bundle_gate
+    roadmap_bundle_refs:
+      - future-external-bundle-gate
+    proof_refs:
+      - external_intake_surface_contract
+      - external_bundle_specific_proofs_gap
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    does_not_prove:
+      - Notion/Sheets/Slack/GitHub/Webhook/REST connector behavior until gap proof edges are replaced by executable proofs
+
+  - bundle_id: instance_substrate_gate
+    proof_refs:
+      - instance_substrate_contract_gap
+    runner_surfaces:
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    does_not_prove:
+      - instance settings topology, primitive authority, runtime instance selection, or execution authority enforcement
+
+  - bundle_id: agent-tools-proof-and-structure-gate
+    roadmap_bundle_refs:
+      - agent-tools-proof-and-structure-gate
+    proof_refs:
+      - ssot_structure_policy_contract
+    runner_surfaces:
+      - .agent/tests/check-agent-tools-surface.sh
+      - .agent/tests/check-structure.sh
+    proves_lookup_for:
+      - .agent/tools required entrypoint existence and executable permission
+      - .agent/tools thin read-only entrypoint boundary (delegates to .agent/scripts/agent_tools/readonly_observation.py instead of forking structured processing)
+      - .agent/tools mutation-argument rejection (e.g. --output)
+      - .agent/tools baseline output free of SSOT authority / proof completion / completion judgment / semantic audit judgment / implemented-partial-not_started status claims
+      - yaml-section-query hierarchical YAML section/path observation over repo *.yaml files, with a canonical path selector, minimal default section listing, and ambiguous multi-hit --section handling that returns candidates instead of a silently-picked value; ssot-map-query is retired in favor of yaml-section-query --file .agent/docs/ssot-map.yaml and its removal (entrypoint file, dispatch target, README documentation) is gated
+      - proof-surface-map --ssot <repo-relative-path> looks up proof/runner/test/bundle candidates from a target SSOT path (matched against ssot_refs / missing_ssot_blocking / evidence_inputs / required_when.changed_files glob, with per-entry ssot_match_fields)
+      - directory-map --root and yaml-section-query --file normalize to a repo-relative path and fail-close (non-zero exit, explicit boundary message) on absolute paths, "../" escapes, or symlink escapes instead of reading/walking outside the repository
+    does_not_prove:
+      - semantic correctness of any .agent/tools observation output content
+      - SSOT authority, proof completion, or implementation status of any bundle observed through .agent/tools
+
+  - bundle_id: docs-ssot-connectivity-structure-manifest-and-ci-workflow-gate
+    proof_refs:
+      - ssot_structure_policy_contract
+    runner_surfaces:
+      - .agent/tests/check-docs-ssot-connectivity.sh
+      - .agent/tests/check-ssot-proof-surface-connectivity.sh
+      - .agent/tests/check-no-ruby-dependency.sh
+      - .agent/tests/check-structure.sh
+    proves_lookup_for:
+      - docs/ SSOT reachability from agent index/route/test/prompt/protocol/workflow surfaces
+      - manifest-driven required path / required term structure gate wiring
+      - workflow yml referenced-script existence
+      - general repo directory surface JSON observation (docs/ and .agent/tests/ on the same observation plane)
+      - docs/ SSOT candidate connectivity to a reachable executable proof surface (ssot-map.yaml reference alone does not count)
+      - repo governance tooling Ruby-dependency exclusion (Python3 stdlib only)
+    does_not_prove:
+      - semantic sufficiency of any mapped SSOT read set
+      - implementation completion of any roadmap bundle
+      - legitimacy of any future product-code Ruby usage outside repo governance tooling
+
+  - bundle_id: frontend-admin-projection-expression-e2e-completion
+    roadmap_bundle_refs:
+      - frontend-admin-projection-expression-e2e-completion
+    proof_refs:
+      - admin_registration_promotion_contract
+      - admin_projection_readback_contract
+      - frontend_projection_expression_contract
+      - frontend_admin_projection_expression_e2e_contract
+    runner_surfaces:
+      - .agent/tests/check-frontend-all-tests.sh
+      - .agent/tests/check-projection-lane-seed-hardening.sh
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    does_not_prove:
+      - live browser click simulation against deployed admin route
+      - unknown props global policy beyond existing projection constructor schema checks
 
 bundles:
 
