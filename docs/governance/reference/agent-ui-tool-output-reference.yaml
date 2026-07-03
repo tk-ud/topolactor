@@ -140,7 +140,17 @@ local_test_outputs:
 
 log_record_reference:
   path: docs/governance/logs/tool.log
+  initial_state: empty_tracked_file
+  create_rule:
+    - Keep an empty tracked docs/governance/logs/tool.log in the repository.
+    - If missing during tool execution, create it before appending.
+    - Create docs/governance/logs directory if it does not exist.
+  write_rule:
+    - Append only.
+    - One tool usage equals one line.
+    - Do not rewrite historical records.
   record_format: "<datetime> <uuid> <task_name> <worktype>"
+  datetime_format: ISO-8601
   forbidden_contents:
     - verbose execution logs
     - checklist answers
