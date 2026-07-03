@@ -34,6 +34,35 @@ agent_protocols:
       The flow controller is the outer frame. The output layer is attached to
       each step of that frame; it is not a separate competing workflow.
 
+  legacy_text_surface_policy:
+    keep_existing_files_for:
+      - Agents that cannot use the tool.
+      - Manual fallback reading.
+      - Audit comparison against existing governance text.
+    examples:
+      - .agent/prompt/*.md
+      - .agent/protocols/*.md
+      - .agent/checklists/*.md
+    rule: >-
+      Existing prompt/protocol/checklist files remain available, but they are not
+      the primary output reference for the tool UI. Tool-facing references are
+      rebuilt under docs/governance/reference.
+
+  governance_reference_policy:
+    canonical_directory: docs/governance/reference
+    purpose: >-
+      Store compact tool-output references that are designed for the Agent UI
+      tool to emit. These references are rebuilt for tool output and are not a
+      dump of legacy prompt/protocol/checklist files.
+    initial_reference:
+      - docs/governance/reference/agent-ui-tool-output-reference.yaml
+    rules:
+      - Keep references compact.
+      - Organize references by tool output step, not by legacy file layout.
+      - Do not copy full prompt/protocol/checklist bodies into references.
+      - Prefer output fields, templates, and minimal excerpts.
+      - Existing .agent files remain fallback material for non-tool Agents.
+
   tool_overview:
     tool_principles:
       - Keep output minimal and reduce context load.
@@ -52,6 +81,7 @@ agent_protocols:
         - .agent/tools implementation files
         - .agent/tests for tool checks
         - docs/governance agent-tool SSOT files
+        - docs/governance/reference tool-output reference files
         - docs/governance/logs/tool.log compact usage evidence
       ordinary_use_prohibited_mutations:
         - backend runtime/product code
@@ -64,6 +94,7 @@ agent_protocols:
       - Behavior that forces the Agent to read unnecessary protocol/prompt bodies.
       - Behavior that treats tool output alone as completion proof.
       - Treating read-only as a ban on updating .agent/tools while implementing this tool bundle.
+      - Treating legacy prompt/protocol/checklist files as the tool output reference without rebuilding compact governance/reference material.
 
   tool_initial_contract_flow:
     name: initial_contract
