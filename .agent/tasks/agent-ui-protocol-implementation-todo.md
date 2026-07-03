@@ -20,12 +20,16 @@ Agent は `./AGENTS.md` / `.agent/rules/rule.md` を読んでも、toolを作業
 
 また、tool使用時の uuid / datetime / task_name / worktype 証跡を `docs/governance/logs/tool.log` に残し、PR / summary に同じmetadataを書かせる契約がない。
 
+さらに、tool flow の各stepが何を出力するかが曖昧だと、Agent が必要以上のprompt / SSOT / logを読み込み、contextを浪費する。
+
 ### 目的
 
 `docs/governance/agent-ui-protocol-ssot.yaml` に従い、Agentが使う protocol UI tool を構築する。
 
 tool は以下を満たす。
 
+- flow controller として initial-contract / implementation phase / local-test を持つ。
+- 各stepの output layer として、必要最小限の prompt / SSOT section / metadata / test result / checklist result / missing evidence を返す。
 - Agentに task_name を入力させる。
 - Agentに worktype 番号を選ばせる。
 - worktype に応じた prompt を出す。
@@ -45,9 +49,10 @@ tool は以下を満たす。
 2. `.agent/tools` に Agent-facing CLI を置く。
 3. tool出力は必要最低限にし、実行log垂れ流しを禁止する。
 4. prompt/protocol全文を無制限に出さず、worktype prompt と指定SSOT sectionのみ出す。
-5. `docs/governance/logs/tool.log` は compact one-line evidence log とし、checklist本文やscenario-contract本文は保存しない。
-6. read-only は Topolactor本体の application/runtime/product source 観測面に適用する。`.agent/tools` 自身、tool用test、governance-tool SSOT、tool.log はこのBundleのscope内で更新してよい。
-7. local test flow は worktype別test → checklist interview → check → pass の順にする。
+5. 各stepはSSOTに定義された output layer を返す。
+6. `docs/governance/logs/tool.log` は compact one-line evidence log とし、checklist本文やscenario-contract本文は保存しない。
+7. read-only は Topolactor本体の application/runtime/product source 観測面に適用する。`.agent/tools` 自身、tool用test、governance-tool SSOT、tool.log はこのBundleのscope内で更新してよい。
+8. local test flow は worktype別test → checklist interview → check → pass の順にする。
 
 ### 対応資料
 
@@ -109,6 +114,9 @@ Topolactor本体の application/runtime/product source は通常使用時に too
 - `run_worktype_tests`
 - `run_checklist_interview`
 - `run_checks`
+- `emit_step_output`
+- `build_initial_contract_summary`
+- `build_completion_summary`
 - future command: `.agent/tools/agent-ui initial-contract`
 - future command: `.agent/tools/agent-ui local-test`
 
@@ -129,9 +137,11 @@ Bundle単位で処理する。小粒PR化は禁止。
 - [ ] 指定section配下のみを結合して出す。
 - [ ] SSOT選択へ戻る / quit を選べる。
 - [ ] quit時に scenario-contract を書かせる。
+- [ ] 各stepがSSOTに定義された output layer を返す。
 - [ ] datetime / uuid / task_name / worktype を `docs/governance/logs/tool.log` にcompact記録する。
 - [ ] PR / summary に datetime / uuid / task_name / worktype を書かせる出力契約を追加する。
 - [ ] local-test flow として worktype別test → checklist interview → check → pass を実装する。
+- [ ] local-test 各stepが test result / checklist result / check result / missing evidence / completion summary を返す。
 - [ ] 実行log垂れ流しを避け、tool出力を必要最低限にする。
 - [ ] tool.log に checklist本文 / scenario-contract本文 / verbose実行logを保存しない。
 - [ ] `.agent/tests/check-agent-ui-route.sh` または同等checkを追加する。
@@ -143,9 +153,11 @@ Bundle単位で処理する。小粒PR化は禁止。
 - tool が uuid を発行し、`docs/governance/logs/tool.log` に datetime / uuid / task_name / worktype を残す。
 - PR / summary に datetime / uuid / task_name / worktype が出る。
 - tool出力が最小限で、実行logを垂れ流さない。
+- 君の枠である flow controller に、各stepの output layer が接続されている。
 - worktype prompt と指定SSOT sectionだけを出せる。
 - quit時に scenario-contract を要求する。
 - local-test が worktype別test → checklist interview → check → pass の順で動く。
+- local-test が completion summary / missing evidence を返す。
 - `.agent/tools` 自身とtool用governance surfaceはBundle scope内で更新できる。
 - 通常使用時、Topolactor本体 application/runtime/product source をtoolが変更しない。
 - `docs/governance/agent-ui-protocol-ssot.yaml` と矛盾しない。
@@ -157,6 +169,7 @@ Bundle単位で処理する。小粒PR化は禁止。
 - PR / summary に tool usage metadata が出ない。
 - toolが実行logを長々とAgentに読ませる。
 - SSOT全体を毎回dumpする。
+- 各stepの output layer がなく、ただの対話CLIになっている。
 - checklist本文やscenario-contract本文を `tool.log` に保存する。
 - toolが implemented / partial / not_started 判定を行う。
 - read-only を `.agent/tools` 自身の更新禁止として扱う。
@@ -174,4 +187,4 @@ Bundle単位で処理する。小粒PR化は禁止。
 5. `.agent/tasks/agent-ui-protocol-implementation-todo.md` の Bundle `agent-ui-protocolization` を処理する。
 6. 既存 `.agent/tasks/todo.md` は触らない。
 7. 実装後、追加checkerと既存 required checks を実行する。
-8. completion output に datetime / uuid / task_name / worktype / local-test結果 / checklist結果 / check結果を出す。
+8. completion output に datetime / uuid / task_name / worktype / selected_ssot_sections / scenario_contract_summary / local-test結果 / checklist結果 / check結果 / missing_evidence を出す。
