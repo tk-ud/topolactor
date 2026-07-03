@@ -972,6 +972,7 @@ export default function ContentsScreenDesignPanel({
       targetSource: "step2_logical_entity_definition",
       targetId: table.tableName.trim(),
       label: `Step2 logical entity: ${table.tableName.trim()}`,
+      fields: table.columns.map((c) => c.name.trim()).filter(Boolean),
     }));
   const aggregateStep25Targets: StepTarget[] = design.relationIntents
     .filter((rel) => rel.localTableRef.trim() && rel.joinTableRef.trim())
@@ -979,6 +980,7 @@ export default function ContentsScreenDesignPanel({
       targetSource: "step2_5_relation_definition",
       targetId: `${rel.localTableRef.trim()}->${rel.joinTableRef.trim()}`,
       label: `Step2.5 relation: ${rel.localTableRef.trim()} → ${rel.joinTableRef.trim()}`,
+      fields: [rel.localKey.trim(), rel.remoteKey.trim()].filter(Boolean),
     }));
   const toggleOperationKind = (kind: ScreenOperationKind) => {
     const has = design.operationKinds.includes(kind);

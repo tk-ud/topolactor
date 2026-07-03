@@ -173,6 +173,16 @@ public class AggregateTriggerRepositoryLiveDbTests
             Assert.Equal(definition.ApprovalPolicy, loaded.ApprovalPolicy);
             Assert.Equal(definition.ThresholdPolicy.MinimumTrialCount, loaded.ThresholdPolicy.MinimumTrialCount);
             Assert.Equal(definition.ThresholdPolicy.TargetRatio, loaded.ThresholdPolicy.TargetRatio);
+            // processing_function_scope round-trips fully — accepted_event_schema_ref, allowed_source_kinds,
+            // and materialization_policy_ref are canonical columns, not restored empty.
+            Assert.Equal(definition.ProcessingFunctionScope.FunctionId, loaded.ProcessingFunctionScope.FunctionId);
+            Assert.Equal(definition.ProcessingFunctionScope.OperationDefinitionId, loaded.ProcessingFunctionScope.OperationDefinitionId);
+            Assert.Equal(definition.ProcessingFunctionScope.AcceptedEventSchemaRef, loaded.ProcessingFunctionScope.AcceptedEventSchemaRef);
+            Assert.Equal(definition.ProcessingFunctionScope.AllowedSourceKinds, loaded.ProcessingFunctionScope.AllowedSourceKinds);
+            Assert.Equal(definition.ProcessingFunctionScope.MaterializationPolicyRef, loaded.ProcessingFunctionScope.MaterializationPolicyRef);
+            Assert.NotEmpty(loaded.ProcessingFunctionScope.AcceptedEventSchemaRef);
+            Assert.NotEmpty(loaded.ProcessingFunctionScope.AllowedSourceKinds);
+            Assert.NotEmpty(loaded.ProcessingFunctionScope.MaterializationPolicyRef);
 
             // Re-save (admin re-authoring the same trigger_definition_id) upserts rather than duplicating.
             await repo.SaveDefinitionAsync(definition with { ApprovalPolicy = "require_backend_approval_before_materialization" });

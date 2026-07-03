@@ -47,7 +47,20 @@ export type StepTarget = {
     | "step2_5_relation_definition";
   targetId: string;
   label: string;
+  /** Field names available on this target for conflict_key_fields / materialization_payload_map selection. */
+  fields?: string[];
 };
+
+const SAFE_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_:.-]*$/;
+const SQL_FRAGMENTS = ["select ", " where ", " case ", ";", "--", "/*", "*/"];
+
+/** Mirrors backend AggregateTriggerDefinitionValidator.ValidateSafeToken: no raw SQL/CASE/WHERE/arbitrary expressions. */
+export function isSafeAggregateTriggerIdentifier(value: string): boolean {
+  const v = value.trim();
+  if (!SAFE_IDENTIFIER.test(v)) return false;
+  const lower = v.toLowerCase();
+  return !SQL_FRAGMENTS.some((fragment) => lower.includes(fragment));
+}
 export type AggregateTriggerTargetBindingPayload = {
   target_source: StepTarget["targetSource"];
   target_id: string;

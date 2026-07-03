@@ -1453,6 +1453,9 @@ aggregate_trigger_table_contracts:
         - trigger_definition_id
         - processing_function_id
         - operation_definition_id
+        - accepted_event_schema_ref
+        - allowed_source_kinds_json
+        - materialization_policy_ref
         - trigger_source_kind
         - execution_scope
         - transaction_boundary

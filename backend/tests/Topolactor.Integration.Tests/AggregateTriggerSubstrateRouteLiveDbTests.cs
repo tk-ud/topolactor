@@ -13,11 +13,16 @@ namespace Topolactor.Integration.Tests;
 /// Live-DB proof that cron, hook, and client triggers all reach the aggregate trigger
 /// substrate through the same production route:
 ///   trigger -> RuntimeTimelineScheduler (trigger alignment) -> ManifestDispatcher
-///   (role/target/layer/action axes) -> AggregateTriggerRuntime -> NpgsqlAggregateTriggerRepository
+///   (role/target/layer/action axes resolved by NpgsqlManifestRepository against a real
+///   `manifest` table row) -> AggregateTriggerRuntime -> NpgsqlAggregateTriggerRepository
 ///   -> runtime_orchestration.* tables.
 ///
+/// The manifest row is a genuine seeded row in the `manifest` table (not an in-memory
+/// fixture), so ResolveActiveManifestAsync executes a real DB query and dispatch
+/// resolution is not a fake/mocked boundary.
+///
 /// Skipped (no-op) when TOPOLACTOR_TEST_DB_CONNECTION is not set. Requires
-/// db/runtime_orchestration_tables.sql applied to the target database.
+/// db/manifest_tables.sql and db/runtime_orchestration_tables.sql applied to the target database.
 /// </summary>
 [Trait("Category", "RequiresDatabase")]
 public class AggregateTriggerSubstrateRouteLiveDbTests
@@ -29,6 +34,8 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         if (cs is null) return;
 
         var defId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        await SeedActiveManifestAsync(cs, manifestId);
         var scheduler = CreateScheduler(cs);
         await scheduler.StartAsync(CancellationToken.None);
         try
@@ -50,6 +57,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         {
             await scheduler.StopAsync(CancellationToken.None);
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, defId);
+            await DeleteManifestAsync(cs, manifestId);
         }
     }
 
@@ -60,6 +68,8 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         if (cs is null) return;
 
         var defId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        await SeedActiveManifestAsync(cs, manifestId);
         var scheduler = CreateScheduler(cs);
         await scheduler.StartAsync(CancellationToken.None);
         try
@@ -73,6 +83,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         {
             await scheduler.StopAsync(CancellationToken.None);
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, defId);
+            await DeleteManifestAsync(cs, manifestId);
         }
     }
 
@@ -83,6 +94,8 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         if (cs is null) return;
 
         var defId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        await SeedActiveManifestAsync(cs, manifestId);
         var scheduler = CreateScheduler(cs);
         await scheduler.StartAsync(CancellationToken.None);
         try
@@ -96,6 +109,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         {
             await scheduler.StopAsync(CancellationToken.None);
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, defId);
+            await DeleteManifestAsync(cs, manifestId);
         }
     }
 
@@ -106,6 +120,8 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         if (cs is null) return;
 
         var defId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        await SeedActiveManifestAsync(cs, manifestId);
         var scheduler = CreateScheduler(cs);
         await scheduler.StartAsync(CancellationToken.None);
         try
@@ -128,6 +144,41 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         {
             await scheduler.StopAsync(CancellationToken.None);
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, defId);
+            await DeleteManifestAsync(cs, manifestId);
+        }
+    }
+
+    [Fact]
+    public async Task ManifestResolution_UsesRealManifestTableRow_NotAnInMemoryFixture()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var manifestId = Guid.NewGuid();
+        await SeedActiveManifestAsync(cs, manifestId);
+        try
+        {
+            var manifestRepo = new NpgsqlManifestRepository(NullLogger<NpgsqlManifestRepository>.Instance, cs);
+            var resolved = await manifestRepo.ResolveActiveManifestAsync("admin", "aggregate_trigger", "runtime", "execute");
+            Assert.NotNull(resolved);
+            Assert.Equal(manifestId, resolved!.ManifestId);
+
+            // Deactivating the real row removes it from resolution — proves resolution is a
+            // live query against `manifest`, not a fixed in-memory fixture.
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+            await using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "UPDATE manifest SET status = 'deprecated' WHERE manifest_id = @id";
+                cmd.Parameters.AddWithValue("id", manifestId);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            var afterDeactivation = await manifestRepo.ResolveActiveManifestAsync("admin", "aggregate_trigger", "runtime", "execute");
+            Assert.Null(afterDeactivation);
+        }
+        finally
+        {
+            await DeleteManifestAsync(cs, manifestId);
         }
     }
 
@@ -182,9 +233,41 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
             handlers,
             new OperationVectorResolver(),
             targetOverride,
-            manifestRepository: new FakeAggregateTriggerManifestRepository());
+            manifestRepository: new NpgsqlManifestRepository(NullLogger<NpgsqlManifestRepository>.Instance, connectionString));
 
         return new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+    }
+
+    /// <summary>
+    /// Seeds a genuine active row in the `manifest` table (dispatcher_mapping role=admin
+    /// target=aggregate_trigger layer=runtime action=execute -> runtime_mapping
+    /// aggregate_trigger_runtime), so NpgsqlManifestRepository.ResolveActiveManifestAsync
+    /// resolves the route from a real DB row instead of an in-memory fixture.
+    /// </summary>
+    private static async Task SeedActiveManifestAsync(string cs, Guid manifestId)
+    {
+        var topology = new[]
+        {
+            JsonSerializer.Serialize(new { type = "dispatcher_mapping", role = "admin", target = "aggregate_trigger", layer = "runtime", action = "execute" }),
+            JsonSerializer.Serialize(new { type = "runtime_mapping", runtime_destination = "aggregate_trigger_runtime" }),
+        };
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO manifest (manifest_id, relation_registry_id, topology, status) VALUES (@id, NULL, @topology, 'active')";
+        cmd.Parameters.AddWithValue("id", manifestId);
+        cmd.Parameters.Add(new NpgsqlParameter("topology", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Jsonb) { Value = topology });
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task DeleteManifestAsync(string cs, Guid manifestId)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM manifest WHERE manifest_id = @id";
+        cmd.Parameters.AddWithValue("id", manifestId);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static EndpointRequestDto BuildRequest(Guid defId, string eventId, string canonicalTriggerKind, string triggerSourceDetailKind, string conflictKey)

@@ -220,17 +220,20 @@ const step2Targets: StepTarget[] = [
     targetSource: "step2_logical_entity_definition",
     targetId: "orders",
     label: "Step2 logical entity: orders",
+    fields: ["id", "order_status"],
   },
   {
     targetSource: "step2_logical_entity_definition",
     targetId: "invoices",
     label: "Step2 logical entity: invoices",
+    fields: ["id", "invoice_status"],
   },
 ];
 const step25Targets: StepTarget[] = [{
   targetSource: "step2_5_relation_definition",
   targetId: "orders->customers",
   label: "Step2.5 relation: orders → customers",
+  fields: ["id", "customer_id"],
 }];
 
 function buildUiSelectedAggregatePayload(): AggregateTriggerDefinitionPayload[] {
@@ -492,6 +495,33 @@ Deno.test("contents workflow UI substrate: Step2 → Step2.5 → Step3 save path
     await flushUpdates();
     dispatchSelectValue(materializationSelect, "step2_5_relation_definition:orders->customers");
     await flushUpdates();
+
+    // conflict_key_fields and materialization_payload_map require at least one
+    // structured selection each before the panel emits a payload.
+    const conflictKeyCheckbox = container.querySelector(
+      'input[aria-label="conflict key field id"]',
+    ) as HTMLInputElement;
+    assert(conflictKeyCheckbox, "customers target must expose an 'id' conflict key field checkbox");
+    conflictKeyCheckbox.checked = true;
+    conflictKeyCheckbox.dispatchEvent(new Event("click", { bubbles: true }));
+    conflictKeyCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushUpdates();
+
+    await clickAndFlush(
+      buttonByText(container, "+ materialization payload entry を追加"),
+    );
+    const payloadSourceField = container.querySelector(
+      'input[aria-label="materialization payload source field 0"]',
+    ) as HTMLInputElement;
+    assert(payloadSourceField, "added payload map row must expose a source_field input");
+    dispatchInputValue(payloadSourceField, "id");
+    await flushUpdates();
+    // Effect-driven onPayloadChange propagation to parent state lags one flush cycle
+    // behind the triggering DOM event in this preact-hooks test harness; a no-op
+    // re-dispatch nudges the pending effect through before the save click reads state.
+    dispatchInputValue(payloadSourceField, "id");
+    await flushUpdates();
+
     await clickAndFlush(buttonByText(container, "Step 3 を保存"));
     await confirmOpenDialog(container);
 
@@ -506,6 +536,8 @@ Deno.test("contents workflow UI substrate: Step2 → Step2.5 → Step3 save path
       definitions[0].materialization_target_binding.target_id,
       "orders->customers",
     );
+    assertEquals(definitions[0].conflict_key_fields, ["id"]);
+    assertEquals(definitions[0].materialization_payload_map[0].target_field, "id");
     assertBackendAggregateTriggerShape(definitions[0]);
     assertNoForbiddenPayloadVocabulary(step3Assign?.payload);
   } finally {
@@ -530,7 +562,7 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
     await flushUpdates();
 
     const selects = Array.from(container.querySelectorAll("select"));
-    assertEquals(selects.length, 7);
+    assertEquals(selects.length, 10);
     (selects[0] as HTMLSelectElement).value = "hook";
     selects[0].dispatchEvent(new Event("input", { bubbles: true }));
     selects[0].dispatchEvent(new Event("change", { bubbles: true }));
@@ -559,6 +591,32 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
     await flushUpdates();
     await flushUpdates();
 
+    // conflict_key_fields and materialization_payload_map require at least one
+    // structured selection each before the panel emits a payload.
+    const conflictKeyCheckbox = container.querySelector(
+      'input[aria-label="conflict key field id"]',
+    ) as HTMLInputElement;
+    assert(conflictKeyCheckbox, "invoices target must expose an 'id' conflict key field checkbox");
+    conflictKeyCheckbox.checked = true;
+    conflictKeyCheckbox.dispatchEvent(new Event("click", { bubbles: true }));
+    conflictKeyCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushUpdates();
+
+    await clickAndFlush(
+      buttonByText(container, "+ materialization payload entry を追加"),
+    );
+    const payloadSourceField = container.querySelector(
+      'input[aria-label="materialization payload source field 0"]',
+    ) as HTMLInputElement;
+    assert(payloadSourceField, "added payload map row must expose a source_field input");
+    dispatchInputValue(payloadSourceField, "id");
+    await flushUpdates();
+    // Effect-driven onPayloadChange propagation lags one flush cycle behind the
+    // triggering DOM event in this preact-hooks test harness; a no-op re-dispatch
+    // nudges the pending effect through before reading the captured payload.
+    dispatchInputValue(payloadSourceField, "id");
+    await flushUpdates();
+
     const latest = seen.at(-1)?.[0];
     assert(latest, "UI selection must emit an aggregate trigger payload");
     assertEquals(latest.trigger_source.canonical_trigger_kind, "hook");
@@ -580,6 +638,8 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
       latest.materialization_target_binding.target_id,
       "orders->customers",
     );
+    assertEquals(latest.conflict_key_fields, ["id"]);
+    assertEquals(latest.materialization_payload_map[0].target_field, "id");
     assert(container.textContent?.includes('"target_id": "invoices"'));
 
   } finally {

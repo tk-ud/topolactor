@@ -61,6 +61,14 @@ public class AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests
             Assert.NotNull(loaded);
             Assert.Equal("orders", loaded!.AggregateTargetBinding.TargetId);
             Assert.Equal("orders", loaded.MaterializationTargetBinding.TargetId);
+            // processing_function_scope required fields round-trip through the canonical table,
+            // not restored empty (accepted_event_schema_ref / allowed_source_kinds / materialization_policy_ref
+            // are dedicated columns, per docs/design/db-schema.yaml aggregate_trigger_definitions.required_columns).
+            Assert.Equal("aggregate_trigger_authoring_function", loaded.ProcessingFunctionScope.FunctionId);
+            Assert.Equal("contents_step3_operation", loaded.ProcessingFunctionScope.OperationDefinitionId);
+            Assert.Equal("contents.step3.aggregate_trigger.event.v1", loaded.ProcessingFunctionScope.AcceptedEventSchemaRef);
+            Assert.Equal(["function_input_event"], loaded.ProcessingFunctionScope.AllowedSourceKinds);
+            Assert.Equal("backend_runtime_authority_required", loaded.ProcessingFunctionScope.MaterializationPolicyRef);
 
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();

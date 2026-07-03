@@ -25,16 +25,21 @@ public class NpgsqlAggregateTriggerRepository(string connectionString) : Aggrega
         """;
     public const string SaveDefinitionSql = """
         INSERT INTO runtime_orchestration.aggregate_trigger_definitions (
-            trigger_definition_id, processing_function_id, operation_definition_id, trigger_source_kind, trigger_source_detail_kind,
+            trigger_definition_id, processing_function_id, operation_definition_id, accepted_event_schema_ref, allowed_source_kinds_json,
+            materialization_policy_ref, trigger_source_kind, trigger_source_detail_kind,
             execution_scope, transaction_boundary, aggregate_target_binding_json, conflict_key_fields_json, delta_map_json,
             threshold_policy_json, materialization_target_binding_json, materialization_payload_map_json, approval_policy, active, updated_at)
         VALUES (
-            @trigger_definition_id, @processing_function_id, @operation_definition_id, @trigger_source_kind, @trigger_source_detail_kind,
+            @trigger_definition_id, @processing_function_id, @operation_definition_id, @accepted_event_schema_ref, @allowed_source_kinds_json::jsonb,
+            @materialization_policy_ref, @trigger_source_kind, @trigger_source_detail_kind,
             @execution_scope, @transaction_boundary, @aggregate_target_binding_json::jsonb, @conflict_key_fields_json::jsonb, @delta_map_json::jsonb,
             @threshold_policy_json::jsonb, @materialization_target_binding_json::jsonb, @materialization_payload_map_json::jsonb, @approval_policy, TRUE, now())
         ON CONFLICT (trigger_definition_id) DO UPDATE SET
             processing_function_id = EXCLUDED.processing_function_id,
             operation_definition_id = EXCLUDED.operation_definition_id,
+            accepted_event_schema_ref = EXCLUDED.accepted_event_schema_ref,
+            allowed_source_kinds_json = EXCLUDED.allowed_source_kinds_json,
+            materialization_policy_ref = EXCLUDED.materialization_policy_ref,
             trigger_source_kind = EXCLUDED.trigger_source_kind,
             trigger_source_detail_kind = EXCLUDED.trigger_source_detail_kind,
             execution_scope = EXCLUDED.execution_scope,
@@ -58,7 +63,8 @@ public class NpgsqlAggregateTriggerRepository(string connectionString) : Aggrega
           AND payload_fingerprint = @payload_fingerprint;
         """;
     public const string LoadDefinitionSql = """
-        SELECT trigger_definition_id, processing_function_id, operation_definition_id, trigger_source_kind, trigger_source_detail_kind,
+        SELECT trigger_definition_id, processing_function_id, operation_definition_id, accepted_event_schema_ref, allowed_source_kinds_json,
+               materialization_policy_ref, trigger_source_kind, trigger_source_detail_kind,
                execution_scope, transaction_boundary, aggregate_target_binding_json, conflict_key_fields_json, delta_map_json,
                threshold_policy_json, materialization_target_binding_json, materialization_payload_map_json, approval_policy
         FROM runtime_orchestration.aggregate_trigger_definitions
@@ -127,6 +133,9 @@ public class NpgsqlAggregateTriggerRepository(string connectionString) : Aggrega
         cmd.Parameters.AddWithValue("trigger_definition_id", definition.TriggerDefinitionId);
         cmd.Parameters.AddWithValue("processing_function_id", definition.ProcessingFunctionScope.FunctionId);
         cmd.Parameters.AddWithValue("operation_definition_id", definition.ProcessingFunctionScope.OperationDefinitionId);
+        cmd.Parameters.AddWithValue("accepted_event_schema_ref", definition.ProcessingFunctionScope.AcceptedEventSchemaRef);
+        cmd.Parameters.AddWithValue("allowed_source_kinds_json", System.Text.Json.JsonSerializer.Serialize(definition.ProcessingFunctionScope.AllowedSourceKinds));
+        cmd.Parameters.AddWithValue("materialization_policy_ref", definition.ProcessingFunctionScope.MaterializationPolicyRef);
         cmd.Parameters.AddWithValue("trigger_source_kind", definition.TriggerSource.CanonicalTriggerKind);
         cmd.Parameters.AddWithValue("trigger_source_detail_kind", definition.TriggerSource.TriggerSourceDetailKind);
         cmd.Parameters.AddWithValue("execution_scope", definition.ExecutionScope);
@@ -150,25 +159,26 @@ public class NpgsqlAggregateTriggerRepository(string connectionString) : Aggrega
         if (!await reader.ReadAsync(ct)) return null;
 
         var jsonOptions = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var triggerSourceKind = reader.GetString(3);
-        var triggerSourceDetailKind = reader.GetString(4);
-        // accepted_event_schema_ref / allowed_source_kinds / materialization_policy_ref are owned by the
-        // registered processing function record (runtime-orchestration-ssot processing_function_scope.rule),
-        // not duplicated in the aggregate_trigger_definitions row; callers resolve those from the function
-        // registry, not from this persistence round-trip.
+        var triggerSourceKind = reader.GetString(6);
+        var triggerSourceDetailKind = reader.GetString(7);
         return new AggregateTriggerDefinition(
             reader.GetGuid(0),
             new AggregateTriggerSource(triggerSourceKind, triggerSourceDetailKind),
-            new AggregateTriggerProcessingFunctionScope(reader.GetString(1), reader.GetString(2), "", [], ""),
-            reader.GetString(5),
-            reader.GetString(6),
-            System.Text.Json.JsonSerializer.Deserialize<AggregateTriggerTargetBinding>(reader.GetString(7), jsonOptions)!,
-            System.Text.Json.JsonSerializer.Deserialize<IReadOnlyList<string>>(reader.GetString(8), jsonOptions)!,
-            System.Text.Json.JsonSerializer.Deserialize<IReadOnlyDictionary<string, decimal>>(reader.GetString(9), jsonOptions)!,
-            System.Text.Json.JsonSerializer.Deserialize<AggregateTriggerThresholdPolicy>(reader.GetString(10), jsonOptions)!,
-            System.Text.Json.JsonSerializer.Deserialize<AggregateTriggerTargetBinding>(reader.GetString(11), jsonOptions)!,
-            System.Text.Json.JsonSerializer.Deserialize<IReadOnlyList<AggregateTriggerPayloadMapEntry>>(reader.GetString(12), jsonOptions)!,
-            reader.GetString(13));
+            new AggregateTriggerProcessingFunctionScope(
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                System.Text.Json.JsonSerializer.Deserialize<IReadOnlyList<string>>(reader.GetString(4), jsonOptions)!,
+                reader.GetString(5)),
+            reader.GetString(8),
+            reader.GetString(9),
+            System.Text.Json.JsonSerializer.Deserialize<AggregateTriggerTargetBinding>(reader.GetString(10), jsonOptions)!,
+            System.Text.Json.JsonSerializer.Deserialize<IReadOnlyList<string>>(reader.GetString(11), jsonOptions)!,
+            System.Text.Json.JsonSerializer.Deserialize<IReadOnlyDictionary<string, decimal>>(reader.GetString(12), jsonOptions)!,
+            System.Text.Json.JsonSerializer.Deserialize<AggregateTriggerThresholdPolicy>(reader.GetString(13), jsonOptions)!,
+            System.Text.Json.JsonSerializer.Deserialize<AggregateTriggerTargetBinding>(reader.GetString(14), jsonOptions)!,
+            System.Text.Json.JsonSerializer.Deserialize<IReadOnlyList<AggregateTriggerPayloadMapEntry>>(reader.GetString(15), jsonOptions)!,
+            reader.GetString(16));
     }
 
     private static async Task<AggregateTriggerCurrentRow> UpsertCurrentAsync(NpgsqlConnection conn, NpgsqlTransaction? tx, Guid triggerDefinitionId, string conflictKey, IReadOnlyDictionary<string, decimal> deltaMap, CancellationToken ct)
