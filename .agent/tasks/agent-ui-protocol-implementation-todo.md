@@ -1,0 +1,304 @@
+# Agent UI Protocol Implementation Todo
+
+## Bundle `agent-ui-protocol-tooling`
+
+**Status:** implemented (all three SubBundles processed: agent-ui-initial-contract-tool, agent-ui-local-test-tool, agent-ui-reference-and-route-replacement; see Bundle-level acceptance below)  
+**Worktype:** implementation_change  
+**Primary SSOT:** `docs/governance/agent-ui-protocol-ssot.yaml`  
+**Reference:** `docs/governance/reference/agent-ui-tool-output-reference.yaml`, `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`, `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`  
+**Proof surface:** `.agent/tests/check-agent-ui-protocol-ssot.sh`
+
+### 問題点
+
+- `.agent` prompt / protocol / checklist は存在するが、Agent が作業開始時に implementation name / worktype / SSOT section / senario contract / local test / checklist interview へ一貫して入る tool-first 導線がまだ無い。
+- AI が `uuid` / `datetime` / `worktype` metadata / `tool.log` record まで手書きできる余地が残っており、AI-authored content と tool-generated metadata の境界が runtime tool 上で未実装。
+- `senario-tmp.md` は local temporary contract として設計済みだが、作成・読込・checklist interview への接続 tool が未実装。
+- `docs/governance/logs/tool.log` は空ファイルとして接続済みだが、append-only / human cleanup / compact metadata only の tool runtime が未実装。
+- PR #560 で SSOT / Reference / proof surface は設計・配線されたが、既存 `AGENTS.md` / `.agent/rules/rule.md` / `.agent/README.md` / worktype route は tool-first 導線へまだ置換されていない。
+
+### 目的
+
+PR #560 で確定した Agent UI protocol SSOT / Reference に従い、Agent 作業を tool-first に管制する。
+
+目的は、Agent にすべての資料を読ませることではなく、許可された scope / SSOT section / checklist / proof surface だけを通過させること。
+
+AI は意味入力と実装を担当し、tool は metadata / log / route output / check execution を担当する。human は cleanup / judgment / governance を担当する。
+
+### 改善方針
+
+- `initial contract` 用 tool と `local test` 用 tool の2本を実装する。
+- Tool output は `docs/governance/reference/agent-ui-tool-output-reference.yaml` に従い、compact structured output とする。
+- `senario-tmp.md` は `docs/governance/reference/agent-ui-senario-tmp-reference.yaml` に従って local temporary file として作成し、commit 対象にしない。
+- NG boundary は `docs/governance/reference/agent-ui-negative-boundary-reference.yaml` に従い、prompt NG axis 由来の top boundary として扱う。
+- `tool.log` は `docs/governance/logs/tool.log` へ append-only で記録する。1 usage = 1 line。cleanup / truncate / rewrite は tool が行わない。
+- `AGENTS.md` / `.agent/rules/rule.md` / `.agent/README.md` / `.agent/routes/worktype-required-protocols.yaml` / worktype prompt 導線は tool-first に置換する。ただし既存 prompt / protocols / checklists は tool 非対応 Agent 向け fallback として残す。
+- Reference に不足・表記ズレがあれば最小差分で補正する。SSOT 側へ template 詳細や長い checklist wording を戻さない。
+
+---
+
+## SubBundle `agent-ui-initial-contract-tool`
+
+**Status:** implemented (`.agent/tools/agent-ui-initial-contract`, body in `.agent/scripts/agent_tools/agent_ui_initial_contract.py`)
+
+**Implementation note:** `worktype` selection is by canonical worktype id string (validated against `.agent/routes/worktype-required-protocols.yaml`), not a numbered choice — the `worktypes` subcommand lists ids for the AI to pick from. `sections`/`resolve-ssot` delegate to the existing `yaml-section-query` tool per the Existing Tool Usage rule rather than reimplementing YAML traversal. Verified via `.agent/scripts/check_agent_ui_tool.py` (contract: executable, `--help` terms, `--output` mutation-probe rejection) and manual `worktypes`/`start`/`resolve-ssot`/`sections`/`end` invocations (senario-tmp.md + tool.log write verified, then reverted before commit).
+
+**Follow-up fix:** `end` validated `--senario-summary` as required but discarded it instead of writing it into `senario-tmp.md`, and `start`/`end` had no structured pointer back to the governing Reference files. Both tools now emit a `reference_basis` field (paths to the three `docs/governance/reference/agent-ui-*.yaml` files) from `start` and `end`, and `end` writes `--target-file`/`--senario-summary`/`--ng-boundary` into the `senario-tmp.md` contract body and echoes them back as `target_file`/`senario_summary`/`ng_boundary` JSON fields — not just markdown prose. `agent_ui_common.parse_senario_tmp()` is the shared structural markdown->fields extractor (headings/prefixes, not free-text regex) used by both tools going forward.
+
+### 目的
+
+Agent 作業開始時の route / SSOT selection / senario contract / usage metadata を tool で固定する。
+
+### 対応資料
+
+- `AGENTS.md`
+- `.agent/rules/rule.md`
+- `.agent/README.md`
+- `.agent/routes/worktype-required-protocols.yaml`
+- `.agent/prompt/implementation-change.md`
+- `.agent/prompt/design-change.md`
+- `.agent/prompt/existing-pr-update.md`
+- `docs/governance/agent-ui-protocol-ssot.yaml`
+- `docs/governance/reference/agent-ui-tool-output-reference.yaml`
+- `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`
+- `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`
+- `.agent/tests/check-agent-ui-protocol-ssot.sh`
+
+### 対象ファイル名候補
+
+- `.agent/tools/agent-ui-initial-contract` or equivalent thin entrypoint
+- `.agent/scripts/agent_tools/agent_ui_initial_contract.py` or equivalent implementation body
+- `.agent/scripts/agent_tools/readonly_observation.py` only if existing dispatch model requires integration
+- `.agent/tests/check-agent-ui-protocol-ssot.sh`
+- `.agent/tests/check-agent-ui-initial-contract.sh` or equivalent new proof surface if needed
+- `docs/governance/logs/tool.log`
+- local temporary `senario-tmp.md` output
+
+### 対象関数名 / command 候補
+
+- `initial_contract`
+- `input_implementation_name`
+- `select_worktype`
+- `emit_worktype_prompt`
+- `resolve_target_ssot`
+- `list_ssot_sections`
+- `select_ssot_sections`
+- `emit_selected_section_subtrees`
+- `continue_or_quit`
+- `write_senario_tmp`
+- `generate_usage_metadata`
+- `append_tool_log`
+
+### 実装scope
+
+- [ ] `implementation_name` を AI-authored input として受ける。
+- [ ] `worktype` は AI に番号選択させ、tool が canonical worktype metadata へ解決する。
+- [ ] worktype に応じた prompt path / short excerpt / required reads / protocol trigger hints を compact に出す。
+- [ ] target SSOT 名を受け取り、repo-relative path へ解決する。
+- [ ] target SSOT の section 一覧を出す。本文全体dumpはしない。
+- [ ] `[section_a,section_b]` 形式で複数 section を選択できる。
+- [ ] 選択 section 配下だけを subtree として出力する。
+- [ ] SSOT選択へ戻る / quit を選べる。
+- [ ] quit 時に senario contract を要求し、`senario-tmp.md` を作成する。
+- [ ] `uuid` / `datetime` / `worktype` metadata は tool が生成する。
+- [ ] `docs/governance/logs/tool.log` へ `<datetime> <uuid> <implementation_name> <worktype>` を append する。
+- [ ] `tool.log` に senario body / checklist answers / verbose execution logs / full prompt dumps を書かない。
+
+### OK軸
+
+- [ ] initial contract tool が、SSOT の `flow_order.initial_contract` と Reference の `initial_contract_outputs` に沿って動作する。
+- [ ] AI が `uuid` / `datetime` / `worktype` metadata / `tool.log` record を手書きできない。
+- [ ] output は compact で、full prompt / full protocol / full checklist dump をしない。
+- [ ] `senario-tmp.md` は local temporary file として作成され、git追跡されない。
+- [ ] `tool.log` は append-only compact metadata だけを持つ。
+- [ ] tool は implemented / partial / not_started 判定をしない。
+
+### NG軸
+
+- [ ] AI-authored input として `uuid` / `datetime` / `worktype` metadata / `tool.log` record を受ける。
+- [ ] `tool.log` に senario body / checklist answer / raw execution log を書く。
+- [ ] SSOT全体や legacy prompt/protocol/checklist 全文を output へ流す。
+- [ ] `senario-tmp.md` を commit 対象にする。
+- [ ] tool が semantic completion / implemented / partial / not_started を主張する。
+
+---
+
+## SubBundle `agent-ui-local-test-tool`
+
+**Status:** implemented (`.agent/tools/agent-ui-local-test`, body in `.agent/scripts/agent_tools/agent_ui_local_test.py`)
+
+**Implementation note:** `checklist` lists existing checklist item headings only; it does not evaluate free-form checklist answers (those remain an AI/human interview, per the existing checklist protocol). `summary` re-runs worktype-routed checks + `check-structure.sh` + senario-tmp presence rather than accepting prior step state, keeping the CLI stateless like the existing `topology-seed-discussion` tool. `pass_or_fail` is explicitly documented as required-check pass only, not an implemented/partial/not_started judgment.
+
+### 目的
+
+Agent 実装後に、worktype tests / senario-tmp output / checklist interview / required checks を tool で実行・要約する。
+
+### 対応資料
+
+- `.agent/rules/rule.md`
+- `.agent/README.md`
+- `.agent/routes/worktype-required-protocols.yaml`
+- `.agent/protocols/implementation-change.md`
+- `.agent/protocols/design-change.md`
+- `.agent/protocols/existing-pr-update.md`
+- `.agent/protocols/scenario-contract.md`
+- `.agent/checklists/policy-judgment.md`
+- `.agent/checklists/boundary-identity.md`
+- `.agent/tests/check-structure.sh`
+- `docs/governance/agent-ui-protocol-ssot.yaml`
+- `docs/governance/reference/agent-ui-tool-output-reference.yaml`
+- `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`
+
+### 対象ファイル名候補
+
+- `.agent/tools/agent-ui-local-test` or equivalent thin entrypoint
+- `.agent/scripts/agent_tools/agent_ui_local_test.py` or equivalent implementation body
+- `.agent/tests/check-agent-ui-local-test.sh` or equivalent proof surface if needed
+- `.agent/tests/check-agent-ui-protocol-ssot.sh`
+- `senario-tmp.md` local temporary input
+
+### 対象関数名 / command 候補
+
+- `run_worktype_tests`
+- `read_senario_tmp`
+- `output_senario_tmp_md`
+- `checklist_interview`
+- `run_required_checks`
+- `summarize_check_result`
+- `emit_missing_evidence`
+- `emit_pass_or_fail`
+
+### 実装scope
+
+- [ ] worktype に対応する required tests / checks を解決する。
+- [ ] test command を実行し、結果を compact summary として出す。
+- [ ] raw logs を Agent context へ流さない。必要なら失敗要点のみ出す。
+- [ ] `senario-tmp.md` を出力する。
+- [ ] `senario-tmp.md` が読めない場合は Error を出し、checklist interview を曖昧に進めない。
+- [ ] checklist interview は既存 checklists / protocols を利用する。
+- [ ] missing checklist answers / missing evidence を明示する。
+- [ ] final output は `pass_or_fail` / `check_result` / `checklist_result` / `missing_evidence_if_any` を持つ。
+- [ ] pass は required checks 通過を表すだけで、Implemented 判定ではない。
+
+### OK軸
+
+- [ ] local test tool が、SSOT の `flow_order.local_test` と Reference の `local_test_outputs` に沿って動作する。
+- [ ] `senario-tmp.md` を checklist interview 前に出力する。
+- [ ] `senario-tmp.md` が読めない場合に Error で止まる。
+- [ ] check result と checklist result を分離して出す。
+- [ ] missing evidence がある場合に明示する。
+- [ ] tool は semantic completion / implemented / partial / not_started 判定をしない。
+
+### NG軸
+
+- [ ] raw execution log を大量に output する。
+- [ ] checklist answer を `tool.log` へ書く。
+- [ ] `pass` を Implemented と同義に扱う。
+- [ ] `senario-tmp.md` が無いのに checklist interview を完了扱いする。
+- [ ] worktype route を無視して固定 test だけ実行する。
+
+---
+
+## SubBundle `agent-ui-reference-and-route-replacement`
+
+**Status:** implemented
+
+**Implementation note:** `AGENTS.md` Entry Route, `.agent/rules/rule.md` Worktype Decision/Branch to Prompt, `.agent/routes/worktype-required-protocols.yaml` (new `agent_ui_tool_entry` key), and the `implementation-change`/`design-change`/`existing-pr-update` prompt routers now each carry a "tool-first, fallback to manual reads" bullet pointing at `.agent/tools/agent-ui-initial-contract`. `.agent/README.md`'s `tools/` line was shrunk to a one-line pointer at `.agent/tools/README.md` (no authority/mutation-boundary detail in the directory map, per scope). Legacy `.agent/prompt`, `.agent/protocols`, `.agent/checklists` files are untouched and remain the fallback route. `docs/governance/reference/agent-ui-tool-output-reference.yaml` was aligned from `implementation_name`/`worktype_number_selection` to the SSOT's `task_name`/`worktype_id_selection` vocabulary; `docs/governance/agent-ui-protocol-ssot.yaml`'s `flow_order.initial_contract` step was renamed `worktype_number_select` -> `worktype_id_select` to match the implemented canonical-id (not numbered) worktype selection. `senario-tmp.md` spelling and the legacy `scenario-contract.md` filename were left as-is. `agent-ui-initial-contract end` now folds `--senario-summary` into the written `senario-tmp.md` contract body (previously validated but discarded) and echoes it back as a `senario_summary` field (also fixed in `docs/governance/agent-ui-protocol-ssot.yaml`'s `completion_contract` and `agent-ui-tool-output-reference.yaml`, both of which had drifted to `scenario_contract_summary`/`senario_contract_summary` — three different spellings of the same field before this pass); `agent-ui-local-test summary` reads it back from the file via the shared `parse_senario_tmp()` structural parser instead of ad hoc line-matching.
+
+### 目的
+
+PR #560 で設計・配線した Agent UI protocol を、既存 Agent 導線へ tool-first として接続する。legacy prompt / protocols / checklists は削除せず fallback として残す。
+
+### 対応資料
+
+- `AGENTS.md`
+- `.agent/rules/rule.md`
+- `.agent/README.md`
+- `.agent/routes/worktype-required-protocols.yaml`
+- `.agent/prompt/*.md`
+- `.agent/protocols/*.md`
+- `.agent/checklists/*.md`
+- `docs/governance/agent-ui-protocol-ssot.yaml`
+- `docs/governance/reference/agent-ui-tool-output-reference.yaml`
+- `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`
+- `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`
+- `.agent/tests/check-agent-ui-protocol-ssot.sh`
+- `.agent/docs/ssot-map.yaml`
+- `.agent/docs/required-paths.yaml`
+- `.agent/docs/test-bundles.yaml`
+
+### 対象ファイル名候補
+
+- `AGENTS.md`
+- `.agent/rules/rule.md`
+- `.agent/README.md`
+- `.agent/routes/worktype-required-protocols.yaml`
+- `.agent/prompt/implementation-change.md`
+- `.agent/prompt/design-change.md`
+- `.agent/prompt/existing-pr-update.md`
+- `docs/governance/reference/agent-ui-tool-output-reference.yaml`
+- `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`
+- `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`
+- `.agent/tests/check-agent-ui-protocol-ssot.sh`
+
+### 対象関数名 / route 候補
+
+- `READ_ENTRY`
+- `READ_TASK_MATERIALS`
+- `DEFINE_SCOPE`
+- `SCENARIO_CONTRACT`
+- `FILL_CHECKLISTS`
+- `STRUCTURE_CHECK`
+- `agent_ui_initial_contract`
+- `agent_ui_local_test`
+
+### 実装scope
+
+- [x] `AGENTS.md` の Entry Route を tool-first に寄せる。ただし tool 非対応 Agent 向け fallback を残す。
+- [x] `.agent/rules/rule.md` に Agent UI protocol の trigger / prohibition / authority split を最小差分で反映する（Prohibitions/Existing Tool Usage は既存commit分、Worktype Decision/Branch to Promptへtool-first routingを本SubBundleで追加）。
+- [x] `.agent/README.md` の directory map に `.agent/tools` の Agent UI tool role を追加する（一行紹介のみ、詳細は `.agent/tools/README.md` 側）。
+- [x] `.agent/routes/worktype-required-protocols.yaml` へ Agent UI tool route (`agent_ui_tool_entry`) を接続する。
+- [x] worktype prompt (`implementation-change.md` / `design-change.md` / `existing-pr-update.md`) は tool が使える場合の入口を Agent UI protocol 優先に寄せる。
+- [x] Reference 内の `task_name` / `implementation_name` 命名ズレを `task_name` へ統一、`worktype_number_select(ion)` を `worktype_id_select(ion)` へ最小差分で整える。
+- [x] `senario` 綴りは既存設計に合わせ、`senario-tmp.md` を正として扱う。既存 legacy `scenario-contract.md` ファイル名は変更していない。
+- [x] `.agent/tests/check-agent-ui-protocol-ssot.sh` は未変更のまま配列 + loop 構成を維持（将来 Reference 増加に対応可能な形のまま）。
+
+### OK軸
+
+- [x] Agent が tool 利用可能な場合、Agent UI protocol を先に通る導線になっている。
+- [x] tool 非対応 Agent 向け legacy fallback が残っている。
+- [x] SSOT は軽量な契約 / 順序 / Reference 配線のまま（語彙修正のみ、template詳細は追加していない）。
+- [x] Reference が output fields / templates / checklist interview wording を持つ。
+- [x] `.agent/tasks/todo.md` は触っていない。
+- [x] 既存 prompt / protocols / checklists を削除していない。
+- [x] Structure Check が pass する。
+
+### NG軸
+
+- [ ] 既存 rule / README / prompt を全文置換する。
+- [ ] legacy fallback を削除する。
+- [ ] SSOT 側へ template 詳細や checklist wording を戻す。
+- [ ] `.agent/tasks/todo.md` を更新する。
+- [ ] tool output を SSOT authority / proof completion / semantic completion として扱う。
+- [ ] tool が product runtime/source を ordinary use で mutate する。
+
+---
+
+## Bundle-level acceptance
+
+- [x] `agent-ui-initial-contract-tool` が実装され、usage metadata / selected SSOT section / senario-tmp / tool.log append まで到達する。
+- [x] `agent-ui-local-test-tool` が実装され、worktype tests / senario-tmp output / checklist interview / required checks を compact に実行・要約する。
+- [x] Reference 不足・命名ズレが最小差分で整理されている。
+- [x] `AGENTS.md` / `.agent/rules/rule.md` / `.agent/README.md` / worktype route が tool-first に接続されている（legacy全文置換ではなく、tool-first bullet + fallback保持）。
+- [x] legacy fallback が残っている。
+- [x] `docs/governance/logs/tool.log` は append-only compact metadata であり、cleanup は human periodic operation のまま。
+- [x] `senario-tmp.md` は gitignore 済み local temporary file のまま。
+- [x] `bash .agent/tests/check-structure.sh` が pass する。
+
+## Bundle-level NG
+
+- [ ] SubBundle 1つだけの小粒実装で完了扱いする。
+- [ ] tool 2本が揃わないまま導線置換だけ行う。
+- [ ] Reference 整理だけで tool 実装を先送りする。
+- [ ] rule 導線置換だけで runtime tool が無い。
+- [ ] AI に metadata / log / judgment authority を戻す。
+- [ ] Implemented 判定を tool の pass/fail と混同する。

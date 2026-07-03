@@ -25,3 +25,4 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 python3 "$REPO_ROOT/.agent/scripts/check_agent_tools_surface.py" "$@"
+bash "$REPO_ROOT/.agent/tests/check-agent-ui-tool.sh" "$@"

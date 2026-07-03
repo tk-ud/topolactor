@@ -6,6 +6,9 @@ Implementation change under existing SSOT.
 ## trigger_condition
 Worktype is `implementation_change`.
 
+## tool_first_entry
+When `.agent/tools/agent-ui-initial-contract` is usable, run `start --task-name <name> --worktype implementation_change` first to get the routed prompt excerpt and protocol trigger hints; this file remains the fallback router when the tool is not usable.
+
 ## required_reads
 - .agent/docs/ssot-map.yaml
 - mapped SSOT for touched runtime surface selected through `.agent/docs/ssot-map.yaml`

@@ -1,0 +1,54 @@
+# agent-ui-senario-tmp-reference.yaml
+
+version: 1
+status: draft_reference
+scope: agent_ui_senario_tmp
+canonical_path: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+
+senario_tmp:
+  path: senario-tmp.md
+  created_by: .agent/tools/agent-ui initial-contract
+  created_at: initial_contract_end
+  gitignore_required: true
+  git_tracked: false
+
+markdown_template: |-
+  # contracts
+  ## 対象file名
+  - [ ] 作業概要
+
+  # negative cases
+  ## NG boundary
+  - [ ] does not cross NG boundary
+
+negative_boundary:
+  source: prompt NG axis
+  meaning: negative cases list the task's top boundary from the prompt NG axis
+
+structured_evidence_fields:
+  rule: >-
+    senario-tmp.md is the human/UI-rendering markdown surface, not the
+    authority. Tools that read or write it must expose these as structured
+    output fields (a UI may render markdown from the fields, not the
+    other way around).
+  fields:
+    - target_file
+    - senario_summary
+    - ng_boundary
+    - senario_tmp_path
+    - reference_basis
+
+checklist_interview:
+  order:
+    - output_senario_tmp_md
+    - output_Error_if_senario_tmp_cannot_be_checked
+    - ask_framework_questions_using_existing_checklists
+
+usage_log:
+  path: docs/governance/logs/tool.log
+  fields:
+    - datetime
+    - uuid
+    - task_name
+    - worktype
+  rule: compact metadata only

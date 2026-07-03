@@ -1,0 +1,237 @@
+# agent-ui-tool-output-reference.yaml
+#
+# Compact reference for Agent UI tool output. This is rebuilt for tool output
+# and must not be a dump of legacy prompt/protocol/checklist files.
+
+version: 1
+status: draft_reference
+scope: agent_ui_tool_output
+canonical_path: docs/governance/reference/agent-ui-tool-output-reference.yaml
+
+reference_policy:
+  source_ssot: docs/governance/agent-ui-protocol-ssot.yaml
+  legacy_text_surfaces_are_fallback:
+    - .agent/prompt/*.md
+    - .agent/protocols/*.md
+    - .agent/checklists/*.md
+  output_rule:
+    - Emit compact structured output per tool step.
+    - Do not emit verbose execution logs.
+    - Do not dump full legacy files.
+    - Prefer fields, short excerpts, and selected SSOT sections.
+    - Expose this Reference's basis as structured fields (reference_basis),
+      not markdown wording; a UI may render markdown from those fields, but
+      the fields are the authority, not the rendered text.
+
+reference_basis_field:
+  meaning: >-
+    reference_basis is a structured tool-output field (not prose) pointing
+    at the Reference files that ground the current tool step's contract.
+  emitted_by:
+    - agent-ui-initial-contract start
+    - agent-ui-initial-contract end
+    - agent-ui-local-test read-senario-tmp
+    - agent-ui-local-test summary
+  value_shape:
+    tool_output_reference: docs/governance/reference/agent-ui-tool-output-reference.yaml
+    senario_tmp_reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+    negative_boundary_reference: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+
+authority_split:
+  ai_authored:
+    - task_name
+    - tool_operation_inputs
+    - target_file
+    - senario_summary
+    - ng_boundary
+    - implementation_changes
+  tool_generated:
+    - uuid
+    - datetime
+    - worktype
+    - docs/governance/logs/tool.log record
+  rule: >-
+    AI writes semantic inputs and implementation content. The tool generates
+    metadata and writes the log. AI must not hand-write uuid, datetime,
+    worktype metadata, or tool.log records.
+
+common_metadata:
+  fields:
+    - datetime
+    - uuid
+    - task_name
+    - worktype
+  generated_by_tool:
+    - datetime
+    - uuid
+    - worktype
+  authored_by_ai:
+    - task_name
+  reuse_required:
+    - PR body
+    - summary
+    - docs/governance/logs/tool.log
+
+initial_contract_outputs:
+  step_1_task_name:
+    ai_input:
+      - task_name
+    tool_emits:
+      - uuid
+      - datetime
+    compact_note: usage_metadata_partial
+  step_2_worktype:
+    ai_input:
+      - worktype_id_selection
+    tool_emits:
+      - worktype
+      - worktype_prompt_path
+      - usage_metadata_completed
+      - reference_basis
+  step_3_prompt:
+    tool_emits:
+      - selected_prompt_excerpt
+      - required_reads_from_prompt
+      - protocol_trigger_hints
+    constraints:
+      - Use short excerpt only.
+      - Do not dump full prompt unless explicitly requested.
+  step_4_target_ssot:
+    ai_input:
+      - target_ssot_name
+    tool_emits:
+      - target_ssot_path
+      - ssot_resolution_status
+  step_5_section_list:
+    tool_emits:
+      - section_list
+    constraints:
+      - Output section names only.
+      - Do not output section bodies here.
+  step_6_section_selection:
+    input_format: "[section_a,section_b]"
+    ai_input:
+      - selected_section_names
+  step_7_selected_sections:
+    tool_emits:
+      - selected_section_subtrees
+      - selected_ssot_sections_summary
+    constraints:
+      - Output selected section subtrees only.
+      - Avoid full-file output unless all sections are explicitly selected.
+  step_8_continue_or_quit:
+    ai_input:
+      - continue_or_quit
+    tool_emits:
+      - current_selected_ssot_sections
+      - missing_required_selection_if_any
+  step_9_senario_contract:
+    ai_authored:
+      - target_file
+      - senario_summary
+      - ng_boundary
+    tool_emits:
+      - senario_contract_template
+      - missing_evidence_if_any
+    constraints:
+      - Do not store senario body in tool.log.
+  step_10_initial_contract_end:
+    tool_emits:
+      - initial_contract_summary
+      - reference_basis
+      - datetime
+      - uuid
+      - task_name
+      - worktype
+      - target_file
+      - senario_summary
+      - ng_boundary
+      - senario_tmp_path
+
+implementation_phase_outputs:
+  start:
+    ai_authored:
+      - implementation_changes
+    tool_emits:
+      - implementation_start_metadata
+      - selected_ssot_sections_summary
+      - senario_summary
+  end:
+    tool_emits:
+      - implementation_end_metadata
+      - selected_ssot_sections_summary
+      - senario_summary
+
+local_test_outputs:
+  step_1_worktype_tests:
+    tool_emits:
+      - worktype_test_commands
+      - worktype_test_result
+    constraints:
+      - Summarize result.
+      - Do not dump full logs.
+  step_2_checklist_interview:
+    ai_authored:
+      - checklist_interview_answers
+    tool_emits:
+      - checklist_interview_items
+      - checklist_result
+      - missing_checklist_answers_if_any
+    constraints:
+      - Do not write checklist answers to tool.log.
+  step_3_checks:
+    tool_emits:
+      - check_commands
+      - check_result
+      - missing_evidence_if_any
+  step_4_pass:
+    tool_emits:
+      - pass_or_fail
+      - completion_summary
+      - reference_basis
+      - datetime
+      - uuid
+      - task_name
+      - worktype
+      - selected_ssot_sections
+      - target_file
+      - senario_summary
+      - ng_boundary
+      - senario_tmp_path
+      - checklist_result
+      - check_result
+      - missing_evidence_if_any
+
+log_record_reference:
+  path: docs/governance/logs/tool.log
+  initial_state: empty_tracked_file
+  create_rule:
+    - Keep an empty tracked docs/governance/logs/tool.log in the repository.
+    - If missing during tool execution, create it before appending.
+    - Create docs/governance/logs directory if it does not exist.
+  write_rule:
+    - Tool writes the log record, not AI.
+    - Append only.
+    - One tool usage equals one line.
+    - Do not rewrite historical records.
+  cleanup_rule:
+    owner: human
+    cadence: periodic_manual
+    tool_must_not:
+      - cleanup
+      - truncate
+      - rewrite_historical_records
+    note: >-
+      tool.log is append-only for the tool. Periodic cleanup is a human
+      governance operation.
+  record_format: "<datetime> <uuid> <task_name> <worktype>"
+  datetime_format: ISO-8601
+  forbidden_contents:
+    - AI-authored uuid
+    - AI-authored datetime
+    - AI-authored worktype metadata
+    - AI-authored tool.log records
+    - verbose execution logs
+    - checklist answers
+    - senario body
+    - full prompt/protocol/checklist dumps

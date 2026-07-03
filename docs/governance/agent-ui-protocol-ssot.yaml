@@ -1,0 +1,120 @@
+# agent-ui-protocol-ssot.yaml
+#
+# SSOT contract for routing Agents into the Agent UI tool.
+# Details and emitted templates live under docs/governance/reference.
+
+version: 1
+status: draft_ssot
+scope: repository_agent_governance_agent_ui
+canonical_path: docs/governance/agent-ui-protocol-ssot.yaml
+
+agent_protocols:
+  purpose:
+    - Route Agents from ./AGENTS.md and .agent/rules/rule.md into the Agent UI tool.
+    - Issue a usage id when the tool is used.
+    - Append datetime, uuid, task_name, and worktype to docs/governance/logs/tool.log.
+    - Require PRs and summaries to include datetime, uuid, task_name, and worktype.
+
+  reference_wiring:
+    directory: docs/governance/reference
+    tool_output_reference: docs/governance/reference/agent-ui-tool-output-reference.yaml
+    senario_tmp_reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+    negative_boundary_reference: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+    rule: >-
+      This SSOT owns the contract and order. Reference files own detailed output
+      fields, templates, and checklist interview wording.
+
+  legacy_surface_policy:
+    fallback_only:
+      - .agent/prompt/*.md
+      - .agent/protocols/*.md
+      - .agent/checklists/*.md
+    rule: >-
+      Existing .agent prompt/protocol/checklist files remain for Agents that
+      cannot use the tool. Tool output references are rebuilt under
+      docs/governance/reference and are not legacy full-file dumps.
+
+  tool_principles:
+    - Keep output minimal to reduce context load.
+    - Do not stream raw execution logs into Agent context.
+    - Tool output is Agent UI output, not SSOT authority or completion judgment.
+    - Tool must not judge implemented / partial / not_started status.
+    - Read-only applies to Topolactor application/runtime/product source during ordinary tool use, not to the Agent UI tool implementation itself.
+
+  mutation_boundary:
+    ordinary_use_read_only_target:
+      - Topolactor application/runtime/product source surfaces observed by the tool
+    allowed_when_in_agent_ui_scope:
+      - .agent/tools implementation files
+      - .agent/tests for tool checks
+      - docs/governance agent-tool SSOT files
+      - docs/governance/reference tool-output reference files
+      - docs/governance/logs/tool.log compact usage evidence
+      - senario-tmp.md local temporary file
+    ordinary_use_prohibited:
+      - product runtime/source mutation by the tool
+      - verbose execution log output into Agent context
+      - committing senario-tmp.md
+
+  flow_order:
+    initial_contract:
+      - task_name_input
+      - worktype_id_select
+      - emit_worktype_prompt
+      - target_ssot_name_input
+      - output_section_list
+      - select_sections
+      - output_selected_section_subtrees
+      - return_to_ssot_selection_or_quit
+      - require_scenario_contract_on_quit
+      - create_senario_tmp_md_and_end
+    implementation:
+      - agent_implementation_start
+      - agent_implementation_end
+    local_test:
+      - run_worktype_tests
+      - checklist_interview
+      - run_checks
+      - pass_if_all_required_items_pass
+
+  senario_tmp_contract:
+    path: senario-tmp.md
+    gitignore_required: true
+    shape_reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+    boundary_reference: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+    rule: >-
+      senario-tmp.md is a local temporary scenario checklist. It is created at
+      initial_contract end, read by checklist interview, and must not be committed.
+
+  checklist_interview_contract:
+    order:
+      - output_senario_tmp_md
+      - output_error_if_senario_tmp_cannot_be_checked
+      - ask_framework_questions_using_existing_checklists
+    reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
+
+  log_contract:
+    path: docs/governance/logs/tool.log
+    fields:
+      - datetime
+      - uuid
+      - task_name
+      - worktype
+    rule: compact metadata only
+
+  completion_contract:
+    required_summary_fields:
+      - datetime
+      - uuid
+      - task_name
+      - worktype
+      - reference_basis
+      - selected_ssot_sections
+      - target_file
+      - senario_summary
+      - ng_boundary
+      - senario_tmp_path
+      - local_test_result
+      - checklist_result
+      - check_result
+      - missing_evidence_if_any

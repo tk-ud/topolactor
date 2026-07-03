@@ -1,6 +1,16 @@
 version: 1
 purpose: Worktype-to-prompt/protocol/check executable routing map
 
+agent_ui_tool_entry:
+  tool_first: .agent/tools/agent-ui-initial-contract
+  local_test: .agent/tools/agent-ui-local-test
+  rule: >-
+    When the Agent UI tool is usable, resolve worktype/prompt routing via
+    agent-ui-initial-contract's worktypes/start subcommands instead of
+    manually reading this file end to end. This routing map stays the
+    fallback reference and the executable prompt/protocol/check source of
+    truth either way; the tool reads this same file, it does not replace it.
+
 worktypes:
   audit:
     prompt: .agent/prompt/audit.md

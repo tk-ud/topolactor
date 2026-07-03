@@ -1,0 +1,32 @@
+# agent-ui-negative-boundary-reference.yaml
+
+version: 1
+status: draft_reference
+scope: agent_ui_negative_boundary
+canonical_path: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+
+negative_boundary:
+  name: NG boundary
+  meaning: Prompt NG axis is copied into the negative scenario section and treated as the top boundary for the task.
+
+senario_tmp_markdown:
+  contracts_heading: "# contracts"
+  target_file_heading: "## 対象file名"
+  contract_item: "- [ ] 作業概要"
+  negative_cases_heading: "# negative cases"
+  boundary_heading: "## NG boundary"
+  boundary_item: "- [ ] does not cross NG boundary"
+
+checklist_interview:
+  sequence:
+    - output senario-tmp.md
+    - output Error if the file cannot be checked
+    - ask framework questions based on existing checklists
+
+structured_evidence_fields:
+  rule: >-
+    ng_boundary must be surfaced by tools as a structured field extracted
+    from boundary_item, not left inside markdown prose only.
+  fields:
+    - ng_boundary
+    - reference_basis
