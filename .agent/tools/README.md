@@ -2,11 +2,13 @@
 
 ## Purpose
 
-`.agent/tools` is the Agent-facing read-only repository observation surface. It provides stable commands for inspecting repository directory surfaces, SSOT routing indexes, and proof-surface maps without treating `.agent/scripts` as a convenience-command namespace.
+`.agent/tools` is the Agent-facing repository tool surface. Existing observation tools provide stable commands for inspecting repository directory surfaces, SSOT routing indexes, and proof-surface maps without treating `.agent/scripts` as a convenience-command namespace.
 
-## Read-only / no mutation boundary
+## Mutation boundary
 
-Tools in this directory must not mutate repository files, edit TODO/roadmap/SSOT/proof manifests, create persistent temporary artifacts, or expose file-write options such as `--output`. If a mutation-oriented option is passed to an initial tool, the tool rejects it instead of forwarding it.
+Existing observation tools in this directory are read-only over repository/product surfaces. They must not edit Topolactor application/runtime/product source, TODO/roadmap/SSOT/proof manifests, or expose file-write options such as `--output`. If a mutation-oriented option is passed to an observation tool, the tool rejects it instead of forwarding it.
+
+Tool-side or governance-side writes are different. A tool may write tool-owned or governance-owned artifacts only when an applicable SSOT and task scope explicitly require it, for example Agent UI evidence files or temporary Agent UI working files. These writes must stay inside the declared tool/governance boundary and must not become ordinary mutation of Topolactor product/runtime/source implementation surfaces.
 
 ## Judgment boundary
 
@@ -22,7 +24,7 @@ Todo and roadmap statuses may appear only as observed text. They must not be tre
 
 ## Relationship to `.agent/scripts`
 
-`.agent/scripts` owns CI/gate/helper implementation bodies and reusable structured-processing code. `.agent/tools` may expose thin read-only entrypoints over those bodies, but must not duplicate structural processing logic already owned by `.agent/scripts`.
+`.agent/scripts` owns CI/gate/helper implementation bodies and reusable structured-processing code. `.agent/tools` may expose thin entrypoints over those bodies, but must not duplicate structural processing logic already owned by `.agent/scripts`.
 
 ## Recommended usage order
 
@@ -123,10 +125,10 @@ Examples:
 
 ## Prohibited uses
 
-Do not use `.agent/tools` to:
+Do not use ordinary observation `.agent/tools` to:
 
-- write repository files or persistent artifacts;
-- write seed SQL, manifests, SSOTs, TODO, or roadmap files;
+- write Topolactor application/runtime/product source files;
+- write seed SQL, manifests, SSOTs, TODO, or roadmap files without explicit tool/governance SSOT scope;
 - connect to a DB, external API, or AI API;
 - bypass `.agent/scripts` / `.agent/tests` gate implementations;
 - claim proof passed, completion, implemented, partial, or not_started status;
@@ -135,7 +137,7 @@ Do not use `.agent/tools` to:
 
 ## Proof / structure gate connectivity
 
-`.agent/tools` existence, executable permission, thin read-only entrypoint boundary, mutation-argument rejection, and no-authority-claim baseline output are gated by `.agent/tests/check-agent-tools-surface.sh` (structured verification delegated to `.agent/scripts/check_agent_tools_surface.py`), which is called as a delegated subcheck from `.agent/tests/check-structure.sh`. `.agent/tools`, `.agent/scripts/agent_tools/`, and the dedicated checker are enumerated in `.agent/docs/required-paths.yaml`. The connection is recorded in `.agent/docs/test-bundles.yaml` under the `agent-tools-proof-and-structure-gate` bundle against the `ssot_structure_policy_contract` proof edge in `docs/design/test-proof-manifest-ssot.yaml` (whose `required_when.changed_files` already covers `.agent/**`). This dedicated check verifies `.agent/tools`' own structural / read-only / no-authority contract only; it does not become SSOT authority, proof completion, or completion judgment for anything `.agent/tools` observes.
+The existing read-only observation tools' executable permission, thin entrypoint boundary, mutation-argument rejection, and no-authority-claim baseline output are gated by `.agent/tests/check-agent-tools-surface.sh` (structured verification delegated to `.agent/scripts/check_agent_tools_surface.py`), which is called as a delegated subcheck from `.agent/tests/check-structure.sh`. `.agent/tools`, `.agent/scripts/agent_tools/`, and the dedicated checker are enumerated in `.agent/docs/required-paths.yaml`. The connection is recorded in `.agent/docs/test-bundles.yaml` under the `agent-tools-proof-and-structure-gate` bundle against the `ssot_structure_policy_contract` proof edge in `docs/design/test-proof-manifest-ssot.yaml` (whose `required_when.changed_files` already covers `.agent/**`). This dedicated check verifies the existing observation tools' own structural / read-only / no-authority contract only; it does not become SSOT authority, proof completion, or completion judgment for anything `.agent/tools` observes.
 
 ## Advanced surface maps: deferred scope
 
