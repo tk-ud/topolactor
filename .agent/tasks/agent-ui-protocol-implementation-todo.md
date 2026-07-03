@@ -16,41 +16,38 @@ worktype: `design_change` → `implementation_change`
 
 ### 問題点
 
-現状の implementation protocol は、prompt / protocol / checklist / scenario-contract / required checks が個別に存在するが、Agent が 0→N の作業UIとして順序立てて踏む形になっていない。
+Agent は `./AGENTS.md` / `.agent/rules/rule.md` を読んでも、toolを作業UIとして踏む導線になっていない。
 
-特に以下が弱い。
-
-- Scenario Contract は「作れ」「diff照合しろ」と書かれているが、Agent-facing route として必須UI化されていない。
-- CheckLists は viewpoint template と checker script があるが、implementation_change の標準実行経路に gate として接続されていない。
-- `.agent/tools` は read-only observation surface として定義済みだが、prompt/protocol/ssot-map/checklist から条件解決して route card を吐く Agent UI tool がない。
-- Agent が protocol を読んで短期記憶で判断する形になっており、scope を route card に従って傾ける UI projection がない。
+また、tool使用時の uuid / datetime / task_name / worktype 証跡を `docs/governance/logs/tool.log` に残し、PR / summary に同じmetadataを書かせる契約がない。
 
 ### 目的
 
-prompt / protocol / checklist / ssot-map を正本として残したまま、`.agent/tools` に Agent UI CLI を構築し、条件に応じて以下を route card として吐けるようにする。
+`docs/governance/agent-ui-protocol-ssot.yaml` に従い、Agentが使う protocol UI tool を構築する。
 
-- worktype
-- required reads
-- target surfaces
-- triggered protocols
-- triggered checklists
-- scenario-contract 要否
-- substrate plan template
-- required checks
-- completion evidence skeleton
-- missing evidence
+tool は以下を満たす。
 
-Agent は tool が吐いた route card に従って scope を決め、実装・検証・completion output を行う。
+- Agentに task_name を入力させる。
+- Agentに worktype 番号を選ばせる。
+- worktype に応じた prompt を出す。
+- 対象SSOT名を入力させる。
+- SSOT section一覧を出す。
+- `[abc,def]` のように複数section指定を許可する。
+- 指定section配下だけを結合して出す。
+- SSOT選択に戻るか quit できる。
+- quit 時に scenario-contract を書かせる。
+- tool使用idを発行し、`docs/governance/logs/tool.log` に datetime / uuid / task_name / worktype を記録する。
+- PR / summary に datetime / uuid / task_name / worktype を書かせる。
+- agent実装終了後、worktype別test / checklist interview / check を実行し、合格なら pass を出す。
 
 ### 改善方針
 
 1. `docs/governance/agent-ui-protocol-ssot.yaml` を正本として読む。
-2. Agent UI CLI は `.agent/tools` に置く。
-3. tool は read-only とし、repo mutation / completion judgment / implemented 判定を行わない。
-4. prompt / protocol 本文を tool に複製しない。tool は参照・条件解決・route card projection に限定する。
-5. scripts/checkers の実体は `.agent/scripts` / `.agent/tests` / `.agent/checklists/check-*.sh` に残し、tool は必要に応じて command を提示または薄く呼び出す。
-6. Scenario Contract / CheckLists / Required Checks を route card 上の evidence gate として表示する。
-7. missing evidence がある場合、completion output に blocking として出す。
+2. `.agent/tools` に Agent-facing CLI を置く。
+3. tool出力は必要最低限にし、実行log垂れ流しを禁止する。
+4. prompt/protocol全文を無制限に出さず、worktype prompt と指定SSOT sectionのみ出す。
+5. `docs/governance/logs/tool.log` は compact one-line evidence log とし、checklist本文やscenario-contract本文は保存しない。
+6. tool は source mutation をしない。ただし usage log append はSSOT上の明示例外として扱う。
+7. local test flow は worktype別test → checklist interview → check → pass の順にする。
 
 ### 対応資料
 
@@ -59,18 +56,16 @@ Agent は tool が吐いた route card に従って scope を決め、実装・�
 - `AGENTS.md`
 - `.agent/rules/rule.md`
 - `.agent/README.md`
-- `.agent/prompt/design-change.md`
-- `.agent/protocols/design-change.md`
-- `.agent/prompt/implementation-change.md`
-- `.agent/protocols/implementation-change.md`
-- `.agent/protocols/scenario-contract.md`
-- `.agent/protocols/policy-judgment.md`
-- `.agent/checklists/README.md`
-- `.agent/checklists/policy-judgment.md`
-- `.agent/checklists/boundary-identity.md`
-- `.agent/checklists/registry-tensor-projection-continuity.md`
-- `.agent/docs/ssot-map.yaml`
 - `.agent/routes/worktype-required-protocols.yaml`
+- `.agent/prompt/audit.md`
+- `.agent/prompt/specific.md`
+- `.agent/prompt/implementation-change.md`
+- `.agent/prompt/design-change.md`
+- `.agent/prompt/todo-maintenance.md`
+- `.agent/prompt/existing-pr-update.md`
+- `.agent/protocols/scenario-contract.md`
+- `.agent/checklists/README.md`
+- `.agent/docs/ssot-map.yaml`
 - `docs/governance/agent-governance-routing-ssot.yaml`
 - `docs/governance/agent-governance-routing-ssot.md`
 - `docs/governance/agent-ui-protocol-ssot.yaml`
@@ -81,43 +76,39 @@ Agent は tool が吐いた route card に従って scope を決め、実装・�
 
 新規候補:
 
-- `docs/governance/agent-ui-protocol-ssot.yaml`
 - `.agent/tools/agent-ui`
 - `.agent/tools/agent_ui.py`
 - `.agent/tests/check-agent-ui-route.sh`
-- `.agent/tests/fixtures/agent-ui-route/*.json` or `.yaml`
+- `.agent/tests/fixtures/agent-ui-route/*.txt` or `.yaml`
+- `docs/governance/logs/tool.log`
 
 変更候補:
 
 - `.agent/docs/required-paths.yaml`
 - `.agent/routes/worktype-required-protocols.yaml`
-- `.agent/prompt/implementation-change.md`
-- `.agent/protocols/implementation-change.md`
-- `.agent/protocols/scenario-contract.md`
-- `.agent/checklists/README.md`
 - `.agent/README.md`
+- `AGENTS.md`
+- `.agent/rules/rule.md`
 
 既存 `.agent/tasks/todo.md` は触らない。
 
 ### 対象関数名 / コマンド名候補
 
 - `main`
-- `load_yaml_like`
-- `load_route_map`
-- `resolve_worktype`
-- `discover_target_surfaces`
-- `resolve_required_reads`
-- `resolve_triggered_protocols`
-- `resolve_triggered_checklists`
-- `resolve_scenario_contract_gate`
-- `emit_route_card`
-- `emit_substrate_plan_template`
-- `emit_completion_template`
-- `validate_route_card`
-- future command: `.agent/tools/agent-ui route`
-- future command: `.agent/tools/agent-ui read-set`
-- future command: `.agent/tools/agent-ui checklist`
-- future command: `.agent/tools/agent-ui verify`
+- `issue_usage_id`
+- `append_tool_log`
+- `select_worktype`
+- `emit_worktype_prompt`
+- `select_target_ssot`
+- `list_ssot_sections`
+- `emit_selected_sections`
+- `parse_section_selection`
+- `request_scenario_contract_on_quit`
+- `run_worktype_tests`
+- `run_checklist_interview`
+- `run_checks`
+- future command: `.agent/tools/agent-ui initial-contract`
+- future command: `.agent/tools/agent-ui local-test`
 
 ### 実装scope
 
@@ -125,40 +116,45 @@ Bundle単位で処理する。小粒PR化は禁止。
 
 このBundleで最低限完了させること:
 
-- [ ] `docs/governance/agent-ui-protocol-ssot.yaml` の内容に従い、Agent UI route card の schema / phase / evidence state を実装へ写像する。
-- [ ] `.agent/tools/agent-ui` を追加し、Agent が実行できるCLI入口を用意する。
-- [ ] CLI は `route` subcommand または同等の入口で、task text / optional changed files から route card を stdout に出す。
-- [ ] CLI は `.agent/routes/worktype-required-protocols.yaml`, `.agent/docs/ssot-map.yaml`, prompt/protocol/checklist index を参照して、required reads / triggered protocols / triggered checklists / required checks を出す。
-- [ ] CLI は repository mutation を行わない。
-- [ ] CLI output は SSOT authority / proof authority / completion judgment / implemented status evidence ではない旨を route card に含める。
-- [ ] Scenario Contract trigger が成立する場合、route card に `scenario_contract.required=true` と required fields / verification slot を出す。
-- [ ] CheckList trigger が成立する場合、route card に checklist file / trigger reason / checker command / not_required reason slot を出す。
-- [ ] implementation_change の route card で Substrate Plan template を出す。
-- [ ] required checks は structure check last を維持して出す。
-- [ ] missing evidence がある場合、completion skeleton に blocking として出す。
-- [ ] `.agent/tests/check-agent-ui-route.sh` または同等の executable check を追加し、route card の必須キー欠落を検出する。
-- [ ] `.agent/docs/required-paths.yaml` / `.agent/routes/worktype-required-protocols.yaml` / README 等、必要な governance route index を最小差分で更新する。
+- [ ] `AGENTS.md` / `.agent/rules/rule.md` から Agent が tool を使う導線を最小差分で追加する。
+- [ ] `.agent/tools/agent-ui` を追加する。
+- [ ] tool使用時に task_name を入力させる。
+- [ ] tool使用時に worktype 番号を選ばせる。
+- [ ] worktypeに応じた prompt を出す。
+- [ ] 対象SSOT名を入力させる。
+- [ ] 対象SSOTのsection一覧を出す。
+- [ ] `[abc,def]` のような複数section指定を受け付ける。
+- [ ] 指定section配下のみを結合して出す。
+- [ ] SSOT選択へ戻る / quit を選べる。
+- [ ] quit時に scenario-contract を書かせる。
+- [ ] datetime / uuid / task_name / worktype を `docs/governance/logs/tool.log` にcompact記録する。
+- [ ] PR / summary に datetime / uuid / task_name / worktype を書かせる出力契約を追加する。
+- [ ] local-test flow として worktype別test → checklist interview → check → pass を実装する。
+- [ ] 実行log垂れ流しを避け、tool出力を必要最低限にする。
+- [ ] tool.log に checklist本文 / scenario-contract本文 / verbose実行logを保存しない。
+- [ ] `.agent/tests/check-agent-ui-route.sh` または同等checkを追加する。
 
 ### OK軸
 
-- Agent UI tool が prompt/protocol/checklist/ssot-map を条件解決し、Agent-facing route card として作業UIを投影している。
-- tool は read-only で、repo mutation / semantic implemented 判定 / proof completion 判定を行わない。
-- Scenario Contract / CheckLists / Required Checks が route card 上で evidence gate として明示される。
-- Agent は route card に従って scope を傾け、missing evidence を completion output に出せる。
-- protocol/prompt の本文複製ではなく、参照・条件解決・projection に留まっている。
-- tests/checkers が route card の最低構造と必須keyを検査できる。
-- `docs/governance/agent-ui-protocol-ssot.yaml` と `docs/governance/agent-governance-routing-ssot.yaml` の責務境界が矛盾しない。
+- Agent が `AGENTS.md` / `.agent/rules/rule.md` の導線から tool を使う。
+- tool が uuid を発行し、`docs/governance/logs/tool.log` に datetime / uuid / task_name / worktype を残す。
+- PR / summary に datetime / uuid / task_name / worktype が出る。
+- tool出力が最小限で、実行logを垂れ流さない。
+- worktype prompt と指定SSOT sectionだけを出せる。
+- quit時に scenario-contract を要求する。
+- local-test が worktype別test → checklist interview → check → pass の順で動く。
+- `docs/governance/agent-ui-protocol-ssot.yaml` と矛盾しない。
 
 ### NG軸
 
-- tool が SSOT authority / proof authority / implemented 判定を持つ。
-- tool が repository file mutation を行う。
-- prompt/protocol本文を tool 内へ長文複製する。
-- Scenario Contract / CheckLists が route card に出ない。
-- route card が単なる説明文で、required reads / triggers / evidence state / missing evidence を構造化していない。
-- `.agent/tasks/todo.md` を更新する。
-- 小粒の route 表示だけで checklist / scenario / required checks 接続を残す。
-- structure check last を崩す。
+- toolを使わせる導線が `AGENTS.md` / `.agent/rules/rule.md` にない。
+- uuid / datetime / task_name / worktype の証跡が残らない。
+- PR / summary に tool usage metadata が出ない。
+- toolが実行logを長々とAgentに読ませる。
+- SSOT全体を毎回dumpする。
+- checklist本文やscenario-contract本文を `tool.log` に保存する。
+- toolが implemented / partial / not_started 判定を行う。
+- 既存 `.agent/tasks/todo.md` を更新する。
 
 ### Agent向け実行指示
 
@@ -170,6 +166,5 @@ Bundle単位で処理する。小粒PR化は禁止。
 4. `docs/governance/agent-ui-protocol-ssot.yaml` を正本として読む。
 5. `.agent/tasks/agent-ui-protocol-implementation-todo.md` の Bundle `agent-ui-protocolization` を処理する。
 6. 既存 `.agent/tasks/todo.md` は触らない。
-7. tool は read-only Agent UI projection として設計し、mutation / completion judgment / implemented 判定を持たせない。
-8. 実装後、追加した checker と既存 required checks を実行する。
-9. completion output に route card summary / missing evidence / check results を出す。
+7. 実装後、追加checkerと既存 required checks を実行する。
+8. completion output に datetime / uuid / task_name / worktype / local-test結果 / checklist結果 / check結果を出す。
