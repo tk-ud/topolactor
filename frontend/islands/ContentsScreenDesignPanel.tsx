@@ -1596,6 +1596,7 @@ export default function ContentsScreenDesignPanel({
           <AggregateTriggerAuthoringPanel
             step2LogicalEntityDefinitions={aggregateStep2Targets}
             step25RelationDefinitions={aggregateStep25Targets}
+            topologySystemName={design.topologySystemName}
             onPayloadChange={setAggregateTriggerDefinitions}
           />
 

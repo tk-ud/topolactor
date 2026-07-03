@@ -247,4 +247,37 @@ public class AggregateTriggerRepositoryLiveDbTests
         }
         return cs;
     }
+
+    /// <summary>
+    /// Seeds a real row in topology.abstract_function_manifests — the registry
+    /// AggregateTriggerDefinitionValidator.ValidateProcessingFunctionAuthorityAsync authorizes
+    /// processing_function_scope.function_id against.
+    /// </summary>
+    internal static async Task SeedAbstractFunctionManifestAsync(
+        string cs, string functionKey, string runtimeLane, string authorityScope, bool active = true)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO topology.abstract_function_manifests (function_key, runtime_lane, authority_scope, active)
+            VALUES (@function_key, @runtime_lane, @authority_scope, @active)
+            ON CONFLICT (function_key) DO UPDATE SET runtime_lane = EXCLUDED.runtime_lane, authority_scope = EXCLUDED.authority_scope, active = EXCLUDED.active;
+            """;
+        cmd.Parameters.AddWithValue("function_key", functionKey);
+        cmd.Parameters.AddWithValue("runtime_lane", runtimeLane);
+        cmd.Parameters.AddWithValue("authority_scope", authorityScope);
+        cmd.Parameters.AddWithValue("active", active);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    internal static async Task DeleteAbstractFunctionManifestAsync(string cs, string functionKey)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM topology.abstract_function_manifests WHERE function_key = @function_key";
+        cmd.Parameters.AddWithValue("function_key", functionKey);
+        await cmd.ExecuteNonQueryAsync();
+    }
 }

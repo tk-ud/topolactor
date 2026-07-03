@@ -776,7 +776,7 @@ chronological_scope_index:
       - cron/hook/client scheduler-to-manifest DB route (see aggregate_trigger_substrate_live_db_executable_proof)
       - full event -> aggregate -> threshold -> materialization execution (see aggregate_trigger_substrate_live_db_executable_proof)
       - admin/contents Step3 UI authoring for conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map (see aggregate_trigger_substrate_step3_dynamic_authoring_proof)
-      - admin/contents Step3 selection of processing_function_scope.function_id / operation_definition_id from a bounded processing-function registry (see aggregate_trigger_substrate_executable_proof_gap known_gap; no such registry exists in this codebase)
+      - admin/contents Step3 UI selector that lists registered processing-function options for interactive selection; backend registry authority and operation_definition_id derivation are proven separately (see aggregate_trigger_substrate_processing_function_authority_proof), and the remaining frontend selector-UX gap is tracked in aggregate_trigger_substrate_executable_proof_gap known_gap
 
   - proof_id: aggregate_trigger_substrate_live_db_executable_proof
     proof_order: 136
@@ -835,7 +835,7 @@ chronological_scope_index:
       - representative event -> aggregate -> threshold -> materialization scenarios (threshold_not_satisfied, materialized, duplicate_event_evidence, duplicate_materialization_guard, approval_required then granted) execute against a live database across the runtime, repository, and DB boundaries
     does_not_prove:
       - admin/contents Step3 UI authoring for conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map (see aggregate_trigger_substrate_step3_dynamic_authoring_proof)
-      - admin/contents Step3 selection of processing_function_scope.function_id / operation_definition_id from a bounded processing-function registry (see aggregate_trigger_substrate_executable_proof_gap known_gap; no such registry exists in this codebase)
+      - admin/contents Step3 UI selector that lists registered processing-function options for interactive selection; backend registry authority and operation_definition_id derivation are proven separately (see aggregate_trigger_substrate_processing_function_authority_proof), and the remaining frontend selector-UX gap is tracked in aggregate_trigger_substrate_executable_proof_gap known_gap
       - a dedicated autonomous cron/hook scheduling loop that resolves trigger_definition_id from runtime_orchestration.aggregate_trigger_definitions on a schedule; trigger origination remains the responsibility of the processing function / operation definition that owns scope per aggregate_trigger_substrate_contract.authority_boundary
 
   - proof_id: aggregate_trigger_substrate_step3_dynamic_authoring_proof
@@ -881,8 +881,55 @@ chronological_scope_index:
       - the panel does not emit a payload until conflict_key_fields and materialization_payload_map each have at least one entry, and rejects unsafe identifiers client-side before backend validation ever sees them
       - processing_function_scope.function_id / operation_definition_id are authored via safe-identifier-validated structured text input rather than hardcoded constants; backend AggregateTriggerDefinitionValidator remains the authority that rejects invalid values
     does_not_prove:
-      - selection of function_id/operation_definition_id from a bounded processing-function registry; no such registry surface exists yet in this codebase, so these two fields are validated free text rather than a dropdown of registered options — this is a structural boundary, not a defect, and should be revisited if/when a processing-function registry is introduced
+      - selection of function_id/operation_definition_id from a bounded processing-function registry via a live dropdown fed by an admin registry-listing operation (see aggregate_trigger_substrate_processing_function_authority_proof for the backend registry that now exists, and aggregate_trigger_substrate_executable_proof_gap known_gap for the remaining frontend selector UX gap)
       - live browser automation against a deployed admin route
+
+  - proof_id: aggregate_trigger_substrate_processing_function_authority_proof
+    proof_order: 138
+    scope_phase: aggregate_trigger_substrate_processing_function_authority
+    domain: backend_db
+    proof_type: integration_route_proof
+    source_contract: docs/design/runtime-orchestration-ssot.yaml aggregate_trigger_substrate_contract.processing_function_scope
+    target_contract: processing_function_scope.function_id authority against topology.abstract_function_manifests and operation_definition_id backend derivation from the admin_contents_step1 topologySystemName
+    ssot_refs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/abstract-function-primitive-registry-ssot.yaml
+    implementation_files:
+      - backend/runtime/AggregateTriggerDefinitionValidator.cs
+      - backend/runtime/AggregateTriggerRuntime.cs
+      - backend/runtime/AdminRuntime.cs
+      - backend/repository/NpgsqlAbstractFunctionManifestRepository.cs
+      - db/topology_tables.sql
+    test_files:
+      - backend/tests/Topolactor.Integration.Tests/AggregateTriggerProcessingFunctionAuthorityLiveDbTests.cs
+      - backend/tests/Topolactor.Integration.Tests/AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests.cs
+      - backend/tests/Topolactor.Integration.Tests/AggregateTriggerSubstrateRouteLiveDbTests.cs
+    runner_surfaces:
+      - .agent/tests/check-backend-tests.sh
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs: []
+    workflow_jobs:
+      - .github/workflows/backend-tests.yml::backend-tests
+    required_when:
+      changed_files:
+        - backend/runtime/AggregateTriggerDefinitionValidator.cs
+        - backend/runtime/AggregateTriggerRuntime.cs
+        - backend/runtime/AdminRuntime.cs
+        - backend/repository/NpgsqlAbstractFunctionManifestRepository.cs
+        - db/topology_tables.sql
+        - backend/tests/Topolactor.Integration.Tests/AggregateTriggerProcessingFunctionAuthorityLiveDbTests.cs
+    depends_on:
+      - aggregate_trigger_substrate_live_db_executable_proof
+      - backend_runtime_function_contract
+    unblocks: []
+    proves:
+      - processing_function_scope.function_id is authorized against the real topology.abstract_function_manifests registry (the same registry execute_abstract_function resolves against, extended with an aggregate_trigger_runtime runtime_lane value) via NpgsqlAbstractFunctionManifestRepository.LoadAsync, not accepted on safe-identifier syntax alone
+      - AggregateTriggerDefinitionValidator.ValidateProcessingFunctionAuthorityAsync fails closed against a live database for all four authority violations -- function_key not registered, manifest inactive, runtime_lane not aggregate_trigger_runtime, and authority_scope not equal to operation_definition_id
+      - AggregateTriggerRuntime invokes this authority check before appending event evidence when an IAbstractFunctionManifestRepository is wired (the production route via RuntimeTimelineScheduler -> ManifestDispatcher does wire it), and the four cron/hook/client scenario tests in AggregateTriggerSubstrateRouteLiveDbTests now seed a valid registry row and exercise this check end to end rather than skipping it
+      - AdminRuntime.assign_screen_data_shape derives processing_function_scope.operation_definition_id from the manifest's topologySystemName and overrides any client-submitted value before validation and persistence, and rejects assignment with AGGREGATE_PROCESSING_FUNCTION_NOT_FOUND (persisting nothing) when function_id is not a registered abstract function
+    does_not_prove:
+      - a frontend admin/contents Step3 selector that lists registered abstract_function_manifests rows for interactive selection; the Step3 function_id input remains a safe-identifier-validated free-text field validated by this backend authority check (see aggregate_trigger_substrate_executable_proof_gap known_gap)
 
 maintenance_rules:
   - Add or update a proof_id before claiming a new proof boundary.

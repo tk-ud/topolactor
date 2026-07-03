@@ -36,6 +36,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         var defId = Guid.NewGuid();
         var manifestId = Guid.NewGuid();
         await SeedActiveManifestAsync(cs, manifestId);
+        await SeedProcessingFunctionAsync(cs);
         var scheduler = CreateScheduler(cs);
         await scheduler.StartAsync(CancellationToken.None);
         try
@@ -58,6 +59,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
             await scheduler.StopAsync(CancellationToken.None);
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, defId);
             await DeleteManifestAsync(cs, manifestId);
+            await DeleteProcessingFunctionAsync(cs);
         }
     }
 
@@ -70,6 +72,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         var defId = Guid.NewGuid();
         var manifestId = Guid.NewGuid();
         await SeedActiveManifestAsync(cs, manifestId);
+        await SeedProcessingFunctionAsync(cs);
         var scheduler = CreateScheduler(cs);
         await scheduler.StartAsync(CancellationToken.None);
         try
@@ -84,6 +87,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
             await scheduler.StopAsync(CancellationToken.None);
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, defId);
             await DeleteManifestAsync(cs, manifestId);
+            await DeleteProcessingFunctionAsync(cs);
         }
     }
 
@@ -96,6 +100,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         var defId = Guid.NewGuid();
         var manifestId = Guid.NewGuid();
         await SeedActiveManifestAsync(cs, manifestId);
+        await SeedProcessingFunctionAsync(cs);
         var scheduler = CreateScheduler(cs);
         await scheduler.StartAsync(CancellationToken.None);
         try
@@ -110,6 +115,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
             await scheduler.StopAsync(CancellationToken.None);
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, defId);
             await DeleteManifestAsync(cs, manifestId);
+            await DeleteProcessingFunctionAsync(cs);
         }
     }
 
@@ -122,6 +128,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         var defId = Guid.NewGuid();
         var manifestId = Guid.NewGuid();
         await SeedActiveManifestAsync(cs, manifestId);
+        await SeedProcessingFunctionAsync(cs);
         var scheduler = CreateScheduler(cs);
         await scheduler.StartAsync(CancellationToken.None);
         try
@@ -145,6 +152,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
             await scheduler.StopAsync(CancellationToken.None);
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, defId);
             await DeleteManifestAsync(cs, manifestId);
+            await DeleteProcessingFunctionAsync(cs);
         }
     }
 
@@ -216,7 +224,7 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
     private static RuntimeTimelineScheduler CreateScheduler(string connectionString)
     {
         var repository = new NpgsqlAggregateTriggerRepository(connectionString);
-        var runtime = new AggregateTriggerRuntime(repository);
+        var runtime = new AggregateTriggerRuntime(repository, new NpgsqlAbstractFunctionManifestRepository(connectionString));
         var handlers = new Dictionary<string, IDispatchableRuntime> { ["aggregate_trigger_runtime"] = runtime };
 
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
@@ -269,6 +277,21 @@ public class AggregateTriggerSubstrateRouteLiveDbTests
         cmd.Parameters.AddWithValue("id", manifestId);
         await cmd.ExecuteNonQueryAsync();
     }
+
+    /// <summary>
+    /// Registers the processing_function_scope.function_id / operation_definition_id pair
+    /// used by AggregateTriggerRepositoryLiveDbTests.BuildDefinition ("live_db_test_function" /
+    /// "live_db_test_operation") in the real topology.abstract_function_manifests registry, so
+    /// AggregateTriggerRuntime's function-authority check (which CreateScheduler now wires with a
+    /// real NpgsqlAbstractFunctionManifestRepository) passes for these route-level scenario tests
+    /// instead of silently skipping the check.
+    /// </summary>
+    private static Task SeedProcessingFunctionAsync(string cs) =>
+        AggregateTriggerRepositoryLiveDbTests.SeedAbstractFunctionManifestAsync(
+            cs, "live_db_test_function", "aggregate_trigger_runtime", "live_db_test_operation");
+
+    private static Task DeleteProcessingFunctionAsync(string cs) =>
+        AggregateTriggerRepositoryLiveDbTests.DeleteAbstractFunctionManifestAsync(cs, "live_db_test_function");
 
     private static EndpointRequestDto BuildRequest(Guid defId, string eventId, string canonicalTriggerKind, string triggerSourceDetailKind, string conflictKey)
     {

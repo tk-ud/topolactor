@@ -4,7 +4,7 @@ using Topolactor.Schema;
 
 namespace Topolactor.Runtime;
 
-public class AggregateTriggerRuntime(AggregateTriggerRepository repository) : IDispatchableRuntime
+public class AggregateTriggerRuntime(AggregateTriggerRepository repository, IAbstractFunctionManifestRepository? abstractFunctionManifestRepository = null) : IDispatchableRuntime
 {
     public async Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
     {
@@ -19,6 +19,13 @@ public class AggregateTriggerRuntime(AggregateTriggerRepository repository) : ID
                 new HashSet<string>(runtimeRequest.DeclaredStep25RelationDefinitionIds, StringComparer.OrdinalIgnoreCase)).ToList();
             if (!AggregateTriggerVocabulary.CanonicalTriggerKinds.Contains(request.TriggerKind ?? runtimeRequest.Definition.TriggerSource.CanonicalTriggerKind)) validation.Add(new("AGGREGATE_TRIGGER_KIND_INVALID", "request trigger_kind must be cron, hook, or client."));
             if (validation.Count > 0) return new(false, null, validation);
+
+            if (abstractFunctionManifestRepository is not null)
+            {
+                var authorityError = await AggregateTriggerDefinitionValidator.ValidateProcessingFunctionAuthorityAsync(
+                    runtimeRequest.Definition, abstractFunctionManifestRepository, ct);
+                if (authorityError is not null) return new(false, null, [authorityError]);
+            }
 
             var evidence = new AggregateTriggerEventEvidence(runtimeRequest.Definition.TriggerDefinitionId, runtimeRequest.EventId, runtimeRequest.Definition.TriggerSource.CanonicalTriggerKind, runtimeRequest.Definition.TriggerSource.TriggerSourceDetailKind, runtimeRequest.EventPayload, runtimeRequest.Actor, runtimeRequest.Source);
             var append = await repository.AppendEventEvidenceAsync(evidence, ct);

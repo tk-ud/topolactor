@@ -29,16 +29,24 @@ public class AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests
 
         var manifestId = Guid.NewGuid();
         var definitionId = Guid.NewGuid();
+        var functionKey = $"aggregate-trigger-authoring-function-{definitionId:N}";
         var manifestRepo = new FakeAdminScreenDataShapeManifestRepository();
         manifestRepo.Seed(new ManifestDetailRecord(
             manifestId, null, DraftTopologyWithLogicalTables("orders", "id"), "draft",
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
         var aggregateTriggerRepo = new NpgsqlAggregateTriggerRepository(cs);
-        var runtime = CreateAdminRuntime(manifestRepo, aggregateTriggerRepo);
+        var abstractFunctionRepo = new NpgsqlAbstractFunctionManifestRepository(cs);
+        var runtime = CreateAdminRuntime(manifestRepo, aggregateTriggerRepo, abstractFunctionRepo);
 
         try
         {
+            // processing_function_scope.function_id authority: registered specifically for
+            // aggregate_trigger_runtime and scoped (authority_scope) to this operation's
+            // topologySystemName ("orders") — the backend-derived operation_definition_id.
+            await AggregateTriggerRepositoryLiveDbTests.SeedAbstractFunctionManifestAsync(
+                cs, functionKey, "aggregate_trigger_runtime", "orders");
+
             var payload = JsonSerializer.SerializeToElement(new
             {
                 manifestId = manifestId.ToString(),
@@ -47,7 +55,7 @@ public class AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests
                 {
                     new { tableName = "orders", columns = new[] { new { name = "id", dataType = "text", nullable = false } } },
                 },
-                aggregateTriggerDefinitions = new[] { ValidAggregateTriggerDefinition(definitionId, "orders", "orders") },
+                aggregateTriggerDefinitions = new[] { ValidAggregateTriggerDefinition(definitionId, functionKey, "orders", "orders") },
             });
 
             var (data, error) = await runtime.ExecuteDataAsync(
@@ -64,8 +72,10 @@ public class AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests
             // processing_function_scope required fields round-trip through the canonical table,
             // not restored empty (accepted_event_schema_ref / allowed_source_kinds / materialization_policy_ref
             // are dedicated columns, per docs/design/db-schema.yaml aggregate_trigger_definitions.required_columns).
-            Assert.Equal("aggregate_trigger_authoring_function", loaded.ProcessingFunctionScope.FunctionId);
-            Assert.Equal("contents_step3_operation", loaded.ProcessingFunctionScope.OperationDefinitionId);
+            Assert.Equal(functionKey, loaded.ProcessingFunctionScope.FunctionId);
+            // operation_definition_id is backend authority, derived from topologySystemName, and
+            // overrides whatever the client submitted (the request below submits a different value).
+            Assert.Equal("orders", loaded.ProcessingFunctionScope.OperationDefinitionId);
             Assert.Equal("contents.step3.aggregate_trigger.event.v1", loaded.ProcessingFunctionScope.AcceptedEventSchemaRef);
             Assert.Equal(["function_input_event"], loaded.ProcessingFunctionScope.AllowedSourceKinds);
             Assert.Equal("backend_runtime_authority_required", loaded.ProcessingFunctionScope.MaterializationPolicyRef);
@@ -80,10 +90,62 @@ public class AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests
         finally
         {
             await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, definitionId);
+            await AggregateTriggerRepositoryLiveDbTests.DeleteAbstractFunctionManifestAsync(cs, functionKey);
         }
     }
 
-    private static AdminRuntime CreateAdminRuntime(ManifestRepository manifestRepo, AggregateTriggerRepository aggregateTriggerRepo)
+    [Fact]
+    public async Task AssignScreenDataShape_UnregisteredFunctionId_FailsCloseAndPersistsNothing()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var manifestId = Guid.NewGuid();
+        var definitionId = Guid.NewGuid();
+        var unregisteredFunctionKey = $"unregistered-function-{definitionId:N}";
+        var manifestRepo = new FakeAdminScreenDataShapeManifestRepository();
+        manifestRepo.Seed(new ManifestDetailRecord(
+            manifestId, null, DraftTopologyWithLogicalTables("orders", "id"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var aggregateTriggerRepo = new NpgsqlAggregateTriggerRepository(cs);
+        var abstractFunctionRepo = new NpgsqlAbstractFunctionManifestRepository(cs);
+        var runtime = CreateAdminRuntime(manifestRepo, aggregateTriggerRepo, abstractFunctionRepo);
+
+        try
+        {
+            var payload = JsonSerializer.SerializeToElement(new
+            {
+                manifestId = manifestId.ToString(),
+                topologySystemName = "orders",
+                logicalTables = new[]
+                {
+                    new { tableName = "orders", columns = new[] { new { name = "id", dataType = "text", nullable = false } } },
+                },
+                aggregateTriggerDefinitions = new[] { ValidAggregateTriggerDefinition(definitionId, unregisteredFunctionKey, "orders", "orders") },
+            });
+
+            var (data, error) = await runtime.ExecuteDataAsync(
+                new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null),
+                default);
+
+            Assert.Null(data);
+            Assert.NotNull(error);
+            Assert.Equal("AGGREGATE_PROCESSING_FUNCTION_NOT_FOUND", error!.Code);
+
+            var loaded = await aggregateTriggerRepo.LoadDefinitionAsync(definitionId);
+            Assert.Null(loaded);
+        }
+        finally
+        {
+            await AggregateTriggerRepositoryLiveDbTests.CleanupAsync(cs, definitionId);
+        }
+    }
+
+    private static AdminRuntime CreateAdminRuntime(
+        ManifestRepository manifestRepo,
+        AggregateTriggerRepository aggregateTriggerRepo,
+        IAbstractFunctionManifestRepository? abstractFunctionRepo = null)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
         var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
@@ -99,7 +161,8 @@ public class AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests
             uiRepo,
             manifestRepository: manifestRepo,
             topologyRepository: topoRepo,
-            aggregateTriggerRepository: aggregateTriggerRepo);
+            aggregateTriggerRepository: aggregateTriggerRepo,
+            abstractFunctionManifestRepository: abstractFunctionRepo);
     }
 
     private static IReadOnlyList<JsonElement> DraftTopologyWithLogicalTables(string tableName, string columnName)
@@ -113,13 +176,15 @@ public class AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests
         return list;
     }
 
-    private static object ValidAggregateTriggerDefinition(Guid definitionId, string aggregateTargetId, string materializationTargetId) => new
+    private static object ValidAggregateTriggerDefinition(Guid definitionId, string functionId, string aggregateTargetId, string materializationTargetId) => new
     {
         trigger_definition_id = definitionId,
         trigger_source = new { canonical_trigger_kind = "client", trigger_source_detail_kind = "client_operation_event" },
         processing_function_scope = new
         {
-            function_id = "aggregate_trigger_authoring_function",
+            function_id = functionId,
+            // Intentionally different from topologySystemName ("orders") to prove the backend
+            // overrides operation_definition_id rather than trusting this client-submitted value.
             operation_definition_id = "contents_step3_operation",
             accepted_event_schema_ref = "contents.step3.aggregate_trigger.event.v1",
             allowed_source_kinds = new[] { "function_input_event" },

@@ -20,6 +20,7 @@ import {
 type Props = {
   step2LogicalEntityDefinitions: StepTarget[];
   step25RelationDefinitions: StepTarget[];
+  topologySystemName?: string;
   onPayloadChange?: (payload: AggregateTriggerDefinitionPayload[]) => void;
 };
 
@@ -40,6 +41,7 @@ const generatedValueOptions = [
 export default function AggregateTriggerAuthoringPanel({
   step2LogicalEntityDefinitions,
   step25RelationDefinitions,
+  topologySystemName,
   onPayloadChange,
 }: Props): JSX.Element {
   const targets = useMemo(
@@ -99,9 +101,11 @@ export default function AggregateTriggerAuthoringPanel({
   const [functionId, setFunctionId] = useState(
     "aggregate_trigger_authoring_function",
   );
-  const [operationDefinitionId, setOperationDefinitionId] = useState(
-    "contents_step3_operation",
-  );
+  // operation_definition_id is not authored here: AdminRuntime.assign_screen_data_shape
+  // derives it from the manifest's topologySystemName (admin/contents Step1) and overrides
+  // any submitted value, per runtime-orchestration-ssot.yaml
+  // aggregate_trigger_substrate_contract.processing_function_scope.operation_definition_id_authority_binding.
+  const operationDefinitionId = (topologySystemName ?? "").trim();
   const [conflictKeyFields, setConflictKeyFields] = useState<string[]>([]);
   const [deltaMapRows, setDeltaMapRows] = useState<DeltaMapRow[]>([
     { name: "event_count", amount: 1 },
@@ -137,9 +141,8 @@ export default function AggregateTriggerAuthoringPanel({
     .filter((n) => n.length > 0);
 
   const functionIdValid = isSafeAggregateTriggerIdentifier(functionId);
-  const operationDefinitionIdValid = isSafeAggregateTriggerIdentifier(
-    operationDefinitionId,
-  );
+  const operationDefinitionIdValid = operationDefinitionId.length > 0 &&
+    isSafeAggregateTriggerIdentifier(operationDefinitionId);
   const deltaMapValid = deltaMapRows.every((r) =>
     isSafeAggregateTriggerIdentifier(r.name)
   );
@@ -470,14 +473,18 @@ export default function AggregateTriggerAuthoringPanel({
         <label class="block">
           processing_function_scope.operation_definition_id
           <input
-            class={`mt-1 w-full rounded border px-2 py-1 font-mono ${
+            class={`mt-1 w-full rounded border bg-slate-50 px-2 py-1 font-mono text-slate-600 ${
               operationDefinitionIdValid ? "" : "border-red-400"
             }`}
             aria-label="aggregate operation definition id"
             value={operationDefinitionId}
-            onInput={(e) =>
-              setOperationDefinitionId((e.target as HTMLInputElement).value)}
+            readOnly
+            disabled
           />
+          <p class="mt-1 text-xs text-slate-500">
+            admin/contents Step1 の topologySystemName から backend
+            が導出する値です（ここでは編集できません）。
+          </p>
         </label>
       </div>
 

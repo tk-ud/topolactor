@@ -555,6 +555,7 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
       h(AggregateTriggerAuthoringPanel, {
         step2LogicalEntityDefinitions: step2Targets,
         step25RelationDefinitions: step25Targets,
+        topologySystemName: "orders",
         onPayloadChange: (payload) => seen.push(payload),
       }),
       container,

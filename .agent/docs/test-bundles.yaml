@@ -39,6 +39,7 @@ reverse_lookup:
       - frontend_admin_projection_expression_e2e_contract
       - aggregate_trigger_substrate_live_db_executable_proof
       - aggregate_trigger_substrate_step3_dynamic_authoring_proof
+      - aggregate_trigger_substrate_processing_function_authority_proof
       - aggregate_trigger_substrate_executable_proof_gap
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
@@ -109,11 +110,12 @@ reverse_lookup:
     proof_refs:
       - aggregate_trigger_substrate_live_db_executable_proof
       - aggregate_trigger_substrate_step3_dynamic_authoring_proof
+      - aggregate_trigger_substrate_processing_function_authority_proof
       - aggregate_trigger_substrate_executable_proof_gap
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - admin/contents Step3 selection of processing_function_scope.function_id / operation_definition_id from a bounded processing-function registry; no such registry exists in this codebase (live PostgreSQL, AdminRuntime persistence, scheduler-to-manifest DB routing, and Step3 structured authoring for conflict_key_fields/delta_map/threshold_policy/materialization_payload_map proofs are closed; see aggregate_trigger_substrate_live_db_executable_proof and aggregate_trigger_substrate_step3_dynamic_authoring_proof)
+      - a frontend admin/contents Step3 live dropdown selector that lists registered topology.abstract_function_manifests rows for function_id selection; no admin listing operation for that registry exists yet (backend registry authority -- fail-close validation of function_id against the registry and backend derivation of operation_definition_id from topologySystemName -- is closed, see aggregate_trigger_substrate_processing_function_authority_proof; live PostgreSQL, AdminRuntime persistence, scheduler-to-manifest DB routing, and Step3 structured authoring for conflict_key_fields/delta_map/threshold_policy/materialization_payload_map proofs are also closed, see aggregate_trigger_substrate_live_db_executable_proof and aggregate_trigger_substrate_step3_dynamic_authoring_proof)
 
   - bundle_id: agent-tools-proof-and-structure-gate
     roadmap_bundle_refs:

@@ -93,12 +93,13 @@ db_schema:
     abstract_function_manifests:
       category: abstract_function_manifest
       source_file: db/topology_tables.sql
-      role: execute_abstract_function manifest authority for runtime lane, authority scope, output shape, and projection deny keys
+      role: execute_abstract_function manifest authority for runtime lane, authority scope, output shape, and projection deny keys; also the registry AggregateTriggerDefinitionValidator.ValidateProcessingFunctionAuthorityAsync loads against for aggregate_trigger_substrate_contract.processing_function_scope.function_id authority (aggregate_trigger_runtime rows are an authority lookup source here, not dispatched through AbstractFunctionExecutor)
       authority_rules:
         - frontend_payload_is_not_table_column_join_output_authority
         - raw_sql_payload_is_prohibited
-        - runtime_lane_must_be_external_port_runtime_or_admin_runtime_or_runtime_executor
+        - runtime_lane_must_be_one_of_external_port_runtime_instance_port_runtime_admin_runtime_runtime_executor_scheduler_job_runtime_or_aggregate_trigger_runtime
         - secret_projection_denied_for_credential_signed_url_bucket_endpoint_storage_path_raw_storage_refs
+        - aggregate_trigger_runtime_rows_require_authority_scope_equal_to_the_aggregate_trigger_definitions_operation_definition_id
     abstract_function_steps:
       category: abstract_function_manifest
       source_file: db/topology_tables.sql

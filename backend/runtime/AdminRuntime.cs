@@ -36,6 +36,7 @@ public partial class AdminRuntime
     private readonly TeamMarkdownRepository? _teamMarkdownRepository;
     private readonly IBackendErrorEvidenceAppender? _errorAppender;
     private readonly AggregateTriggerRepository? _aggregateTriggerRepository;
+    private readonly IAbstractFunctionManifestRepository? _abstractFunctionManifestRepository;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -72,7 +73,8 @@ public partial class AdminRuntime
         TeamMarkdownRepository? teamMarkdownRepository = null,
         ISchedulerJobManifestRepository? schedulerJobManifestRepository = null,
         IBackendErrorEvidenceAppender? errorAppender = null,
-        AggregateTriggerRepository? aggregateTriggerRepository = null)
+        AggregateTriggerRepository? aggregateTriggerRepository = null,
+        IAbstractFunctionManifestRepository? abstractFunctionManifestRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -96,6 +98,7 @@ public partial class AdminRuntime
         _schedulerJobManifestRepository = schedulerJobManifestRepository;
         _errorAppender = errorAppender;
         _aggregateTriggerRepository = aggregateTriggerRepository;
+        _abstractFunctionManifestRepository = abstractFunctionManifestRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -3153,7 +3156,9 @@ public partial class AdminRuntime
             ? topologySystemName
             : existingTopologySystemName;
 
-        if (request.AggregateTriggerDefinitions is { Count: > 0 } aggregateTriggerDefinitions)
+        IReadOnlyList<AggregateTriggerDefinition> effectiveAggregateTriggerDefinitions =
+            request.AggregateTriggerDefinitions ?? Array.Empty<AggregateTriggerDefinition>();
+        if (request.AggregateTriggerDefinitions is { Count: > 0 } requestedAggregateTriggerDefinitions)
         {
             var step2Ids = new HashSet<string>(
                 draftTables.Select(t => t.TableName).Where(s => !string.IsNullOrWhiteSpace(s)),
@@ -3163,11 +3168,41 @@ public partial class AdminRuntime
                     .Where(r => !string.IsNullOrWhiteSpace(r.LocalTableRef) && !string.IsNullOrWhiteSpace(r.JoinTableRef))
                     .Select(r => $"{r.LocalTableRef!.Trim()}->{r.JoinTableRef!.Trim()}"),
                 StringComparer.OrdinalIgnoreCase);
+
+            // processing_function_scope.operation_definition_id is backend authority, derived from the
+            // manifest's own topologySystemName (admin-console-workflow-ssot.yaml aggregate_trigger_step3_extension_contract
+            // owning_step: admin_contents_step3_operation_definition). Frontend-submitted operation_definition_id
+            // is never treated as authority; it is overridden here regardless of what the client sent.
+            var aggregateTriggerDefinitions = requestedAggregateTriggerDefinitions
+                .Select(definition => definition with
+                {
+                    ProcessingFunctionScope = definition.ProcessingFunctionScope with
+                    {
+                        OperationDefinitionId = effectiveTopologySystemName!,
+                    },
+                })
+                .ToList();
+
             foreach (var definition in aggregateTriggerDefinitions)
             {
                 var aggregateErrors = AggregateTriggerDefinitionValidator
                     .Validate(definition, step2Ids, step25Ids);
                 if (aggregateErrors.Count > 0) return (null, aggregateErrors[0]);
+            }
+
+            // processing_function_scope.function_id must reference an existing, active abstract function
+            // registered specifically for the aggregate_trigger_runtime lane and scoped to this operation
+            // (authority_scope == operation_definition_id) — the same authority-scope match pattern
+            // AbstractFunctionExecutor already enforces for execute_abstract_function. This is the backend
+            // authority check; safe-identifier validation alone does not make function_id SSOT-compliant.
+            if (_abstractFunctionManifestRepository is not null)
+            {
+                foreach (var definition in aggregateTriggerDefinitions)
+                {
+                    var authorityError = await AggregateTriggerDefinitionValidator.ValidateProcessingFunctionAuthorityAsync(
+                        definition, _abstractFunctionManifestRepository, ct);
+                    if (authorityError is not null) return (null, authorityError);
+                }
             }
 
             // Canonical structured definition persistence authority (runtime_orchestration.aggregate_trigger_definitions,
@@ -3178,6 +3213,8 @@ public partial class AdminRuntime
                 foreach (var definition in aggregateTriggerDefinitions)
                     await _aggregateTriggerRepository.SaveDefinitionAsync(definition, ct);
             }
+
+            effectiveAggregateTriggerDefinitions = aggregateTriggerDefinitions;
         }
 
         var tableRef = !string.IsNullOrWhiteSpace(request.TableRef)
@@ -3223,7 +3260,7 @@ public partial class AdminRuntime
             searchConditions = request.SearchConditions ?? Array.Empty<AdminManifestSearchConditionDto>(),
             havingConditions = request.HavingConditions ?? Array.Empty<AdminManifestHavingConditionDto>(),
             displayColumnMode = request.DisplayColumnMode,
-            aggregateTriggerDefinitions = request.AggregateTriggerDefinitions ?? Array.Empty<AggregateTriggerDefinition>(),
+            aggregateTriggerDefinitions = effectiveAggregateTriggerDefinitions,
             screenReadQueryWiring = ScreenReadQueryWiringBuilder.Build(
                 request.SearchConditions,
                 request.HavingConditions,
