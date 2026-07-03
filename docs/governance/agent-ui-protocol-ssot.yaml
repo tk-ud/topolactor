@@ -22,6 +22,18 @@ agent_protocols:
     - When an Agent uses the tool, issue a usage id and log datetime, uuid, task_name, and worktype to docs/governance/logs/tool.log.
     - Require PRs and summaries to include datetime, uuid, task_name, and worktype.
 
+  design_split:
+    flow_controller: >-
+      The user-facing tool flow owns input order and transitions: initial_contract,
+      implementation phase, and agent_local_test.
+    output_layer: >-
+      Each flow step must emit compact structured output: selected prompt,
+      selected SSOT sections, scenario-contract template/result, checklist result,
+      check result, missing evidence, and completion metadata.
+    adoption_rule: >-
+      The flow controller is the outer frame. The output layer is attached to
+      each step of that frame; it is not a separate competing workflow.
+
   tool_overview:
     tool_principles:
       - Keep output minimal and reduce context load.
@@ -58,24 +70,58 @@ agent_protocols:
     steps:
       - number: 1
         action: Ask the Agent to enter a task_name when using the tool.
+        output_layer:
+          - usage_metadata_partial
       - number: 2
         action: Ask the Agent to select a worktype number.
+        output_layer:
+          - worktype
+          - worktype_prompt_path
+          - usage_metadata_completed
       - number: 3
         action: Emit the prompt corresponding to the selected worktype.
+        output_layer:
+          - selected_prompt_excerpt
+          - required_reads_from_prompt
+          - protocol_trigger_hints
       - number: 4
         action: Ask the Agent to enter a target SSOT name.
+        output_layer:
+          - target_ssot_name
+          - target_ssot_path
+          - ssot_resolution_status
       - number: 5
         action: Output the section list for the target SSOT.
+        output_layer:
+          - section_list
       - number: 6
         action: Allow the Agent to specify multiple section names, for example [abc,def].
+        output_layer:
+          - selected_section_names
       - number: 7
         action: Concatenate and output the selected section subtrees only.
+        output_layer:
+          - selected_section_subtrees
+          - selected_ssot_sections_summary
       - number: 8
         action: Return to step 4, or allow quit.
+        output_layer:
+          - current_selected_ssot_sections
+          - missing_required_selection_if_any
       - number: 9
         action: When quit is selected, require the Agent to write a scenario-contract.
+        output_layer:
+          - scenario_contract_template
+          - scenario_contract_result
+          - missing_evidence_if_any
       - number: 10
         action: End initial contract.
+        output_layer:
+          - initial_contract_summary
+          - datetime
+          - uuid
+          - task_name
+          - worktype
 
   agent_implementation_phase:
     start:
@@ -84,18 +130,46 @@ agent_protocols:
     end:
       - Agent finishes implementation before running the local-test tool flow.
       - Agent must preserve the tool usage metadata for PR and summary output.
+    output_layer:
+      - implementation_start_metadata
+      - implementation_end_metadata
+      - selected_ssot_sections_summary
+      - scenario_contract_summary
 
   tool_agent_local_test_flow:
     name: agent_local_test
     steps:
       - number: 1
         action: Run tests matching the selected worktype.
+        output_layer:
+          - worktype_test_commands
+          - worktype_test_result
       - number: 2
         action: Run checklist interview.
+        output_layer:
+          - checklist_interview_items
+          - checklist_result
+          - missing_checklist_answers_if_any
       - number: 3
         action: Run checks.
+        output_layer:
+          - check_commands
+          - check_result
+          - missing_evidence_if_any
       - number: 4
         action: If all required items pass, emit pass.
+        output_layer:
+          - pass_or_fail
+          - completion_summary
+          - datetime
+          - uuid
+          - task_name
+          - worktype
+          - selected_ssot_sections
+          - scenario_contract_summary
+          - checklist_result
+          - check_result
+          - missing_evidence_if_any
 
   usage_log_contract:
     path: docs/governance/logs/tool.log
@@ -165,4 +239,5 @@ agent_protocols:
       - local_test_result
       - checklist_result
       - check_result
+      - missing_evidence_if_any
     pass_rule: agent_local_test flow must pass before completion is reported as pass.
