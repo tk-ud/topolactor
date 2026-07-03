@@ -75,6 +75,78 @@ public class AggregateTriggerSubstrateTests
         Assert.Contains(invalidTarget.Errors, e => e.Code == "AGGREGATE_MATERIALIZATION_TARGET_INVALID");
     }
 
+    [Fact]
+    public async Task Runtime_HonorsTransactionBoundary_EventAppendOnly_NeverUpsertsOrMaterializes()
+    {
+        var repo = new InMemoryAggregateTriggerRepository();
+        var runtime = new AggregateTriggerRuntime(repo);
+        var def = Definition() with { TransactionBoundary = "event_append_only" };
+
+        var r1 = await runtime.ExecuteAsync(BuildRequest("event-1", def), null);
+        Assert.True(r1.Success);
+        Assert.Contains("event_appended_only", r1.Emission!.Data!.Value.GetRawText());
+
+        // No aggregate current row must exist: this boundary never reaches upsert.
+        var current = await repo.AtomicUpsertCurrentAsync(def.TriggerDefinitionId, "a", new Dictionary<string, decimal>());
+        Assert.False(current.Counters.ContainsKey("selected"));
+    }
+
+    [Fact]
+    public async Task Runtime_HonorsTransactionBoundary_AppendAndUpsert_NeverMaterializes()
+    {
+        var repo = new InMemoryAggregateTriggerRepository();
+        var runtime = new AggregateTriggerRuntime(repo);
+        var def = Definition() with { TransactionBoundary = "event_append_and_aggregate_upsert" };
+
+        var r1 = await runtime.ExecuteAsync(BuildRequest("event-1", def), null);
+        Assert.Contains("threshold_not_satisfied", r1.Emission!.Data!.Value.GetRawText());
+        var r2 = await runtime.ExecuteAsync(BuildRequest("event-2", def), null);
+        Assert.Contains("threshold_satisfied_materialization_out_of_scope", r2.Emission!.Data!.Value.GetRawText());
+        Assert.DoesNotContain("\"materialized\"", r2.Emission!.Data!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task Repository_AtomicUpsertAndMaterialize_CommitsUpsertAndMaterializationTogetherAndGuardsDuplicate()
+    {
+        var repo = new InMemoryAggregateTriggerRepository();
+        var def = Definition();
+
+        var r1 = await repo.AtomicUpsertAndMaterializeAsync(def, "a", "event-1",
+            row => AggregateTriggerConditionEvaluator.Evaluate(def.ThresholdPolicy, row)
+                ? AggregateTriggerMaterializationDecision.Materialize
+                : AggregateTriggerMaterializationDecision.ThresholdNotSatisfied);
+        Assert.Equal(AggregateTriggerMaterializationDecision.ThresholdNotSatisfied, r1.Decision);
+        Assert.Null(r1.Materialization);
+
+        var r2 = await repo.AtomicUpsertAndMaterializeAsync(def, "a", "event-2",
+            row => AggregateTriggerConditionEvaluator.Evaluate(def.ThresholdPolicy, row)
+                ? AggregateTriggerMaterializationDecision.Materialize
+                : AggregateTriggerMaterializationDecision.ThresholdNotSatisfied);
+        Assert.Equal(AggregateTriggerMaterializationDecision.Materialize, r2.Decision);
+        Assert.NotNull(r2.Materialization);
+        Assert.True(r2.Materialization!.Created);
+
+        var r3 = await repo.AtomicUpsertAndMaterializeAsync(def, "a", "event-3",
+            _ => AggregateTriggerMaterializationDecision.Materialize);
+        Assert.False(r3.Materialization!.Created);
+        Assert.Equal(r2.Materialization.MaterializationId, r3.Materialization.MaterializationId);
+    }
+
+    [Fact]
+    public async Task Repository_SaveAndLoadDefinition_RoundTripsCanonicalPersistedFields()
+    {
+        var repo = new InMemoryAggregateTriggerRepository();
+        var def = Definition();
+        await repo.SaveDefinitionAsync(def);
+
+        var loaded = await repo.LoadDefinitionAsync(def.TriggerDefinitionId);
+        Assert.NotNull(loaded);
+        Assert.Equal(def.ExecutionScope, loaded!.ExecutionScope);
+        Assert.Equal(def.TransactionBoundary, loaded.TransactionBoundary);
+        Assert.Equal(def.AggregateTargetBinding.TargetId, loaded.AggregateTargetBinding.TargetId);
+        Assert.Equal(def.ApprovalPolicy, loaded.ApprovalPolicy);
+    }
+
     private static EndpointRequestDto BuildRequest(string eventId, AggregateTriggerDefinition? definition = null, IReadOnlyList<string>? declaredStep2 = null, IReadOnlyList<string>? declaredStep25 = null)
     {
         var payload = JsonSerializer.SerializeToElement(new AggregateTriggerRuntimeRequest(definition ?? Definition(), eventId, "a", JsonSerializer.SerializeToElement(new { entity_id = "a" }), declaredStep2 ?? ["defined_entity"], declaredStep25 ?? ["defined_relation"], "actor", "ui", false));

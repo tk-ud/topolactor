@@ -530,21 +530,32 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
     await flushUpdates();
 
     const selects = Array.from(container.querySelectorAll("select"));
-    assertEquals(selects.length, 4);
+    assertEquals(selects.length, 7);
     (selects[0] as HTMLSelectElement).value = "hook";
     selects[0].dispatchEvent(new Event("input", { bubbles: true }));
     selects[0].dispatchEvent(new Event("change", { bubbles: true }));
     (selects[1] as HTMLSelectElement).value = "hook_event";
     selects[1].dispatchEvent(new Event("input", { bubbles: true }));
     selects[1].dispatchEvent(new Event("change", { bubbles: true }));
-    (selects[2] as HTMLSelectElement).value =
-      "step2_logical_entity_definition:invoices";
+    (selects[2] as HTMLSelectElement).value = "operation_instance";
     selects[2].dispatchEvent(new Event("input", { bubbles: true }));
     selects[2].dispatchEvent(new Event("change", { bubbles: true }));
     (selects[3] as HTMLSelectElement).value =
-      "step2_5_relation_definition:orders->customers";
+      "event_append_aggregate_upsert_and_materialization";
     selects[3].dispatchEvent(new Event("input", { bubbles: true }));
     selects[3].dispatchEvent(new Event("change", { bubbles: true }));
+    (selects[4] as HTMLSelectElement).value =
+      "require_backend_approval_before_materialization";
+    selects[4].dispatchEvent(new Event("input", { bubbles: true }));
+    selects[4].dispatchEvent(new Event("change", { bubbles: true }));
+    (selects[5] as HTMLSelectElement).value =
+      "step2_logical_entity_definition:invoices";
+    selects[5].dispatchEvent(new Event("input", { bubbles: true }));
+    selects[5].dispatchEvent(new Event("change", { bubbles: true }));
+    (selects[6] as HTMLSelectElement).value =
+      "step2_5_relation_definition:orders->customers";
+    selects[6].dispatchEvent(new Event("input", { bubbles: true }));
+    selects[6].dispatchEvent(new Event("change", { bubbles: true }));
     await flushUpdates();
     await flushUpdates();
 
@@ -554,6 +565,15 @@ Deno.test("contents aggregate trigger Step3 UI: select changes drive preview and
     assertEquals(
       latest.trigger_source.trigger_source_detail_kind,
       "hook_event",
+    );
+    assertEquals(latest.execution_scope, "operation_instance");
+    assertEquals(
+      latest.transaction_boundary,
+      "event_append_aggregate_upsert_and_materialization",
+    );
+    assertEquals(
+      latest.approval_policy,
+      "require_backend_approval_before_materialization",
     );
     assertEquals(latest.aggregate_target_binding.target_id, "invoices");
     assertEquals(

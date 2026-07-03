@@ -771,10 +771,70 @@ chronological_scope_index:
     does_not_prove:
       - live browser automation against a deployed admin route
       - complete interaction coverage for every ui-builder control or manifests child control
-      - live PostgreSQL application proof for aggregate trigger tables and repository statements
-      - aggregate trigger definition persistence beyond validated screen_data_shape topology serialization
-      - cron/hook/client scheduler-to-manifest DB route
-      - full event -> aggregate -> threshold -> materialization execution
+      - live PostgreSQL application proof for aggregate trigger tables and repository statements (see aggregate_trigger_substrate_live_db_executable_proof)
+      - aggregate trigger definition persistence beyond validated screen_data_shape topology serialization (see aggregate_trigger_substrate_live_db_executable_proof)
+      - cron/hook/client scheduler-to-manifest DB route (see aggregate_trigger_substrate_live_db_executable_proof)
+      - full event -> aggregate -> threshold -> materialization execution (see aggregate_trigger_substrate_live_db_executable_proof)
+      - admin/contents Step3 UI authoring for processing_function_scope selection, conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map (see aggregate_trigger_substrate_executable_proof_gap)
+
+  - proof_id: aggregate_trigger_substrate_live_db_executable_proof
+    proof_order: 136
+    scope_phase: aggregate_trigger_substrate_live_db_and_route_proof
+    domain: backend_db
+    proof_type: integration_route_proof
+    source_contract: docs/design/runtime-orchestration-ssot.yaml aggregate_trigger_substrate_contract
+    target_contract: live PostgreSQL aggregate trigger tables/repository, AdminRuntime canonical definition persistence route, and cron/hook/client scheduler-to-manifest-dispatcher-to-runtime route
+    ssot_refs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/abstract-function-primitive-registry-ssot.yaml
+    implementation_files:
+      - backend/repository/AggregateTriggerRepository.cs
+      - backend/repository/NpgsqlAggregateTriggerRepository.cs
+      - backend/runtime/AggregateTriggerRuntime.cs
+      - backend/runtime/AdminRuntime.cs
+      - backend/scheduler/RuntimeTimelineScheduler.cs
+      - backend/runtime/ManifestDispatcher.cs
+      - db/runtime_orchestration_tables.sql
+    test_files:
+      - backend/tests/Topolactor.Integration.Tests/AggregateTriggerRepositoryLiveDbTests.cs
+      - backend/tests/Topolactor.Integration.Tests/AggregateTriggerSubstrateRouteLiveDbTests.cs
+      - backend/tests/Topolactor.Integration.Tests/AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/AggregateTriggerSubstrateTests.cs
+    runner_surfaces:
+      - .agent/tests/check-backend-tests.sh
+      - .agent/tests/check-runtime-environment.sh
+      - .agent/tests/check-test-proof-manifest-integrity.sh
+    evidence_inputs: []
+    workflow_jobs:
+      - .github/workflows/backend-tests.yml::backend-tests
+      - .github/workflows/unified-test-gate.yml::runtime-environment-gate
+    required_when:
+      changed_files:
+        - backend/repository/AggregateTriggerRepository.cs
+        - backend/repository/NpgsqlAggregateTriggerRepository.cs
+        - backend/runtime/AggregateTriggerRuntime.cs
+        - backend/runtime/AdminRuntime.cs
+        - backend/scheduler/RuntimeTimelineScheduler.cs
+        - backend/runtime/ManifestDispatcher.cs
+        - db/runtime_orchestration_tables.sql
+        - backend/tests/Topolactor.Integration.Tests/AggregateTriggerRepositoryLiveDbTests.cs
+        - backend/tests/Topolactor.Integration.Tests/AggregateTriggerSubstrateRouteLiveDbTests.cs
+        - backend/tests/Topolactor.Integration.Tests/AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests.cs
+    depends_on:
+      - db_schema_seed_contract
+      - admin_workflow_ui_assurance_substrate_contract
+    unblocks: []
+    proves:
+      - live PostgreSQL application of db/runtime_orchestration_tables.sql and NpgsqlAggregateTriggerRepository fixed SQL templates for idempotent event evidence append, atomic aggregate current upsert, threshold evaluation, controlled materialization, and duplicate materialization guard
+      - aggregate current upsert and materialization evidence append commit under the same backend transaction (Npgsql xmin equality proof) when materialization is attempted, closing the transaction_boundary.atomicity_rule and avoiding an app-side read -> count++ -> update race
+      - AdminRuntime.assign_screen_data_shape persists validator-accepted aggregate trigger definitions to the canonical runtime_orchestration.aggregate_trigger_definitions table via AggregateTriggerRepository.SaveDefinitionAsync, in addition to the screen_data_shape authoring-draft projection
+      - cron, hook, and client triggers all reach AggregateTriggerRuntime and NpgsqlAggregateTriggerRepository through the same RuntimeTimelineScheduler -> ManifestDispatcher route against a live database
+      - representative event -> aggregate -> threshold -> materialization scenarios (threshold_not_satisfied, materialized, duplicate_event_evidence, duplicate_materialization_guard, approval_required then granted) execute against a live database across the runtime, repository, and DB boundaries
+    does_not_prove:
+      - admin/contents Step3 UI authoring for processing_function_scope selection, conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map (see aggregate_trigger_substrate_executable_proof_gap)
+      - a dedicated autonomous cron/hook scheduling loop that resolves trigger_definition_id from runtime_orchestration.aggregate_trigger_definitions on a schedule; trigger origination remains the responsibility of the processing function / operation definition that owns scope per aggregate_trigger_substrate_contract.authority_boundary
 
 maintenance_rules:
   - Add or update a proof_id before claiming a new proof boundary.
@@ -787,23 +847,19 @@ maintenance_rules:
 aggregate_trigger_substrate_known_gaps:
   - proof_id: aggregate_trigger_substrate_executable_proof_gap
     proof_order: 140
-    scope_phase: aggregate_trigger_substrate_future_implementation
-    domain: cross_domain
+    scope_phase: aggregate_trigger_substrate_step3_dynamic_authoring
+    domain: frontend
     proof_type: known_gap
-    source_contract: docs/design/runtime-orchestration-ssot.yaml aggregate_trigger_substrate_contract
-    target_contract: backend/admin/db executable aggregate trigger behavior
+    source_contract: docs/design/admin-console-workflow-ssot.yaml aggregate_trigger_step3_extension_contract
+    target_contract: admin/contents Step3 structured authoring UI for the remaining aggregate_trigger_step3_extension_contract.ui_authoring_boundary.allowed actions
     ssot_refs:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/db-schema.yaml
       - docs/design/abstract-function-primitive-registry-ssot.yaml
     implementation_files:
-      - backend/runtime/AggregateTriggerRuntime.cs
-      - backend/repository/AggregateTriggerRepository.cs
-      - backend/repository/NpgsqlAggregateTriggerRepository.cs
-      - frontend/islands/**
-      - frontend/components/**
-      - db/*.sql
+      - frontend/components/AggregateTriggerAuthoringPanel.tsx
+      - frontend/lib/aggregateTriggerAuthoring.ts
     test_files: []
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
@@ -814,21 +870,31 @@ aggregate_trigger_substrate_known_gaps:
     workflow_jobs: []
     required_when:
       changed_files:
-        - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
-        - docs/design/db-schema.yaml
-        - docs/design/abstract-function-primitive-registry-ssot.yaml
-        - backend/**
-        - frontend/**
-        - db/**/*.sql
+        - frontend/components/AggregateTriggerAuthoringPanel.tsx
+        - frontend/lib/aggregateTriggerAuthoring.ts
     depends_on:
       - db_schema_seed_contract
       - backend_runtime_function_contract
     unblocks: []
-    known_gap_reason: Partial implementation and local contract tests now exist for the backend runtime, validator, repository fixed SQL templates, DB DDL, frontend structured authoring helper, admin workflow UI assurance substrate, AdminRuntime assign_screen_data_shape validator gate, idempotent event append, atomic aggregate upsert, threshold evaluation, controlled materialization, and duplicate guard. This known gap remains open because those local contract proofs do not yet constitute full executable proof across live PostgreSQL application, aggregate trigger definition persistence beyond validated screen_data_shape serialization, cron/hook/client scheduler-to-manifest DB routing, and end-to-end event -> aggregate -> threshold -> materialization execution.
+    known_gap_reason: >-
+      Backend runtime/validator/repository, live PostgreSQL application, the aggregate upsert +
+      materialization evidence append single-transaction boundary, AdminRuntime canonical
+      definition persistence (runtime_orchestration.aggregate_trigger_definitions), and
+      cron/hook/client scheduler-to-manifest-dispatcher-to-runtime route proofs are now closed
+      (see aggregate_trigger_substrate_live_db_executable_proof). This known gap remains open
+      because admin/contents Step3 (AggregateTriggerAuthoringPanel.tsx) still hardcodes
+      processing_function_scope (function_id/operation_definition_id), conflict_key_fields,
+      delta_map, threshold_policy (minimum_trial_count/ratio fields/operator/target_ratio), and
+      materialization_payload_map instead of exposing them as structured selectors per
+      aggregate_trigger_step3_extension_contract.ui_authoring_boundary.allowed
+      (select_processing_function_or_operation_definition,
+      select_conflict_key_fields_from_target,
+      configure_delta_map_from_declared_event_and_target_fields,
+      configure_threshold_policy_minimum_trial_count_ratio_operator,
+      configure_materialization_payload_map_from_allowed_sources). canonical_trigger_kind,
+      trigger_source_detail_kind, execution_scope, transaction_boundary, approval_policy, and
+      aggregate/materialization target selection are already exposed as structured selectors.
     proves: []
     does_not_prove:
-      - live PostgreSQL application proof for runtime_orchestration aggregate trigger tables and repository statements
-      - AdminRuntime definition persistence route for aggregate trigger definitions
-      - cron/hook/client scheduler-to-manifest DB route
-      - full executable event -> aggregate -> threshold -> materialization proof across admin, runtime, repository, and DB boundaries
+      - admin/contents Step3 structured selector authoring for processing_function_scope, conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map

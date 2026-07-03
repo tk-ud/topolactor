@@ -297,7 +297,9 @@ public class AdminRuntimeManifestManagementTests
             manifestId, null, DraftTopologyWithLogicalTables("orders", "id"), "draft",
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
 
-        var runtime = CreateRuntime(repo);
+        var aggregateTriggerRepo = new InMemoryAggregateTriggerRepository();
+        var runtime = CreateRuntime(repo, aggregateTriggerRepo: aggregateTriggerRepo);
+        var definitionId = Guid.NewGuid().ToString();
         var payload = JsonSerializer.SerializeToElement(new
         {
             manifestId = manifestId.ToString(),
@@ -312,7 +314,7 @@ public class AdminRuntimeManifestManagementTests
             },
             aggregateTriggerDefinitions = new[]
             {
-                ValidAggregateTriggerDefinition("orders", "orders"),
+                ValidAggregateTriggerDefinition("orders", "orders", definitionId),
             },
         });
 
@@ -328,6 +330,12 @@ public class AdminRuntimeManifestManagementTests
         var definitions = shapeEntry.GetProperty("aggregateTriggerDefinitions").EnumerateArray().ToList();
         Assert.Single(definitions);
         Assert.Equal("orders", definitions[0].GetProperty("aggregate_target_binding").GetProperty("target_id").GetString());
+
+        // Canonical execution-authority persistence route (runtime_orchestration.aggregate_trigger_definitions),
+        // in addition to the screen_data_shape authoring-draft projection asserted above.
+        var persisted = await aggregateTriggerRepo.LoadDefinitionAsync(Guid.Parse(definitionId));
+        Assert.NotNull(persisted);
+        Assert.Equal("orders", persisted!.AggregateTargetBinding.TargetId);
     }
 
     [Fact]
@@ -807,9 +815,9 @@ public class AdminRuntimeManifestManagementTests
         Assert.Contains(InMemoryEnumDictionaryRepository.UserStatusGroupId.ToString(), groupIds);
     }
 
-    private static object ValidAggregateTriggerDefinition(string aggregateTargetId, string materializationTargetId) => new
+    private static object ValidAggregateTriggerDefinition(string aggregateTargetId, string materializationTargetId, string? definitionId = null) => new
     {
-        trigger_definition_id = Guid.NewGuid(),
+        trigger_definition_id = Guid.Parse(definitionId ?? Guid.NewGuid().ToString()),
         trigger_source = new
         {
             canonical_trigger_kind = "client",
@@ -860,7 +868,8 @@ public class AdminRuntimeManifestManagementTests
 
     private static AdminRuntime CreateRuntime(
         InMemoryManifestAdminRepository manifestRepo,
-        EnumDictionaryRepository? enumRepo = null)
+        EnumDictionaryRepository? enumRepo = null,
+        AggregateTriggerRepository? aggregateTriggerRepo = null)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "Host=localhost");
         var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
@@ -883,7 +892,8 @@ public class AdminRuntimeManifestManagementTests
             manifestRepo,
             null,
             topoRepo,
-            enumRepo);
+            enumRepo,
+            aggregateTriggerRepository: aggregateTriggerRepo);
     }
 }
 

@@ -79,3 +79,5 @@ public record AggregateTriggerRuntimeRequest(
     [property: JsonPropertyName("approval_granted")] bool ApprovalGranted = false);
 
 public record AggregateTriggerRuntimeResult(bool Accepted, bool EventAppended, bool ThresholdSatisfied, bool Materialized, string Status, Guid? MaterializationId);
+
+public enum AggregateTriggerMaterializationDecision { ThresholdNotSatisfied, ApprovalRequired, Materialize }

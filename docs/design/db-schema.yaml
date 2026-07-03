@@ -43,6 +43,16 @@ db_schema:
       - db/physical_details_inline_editor_md_generator_preset_seed.sql
       - db/aggregate_dashboard_preset_seed.sql
       - db/ui_component_registry_preset_catalog_bootstrap.sql
+      - db/runtime_orchestration_tables.sql
+    canonical_bootstrap_files_note: >-
+      db/init.sql applies additional canonical files not yet listed above
+      (db/backend_error_evidence_tables.sql, db/demo_seed.sql,
+      db/external_port_compat_absorption_seed.sql, db/file_attachment_crud_preset_seed.sql,
+      db/file_storage_export_job_preset_seed.sql, db/export_sftp_transfer_preset_seed.sql,
+      db/audit_approval_form_preset_seed.sql, db/email_approval_form_preset_seed.sql,
+      db/stripe_webhook_intake_preset_seed.sql, db/external_port_result_context_mapping_seed.sql,
+      db/backend_error_notify_hook_port_seed.sql); this is a pre-existing list staleness
+      outside aggregate_trigger_substrate scope and is not resolved by this change.
 
   source_files:
     - db/schema.sql
@@ -64,6 +74,7 @@ db_schema:
     - db/physical_details_inline_editor_md_generator_preset_seed.sql
     - db/aggregate_dashboard_preset_seed.sql
     - db/ui_component_registry_preset_catalog_bootstrap.sql
+    - db/runtime_orchestration_tables.sql
 
   categories:
     - topology_definition
@@ -1419,8 +1430,16 @@ recommend_target_boundary:
   interpretation: recommendation_uses_topology_and_context_learning_surfaces
 
 aggregate_trigger_table_contracts:
-  status: design_contract_only_no_sql_implementation_in_this_change
+  status: implemented
   namespace: runtime_orchestration
+  source_file: db/runtime_orchestration_tables.sql
+  repository_implementation:
+    - backend/repository/AggregateTriggerRepository.cs
+    - backend/repository/NpgsqlAggregateTriggerRepository.cs
+  live_db_proof:
+    - backend/tests/Topolactor.Integration.Tests/AggregateTriggerRepositoryLiveDbTests.cs
+    - backend/tests/Topolactor.Integration.Tests/AggregateTriggerSubstrateRouteLiveDbTests.cs
+    - backend/tests/Topolactor.Integration.Tests/AdminRuntimeAggregateTriggerDefinitionPersistenceLiveDbTests.cs
   schema_qualified_tables:
     aggregate_trigger_definitions: runtime_orchestration.aggregate_trigger_definitions
     aggregate_trigger_event_evidence: runtime_orchestration.aggregate_trigger_event_evidence
@@ -1429,6 +1448,7 @@ aggregate_trigger_table_contracts:
   tables:
     runtime_orchestration.aggregate_trigger_definitions:
       role: canonical structured aggregate trigger definition store
+      persistence_route: AdminRuntime validates admin/contents Step3 aggregate trigger definitions then calls AggregateTriggerRepository.SaveDefinitionAsync; screen_data_shape topology entry retains the same validated definitions as the Step3 authoring-draft projection for form re-hydration, not as execution authority.
       required_columns:
         - trigger_definition_id
         - processing_function_id
@@ -1466,3 +1486,4 @@ aggregate_trigger_table_contracts:
     - atomic_upsert_for_aggregate_current
     - idempotent_append_for_event_evidence
     - duplicate_materialization_guard
+    - aggregate_current_upsert_and_materialization_evidence_append_share_one_backend_transaction_when_materialization_is_attempted

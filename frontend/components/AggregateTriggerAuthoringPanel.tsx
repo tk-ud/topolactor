@@ -47,6 +47,15 @@ export default function AggregateTriggerAuthoringPanel({
   const [triggerSourceDetailKind, setTriggerSourceDetailKind] = useState<
     typeof triggerSourceDetailKinds[number]
   >("client_operation_event");
+  const [executionScope, setExecutionScope] = useState<
+    typeof executionScopeAllowedValues[number]
+  >(executionScopeAllowedValues[0]);
+  const [transactionBoundary, setTransactionBoundary] = useState<
+    typeof transactionBoundaryAllowedValues[number]
+  >(transactionBoundaryAllowedValues[0]);
+  const [approvalPolicy, setApprovalPolicy] = useState<
+    typeof approvalPolicyAllowedValues[number]
+  >(approvalPolicyAllowedValues[0]);
   const [aggregateTargetKey, setAggregateTargetKey] = useState(
     defaultAggregateKey,
   );
@@ -69,6 +78,9 @@ export default function AggregateTriggerAuthoringPanel({
       triggerDefinitionId: "00000000-0000-0000-0000-000000000001",
       canonicalTriggerKind,
       triggerSourceDetailKind,
+      executionScope,
+      transactionBoundary,
+      approvalPolicy,
       aggregateTargetBinding: aggregateTarget,
       materializationTargetBinding: materializationTarget,
       operationDefinitionId: "contents_step3_operation",
@@ -170,6 +182,72 @@ export default function AggregateTriggerAuthoringPanel({
           </select>
         </label>
         <label class="block">
+          execution_scope
+          <select
+            class="mt-1 w-full rounded border px-2 py-1 font-mono"
+            aria-label="aggregate execution scope"
+            value={executionScope}
+            onInput={(e) =>
+              setExecutionScope(
+                (e.target as HTMLSelectElement)
+                  .value as typeof executionScopeAllowedValues[number],
+              )}
+            onChange={(e) =>
+              setExecutionScope(
+                (e.target as HTMLSelectElement)
+                  .value as typeof executionScopeAllowedValues[number],
+              )}
+          >
+            {executionScopeAllowedValues.map((scope) => (
+              <option key={scope} value={scope}>{scope}</option>
+            ))}
+          </select>
+        </label>
+        <label class="block">
+          transaction_boundary
+          <select
+            class="mt-1 w-full rounded border px-2 py-1 font-mono"
+            aria-label="aggregate transaction boundary"
+            value={transactionBoundary}
+            onInput={(e) =>
+              setTransactionBoundary(
+                (e.target as HTMLSelectElement)
+                  .value as typeof transactionBoundaryAllowedValues[number],
+              )}
+            onChange={(e) =>
+              setTransactionBoundary(
+                (e.target as HTMLSelectElement)
+                  .value as typeof transactionBoundaryAllowedValues[number],
+              )}
+          >
+            {transactionBoundaryAllowedValues.map((boundary) => (
+              <option key={boundary} value={boundary}>{boundary}</option>
+            ))}
+          </select>
+        </label>
+        <label class="block">
+          approval_policy
+          <select
+            class="mt-1 w-full rounded border px-2 py-1 font-mono"
+            aria-label="aggregate approval policy"
+            value={approvalPolicy}
+            onInput={(e) =>
+              setApprovalPolicy(
+                (e.target as HTMLSelectElement)
+                  .value as typeof approvalPolicyAllowedValues[number],
+              )}
+            onChange={(e) =>
+              setApprovalPolicy(
+                (e.target as HTMLSelectElement)
+                  .value as typeof approvalPolicyAllowedValues[number],
+              )}
+          >
+            {approvalPolicyAllowedValues.map((policy) => (
+              <option key={policy} value={policy}>{policy}</option>
+            ))}
+          </select>
+        </label>
+        <label class="block">
           aggregate target binding
           <select
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
@@ -234,9 +312,9 @@ export default function AggregateTriggerAuthoringPanel({
       <p class="mt-2 text-[10px] text-indigo-900">
         allowed sources: {materializationPayloadMapAllowedSources.join(", ")}
         {" "}
-        / execution_scope: {executionScopeAllowedValues[0]}{" "}
-        / transaction_boundary: {transactionBoundaryAllowedValues[0]}{" "}
-        / approval_policy: {approvalPolicyAllowedValues[0]} / comparison:{" "}
+        / execution_scope: {executionScope}{" "}
+        / transaction_boundary: {transactionBoundary}{" "}
+        / approval_policy: {approvalPolicy} / comparison:{" "}
         {comparisonOperatorAllowedValues.join(" ")}
       </p>
     </section>

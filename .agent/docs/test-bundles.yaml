@@ -37,6 +37,7 @@ reverse_lookup:
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
       - frontend_admin_projection_expression_e2e_contract
+      - aggregate_trigger_substrate_live_db_executable_proof
       - aggregate_trigger_substrate_executable_proof_gap
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
@@ -105,11 +106,12 @@ reverse_lookup:
     roadmap_bundle_refs:
       - aggregate-trigger-substrate
     proof_refs:
+      - aggregate_trigger_substrate_live_db_executable_proof
       - aggregate_trigger_substrate_executable_proof_gap
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
     does_not_prove:
-      - executable aggregate trigger proof across live PostgreSQL, AdminRuntime persistence, scheduler-to-manifest DB routing, or end-to-end materialization
+      - admin/contents Step3 structured selector authoring for processing_function_scope, conflict_key_fields, delta_map, threshold_policy, and materialization_payload_map (live PostgreSQL, AdminRuntime persistence, and scheduler-to-manifest DB routing proofs are closed; see aggregate_trigger_substrate_live_db_executable_proof)
 
   - bundle_id: agent-tools-proof-and-structure-gate
     roadmap_bundle_refs:

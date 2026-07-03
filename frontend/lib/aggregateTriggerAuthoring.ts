@@ -122,6 +122,9 @@ export function buildAggregateTriggerDefinition(input: {
   triggerDefinitionId: string;
   canonicalTriggerKind: typeof canonicalTriggerKinds[number];
   triggerSourceDetailKind: typeof triggerSourceDetailKinds[number];
+  executionScope?: typeof executionScopeAllowedValues[number];
+  transactionBoundary?: typeof transactionBoundaryAllowedValues[number];
+  approvalPolicy?: typeof approvalPolicyAllowedValues[number];
   aggregateTargetBinding: StepTarget;
   materializationTargetBinding: StepTarget;
   functionId: string;
@@ -147,8 +150,9 @@ export function buildAggregateTriggerDefinition(input: {
       allowed_source_kinds: [...triggerSourceDetailKinds],
       materialization_policy_ref: input.materializationPolicyRef,
     },
-    execution_scope: executionScopeAllowedValues[0],
-    transaction_boundary: transactionBoundaryAllowedValues[0],
+    execution_scope: input.executionScope ?? executionScopeAllowedValues[0],
+    transaction_boundary: input.transactionBoundary ??
+      transactionBoundaryAllowedValues[0],
     aggregate_target_binding: toTargetBinding(input.aggregateTargetBinding),
     conflict_key_fields: input.conflictKeyFields,
     delta_map: input.deltaMap,
@@ -157,7 +161,7 @@ export function buildAggregateTriggerDefinition(input: {
       input.materializationTargetBinding,
     ),
     materialization_payload_map: input.materializationPayloadMap,
-    approval_policy: approvalPolicyAllowedValues[0],
+    approval_policy: input.approvalPolicy ?? approvalPolicyAllowedValues[0],
     evidence_policy: "structured_authoring_preview_only",
   };
 }

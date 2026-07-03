@@ -35,6 +35,7 @@ public partial class AdminRuntime
     private readonly MockPresetRepository? _mockPresetRepository;
     private readonly TeamMarkdownRepository? _teamMarkdownRepository;
     private readonly IBackendErrorEvidenceAppender? _errorAppender;
+    private readonly AggregateTriggerRepository? _aggregateTriggerRepository;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -70,7 +71,8 @@ public partial class AdminRuntime
         MockPresetRepository? mockPresetRepository = null,
         TeamMarkdownRepository? teamMarkdownRepository = null,
         ISchedulerJobManifestRepository? schedulerJobManifestRepository = null,
-        IBackendErrorEvidenceAppender? errorAppender = null)
+        IBackendErrorEvidenceAppender? errorAppender = null,
+        AggregateTriggerRepository? aggregateTriggerRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -93,6 +95,7 @@ public partial class AdminRuntime
         _teamMarkdownRepository = teamMarkdownRepository;
         _schedulerJobManifestRepository = schedulerJobManifestRepository;
         _errorAppender = errorAppender;
+        _aggregateTriggerRepository = aggregateTriggerRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -3165,6 +3168,15 @@ public partial class AdminRuntime
                 var aggregateErrors = AggregateTriggerDefinitionValidator
                     .Validate(definition, step2Ids, step25Ids);
                 if (aggregateErrors.Count > 0) return (null, aggregateErrors[0]);
+            }
+
+            // Canonical structured definition persistence authority (runtime_orchestration.aggregate_trigger_definitions,
+            // db-schema.yaml aggregate_trigger_table_contracts). AdminRuntime validates and persists; it does not
+            // own threshold evaluation, aggregate current upsert, or materialization execution (AggregateTriggerRuntime does).
+            if (_aggregateTriggerRepository is not null)
+            {
+                foreach (var definition in aggregateTriggerDefinitions)
+                    await _aggregateTriggerRepository.SaveDefinitionAsync(definition, ct);
             }
         }
 

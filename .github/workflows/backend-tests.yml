@@ -19,6 +19,9 @@ on:
       - 'db/email_approval_form_preset_seed.sql'
       - 'db/stripe_webhook_intake_preset_seed.sql'
       - 'db/external_port_result_context_mapping_seed.sql'
+      - 'db/runtime_orchestration_tables.sql'
+      - 'docs/design/db-schema.yaml'
+      - 'docs/design/abstract-function-primitive-registry-ssot.yaml'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
   push:
@@ -41,6 +44,9 @@ on:
       - 'db/email_approval_form_preset_seed.sql'
       - 'db/stripe_webhook_intake_preset_seed.sql'
       - 'db/external_port_result_context_mapping_seed.sql'
+      - 'db/runtime_orchestration_tables.sql'
+      - 'docs/design/db-schema.yaml'
+      - 'docs/design/abstract-function-primitive-registry-ssot.yaml'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
 
@@ -92,7 +98,7 @@ jobs:
       - name: Apply DB schema for continuity integration
         run: |
           set -euo pipefail
-          for sql in db/schema.sql db/topology_tables.sql db/manifest_tables.sql db/sql_attention_logs_tables.sql db/context_route_tables.sql db/ui_topology_tables.sql db/topology_cross_table_wiring.sql db/mock_preset_tables.sql db/team_markdown_tables.sql db/promotion_tables.sql db/seed_empty.sql db/external_port_compat_absorption_seed.sql db/audit_approval_form_preset_seed.sql db/email_approval_form_preset_seed.sql db/stripe_webhook_intake_preset_seed.sql db/external_port_result_context_mapping_seed.sql; do
+          for sql in db/schema.sql db/topology_tables.sql db/manifest_tables.sql db/sql_attention_logs_tables.sql db/context_route_tables.sql db/ui_topology_tables.sql db/topology_cross_table_wiring.sql db/mock_preset_tables.sql db/team_markdown_tables.sql db/promotion_tables.sql db/seed_empty.sql db/external_port_compat_absorption_seed.sql db/audit_approval_form_preset_seed.sql db/email_approval_form_preset_seed.sql db/stripe_webhook_intake_preset_seed.sql db/external_port_result_context_mapping_seed.sql db/runtime_orchestration_tables.sql; do
             tmp="$(mktemp)"
             if psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f "$sql" >"$tmp" 2>&1; then
               echo "PASS psql file=$sql"
