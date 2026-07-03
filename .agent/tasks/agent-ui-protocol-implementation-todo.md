@@ -25,6 +25,8 @@ Agent は `./AGENTS.md` / `.agent/rules/rule.md` を読んでも、toolを作業
 
 現存 `.agent/prompt` / `.agent/protocols` / `.agent/checklists` は tool を使えない Agent 向けのfallbackとして残すが、tool出力用referenceは `docs/governance/reference` へ作り直す必要がある。
 
+scenario-contract は quit 時に `senario-tmp.md` へ一時保存し、git追跡しない契約が必要。
+
 ### 目的
 
 `docs/governance/agent-ui-protocol-ssot.yaml` と `docs/governance/reference/agent-ui-tool-output-reference.yaml` に従い、Agentが使う protocol UI tool を構築する。
@@ -43,6 +45,7 @@ tool は以下を満たす。
 - 指定section配下だけを結合して出す。
 - SSOT選択に戻るか quit できる。
 - quit 時に scenario-contract を書かせる。
+- `senario-tmp.md` を作成して initial-contract を終了する。
 - tool使用idを発行し、`docs/governance/logs/tool.log` に datetime / uuid / task_name / worktype を記録する。
 - PR / summary に datetime / uuid / task_name / worktype を書かせる。
 - agent実装終了後、worktype別test / checklist interview / check を実行し、合格なら pass を出す。
@@ -56,8 +59,9 @@ tool は以下を満たす。
 5. prompt/protocol全文を無制限に出さず、worktype prompt と指定SSOT sectionのみ出す。
 6. 各stepはSSOTとreferenceに定義された output layer を返す。
 7. `docs/governance/logs/tool.log` は compact one-line evidence log とし、checklist本文やscenario-contract本文は保存しない。
-8. read-only は Topolactor本体の application/runtime/product source 観測面に適用する。`.agent/tools` 自身、tool用test、governance-tool SSOT、governance/reference、tool.log はこのBundleのscope内で更新してよい。
-9. local test flow は worktype別test → checklist interview → check → pass の順にする。
+8. `senario-tmp.md` を作成し、`.gitignore` に追加する。
+9. read-only は Topolactor本体の application/runtime/product source 観測面に適用する。`.agent/tools` 自身、tool用test、governance-tool SSOT、governance/reference、tool.log、`senario-tmp.md` はこのBundleのscope内で扱ってよい。
+10. local test flow は worktype別test → checklist interview → check → pass の順にする。
 
 ### 対応資料
 
@@ -80,6 +84,7 @@ tool は以下を満たす。
 - `docs/governance/agent-governance-routing-ssot.md`
 - `docs/governance/agent-ui-protocol-ssot.yaml`
 - `docs/governance/reference/agent-ui-tool-output-reference.yaml`
+- `.gitignore`
 
 関連箇所は Agent 判断で追加調査・追加修正すること。
 
@@ -95,12 +100,17 @@ tool は以下を満たす。
 
 変更候補:
 
+- `.gitignore`
 - `docs/governance/reference/agent-ui-tool-output-reference.yaml`
 - `.agent/docs/required-paths.yaml`
 - `.agent/routes/worktype-required-protocols.yaml`
 - `.agent/README.md`
 - `AGENTS.md`
 - `.agent/rules/rule.md`
+
+local-only:
+
+- `senario-tmp.md`
 
 既存 `.agent/tasks/todo.md` は触らない。
 
@@ -118,6 +128,7 @@ Topolactor本体の application/runtime/product source は通常使用時に too
 - `emit_selected_sections`
 - `parse_section_selection`
 - `request_scenario_contract_on_quit`
+- `write_senario_tmp`
 - `run_worktype_tests`
 - `run_checklist_interview`
 - `run_checks`
@@ -147,6 +158,8 @@ Bundle単位で処理する。小粒PR化は禁止。
 - [ ] 指定section配下のみを結合して出す。
 - [ ] SSOT選択へ戻る / quit を選べる。
 - [ ] quit時に scenario-contract を書かせる。
+- [ ] `senario-tmp.md` を作成して initial-contract を終了する。
+- [ ] `.gitignore` に `senario-tmp.md` を追加する。
 - [ ] 各stepがSSOT/referenceに定義された output layer を返す。
 - [ ] datetime / uuid / task_name / worktype を `docs/governance/logs/tool.log` にcompact記録する。
 - [ ] PR / summary に datetime / uuid / task_name / worktype を書かせる出力契約を追加する。
@@ -167,6 +180,8 @@ Bundle単位で処理する。小粒PR化は禁止。
 - 君の枠である flow controller に、各stepの output layer が接続されている。
 - worktype prompt と指定SSOT sectionだけを出せる。
 - quit時に scenario-contract を要求する。
+- quit後に `senario-tmp.md` が作成される。
+- `.gitignore` に `senario-tmp.md` がある。
 - local-test が worktype別test → checklist interview → check → pass の順で動く。
 - local-test が completion summary / missing evidence を返す。
 - `.agent/tools` 自身とtool用governance surfaceはBundle scope内で更新できる。
@@ -182,6 +197,8 @@ Bundle単位で処理する。小粒PR化は禁止。
 - SSOT全体を毎回dumpする。
 - tool出力referenceを `docs/governance/reference` に作らず、legacy `.agent` files の全文dumpに依存する。
 - 各stepの output layer がなく、ただの対話CLIになっている。
+- quit後に `senario-tmp.md` が作成されない。
+- `senario-tmp.md` がgit追跡対象になる。
 - checklist本文やscenario-contract本文を `tool.log` に保存する。
 - toolが implemented / partial / not_started 判定を行う。
 - read-only を `.agent/tools` 自身の更新禁止として扱う。
@@ -200,4 +217,4 @@ Bundle単位で処理する。小粒PR化は禁止。
 6. `.agent/tasks/agent-ui-protocol-implementation-todo.md` の Bundle `agent-ui-protocolization` を処理する。
 7. 既存 `.agent/tasks/todo.md` は触らない。
 8. 実装後、追加checkerと既存 required checks を実行する。
-9. completion output に datetime / uuid / task_name / worktype / selected_ssot_sections / scenario_contract_summary / local-test結果 / checklist結果 / check結果 / missing_evidence を出す。
+9. completion output に datetime / uuid / task_name / worktype / selected_ssot_sections / scenario_contract_summary / senario_tmp_path / local-test結果 / checklist結果 / check結果 / missing_evidence を出す。
