@@ -287,13 +287,16 @@ Deno.test("admin workflow UI assurance substrate: route body operations dispatch
   const uiEnv = setupDom();
   try {
     render(h(UiBuilderAdmin, {}), uiEnv.container);
+    // UiBuilderAdmin reactively loads its package/layout-candidate lists on mount
+    // (no manual "reload list" button in this workflow); the reactive load itself
+    // must still be a client-trigger admin dispatch.
     await flushUpdates();
     await flushUpdates();
-    await clickAndFlush(buttonByText(uiEnv.container, "一覧を再読み込み"));
+    await flushUpdates();
     assert(
       captured.some((body) =>
-        body.layer === "ui_component_bucket" &&
-        body.action === "list" &&
+        body.layer === "ui_topology" &&
+        body.action === "list_packages" &&
         body.triggerKind === "client" &&
         !("role" in body)
       ),
@@ -405,6 +408,15 @@ Deno.test("contents workflow UI substrate: Step2 → Step2.5 → Step3 save path
     await flushUpdates();
     await flushUpdates();
 
+    // Step 1: topologySystemName is required and drives the primary logical
+    // table's auto-derived name (topologySystemNameToPhysicalTable) — rec-a's
+    // primary table row has no manual name input, only Step 2+ tables do.
+    const topologySystemNameInput = container.querySelector(
+      'input[placeholder="例: customer-management"]',
+    ) as HTMLInputElement;
+    dispatchInputValue(topologySystemNameInput, "orders");
+    await flushUpdates();
+
     await clickAndFlush(buttonByText(container, "Step 2"));
     await flushUpdates();
     await flushUpdates();
@@ -412,12 +424,10 @@ Deno.test("contents workflow UI substrate: Step2 → Step2.5 → Step3 save path
       Array.from(container.querySelectorAll('input[placeholder="例: customer-contacts"]'));
     const columnNameInputs = () =>
       Array.from(container.querySelectorAll('input[placeholder="項目名"]'));
-    dispatchInputValue(tableNameInputs()[0], "orders");
-    await flushUpdates();
     dispatchInputValue(columnNameInputs()[0], "id");
     await flushUpdates();
     await clickAndFlush(buttonByText(container, "テーブルを追加"));
-    dispatchInputValue(tableNameInputs()[1], "customers");
+    dispatchInputValue(tableNameInputs()[0], "customers");
     await flushUpdates();
     dispatchInputValue(columnNameInputs()[1], "id");
     await flushUpdates();
