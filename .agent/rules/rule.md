@@ -4,6 +4,7 @@
 
 - Do not bypass Workflow Order Invariant.
 - Do not bypass Repository Design Order Invariant.
+- Do not bypass existing `.agent/tools` when an existing tool fits the work.
 - Do not treat structure check as semantic judgment.
 - Do not mark completion before required judgment gates.
 - Do not use silent fallback for runtime boundary failures.
@@ -29,6 +30,18 @@ Rules:
 - Test/proof surface must be defined before implementation is treated as executable work.
 - Implementation may start only after the applicable SSOT, wiring, and test/proof surface are identified or added.
 - If any earlier layer is missing, stop implementation and repair the earlier layer first.
+
+## Existing Tool Usage
+
+Agents should use existing `.agent/tools` when they match the task.
+
+Rules:
+- Prefer existing tools over ad-hoc manual inspection or reimplementation.
+- Treat existing tools as useful repository navigation, observation, query, and proof-surface helpers.
+- Reuse existing tools before adding a new tool.
+- Add a new tool only when existing tools cannot express the required SSOT contract or workflow boundary.
+- Tool output is still not SSOT authority, proof completion, semantic completion, or implemented / partial / not_started judgment by itself.
+- Ordinary `.agent/tools` use must preserve the repository mutation boundary.
 
 READ_ENTRY environment trigger note:
 - When the executing agent is Claude Code on the web / remote execution environment, READ_ENTRY includes reading `.agent/protocols/claude.md` as a condition-triggered environment prerequisite.
