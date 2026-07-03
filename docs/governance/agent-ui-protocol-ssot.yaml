@@ -1,0 +1,296 @@
+# agent-ui-protocol-ssot.yaml
+#
+# Draft SSOT for projecting .agent prompt/protocol governance into an
+# Agent-facing UI/tool route. This SSOT does not define product runtime behavior.
+
+version: 1
+status: draft_ssot
+scope: repository_agent_governance_agent_ui
+canonical_path: docs/governance/agent-ui-protocol-ssot.yaml
+
+purpose:
+  summary: >-
+    Define how repository governance prompt/protocol/checklist contracts are
+    projected into an Agent UI route so an implementation Agent follows a
+    condition-resolved execution surface instead of relying on free-form
+    protocol reading and short-term memory.
+  problem_statement:
+    - implementation_change currently has prompt/protocol/checklist fragments,
+      but the execution sequence is not projected as an explicit Agent UI route.
+    - Scenario Contract and CheckLists exist as governance surfaces, but the
+      Agent-facing route does not consistently force triggered evidence capture.
+    - Tools are defined as read-only observation surfaces, but there is no
+      canonical tool/UI contract that conditionally emits the required prompt,
+      protocol, checklist, scenario-contract, and check route for the current task.
+  goals:
+    - keep docs/governance as the SSOT surface for agent-ui protocol projection
+    - keep prompt/protocol/checklist files as canonical governance material
+    - let tools conditionally emit route cards from prompt/protocol/ssot-map input
+    - make the Agent follow the emitted route card and tilt scope according to it
+    - keep audit authority separate from tool output
+  non_goals:
+    - moving SSOT authority into .agent/tools
+    - making tool output proof completion or semantic implementation judgment
+    - replacing prompt/protocol/checklist files with generated text
+    - implementing product UI/runtime behavior
+    - storing PR-specific filled checklist logs in docs/governance
+
+principles:
+  seed_template_is_ui:
+    statement: >-
+      A seed/template surface is a UI surface. The Agent UI route must be
+      represented as data/projection structure first, not as free-form prose that
+      the Agent is expected to remember.
+  protocol_prompt_as_source_material:
+    statement: >-
+      Prompt and protocol files remain source governance material. Tools may
+      read and project them into route cards, but tools must not fork or redefine
+      their judgment rules.
+  tool_as_agent_ui_projection:
+    statement: >-
+      .agent/tools may present the current work route, required reads, triggered
+      protocols, required checklist surfaces, scenario-contract requirements,
+      check scripts, and missing evidence as an Agent-facing UI projection.
+  scope_tilting:
+    statement: >-
+      The Agent must adjust implementation scope according to the emitted route
+      card. If the route card marks a gate as triggered, the Agent must either
+      satisfy it or report a blocking not-executed state.
+  audit_separation:
+    statement: >-
+      Auditors may use the route card as submitted evidence inventory, but must
+      still verify SSOT, diff, implementation, tests, and todo/roadmap boundaries.
+
+authority_boundaries:
+  docs_governance:
+    owns:
+      - agent-ui protocol projection SSOT
+      - responsibility split for Agent UI route generation
+      - closed-world vocabulary for route card phases and evidence states
+  agent_prompt:
+    owns:
+      - worktype router material
+      - required_reads lists
+      - protocol_triggers lists
+      - output_shape expectations
+    must_not_own:
+      - final completion judgment
+      - tool implementation body
+  agent_protocols:
+    owns:
+      - judgment gates
+      - blocking/pass conditions
+      - scenario-contract and checklist trigger semantics
+    must_not_own:
+      - worktype selection
+      - tool implementation body
+  agent_checklists:
+    owns:
+      - triggered viewpoint answer templates
+      - checklist-local answer validity when a checker exists
+    must_not_own:
+      - final semantic judgment
+  agent_tools:
+    owns:
+      - read-only route-card projection for Agents
+      - condition resolution using prompt/protocol/ssot-map/checklist indexes
+      - missing-evidence display
+      - thin wrappers around scripts for read-only observation and validation dispatch
+    must_not_own:
+      - SSOT authority
+      - proof authority
+      - completion judgment
+      - implemented / partial / not_started classification
+      - repository mutation
+      - duplicated protocol body or script body
+  agent_scripts:
+    owns:
+      - executable checks
+      - CI/local gate helper bodies
+      - reusable validation implementation
+
+route_card_contract:
+  canonical_name: agent_ui_route_card
+  format: yaml_or_json_stdout
+  storage: transient_output_only
+  must_include:
+    - repository
+    - worktype
+    - task_summary
+    - target_surfaces
+    - required_reads
+    - triggered_protocols
+    - triggered_checklists
+    - scenario_contract
+    - substrate_plan
+    - required_checks
+    - completion_output_requirements
+    - missing_evidence
+    - authority_disclaimer
+  evidence_state_values:
+    - pending
+    - completed
+    - not_required
+    - blocking_missing
+    - failed
+  authority_disclaimer: >-
+    This route card is an Agent UI projection. It is not SSOT authority, proof
+    completion, semantic audit judgment, or implementation status evidence by
+    itself.
+
+execution_route:
+  phases:
+    - id: read_entry
+      purpose: Confirm repository entry route and worktype branch.
+      emits:
+        - entry_files
+        - worktype_candidate
+    - id: resolve_worktype
+      purpose: Resolve canonical worktype and matching prompt route.
+      inputs:
+        - task_text
+        - .agent/rules/rule.md
+        - .agent/routes/worktype-required-protocols.yaml
+      emits:
+        - worktype
+        - prompt_path
+    - id: discover_target_surfaces
+      purpose: Identify touched or requested repository surfaces before implementation.
+      inputs:
+        - task_text
+        - changed_files_when_available
+        - target_files_when_given
+      emits:
+        - target_surfaces
+        - unknown_surface_warnings
+    - id: resolve_ssot_reads
+      purpose: Use .agent/docs/ssot-map.yaml and prompt required_reads to produce the concrete read set.
+      emits:
+        - required_reads
+        - foundation_ssot_read_judgment_template
+    - id: emit_substrate_plan
+      purpose: Emit the substrate plan form when route/island/api/action/helper/repository/audit/validation/status surfaces may change.
+      emits:
+        - substrate_plan_template
+        - hardcode_allowed_vs_seed_data_required_axes
+    - id: resolve_triggered_gates
+      purpose: Resolve scenario-contract, checklist, and policy gates from prompt/protocol conditions.
+      emits:
+        - triggered_protocols
+        - triggered_checklists
+        - scenario_contract_required
+        - not_required_reason_slots
+    - id: implement_under_route
+      purpose: Agent performs implementation while following the route card.
+      tool_role: no_mutation_by_tool_agent_edits_outside_tool
+    - id: collect_checklist_evidence
+      purpose: Require filled checklist evidence or explicit not_required reason for each triggered checklist.
+      emits:
+        - checklist_evidence_requirements
+        - checklist_checker_commands
+    - id: verify_scenario_diff
+      purpose: Compare implementation diff against scenario contract when scenario-contract is triggered.
+      emits:
+        - scenario_diff_verification_requirement
+    - id: run_required_checks
+      purpose: Run required checks, with structure check last.
+      emits:
+        - required_check_commands
+        - check_order
+    - id: emit_completion_evidence
+      purpose: Produce completion-facing output skeleton and missing evidence list.
+      emits:
+        - completion_output_template
+        - blocking_missing_items
+
+trigger_resolution_rules:
+  scenario_contract:
+    trigger_when:
+      - runtime claim changes
+      - canonical route behavior changes
+      - persistence behavior changes
+      - projection behavior changes
+    output_requirement:
+      - scenario_contract_required: true
+      - expected route/read/write/append/cache/return order slots
+      - failure path side-effect slots
+      - post-implementation diff verification slot
+  checklist_gate:
+    trigger_when:
+      - triggered protocol references a checklist
+      - prompt/protocol indicates policy/scoring/threshold/routing/validation/projection behavior change
+      - boundary identity or projection continuity surface is touched
+    output_requirement:
+      - checklist file
+      - trigger reason
+      - answer/evidence slot
+      - checker command when available
+      - not_required reason when skipped
+  required_checks:
+    trigger_when:
+      - all implementation/design/todo/audit worktypes
+    output_requirement:
+      - worktype route checks
+      - triggered checker scripts
+      - structure check last
+
+agent_cli_contract:
+  canonical_surface: .agent/tools/agent-ui
+  status: design_target_not_implemented
+  command_candidates:
+    - name: route
+      purpose: Emit worktype, prompt, protocol, checklist, and check route from task text and optional changed files.
+    - name: read-set
+      purpose: Emit concrete required SSOT/read set from route card and ssot-map.
+    - name: substrate-plan
+      purpose: Emit/fill substrate plan skeleton for the current route.
+    - name: checklist
+      purpose: Emit triggered checklist requirements and checker commands.
+    - name: verify
+      purpose: Report missing route-card evidence before completion.
+  constraints:
+    - read_only
+    - python3_stdlib_only unless an existing repository policy grants otherwise
+    - no repository mutation
+    - no persistent temp artifacts
+    - no semantic implemented/partial judgment
+    - no duplication of prompt/protocol body text beyond short route references and required slots
+
+completion_contract:
+  agent_output_must_include:
+    - route_card_summary
+    - required_reads_completed_or_not_required
+    - substrate_plan_result
+    - scenario_contract_result
+    - checklist_evidence_result
+    - required_checks_result
+    - missing_evidence_if_any
+  missing_triggered_gate_behavior:
+    judgment: blocking
+    reason: Triggered route-card gate without evidence cannot be treated as pass.
+
+impact_surfaces:
+  primary_files:
+    - docs/governance/agent-ui-protocol-ssot.yaml
+    - .agent/tasks/agent-ui-protocol-implementation-todo.md
+  expected_future_files:
+    - .agent/tools/agent-ui
+    - .agent/tools/agent_ui.py
+    - .agent/tests/check-agent-ui-route.sh
+    - .agent/routes/worktype-required-protocols.yaml
+    - .agent/prompt/implementation-change.md
+    - .agent/protocols/implementation-change.md
+    - .agent/protocols/scenario-contract.md
+    - .agent/checklists/README.md
+  reference_files:
+    - AGENTS.md
+    - .agent/rules/rule.md
+    - .agent/README.md
+    - docs/governance/agent-governance-routing-ssot.yaml
+    - docs/governance/agent-governance-routing-ssot.md
+    - .agent/docs/ssot-map.yaml
+
+open_questions:
+  - Whether agent-ui should be one command with subcommands or separate thin tools.
+  - Whether route-card schema should be validated by shell checker, Python checker, or both.
+  - Whether existing checklist checkers should be invoked directly by agent-ui or only listed as commands.
