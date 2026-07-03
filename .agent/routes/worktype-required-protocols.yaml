@@ -16,12 +16,14 @@ worktypes:
     prompt: .agent/prompt/audit.md
     required_protocols:
       - .agent/protocols/audit.md
+      - .agent/protocols/audit-tool-evidence.md
     triggered_protocols:
       todo_roadmap_finalization:
         - .agent/protocols/todo-carry-over.md
     required_checks:
       - .agent/tests/check-worktype-routing.sh
       - .agent/tests/check-completion-judgment.sh
+      - .agent/tests/check-audit-tool-evidence.sh
       - .agent/tests/check-structure.sh
 
   specific:
