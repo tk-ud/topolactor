@@ -52,6 +52,7 @@ proof_model:
     runner_surfaces: local agent scripts or CI gate scripts that execute or audit tests
     evidence_inputs: seed, schema fixture, static fixture, or input files consumed as evidence but not executable tests
     workflow_jobs: GitHub workflow jobs that run the runner/audit surface
+    todo_bundle_refs: todo Bundle IDs in .agent/tasks/todo.md that own unresolved known_gap residual scope; required and non-empty for proof_type known_gap, optional/empty otherwise
   prohibited_claims:
     - DB seed presence alone proves runtime behavior.
     - Backend unit success alone proves scheduler/external/frontend route behavior.
@@ -410,6 +411,8 @@ chronological_scope_index:
       - .agent/tasks/todo.md
     workflow_jobs:
       - .github/workflows/structure-check.yml::structure-check
+    todo_bundle_refs:
+      - future-external-bundle-gate
     required_when:
       changed_files:
         - docs/design/runtime-bundle-*-ssot.yaml
@@ -437,9 +440,12 @@ chronological_scope_index:
     test_files: []
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
-    evidence_inputs: []
+    evidence_inputs:
+      - .agent/tasks/todo.md
     workflow_jobs:
       - .github/workflows/structure-check.yml::structure-check
+    todo_bundle_refs:
+      - instance-substrate
     required_when:
       changed_files:
         - docs/design/admin-console-workflow-ssot.yaml
@@ -756,6 +762,8 @@ maintenance_rules:
   - Keep proof_order, depends_on, and unblocks acyclic and aligned in the same change.
   - DB/backend/runtime/external/instance/admin/frontend proof gaps must remain explicit.
   - Known gaps and missing SSOTs MUST NOT be mixed into implemented proof edges.
+  - Every proof_type known_gap MUST declare non-empty todo_bundle_refs that point to existing unfinished Bundles in .agent/tasks/todo.md, and MUST include .agent/tasks/todo.md in evidence_inputs so the gap remains governed by the unresolved work queue.
+  - A known_gap that references a missing, implemented, completed, or otherwise closed todo Bundle is a CI error; known_gap_reason alone is never sufficient proof governance.
   - CI gates MUST run manifest integrity checks and MUST NOT claim proof completion from fixed test lists alone.
 
 aggregate_trigger_substrate_known_gaps:
@@ -781,8 +789,11 @@ aggregate_trigger_substrate_known_gaps:
     test_files: []
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
-    evidence_inputs: []
+    evidence_inputs:
+      - .agent/tasks/todo.md
     workflow_jobs: []
+    todo_bundle_refs:
+      - aggregate-trigger-substrate
     required_when:
       changed_files:
         - docs/design/runtime-orchestration-ssot.yaml
@@ -795,8 +806,7 @@ aggregate_trigger_substrate_known_gaps:
     depends_on:
       - db_schema_seed_contract
       - backend_runtime_function_contract
-    unblocks:
-      - aggregate-trigger-substrate-implementation
+    unblocks: []
     known_gap_reason: Partial implementation and local contract tests now exist for the backend runtime, validator, repository fixed SQL templates, DB DDL, frontend structured authoring helper, admin workflow UI assurance substrate, AdminRuntime assign_screen_data_shape validator gate, idempotent event append, atomic aggregate upsert, threshold evaluation, controlled materialization, and duplicate guard. This known gap remains open because those local contract proofs do not yet constitute full executable proof across live PostgreSQL application, aggregate trigger definition persistence beyond validated screen_data_shape serialization, cron/hook/client scheduler-to-manifest DB routing, and end-to-end event -> aggregate -> threshold -> materialization execution.
     proves: []
     does_not_prove:

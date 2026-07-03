@@ -11,6 +11,7 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | not_started | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `aggregate-trigger-substrate` | 集計トリガー基盤 | not_started | 1 | `docs/design/runtime-orchestration-ssot.yaml` |
+| `instance-substrate` | instance runtime authority substrate | not_started | 1 | `docs/design/runtime-orchestration-ssot.yaml` |
 
 ---
 
@@ -41,6 +42,15 @@
 - [ ] `product.dynamic_support_nocode_loop` 手動受入（roadmap 追従）
 
 ---
+
+## Bundle `instance-substrate`
+
+**Status:** not_started
+**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/test-proof-manifest-ssot.yaml`
+
+- [ ] instance-port substrate SSOT と runtime authority proof bundle を整備する
+  - 問題点: `docs/design/instance-port-substrate-ssot.yaml` が未作成で、instance settings topology / primitive registry authority / runtime instance selection / execution authority enforcement / credential-secret boundary behavior の executable proof が未整備。
+  - known_gap_ref: `instance_substrate_contract_gap`
 
 ## Bundle `aggregate-trigger-substrate`
 

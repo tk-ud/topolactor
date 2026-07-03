@@ -4,6 +4,7 @@
 Python3 stdlib structured-processing counterpart of the Ruby heredoc
 previously embedded in check-test-proof-manifest-integrity.sh.
 """
+import glob
 import os
 import sys
 
@@ -28,15 +29,44 @@ def main():
     if proofs is None:
         failures.append("missing chronological_scope_index")
         proofs = []
+    extra_proofs = []
+    for section_name in ["aggregate_trigger_substrate_known_gaps"]:
+        for proof in arr(manifest.get(section_name)):
+            if isinstance(proof, dict):
+                extra_proofs.append(proof)
+    all_proofs = arr(proofs) + extra_proofs
     required = dig(manifest, "proof_model", "required_fields") or []
     proof_types = dig(manifest, "proof_model", "proof_types") or []
     ids = {}
     orders = []
 
+    TODO_PATH = ".agent/tasks/todo.md"
+    OPEN_TODO_STATUSES = {"not_started", "partial", "in_progress", "open", "todo", "pending"}
+    CLOSED_TODO_STATUSES = {"implemented", "completed", "complete", "done", "closed", "resolved"}
+
+    def parse_todo_bundles(path):
+        bundles = {}
+        if not os.path.isfile(path):
+            failures.append(f"{path}: todo file does not exist")
+            return bundles
+        current = None
+        with open(path, "r", encoding="utf-8") as f:
+            for raw in f:
+                line = raw.rstrip("\n")
+                if line.startswith("## Bundle `") and "`" in line[len("## Bundle `"):]:
+                    current = line.split("`", 2)[1]
+                    bundles.setdefault(current, {})
+                    continue
+                if current and line.startswith("**Status:**"):
+                    bundles[current]["status"] = line.split(":**", 1)[1].strip().lower()
+        return bundles
+
+    todo_bundles = parse_todo_bundles(TODO_PATH)
+
     def workflow_file_for(workflow_job):
         return str(workflow_job).split("::", 1)[0]
 
-    for index, proof in enumerate(proofs):
+    for index, proof in enumerate(all_proofs):
         label = proof.get("proof_id") or f"index {index}"
         for field in required:
             if field not in proof:
@@ -67,7 +97,10 @@ def main():
             failures.append(f"{label}: required_when.changed_files must be a non-empty list")
 
         for path in arr(proof.get("implementation_files")):
-            if not os.path.exists(path):
+            if any(ch in str(path) for ch in "*?["):
+                if not glob.glob(path):
+                    failures.append(f"{label}: implementation_files glob does not match any path: {path}")
+            elif not os.path.exists(path):
                 failures.append(f"{label}: implementation_files path does not exist: {path}")
 
         for path in arr(proof.get("runner_surfaces")):
@@ -104,6 +137,24 @@ def main():
                 failures.append(f"{label}: known_gap must have known_gap_reason")
             if len(arr(proof.get("proves"))) != 0:
                 failures.append(f"{label}: known_gap must not claim proves entries")
+            todo_refs = arr(proof.get("todo_bundle_refs"))
+            if not todo_refs:
+                failures.append(f"{label}: known_gap must have non-empty todo_bundle_refs")
+            if TODO_PATH not in arr(proof.get("evidence_inputs")):
+                failures.append(f"{label}: known_gap must include {TODO_PATH} in evidence_inputs")
+            for bundle_id in todo_refs:
+                bundle = todo_bundles.get(str(bundle_id))
+                if bundle is None:
+                    failures.append(f"{label}: todo_bundle_refs unknown todo Bundle {bundle_id}")
+                    continue
+                status = str(bundle.get("status") or "").strip().lower()
+                if not status:
+                    failures.append(f"{label}: todo Bundle {bundle_id} missing Status")
+                elif status in CLOSED_TODO_STATUSES or status not in OPEN_TODO_STATUSES:
+                    failures.append(
+                        f"{label}: todo Bundle {bundle_id} has non-open Status {status}; "
+                        "known_gap may only reference unfinished bundles"
+                    )
         else:
             if len(arr(proof.get("proves"))) == 0:
                 failures.append(f"{label}: implemented/design proof must have at least one proves entry")
@@ -114,7 +165,7 @@ def main():
         if not order > prev_order:
             failures.append(f"proof_order must be strictly increasing: {prev_id}({prev_order}) before {oid}({order})")
 
-    for proof in proofs:
+    for proof in all_proofs:
         label = proof.get("proof_id")
         for dep in arr(proof.get("depends_on")):
             if dep not in ids:
@@ -161,7 +212,7 @@ def main():
 
     if not failures:
         print(
-            f"OK  [test-proof-manifest] {len(proofs)} proof edges and "
+            f"OK  [test-proof-manifest] {len(all_proofs)} proof edges and "
             f"{len(arr(reverse_lookup.get('reverse_lookup')))} reverse lookup bundles passed integrity checks"
         )
         return 0

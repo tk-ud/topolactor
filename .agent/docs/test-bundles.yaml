@@ -33,6 +33,7 @@ reverse_lookup:
       - admin_projection_readback_contract
       - frontend_projection_expression_contract
       - frontend_admin_projection_expression_e2e_contract
+      - aggregate_trigger_substrate_executable_proof_gap
     runner_surfaces:
       - .agent/tests/check-test-proof-manifest-integrity.sh
       - .agent/tests/check-unified-test-gate.sh
@@ -89,6 +90,8 @@ reverse_lookup:
       - Notion/Sheets/Slack/GitHub/Webhook/REST connector behavior until gap proof edges are replaced by executable proofs
 
   - bundle_id: instance_substrate_gate
+    roadmap_bundle_refs:
+      - instance-substrate
     proof_refs:
       - instance_substrate_contract_gap
     runner_surfaces:
