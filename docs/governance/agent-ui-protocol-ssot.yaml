@@ -83,6 +83,7 @@ agent_protocols:
         - docs/governance agent-tool SSOT files
         - docs/governance/reference tool-output reference files
         - docs/governance/logs/tool.log compact usage evidence
+        - senario-tmp.md local temporary scenario contract file
       ordinary_use_prohibited_mutations:
         - backend runtime/product code
         - frontend runtime/product code
@@ -95,6 +96,7 @@ agent_protocols:
       - Behavior that treats tool output alone as completion proof.
       - Treating read-only as a ban on updating .agent/tools while implementing this tool bundle.
       - Treating legacy prompt/protocol/checklist files as the tool output reference without rebuilding compact governance/reference material.
+      - Committing senario-tmp.md.
 
   tool_initial_contract_flow:
     name: initial_contract
@@ -146,18 +148,33 @@ agent_protocols:
           - scenario_contract_result
           - missing_evidence_if_any
       - number: 10
-        action: End initial contract.
+        action: Create senario-tmp.md and end initial contract.
         output_layer:
+          - senario_tmp_path
+          - senario_tmp_created
           - initial_contract_summary
           - datetime
           - uuid
           - task_name
           - worktype
 
+  senario_tmp_contract:
+    path: senario-tmp.md
+    gitignore_required: true
+    created_when: quit from initial_contract after scenario-contract is written
+    purpose: >-
+      Store local temporary scenario-contract content for the Agent implementation
+      phase. This file is a local working artifact and must not be committed.
+    constraints:
+      - Must be listed in .gitignore.
+      - Must not be committed.
+      - May contain scenario-contract body.
+      - tool.log must not contain scenario-contract body.
+
   agent_implementation_phase:
     start:
       - Agent begins implementation after initial_contract ends.
-      - Agent follows the emitted worktype prompt, selected SSOT sections, and scenario-contract.
+      - Agent follows the emitted worktype prompt, selected SSOT sections, scenario-contract, and senario-tmp.md.
     end:
       - Agent finishes implementation before running the local-test tool flow.
       - Agent must preserve the tool usage metadata for PR and summary output.
@@ -166,6 +183,7 @@ agent_protocols:
       - implementation_end_metadata
       - selected_ssot_sections_summary
       - scenario_contract_summary
+      - senario_tmp_path
 
   tool_agent_local_test_flow:
     name: agent_local_test
@@ -257,6 +275,7 @@ agent_protocols:
   scenario_contract_gate:
     trigger: quit from initial_contract
     required_output: scenario-contract
+    temporary_file: senario-tmp.md
     purpose: Fix implementation route intent before Agent implementation begins.
 
   completion_output_contract:
@@ -267,6 +286,7 @@ agent_protocols:
       - worktype
       - selected_ssot_sections
       - scenario_contract_summary
+      - senario_tmp_path
       - local_test_result
       - checklist_result
       - check_result
