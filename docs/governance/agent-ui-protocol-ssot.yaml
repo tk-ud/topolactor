@@ -28,13 +28,30 @@ agent_protocols:
       - Do not dump execution logs into Agent context.
       - Tool output is an Agent-facing protocol UI, not SSOT authority by itself.
       - Tool may append compact usage evidence to docs/governance/logs/tool.log.
-      - Tool must not mutate repository source files outside the explicit usage log contract.
+      - Read-only applies to Topolactor application/runtime/product source surfaces observed by the tool, not to the tool's own implementation or governance-tool maintenance surfaces.
+      - Tool self-update and governance-tool evolution are allowed when the work scope is this agent-ui/tool bundle and the Agent is explicitly implementing the tool.
+      - During ordinary use, the tool must not mutate Topolactor application/runtime/product source files.
       - Tool must not judge implemented / partial / not_started status.
       - Tool must not duplicate full prompt/protocol bodies when a short emitted prompt section is enough.
+    mutation_boundary:
+      read_only_target:
+        - Topolactor application/runtime/product source surfaces observed by the tool
+      allowed_when_in_scope:
+        - .agent/tools implementation files
+        - .agent/tests for tool checks
+        - docs/governance agent-tool SSOT files
+        - docs/governance/logs/tool.log compact usage evidence
+      ordinary_use_prohibited_mutations:
+        - backend runtime/product code
+        - frontend runtime/product code
+        - db product schema/seed code
+        - docs/design product/runtime SSOT files
+        - roadmap/todo files outside an explicit governance-tool maintenance scope
     ng_examples:
       - Behavior that streams raw execution logs into Agent context.
       - Behavior that forces the Agent to read unnecessary protocol/prompt bodies.
       - Behavior that treats tool output alone as completion proof.
+      - Treating read-only as a ban on updating .agent/tools while implementing this tool bundle.
 
   tool_initial_contract_flow:
     name: initial_contract
