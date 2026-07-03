@@ -137,6 +137,7 @@ reverse_lookup:
     runner_surfaces:
       - .agent/tests/check-docs-ssot-connectivity.sh
       - .agent/tests/check-ssot-proof-surface-connectivity.sh
+      - .agent/tests/check-agent-ui-protocol-ssot.sh
       - .agent/tests/check-no-ruby-dependency.sh
       - .agent/tests/check-structure.sh
     proves_lookup_for:
@@ -145,6 +146,7 @@ reverse_lookup:
       - workflow yml referenced-script existence
       - general repo directory surface JSON observation (docs/ and .agent/tests/ on the same observation plane)
       - docs/ SSOT candidate connectivity to a reachable executable proof surface (ssot-map.yaml reference alone does not count)
+      - Agent UI protocol SSOT/reference wiring, without proving .agent/tools/agent-ui implementation completion
       - repo governance tooling Ruby-dependency exclusion (Python3 stdlib only)
     does_not_prove:
       - semantic sufficiency of any mapped SSOT read set

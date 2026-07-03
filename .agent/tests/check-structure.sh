@@ -554,6 +554,8 @@ run_subcheck ".agent/tests/check-docs-ssot-connectivity.sh"
 
 run_subcheck ".agent/tests/check-ssot-proof-surface-connectivity.sh"
 
+run_subcheck ".agent/tests/check-agent-ui-protocol-ssot.sh"
+
 run_subcheck ".agent/tests/check-no-ruby-dependency.sh"
 
 run_subcheck ".agent/tests/check-agent-tools-surface.sh"
