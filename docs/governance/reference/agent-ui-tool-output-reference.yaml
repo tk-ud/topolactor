@@ -149,6 +149,16 @@ log_record_reference:
     - Append only.
     - One tool usage equals one line.
     - Do not rewrite historical records.
+  cleanup_rule:
+    owner: human
+    cadence: periodic_manual
+    tool_must_not:
+      - cleanup
+      - truncate
+      - rewrite_historical_records
+    note: >-
+      tool.log is append-only for the tool. Periodic cleanup is a human
+      governance operation.
   record_format: "<datetime> <uuid> <task_name> <worktype>"
   datetime_format: ISO-8601
   forbidden_contents:
