@@ -12,6 +12,7 @@ import { buildLayoutPreviewPlaceholderProps } from "./layoutComponentPreview.ts"
 import { resolveUnknownCssTokenRefs } from "./cssDictionary.ts";
 import { interpolateLinkHrefReadOnly } from "./linkPlaceholderInterpolation.ts";
 import { evaluateAllCalcBindings, type CalcBinding, type CalcContext } from "./frontendLocalCalculationResolver.ts";
+import { projectionInputFromData } from "./projectionInput.ts";
 
 export type RenderEmissionOptions = {
   /**
@@ -473,7 +474,7 @@ export function projectionFromEmission(
   emission: Emission,
   definition: ProjectionDefinition,
 ): { projection: UiProjection; error?: undefined } | { projection?: undefined; error: string } {
-  const jsonKeyValue: Record<string, unknown> = emission.data ?? {};
+  const jsonKeyValue = projectionInputFromData(emission.data);
   return constructProjection(jsonKeyValue, definition);
 }
 

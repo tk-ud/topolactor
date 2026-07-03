@@ -70,7 +70,11 @@ export function LayoutPreviewNodeFrame({
     );
   }
   return (
-    <div class={`h-full w-full overflow-auto bg-white ${className}`}>
+    <div
+      class={`h-full w-full overflow-auto bg-white ${className}`}
+      aria-label={`${componentKey} preview`}
+      data-layout-preview-live={componentKey}
+    >
       {result.node as JSX.Element}
     </div>
   );

@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
+PASS_COUNT=0
 
 fail() {
   echo "FAIL: $1" >&2
@@ -86,7 +87,7 @@ must_have "$TARGET_SSOT" "automatic_promotion_from_diagnostic_surface"
 must_have "$TARGET_SSOT" "silent_fallback_to_pass"
 
 if [ "$FAILURES" -eq 0 ]; then
-  echo "=== system CI admin runtime callable SSOT wiring check passed ==="
+  echo "PASS check-system-ci-admin-runtime-callable-ssot.sh assertions=${PASS_COUNT}"
   exit 0
 fi
 

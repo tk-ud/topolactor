@@ -26,7 +26,8 @@ Canonical route:
 - `tasks/`: unresolved work queue.
 - `tmp/`: temporary artifacts only.
 - `skills/`: task procedures.
-- `scripts/`: helper scripts.
+- `tools/`: Agent-facing read-only repo observation entrypoints. Tools may expose thin wrappers over `.agent/scripts`, but they must not mutate repository state, own proof authority, or make semantic completion / implemented / partial judgments.
+- `scripts/`: CI / gate / helper implementation bodies. Scripts may provide reusable structured-processing bodies for tools, but `.agent/scripts` is not the Agent-facing convenience-command surface.
 
 ## Boundary Notes
 

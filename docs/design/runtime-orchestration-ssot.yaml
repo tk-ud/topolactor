@@ -250,6 +250,7 @@ runtime_orchestration_ssot:
       - topology_transform_runtime
       - registry_attractor_runtime
       - admin_runtime
+      - aggregate_trigger_runtime
       - sse_projection_runtime
       - external_port_runtime
       - cli_reader_port_runtime
@@ -330,10 +331,13 @@ runtime_orchestration_ssot:
           output: topology_output_lanes
         registry_attractor_runtime:
           output: sql_attention_observation
+        aggregate_trigger_runtime:
+          output: aggregate_trigger_event_aggregate_threshold_materialization_evidence
     backend_dispatchable_kinds:
       - topology_transform_runtime
       - registry_attractor_runtime
       - admin_runtime
+      - aggregate_trigger_runtime
       - sse_projection_runtime
       - external_port_runtime
       - cli_reader_port_runtime
@@ -991,3 +995,201 @@ runtime_orchestration_ssot:
     references:
       external_integration_completion_gate: docs/design/external-port-substrate-ssot.yaml
       admin_authoring_completion_gate: docs/design/admin-console-workflow-ssot.yaml
+
+aggregate_trigger_substrate_contract:
+  status: design_contract_confirmed_for_future_implementation
+  role: public_runtime_substrate
+  application_specific_names_policy:
+    rule: aggregate trigger substrate contract must use public substrate vocabulary only and must not encode application-specific domain names, use-case names, or bundle-local names as canonical terms.
+  authority_boundary:
+    event_role: input_evidence_only_not_scope_owner
+    scope_owner: processing_function_or_operation_definition
+    frontend_role: structured_authoring_projection_only
+    backend_runtime_role: validate_execute_and_persist_authority
+    repository_role: fixed_template_parameterized_persistence_authority
+  aggregate_trigger_definition:
+    required_fields:
+      - trigger_definition_id
+      - trigger_source
+      - processing_function_scope
+      - execution_scope
+      - transaction_boundary
+      - aggregate_target_binding
+      - conflict_key_fields
+      - delta_map
+      - threshold_policy
+      - materialization_target_binding
+      - materialization_payload_map
+      - approval_policy
+      - evidence_policy
+    prohibited_fields:
+      - raw_sql
+      - raw_case_expression
+      - raw_where_clause
+      - arbitrary_table_name
+  runtime_membership:
+    runtime_destination: aggregate_trigger_runtime
+    dispatchable_kind: aggregate_trigger_runtime
+    registration_surface: runtime_contract.backend_dispatchable_kinds
+    execution_route: trigger enters scheduler as cron/hook/client, manifest dispatcher resolves aggregate_trigger_runtime after scheduler alignment, and AggregateTriggerRuntime executes the structured definition.
+    not_admin_runtime_action: AdminRuntime authors and validates aggregate trigger definitions but does not own threshold evaluation, aggregate current upsert, or materialization execution.
+  trigger_source:
+    canonical_trigger_kind:
+      allowed_kinds:
+        - cron
+        - hook
+        - client
+      source_ref: runtime_orchestration_ssot.trigger_contract.kind_enum
+    trigger_source_detail_kind:
+      role: source detail after canonical trigger kind is known; not a runtime destination and not scheduler ownership
+      mapping:
+        client_operation_event:
+          canonical_trigger_kind: client
+          detail_source: ui_operation_or_admin_operation
+        hook_event:
+          canonical_trigger_kind: hook
+          detail_source: db_notify_external_webhook_or_internal_runtime_event
+        scheduled_cron_event:
+          canonical_trigger_kind: cron
+          detail_source: schedule_aligned_by_runtime_timeline_scheduler
+        runtime_function_event:
+          canonical_trigger_kind: hook
+          detail_source: internal_runtime_event
+    prohibited_detail_kinds:
+      - scheduler_event
+    rule: trigger_source supplies event payload and source metadata only; canonical trigger kind remains cron/hook/client and never owns execution scope, transaction boundary, aggregate target, threshold policy, materialization target, or approval policy.
+  processing_function_scope:
+    owner: processing_function_or_operation_definition
+    required_fields:
+      - function_id
+      - operation_definition_id
+      - accepted_event_schema_ref
+      - allowed_source_kinds
+      - materialization_policy_ref
+    rule: scope is resolved from registered processing function / operation definition, not from event origin.
+  execution_scope:
+    owner: processing_function_or_operation_definition
+    allowed_values:
+      - single_event
+      - aggregate_key_partition
+      - operation_instance
+      - tenant_or_workspace_partition
+    rule: event may select an instance within the declared scope but cannot broaden or redefine it.
+  transaction_boundary:
+    owner: processing_function_or_operation_definition
+    allowed_values:
+      - event_append_only
+      - event_append_and_aggregate_upsert
+      - event_append_aggregate_upsert_and_materialization
+    atomicity_rule: aggregate upsert and materialization evidence append are executed in one backend transaction when materialization is attempted.
+  aggregate_target_binding:
+    allowed_target_sources:
+      - step2_logical_entity_definition
+      - step2_5_relation_definition
+    target_selection_rule: admin Step3 may select only targets already defined in Step2 logical entity definitions or Step2.5 relation definitions.
+    prohibited:
+      - undefined_entity_or_relation_target
+      - arbitrary_table_name
+  conflict_key_fields:
+    source: selected_aggregate_target_binding_fields
+    required: true
+    rule: fields form stable aggregate current row identity and duplicate materialization guard identity.
+  delta_map:
+    role: event_to_aggregate_delta_definition
+    allowed_operations:
+      - increment_count
+      - increment_success_count
+      - increment_failure_count
+      - set_latest_value
+      - set_latest_timestamp
+    prohibited:
+      - raw_sql_expression
+      - raw_case_expression
+      - raw_where_clause
+  threshold_policy:
+    initial_shape:
+      minimum_trial_count:
+        type: integer
+        minimum: 1
+      ratio_numerator_field:
+        source: aggregate_current_row
+      ratio_denominator_field:
+        source: aggregate_current_row
+      comparison_operator:
+        allowed: [">", ">=", "<", "<=", "=", "!="]
+      target_ratio:
+        type: decimal
+        range: "0.0_to_1.0_unless_explicitly_extended_by_ssot"
+    evaluation_owner: backend_runtime
+    frontend_role: author_structured_policy_only
+  materialization_target_binding:
+    allowed_target_sources:
+      - step2_logical_entity_definition
+      - step2_5_relation_definition
+    prohibited:
+      - undefined_target
+      - arbitrary_table_name
+  materialization_payload_map:
+    status: confirmed_initial_contract
+    allowed_sources:
+      function_input_event:
+        allowed: true
+        rule: referenced by declared event schema path only
+      aggregate_current_row:
+        allowed: true
+        rule: referenced by declared aggregate field only
+      selected_step2_entity_fields:
+        allowed: true
+        rule: selected from Step2 logical entity definition already bound to the operation
+      selected_step2_5_relation_fields:
+        allowed: true
+        rule: selected from Step2.5 relation definition already bound to the operation
+      constant:
+        allowed: true
+        rule: typed scalar or typed json literal validated by target field type
+      generated_value:
+        allowed: true
+        allowed_generators:
+          - uuid
+          - current_timestamp
+          - monotonic_sequence_within_scope
+      runtime_actor_source_metadata:
+        allowed: true
+        allowed_fields:
+          - actor_id
+          - actor_role
+          - source_kind
+          - source_id
+          - correlation_id
+    prohibited:
+      - raw_sql_expression
+      - raw_case_expression
+      - raw_where_clause
+      - arbitrary_json_path_not_declared_by_schema
+  approval_policy:
+    allowed_values:
+      - auto_materialize_when_threshold_passes
+      - require_backend_approval_before_materialization
+      - require_human_approval_before_materialization
+    owner: processing_function_or_operation_definition
+    frontend_role: request_or_display_only_not_final_judgment
+  evidence_contracts:
+    event_evidence:
+      persistence: append_only_idempotent_event_log
+      identity: source_kind_source_id_correlation_id_event_fingerprint
+    aggregate_current:
+      persistence: current_row_by_conflict_key
+      mutation_rule: atomic_upsert_only
+    materialization_evidence:
+      persistence: append_only_materialization_log
+      duplicate_guard: materialization_target_binding_plus_conflict_key_fields_plus_payload_fingerprint
+  repository_contract:
+    required:
+      - fixed_sql_template_only
+      - parameterized_sql_only
+      - idempotent_event_append
+      - atomic_aggregate_current_upsert
+      - duplicate_materialization_guard
+    prohibited:
+      - app_side_read_count_update_race
+      - raw_sql_from_ui_or_event

@@ -2,7 +2,7 @@
 # check-design-inspector-port-binding-authoring.sh
 # Guards for Design Inspector component event / payloadFrom / outputProp / portTargetRef authoring bundle.
 # Bundle: ui-builder-design-inspector-port-binding-authoring
-# SSOT: external-port-substrate-ssot.yaml admin_setting_projection + ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
+# SSOT: docs/design/external-port-substrate-ssot.yaml admin_setting_projection + docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
 set -euo pipefail
 
 ui="frontend/islands/UiBuilderAdmin.tsx"

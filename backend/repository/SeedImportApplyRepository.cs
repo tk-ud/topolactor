@@ -6,7 +6,17 @@ namespace Topolactor.Repository;
 /// Canonical apply boundary for SeedRuntime import.
 /// Registers/promotes seed runtime declarations into manifest as active wiring entries.
 /// </summary>
-public class SeedImportApplyRepository
+public interface ISeedImportApplyBoundary
+{
+    Task<SeedImportApplyResult> ApplyRuntimeDeclarationAsync(
+        string target,
+        string layer,
+        string action,
+        string runtimeDestination,
+        CancellationToken ct = default);
+}
+
+public class SeedImportApplyRepository : ISeedImportApplyBoundary
 {
     private readonly string _connectionString;
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SSOT: docs/design/instance-port-substrate-ssot.yaml (auth.external.credential_management.projection boundary)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

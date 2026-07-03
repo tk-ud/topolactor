@@ -1,3 +1,4 @@
+import type { AggregateTriggerDefinitionPayload } from "./aggregateTriggerAuthoring.ts";
 import type { AdminManifestScreenDataShapeInput } from "../api/adminApi.ts";
 import type { ManifestScreenDesignDraft } from "./manifestScreenDesign.ts";
 import {
@@ -86,6 +87,7 @@ function shapePayloadFromExisting(
 export type BuildAssignPayloadOptions = {
   /** Active manifests from list_relationship_remote_targets (Step 2.5 infer). */
   relationshipRemoteTargets?: Step3RemoteTargetManifest[];
+  aggregateTriggerDefinitions?: AggregateTriggerDefinitionPayload[];
 };
 
 export function buildAssignPayloadForStep(
@@ -214,5 +216,6 @@ export function buildAssignPayloadForStep(
     searchConditions: assignSearchConditionsFromDesign(design),
     havingConditions: assignHavingConditionsFromDesign(design),
     displayColumnMode: design.displayColumnMode,
+    aggregateTriggerDefinitions: options?.aggregateTriggerDefinitions ?? [],
   };
 }

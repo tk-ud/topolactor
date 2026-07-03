@@ -18,6 +18,7 @@ const REQUIRED_ADMIN_DISPATCH_AXES: string[] = [
   "registry_vector:validate",
   "ui_component_bucket:create",
   "ui_component_bucket:list",
+  "component_registration:register_or_update_projection_component",
   "package_generator:generate",
   "package_generator:promote",
   "package_generator:promote_package",
@@ -111,7 +112,11 @@ function extractAdminDispatcherMappings(seedSql: string): Set<string> {
   return found;
 }
 
-function manifestBlocksRouteToAdminRuntime(seedSql: string, layer: string, action: string): boolean {
+function manifestBlocksRouteToAdminRuntime(
+  seedSql: string,
+  layer: string,
+  action: string,
+): boolean {
   const needle =
     `"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"${layer}","action":"${action}"`;
   const start = seedSql.indexOf(needle);
@@ -127,10 +132,14 @@ Deno.test(
       new URL("../../db/seed_empty.sql", import.meta.url),
     );
     const seeded = extractAdminDispatcherMappings(seedSql);
-    const missing = REQUIRED_ADMIN_DISPATCH_AXES.filter((axis) => !seeded.has(axis));
+    const missing = REQUIRED_ADMIN_DISPATCH_AXES.filter((axis) =>
+      !seeded.has(axis)
+    );
     assert(
       missing.length === 0,
-      `seed_empty.sql missing admin dispatcher_mapping for: ${missing.join(", ")}. ` +
+      `seed_empty.sql missing admin dispatcher_mapping for: ${
+        missing.join(", ")
+      }. ` +
         "POST /api/dispatch will return MANIFEST_NOT_FOUND until these rows exist.",
     );
   },
@@ -151,7 +160,9 @@ Deno.test(
     }
     assert(
       missingRuntime.length === 0,
-      `seed_empty.sql missing runtime_mapping admin_runtime near: ${missingRuntime.join(", ")}`,
+      `seed_empty.sql missing runtime_mapping admin_runtime near: ${
+        missingRuntime.join(", ")
+      }`,
     );
   },
 );

@@ -15,6 +15,9 @@ on:
       - '.agent/tasks/instance-port-substrate-implementation-todo.md'
       - '.agent/tests/check-instance-port-substrate.sh'
       - 'docs/design/instance-port-substrate-ssot.yaml'
+      - '.agent/tests/check-test-proof-manifest-integrity.sh'
+      - '.agent/docs/test-bundles.yaml'
+      - 'docs/design/test-proof-manifest-ssot.yaml'
       - 'db/**/*.sql'
       - 'infra/docker-compose.yml'
       - 'infra/.env.example'
@@ -37,6 +40,9 @@ on:
       - '.agent/tasks/instance-port-substrate-implementation-todo.md'
       - '.agent/tests/check-instance-port-substrate.sh'
       - 'docs/design/instance-port-substrate-ssot.yaml'
+      - '.agent/tests/check-test-proof-manifest-integrity.sh'
+      - '.agent/docs/test-bundles.yaml'
+      - 'docs/design/test-proof-manifest-ssot.yaml'
       - 'db/**/*.sql'
       - 'infra/docker-compose.yml'
       - 'infra/.env.example'
@@ -65,6 +71,9 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+
+      - name: Run test proof manifest integrity check
+        run: bash .agent/tests/check-test-proof-manifest-integrity.sh
 
       - name: Run unified test gate
         run: bash .agent/tests/check-unified-test-gate.sh
