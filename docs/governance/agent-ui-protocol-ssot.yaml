@@ -56,6 +56,7 @@ agent_protocols:
       dump of legacy prompt/protocol/checklist files.
     initial_reference:
       - docs/governance/reference/agent-ui-tool-output-reference.yaml
+      - docs/governance/reference/agent-ui-senario-tmp-reference.yaml
     rules:
       - Keep references compact.
       - Organize references by tool output step, not by legacy file layout.
@@ -163,13 +164,34 @@ agent_protocols:
     gitignore_required: true
     created_when: quit from initial_contract after scenario-contract is written
     purpose: >-
-      Store local temporary scenario-contract content for the Agent implementation
-      phase. This file is a local working artifact and must not be committed.
+      Store local temporary scenario-contract checklist content for the Agent
+      implementation phase. This file is a local working artifact and must not
+      be committed.
+    required_markdown_shape:
+      - heading: contracts
+        level: 1
+      - heading: target_file_name
+        level: 2
+        checklist_item_format: "- [ ] work summary"
+      - heading: negative cases
+        level: 1
+      - heading: NG authority
+        level: 2
+        checklist_item_format: "- [ ] not NG authority"
+    template: |-
+      # contracts
+      ## <target file name>
+      - [ ] <work summary>
+
+      # negative cases
+      ## NG authority
+      - [ ] not NG authority
     constraints:
       - Must be listed in .gitignore.
       - Must not be committed.
-      - May contain scenario-contract body.
       - tool.log must not contain scenario-contract body.
+      - checklist interview reads senario-tmp.md before asking framework questions.
+      - checklist interview must output Error when senario-tmp.md cannot be read or does not match the required markdown shape.
 
   agent_implementation_phase:
     start:
@@ -195,7 +217,12 @@ agent_protocols:
           - worktype_test_result
       - number: 2
         action: Run checklist interview.
+        details:
+          - Read senario-tmp.md.
+          - Output Error when senario-tmp.md cannot be checked.
+          - Ask questions following the framework, referring to existing checklists.
         output_layer:
+          - senario_tmp_check_result
           - checklist_interview_items
           - checklist_result
           - missing_checklist_answers_if_any
@@ -216,6 +243,7 @@ agent_protocols:
           - worktype
           - selected_ssot_sections
           - scenario_contract_summary
+          - senario_tmp_path
           - checklist_result
           - check_result
           - missing_evidence_if_any
@@ -288,6 +316,7 @@ agent_protocols:
       - scenario_contract_summary
       - senario_tmp_path
       - local_test_result
+      - senario_tmp_check_result
       - checklist_result
       - check_result
       - missing_evidence_if_any
