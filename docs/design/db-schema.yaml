@@ -1430,7 +1430,7 @@ recommend_target_boundary:
   interpretation: recommendation_uses_topology_and_context_learning_surfaces
 
 aggregate_trigger_table_contracts:
-  status: implemented
+  status: canonical_active
   namespace: runtime_orchestration
   source_file: db/runtime_orchestration_tables.sql
   repository_implementation:
