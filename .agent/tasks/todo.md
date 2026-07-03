@@ -8,22 +8,11 @@
 
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
-| `backend-error-evidence-report-notify-substrate` | backend system error evidence / report / notify substrate | partial | 1 | `product.backend_error_evidence_report_notify_substrate` | `docs/design/backend-error-evidence-report-notify-ssot.yaml` |
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `aggregate-trigger-substrate` | 集計トリガー基盤 | in_progress | 1 | - | `docs/design/runtime-orchestration-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
-
----
-
-## Bundle `future-external-bundle-gate`
-
-**Status:** not_started
-**SSOT:** `docs/design/extended-runtime-bundle-registry-ssot.yaml`
-
-- [ ] Notion/Sheets/Slack/GitHub/Webhook/REST-API-Connector/NoCode-Loop — 個別 SSOT 揃うまで実装しない
 
 ---
 
