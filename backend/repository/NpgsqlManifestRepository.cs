@@ -135,6 +135,32 @@ public class NpgsqlManifestRepository : ManifestRepository
     }
 
     /// <inheritdoc/>
+    public override async Task<IReadOnlySet<string>> ListActivePhysicalTableRefsAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT table_ref FROM topology.physical_tables WHERE active = true";
+
+        var refs = new HashSet<string>(StringComparer.Ordinal);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            if (!reader.IsDBNull(0))
+            {
+                var tableRef = reader.GetString(0).Trim();
+                if (!string.IsNullOrWhiteSpace(tableRef))
+                    refs.Add(tableRef);
+            }
+        }
+
+        return refs;
+    }
+
+    /// <inheritdoc/>
     public override async Task<ManifestDetailRecord?> LoadDetailByIdAsync(
         Guid manifestId,
         CancellationToken ct = default)
@@ -534,6 +560,8 @@ public class NpgsqlManifestRepository : ManifestRepository
             evidence);
         var topology = ManifestCanonicalProjection.MergeTopologyEntry(
             source.Topology, CloneDraftMetadata.EntryType, cloneEntry);
+        topology = ManifestListEligibility.EnsureContentsTypeOnTopology(
+            topology, ManifestContentsTypeVocabulary.Contents);
 
         return await CreateDraftAsync(source.RelationRegistryId, topology, ct);
     }
@@ -560,6 +588,8 @@ public class NpgsqlManifestRepository : ManifestRepository
             evidence);
         var topology = ManifestCanonicalProjection.MergeTopologyEntry(
             renamed, CloneDraftMetadata.EntryType, cloneEntry);
+        topology = ManifestListEligibility.EnsureContentsTypeOnTopology(
+            topology, ManifestContentsTypeVocabulary.Contents);
 
         return await CreateDraftAsync(source.RelationRegistryId, topology, ct);
     }

@@ -116,6 +116,13 @@ public abstract class ManifestRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// Active table_ref values from topology.physical_tables for manifest:list physical filter.
+    /// </summary>
+    public virtual Task<IReadOnlySet<string>> ListActivePhysicalTableRefsAsync(
+        CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.Ordinal));
+
+    /// <summary>
     /// Loads manifest detail including timestamps.
     /// </summary>
     public abstract Task<ManifestDetailRecord?> LoadDetailByIdAsync(

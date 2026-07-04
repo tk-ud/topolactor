@@ -225,7 +225,8 @@ export const UX_COLUMN_TYPE_ADVANCED_LABEL = "その他（詳細入力）";
 export type ContentsStep1EntryModeId =
   | "create_new_topology"
   | "clone_active_as_replacement_draft"
-  | "clone_active_as_new_topology_draft";
+  | "clone_active_as_new_topology_draft"
+  | "resume_existing_draft";
 
 export const CONTENTS_STEP1_ENTRY_MODE_OPTIONS: readonly {
   id: ContentsStep1EntryModeId;
@@ -250,6 +251,12 @@ export const CONTENTS_STEP1_ENTRY_MODE_OPTIONS: readonly {
     description:
       "有効な正本を系譜（lineage）の証跡としてのみ参照し、新しいトポロジIDで別トポロジを登録します。" +
       "元の正本を置き換えることはできません。",
+  },
+  {
+    id: "resume_existing_draft",
+    label: "既存の下書きを再開",
+    description:
+      "保存済みの contents 下書きを選び、トポロジ名の再登録なしで Step 2 から編集を再開します。",
   },
 ];
 

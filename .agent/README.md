@@ -24,7 +24,7 @@ Fallback route when tool-first is not usable:
 - `prompt/`: worktype routers (purpose/trigger/reads/protocol triggers/output shape/out-of-scope).
 - `protocols/`: judgment gates (blocking/pass semantics only).
 - `checklists/`: viewpoint signature templates.
-- `tests/`: executable route/vocabulary/structure checks.
+- `tests/`: executable route/vocabulary/structure checks. Output policy: [`tests/README.md`](tests/README.md).
 - `docs/`: agent-side required path and ssot mapping indexes.
 - `reports/`: persistent inspection reports.
 - `tasks/`: unresolved work queue.

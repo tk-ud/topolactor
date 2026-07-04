@@ -1889,26 +1889,43 @@ public partial class AdminRuntime
     {
         if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
 
-        string? status = null;
-        if (vector.Payload is { ValueKind: JsonValueKind.Object } payload &&
-            payload.TryGetProperty("status", out var statusEl) &&
-            statusEl.ValueKind == JsonValueKind.String)
-        {
-            status = statusEl.GetString();
-        }
+        var filter = ManifestListEligibility.ParseFilter(vector.Payload);
+        var status = filter.Status;
 
         var items = await _manifestRepository.ListManifestsAsync(status, ct);
-        var dtos = items.Select(m => new AdminManifestListItemDto(
-            m.ManifestId.ToString(),
-            m.Status,
-            m.RelationRegistryId?.ToString(),
-            m.Role,
-            m.Target,
-            m.Layer,
-            m.Action,
-            m.RuntimeDestination,
-            m.CreatedAt.ToString("o"),
-            m.UpdatedAt.ToString("o"))).ToList();
+        var activePhysicalTableRefs = await _manifestRepository.ListActivePhysicalTableRefsAsync(ct);
+
+        var dtos = new List<AdminManifestListItemDto>();
+        foreach (var item in items)
+        {
+            var detail = await _manifestRepository.LoadDetailByIdAsync(item.ManifestId, ct);
+            if (detail is null) continue;
+
+            var summary = ManifestListEligibility.Summarize(detail.Topology, activePhysicalTableRefs);
+            if (!ManifestListEligibility.MatchesFilter(summary, filter))
+                continue;
+
+            dtos.Add(new AdminManifestListItemDto(
+                item.ManifestId.ToString(),
+                item.Status,
+                item.RelationRegistryId?.ToString(),
+                item.Role,
+                item.Target,
+                item.Layer,
+                item.Action,
+                item.RuntimeDestination,
+                item.CreatedAt.ToString("o"),
+                item.UpdatedAt.ToString("o"),
+                summary.ContentsType,
+                summary.TopologySystemName,
+                summary.UserFacingTopologyLabel,
+                summary.TableRef,
+                summary.PhysicalBound,
+                summary.AuthoringProgressStep,
+                summary.DraftOrigin,
+                summary.CloneMode,
+                summary.SourceActiveManifestId));
+        }
 
         return (JsonSerializer.SerializeToElement(dtos), null);
     }
@@ -2093,6 +2110,8 @@ public partial class AdminRuntime
         var cloneEntry = CloneDraftMetadata.BuildEntry(
             CloneDraftMetadata.OriginManualNew, CloneDraftMetadata.CloneModeNone, null, null);
         topology = ManifestCanonicalProjection.MergeTopologyEntry(topology, CloneDraftMetadata.EntryType, cloneEntry);
+        topology = ManifestListEligibility.EnsureContentsTypeOnTopology(
+            topology, ManifestContentsTypeVocabulary.Contents);
 
         Guid? relationRegistryId = null;
         if (!string.IsNullOrWhiteSpace(request.RelationRegistryId))
@@ -3236,6 +3255,7 @@ public partial class AdminRuntime
         var entry = JsonSerializer.SerializeToElement(new
         {
             type = ManifestCanonicalProjection.ScreenDataShapeEntryType,
+            contentsType = ManifestContentsTypeVocabulary.Contents,
             tableRef,
             dbTableName = tableRef,
             importSchemaName = request.ImportSchemaName,

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
@@ -281,19 +282,123 @@ public class SeedRuntimeTopologySeedDiscussionTests
         var repoRoot = FindRepoRoot();
         var psi = new ProcessStartInfo
         {
-            FileName = Path.Combine(repoRoot, ".agent", "tools", "topology-seed-discussion"),
             WorkingDirectory = repoRoot,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
-        foreach (var arg in args) psi.ArgumentList.Add(arg);
+        ApplyUtf8ToolProcessEnvironment(psi);
+
+        if (OperatingSystem.IsWindows())
+            ConfigureWindowsToolLaunch(psi, repoRoot, args);
+        else
+            ConfigureUnixToolLaunch(psi, repoRoot, args);
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("failed to start topology-seed-discussion");
         var stdout = process.StandardOutput.ReadToEnd();
         var stderr = process.StandardError.ReadToEnd();
         process.WaitForExit();
         return new ToolResult(process.ExitCode, stdout, stderr);
+    }
+
+    private static void ConfigureUnixToolLaunch(ProcessStartInfo psi, string repoRoot, string[] args)
+    {
+        var toolPath = Path.Combine(repoRoot, ".agent", "tools", "topology-seed-discussion");
+        psi.FileName = toolPath;
+        foreach (var arg in args) psi.ArgumentList.Add(arg);
+    }
+
+    private static void ConfigureWindowsToolLaunch(ProcessStartInfo psi, string repoRoot, string[] args)
+    {
+        var scriptPath = Path.Combine(repoRoot, ".agent", "scripts", "agent_tools", "readonly_observation.py");
+        if (TryConfigurePythonLaunch(psi, scriptPath, args))
+            return;
+
+        // Git Bash only resolves repo-local scripts via MSYS paths (E:/... is not executable).
+        var toolPath = Path.Combine(repoRoot, ".agent", "tools", "topology-seed-discussion");
+        psi.FileName = "bash";
+        psi.ArgumentList.Add(ToMsysPath(toolPath));
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (i > 0 && args[i - 1] == "--answers" && LooksLikeFilesystemPath(arg))
+                arg = ToMsysPath(arg);
+            psi.ArgumentList.Add(arg);
+        }
+    }
+
+    private static bool TryConfigurePythonLaunch(ProcessStartInfo psi, string scriptPath, string[] args)
+    {
+        (string executable, string[] prefix)[] candidates =
+        [
+            ("py", ["-3"]),
+            ("python3", []),
+            ("python", []),
+        ];
+
+        foreach (var (executable, prefix) in candidates)
+        {
+            if (!CommandRuns(executable, [.. prefix, "--version"]))
+                continue;
+
+            psi.FileName = executable;
+            foreach (var token in prefix) psi.ArgumentList.Add(token);
+            psi.ArgumentList.Add(scriptPath);
+            psi.ArgumentList.Add("topology-seed-discussion");
+            foreach (var arg in args) psi.ArgumentList.Add(arg);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool CommandRuns(string executable, string[] args)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = executable,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var arg in args) psi.ArgumentList.Add(arg);
+
+        try
+        {
+            using var process = Process.Start(psi);
+            if (process is null) return false;
+            process.WaitForExit(5000);
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string ToMsysPath(string path)
+    {
+        var full = Path.GetFullPath(path);
+        if (full.Length >= 2 && full[1] == ':' && char.IsLetter(full[0]))
+        {
+            var drive = char.ToLowerInvariant(full[0]);
+            var rest = full[2..].Replace('\\', '/');
+            return $"/{drive}{rest}";
+        }
+
+        return full.Replace('\\', '/');
+    }
+
+    private static bool LooksLikeFilesystemPath(string value)
+        => value.Contains('\\') || value.Contains('/') || (value.Length > 1 && value[1] == ':');
+
+    private static void ApplyUtf8ToolProcessEnvironment(ProcessStartInfo psi)
+    {
+        psi.Environment["PYTHONUTF8"] = "1";
+        psi.Environment["PYTHONIOENCODING"] = "utf-8";
     }
 
     private static string FindRepoRoot()

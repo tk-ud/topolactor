@@ -130,7 +130,7 @@ VALUES (
       '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
       '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb,
       '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-      '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+      '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
     ]::jsonb[],
     'active'
 )
@@ -332,7 +332,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -344,7 +344,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -356,7 +356,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -368,7 +368,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -380,7 +380,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -392,7 +392,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -404,7 +404,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -416,7 +416,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -428,7 +428,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -440,7 +440,7 @@ VALUES
             '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
             '{"type":"projection_constructor_mapping","projection_definition":{"constructorKey":"seed-projection-lane","packageIds":["00000000-0000-0000-0000-000000000001"],"outputKind":"form_inputs","fieldDefs":[{"key":"seedLabel","label":"Seed label","kind":"text","required":true}]}}'::jsonb,
-            '{"type":"screen_data_shape","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
+            '{"type":"screen_data_shape","contentsType":"runtime_seed","tableRef":"seed.projection_lane","initialDataRows":[{"values":{"seedLabel":"projection-lane-seed"}}],"displayColumnMode":"all"}'::jsonb
         ]::jsonb[],
         'active'
     ),
@@ -1927,7 +1927,7 @@ VALUES (
     NULL,
     ARRAY[
         '{"type":"hub_grouping","manifestKey":"auth.user.boundary"}'::jsonb,
-        '{"type":"screen_data_shape","logicalTables":[{"tableName":"auth.user","columns":[{"name":"id","dataType":"uuid","nullable":false},{"name":"username","dataType":"text","nullable":true}]}]}'::jsonb
+        '{"type":"screen_data_shape","contentsType":"relationship_boundary","logicalTables":[{"tableName":"auth.user","columns":[{"name":"id","dataType":"uuid","nullable":false},{"name":"username","dataType":"text","nullable":true}]}]}'::jsonb
     ]::jsonb[],
     'active'
 )
@@ -1956,7 +1956,7 @@ VALUES (
         '{"type":"admin_event_authoring_boundary","surface":"admin_ui_builder_design_inspector","category":"instance_settings","allowedActionType":"dispatchInstanceOperation","allowedTargetRefField":"instanceTargetRef","candidateScope":"approved_instance_operation_only","allowedAssignments":["trigger","payloadFrom","outputProp"],"forbiddenEditors":["instance_function_definition","address_edit","schema_edit","raw_sql_edit","credential_edit"],"targetRefPrefix":"instance-port:"}'::jsonb,
         '{"type":"physical_binding","mode":"seed_projection_marker_only","canonical_execution":"runtime_resolves_tableRef_to_physical_table_manifest_bindings","tables":["topology.external_access_ports","topology.external_response_ports","topology.external_hook_ports","topology.external_port_policies","topology.db_instance_port","topology.runtime_instance_port","topology.instance_connection_policy","topology.instance_operation_authority_binding"],"forbidden":"generic_physical_table_row_editor"}'::jsonb,
         '{"type":"canonical_port_bindings","manifestKey":"auth.external.credential_management.projection","portKindTableRefs":{"access_port":"topology.external_access_ports","response_port":"topology.external_response_ports","hook_port":"topology.external_hook_ports","db_instance_port":"topology.db_instance_port","runtime_instance_port":"topology.runtime_instance_port"},"instancePolicyTableRefs":{"instance_connection_policy":"topology.instance_connection_policy","instance_operation_authority_binding":"topology.instance_operation_authority_binding"},"verifiedBy":"physical_table_manifest_bindings"}'::jsonb,
-        '{"type":"screen_data_shape","topologySystemName":"auth-external-credential-management-topology-projection","userFacingTopologyLabel":"Auth / external credential management","tableRef":"topology.external_response_ports","dbTableName":"topology.external_response_ports","screenOperationKinds":["list","update","download_json_template","import_json_template","validate","preview","apply"],"displayColumnMode":"selected","displayColumns":["credential_management_category.category_key","external_port_context.port_kind","external_port_context.provider_kind","external_port_context.credential_kind","external_port_context.reference_key","external_port_context.required_by_bundle","external_port_context.consumer_bundle_binding","external_port_context.policy_template_key","instance_connection_policy.instance_authority_key","instance_operation_authority_binding.operation_binding_key","instance_operation_authority_binding.approval_status"],"designInspectorEventCandidates":[{"actionType":"dispatchInstanceOperation","candidateScope":"approved_instance_operation_only","instanceTargetRef":"instance-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder","assignableFields":["trigger","payloadFrom","outputProp"],"forbiddenEditors":["instance_function_definition","address_edit","schema_edit","raw_sql_edit","credential_edit"]}]}'::jsonb,
+        '{"type":"screen_data_shape","contentsType":"bundle_projection","topologySystemName":"auth-external-credential-management-topology-projection","userFacingTopologyLabel":"Auth / external credential management","tableRef":"topology.external_response_ports","dbTableName":"topology.external_response_ports","screenOperationKinds":["list","update","download_json_template","import_json_template","validate","preview","apply"],"displayColumnMode":"selected","displayColumns":["credential_management_category.category_key","external_port_context.port_kind","external_port_context.provider_kind","external_port_context.credential_kind","external_port_context.reference_key","external_port_context.required_by_bundle","external_port_context.consumer_bundle_binding","external_port_context.policy_template_key","instance_connection_policy.instance_authority_key","instance_operation_authority_binding.operation_binding_key","instance_operation_authority_binding.approval_status"],"designInspectorEventCandidates":[{"actionType":"dispatchInstanceOperation","candidateScope":"approved_instance_operation_only","instanceTargetRef":"instance-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder","assignableFields":["trigger","payloadFrom","outputProp"],"forbiddenEditors":["instance_function_definition","address_edit","schema_edit","raw_sql_edit","credential_edit"]}]}'::jsonb,
         '{"type":"credential_management_logical_table_shape","tableName":"credential_management_category","columns":[{"name":"category_key","dataType":"text","nullable":false},{"name":"mode","dataType":"text","nullable":false},{"name":"label","dataType":"text","nullable":false}]}'::jsonb,
         '{"type":"credential_management_logical_table_shape","tableName":"external_port_context","columns":[{"name":"port_context_id","dataType":"uuid","nullable":false},{"name":"category_key","dataType":"text","nullable":false},{"name":"port_kind","dataType":"text","nullable":false},{"name":"provider_kind","dataType":"text","nullable":false},{"name":"credential_kind","dataType":"text","nullable":false},{"name":"reference_key","dataType":"text","nullable":true},{"name":"required_by_bundle","dataType":"text","nullable":false},{"name":"consumer_bundle_binding","dataType":"text","nullable":true},{"name":"policy_template_key","dataType":"text","nullable":false},{"name":"auth_user_id","dataType":"uuid","nullable":true}]}'::jsonb,
         '{"type":"credential_management_logical_table_shape","tableName":"policy_template_selection","columns":[{"name":"policy_template_key","dataType":"text","nullable":false},{"name":"category_key","dataType":"text","nullable":false},{"name":"port_kind","dataType":"text","nullable":false},{"name":"required_by_bundle","dataType":"text","nullable":false}]}'::jsonb,
@@ -2093,7 +2093,7 @@ VALUES (
     '00000000-0000-0000-0000-0000000000a2',
     'file_storage.export_job.dispatch.projection',
     'active',
-    '{"manifest_id":"00000000-0000-0000-0000-000000000093","source":"file-storage-bundle-export-job-dispatch","attachmentSurface":{"tableRef":"topology.record_file_attachment_bindings","artifactAuthority":"topology.file_artifacts","credentialPlane":"external_port_substrate_reference_key_only","operations":["topology.fs_bind_record_file_attachment","topology.fs_list_record_file_attachments","topology.fs_unbind_record_file_attachment"],"forbiddenProjectionFields":["storage_ref","authorization_key","signed_url","credential","bucket","endpoint"]},"screen_data_shape":{"type":"screen_data_shape","topologySystemName":"file-storage-attachment-manifest-seed","userFacingTopologyLabel":"File attachments","tableRef":"topology.record_file_attachment_bindings","dbTableName":"topology.record_file_attachment_bindings","displayColumnMode":"selected","displayColumns":["record_file_attachment_bindings.record_table_ref","record_file_attachment_bindings.record_id","file_artifacts.file_name","file_artifacts.file_type","file_artifacts.byte_size","file_artifacts.checksum_value","record_file_attachment_bindings.relation_kind","record_file_attachment_bindings.created_at"],"logicalTables":[{"tableName":"record_file_attachment_bindings","columns":[{"name":"attachment_binding_id","dataType":"uuid","nullable":false},{"name":"record_table_ref","dataType":"text","nullable":false},{"name":"record_id","dataType":"text","nullable":false},{"name":"file_artifact_id","dataType":"uuid","nullable":false},{"name":"relation_kind","dataType":"text","nullable":false},{"name":"created_at","dataType":"timestamptz","nullable":false}]},{"tableName":"file_artifacts","columns":[{"name":"file_artifact_id","dataType":"uuid","nullable":false},{"name":"file_name","dataType":"text","nullable":false},{"name":"file_type","dataType":"text","nullable":false},{"name":"byte_size","dataType":"bigint","nullable":true},{"name":"checksum_value","dataType":"text","nullable":false}]}],"relationIntents":[{"localTableRef":"record_file_attachment_bindings","joinTableRef":"file_artifacts","localKey":"file_artifact_id","remoteKey":"file_artifact_id"}],"operationEntityBindings":[{"operationKind":"bind_attachment","function":"topology.fs_bind_record_file_attachment","entityTargetColumns":["record_table_ref","record_id","file_artifact_id","relation_kind"]},{"operationKind":"list_attachments","function":"topology.fs_list_record_file_attachments","entityTargetColumns":["record_table_ref","record_id"]},{"operationKind":"unbind_attachment","function":"topology.fs_unbind_record_file_attachment","entityTargetColumns":["record_table_ref","record_id","file_artifact_id","relation_kind"]}]}}'::jsonb
+    '{"manifest_id":"00000000-0000-0000-0000-000000000093","source":"file-storage-bundle-export-job-dispatch","attachmentSurface":{"tableRef":"topology.record_file_attachment_bindings","artifactAuthority":"topology.file_artifacts","credentialPlane":"external_port_substrate_reference_key_only","operations":["topology.fs_bind_record_file_attachment","topology.fs_list_record_file_attachments","topology.fs_unbind_record_file_attachment"],"forbiddenProjectionFields":["storage_ref","authorization_key","signed_url","credential","bucket","endpoint"]},"screen_data_shape":{"type":"screen_data_shape","contentsType":"bundle_projection","topologySystemName":"file-storage-attachment-manifest-seed","userFacingTopologyLabel":"File attachments","tableRef":"topology.record_file_attachment_bindings","dbTableName":"topology.record_file_attachment_bindings","displayColumnMode":"selected","displayColumns":["record_file_attachment_bindings.record_table_ref","record_file_attachment_bindings.record_id","file_artifacts.file_name","file_artifacts.file_type","file_artifacts.byte_size","file_artifacts.checksum_value","record_file_attachment_bindings.relation_kind","record_file_attachment_bindings.created_at"],"logicalTables":[{"tableName":"record_file_attachment_bindings","columns":[{"name":"attachment_binding_id","dataType":"uuid","nullable":false},{"name":"record_table_ref","dataType":"text","nullable":false},{"name":"record_id","dataType":"text","nullable":false},{"name":"file_artifact_id","dataType":"uuid","nullable":false},{"name":"relation_kind","dataType":"text","nullable":false},{"name":"created_at","dataType":"timestamptz","nullable":false}]},{"tableName":"file_artifacts","columns":[{"name":"file_artifact_id","dataType":"uuid","nullable":false},{"name":"file_name","dataType":"text","nullable":false},{"name":"file_type","dataType":"text","nullable":false},{"name":"byte_size","dataType":"bigint","nullable":true},{"name":"checksum_value","dataType":"text","nullable":false}]}],"relationIntents":[{"localTableRef":"record_file_attachment_bindings","joinTableRef":"file_artifacts","localKey":"file_artifact_id","remoteKey":"file_artifact_id"}],"operationEntityBindings":[{"operationKind":"bind_attachment","function":"topology.fs_bind_record_file_attachment","entityTargetColumns":["record_table_ref","record_id","file_artifact_id","relation_kind"]},{"operationKind":"list_attachments","function":"topology.fs_list_record_file_attachments","entityTargetColumns":["record_table_ref","record_id"]},{"operationKind":"unbind_attachment","function":"topology.fs_unbind_record_file_attachment","entityTargetColumns":["record_table_ref","record_id","file_artifact_id","relation_kind"]}]}}'::jsonb
 )
 ON CONFLICT (topology_manifest_id) DO UPDATE
     SET manifest_key = EXCLUDED.manifest_key,

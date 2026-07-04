@@ -230,6 +230,22 @@ export type AdminManifestListItem = {
   runtimeDestination: string | null;
   createdAt: string;
   updatedAt: string;
+  contentsType?: string;
+  topologySystemName?: string;
+  userFacingTopologyLabel?: string;
+  tableRef?: string;
+  physicalBound?: boolean;
+  authoringProgressStep?: string;
+  draftOrigin?: string;
+  cloneMode?: string;
+  sourceActiveManifestId?: string | null;
+};
+
+export type AdminManifestListFilter = {
+  status?: string;
+  contentsType?: string | string[];
+  physical?: boolean;
+  logicalTablesMin?: number;
 };
 
 export type AdminManifestTopologySummary = {
@@ -292,7 +308,8 @@ export type AdminManifestDraftInput = {
 export type ContentsStep1EntryMode =
   | "create_new_topology"
   | "clone_active_as_replacement_draft"
-  | "clone_active_as_new_topology_draft";
+  | "clone_active_as_new_topology_draft"
+  | "resume_existing_draft";
 
 export type CloneSourceEvidence = {
   sourceActiveManifestId: string;
@@ -553,8 +570,13 @@ async function callAdminManifestOp(
   return { success: result.success ?? true, emission: result.emission, errors: result.errors };
 }
 
-export async function listAdminManifests(status?: string): Promise<AdminManifestListItem[] | null> {
-  const body = await callAdminManifestOp("list", status ? { status } : undefined);
+export async function listAdminManifests(
+  filter?: string | AdminManifestListFilter,
+): Promise<AdminManifestListItem[] | null> {
+  const payload = typeof filter === "string"
+    ? (filter ? { status: filter } : undefined)
+    : filter;
+  const body = await callAdminManifestOp("list", payload);
   if (body === null) return null;
   return (body.emission?.data ?? []) as AdminManifestListItem[];
 }
