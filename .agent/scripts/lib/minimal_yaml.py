@@ -183,6 +183,49 @@ def _consume_block_scalar(cur: _Cursor, marker: str, key_indent: int):
     return text
 
 
+def _is_self_contained_scalar(first_line: str) -> bool:
+    """True if first_line is already a complete quoted/flow scalar on its own.
+
+    Folding continuation lines onto these would corrupt them (e.g. appending
+    text after a closing quote breaks _unquote's s[0]==s[-1]==quote check), and
+    this repo's hand-authored yaml never wraps a quoted/flow scalar across
+    lines, so such values are left exactly as _resolve_value/parse_scalar
+    always handled them.
+    """
+    if not first_line:
+        return True
+    if first_line[0] in ('"', "'"):
+        return True
+    if first_line[0] == "[" and first_line.endswith("]"):
+        return True
+    return False
+
+
+def _fold_plain_scalar_continuation(cur: _Cursor, first_line: str, base_indent: int) -> str:
+    """Folds continuation lines of an unmarked plain scalar onto one string.
+
+    Plain YAML block-sequence/mapping scalars can wrap across lines without an
+    explicit `>`/`|` marker -- any following line indented deeper than
+    base_indent is part of the same scalar (folded, like `>`), same as
+    _consume_block_scalar does for explicitly-marked values. Before this, such
+    continuation lines fell outside the marker-based path entirely and the
+    sequence/mapping loop that hit them (indent mismatch, no '- '/'key:')
+    would silently stop instead of erroring or folding, dropping every
+    following key. See docs/governance/reference/agent-ui-tool-output-reference.yaml
+    git history for a real instance of this truncation.
+    """
+    if _is_self_contained_scalar(first_line):
+        return first_line
+    parts = [first_line]
+    while True:
+        nxt = cur.peek()
+        if nxt is None or nxt[0] <= base_indent:
+            break
+        parts.append(nxt[1])
+        cur.advance()
+    return " ".join(parts)
+
+
 def _resolve_value(cur: _Cursor, val: str, key_indent: int):
     if val in _BLOCK_MARKERS:
         return _consume_block_scalar(cur, val, key_indent)
@@ -191,7 +234,7 @@ def _resolve_value(cur: _Cursor, val: str, key_indent: int):
         if nxt is not None and nxt[0] > key_indent:
             return _parse_block(cur, nxt[0])
         return None
-    return parse_scalar(val)
+    return parse_scalar(_fold_plain_scalar_continuation(cur, val, key_indent))
 
 
 def _parse_map(cur: _Cursor, indent: int):
@@ -231,7 +274,7 @@ def _parse_seq(cur: _Cursor, indent: int):
             continue
         key, val, is_kv = _try_split_kv(rest)
         if not is_kv:
-            result.append(parse_scalar(rest))
+            result.append(parse_scalar(_fold_plain_scalar_continuation(cur, rest, indent)))
             continue
         item_indent = indent + 2
         d = {key: _resolve_value(cur, val, item_indent)}
