@@ -1,3 +1,5 @@
 # design_change protocol sections
 
-Source: `.agent/protocols/design-change.md`.
+Source compatibility file: `.agent/protocols/design-change.md`.
+
+Section shards live under `.agent/protocols/design-change/`.
