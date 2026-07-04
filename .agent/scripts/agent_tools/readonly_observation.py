@@ -806,6 +806,19 @@ def _normalize_enabled_indexes(bits, schema_bits):
     return enabled
 
 
+def _bits_length_metadata(bits, schema_bits):
+    expected = len(schema_bits)
+    provided = len(bits)
+    implicit_zero_fill = max(0, expected - provided)
+    return {
+        "mode": "exact" if provided == expected else "prefix_zero_fill",
+        "expected": expected,
+        "provided": provided,
+        "implicit_zero_fill": implicit_zero_fill,
+        "bits_length_mismatch": provided != expected,
+    }
+
+
 def _base_template(space: str):
     return {
         "discussion_only": True,
@@ -881,6 +894,7 @@ def _validate_seed_candidate_payload(payload):
 def _build_tmp_template(space: str, bits):
     schema_bits = topology_seed_question_bits(space)
     enabled_indexes = _normalize_enabled_indexes(bits, schema_bits)
+    bits_length = _bits_length_metadata(bits, schema_bits)
     template = _base_template(space)
     enabled_keys = []
     disabled_keys = []
@@ -896,9 +910,10 @@ def _build_tmp_template(space: str, bits):
         "question_space": space,
         "enabled_keys": enabled_keys,
         "status": "discussion_draft",
+        "bits_length": bits_length,
     }
     template["seed_candidate_payload"] = _empty_seed_candidate_payload(space, enabled_keys)
-    return enabled_keys, disabled_keys, template
+    return enabled_keys, disabled_keys, template, bits_length
 
 
 def topology_seed_discussion(argv: list[str]) -> int:
@@ -978,7 +993,7 @@ def topology_seed_discussion(argv: list[str]) -> int:
                     raise ValueError("--space is required when using --bits")
                 space = args.space
                 bits = _parse_bits(args.bits)
-            enabled_keys, disabled_keys, template = _build_tmp_template(space, bits)
+            enabled_keys, disabled_keys, template, bits_length = _build_tmp_template(space, bits)
         except (OSError, json.JSONDecodeError, ValueError) as exc:
             sys.stderr.write(f"FAIL: {exc}\n")
             return 1
@@ -990,6 +1005,7 @@ def topology_seed_discussion(argv: list[str]) -> int:
             "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
             "enabled_keys": enabled_keys,
             "disabled_keys": disabled_keys,
+            "bits_length": bits_length,
             "discussion_metadata": template["discussion_metadata"],
             "seed_candidate_payload": template["seed_candidate_payload"],
             "tmp_json_template": template,
@@ -1038,6 +1054,7 @@ def topology_seed_discussion(argv: list[str]) -> int:
         "mode": "build",
         "source_file": str(answers_path),
         "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY,
+        "bits_length": discussion_metadata.get("bits_length"),
         "discussion_metadata": discussion_metadata,
         "discussion_result": {
             "status": "discussion_draft",

@@ -560,6 +560,8 @@ run_subcheck ".agent/tests/check-no-ruby-dependency.sh"
 
 run_subcheck ".agent/tests/check-agent-tools-surface.sh"
 
+run_subcheck ".agent/tests/check-topology-seed-discussion-bits-length.sh"
+
 run_subcheck ".agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
 
 run_subcheck ".agent/tests/check-runtime-bundle-ssots.sh"

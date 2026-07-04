@@ -21,11 +21,21 @@ Worktype is `audit`, including any of:
   4. docs/design/pipeline-continuity-ssot.yaml
 - PR diff or patch
 - changed file list
+- PR上の記録 when the audit target is a PR:
+  - PR本文 / scope claim
+  - PR comments
+  - PR reviews
+  - review thread status
+- tool証跡log when `.agent/tools` / Agent UI run evidence is claimed or required:
+  - docs/governance/logs/tool.log
+  - referenced Agent UI uuid / datetime
+  - senario-tmp.md or relevant tool summary when referenced
 - .agent/tasks/todo.md
 - docs/system-roadmap.yaml
 - roadmap target milestone/unlocks and related implementation_registry entry
 - diff-target implementation files
 - .agent/protocols/audit.md
+- .agent/protocols/audit/index.md
 - Gate 0 architecture substrate / reusable abstraction conformance from `.agent/protocols/audit.md`
 - target-specific SSOT discovery after top-level baseline:
   - .agent/docs/ssot-map.yaml (surface-specific discovery; do not replace top-level baseline reads)
@@ -34,14 +44,16 @@ Worktype is `audit`, including any of:
 - README / docs/articles / design SSOT when diff claim validation requires public/docs context
 - .agent/docs/ssot-map.yaml when PR diff touches runtime/db/frontend/governance surfaces and SSOT selection is needed
 - .agent/docs/required-paths.yaml only when auditing `.agent` structure, required paths, required content terms, or check-structure expectations
+- .agent/tools/README.md when tool log boundary or Agent UI log meaning must be verified
 
 ## protocol_triggers
 - always: .agent/protocols/audit.md
+- always: .agent/protocols/audit/index.md
 - conditional: .agent/protocols/todo-carry-over.md when TODO/Roadmap Finalization Judgment updates, closes, reclassifies, or carries over canonical TODO/roadmap state
 - conditional: policy/scenario/runtime protocols only when touched
 
 ## completion_judgment_axis
-- audit の implemented / partial / carry-over / Request Changes の詳細判定は .agent/protocols/audit.md の approve_judgment_axis に従う。
+- audit の implemented / partial / carry-over / Request Changes の詳細判定は .agent/protocols/audit.md と .agent/protocols/audit/ section shards の approve_judgment_axis に従う。
 - prompt 側では completion 判定本文を重複定義しない。
 - `implemented` 判定可否、PR-internal checkpoint clear、main merge approval 条件、implemented 未達時の TODO細分化 / carry-over 必須条件は protocol 側を正本とする。
 - PR merge unit is completion Bundle; Bundle途中状態の監査clearは同一PR内で次checkpointへ進む許可であり、main merge approval ではない。
@@ -49,6 +61,8 @@ Worktype is `audit`, including any of:
 ## output_shape
 - Diff reviewed: yes/no
 - Changed files
+- PR record checked: yes/no/not_applicable (yes の場合、PR本文/comments/reviews/thread status の確認範囲を列挙する; metadata-only の yes は無効)
+- Tool log checked: yes/no/not_applicable (yes の場合、確認した tool.log / uuid / datetime / senario-tmp.md / tool summary surface を列挙する; tool log は観測記録であり SSOT/proof/completion 判定そのものではない)
 - Todo checked: yes/no
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
@@ -85,6 +99,8 @@ Worktype is `audit`, including any of:
 - replacing semantic audit with structure check
 - summary-only judgment
 - metadata-only (PR metadata/mergeability only) judgment
+- treating PR record as a replacement for SSOT/code/test evidence
+- treating tool log or tool output as SSOT authority, proof completion, completion judgment, or semantic audit judgment by itself
 
 ## todo_granularity_judgment
 - roadmap entry（`docs/system-roadmap.yaml`）

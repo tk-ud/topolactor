@@ -14,8 +14,10 @@ agent_ui_tool_entry:
 worktypes:
   audit:
     prompt: .agent/prompt/audit.md
+    protocol_sections_dir: .agent/protocols/audit
     required_protocols:
       - .agent/protocols/audit.md
+      - .agent/protocols/audit/index.md
     triggered_protocols:
       todo_roadmap_finalization:
         - .agent/protocols/todo-carry-over.md
@@ -26,8 +28,10 @@ worktypes:
 
   specific:
     prompt: .agent/prompt/specific.md
+    protocol_sections_dir: .agent/protocols/specific
     required_protocols:
       - .agent/protocols/specific.md
+      - .agent/protocols/specific/index.md
     triggered_protocols:
       todo_roadmap_finalization:
         - .agent/protocols/todo-carry-over.md
@@ -37,8 +41,10 @@ worktypes:
 
   implementation_change:
     prompt: .agent/prompt/implementation-change.md
+    protocol_sections_dir: .agent/protocols/implementation-change
     required_protocols:
       - .agent/protocols/implementation-change.md
+      - .agent/protocols/implementation-change/index.md
     triggered_protocols:
       runtime_persistence_projection_changes:
         - .agent/protocols/scenario-contract.md
@@ -51,8 +57,10 @@ worktypes:
 
   design_change:
     prompt: .agent/prompt/design-change.md
+    protocol_sections_dir: .agent/protocols/design-change
     required_protocols:
       - .agent/protocols/design-change.md
+      - .agent/protocols/design-change/index.md
     triggered_protocols:
       ssot_change:
         - .agent/protocols/ssot-change-impact.md
@@ -63,16 +71,20 @@ worktypes:
 
   todo_maintenance:
     prompt: .agent/prompt/todo-maintenance.md
+    protocol_sections_dir: .agent/protocols/todo-maintenance
     required_protocols:
       - .agent/protocols/todo-carry-over.md
+      - .agent/protocols/todo-maintenance/index.md
     required_checks:
       - .agent/tests/check-system-roadmap.sh
       - .agent/tests/check-structure.sh
 
   existing_pr_update:
     prompt: .agent/prompt/existing-pr-update.md
+    protocol_sections_dir: .agent/protocols/existing-pr-update
     required_protocols:
       - .agent/protocols/completion-summary.md
+      - .agent/protocols/existing-pr-update/index.md
     required_checks:
       - .agent/tests/check-completion-judgment.sh
       - .agent/tests/check-structure.sh

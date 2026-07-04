@@ -1,0 +1,26 @@
+# protocol-section-required-paths.yaml
+# Companion inventory for protocol worktype section directories.
+# `.agent/docs/required-paths.yaml` remains the structure-check manifest SSOT.
+
+version: 1
+purpose: Inventory newly split protocol section directories until required-paths.yaml is safely expanded.
+
+protocol_section_directories:
+  - .agent/protocols/audit
+  - .agent/protocols/specific
+  - .agent/protocols/implementation-change
+  - .agent/protocols/design-change
+  - .agent/protocols/todo-maintenance
+  - .agent/protocols/existing-pr-update
+
+compatibility_roots:
+  - .agent/protocols/audit.md
+  - .agent/protocols/specific.md
+  - .agent/protocols/implementation-change.md
+  - .agent/protocols/design-change.md
+  - .agent/protocols/todo-carry-over.md
+  - .agent/protocols/completion-summary.md
+
+note: >-
+  This file is an inventory aid only. Do not treat it as a replacement for
+  .agent/docs/required-paths.yaml or .agent/routes/worktype-required-protocols.yaml.

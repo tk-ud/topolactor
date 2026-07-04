@@ -16,8 +16,9 @@ The YAML is the detailed body for closed-world structure, authority boundaries, 
 2. Identify the worktype.
 3. Use the YAML to resolve directory responsibility, semantic closure, and authority boundary.
 4. Open only the matching worktype prompt and triggered protocol surfaces.
-5. Run required CI/checker contracts in the YAML-defined order.
-6. Keep `.agent` files subordinate to this governance SSOT set.
+5. When a worktype has a protocol section directory, use the section index/shards as the focused protocol reading surface while keeping the root protocol file as compatibility authority.
+6. Run required CI/checker contracts in the YAML-defined order.
+7. Keep `.agent` files subordinate to this governance SSOT set.
 
 ## Resume
 
@@ -34,6 +35,7 @@ AGENTS.md
 → .agent/README.md
 → .agent/prompt/<worktype>.md
 → .agent/protocols/<worktype or triggered protocol>.md
+→ .agent/protocols/<worktype>/index.md when section shards exist
 → checklist / tests
 ```
 
@@ -74,11 +76,13 @@ Canonical worktype ids:
 - `existing_pr_update`
 
 The YAML owns each worktype's prompt/protocol relation and required check scope.
+When section directories exist, `.agent/routes/worktype-required-protocols.yaml` may expose `protocol_sections_dir` as the executable routing aid, but protocol judgment remains owned by the protocol body and its worktype-local shards.
 
 ## Reading Rule
 
 - Use this Markdown to orient and navigate.
 - Use the YAML to decide.
+- Use protocol section shards for focused reads when the route map points to them.
 - Do not duplicate YAML body details into `.agent/README.md`, `.agent/rules/rule.md`, prompt files, protocol files, or check scripts.
 
 If this Markdown and the YAML disagree, update this Markdown to match the YAML agenda/index intent; the YAML body remains the detailed decision source.
