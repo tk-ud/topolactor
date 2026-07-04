@@ -1678,3 +1678,39 @@ aggregate_trigger_step3_extension_contract:
       - runtime_actor_source_metadata
     validation_owner: backend_runtime
     frontend_role: structured_selector_and_preview_only
+
+manifest_list_and_contents_authoring_contract:
+  admin_action: manifest:list
+  request_extensions:
+    status: draft | active | deprecated
+    contentsType: string | string[] — screen_data_shape.contentsType filter (fail-close when unset)
+    physical: boolean — tableRef resolves in topology.physical_tables active catalog
+    logicalTablesMin: integer — minimum logicalTables count
+  response_extensions:
+    contentsType: screen_data_shape.contentsType
+    topologySystemName: screen_data_shape.topologySystemName
+    userFacingTopologyLabel: screen_data_shape.userFacingTopologyLabel
+    tableRef: screen_data_shape.tableRef
+    physicalBound: derived from topology.physical_tables
+    authoringProgressStep: "1" | "2" | "2.5" | "3" — backend-derived from persisted topology
+    draftOrigin_cloneMode_sourceActiveManifestId: clone_metadata when present
+  contents_type_vocabulary:
+    contents: /admin/contents pipeline business apps (backend stamp on Step 1 create/clone/assign)
+    relationship_boundary: Step 2.5 remote boundary manifests (seed e.g. auth.user)
+    runtime_seed: projection_lane and similar runtime probe seeds
+    bundle_projection: bundle substrate topology projection seeds
+  registration_rule: >
+    contentsType is stamped by backend on Step 1 create/clone/assign only for contents pipeline
+    manifests. Seed SQL must declare contentsType explicitly; runtime infer from topologySystemName
+    is prohibited. Unstamped manifests are excluded from contentsType-filtered list responses.
+  admin_contents_step1_entry_modes:
+    resume_existing_draft:
+      label: 既存の下書きを再開
+      rule: >
+        Author selects an existing draft with contentsType=contents. Submit does not re-save
+        topologySystemName; loads persisted shape and navigates to Step 2. completedThroughStep
+        restores from authoringProgressStep; author may use stepper to reach Step 3.
+  surface_filters:
+    contents_draft_picker: { status: draft, contentsType: contents }
+    clone_active_source_picker: { status: active, contentsType: contents, logicalTablesMin: 1, physical: true }
+    list_relationship_remote_targets: unchanged dedicated op (includes relationship_boundary)

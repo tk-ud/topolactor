@@ -56,7 +56,7 @@ export default function ContentsPromotionPanel({
 
   useEffect(() => {
     (async () => {
-      const m = await listAdminManifests("draft");
+      const m = await listAdminManifests({ status: "draft", contentsType: "contents" });
       if (m) setManifests(m);
     })();
   }, [manifestsVersion]);
@@ -160,7 +160,7 @@ export default function ContentsPromotionPanel({
       }
       setStatus(`有効化が完了しました。次: ${UX_HUB_MANIFESTS_PAGE}`);
       setValidation(null);
-      const m = await listAdminManifests("draft");
+      const m = await listAdminManifests({ status: "draft", contentsType: "contents" });
       if (m) setManifests(m);
     } catch (e) {
       console.error("PAGE_ACTIVATION_FAILED", e);

@@ -2253,16 +2253,16 @@ Deno.test("ManifestRouteEntry SSOT: topologySystemNameToUiBuilderKey roundtrip m
 //       replacement_clone_merge_lifecycle. Frontend carries entry intent + source evidence
 //       display only; merge target / conflict / active mutation authority is backend.
 
-Deno.test("Step 1 entry modes: three SSOT-defined modes are present and visibly separated", () => {
+Deno.test("Step 1 entry modes: four SSOT-defined modes are present and visibly separated", () => {
   const ids = CONTENTS_STEP1_ENTRY_MODE_OPTIONS.map((o) => o.id);
   assertEquals(ids, [
     "create_new_topology",
     "clone_active_as_replacement_draft",
     "clone_active_as_new_topology_draft",
+    "resume_existing_draft",
   ]);
-  // Each mode has a distinct label and description so modes are not confused.
   const labels = new Set(CONTENTS_STEP1_ENTRY_MODE_OPTIONS.map((o) => o.label));
-  assertEquals(labels.size, 3);
+  assertEquals(labels.size, 4);
   for (const o of CONTENTS_STEP1_ENTRY_MODE_OPTIONS) {
     assert(o.description.length > 0, `${o.id} needs a description`);
   }
@@ -2372,4 +2372,15 @@ Deno.test("ContentsScreenDesignPanel: clone source selection is read-only eviden
       src.includes("isReplacementCloneDraft"),
     "replacement draft must not be promoted to active from the panel",
   );
+});
+
+Deno.test("ContentsScreenDesignPanel: resume draft uses contents list filter and skips Step 1 re-register", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(src.includes("resume_existing_draft"), "resume entry mode");
+  assert(src.includes("contentsType: \"contents\""), "contents draft list filter");
+  assert(src.includes("下書きを再開"), "resume button label");
+  assert(src.includes('setActiveStep(2)'), "resume navigates to step 2");
+  assert(src.includes("authoringProgressStep"), "restores progress from list item");
 });

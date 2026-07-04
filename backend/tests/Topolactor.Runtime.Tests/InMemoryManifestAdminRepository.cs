@@ -26,8 +26,15 @@ internal sealed class InMemoryManifestAdminRepository : ManifestRepository
     private readonly List<ManifestDetailRecord> _manifests = [];
     private readonly List<ProjectedTopologyManifest> _projected = [];
     private readonly List<InMemoryMergeEditLogEntry> _mergeEditLog = [];
+    private readonly HashSet<string> _activePhysicalTableRefs = new(StringComparer.Ordinal);
 
     public InMemoryManifestAdminRepository() : base(NullLogger<ManifestRepository>.Instance) { }
+
+    public void SeedActivePhysicalTableRef(string tableRef) =>
+        _activePhysicalTableRefs.Add(tableRef.Trim());
+
+    public override Task<IReadOnlySet<string>> ListActivePhysicalTableRefsAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlySet<string>>(_activePhysicalTableRefs);
 
     public void Seed(ManifestDetailRecord record) => _manifests.Add(record);
 
@@ -295,6 +302,8 @@ internal sealed class InMemoryManifestAdminRepository : ManifestRepository
             evidence);
         var topology = ManifestCanonicalProjection.MergeTopologyEntry(
             source.Topology, CloneDraftMetadata.EntryType, cloneEntry);
+        topology = ManifestListEligibility.EnsureContentsTypeOnTopology(
+            topology, ManifestContentsTypeVocabulary.Contents);
         return CreateDraftAsync(source.RelationRegistryId, topology, ct);
     }
 
@@ -316,6 +325,8 @@ internal sealed class InMemoryManifestAdminRepository : ManifestRepository
             evidence);
         var topology = ManifestCanonicalProjection.MergeTopologyEntry(
             renamed, CloneDraftMetadata.EntryType, cloneEntry);
+        topology = ManifestListEligibility.EnsureContentsTypeOnTopology(
+            topology, ManifestContentsTypeVocabulary.Contents);
         return CreateDraftAsync(source.RelationRegistryId, topology, ct);
     }
 

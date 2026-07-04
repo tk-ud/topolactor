@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
   type AdminManifestDetail,
+  type AdminManifestListFilter,
   type AdminManifestListItem,
   type AggregateTriggerProcessingFunctionCandidate,
   assignAdminManifestScreenDataShape,
@@ -387,6 +388,31 @@ function SamplePreviewPanel({
   );
 }
 
+const CONTENTS_DRAFT_LIST_FILTER: AdminManifestListFilter = {
+  status: "draft",
+  contentsType: "contents",
+};
+
+const CONTENTS_CLONE_SOURCE_LIST_FILTER: AdminManifestListFilter = {
+  status: "active",
+  contentsType: "contents",
+  logicalTablesMin: 1,
+  physical: true,
+};
+
+function authoringProgressToPipelineStep(
+  step: string | undefined,
+): ContentsPipelineStep | null {
+  if (step === "1" || step === "2" || step === "2.5" || step === "3") return step;
+  return null;
+}
+
+function manifestListDisplayLabel(m: AdminManifestListItem): string | undefined {
+  return m.userFacingTopologyLabel?.trim() ||
+    m.topologySystemName?.trim() ||
+    undefined;
+}
+
 export type ContentsScreenDesignPanelProps = {
   sharedManifestId: string;
   onSharedManifestIdChange: (id: string) => void;
@@ -530,13 +556,17 @@ export default function ContentsScreenDesignPanel({
 
   const isCloneMode = entryMode === "clone_active_as_replacement_draft" ||
     entryMode === "clone_active_as_new_topology_draft";
+  const isResumeMode = entryMode === "resume_existing_draft";
 
   // Load active source candidates (read-only) for clone entry modes.
   useEffect(() => {
     if (activeStep !== 1 || !isCloneMode) return;
     void (async () => {
-      const items = await listAdminManifests("active");
+      const items = await listAdminManifests(CONTENTS_CLONE_SOURCE_LIST_FILTER);
       setActiveSources(items ?? []);
+      if (items?.length) {
+        await loadManifestLabelsWithSystemName(items);
+      }
     })();
   }, [activeStep, isCloneMode]);
 
@@ -600,7 +630,7 @@ export default function ContentsScreenDesignPanel({
   };
 
   const loadManifests = async () => {
-    const m = await listAdminManifests("draft");
+    const m = await listAdminManifests(CONTENTS_DRAFT_LIST_FILTER);
     if (m) {
       onManifestsChange(m);
       await loadManifestLabelsWithSystemName(m);
@@ -608,29 +638,57 @@ export default function ContentsScreenDesignPanel({
   };
 
   const draftOptionLabel = (m: AdminManifestListItem, index: number): string => {
-    const label = manifestLabels[m.manifestId] ??
+    const label = manifestListDisplayLabel(m) ??
+      manifestLabels[m.manifestId] ??
       getStoredScreenLabel(m.manifestId);
     const status = UX_STATUS_LABELS[m.status] ?? m.status;
     if (label) return `${label} [${status}]`;
     return `下書き ${index + 1} [${status}]`;
   };
 
+  const activeSourceOptionLabel = (
+    m: AdminManifestListItem,
+    index: number,
+  ): string => {
+    const label = manifestListDisplayLabel(m) ??
+      manifestLabels[m.manifestId] ??
+      getStoredScreenLabel(m.manifestId);
+    const status = UX_STATUS_LABELS[m.status] ?? m.status;
+    if (label) return `${label} [${status}]`;
+    const axes = [m.role, m.target, m.layer, m.action]
+      .filter((part) => part?.trim())
+      .join("/");
+    if (axes) return `${axes} [${status}]`;
+    return `正本 ${index + 1} [${status}]`;
+  };
+
   const loadManifestLabelsWithSystemName = async (items: AdminManifestListItem[]) => {
     const labels: Record<string, string> = {};
+    const needsFetch: AdminManifestListItem[] = [];
+    for (const item of items) {
+      const fromList = manifestListDisplayLabel(item);
+      if (fromList) {
+        labels[item.manifestId] = fromList;
+        continue;
+      }
+      const stored = getStoredScreenLabel(item.manifestId);
+      if (stored) {
+        labels[item.manifestId] = stored;
+        continue;
+      }
+      needsFetch.push(item);
+    }
     await Promise.all(
-      items.map(async (item) => {
-        const stored = getStoredScreenLabel(item.manifestId);
-        if (stored) { labels[item.manifestId] = stored; return; }
+      needsFetch.map(async (item) => {
         const detail = await getAdminManifest(item.manifestId);
         if (!detail) return;
         const shape = extractScreenDataShapeFromTopology(detail.topologyRawJson);
-        const display = shape.userFacingTopologyLabel?.trim();
-        const sysName = shape.topologySystemName?.trim();
-        const visible = display || sysName;
+        const visible = shape.userFacingTopologyLabel?.trim() ||
+          shape.topologySystemName?.trim();
         if (visible) labels[item.manifestId] = visible;
       }),
     );
-    setManifestLabels(labels);
+    setManifestLabels((prev) => ({ ...prev, ...labels }));
   };
 
   const loadSelectedManifest = async (manifestId: string) => {
@@ -687,6 +745,14 @@ export default function ContentsScreenDesignPanel({
           ? "backend"
           : "none",
       );
+    }
+
+    const listItem = manifests.find((m) => m.manifestId === manifestId);
+    const progress = authoringProgressToPipelineStep(
+      listItem?.authoringProgressStep,
+    );
+    if (progress) {
+      setCompletedThroughStep(progress);
     }
   };
 
@@ -749,6 +815,36 @@ export default function ContentsScreenDesignPanel({
   }, [remoteTargets, design.logicalTables, design.relationIntents]);
 
   const handleStep1Submit = async () => {
+    if (entryMode === "resume_existing_draft") {
+      if (!selectedId) {
+        setErrors([{ message: "再開する下書きを選択してください。" }]);
+        return;
+      }
+      setErrors([]);
+      setSubmitStatus({ outcome: "idle", message: null });
+      setLoading(true);
+      try {
+        await loadSelectedManifest(selectedId);
+        const item = manifests.find((m) => m.manifestId === selectedId);
+        const progress = authoringProgressToPipelineStep(item?.authoringProgressStep);
+        if (progress) setCompletedThroughStep(progress);
+        setActiveStep(2);
+        setShowStep3Completion(false);
+        setSubmitStatus({
+          outcome: "success",
+          message: "下書きを読み込みました。Step 2 から編集を再開できます。",
+        });
+      } catch {
+        setSubmitStatus({
+          outcome: "error",
+          message: "下書きを読み込めませんでした。",
+        });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // create_new_topology and clone_active_as_new_topology_draft both require a new
     // topologySystemName. clone_active_as_replacement_draft inherits the source identity.
     const requiresNewName = entryMode !== "clone_active_as_replacement_draft";
@@ -1241,9 +1337,15 @@ export default function ContentsScreenDesignPanel({
       }));
   };
 
-  const remoteTargetLabel = (t: RelationshipRemoteTarget): string => {
+  const remoteTargetLabel = (
+    t: RelationshipRemoteTarget,
+    index: number,
+  ): string => {
     const key = t.manifestKey?.trim();
-    return key ? `${key} (${t.manifestId.slice(0, 8)}…)` : t.manifestId;
+    if (key) return key;
+    const label = manifestLabels[t.manifestId]?.trim();
+    if (label) return label;
+    return `有効ページ ${index + 1}`;
   };
 
   const defaultRemoteManifestId = (): string => {
@@ -1443,7 +1545,7 @@ export default function ContentsScreenDesignPanel({
             disabled={loading}
             onClick={handleStep1Submit}
           >
-            Step 1 を登録
+            {isResumeMode ? "下書きを再開" : "Step 1 を登録"}
           </button>
         )}
         {(activeStep === 2 || activeStep === 2.5 || activeStep === 3) && (
@@ -1482,6 +1584,9 @@ export default function ContentsScreenDesignPanel({
                       setEntryMode(opt.id);
                       setCloneSourceId("");
                       setCloneSourceEvidence(null);
+                      if (opt.id !== "resume_existing_draft") {
+                        setSelectedId("");
+                      }
                     }}
                   />
                   <span>
@@ -1493,23 +1598,54 @@ export default function ContentsScreenDesignPanel({
             </div>
           </fieldset>
 
+          {isResumeMode && (
+            <label class="block text-xs">
+              <span class="font-semibold">再開する下書き（contents のみ）</span>
+              <select
+                class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                value={selectedId}
+                onChange={(e) => setSelectedId((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">— 選択 —</option>
+                {manifests.length === 0 && (
+                  <option value="" disabled>contents 下書きがありません</option>
+                )}
+                {manifests.map((m, index) => (
+                  <option key={m.manifestId} value={m.manifestId}>
+                    {draftOptionLabel(m, index)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           {isCloneMode && (
             <div class="space-y-2">
               <label class="block text-xs">
                 <span class="font-semibold">{UX_CLONE_SOURCE_EVIDENCE_HEADING}</span>
                 <select
-                  class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                  class="mt-1 w-full rounded border px-2 py-1"
                   value={cloneSourceId}
                   onChange={(e) =>
                     setCloneSourceId((e.target as HTMLSelectElement).value)}
                 >
                   <option value="">— 複製元を選択 —</option>
-                  {activeSources.map((m) => (
+                  {activeSources.map((m, index) => (
                     <option key={m.manifestId} value={m.manifestId}>
-                      {manifestLabels[m.manifestId] ?? m.manifestId}
+                      {activeSourceOptionLabel(m, index)}
                     </option>
                   ))}
-                </select>
+</select>
+              {cloneSourceId && (
+                <details class="mt-1">
+                  <summary class="cursor-pointer text-xs text-gray-400">
+                    技術情報
+                  </summary>
+                  <code class="block mt-0.5 font-mono text-xs text-gray-500">
+                    {cloneSourceId}
+                  </code>
+                </details>
+              )}
               </label>
               {cloneSourceEvidence && (
                 <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
@@ -1542,7 +1678,7 @@ export default function ContentsScreenDesignPanel({
             </div>
           )}
 
-          {entryMode !== "clone_active_as_replacement_draft" && (
+          {!isResumeMode && entryMode !== "clone_active_as_replacement_draft" && (
             <label class="block text-xs">
               <span class="font-semibold">トポロジーID <span class="text-red-500">*</span></span>
               <span class="ml-1 text-slate-500">（英小文字・数字・ハイフンのみ、例: customer-management）</span>
@@ -1562,7 +1698,7 @@ export default function ContentsScreenDesignPanel({
               )}
             </label>
           )}
-          {design.topologySystemName.trim() && isValidTopologySystemName(design.topologySystemName) && (
+          {!isResumeMode && design.topologySystemName.trim() && isValidTopologySystemName(design.topologySystemName) && (
             <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-600">
               <p class="font-semibold mb-1">生成される識別子（自動）</p>
               <ul class="space-y-0.5 font-mono text-[11px]">
@@ -1572,6 +1708,7 @@ export default function ContentsScreenDesignPanel({
               </ul>
             </div>
           )}
+          {!isResumeMode && (
           <label class="block text-xs">
             表示名（任意）
             <span class="ml-1 text-slate-500">日本語OK・後から変更可</span>
@@ -1585,6 +1722,7 @@ export default function ContentsScreenDesignPanel({
                 })}
             />
           </label>
+          )}
         </div>
       )}
       {activeStep !== 1 && (
@@ -1984,9 +2122,9 @@ export default function ContentsScreenDesignPanel({
                     }}
                   >
                     <option value="">— マニフェスト —</option>
-                    {remoteTargets.map((t) => (
+                    {remoteTargets.map((t, index) => (
                       <option key={t.manifestId} value={t.manifestId}>
-                        {remoteTargetLabel(t)}
+                        {remoteTargetLabel(t, index)}
                       </option>
                     ))}
                   </select>

@@ -940,6 +940,129 @@ public class AdminRuntimeManifestManagementTests
         Assert.True(data.HasValue);
         Assert.Equal("[]", data!.Value.GetRawText());
     }
+
+    [Fact]
+    public async Task ManifestList_FiltersByContentsType()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var contentsId = Guid.NewGuid();
+        var seedId = Guid.NewGuid();
+        repo.Seed(MakeContentsDraft(contentsId, "customer-mgmt", logicalTables: 1));
+        repo.Seed(MakeSeedActive(seedId));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            status = "draft",
+            contentsType = ManifestContentsTypeVocabulary.Contents,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "list", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.Equal(1, data.Value.GetArrayLength());
+        Assert.Equal(contentsId.ToString(), data.Value[0].GetProperty("manifestId").GetString());
+    }
+
+    [Fact]
+    public async Task ManifestList_ActiveCloneSourceFilter_RequiresLogicalTablesAndPhysical()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        repo.SeedActivePhysicalTableRef("customer_mgmt");
+        var eligibleId = Guid.NewGuid();
+        var ineligibleId = Guid.NewGuid();
+        repo.Seed(MakeContentsActive(eligibleId, "customer-mgmt", tableRef: "customer_mgmt", logicalTables: 1));
+        repo.Seed(MakeContentsActive(ineligibleId, "other-app", tableRef: "missing_table", logicalTables: 1));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            status = "active",
+            contentsType = ManifestContentsTypeVocabulary.Contents,
+            logicalTablesMin = 1,
+            physical = true,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "list", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.Equal(1, data.Value.GetArrayLength());
+        Assert.Equal(eligibleId.ToString(), data.Value[0].GetProperty("manifestId").GetString());
+    }
+
+    [Fact]
+    public async Task CreateNewTopologyDraft_StampsContentsTypeOnShape()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            role = "admin",
+            target = "admin",
+            layer = "manifest",
+            action = "list",
+            runtimeDestination = "admin_runtime",
+            screenOperationKind = "list",
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "create_new_topology_draft", null, "admin", payload, null),
+            default);
+
+        Assert.Null(error);
+        var manifestId = Guid.Parse(data!.Value.GetProperty("manifestId").GetString()!);
+        var detail = await repo.LoadDetailByIdAsync(manifestId, default);
+        Assert.NotNull(detail);
+        var shape = ScreenDataShapeTopologyReader.FindScreenDataShapeEntry(detail!.Topology);
+        Assert.True(shape.HasValue);
+        Assert.Equal(
+            ManifestContentsTypeVocabulary.Contents,
+            shape.Value.GetProperty("contentsType").GetString());
+    }
+
+    private static ManifestDetailRecord MakeContentsDraft(
+        Guid id, string topologySystemName, int logicalTables = 0, string? tableRef = null)
+    {
+        var shape = new Dictionary<string, object?>
+        {
+            ["type"] = "screen_data_shape",
+            ["contentsType"] = ManifestContentsTypeVocabulary.Contents,
+            ["topologySystemName"] = topologySystemName,
+        };
+        if (logicalTables > 0)
+        {
+            shape["logicalTables"] = new[]
+            {
+                new { tableName = topologySystemName.Replace('-', '_'), columns = new[] { new { name = "id", dataType = "uuid", nullable = false } } },
+            };
+        }
+        if (!string.IsNullOrWhiteSpace(tableRef))
+            shape["tableRef"] = tableRef;
+
+        var topology = ValidTopology("admin", "admin", "manifest", "list", "admin_runtime").ToList();
+        topology.Add(JsonSerializer.SerializeToElement(shape));
+        return new ManifestDetailRecord(id, null, topology, "draft", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+    }
+
+    private static ManifestDetailRecord MakeContentsActive(
+        Guid id, string topologySystemName, string tableRef, int logicalTables)
+    {
+        var record = MakeContentsDraft(id, topologySystemName, logicalTables, tableRef);
+        return record with { Status = "active" };
+    }
+
+    private static ManifestDetailRecord MakeSeedActive(Guid id)
+    {
+        var topology = ValidTopology("admin", "admin", "manifest", "list", "admin_runtime").ToList();
+        topology.Add(JsonSerializer.SerializeToElement(new
+        {
+            type = "screen_data_shape",
+            contentsType = ManifestContentsTypeVocabulary.RuntimeSeed,
+            tableRef = "seed.projection_lane",
+        }));
+        return new ManifestDetailRecord(id, null, topology, "active", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+    }
 }
 
 /// <summary>

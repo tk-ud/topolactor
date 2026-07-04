@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Shared helpers for compact success output with full replay on failure.
+# Compact success / verbose failure helpers for .agent/tests check-*.sh gates.
+# Policy: .agent/tests/README.md (ok log short; error detailed replay on stderr).
 
 noise_run() {
   local label="$1"; shift
@@ -36,4 +37,9 @@ noise_run_bash() {
   fi
   rm -f "$tmp"
   [ "${NOISE_QUIET_SUCCESS:-0}" = "1" ] || echo "PASS ${label}"
+}
+
+# Multi-lane gate: suppress per-lane PASS; caller emits one summary line.
+noise_run_lane() {
+  NOISE_QUIET_SUCCESS=1 noise_run "$@"
 }

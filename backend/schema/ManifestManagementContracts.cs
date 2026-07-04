@@ -13,7 +13,16 @@ public record AdminManifestListItemDto(
     [property: JsonPropertyName("action")] string? Action,
     [property: JsonPropertyName("runtimeDestination")] string? RuntimeDestination,
     [property: JsonPropertyName("createdAt")] string CreatedAt,
-    [property: JsonPropertyName("updatedAt")] string UpdatedAt
+    [property: JsonPropertyName("updatedAt")] string UpdatedAt,
+    [property: JsonPropertyName("contentsType")] string? ContentsType = null,
+    [property: JsonPropertyName("topologySystemName")] string? TopologySystemName = null,
+    [property: JsonPropertyName("userFacingTopologyLabel")] string? UserFacingTopologyLabel = null,
+    [property: JsonPropertyName("tableRef")] string? TableRef = null,
+    [property: JsonPropertyName("physicalBound")] bool? PhysicalBound = null,
+    [property: JsonPropertyName("authoringProgressStep")] string? AuthoringProgressStep = null,
+    [property: JsonPropertyName("draftOrigin")] string? DraftOrigin = null,
+    [property: JsonPropertyName("cloneMode")] string? CloneMode = null,
+    [property: JsonPropertyName("sourceActiveManifestId")] string? SourceActiveManifestId = null
 );
 
 public record AdminManifestDispatcherMappingDto(
@@ -216,7 +225,10 @@ public record AdminManifestIdRequestDto(
 );
 
 public record AdminManifestListRequestDto(
-    [property: JsonPropertyName("status")] string? Status
+    [property: JsonPropertyName("status")] string? Status,
+    [property: JsonPropertyName("contentsType")] System.Text.Json.JsonElement? ContentsType = null,
+    [property: JsonPropertyName("physical")] bool? Physical = null,
+    [property: JsonPropertyName("logicalTablesMin")] int? LogicalTablesMin = null
 );
 
 public record AdminManifestLifecycleResponseDto(

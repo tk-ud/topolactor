@@ -16,6 +16,10 @@ This workspace is edited in **Cursor on a local machine** where `dotnet`, `deno`
 - **Do not** use a Docker SDK image as a substitute for host `dotnet test` / `deno test` when local tools are available.
 - Use Docker only when a script explicitly requires it (e.g. `.agent/tests/check-runtime-environment.sh`).
 
+## Test output policy
+
+Gate scripts under `.agent/tests/` follow [`.agent/tests/README.md`](../../.agent/tests/README.md): **short PASS on success**, **full runner replay on FAIL** via `.agent/scripts/lib/noise_control.sh`. Prefer `bash .agent/tests/check-*.sh` over raw `dotnet test` / `deno test` when verifying completion.
+
 ## Common commands
 
 ```bash
