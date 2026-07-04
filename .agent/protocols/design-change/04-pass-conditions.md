@@ -1,3 +1,4 @@
 # design_change / pass_conditions
 
-See `.agent/protocols/design-change.md`.
+- SSOT change impact handled.
+- Related routing/check references updated consistently.
