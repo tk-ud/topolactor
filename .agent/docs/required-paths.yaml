@@ -51,6 +51,12 @@ required_directories:
     - .agent/tmp
     - .agent/scripts/agent_tools
     - .agent/tools
+    - .agent/protocols/audit
+    - .agent/protocols/specific
+    - .agent/protocols/implementation-change
+    - .agent/protocols/design-change
+    - .agent/protocols/todo-maintenance
+    - .agent/protocols/existing-pr-update
   docs:
     - docs
   db:
@@ -235,6 +241,17 @@ required_files:
     - .agent/scripts/check_agent_ui_protocol.py
     - .agent/scripts/check_agent_ui_tool.py
     - .agent/tests/check-agent-ui-tool.sh
+    - .agent/protocols/audit/index.md
+    - .agent/protocols/audit/02-required-alignment-surfaces.md
+    - .agent/protocols/audit/08-output.md
+    - .agent/protocols/audit/09-ng.md
+    - .agent/protocols/audit/14-blocking.md
+    - .agent/protocols/specific/index.md
+    - .agent/protocols/implementation-change/index.md
+    - .agent/protocols/design-change/index.md
+    - .agent/protocols/todo-maintenance/index.md
+    - .agent/protocols/existing-pr-update/index.md
+    - .agent/docs/protocol-section-required-paths.yaml
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml
@@ -346,6 +363,8 @@ required_content_terms:
     - "todo-carry-over"
     - "report-surfaces"
     - "completion-summary"
+    - "section_dir"
+    - "shard"
   .agent/protocols/completion.md:
     - "Completion Sequence"
     - "Recursive Verification Gate"
@@ -709,6 +728,26 @@ required_content_terms:
     - "design_change"
     - "implementation_change"
     - "required_protocols"
+    - "protocol_sections_dir: .agent/protocols/audit"
+    - "protocol_sections_dir: .agent/protocols/specific"
+    - "protocol_sections_dir: .agent/protocols/implementation-change"
+    - "protocol_sections_dir: .agent/protocols/design-change"
+    - "protocol_sections_dir: .agent/protocols/todo-maintenance"
+    - "protocol_sections_dir: .agent/protocols/existing-pr-update"
+  .agent/protocols/audit/02-required-alignment-surfaces.md:
+    - "PR-side record"
+    - "tool evidence log"
+    - "docs/governance/logs/tool.log"
+    - "trace/context surfaces only"
+  .agent/protocols/audit/08-output.md:
+    - "PR record checked"
+    - "Tool log checked"
+  .agent/protocols/audit/09-ng.md:
+    - "PR-side record を SSOT"
+    - "tool.log"
+  .agent/protocols/audit/14-blocking.md:
+    - "PR record omitted"
+    - "Tool evidence log omitted"
   docs/design/cli-model-context-protocols-port-ssot.yaml:
     - "cli_model_context_protocols_port_ssot"
     - "core_invariant"

@@ -384,6 +384,7 @@ worktypes:
     purpose: PR or diff semantic audit.
     prompt: .agent/prompt/audit.md
     protocol: .agent/protocols/audit.md
+    protocol_section_dir: .agent/protocols/audit
     primary_focus:
       - implementation meaning consistency
       - diff-to-intent consistency
@@ -402,9 +403,31 @@ worktypes:
       - target_functions
       - todo
       - remaining_todo
+      - PR record checked
+      - Tool log checked
+    evidence_gate:
+      pr_side_record:
+        required_when: audit target is a PR
+        surfaces:
+          - PR body / stated scope
+          - PR comments
+          - PR reviews
+          - review thread status
+      tool_evidence_log:
+        required_when: ".agent/tools or Agent UI run evidence is claimed, required, or relied on"
+        surfaces:
+          - docs/governance/logs/tool.log
+          - referenced Agent UI uuid / datetime
+          - senario-tmp.md or relevant tool summary when referenced
+      boundary: >-
+        PR-side record and tool evidence log are trace/context surfaces only;
+        they must not replace SSOT, implementation, or test evidence, and must
+        not stand alone as proof of completion or semantic audit judgment.
     prohibited:
       - treating structure check as semantic audit substitute
       - posting GitHub comments when user requested prompt output only
+      - treating PR record as a replacement for SSOT/code/test evidence
+      - treating tool log or tool output as SSOT authority, proof completion, or implemented status evidence by itself
 
   specific:
     id: specific
@@ -652,6 +675,30 @@ routing_index_policy:
     rule: >-
       This map verifies worktype routing existence and required references.
       It is not semantic design-judgment authority.
+  protocol_section_directories:
+    role: worktype_scoped_protocol_section_shard_surface
+    status: implemented
+    directories:
+      - .agent/protocols/audit
+      - .agent/protocols/specific
+      - .agent/protocols/implementation-change
+      - .agent/protocols/design-change
+      - .agent/protocols/todo-maintenance
+      - .agent/protocols/existing-pr-update
+    rule: >-
+      Each worktype protocol has a matching .agent/protocols/<worktype>/
+      directory containing an index.md and numbered section shards, reachable
+      from .agent/routes/worktype-required-protocols.yaml's
+      protocol_sections_dir field and from .agent/protocols/index.yaml's
+      section_dir/shard fields. The root .agent/protocols/<worktype>.md file
+      remains the compatibility authority and must not be deleted; section
+      shards are a focused-reading aid, not a replacement judgment surface.
+    inventory_aid: .agent/docs/protocol-section-required-paths.yaml
+    compatibility_rule: >-
+      Root protocol files stay canonical. Section shards must not diverge in
+      judgment meaning from the root file; when both exist, agents read the
+      section shard for focused access but the root file remains the
+      compatibility fallback and audit reference.
 
 token_estimate_policy:
   canonical_surface: README.md
@@ -693,3 +740,5 @@ migration_target_state:
   - unify_grep_keys_to_english_snake_case
   - update_required_paths_and_check_scripts_to_reference_new_worktypes
   - update_check_scripts_to_reference_ci_check_contract
+  - split_worktype_protocols_into_section_directories_with_index_and_shards
+  - add_audit_pr_record_and_tool_evidence_log_gate_to_prompt_protocol_routing_and_required_paths
