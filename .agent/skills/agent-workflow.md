@@ -7,6 +7,8 @@ This skill defines the lightweight execution order for task work.
 It does not replace `AGENTS.md`, `.agent/rules/rule.md`, or `.agent/README.md`.
 Follow those always-read sources first.
 
+This skill defines workflow procedure order only. Worktype routing remains in `.agent/routes/worktype-required-protocols.yaml`.
+
 ## Execution Order
 
 ```text
@@ -31,7 +33,11 @@ READ_ENTRY
   - `.agent/README.md`
   - `.agent/skills/agent-workflow.md`
   - if the executing agent is Claude (Claude Code on the web / remote execution environment), read `.agent/protocols/claude.md` for environment setup before any local tool execution
-  - open matching `.agent/prompt/<work-type>.md` only when the work type trigger applies
+  - apply Tool-first route when `.agent/tools/agent-ui-initial-contract` is usable:
+    - read `.agent/tools/README.md` for tool boundary
+    - run `.agent/tools/agent-ui-initial-contract worktypes` or `start` to resolve worktype / prompt / check routing hints
+    - preserve emitted uuid / datetime / senario-tmp.md / tool.log references when the tool route is used
+  - when Tool-first is not usable, record the fallback reason and open matching `.agent/prompt/<work-type>.md` only when the work type trigger applies
   - for existing PR follow-up updates, route via `.agent/prompt/existing-pr-update.md`
 - READ_TASK_MATERIALS
   - read issue / prompt explicit対応資料 and必読リスト
