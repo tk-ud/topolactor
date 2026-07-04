@@ -79,7 +79,7 @@ def _cmd_worktypes(_args: argparse.Namespace) -> int:
 FULL_READ_LINE_CAP = 500
 
 
-def _read_full(path_text: str | None) -> tuple[list[str], bool]:
+def _read_full(path_text: str | None) -> tuple[list[str] | None, bool]:
     """Full content of a repo-relative file already narrowed by worktype/trigger routing.
 
     This is not the "read every prompt/protocol/skill" breadth this tool exists to
@@ -89,12 +89,18 @@ def _read_full(path_text: str | None) -> tuple[list[str], bool]:
     largest current .agent/protocols file is well under it): if a file exceeds it,
     the return is truncated and the second tuple element is True so callers/agents
     never silently get a partial read without knowing it.
+
+    Returns (None, False) when path_text is unset or the file does not exist on
+    disk -- distinct from ([], False), an empty-but-present file -- so a missing
+    routed file (a routes.yaml entry pointing at a path that doesn't exist) never
+    reads the same as "this file has no content"; callers must fail closed on
+    None rather than silently emitting empty content (rule.md: no silent fallback).
     """
     if not path_text:
-        return [], False
+        return None, False
     file_path = REPO_ROOT / path_text
     if not file_path.is_file():
-        return [], False
+        return None, False
     lines = file_path.read_text(encoding="utf-8").splitlines()
     if len(lines) > FULL_READ_LINE_CAP:
         return lines[:FULL_READ_LINE_CAP], True
@@ -135,15 +141,21 @@ def _cmd_start(args: argparse.Namespace) -> int:
 
     route = routes[args.worktype]
     prompt_path = route.get("prompt")
+    missing_paths: list[str] = []
+
     prompt_content, prompt_truncated = _read_full(prompt_path)
+    if prompt_content is None:
+        missing_paths.append(prompt_path or "<route.prompt unset in worktype-required-protocols.yaml>")
 
     protocol_trigger_hints: list[dict] = []
     for path in route.get("required_protocols", []) or []:
         content, truncated = _read_full(path)
+        if content is None:
+            missing_paths.append(path)
         protocol_trigger_hints.append({
             "path": path,
             "trigger_condition": "always",
-            "content": content,
+            "content": content or [],
             "truncated": truncated,
         })
     triggered = route.get("triggered_protocols") or {}
@@ -151,19 +163,42 @@ def _cmd_start(args: argparse.Namespace) -> int:
         for condition, paths in sorted(triggered.items()):
             for path in paths or []:
                 content, truncated = _read_full(path)
+                if content is None:
+                    missing_paths.append(path)
                 protocol_trigger_hints.append({
                     "path": path,
                     "trigger_condition": condition,
-                    "content": content,
+                    "content": content or [],
                     "truncated": truncated,
                 })
 
     workflow_file = REPO_ROOT / WORKFLOW_SKILL_PATH
     workflow_procedure: list[str] = []
-    if workflow_file.is_file():
+    if not workflow_file.is_file():
+        missing_paths.append(WORKFLOW_SKILL_PATH)
+    else:
         workflow_procedure = _extract_fenced_block_after_heading(
             workflow_file.read_text(encoding="utf-8"), "## Execution Order"
         )
+        if not workflow_procedure:
+            missing_paths.append(f"{WORKFLOW_SKILL_PATH}#Execution Order (heading or fenced block not found)")
+
+    if missing_paths:
+        emit_json({
+            "tool": TOOL_NAME,
+            "boundary": BOUNDARY,
+            "mode": "start",
+            "read_status": "missing",
+            "missing_path": missing_paths,
+            "start_contract_status": "failed",
+            "start_contract_status_note": (
+                "start requires every routed prompt/protocol file and the workflow skill's "
+                "Execution Order block to actually be readable; a missing one is a routing/"
+                "repo integrity defect, not something to silently paper over with empty content."
+            ),
+            "reference_basis": REFERENCE_BASIS,
+        })
+        return 3
 
     usage_metadata = {
         "uuid": new_uuid(),

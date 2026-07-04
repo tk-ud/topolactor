@@ -26,13 +26,23 @@ agent_protocols:
 
   legacy_surface_policy:
     fallback_only:
-      - .agent/prompt/*.md
-      - .agent/protocols/*.md
-      - .agent/checklists/*.md
+      - .agent/prompt/*.md (worktypes other than the one agent-ui-initial-contract start resolved)
+      - .agent/protocols/*.md (files not in the resolved worktype's required_protocols/triggered_protocols)
+      - .agent/checklists/*.md (listed by agent-ui-local-test checklist as headings only, not inlined)
+    tool_first_full_text:
+      - the resolved worktype's routed .agent/prompt/<worktype>.md, in full, as start's prompt_content
+      - the resolved worktype's required/triggered .agent/protocols/*.md file(s), in full, as start's protocol_trigger_hints[].content
+      - .agent/skills/agent-workflow.md's Execution Order block, as start's workflow_procedure -- this file backs both the tool-first and fallback routes, it is not fallback-only
     rule: >-
-      Existing .agent prompt/protocol/checklist files remain for Agents that
-      cannot use the tool. Tool output references are rebuilt under
-      docs/governance/reference and are not legacy full-file dumps.
+      Non-routed .agent prompt/protocol/checklist/skill surfaces remain
+      fallback-only, for Agents that cannot use the tool or for worktypes/
+      conditions other than the one currently resolved. For the current
+      worktype/trigger's routed file(s), tool output returns full text (see
+      tool_first_full_text), not an indiscriminate dump of every legacy
+      surface -- routing still narrows which files are read; only the
+      excerpt-vs-full-text axis changed for the narrowed set. Tool output
+      references under docs/governance/reference document these output
+      fields; they do not themselves relax this contract.
 
   tool_principles:
     - Keep output minimal to reduce context load.

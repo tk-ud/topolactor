@@ -29,7 +29,7 @@ Fallback route when tool-first is not usable:
 - `reports/`: persistent inspection reports.
 - `tasks/`: unresolved work queue.
 - `tmp/`: temporary artifacts only.
-- `skills/`: fallback task procedures for agents that cannot use the tool-first route.
+- `skills/`: task procedure source. `agent-workflow.md`'s Execution Order is both the fallback router for agents that cannot use the tool-first route, and the `workflow_procedure` field `agent-ui-initial-contract start` reads directly and surfaces in tool-first output -- it is read by both routes, not fallback-only.
 - `tools/`: Agent-facing tool entrypoints (existing observation tools plus Agent UI protocol tools). See `.agent/tools/README.md` for the read-only/write boundary and available commands.
 - `scripts/`: CI / gate / helper implementation bodies. Scripts may provide reusable structured-processing bodies for tools, but `.agent/scripts` is not the Agent-facing convenience-command surface.
 
