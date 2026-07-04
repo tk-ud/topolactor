@@ -4,8 +4,14 @@
 Implements docs/governance/agent-ui-protocol-ssot.yaml's
 agent_protocols.flow_order.initial_contract as a stateless, multi-invocation
 CLI (mirroring the existing topology-seed-discussion tool's step-by-step
-model): task_name/worktype input -> worktype prompt guidance -> target SSOT
+model): task_name/worktype input -> worktype prompt guidance + required/
+triggered protocol excerpts + workflow procedure order -> target SSOT
 resolution -> section listing/selection -> senario-tmp.md + tool.log on quit.
+
+`start` absorbs the short excerpts an agent would otherwise have to open
+`.agent/protocols/*` and `.agent/skills/agent-workflow.md` separately for:
+it emits bounded excerpts, not full-file dumps, and does not itself judge
+whether a triggered_protocols condition applies to the current task.
 
 AI supplies task_name, worktype selection, target SSOT name, section
 selection, and senario content. This tool generates uuid/datetime/worktype
@@ -66,6 +72,51 @@ def _cmd_worktypes(_args: argparse.Namespace) -> int:
     })
 
 
+def _read_excerpt(path_text: str | None, max_lines: int = 12) -> list[str]:
+    """Bounded short excerpt of a repo-relative file (mirrors the prompt-excerpt read).
+
+    Not a full-file dump: capped at max_lines non-blank lines. Most .agent/protocols
+    leaf files are shorter than the cap, so this often surfaces their entire text
+    anyway -- but the mechanism stays the same bounded read used for prompt excerpts.
+    """
+    if not path_text:
+        return []
+    file_path = REPO_ROOT / path_text
+    if not file_path.is_file():
+        return []
+    excerpt: list[str] = []
+    for line in file_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            excerpt.append(line)
+        if len(excerpt) >= max_lines:
+            break
+    return excerpt
+
+
+def _extract_fenced_block_after_heading(text: str, heading: str) -> list[str]:
+    """Extracts the fenced code block immediately following a markdown heading line."""
+    collecting = False
+    in_block = False
+    result: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not collecting and stripped == heading:
+            collecting = True
+            continue
+        if collecting and not in_block:
+            if stripped.startswith("```"):
+                in_block = True
+            continue
+        if collecting and in_block:
+            if stripped.startswith("```"):
+                break
+            result.append(line)
+    return result
+
+
+WORKFLOW_SKILL_PATH = ".agent/skills/agent-workflow.md"
+
+
 def _cmd_start(args: argparse.Namespace) -> int:
     routes = worktypes()
     if args.worktype not in routes:
@@ -76,20 +127,31 @@ def _cmd_start(args: argparse.Namespace) -> int:
 
     route = routes[args.worktype]
     prompt_path = route.get("prompt")
-    excerpt_lines: list[str] = []
-    if prompt_path:
-        prompt_file = REPO_ROOT / prompt_path
-        if prompt_file.is_file():
-            for line in prompt_file.read_text(encoding="utf-8").splitlines():
-                if line.strip():
-                    excerpt_lines.append(line)
-                if len(excerpt_lines) >= 12:
-                    break
+    excerpt_lines = _read_excerpt(prompt_path)
 
-    protocol_trigger_hints = list(route.get("required_protocols", []) or [])
+    protocol_trigger_hints: list[dict] = []
+    for path in route.get("required_protocols", []) or []:
+        protocol_trigger_hints.append({
+            "path": path,
+            "trigger_condition": "always",
+            "excerpt": _read_excerpt(path),
+        })
     triggered = route.get("triggered_protocols") or {}
     if isinstance(triggered, dict):
-        protocol_trigger_hints.extend(sorted(triggered.keys()))
+        for condition, paths in sorted(triggered.items()):
+            for path in paths or []:
+                protocol_trigger_hints.append({
+                    "path": path,
+                    "trigger_condition": condition,
+                    "excerpt": _read_excerpt(path),
+                })
+
+    workflow_file = REPO_ROOT / WORKFLOW_SKILL_PATH
+    workflow_procedure: list[str] = []
+    if workflow_file.is_file():
+        workflow_procedure = _extract_fenced_block_after_heading(
+            workflow_file.read_text(encoding="utf-8"), "## Execution Order"
+        )
 
     usage_metadata = {
         "uuid": new_uuid(),
@@ -108,6 +170,9 @@ def _cmd_start(args: argparse.Namespace) -> int:
         "selected_prompt_excerpt": excerpt_lines,
         "required_reads_from_prompt": ["AGENTS.md", ".agent/rules/rule.md", prompt_path],
         "protocol_trigger_hints": protocol_trigger_hints,
+        "protocol_trigger_hints_note": "each entry's excerpt is a bounded text read, not a judgment; whether a non-'always' trigger_condition applies to the current task is still the agent's call.",
+        "workflow_procedure_path": WORKFLOW_SKILL_PATH,
+        "workflow_procedure": workflow_procedure,
         "reference_basis": REFERENCE_BASIS,
     })
 

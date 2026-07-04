@@ -63,7 +63,7 @@ Use `.agent/routes/worktype-required-protocols.yaml` as executable reference for
 
 ## Branch to Prompt
 
-Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, run its `worktypes`/`start` subcommands to resolve the worktype route, prompt path, and prompt excerpt (see `.agent/tools/README.md` and `.agent/routes/worktype-required-protocols.yaml`'s `agent_ui_tool_entry`) instead of manually reading every prompt router below.
+Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, run its `worktypes`/`start` subcommands to resolve the worktype route, prompt path, prompt excerpt, required/triggered protocol excerpts (`protocol_trigger_hints[].excerpt`), and workflow step order (`workflow_procedure`, sourced from `.agent/skills/agent-workflow.md`) in one call (see `.agent/tools/README.md` and `.agent/routes/worktype-required-protocols.yaml`'s `agent_ui_tool_entry`) instead of manually reading every prompt router, `.agent/protocols/*`, or `.agent/skills/agent-workflow.md` below.
 
 Fallback: after worktype decision, open only matching prompt router:
 

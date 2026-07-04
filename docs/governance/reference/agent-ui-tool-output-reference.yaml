@@ -37,6 +37,23 @@ reference_basis_field:
     senario_tmp_reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
     negative_boundary_reference: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
 
+workflow_procedure_field:
+  meaning: >-
+    workflow_procedure is the Execution Order fenced block read directly out
+    of .agent/skills/agent-workflow.md and returned by `start`, so the
+    tool-first path does not require a separate manual read of the skill
+    file just to learn step order. It is worktype-independent (same value
+    for every worktype) and is a bounded text extraction, not a workflow
+    judgment -- applying each step to the current task remains agent work.
+  emitted_by:
+    - agent-ui-initial-contract start
+  value_shape:
+    workflow_procedure_path: .agent/skills/agent-workflow.md
+    workflow_procedure:
+      - READ_ENTRY
+      - "-> READ_TASK_MATERIALS"
+      - "-> ... -> PUSH_OR_PR"
+
 authority_split:
   ai_authored:
     - task_name
@@ -88,14 +105,24 @@ initial_contract_outputs:
       - worktype_prompt_path
       - usage_metadata_completed
       - reference_basis
+      - workflow_procedure_path
+      - workflow_procedure
   step_3_prompt:
     tool_emits:
       - selected_prompt_excerpt
       - required_reads_from_prompt
       - protocol_trigger_hints
+      - protocol_trigger_hints_note
     constraints:
-      - Use short excerpt only.
-      - Do not dump full prompt unless explicitly requested.
+      - Use short excerpt only, for the prompt router and for each
+        protocol_trigger_hints entry's excerpt alike.
+      - Do not dump full prompt/protocol files unless explicitly requested;
+        a bounded excerpt (even one that happens to cover a whole short
+        protocol leaf file) is not the same as an unbounded dump.
+      - protocol_trigger_hints excerpt text is retrieval only. Whether a
+        triggered_protocols condition (trigger_condition != "always")
+        applies to the current task is still agent judgment, never tool
+        output.
   step_4_target_ssot:
     ai_input:
       - target_ssot_name
