@@ -260,6 +260,10 @@ Roadmap bundle:
 - file export / email approval / audit approval / transfer projection
 
 手動受入 TODO:
+
+巡回監査メモ:
+- 2026-07-04 audit: 5項目すべて `manual_acceptance_required`。Roadmap / frontend tests / backend tests で file_storage・email・audit_approval・export_sftp は generic external_port lane、UI Builder portTargetRef wiring、safe projection、projection_deny_keys、provider-specific client/runtime不在が確認できる。残るのは、外部サービスを system SSOT と誤認しないか、approval required の承認前/後/拒否後、file export / transfer / email / approval の成功・失敗・保留、provider未接続/future scope の体感表示が実画面で自然に読めるかの受入判断。
+
 - [ ] 外部連携操作が、外部サービスを system SSOT と誤認させない表示になっている。
 - [ ] approval required な操作は、UI 上で承認前・承認後・拒否後を誤認しない。
 - [ ] file export / transfer / email / audit approval の結果 projection が、成功・失敗・保留として追える。
