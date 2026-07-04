@@ -7,7 +7,7 @@ Agent executes requested repository work while preserving canonical runtime rout
 ## Entry Route
 
 - Start by reading `.agent/rules/rule.md` for always-read operating rules and trigger map.
-- If the executing agent is Claude Code on the web / remote execution environment, read `.agent/protocols/claude.md` at READ_ENTRY as an environment prerequisite route before further task checks.
+- If the executing agent is Claude Code on the web / remote execution environment, read `.agent/protocols/claude.md` once at READ_ENTRY as an environment prerequisite route before further task checks. After that setup, resume with the next Entry Route step; do not re-enter the Claude environment prerequisite.
 - Then read `.agent/README.md` for the `.agent` directory map and operating route.
 - Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, run it to resolve worktype/prompt routing and target SSOT sections (see `.agent/tools/README.md`) instead of manually opening every prompt/protocol/skill surface.
 - Fallback: when the tool is not usable, read `.agent/skills/agent-workflow.md`, then read matching `.agent/prompt/<work-type>.md` as the lightweight router.
@@ -31,7 +31,7 @@ Agent executes requested repository work while preserving canonical runtime rout
 
 - `.agent/`
   - Agent-facing documentation, rules, prompts, protocols, checklists, tests, tasks, reports, and helper scripts.
-  - Repository work starts from `AGENTS.md`, then follows `.agent/rules/rule.md`, `.agent/README.md`, tool-first routing when available, or `.agent/skills/agent-workflow.md` plus the matching worktype route when tool routing is not available.
+  - Repository work starts from `AGENTS.md`, then follows `.agent/rules/rule.md`, optional one-time Claude environment setup, `.agent/README.md`, tool-first routing when available, or `.agent/skills/agent-workflow.md` plus the matching worktype route when tool routing is not available.
   - Do not treat all `.agent/` files as always-read scope.
 
 - `docs/`
