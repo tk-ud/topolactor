@@ -506,7 +506,7 @@ admin_console_workflow_ssot:
       spacing_authority:
         - cssTokenRefs spacing vocabulary (margin, padding, gap) per css-dictionary-ssot
         - responsiveTokenRefs per breakpoint for spacing and presentation tokens
-        note: x/y are NOT padding. Spacing is edited via design_inspector tokens only.
+        - "note: x/y are NOT padding. Spacing is edited via design_inspector tokens only."
       sizing_authority:
         fields: [width, height]
         allowed_units: [px, percent, auto]
