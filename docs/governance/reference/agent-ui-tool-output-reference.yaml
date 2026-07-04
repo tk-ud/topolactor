@@ -1,7 +1,10 @@
 # agent-ui-tool-output-reference.yaml
 #
 # Compact reference for Agent UI tool output. This is rebuilt for tool output
-# and must not be a dump of legacy prompt/protocol/checklist files.
+# and must not indiscriminately dump every legacy prompt/protocol/checklist
+# file. It may, and for `start` does, return the full text of the specific
+# prompt/protocol file(s) a worktype/trigger has already resolved -- that is
+# a targeted read of exactly what applies, not the breadth this guards against.
 
 version: 1
 status: draft_reference
@@ -17,8 +20,15 @@ reference_policy:
   output_rule:
     - Emit compact structured output per tool step.
     - Do not emit verbose execution logs.
-    - Do not dump full legacy files.
-    - Prefer fields, short excerpts, and selected SSOT sections.
+    - Do not read/return prompt or protocol files outside what the current
+      worktype/trigger routing has resolved (no indiscriminate all-worktype
+      or all-protocol reads).
+    - Once routing has resolved which prompt/protocol file(s) apply, return
+      that file's full content rather than an arbitrary partial excerpt --
+      a truncated blocking/pass-condition section is worse than no excerpt,
+      since it can look complete while silently omitting the rest.
+    - Prefer fields and selected SSOT sections for anything not yet routing-
+      resolved (e.g. SSOT section listing/selection stays selection-only).
     - Expose this Reference's basis as structured fields (reference_basis),
       not markdown wording; a UI may render markdown from those fields, but
       the fields are the authority, not the rendered text.
@@ -109,17 +119,23 @@ initial_contract_outputs:
       - workflow_procedure
   step_3_prompt:
     tool_emits:
-      - selected_prompt_excerpt
+      - prompt_content
+      - prompt_content_truncated
       - required_reads_from_prompt
       - protocol_trigger_hints
       - protocol_trigger_hints_note
     constraints:
-      - Use short excerpt only, for the prompt router and for each
-        protocol_trigger_hints entry's excerpt alike.
-      - Do not dump full prompt/protocol files unless explicitly requested;
-        a bounded excerpt (even one that happens to cover a whole short
-        protocol leaf file) is not the same as an unbounded dump.
-      - protocol_trigger_hints excerpt text is retrieval only. Whether a
+      - prompt_content is the full text of the one worktype-routed prompt
+        file; protocol_trigger_hints[].content is the full text of each
+        routed required/triggered protocol file. Neither is an arbitrary
+        partial excerpt.
+      - This is not "dump every prompt/protocol"; it is the full text of
+        only the file(s) worktype/trigger routing already resolved to.
+      - Each file read is bounded by a fail-explicit safety cap
+        (FULL_READ_LINE_CAP in agent_ui_initial_contract.py); if a file
+        exceeds it, truncated/prompt_content_truncated is set true rather
+        than silently returning a partial read.
+      - protocol_trigger_hints content text is retrieval only. Whether a
         triggered_protocols condition (trigger_condition != "always")
         applies to the current task is still agent judgment, never tool
         output.

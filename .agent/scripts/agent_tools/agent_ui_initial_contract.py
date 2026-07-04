@@ -8,10 +8,13 @@ model): task_name/worktype input -> worktype prompt guidance + required/
 triggered protocol excerpts + workflow procedure order -> target SSOT
 resolution -> section listing/selection -> senario-tmp.md + tool.log on quit.
 
-`start` absorbs the short excerpts an agent would otherwise have to open
+`start` absorbs the reads an agent would otherwise have to open
 `.agent/protocols/*` and `.agent/skills/agent-workflow.md` separately for:
-it emits bounded excerpts, not full-file dumps, and does not itself judge
-whether a triggered_protocols condition applies to the current task.
+once a worktype/trigger has narrowed which prompt/protocol files apply, it
+returns those specific files' full content (not every worktype's files --
+that breadth guard is unchanged) so no separate manual open is needed. It
+does not itself judge whether a triggered_protocols condition applies to
+the current task -- that stays agent judgment.
 
 AI supplies task_name, worktype selection, target SSOT name, section
 selection, and senario content. This tool generates uuid/datetime/worktype
@@ -72,25 +75,29 @@ def _cmd_worktypes(_args: argparse.Namespace) -> int:
     })
 
 
-def _read_excerpt(path_text: str | None, max_lines: int = 12) -> list[str]:
-    """Bounded short excerpt of a repo-relative file (mirrors the prompt-excerpt read).
+FULL_READ_LINE_CAP = 500
 
-    Not a full-file dump: capped at max_lines non-blank lines. Most .agent/protocols
-    leaf files are shorter than the cap, so this often surfaces their entire text
-    anyway -- but the mechanism stays the same bounded read used for prompt excerpts.
+
+def _read_full(path_text: str | None) -> tuple[list[str], bool]:
+    """Full content of a repo-relative file already narrowed by worktype/trigger routing.
+
+    This is not the "read every prompt/protocol/skill" breadth this tool exists to
+    avoid -- the caller has already resolved exactly which file(s) apply to the
+    current worktype/trigger, so returning that file's full text is a targeted
+    read, not a dump. FULL_READ_LINE_CAP is a fail-explicit safety bound only (the
+    largest current .agent/protocols file is well under it): if a file exceeds it,
+    the return is truncated and the second tuple element is True so callers/agents
+    never silently get a partial read without knowing it.
     """
     if not path_text:
-        return []
+        return [], False
     file_path = REPO_ROOT / path_text
     if not file_path.is_file():
-        return []
-    excerpt: list[str] = []
-    for line in file_path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            excerpt.append(line)
-        if len(excerpt) >= max_lines:
-            break
-    return excerpt
+        return [], False
+    lines = file_path.read_text(encoding="utf-8").splitlines()
+    if len(lines) > FULL_READ_LINE_CAP:
+        return lines[:FULL_READ_LINE_CAP], True
+    return lines, False
 
 
 def _extract_fenced_block_after_heading(text: str, heading: str) -> list[str]:
@@ -127,23 +134,27 @@ def _cmd_start(args: argparse.Namespace) -> int:
 
     route = routes[args.worktype]
     prompt_path = route.get("prompt")
-    excerpt_lines = _read_excerpt(prompt_path)
+    prompt_content, prompt_truncated = _read_full(prompt_path)
 
     protocol_trigger_hints: list[dict] = []
     for path in route.get("required_protocols", []) or []:
+        content, truncated = _read_full(path)
         protocol_trigger_hints.append({
             "path": path,
             "trigger_condition": "always",
-            "excerpt": _read_excerpt(path),
+            "content": content,
+            "truncated": truncated,
         })
     triggered = route.get("triggered_protocols") or {}
     if isinstance(triggered, dict):
         for condition, paths in sorted(triggered.items()):
             for path in paths or []:
+                content, truncated = _read_full(path)
                 protocol_trigger_hints.append({
                     "path": path,
                     "trigger_condition": condition,
-                    "excerpt": _read_excerpt(path),
+                    "content": content,
+                    "truncated": truncated,
                 })
 
     workflow_file = REPO_ROOT / WORKFLOW_SKILL_PATH
@@ -167,10 +178,11 @@ def _cmd_start(args: argparse.Namespace) -> int:
         "usage_metadata": usage_metadata,
         "usage_metadata_note": "tool_generated: uuid/datetime/worktype. ai_authored: task_name. Reuse these values verbatim in later steps; do not hand-author them.",
         "worktype_prompt_path": prompt_path,
-        "selected_prompt_excerpt": excerpt_lines,
+        "prompt_content": prompt_content,
+        "prompt_content_truncated": prompt_truncated,
         "required_reads_from_prompt": ["AGENTS.md", ".agent/rules/rule.md", prompt_path],
         "protocol_trigger_hints": protocol_trigger_hints,
-        "protocol_trigger_hints_note": "each entry's excerpt is a bounded text read, not a judgment; whether a non-'always' trigger_condition applies to the current task is still the agent's call.",
+        "protocol_trigger_hints_note": "each entry's content is that single file's full text (already narrowed to this worktype/trigger, not every protocol) -- reading it is not judgment; whether a non-'always' trigger_condition applies to the current task is still the agent's call.",
         "workflow_procedure_path": WORKFLOW_SKILL_PATH,
         "workflow_procedure": workflow_procedure,
         "reference_basis": REFERENCE_BASIS,
