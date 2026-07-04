@@ -4,6 +4,18 @@
 
 Read this file at READ_ENTRY when the executing agent is Claude (Claude Code on the web / remote execution environment).
 
+## Authority boundary
+
+This file is an environment prerequisite only.
+It does not own worktype routing, prompt selection, protocol selection, skill selection, checklist selection, or completion judgment.
+
+After applying the required environment setup, return to the `AGENTS.md` Entry Route:
+
+- Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, use it for worktype/prompt routing and target SSOT section resolution.
+- Fallback: when the tool is not usable, read `.agent/skills/agent-workflow.md`, then the matching `.agent/prompt/<work-type>.md`.
+
+Do not manually open every prompt/protocol/skill surface from this Claude setup protocol.
+
 ## Context
 
 Claude Code on the web runs in an ephemeral container. Docker is installed but the daemon is not running at session start. Docker Hub unauthenticated pull rate limits apply.
