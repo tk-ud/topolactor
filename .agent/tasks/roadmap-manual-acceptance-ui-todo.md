@@ -195,28 +195,12 @@ Roadmap bundle:
 
 手動受入 TODO:
 
-巡回監査メモ:
-- 2026-07-04 audit: 6項目すべて `implementation_changes_request`。SSOTは `admin.contents` で scheduler job manifest の create / edit / disable と settings/status projection を要求し、backend AdminRuntime / repository / tests は存在する。一方、frontend/APIで `scheduler_jobs` authoring/projection helperや画面surfaceが見つからず、手動受入以前に UI 実装導線が不足している。
-
-Implementation changes request:
-- 対象 route / surface: `/admin/contents` scheduler job authoring surface、scheduler job settings/status projection panel。
-- 問題: backend `scheduler_jobs` create / edit / disable / list_settings authority はあるが、admin UI 側で cron / interval / manual-only / active / disable / status projection を操作・確認する導線が見つからない。
-- 期待する UI 振る舞い: seed/admin-authored scheduler job manifest を data-defined form として作成・編集・disable でき、active / schedule policy / next or last run status / failure status / credential/external port references を secret無しで追える。
-- 関連 SSOT: `docs/design/scheduler-job-manifest-ssot.yaml`、`docs/design/admin-console-workflow-ssot.yaml`、`docs/design/runtime-orchestration-ssot.yaml`。
-- 対象ファイル / 関数候補: `frontend/api/adminApi.ts` に scheduler_jobs helpers 追加、`frontend/islands/ContentsScreenDesignPanel.tsx` または専用 admin contents subpanel、`backend/runtime/AdminRuntime.SchedulerSettings.cs` の `create` / `edit` / `disable` / `list_settings`。
-- 手動受入で確認したい NG 症状: cron設定対象が分からない、有効/無効と手動実行許可を誤認する、失敗/保留/未実行が同じ表示に見える、reload後に設定済み状態を追えない、disable/edit/manual run が通常cron実行と混同される。
-
 - [ ] admin UI で cron / scheduler job の設定対象、周期、有効/無効の意味が分かる。
 - [ ] 設定後、次回実行予定や有効状態を UI 上で追える。
 - [ ] 実行後、projection / status 表示上で、最終実行結果を人間が理解できる。
 - [ ] 失敗した場合、未実行・保留・失敗・無効化を誤認しない。
 - [ ] disable / edit / manual run 相当の操作がある場合、通常スケジュール実行と混同しない。
 - [ ] reload / 再訪問後に、設定済み cron の状態を自然に把握できる。
-
-監査で削除候補:
-- SchedulerJobRunner の内部 lease / result_binding の正しさ。
-- on_error policy の unit test で分かる項目。
-- DB repository の guard。
 
 ### 4. Webhook / hook 設定 UI
 
