@@ -338,6 +338,10 @@ Roadmap bundle:
 - helper viewer / admin header / manual projection が存在する場合のみ
 
 手動受入 TODO:
+
+巡回監査メモ:
+- 2026-07-04 audit: 4項目すべて処理済み。helper/manual は `.agent/tasks/todo.md` の canonical Bundle `helper-manual` として `not_started` で管理済みのため、この manual acceptance TODO から新規 main TODO は生やさない。SSOTは helper reference artifact / admin helper projection を runtime authority ではなく projection-only viewer と定義し、admin submit / apply / promote / approval / merge target decision / active mutation authority を禁止している。現時点では helper未実装を M6 loop failure と扱わず、`helper-manual` 実装後に画面受入で再確認する。
+
 - [ ] helper がある場合、現在の作業文脈に対応した説明として見える。
 - [ ] helper が admin action / apply / promote authority を持つように見えない。
 - [ ] internal vocabulary と user-facing vocabulary の対応が、操作判断を助ける形になっている。
