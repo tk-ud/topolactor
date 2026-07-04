@@ -139,6 +139,7 @@ Roadmap bundle:
 
 巡回監査メモ:
 - 2026-06-30 audit: 先頭3項目（現在位置誤認 / Step境界理解 / apply前変更追跡）は `manual_acceptance_required`。SSOT・実装で `/admin/contents` stepper / 開始モード / 保存状態表示と `/admin/ui-builder` 保存前チェック / preview / validate / apply 境界は確認できる。一方、既存testは語彙・静的guard中心で、初見誤認・体感理解・変更追跡は実画面受入判断が必要なため残す。
+- 2026-07-04 audit: 次5項目（apply後反映先 / validation失敗復帰 / UI Builder編集中状態 / modal・drawer・preview違和感 / advanced語彙）は `manual_acceptance_required`。SSOT・実装・testで lifecycle / status / validation error / handoff / normal-view vocabulary の基板は確認できるが、projection追跡の自然さ・画面離脱なしの復帰体感・canvas阻害感・通常操作時の語彙負荷は実画面受入判断が必要なため残す。
 
 - [ ] `/admin/contents` で、作成・編集・import など実装済み入口を触った時に、作業の現在位置を誤認しない。
 - [ ] Step 遷移中に、draft / preview / validate / apply の関係が体感で分かる。
