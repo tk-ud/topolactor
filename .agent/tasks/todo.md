@@ -9,7 +9,6 @@
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
-| `scheduler-job-manifest-admin-ui` | scheduler job manifest admin authoring / projection UI | partial | 1 | `product.scheduler_job_manifest_substrate` | `docs/design/scheduler-job-manifest-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
@@ -99,70 +98,6 @@ implementation_change で、SSOTに従って helper schema / seed artifact を�
 - [ ] helper viewer は admin submit / apply / promote / approval / merge target decision / active mutation / MCP operation を実行しない。
 - [ ] AI/MCP由来 candidate evidence と human manual admin draft の origin を混同しない表示・監査境界が確認できる。
 - [ ] 新規 MCP tool surface / admin submit direct execution / active topology mutation は追加していない。
-
----
-
-## Bundle `scheduler-job-manifest-admin-ui`
-
-**Status:** partial
-**Roadmap/status SSOT:** `product.scheduler_job_manifest_substrate`
-**Primary SSOT:** `docs/design/scheduler-job-manifest-ssot.yaml`
-**Related SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`
-**Carry-over source:** `.agent/tasks/roadmap-manual-acceptance-ui-todo.md` section 3, 2026-07-04 audit `implementation_changes_request`
-
-目的:
-scheduler job manifest を `admin.contents` の data-defined authoring / projection surface として扱い、cron / interval / manual-only / active / disable / status projection を人間が誤認せず作成・確認できる admin UI 導線を実装する。frontend は scheduler authority を持たず、backend `AdminRuntime` の `scheduler_jobs` create / edit / disable / list_settings authority に intent を渡すだけにする。
-
-残問題:
-- SSOT は `admin.contents` による scheduler job manifest の create / edit / disable と settings/status projection を要求しているが、frontend/API 側に `scheduler_jobs` authoring / projection helper や画面 surface が見つからない。
-- backend `AdminRuntime.SchedulerSettings.cs` には `create` / `edit` / `disable` / `list_settings` があり、secret fail-close / table-column authority guard / read-only projection tests もあるが、admin UI から操作・確認できる導線が未実装。
-- `cron` / `interval_seconds` / `manual_only`、`active` / disabled、`manualRunAllowed`、credential/external port reference、失敗/保留/未実行/無効化の表示が無いため、手動受入以前に UI 実装が必要。
-- manual run 相当を実装する場合、通常 cron 実行と混同しない表現と backend authority boundary が必要。未定義なら manual run 実行は追加せず、`manualRunAllowed` の表示に留める。
-
-改善方針:
-implementation_change で、既存 admin dispatch lane を使って `scheduler_jobs` helpers と admin contents subpanel を追加する。専用 runtime / frontend direct DB write / scheduler-domain switch は追加しない。UI は scheduler job manifest の data-defined form と read-only settings/status projection に限定し、secret material を表示しない。create/edit/disable は backend `AdminRuntime` authority へ渡し、active job の in-place edit は disable-first 境界を表示する。
-
-対応資料:
-- `docs/design/scheduler-job-manifest-ssot.yaml`
-- `docs/design/admin-console-workflow-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/design/pipeline-continuity-ssot.yaml`
-- `docs/framework-core.yaml`
-- `docs/framework-policy.yaml`
-- `.agent/tasks/roadmap-manual-acceptance-ui-todo.md`
-
-対象ファイル名候補:
-- `frontend/api/adminApi.ts`
-- `frontend/islands/ContentsScreenDesignPanel.tsx`
-- future `frontend/islands/SchedulerJobManifestPanel.tsx` or equivalent contents subpanel
-- `backend/runtime/AdminRuntime.SchedulerSettings.cs` (existing authority; reference / contract alignment)
-- `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeSchedulerAuthoringTests.cs`
-- future frontend/admin UX tests for scheduler job authoring/projection
-
-対象関数名候補:
-- future `listSchedulerJobSettings`
-- future `createSchedulerJobManifestDraft`
-- future `editSchedulerJobManifestDraft`
-- future `disableSchedulerJobManifest`
-- future `renderSchedulerJobManifestPanel`
-- future `renderSchedulerJobSettingsProjection`
-- future `renderSchedulerJobRunStatusSummary`
-- existing `DataListSchedulerJobsSettingsAsync`
-- existing `DataCreateSchedulerJobAsync`
-- existing `DataEditSchedulerJobAsync`
-- existing `DataDisableSchedulerJobAsync`
-
-残受入条件:
-- [ ] `frontend/api/adminApi.ts` に `scheduler_jobs` list_settings / create / edit / disable helper があり、既存 admin dispatch lane を通る。
-- [ ] `/admin/contents` または admin contents subpanel から scheduler job manifest を作成・編集・disable できる。
-- [ ] UI は `cron` / `interval_seconds` / `manual_only`、`active`、`manualRunAllowed`、credentialRequirementRef / externalPortRef を secret無しで表示する。
-- [ ] active job の in-place edit が禁止または disable-first として明示される。
-- [ ] settings/status projection が read-only で、payload由来 table/column authority や credential plaintext を表示しない。
-- [ ] 失敗 / 保留 / 未実行 / 無効化 / 成功が同じ表示に潰れない。
-- [ ] reload / 再訪問後に設定済み cron / interval / manual-only の状態を追える。
-- [ ] disable / edit / manual run 表示が通常 cron 実行と混同されない。
-- [ ] frontend guard test が、scheduler UI helper が `/api/dispatch` / admin dispatch lane を通り direct DB write しないことを確認している。
-- [ ] backend `AdminRuntimeSchedulerAuthoringTests` の authority / secret fail-close / projection guard を崩していない。
 
 ---
 
