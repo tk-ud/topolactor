@@ -572,6 +572,8 @@ run_subcheck ".agent/tests/check-scheduler-job-manifest-ssot.sh"
 
 run_subcheck ".agent/tests/check-design-ssot-progress-terms.sh"
 
+run_subcheck ".agent/tests/check-yaml-parse-completeness.sh"
+
 if [ "$FAILURES" -eq 0 ]; then
     echo "PASS check-structure dirs=${DIR_COUNT:-0} files=${FILE_COUNT:-0} content_terms=${TERM_COUNT:-0} success_assertions=${SUCCESSES}"
   exit 0
