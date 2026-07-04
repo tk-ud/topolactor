@@ -68,7 +68,8 @@ READ_ENTRY
   - Structure check is structural validation, not semantic substitute.
 - PUSH_OR_PR
   - Push or update PR only after triggered gates/checks are handled.
-  - Existing-PR follow-up comment behavior remains owned by `.agent/protocols/completion-summary.md`.
+  - Push/PR completion summary must include remaining TODO, per `.agent/protocols/completion-summary.md`.
+  - Existing-PR updates require follow-up PR comment handling; detail remains owned by `.agent/protocols/completion-summary.md`.
 
 ## Scope Discipline
 
