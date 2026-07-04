@@ -11,7 +11,11 @@
 
 Canonical route:
 
-`AGENTS.md -> .agent/rules/rule.md -> (Claude web/remote only: READ_ENTRY triggers .agent/protocols/claude.md) -> worktype decision -> .agent/README.md -> .agent/prompt/<worktype>.md -> .agent/protocols/<worktype or triggered protocol>.md -> checklist/tests`
+`AGENTS.md -> .agent/rules/rule.md -> (Claude web/remote only: READ_ENTRY triggers .agent/protocols/claude.md) -> .agent/README.md -> tool-first when usable (.agent/tools/agent-ui-initial-contract) -> worktype route resolved from .agent/routes/worktype-required-protocols.yaml -> matching .agent/prompt/<worktype>.md / .agent/protocols/<worktype or triggered protocol>.md / checklist/tests`
+
+Fallback route when tool-first is not usable:
+
+`AGENTS.md -> .agent/rules/rule.md -> (Claude web/remote only: READ_ENTRY triggers .agent/protocols/claude.md) -> .agent/README.md -> .agent/skills/agent-workflow.md -> worktype decision -> .agent/routes/worktype-required-protocols.yaml -> matching .agent/prompt/<worktype>.md -> .agent/protocols/<worktype or triggered protocol>.md -> checklist/tests`
 
 ## Directory Responsibilities
 
@@ -25,7 +29,7 @@ Canonical route:
 - `reports/`: persistent inspection reports.
 - `tasks/`: unresolved work queue.
 - `tmp/`: temporary artifacts only.
-- `skills/`: task procedures.
+- `skills/`: fallback task procedures for agents that cannot use the tool-first route.
 - `tools/`: Agent-facing tool entrypoints (existing observation tools plus Agent UI protocol tools). See `.agent/tools/README.md` for the read-only/write boundary and available commands.
 - `scripts/`: CI / gate / helper implementation bodies. Scripts may provide reusable structured-processing bodies for tools, but `.agent/scripts` is not the Agent-facing convenience-command surface.
 
@@ -33,4 +37,4 @@ Canonical route:
 
 - `.agent/README.md` is a directory map only.
 - Token estimates, protocol body details, and completion judgment logic are out of scope here.
-- `docs/system-roadmap.yaml` と `.agent/tasks/todo.md` は常時変更対象の動的参照点。実装実態の正本ではない。実装状態の確認は実コードおよびテストから行い、ロードマップやTODOの記述のみを根拠に実装完了・未着手と判断しない。
+- `docs/system-roadmap.yaml` と `.agent/tasks/todo.md` は常時変更対象の動的参照点。実装実態の正本ではない。実装状態の確認は実コードおよびテストから行い、ロードマップやTODOの記述のみを根拠に実装完了・未着手と判断しない.
