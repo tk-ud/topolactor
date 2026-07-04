@@ -351,20 +351,6 @@ Roadmap bundle:
 - helper schema / seed artifact の存在確認。
 - MCP payload reference の構造確認。
 
-### 9. Future / optional external surfaces
-
-Roadmap bundle:
-- `product.external_optional_surface_bundle_gate`
-
-手動受入 TODO:
-- [ ] optional external connector が現行必須導線に見えない。
-- [ ] future / unavailable / not configured の状態が、壊れている状態に見えない。
-- [ ] Notion / Google Sheets / Slack / GitHub Issues 等の optional surface が、system SSOT と誤認されない。
-
-監査で削除候補:
-- connector contract が未定義であること自体。
-- optional scope の設計未着手確認。
-
 ---
 
 ## Output Candidate
