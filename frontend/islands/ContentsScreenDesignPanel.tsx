@@ -403,7 +403,10 @@ const CONTENTS_CLONE_SOURCE_LIST_FILTER: AdminManifestListFilter = {
 function authoringProgressToPipelineStep(
   step: string | undefined,
 ): ContentsPipelineStep | null {
-  if (step === "1" || step === "2" || step === "2.5" || step === "3") return step;
+  if (step === "1") return 1;
+  if (step === "2") return 2;
+  if (step === "2.5") return 2.5;
+  if (step === "3") return 3;
   return null;
 }
 
