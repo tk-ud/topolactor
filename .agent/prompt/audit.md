@@ -35,6 +35,7 @@ Worktype is `audit`, including any of:
 - roadmap target milestone/unlocks and related implementation_registry entry
 - diff-target implementation files
 - .agent/protocols/audit.md
+- .agent/protocols/audit/index.md
 - Gate 0 architecture substrate / reusable abstraction conformance from `.agent/protocols/audit.md`
 - target-specific SSOT discovery after top-level baseline:
   - .agent/docs/ssot-map.yaml (surface-specific discovery; do not replace top-level baseline reads)
@@ -47,11 +48,12 @@ Worktype is `audit`, including any of:
 
 ## protocol_triggers
 - always: .agent/protocols/audit.md
+- always: .agent/protocols/audit/index.md
 - conditional: .agent/protocols/todo-carry-over.md when TODO/Roadmap Finalization Judgment updates, closes, reclassifies, or carries over canonical TODO/roadmap state
 - conditional: policy/scenario/runtime protocols only when touched
 
 ## completion_judgment_axis
-- audit の implemented / partial / carry-over / Request Changes の詳細判定は .agent/protocols/audit.md の approve_judgment_axis に従う。
+- audit の implemented / partial / carry-over / Request Changes の詳細判定は .agent/protocols/audit.md と .agent/protocols/audit/ section shards の approve_judgment_axis に従う。
 - prompt 側では completion 判定本文を重複定義しない。
 - `implemented` 判定可否、PR-internal checkpoint clear、main merge approval 条件、implemented 未達時の TODO細分化 / carry-over 必須条件は protocol 側を正本とする。
 - PR merge unit is completion Bundle; Bundle途中状態の監査clearは同一PR内で次checkpointへ進む許可であり、main merge approval ではない。
