@@ -165,6 +165,10 @@ Roadmap bundle:
 - projection shell / child island / recommendation panel
 
 手動受入 TODO:
+
+巡回監査メモ:
+- 2026-07-04 audit: 6項目すべて `manual_acceptance_required`。Roadmap上も実装済み範囲とは別に combined UX acceptance が非コード確認 gap として残る。実装・testで AdminImport の preview / apply / Step3 editor merge、projection-only SQL Attention candidate、dispatch/result summary の基板は確認できるが、import→authoring→apply の一連体験、apply後の反映先理解、recommendation と通常状態の視覚的混同、candidate未採用時に状態変化したように見えないか、M6 loop全体の文脈連続性は実画面受入判断が必要なため残す。
+
 - [ ] authoring guidance から import / authoring / apply まで、次操作に迷わない。
 - [ ] CSV / JSON import 後、preview / validate / apply の流れが一連の体験として見える。
 - [ ] apply 後、projection がどこに出たか自然に分かる。
