@@ -12,6 +12,15 @@ require() {
   fi
 }
 
+forbid() {
+  local file="$1"
+  local term="$2"
+  if grep -Fq -- "$term" "$file"; then
+    echo "FAIL $file contains outdated term: $term" >&2
+    missing=1
+  fi
+}
+
 require .agent/prompt/audit.md "Agent UI tool evidence observed"
 require .agent/prompt/audit.md "evidence_present: yes/no/not_applicable"
 require .agent/prompt/audit.md "observed_source"
@@ -22,6 +31,9 @@ require .agent/protocols/audit-tool-evidence.md "Do not inspect or require the a
 require .agent/protocols/audit-tool-evidence.md "observation_judgment"
 require .agent/routes/worktype-required-protocols.yaml ".agent/protocols/audit-tool-evidence.md"
 require .agent/routes/worktype-required-protocols.yaml ".agent/tests/check-audit-tool-evidence.sh"
+forbid .agent/prompt/audit.md "Agent UI tool evidence checked"
+forbid .agent/protocols/audit-tool-evidence.md "tool_used: yes/no/not_available"
+forbid .agent/protocols/audit-tool-evidence.md "tool_log_entry_checked"
 
 if [[ "$missing" -ne 0 ]]; then
   exit 1
