@@ -115,20 +115,31 @@ protocols:
 
   - id: audit
     file: .agent/protocols/audit.md
+    section_dir: .agent/protocols/audit
     stage: [JUDGMENT]
     sections:
       - marker: "## judgment_scope"
+        shard: .agent/protocols/audit/03-judgment-scope.md
         grep_keys:
           intent_keys: ["audit", "semantic review", "diff review"]
           body_keys: ["semantic", "diff", "implementation meaning"]
           boundary_keys: ["structure check is not semantic audit substitute", "do not post GitHub comment when prompt output requested"]
         read_when: ["audit worktype judgment"]
+      - marker: "## required_alignment_surfaces"
+        shard: .agent/protocols/audit/02-required-alignment-surfaces.md
+        grep_keys:
+          intent_keys: ["PR record", "tool log", "alignment surfaces"]
+          body_keys: ["PR body", "PR comments", "review thread", "docs/governance/logs/tool.log"]
+          boundary_keys: ["trace/context surfaces only", "do not replace SSOT"]
+        read_when: ["PR or tool evidence audit"]
 
   - id: specific
     file: .agent/protocols/specific.md
+    section_dir: .agent/protocols/specific
     stage: [DEFINE_SCOPE, JUDGMENT]
     sections:
       - marker: "## judgment_scope"
+        shard: .agent/protocols/specific/04-judgment-scope.md
         grep_keys:
           intent_keys: ["specific", "targeted inspection", "local scope"]
           body_keys: ["minimal target-surface", "scope expansion"]
@@ -137,9 +148,11 @@ protocols:
 
   - id: implementation_change
     file: .agent/protocols/implementation-change.md
+    section_dir: .agent/protocols/implementation-change
     stage: [DEFINE_SCOPE, JUDGMENT]
     sections:
       - marker: "## blocking_conditions"
+        shard: .agent/protocols/implementation-change/04-blocking-conditions.md
         grep_keys:
           intent_keys: ["implementation change", "conditional protocols", "runtime persistence projection"]
           body_keys: ["scenario-contract", "policy-judgment"]
@@ -148,9 +161,11 @@ protocols:
 
   - id: design_change
     file: .agent/protocols/design-change.md
+    section_dir: .agent/protocols/design-change
     stage: [DEFINE_SCOPE, JUDGMENT]
     sections:
       - marker: "## blocking_conditions"
+        shard: .agent/protocols/design-change/03-blocking-conditions.md
         grep_keys:
           intent_keys: ["design change", "SSOT change", "impact propagation"]
           body_keys: ["SSOT change", "impact propagation"]
