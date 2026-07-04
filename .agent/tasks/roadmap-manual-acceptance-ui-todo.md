@@ -314,6 +314,10 @@ Roadmap bundle:
 - UI Builder dashboard candidate surface
 
 手動受入 TODO:
+
+巡回監査メモ:
+- 2026-07-04 audit: 5項目すべて `manual_acceptance_required`。SSOT / Roadmap / 実装 / test で `/admin/team-dashboard`、saved view search/card/drawer、MdViewer、completed_preset_seed_json gate、seed invalid explicit error、refresh/clone/rebind seed gate、Markdown body is not runtime SSOT、md_viewer read projection boundary、UIBuilder dashboard candidate separation は確認できる。残るのは、saved view / rendered Markdown / source / binding / seed summary の関係、Markdown body の権威誤認、refresh/clone/rebind 可否、seed invalid 表示、md_viewer mutation authority の有無が実画面上で自然に読めるかの受入判断。
+
 - [ ] saved view / rendered Markdown / source / binding / seed summary の関係を誤認しない。
 - [ ] Markdown body が runtime SSOT のように見えない。
 - [ ] refresh / clone / rebind が可能な時と不可な時の違いが UI 上で分かる。
