@@ -230,6 +230,10 @@ Roadmap bundle:
 - webhook projection / intake history / status display
 
 手動受入 TODO:
+
+巡回監査メモ:
+- 2026-07-04 audit: 6項目すべて `manual_acceptance_required`。SSOT / Roadmap / test で hook_port は external_port_substrate の generic DB/seed/projection lane、Stripe/Webhook は hook_port consumer として provider-specific admin UI を持たない方針が確認できる。Stripe は production_ready で verification failure / payment state projection / runtime_event_log / SSE lane まで Roadmap上実装済み。手動受入では、DB-driven projection 上で hook_path / route_key / credential requirement reference、受信/拒否/成功/失敗、反映先が人間に自然に追えるかだけを見る。
+
 - [ ] admin UI 上で webhook / hook の設定対象、route、credential requirement の関係を誤認しない。
 - [ ] secret / credential は不用意に見えず、設定済み状態だけが分かる。
 - [ ] webhook 受信後、projection 上で受信・拒否・成功・失敗を区別できる。
