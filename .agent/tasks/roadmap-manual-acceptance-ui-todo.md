@@ -285,6 +285,10 @@ Roadmap bundle:
 - recommendation / candidate projection
 
 手動受入 TODO:
+
+巡回監査メモ:
+- 2026-07-04 audit: 5項目すべて `manual_acceptance_required`。SSOT / 実装 / test で SQL Attention projection は append-only evidence / read-only recommendation guidance / admin dispatch pipeline 経由であり、候補は Draft や adopted topology state ではなく、component module から mutation helper も export されていない。OperationPanel の現surfaceは Advanced 手入力 sourceSetId で candidate一覧API待ちのため、通常状態との視覚混同、candidate目的理解、未採用時に状態変化したように見えないか、採用操作が無い/将来追加される場合の前後差、古い/弱い候補の圧力表現は実画面受入判断が必要なため残す。
+
 - [ ] SQL Attention feedback が、現在状態そのものではなく候補・観察結果として見える。
 - [ ] candidate を見た時に、何のための候補か分かる。
 - [ ] candidate を採用しない限り、route / topology が変わったように見えない。
