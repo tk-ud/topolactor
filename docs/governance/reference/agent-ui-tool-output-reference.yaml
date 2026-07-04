@@ -20,18 +20,10 @@ reference_policy:
   output_rule:
     - Emit compact structured output per tool step.
     - Do not emit verbose execution logs.
-    - Do not read/return prompt or protocol files outside what the current
-      worktype/trigger routing has resolved (no indiscriminate all-worktype
-      or all-protocol reads).
-    - Once routing has resolved which prompt/protocol file(s) apply, return
-      that file's full content rather than an arbitrary partial excerpt --
-      a truncated blocking/pass-condition section is worse than no excerpt,
-      since it can look complete while silently omitting the rest.
-    - Prefer fields and selected SSOT sections for anything not yet routing-
-      resolved (e.g. SSOT section listing/selection stays selection-only).
-    - Expose this Reference's basis as structured fields (reference_basis),
-      not markdown wording; a UI may render markdown from those fields, but
-      the fields are the authority, not the rendered text.
+    - Do not read/return prompt or protocol files outside the current worktype/trigger routing (no indiscriminate all-worktype or all-protocol reads).
+    - Once routing resolves which prompt/protocol file(s) apply, return that file's full content rather than an arbitrary partial excerpt -- a truncated blocking/pass-condition section can look complete while silently omitting the rest.
+    - Prefer fields and selected SSOT sections for anything not yet routing-resolved (e.g. SSOT section listing/selection stays selection-only).
+    - Expose this Reference's basis as structured fields (reference_basis), not markdown wording; a UI may render markdown from those fields, but the fields are the authority, not the rendered text.
 
 reference_basis_field:
   meaning: >-
@@ -63,6 +55,27 @@ workflow_procedure_field:
       - READ_ENTRY
       - "-> READ_TASK_MATERIALS"
       - "-> ... -> PUSH_OR_PR"
+
+next_step_field:
+  meaning: >-
+    next_step is a string every subcommand of both agent-ui-initial-contract
+    and agent-ui-local-test emits, naming the exact next subcommand to run
+    (or, at the two phase boundaries, the next real-world action: implement
+    the change, or push/update the PR per .agent/protocols/completion-summary.md).
+    Following next_step end to end across both tools is the executable form
+    of the initial_contract -> implementation -> local_test flow_order: the
+    agent does not need to separately consult .agent/prompt/*,
+    .agent/protocols/*, or .agent/skills/agent-workflow.md for sequencing --
+    only for judgment content that a given next_step surfaces (e.g.
+    protocol_trigger_hints content, checklist_interview_items) is not itself
+    a judgment.
+  emitted_by:
+    - agent-ui-initial-contract worktypes / start / resolve-ssot / sections / end
+    - agent-ui-local-test run-worktype-tests / read-senario-tmp / checklist / checks / summary
+  chain: >-
+    worktypes -> start -> resolve-ssot -> sections -> end -> (implement) ->
+    run-worktype-tests -> read-senario-tmp -> checklist -> checks -> summary
+    -> (push/update PR)
 
 authority_split:
   ai_authored:
@@ -117,6 +130,7 @@ initial_contract_outputs:
       - reference_basis
       - workflow_procedure_path
       - workflow_procedure
+      - next_step
   step_3_prompt:
     tool_emits:
       - prompt_content
@@ -124,27 +138,19 @@ initial_contract_outputs:
       - required_reads_from_prompt
       - protocol_trigger_hints
       - protocol_trigger_hints_note
+      - next_step
     constraints:
-      - prompt_content is the full text of the one worktype-routed prompt
-        file; protocol_trigger_hints[].content is the full text of each
-        routed required/triggered protocol file. Neither is an arbitrary
-        partial excerpt.
-      - This is not "dump every prompt/protocol"; it is the full text of
-        only the file(s) worktype/trigger routing already resolved to.
-      - Each file read is bounded by a fail-explicit safety cap
-        (FULL_READ_LINE_CAP in agent_ui_initial_contract.py); if a file
-        exceeds it, truncated/prompt_content_truncated is set true rather
-        than silently returning a partial read.
-      - protocol_trigger_hints content text is retrieval only. Whether a
-        triggered_protocols condition (trigger_condition != "always")
-        applies to the current task is still agent judgment, never tool
-        output.
+      - prompt_content is the full text of the one worktype-routed prompt file; protocol_trigger_hints[].content is the full text of each routed required/triggered protocol file. Neither is an arbitrary partial excerpt.
+      - This is not "dump every prompt/protocol"; it is the full text of only the file(s) worktype/trigger routing already resolved to.
+      - Each file read is bounded by a fail-explicit safety cap (FULL_READ_LINE_CAP in agent_ui_initial_contract.py); if a file exceeds it, truncated/prompt_content_truncated is set true rather than silently returning a partial read.
+      - protocol_trigger_hints content text is retrieval only. Whether a triggered_protocols condition (trigger_condition != "always") applies to the current task is still agent judgment, never tool output.
   step_4_target_ssot:
     ai_input:
       - target_ssot_name
     tool_emits:
       - target_ssot_path
       - ssot_resolution_status
+      - next_step
   step_5_section_list:
     tool_emits:
       - section_list
@@ -159,6 +165,7 @@ initial_contract_outputs:
     tool_emits:
       - selected_section_subtrees
       - selected_ssot_sections_summary
+      - next_step
     constraints:
       - Output selected section subtrees only.
       - Avoid full-file output unless all sections are explicitly selected.
@@ -190,6 +197,7 @@ initial_contract_outputs:
       - senario_summary
       - ng_boundary
       - senario_tmp_path
+      - next_step
 
 implementation_phase_outputs:
   start:
@@ -210,6 +218,7 @@ local_test_outputs:
     tool_emits:
       - worktype_test_commands
       - worktype_test_result
+      - next_step
     constraints:
       - Summarize result.
       - Do not dump full logs.
@@ -220,6 +229,7 @@ local_test_outputs:
       - checklist_interview_items
       - checklist_result
       - missing_checklist_answers_if_any
+      - next_step
     constraints:
       - Do not write checklist answers to tool.log.
   step_3_checks:
@@ -227,6 +237,7 @@ local_test_outputs:
       - check_commands
       - check_result
       - missing_evidence_if_any
+      - next_step
   step_4_pass:
     tool_emits:
       - pass_or_fail
@@ -244,6 +255,7 @@ local_test_outputs:
       - checklist_result
       - check_result
       - missing_evidence_if_any
+      - next_step
 
 log_record_reference:
   path: docs/governance/logs/tool.log

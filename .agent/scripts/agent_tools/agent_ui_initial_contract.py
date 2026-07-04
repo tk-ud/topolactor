@@ -72,6 +72,7 @@ def _cmd_worktypes(_args: argparse.Namespace) -> int:
         "boundary": BOUNDARY,
         "mode": "worktypes",
         "worktypes": entries,
+        "next_step": "Run `start --task-name <name> --worktype <one of the worktype ids above>` to begin initial_contract.",
     })
 
 
@@ -186,6 +187,7 @@ def _cmd_start(args: argparse.Namespace) -> int:
         "workflow_procedure_path": WORKFLOW_SKILL_PATH,
         "workflow_procedure": workflow_procedure,
         "reference_basis": REFERENCE_BASIS,
+        "next_step": "Read prompt_content/protocol_trigger_hints above for the target SSOT name(s) to check, then run `resolve-ssot --target <ssot_name>` for each.",
     })
 
 
@@ -223,6 +225,7 @@ def _cmd_resolve_ssot(args: argparse.Namespace) -> int:
             "ssot_resolution_status": "not_found",
             "target_ssot_path": None,
             "section_list": [],
+            "next_step": "Retry `resolve-ssot` with a corrected --target name (check protocol_trigger_hints/prompt_content from `start` for the exact SSOT name).",
         })
     if len(matches) > 1:
         return emit_json({
@@ -232,6 +235,7 @@ def _cmd_resolve_ssot(args: argparse.Namespace) -> int:
             "target_ssot_name": args.target,
             "ssot_resolution_status": "ambiguous",
             "candidates": [str(m.relative_to(REPO_ROOT)) for m in matches],
+            "next_step": "Retry `resolve-ssot` with --target set to one of the candidates above.",
         })
 
     rel_path = str(matches[0].relative_to(REPO_ROOT))
@@ -254,6 +258,11 @@ def _cmd_resolve_ssot(args: argparse.Namespace) -> int:
         "ssot_resolution_status": "resolved",
         "target_ssot_path": rel_path,
         "section_list": section_list,
+        "next_step": (
+            f"Run `sections --file {rel_path} --select '[\"section_a\",...]'` using names from "
+            "section_list above; repeat resolve-ssot/sections for any other target SSOT; then "
+            "call `end` once the senario contract is ready."
+        ),
     })
 
 
@@ -283,6 +292,11 @@ def _cmd_sections(args: argparse.Namespace) -> int:
         "mode": "sections",
         "file": args.file,
         "selected_section_subtrees": subtrees,
+        "next_step": (
+            "Call `sections` again for other files/sections still needed, otherwise run "
+            "`end --task-name ... --worktype ... --uuid ... --datetime ... --target-file ... "
+            "--senario-summary ...` (reuse uuid/datetime from `start`) to close out initial_contract."
+        ),
     })
 
 
@@ -318,6 +332,11 @@ def _cmd_end(args: argparse.Namespace) -> int:
             "senario_tmp_path": str(SENARIO_TMP_PATH.relative_to(REPO_ROOT)),
             "tool_log_appended": True,
         },
+        "next_step": (
+            "initial_contract is closed. Implement within the defined scope from prompt_content/"
+            "protocol_trigger_hints and the senario contract above, then run agent-ui-local-test's "
+            f"`run-worktype-tests --worktype {args.worktype}` to begin local_test."
+        ),
     })
 
 

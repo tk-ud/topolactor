@@ -127,7 +127,9 @@ Examples:
 
 ## Agent UI protocol tools
 
-`agent-ui-initial-contract` and `agent-ui-local-test` implement the Agent UI protocol's `initial_contract` and `local_test` steps from `docs/governance/agent-ui-protocol-ssot.yaml`. They are governance/tool-side tools, not ordinary observation tools: the SSOT and this task scope explicitly permit them to write `senario-tmp.md` and append to `docs/governance/logs/tool.log`, but they still do not mutate Topolactor application/runtime/product source, and they do not expose an `--output` mutation escape hatch.
+`agent-ui-initial-contract` and `agent-ui-local-test` implement the Agent UI protocol's `initial_contract` and `local_test` steps from `docs/governance/agent-ui-protocol-ssot.yaml` (the third phase, `implementation`, is the ordinary coding work between them). They are governance/tool-side tools, not ordinary observation tools: the SSOT and this task scope explicitly permit them to write `senario-tmp.md` and append to `docs/governance/logs/tool.log`, but they still do not mutate Topolactor application/runtime/product source, and they do not expose an `--output` mutation escape hatch.
+
+Every subcommand in both tools emits a `next_step` field naming the exact next subcommand (or, at the two phase boundaries, the next real-world action: implement, or push/update the PR). Following `next_step` end to end — `worktypes` → `start` → `resolve-ssot` → `sections` → `end` → (implement) → `run-worktype-tests` → `read-senario-tmp` → `checklist` → `checks` → `summary` → (push/PR) — carries the full `initial_contract → implementation → local_test` pipeline without consulting `.agent/prompt/*`, `.agent/protocols/*`, or `.agent/skills/agent-workflow.md` for sequencing; `start` already inlined those files' relevant text earlier in the chain.
 
 ### `agent-ui-initial-contract`
 

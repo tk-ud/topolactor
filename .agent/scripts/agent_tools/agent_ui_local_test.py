@@ -62,6 +62,7 @@ def _cmd_run_worktype_tests(args: argparse.Namespace) -> int:
         return 2
     required_checks = routes[args.worktype].get("required_checks", []) or []
     results = [_run_check(c) for c in required_checks]
+    worktype_test_pass = all(r["pass"] for r in results) if results else False
     return emit_json({
         "tool": TOOL_NAME,
         "boundary": BOUNDARY,
@@ -69,7 +70,12 @@ def _cmd_run_worktype_tests(args: argparse.Namespace) -> int:
         "worktype": args.worktype,
         "worktype_test_commands": required_checks,
         "worktype_test_result": results,
-        "worktype_test_pass": all(r["pass"] for r in results) if results else False,
+        "worktype_test_pass": worktype_test_pass,
+        "next_step": (
+            "Run `read-senario-tmp` next."
+            if worktype_test_pass
+            else "Fix the failing check(s) in worktype_test_result[].tail, then re-run run-worktype-tests."
+        ),
     })
 
 
@@ -94,6 +100,7 @@ def _cmd_read_senario_tmp(_args: argparse.Namespace) -> int:
         "ng_boundary": parsed["ng_boundary"],
         "senario_tmp_content": content,
         "senario_tmp_content_note": "senario_tmp_content is the raw markdown for UI rendering only; the fields above are the structured evidence.",
+        "next_step": "Run `checklist` next to see the interview items to answer against this senario.",
     })
 
 
@@ -118,6 +125,7 @@ def _cmd_checklist(args: argparse.Namespace) -> int:
         "checklist_interview_items": items,
         "checklist_result": "requires_ai_interview_using_listed_items",
         "note": "This tool lists existing checklist items only; it does not evaluate free-form checklist answers.",
+        "next_step": "Answer checklist_interview_items against the current diff, then run `checks` next.",
     })
 
 
@@ -129,6 +137,12 @@ def _cmd_checks(_args: argparse.Namespace) -> int:
         "mode": "checks",
         "check_commands": [STRUCTURE_CHECK],
         "check_result": result,
+        "next_step": (
+            "Run `summary --task-name ... --worktype ... --uuid ... --datetime ...` "
+            "(reuse uuid/datetime from initial-contract `start`) for the completion verdict."
+            if result["pass"]
+            else "Fix the failure in check_result.tail, then re-run checks before summary."
+        ),
     })
 
 
@@ -182,6 +196,11 @@ def _cmd_summary(args: argparse.Namespace) -> int:
         "missing_evidence_if_any": missing_evidence,
         "pass_or_fail": pass_or_fail,
         "completion_summary_note": "pass_or_fail reflects required-check pass only; it is not an implemented/partial/not_started judgment.",
+        "next_step": (
+            "PUSH_OR_PR: push the branch / update the PR per .agent/protocols/completion-summary.md."
+            if pass_or_fail == "pass"
+            else "Resolve missing_evidence_if_any, then re-run summary."
+        ),
     })
 
 
