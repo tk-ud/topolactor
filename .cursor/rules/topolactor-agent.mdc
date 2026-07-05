@@ -34,6 +34,7 @@ alwaysApply: true
 
 - Do not load every protocol, doc, or skill by default.
 - **SSOT before implementation:** see [`.cursor/rules/ssot-canonical.mdc`](ssot-canonical.mdc).
+- **その場しのぎ禁止:** 正本は [`.agent/rules/rule.md`](../../.agent/rules/rule.md)（Prohibitions・Repository Design Order Invariant）。`SSOT → wiring → test/proof → implementation` の順を崩さず、症状だけのテスト文字列修正・UI 隠蔽・黙示キャストで CI を通すことは禁止。Cursor 側に別ルールを増やして重複定義しない。
 - Preserve canonical runtime routes and explicit-failure behavior (no silent fallback).
 - Confirm implementation state from **code and tests**, not from `.agent/tasks/todo.md` or `docs/system-roadmap.yaml` alone.
 - **Verification:** tool 利用可なら `agent-ui-local-test` 全チェーン（`summary`）。fallback のみ routed `required_checks` + `check-structure.sh` を最後に。
