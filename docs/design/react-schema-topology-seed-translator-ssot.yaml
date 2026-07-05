@@ -1,6 +1,6 @@
 react_schema_topology_seed_translator_ssot:
   name: topolactor_react_schema_topology_seed_exchange_contract
-  version: 0.3.0
+  version: 0.4.0
   status: experimental_ssot_design_document
   canonical_path: docs/design/react-schema-topology-seed-translator-ssot.yaml
 
@@ -26,7 +26,7 @@ react_schema_topology_seed_translator_ssot:
       - schema_to_seed_exchange_mapping
       - seed_to_schema_exchange_mapping_candidate
       - source_yaml_reference_catalog
-      - source_seed_reference_catalog
+      - declared_seed_surface_catalog
       - exchange_validation_rules
       - loss_and_gap_report_contract
     does_not_own:
@@ -38,6 +38,21 @@ react_schema_topology_seed_translator_ssot:
       - active_topology_write_authority
       - frontend_component_implementation
       - backend_runtime_route_authority
+      - direct_sql_seed_parsing_contract
+
+  translator_input_boundary:
+    allowed_inputs:
+      - ssot_yaml_files
+      - generated_or_reviewed_react_schema_file
+    prohibited_inputs:
+      - db_seed_sql_files_as_primary_input
+      - runtime_database_state
+      - backend_server_response
+      - frontend_runtime_state
+    rule: >-
+      The translator reads SSOT YAML only. Existing seed contents that matter to exchange must be
+      declared in YAML as seed-surface catalog entries. SQL seed files remain implementation/bootstrap
+      artifacts and are not translator source authority.
 
   exchange_model:
     canonical_direction:
@@ -45,14 +60,13 @@ react_schema_topology_seed_translator_ssot:
       status: required_first_direction
       rule: >-
         React-like schema may be normalized into topology UI seed only when each node has
-        source evidence, a catalog identity or known_gap_ref, and an explicit authority boundary.
+        YAML source evidence, a catalog identity or known_gap_ref, and an explicit authority boundary.
     reverse_direction:
       direction: topology_ui_seed_to_react_schema
       status: future_candidate_after_loss_reporting_is_stable
       rule: >-
         Reverse translation is allowed only after forward translation records enough identity,
-        source_yaml_refs, source_seed_refs, and loss markers to reconstruct the authoring schema
-        without silent inference.
+        source_yaml_refs, and loss markers to reconstruct the authoring schema without silent inference.
     exchange_units:
       - projection
       - category
@@ -77,13 +91,11 @@ react_schema_topology_seed_translator_ssot:
       - presetKey
       - surface
       - sourceYamlRefs
-      - sourceSeedRefs
       - root
     node_common_required_fields:
       - key
       - label
       - sourceYamlRefs
-      - sourceSeedRefs
     allowed_node_kinds:
       Projection:
         required: [children]
@@ -134,7 +146,6 @@ react_schema_topology_seed_translator_ssot:
       - action_without_authority
       - field_without_label
       - node_without_source_yaml_refs
-      - node_without_source_seed_refs_when_seed_backed
 
   topology_ui_seed_contract:
     schema_id: topolactor.topology_ui_seed.v1
@@ -145,7 +156,6 @@ react_schema_topology_seed_translator_ssot:
       - surface
       - sourceReactSchema
       - sourceYamlRefs
-      - sourceSeedRefs
       - projections
       - exchangeReport
     record_common_required_fields:
@@ -153,7 +163,6 @@ react_schema_topology_seed_translator_ssot:
       - key
       - label
       - sourceYamlRefs
-      - sourceSeedRefs
       - sourceReactPath
       - knownGapRefs
     record_types:
@@ -208,7 +217,6 @@ react_schema_topology_seed_translator_ssot:
       react_label: seed.label
       react_path: seed.sourceReactPath
       sourceYamlRefs: seed.sourceYamlRefs
-      sourceSeedRefs: seed.sourceSeedRefs
       knownGapRefs: seed.knownGapRefs
     authority_mapping:
       frontend_intent: draft_or_projection_only
@@ -264,124 +272,43 @@ react_schema_topology_seed_translator_ssot:
         sections: [design_principles, binding_flow_contract]
         role: style_design_token_exchange_contract
 
-  source_seed_reference_catalog:
-    bootstrap_order_authority:
-      file: db/README.md
-      sections:
-        - How to run
-        - Bootstrap file order
-        - Files
-      role: canonical_seed_file_order_and_seed_file_purpose_reference
-    structural_seed:
-      - file: db/seed_empty.sql
-        role: minimal_default_topology_and_manifest_seed
-        seed_subjects:
-          - state_registry_defaults
-          - relation_registry_default
-          - deterministic_default_package_schema_component_structure_map
-          - default_dispatch_manifest
-          - external_port_dispatch_manifest
-          - admin_dispatch_manifests
-          - sql_attention_dispatch_manifest
-          - hub_navigation_dispatch_manifests
-          - ui_topology_layout_patch_package_wiring_dispatch_manifests
-          - enum_dictionary_dispatch_manifests
-          - credential_management_projection_manifests
-          - context_route_policy_function_parameters
-        exchange_use: source_manifest_and_projection_seed_evidence
-    ui_builder_preset_seeds:
-      - file: db/hub_search_preset_seed.sql
-        preset_key: hub_search.readonly.v1
-        role: readonly_hub_search_preset_seed
-        seed_records:
-          - topology.mock_preset_registry
-          - topology.mock_preset_object_mapping
-          - topology.mock_preset_wiring_candidate
-          - topology.mock_preset_compile_snapshot
-        exchange_units:
-          - layout_tree_nodes
-          - component_keys
-          - propBindings
-          - payloadFrom
-          - wiring_candidates
-          - unresolved_json
-      - file: db/physical_search_crud_aggregate_preset_seed.sql
-        preset_key: physical_search_crud_aggregate.v1
-        role: physical_search_crud_aggregate_preset_seed
-        seed_records:
-          - topology.mock_preset_registry
-          - topology.mock_preset_object_mapping
-          - topology.mock_preset_wiring_candidate
-          - topology.mock_preset_compile_snapshot
-        exchange_units:
-          - layout_tree_nodes
-          - form_field_nodes
-          - modal_nodes
-          - action_nodes
-          - table_or_list_nodes
-          - payloadFrom
-          - wiring_candidates
-          - unresolved_json
-      - file: db/physical_details_inline_editor_md_generator_preset_seed.sql
-        preset_key: physical_details_inline_editor_md_generator.v1
-        role: detail_inline_editor_markdown_generator_preset_seed
-        seed_records:
-          - topology.mock_preset_registry
-          - topology.mock_preset_object_mapping
-          - topology.mock_preset_wiring_candidate
-          - topology.mock_preset_compile_snapshot
-        exchange_units:
-          - detail_view_nodes
-          - inline_edit_nodes
-          - audit_history_nodes
-          - markdown_preview_or_export_nodes
-          - wiring_candidates
-      - file: db/aggregate_dashboard_preset_seed.sql
-        preset_key: aggregate_dashboard.v1
-        role: aggregate_dashboard_preset_seed
-        seed_records:
-          - topology.mock_preset_registry
-          - topology.mock_preset_object_mapping
-          - topology.mock_preset_wiring_candidate
-          - topology.mock_preset_compile_snapshot
-        exchange_units:
-          - dashboard_layout_nodes
-          - aggregation_display_nodes
-          - manifest_read_query_wiring_candidates
-    component_registry_seed:
-      - file: db/ui_component_registry_preset_catalog_bootstrap.sql
-        role: component_bucket_and_ui_component_registry_bootstrap
-        seed_records:
-          - topology.components_bucket
-          - topology.ui_component_registry
-        exchange_units:
-          - runtime_alias_component_keys
-          - primitive_component_keys
-          - template_component_keys
-          - component_kind
-          - source_path
-          - classification_metadata
-    external_port_consumer_preset_seeds:
-      - file: db/file_attachment_crud_preset_seed.sql
-        role: file_attachment_crud_consumer_preset_seed
-      - file: db/export_sftp_transfer_preset_seed.sql
-        role: export_sftp_transfer_consumer_preset_seed
-      - file: db/file_storage_export_job_preset_seed.sql
-        role: file_storage_export_job_consumer_preset_seed
-      - file: db/audit_approval_form_preset_seed.sql
-        role: audit_approval_form_consumer_preset_seed
-      - file: db/email_approval_form_preset_seed.sql
-        role: email_approval_form_consumer_preset_seed
-    seed_reader_rule: >-
-      Translator generation must read both YAML SSOT references and existing seed references when a seed-backed
-      surface exists. YAML defines vocabulary and authority; seed files provide concrete bootstrap rows,
-      component keys, layout trees, wiring candidates, and compile snapshots.
+  declared_seed_surface_catalog:
+    rule: >-
+      Existing seed contents used by the exchange must be declared in SSOT YAML before the translator
+      can consume them. This catalog describes expected seed-backed surfaces by meaning, not by reading
+      SQL seed files.
+    required_declaration_fields:
+      - seed_surface_key
+      - declared_by_yaml_ref
+      - seed_role
+      - record_subjects
+      - exchange_units
+      - authority_boundary
+    known_declared_surfaces:
+      - seed_surface_key: hub_search.readonly.v1
+        declared_by_yaml_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml hub_search_preset
+        seed_role: readonly_hub_search_preset_seed
+        record_subjects: [preset_registry, object_mapping, wiring_candidate, compile_snapshot]
+        exchange_units: [layout_tree_nodes, component_keys, propBindings, payloadFrom, wiring_candidates, unresolved_json]
+        authority_boundary: tmp_canvas_draft_until_preview_validate_apply
+      - seed_surface_key: physical_search_crud_aggregate.v1
+        declared_by_yaml_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml physical_search_crud_aggregate_preset
+        seed_role: physical_search_crud_aggregate_preset_seed
+        record_subjects: [preset_registry, object_mapping, wiring_candidate, compile_snapshot]
+        exchange_units: [layout_tree_nodes, form_field_nodes, modal_nodes, action_nodes, table_or_list_nodes, payloadFrom, wiring_candidates, unresolved_json]
+        authority_boundary: tmp_canvas_draft_until_preview_validate_apply
+      - seed_surface_key: auth.external.credential_management.projection
+        declared_by_yaml_ref: docs/design/instance-port-substrate-ssot.yaml existing_credential_management_projection_extension
+        seed_role: credential_management_projection_manifest_seed
+        record_subjects: [manifest_projection, screen_data_shape, credential_management_action_wiring, instance_settings_import_boundary]
+        exchange_units: [category_nodes, form_nodes, action_nodes, workflow_nodes, authority_markers]
+        authority_boundary: draft_import_validate_preview_apply_admin_approve
 
   exchange_validation_rules:
     react_schema_validation:
       - every_node_has_source_yaml_refs
-      - seed_backed_node_has_source_seed_refs
       - every_component_or_control_maps_to_catalog_or_known_gap_ref
+      - every_seed_backed_surface_maps_to_declared_seed_surface_catalog
       - every_form_has_fields
       - every_field_has_label_control_required_marker
       - every_action_has_authority_marker
@@ -393,7 +320,6 @@ react_schema_topology_seed_translator_ssot:
     topology_ui_seed_validation:
       - emitted_seed_has_sourceReactPath_for_every_record
       - emitted_seed_has_sourceYamlRefs_for_every_record
-      - emitted_seed_has_sourceSeedRefs_for_seed_backed_records
       - emitted_seed_respects_protected_material_boundary_ref
       - emitted_seed_does_not_create_execution_authority_from_import_or_apply
       - emitted_seed_marks_unresolved_paths_with_knownGapRefs
@@ -409,7 +335,6 @@ react_schema_topology_seed_translator_ssot:
       - sourceSchemaId
       - outputSeedSchemaId
       - sourceYamlRefs
-      - sourceSeedRefs
       - emittedRecords
       - knownGapRefs
       - lossEntries
@@ -428,8 +353,7 @@ react_schema_topology_seed_translator_ssot:
 
   minimal_instance_settings_fixture:
     projection_key: auth.external.credential_management.projection
-    source_seed_refs:
-      - db/seed_empty.sql credential_management_projection_manifests
+    declared_seed_surface_ref: declared_seed_surface_catalog.known_declared_surfaces.auth.external.credential_management.projection
     required_categories: [user_auth, external, instance_settings]
     required_instance_settings_forms:
       - instance_settings_import_form
