@@ -1980,6 +1980,7 @@ ON CONFLICT (manifest_id) DO UPDATE
 -- relation boundaries. This is not a UI Builder preset/component, dedicated
 -- credential route/panel, or physical-table row editor. Secret/token/encrypted
 -- payload values are intentionally absent; only reference metadata is projected.
+-- assign_screen_data_shape dispatch route is manifest 07e only (see remove_duplicate_assign_screen_data_shape_dispatcher.sql).
 -- ---------------------------------------------------------------------------
 INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
 VALUES (
@@ -1987,7 +1988,6 @@ VALUES (
     NULL,
     ARRAY[
         '{"type":"hub_grouping","manifestKey":"auth.external.credential_management.projection","bundle":"auth-external-credential-management-topology-projection","parentBundle":"external-port-substrate-implementation"}'::jsonb,
-        '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"assign_screen_data_shape"}'::jsonb,
         '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
         '{"type":"fixed_form_projection","surface":"auth_external_credential_management","draft_edit_only":true,"validate_preview_apply_required":true,"ui_builder_authority":false,"physical_row_editor":false,"dedicated_credential_route":false,"consumer_bundle_connection":false,"credential_management_categories":["user_auth","external","instance_settings"],"default_category":"external","category_selector_mode":"select_mode_category","secret_fields_forbidden":["plaintext_secret","secret","token","access_token","refresh_token","encrypted_payload","connection_string","endpoint_real_value","raw_sql","private_key","runtime_only_decrypted_payload","approval_bypass_authority"],"policy_step_editing":"template_selection_only"}'::jsonb,
         '{"type":"instance_settings_json_template_policy","category":"instance_settings","download_enabled":true,"import_enabled":true,"validate_preview_apply_required":true,"public_safe_shape_only":true,"template_sections":["db_instance_port","runtime_instance_port","instance_connection_policy","instance_operation_authority_binding"],"forbidden_template_fields":["secret","plaintext_secret","token","access_token","refresh_token","encrypted_payload","connection_string","endpoint_real_value","raw_sql","private_key","runtime_only_decrypted_payload","approval_bypass_authority"],"safe_reference_fields":["reference_key","instance_authority_key","operation_binding_key","policy_template_key"]}'::jsonb,

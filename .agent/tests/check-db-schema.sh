@@ -281,6 +281,8 @@ query_equals_one "manifest dispatcher_mapping for ui_topology list_external_port
   "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='list_external_port_authoring_candidates';"
 query_equals_one "manifest dispatcher_mapping for ui_topology list_instance_operation_authoring_candidates" \
   "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='list_instance_operation_authoring_candidates';"
+query_equals_one "manifest dispatcher_mapping for manifest assign_screen_data_shape (sole active route)" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='manifest' AND e->>'action'='assign_screen_data_shape';"
 
 echo "=== Validating hubs.hub_relations FK chain ==="
 query_equals_one "column exists: hubs.hub_relations.topology_manifest_id" \
