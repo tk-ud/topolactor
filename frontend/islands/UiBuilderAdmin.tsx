@@ -7736,7 +7736,8 @@ function PackageConnectionPanel({
 
   return (
     <section class="rounded border border-slate-200 bg-slate-50/80 p-3">
-      <p class="text-[0.65rem] text-slate-700">{UX_PACKAGE_WIRING_SECTION_HINT}</p>
+      <h4 class="text-sm font-semibold text-slate-800">パッケージ配線（編集）</h4>
+      <p class="mt-1 text-[0.65rem] text-slate-700">{UX_PACKAGE_WIRING_SECTION_HINT}</p>
       {loadStatus && <p class="mt-2 text-xs text-slate-500">{loadStatus}</p>}
       <div class="mt-3 space-y-3">
         <RouteNavigationWiringPreset

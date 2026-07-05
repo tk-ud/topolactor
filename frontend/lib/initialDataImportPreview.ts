@@ -36,9 +36,12 @@ export function parseCsvContent(content: string): {
   ok: true;
   rows: Record<string, unknown>[];
 } | { ok: false; error: string } {
-  const lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n")
-    .filter((l) => l.trim().length > 0);
-  if (lines.length === 0) {
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = normalized.split("\n");
+  if (lines.length > 0 && lines[lines.length - 1] === "" && normalized.endsWith("\n")) {
+    lines.pop();
+  }
+  if (lines.length === 0 || lines.every((l) => l.trim().length === 0)) {
     return { ok: false, error: "CSV が空です。" };
   }
   const headers = splitCsvLine(lines[0]!);

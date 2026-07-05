@@ -1,5 +1,5 @@
 /** @jsxImportSource preact */
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { Fragment } from "preact";
 import { JSX } from "preact";
 import {
@@ -19,7 +19,7 @@ import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { ADMIN_HUB_NAVIGATION_GUIDE } from "../content/adminGuides.ts";
-import { UX_STATUS_LABELS } from "../content/adminUxTerms.ts";
+import { UX_STATUS_LABELS, UX_HUB_NAV_DESTINATION_LABEL } from "../content/adminUxTerms.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 
 type PanelError = { code?: string; message: string };
@@ -42,6 +42,11 @@ export default function HubNavigationAdmin(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [backendUnavailable, setBackendUnavailable] = useState(false);
   const { confirm, ConfirmDialogHost } = useConfirm();
+
+  const destinationHubOptions = useMemo(
+    () => hubs.filter((h) => h.summary.trim().length > 0 || h.label.trim().length > 0),
+    [hubs],
+  );
 
   const loadManifests = async () => {
     const [m, h] = await Promise.all([listHubNavigationManifests(), listContentHubs()]);
@@ -313,16 +318,18 @@ export default function HubNavigationAdmin(): JSX.Element {
 
               <div class="space-y-3">
                 <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-700">遷移先の画面</label>
+                  <label class="mb-1 block text-xs font-medium text-gray-700">
+                    {UX_HUB_NAV_DESTINATION_LABEL}
+                  </label>
                   <select
                     class="input-base w-full max-w-md"
                     value={draftRelatedHubId}
                     onChange={(e) => setDraftRelatedHubId((e.target as HTMLSelectElement).value)}
                   >
                     <option value="">— 画面を選択 —</option>
-                    {hubs.map((h) => (
+                    {destinationHubOptions.map((h) => (
                       <option key={h.id} value={h.id}>
-                        {h.label}
+                        {h.summary || h.label}
                       </option>
                     ))}
                   </select>

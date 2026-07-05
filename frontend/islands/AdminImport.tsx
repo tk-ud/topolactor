@@ -15,9 +15,13 @@ import {
   UX_CONTENTS,
   UX_CONTENTS_PAGE,
   UX_DATA_SHAPE,
+  UX_IMPORT_RULE_PAGE_COLUMNS,
+  UX_IMPORT_RULE_PAGE_COLUMNS_HINT,
   UX_RUNTIME_CHECK,
   UX_UI_BUILDER,
 } from "../content/adminUxTerms.ts";
+import type { ConformanceColumnSpec } from "../lib/contentDataConformance.ts";
+import { previewInitialDataImportLocal } from "../lib/initialDataImportPreview.ts";
 
 export type AdminImportPanelProps = {
   /** When true, omit page chrome (for /admin/contents data-input section). */
@@ -26,6 +30,8 @@ export type AdminImportPanelProps = {
   defaultManifestId?: string;
   /** Lock manifest selector to the shared manifest id. */
   lockManifestId?: boolean;
+  /** Step 2 logical column specs — embedded Step 3 uses page columns, not schema_registry. */
+  columnSpecs?: ConformanceColumnSpec[];
   /** Merge preview rows into contents Step3 unified editor (non-destructive append). */
   onMergePreviewToEditor?: (preview: AdminImportPreviewResult) => void;
   /** After apply — parent may reload snapshot records into the editor. */
@@ -36,6 +42,7 @@ export function AdminImportPanel({
   embedded = false,
   defaultManifestId = "",
   lockManifestId = false,
+  columnSpecs,
   onMergePreviewToEditor,
   onApplied,
 }: AdminImportPanelProps): JSX.Element {
@@ -110,7 +117,9 @@ export function AdminImportPanel({
 
   const manifestsEmpty = !loadingSelectors && manifestOptions.length === 0;
   const schemasEmpty = !loadingSelectors && schemas.length === 0;
-  const canSelectInputs = !manifestsEmpty && !schemasEmpty;
+  const usePageColumnImport = embedded && (columnSpecs?.length ?? 0) > 0;
+  const canSelectInputs = !manifestsEmpty &&
+    (usePageColumnImport || !schemasEmpty);
 
   const handlePreview = async () => {
     setError(null);
@@ -123,7 +132,7 @@ export function AdminImportPanel({
       );
       return;
     }
-    if (schemasEmpty) {
+    if (!usePageColumnImport && schemasEmpty) {
       setError(
         `取り込み用の${UX_DATA_SHAPE}が登録されていません。${UX_CONTENTS_PAGE}で前提を整えてください。`,
       );
@@ -133,7 +142,7 @@ export function AdminImportPanel({
       setError("取り込み先の画面を選択してください。");
       return;
     }
-    if (!selectedSchemaId) {
+    if (!usePageColumnImport && !selectedSchemaId) {
       setError(`${UX_DATA_SHAPE}を選択してください。`);
       return;
     }
@@ -144,14 +153,29 @@ export function AdminImportPanel({
 
     setLoading(true);
     try {
-      const result = await uploadImportPreview(
-        sourceType,
-        fileName || "upload",
-        selectedManifestId,
-        selectedSchemaId,
-        fileContent,
-      );
-      setPreview(result);
+      if (usePageColumnImport && columnSpecs) {
+        const result = previewInitialDataImportLocal({
+          sourceType,
+          fileName: fileName || "upload",
+          manifestId: selectedManifestId,
+          content: fileContent,
+          columns: columnSpecs,
+        });
+        if (!result.ok) {
+          setError(result.error);
+        } else {
+          setPreview(result);
+        }
+      } else {
+        const result = await uploadImportPreview(
+          sourceType,
+          fileName || "upload",
+          selectedManifestId,
+          selectedSchemaId,
+          fileContent,
+        );
+        setPreview(result);
+      }
     } catch (e) {
       console.error("IMPORT_PREVIEW_FAILED", e);
       setError(
@@ -247,22 +271,34 @@ export function AdminImportPanel({
                   ))}
                 </select>
               </label>
-              <label class="text-sm">
-                {UX_DATA_SHAPE}
-                <select
-                  value={selectedSchemaId}
-                  onChange={(e) =>
-                    setSelectedSchemaId((e.target as HTMLSelectElement).value)}
-                  class="input-mono mt-1 min-w-[220px]"
-                >
-                  <option value="">— {UX_DATA_SHAPE}を選択 —</option>
-                  {schemas.map((s, index) => (
-                    <option key={s.schemaId} value={s.schemaId}>
-                      {s.name || `データの形 ${index + 1}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {usePageColumnImport
+                ? (
+                  <div class="text-sm">
+                    <p class="font-medium">{UX_IMPORT_RULE_PAGE_COLUMNS}</p>
+                    <p class="text-muted-xs mt-1">{UX_IMPORT_RULE_PAGE_COLUMNS_HINT}</p>
+                    <p class="text-muted-xs mt-1 font-mono">
+                      {columnSpecs!.map((c) => c.key).join(", ")}
+                    </p>
+                  </div>
+                )
+                : (
+                  <label class="text-sm">
+                    {UX_DATA_SHAPE}
+                    <select
+                      value={selectedSchemaId}
+                      onChange={(e) =>
+                        setSelectedSchemaId((e.target as HTMLSelectElement).value)}
+                      class="input-mono mt-1 min-w-[220px]"
+                    >
+                      <option value="">— {UX_DATA_SHAPE}を選択 —</option>
+                      {schemas.map((s, index) => (
+                        <option key={s.schemaId} value={s.schemaId}>
+                          {s.name || `データの形 ${index + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
             </div>
           )}
       </section>

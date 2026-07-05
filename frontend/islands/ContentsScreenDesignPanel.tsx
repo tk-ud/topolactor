@@ -122,6 +122,7 @@ import {
   UX_FIELD_AGGREGATION_MEASURES,
   UX_FIELD_ENUM_GROUP,
   UX_FIELD_OPERATION_ENTITY,
+  UX_FIELD_OPERATION_KINDS,
   UX_FIELD_ENUM_GROUP_NONE,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
@@ -265,7 +266,7 @@ function SamplePreviewPanel({
       <div class="mb-2 flex flex-wrap items-center gap-2">
         <p class="font-semibold text-slate-700">{UX_FIELD_SAMPLE_VIEWING}</p>
         <label class="flex items-center gap-1 text-slate-600">
-          <span>操作種別</span>
+          <span>{UX_FIELD_OPERATION_KINDS}</span>
           <select
             class="rounded border px-2 py-0.5 text-xs"
             value={effectivePreviewKind}
@@ -276,6 +277,7 @@ function SamplePreviewPanel({
               <option key={kind} value={kind}>{screenOperationLabel(kind)}</option>
             ))}
           </select>
+          <span class="text-slate-500">({screenOperationLabel(effectivePreviewKind)})</span>
         </label>
       </div>
       {activeBlocks.length > 0 && hasRows && (
@@ -2211,6 +2213,11 @@ export default function ContentsScreenDesignPanel({
         embedded
         defaultManifestId={selectedId}
         lockManifestId={!!selectedId}
+        columnSpecs={qualifiedColumns.map((q) => ({
+          key: q.key,
+          dataType: q.dataType,
+          nullable: q.nullable,
+        }))}
         onMergePreviewToEditor={mergeImportPreviewToEditor}
         onApplied={handleImportApplied}
       />
