@@ -1,0 +1,742 @@
+react_schema_topology_seed_translator_ssot:
+  name: topolactor_react_schema_topology_seed_translator
+  version: 1.0.0
+  status: ssot_design_document
+  canonical_path: docs/design/react-schema-topology-seed-translator-ssot.yaml
+
+  authority:
+    parent_ssot: docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml
+    ui_builder_preset_ecosystem_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml
+    mock_intake_compiler_ref: docs/design/mock-preset-intake-compiler-ssot.yaml
+    component_classification_ref: docs/design/component-catalog-classification-ssot.yaml
+    ui_ux_primitive_catalog_ref: docs/design/ui-ux-primitive-catalog-ssot.yaml
+    instance_port_substrate_ref: docs/design/instance-port-substrate-ssot.yaml
+    runtime_orchestration_ref: docs/design/runtime-orchestration-ssot.yaml
+    admin_console_ref: docs/design/admin-console-workflow-ssot.yaml
+    css_dictionary_ref: docs/design/css-dictionary-ssot.yaml
+    topology_layout_class_ref: docs/design/topology-layout-class-ssot.yaml
+    production_policy_ref: docs/design/react-schema-topology-seed-translator-production-policy.md
+    note: >-
+      This SSOT is the exchange contract only, between a React-like authoring schema and a
+      topology UI seed. A next-Bundle Python3 tool reads this YAML and decomposes an input
+      text into normalized elements, a generated React schema candidate, and a generated
+      topology UI seed candidate. This file owns input/output shape, text decomposition,
+      schema/seed shape, the input format ⇆ output format exchange mapping, the declared
+      seed surface catalog, and validation rules. It does NOT own tool implementation, CLI
+      shape, docker compose, nginx routing, C# invocation, or agent work procedure — those
+      belong to production_policy_ref as non-SSOT guidance and must not be authored here.
+
+  scope:
+    owns:
+      - input_format_shape
+      - text_decomposition_shape
+      - react_schema_shape
+      - topology_ui_seed_shape
+      - output_format_shape
+      - input_format_to_output_format_exchange_mapping
+      - declared_seed_surface_catalog
+      - validation_rules
+    does_not_own:
+      - python_tool_entrypoint_or_cli_shape
+      - docker_compose_service_design
+      - nginx_route_design
+      - csharp_invocation_design
+      - agent_work_procedure
+      - active_topology_write_authority
+      - frontend_component_implementation
+      - backend_runtime_route_authority
+      - direct_sql_seed_parsing_contract
+
+  translator_input_authority:
+    allowed_inputs:
+      - this_ssot_yaml_file
+      - other_ssot_yaml_files_reachable_through_source_yaml_refs_or_declared_seed_surface_catalog
+      - an_inputText_string_supplied_by_the_caller_at_runtime
+    prohibited_inputs:
+      - db_seed_sql_files_as_translator_source
+      - runtime_database_state
+      - backend_server_response
+      - frontend_runtime_state
+      - free_text_without_a_declared_targetSurface_and_sourceYamlRefs
+    rule: >-
+      The translator reads SSOT YAML only. Anything in existing seed SQL that matters to the
+      exchange must already be declared here as a declared_seed_surface_catalog entry before
+      the translator can treat it as known. db/*.sql seed files stay reference material for the
+      humans who author/maintain this SSOT; the translator itself never opens them and they are
+      never source authority for a generated schema or seed candidate.
+    protected_boundary_vocabulary:
+      ref: docs/design/instance-port-substrate-ssot.yaml seed_aligned_json_template_boundary.protected_boundary
+      values:
+        - plaintext_secret
+        - connection_string
+        - endpoint_real_value
+        - credential_plaintext
+        - private_key_material
+        - runtime_only_decrypted_payload
+        - raw_SQL
+        - unapproved_executable_function_or_schema_authority
+      rule: >-
+        No input_format field, decomposition unit, react_schema node, or topology_ui_seed
+        record may carry a protected_boundary_vocabulary value. Any input text fragment that
+        looks like one of these must become a validation error, not a normalized element.
+
+  # ===========================================================================
+  # 1. input_format_contract
+  # ===========================================================================
+
+  input_format_contract:
+    schema_id: topolactor.translator_input.v1
+    purpose: >-
+      Shape of the object the Python tool reads before it runs text decomposition.
+      input text -> semantic element decomposition -> React schema candidate is the
+      canonical first pass; other modes reuse the same envelope.
+    required_fields:
+      schemaId:
+        value: topolactor.translator_input.v1
+        rule: literal_marker_must_match_exactly
+      inputText:
+        type: string
+        rule: non_empty; the raw text to decompose
+      targetSurface:
+        type: string
+        rule: >-
+          must equal an existing declared_seed_surface_catalog[].seed_surface_key, or be a new
+          surface key explicitly paired with at least one known_gap_ref of classification
+          ssot_ambiguity_gap or component_catalog_gap in knownGapRefs
+      mode:
+        type: enum
+        values: [generate_react_schema, generate_topology_ui_seed, round_trip_check]
+      sourceYamlRefs:
+        type: list<source_yaml_ref>
+        rule: non_empty; each entry is "file[ section_or_key_path]"
+      knownGapRefs:
+        type: list<known_gap_ref>
+        rule: optional_but_required_when_targetSurface_is_new_or_inputText_names_an_unresolved_path
+      protectedBoundaryRefs:
+        type: list<string>
+        rule: >-
+          optional declaration of which protected_boundary_vocabulary values the caller has
+          already screened inputText against; absence does not waive validation
+    optional_fields:
+      optionalHints:
+        type: object
+        rule: >-
+          freeform authoring hints (e.g. preferred component family, preferred layout class).
+          Hints are never authority: they cannot substitute for sourceYamlRefs, cannot resolve
+          a knownGapRef, and cannot bypass a validation error.
+    mode_vocabulary:
+      generate_react_schema: "inputText -> semantic element decomposition -> react schema candidate"
+      generate_topology_ui_seed: "react schema candidate (passed as inputText JSON) -> topology ui seed candidate"
+      round_trip_check: "topology ui seed candidate (passed as inputText JSON) -> react schema candidate -> loss/blocker comparison against the original react schema candidate"
+    validation:
+      - inputText_must_not_be_empty
+      - targetSurface_must_resolve_per_required_fields_rule_above
+      - sourceYamlRefs_must_be_non_empty
+      - mode_must_be_one_of_mode_vocabulary
+      - protectedBoundaryRefs_absence_is_not_a_pass
+
+  # ===========================================================================
+  # 2. text_decomposition_contract
+  # ===========================================================================
+
+  text_decomposition_contract:
+    purpose: >-
+      Defines the minimum set of element kinds the tool must recognize when segmenting
+      inputText, and the rules every recognized element instance must satisfy.
+    deterministic: true
+    ai_allowed: false
+    units:
+      projection:
+        meaning: top-level authored surface (one screen/route worth of UI)
+        maps_to_react_node: Projection
+      category:
+        meaning: grouping of sections within a projection (e.g. mode/tab switch group)
+        maps_to_react_node: Category
+      section:
+        meaning: a disclosure/layout region inside a category or projection
+        maps_to_react_node: Section
+      form:
+        meaning: a named mutation-or-input surface with one or more fields and an owning target
+        maps_to_react_node: Form
+      field:
+        meaning: a single controlled input/control belonging to a form or standalone display
+        maps_to_react_node: Field
+      table:
+        meaning: a tabular or list-shaped display/read surface
+        maps_to_react_node: Table
+      workflow:
+        meaning: an ordered sequence of steps toward a lifecycle outcome (e.g. validate -> save -> promote)
+        maps_to_react_node: Workflow
+      step:
+        meaning: one ordered stage inside a workflow, carrying its own action and authority marker
+        maps_to_react_node: Step
+      action:
+        meaning: a dispatchable operation (click/change/submit) with a canonical target ref
+        maps_to_react_node: Action
+      validation:
+        meaning: a rule attached to a field, form, or action that can block or warn
+        maps_to_react_node: Validation
+      prop_binding:
+        meaning: a read-only projection of runtime emission data into a component prop
+        maps_to_react_node: PropBinding
+      payload_from:
+        meaning: a dispatch payload field sourced from a node value, event path, or literal
+        maps_to_react_node: PayloadFrom
+      style_ref:
+        meaning: a reference to a css-dictionary token or topology-layout-class ref
+        maps_to_react_node: StyleRef
+      authority_marker:
+        meaning: >-
+          not a standalone node — an attached tag on a Form/Action/Step/Workflow element naming
+          which authority_mapping stage (see exchange_mapping.authority_mapping) the element sits
+          at (draft_or_projection_only | validation_only | preview_only |
+          draft_apply_not_execution_authority | execution_candidate_authority_boundary |
+          approved_runtime_execution_only)
+        maps_to_react_node: null
+      known_gap_ref:
+        meaning: >-
+          not a standalone node — an attached tag on any element that could not be resolved to a
+          catalog identity, a recognized payload_from/prop_binding pattern, or a style token.
+          classification must be one of the canonical_gap_types in
+          docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml (component_catalog_gap,
+          prop_binding_gap, event_payload_resolver_gap, runtime_dispatch_or_projection_gap,
+          ssot_ambiguity_gap)
+        maps_to_react_node: null
+    rules:
+      - every_recognized_unit_instance_carries_sourceYamlRefs
+      - unit_boundaries_are_resolved_from_explicit_markup_in_inputText_not_from_free_nlp_inference
+      - an_input_fragment_that_matches_no_unit_becomes_an_unresolved_element_not_a_silent_drop
+      - decomposition_output_is_an_ordered_list_of_normalized_input_elements_preserving_source_order
+      - authority_marker_and_known_gap_ref_are_attached_metadata_not_addressable_top_level_elements
+
+  # ===========================================================================
+  # 3. react_schema_contract
+  # ===========================================================================
+
+  react_schema_contract:
+    schema_id: topolactor.react_schema.v1
+    role: authoring_schema_not_runtime_component_not_arbitrary_react
+    required_root_fields:
+      - schema
+      - presetKey
+      - surface
+      - sourceYamlRefs
+      - root
+    node_common_required_fields:
+      - key
+      - label
+      - sourceYamlRefs
+    node_common_optional_fields:
+      - knownGapRefs
+      - authorityMarker
+    allowed_node_kinds:
+      Projection:
+        required: [children]
+        emits_seed: topology_ui_projection
+      Category:
+        required: [children]
+        emits_seed: topology_ui_category
+      Section:
+        required: [children]
+        emits_seed: topology_ui_section
+      Form:
+        required: [target, mode, fields, authorityMarker]
+        emits_seed: topology_ui_form
+      Field:
+        required: [control, required]
+        emits_seed: topology_ui_field
+      Table:
+        required: [source, display]
+        emits_seed: topology_ui_table
+      Workflow:
+        required: [steps]
+        emits_seed: topology_ui_workflow
+      Step:
+        required: [action, authorityMarker]
+        emits_seed: topology_ui_workflow_step
+      Action:
+        required: [action, authorityMarker]
+        emits_seed: topology_ui_action
+      Validation:
+        required: [rule, severity]
+        emits_seed: topology_ui_validation
+      PropBinding:
+        required: [targetProp, source]
+        emits_seed: topology_ui_prop_binding
+      PayloadFrom:
+        required: [targetField, source]
+        emits_seed: topology_ui_payload_from
+      StyleRef:
+        required: [target, tokenRef]
+        emits_seed: topology_ui_style_ref
+      Unresolved:
+        required: [rawFragment, knownGapRefs]
+        emits_seed: topology_ui_unresolved
+        note: >-
+          terminal node kind for input fragments that text_decomposition_contract could not
+          classify into any other unit; always carries at least one known_gap_ref
+    prohibited_features:
+      - arbitrary_component_import
+      - arbitrary_js_expression
+      - frontend_direct_persistence
+      - unbounded_inline_css
+      - unknown_component_key_silent_fallback
+      - unknown_control_silent_fallback
+      - action_without_authorityMarker
+      - form_without_fields
+      - mutation_action_not_owned_by_a_form
+      - field_without_label
+      - node_without_source_yaml_refs
+      - protected_boundary_vocabulary_value_present
+
+  # ===========================================================================
+  # 4. topology_ui_seed_contract
+  # ===========================================================================
+
+  topology_ui_seed_contract:
+    schema_id: topolactor.topology_ui_seed.v1
+    role: draft_intake_artifact_not_active_topology
+    required_root_fields:
+      - schema
+      - seedKey
+      - surface
+      - sourceReactSchema
+      - sourceYamlRefs
+      - projections
+      - exchangeReport
+    record_common_required_fields:
+      - recordType
+      - key
+      - label
+      - sourceYamlRefs
+      - sourceReactPath
+      - knownGapRefs
+    record_types:
+      topology_ui_projection:
+        required: [surface, categories]
+      topology_ui_category:
+        required: [categoryKey, sections]
+      topology_ui_section:
+        required: [sectionKey, sectionKind, children]
+      topology_ui_form:
+        required: [formKey, target, mode, fields, actions, authorityMarker]
+      topology_ui_field:
+        required: [fieldKey, control, required, validationRefs]
+      topology_ui_table:
+        required: [tableKey, source, display, columns]
+      topology_ui_workflow:
+        required: [workflowKey, steps]
+      topology_ui_workflow_step:
+        required: [stepKey, actionRef, authorityMarker]
+      topology_ui_action:
+        required: [actionKey, actionRef, authorityMarker]
+      topology_ui_validation:
+        required: [validationKey, rule, severity]
+      topology_ui_prop_binding:
+        required: [targetProp, source]
+      topology_ui_payload_from:
+        required: [targetField, source]
+      topology_ui_style_ref:
+        required: [target, tokenRef]
+      topology_ui_unresolved:
+        required: [rawFragment, knownGapRefs]
+    projection_category_section_form_field_table_workflow_action_mapping_ref: >-
+      exchange_mapping.schema_to_seed_record_mapping (single source of truth for the
+      React-node-kind -> seed-record-type table; not duplicated here)
+    exchange_report_ref: exchange_report_contract
+    loss_report_ref: exchange_report_contract.loss_entry_fields
+    validation_errors_ref: validation_rules.topology_ui_seed_validation
+    protected_material_boundary_ref: docs/design/instance-port-substrate-ssot.yaml seed_aligned_json_template_boundary.protected_boundary
+    active_topology_rule: >-
+      Topology UI seed is draft/intake material only. It cannot write active topology or create
+      callable execution authority by itself; it still requires the existing preview / validate /
+      apply / admin-approve boundary described in authority_mapping before anything it describes
+      can execute.
+
+  # ===========================================================================
+  # 5. output_format_contract
+  # ===========================================================================
+
+  output_format_contract:
+    schema_id: topolactor.translator_output.v1
+    purpose: shape of the object the Python tool returns for every mode in input_format_contract.mode_vocabulary.
+    required_fields:
+      normalizedInputElements:
+        type: list<normalized_element>
+        source: text_decomposition_contract
+        rule: >-
+          ordered list mirroring inputText; every element carries unitKind (one of
+          text_decomposition_contract.units, or "unresolved"), rawFragment, and sourceYamlRefs
+      reactSchemaCandidate:
+        type: topolactor.react_schema.v1 | null
+        rule: populated when mode is generate_react_schema or round_trip_check; null for generate_topology_ui_seed unless the caller also supplied a react schema candidate to carry through
+      topologyUiSeedCandidate:
+        type: topolactor.topology_ui_seed.v1 | null
+        rule: populated when mode is generate_topology_ui_seed or round_trip_check; null for generate_react_schema
+      exchangeReport:
+        type: exchange_report_contract
+        rule: always populated, even when empty (zero records still yields a report shell)
+      validationErrors:
+        type: list<validation_error>
+        rule: >-
+          each entry names the failing rule id from validation_rules, the offending path, and
+          whether it is blocking or a warning; empty list means no errors, never omitted
+      unresolvedGaps:
+        type: list<known_gap_ref>
+        rule: every Unresolved / topology_ui_unresolved node's knownGapRefs, deduplicated
+      reverseTranslationBlockers:
+        type: list<reverse_translation_blocker>
+        rule: populated only for round_trip_check mode; empty list (not null) for the other two modes
+    validation_error_shape:
+      required: [ruleId, path, severity, message]
+      severity_values: [blocking, warning]
+    reverse_translation_blocker_shape:
+      required: [seedRecordPath, reason, knownGapRef]
+
+  # ===========================================================================
+  # 6. exchange_mapping
+  # ===========================================================================
+
+  exchange_mapping:
+    canonical_direction:
+      direction: react_schema_to_topology_ui_seed
+      status: required_first_direction
+      rule: >-
+        A React-like schema may be normalized into a topology UI seed only when every node has
+        sourceYamlRefs, a catalog identity or known_gap_ref, and an explicit authorityMarker
+        where the node kind requires one.
+    reverse_direction:
+      direction: topology_ui_seed_to_react_schema
+      status: future_candidate_gated_by_round_trip_check_mode
+      rule: >-
+        Reverse translation is allowed only after the forward pass recorded enough identity,
+        sourceYamlRefs, and loss markers on the seed to reconstruct the authoring schema without
+        inventing new information; any record that cannot be reconstructed produces a
+        reverse_translation_blocker instead of a guessed React node.
+
+    text_to_schema_mapping:
+      projection: Projection
+      category: Category
+      section: Section
+      form: Form
+      field: Field
+      table: Table
+      workflow: Workflow
+      step: Step
+      action: Action
+      validation: Validation
+      prop_binding: PropBinding
+      payload_from: PayloadFrom
+      style_ref: StyleRef
+      authority_marker: attaches_authorityMarker_field_to_owning_Form_Action_Step_or_Workflow_node
+      known_gap_ref: attaches_knownGapRefs_entry_to_owning_node
+
+    schema_to_seed_record_mapping:
+      Projection: topology_ui_projection
+      Category: topology_ui_category
+      Section: topology_ui_section
+      Form: topology_ui_form
+      Field: topology_ui_field
+      Table: topology_ui_table
+      Workflow: topology_ui_workflow
+      Step: topology_ui_workflow_step
+      Action: topology_ui_action
+      Validation: topology_ui_validation
+      PropBinding: topology_ui_prop_binding
+      PayloadFrom: topology_ui_payload_from
+      StyleRef: topology_ui_style_ref
+      Unresolved: topology_ui_unresolved
+
+    seed_record_to_schema_candidate_mapping:
+      rule: inverse of schema_to_seed_record_mapping, applied only under reverse_direction
+      per_record_requirement:
+        - record.sourceReactPath_must_resolve_to_a_reconstructable_node_shape
+        - record.sourceYamlRefs_must_carry_over_unchanged
+        - record.knownGapRefs_must_carry_over_unchanged
+      on_failure: emit reverse_translation_blocker; never emit a guessed React node
+
+    identity_mapping:
+      react_key: seed.key
+      react_label: seed.label
+      react_path: seed.sourceReactPath
+      sourceYamlRefs: seed.sourceYamlRefs
+      knownGapRefs: seed.knownGapRefs
+      authorityMarker: seed.authorityMarker
+
+    authority_mapping:
+      frontend_intent: draft_or_projection_only
+      backend_validate: validation_only
+      backend_preview: preview_only
+      backend_apply: draft_apply_not_execution_authority
+      admin_approve: execution_candidate_authority_boundary
+      runtime_execute: approved_runtime_execution_only
+
+    unmapped_element_handling:
+      unmapped_input_text_fragment:
+        becomes: normalizedInputElements entry with unitKind unresolved, and a react_schema Unresolved node
+        requirement: knownGapRefs non_empty; appears in output_format_contract.unresolvedGaps
+      unmapped_react_schema_node:
+        condition: node kind absent from react_schema_contract.allowed_node_kinds, or missing a required field
+        handling: validationErrors entry with severity blocking; translator must fail-closed, never silently drop the node
+      unmapped_seed_record_during_reverse:
+        condition: recordType absent from topology_ui_seed_contract.record_types, or sourceReactPath missing/unreconstructable
+        handling: reverseTranslationBlockers entry; reverse pass must not guess a React node
+
+    loss_policy:
+      no_silent_loss: true
+      dropped_property_requires_loss_report_entry: true
+      unresolved_mapping_requires_known_gap_ref: true
+      reverse_translation_requires_no_unexplained_loss: true
+      loss_report_shape_ref: exchange_report_contract.loss_entry_fields
+
+  exchange_report_contract:
+    required_fields:
+      - sourceSchemaId
+      - outputSeedSchemaId
+      - sourceYamlRefs
+      - emittedRecords
+      - knownGapRefs
+      - lossEntries
+      - reverseTranslationBlockers
+      - validationErrors
+    loss_entry_fields:
+      - sourceReactPath
+      - property
+      - reason
+      - severity
+      - knownGapRef
+    known_gap_ref_rule: >-
+      A known_gap_ref may explain unresolved schema/seed exchange only when it points to an
+      existing Bundle-level gap (see ui-builder-seed-first-gap-discovery-ssot.yaml
+      canonical_gap_types) or an owner-approved temporary gap. It must never be used to mark
+      incomplete exchange as implemented.
+
+  # ===========================================================================
+  # 7. declared_seed_surface_catalog
+  # ===========================================================================
+
+  declared_seed_surface_catalog:
+    rule: >-
+      Existing seed content that the exchange needs must be declared here, by meaning, before
+      the translator can treat it as known. The translator never reads db/*.sql directly; this
+      catalog is the only bridge between existing seed rows and the translator's world.
+    required_declaration_fields:
+      - seed_surface_key
+      - declared_by_yaml_ref
+      - seed_role
+      - record_subjects
+      - exchange_units
+      - authority_boundary
+      - required_component_categories
+      - required_wiring_categories
+      - known_gaps
+
+    known_declared_surfaces:
+      - seed_surface_key: hub_search.readonly.v1
+        declared_by_yaml_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml hub_search_preset
+        seed_role: readonly_hub_search_preset_seed
+        record_subjects: [preset_registry, object_mapping, wiring_candidate, compile_snapshot]
+        exchange_units: [section, field, action, table, prop_binding, payload_from]
+        authority_boundary: tmp_canvas_draft_until_preview_validate_apply
+        required_component_categories:
+          - disclosure_structure/section
+          - form_input/search_input
+          - action/button
+          - disclosure_structure/panel
+          - display/card_list
+          - data_display/json
+        required_wiring_categories:
+          - runtime_dispatch_targetRef content_bundle:search
+          - propBindings items/data from emission.data
+        known_gaps: []
+
+      - seed_surface_key: physical_search_crud_aggregate.v1
+        declared_by_yaml_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml physical_search_crud_aggregate_preset
+        seed_role: physical_search_crud_aggregate_preset_seed
+        record_subjects: [preset_registry, object_mapping, wiring_candidate, compile_snapshot]
+        exchange_units: [section, form, field, table, action, workflow, prop_binding, payload_from]
+        authority_boundary: tmp_canvas_draft_until_preview_validate_apply
+        required_component_categories:
+          - disclosure_structure/section
+          - form_input/search_input
+          - form_input/select
+          - form_input/form_field
+          - action/button
+          - disclosure_structure/panel
+          - display/card_list
+          - disclosure/modal
+          - table_op/row_detail_drawer
+          - safety_guard/apply_confirm_dialog
+          - data_display/json
+        required_wiring_categories:
+          - runtime_dispatch_targetRef content_bundle:search/create_entity_draft/update_entity_draft/validate_draft/promote_draft/get_entity/list_states
+          - propBindings items/options/data from emission.data
+        known_gaps:
+          - gap: enum_status_select_options_from_content_bundle_list_states
+            classification: prop_binding_gap
+            status: seed_marks_as_pending
+          - gap: form_field_values_to_create_entity_draft_payload
+            classification: event_payload_resolver_gap
+            status: seed_marks_as_pending
+
+      - seed_surface_key: physical_details_inline_editor_md_generator.v1
+        declared_by_yaml_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml physical_details_inline_editor_md_generator_preset
+        seed_role: physical_record_detail_inline_edit_md_generator_preset_seed
+        record_subjects: [preset_registry, object_mapping, wiring_candidate, compile_snapshot]
+        exchange_units: [section, field, action, table, workflow, prop_binding, payload_from]
+        authority_boundary: tmp_canvas_draft_until_preview_validate_apply
+        required_component_categories:
+          - disclosure_structure/section
+          - action/button
+          - disclosure/tabs
+          - inline_edit/inline_editable_field
+          - form_input/select
+          - inline_edit/confirmed_update_button
+          - inline_edit/audit_diff_drawer
+          - table_op/row_detail_drawer
+          - data_display/json
+        required_wiring_categories:
+          - runtime_dispatch_targetRef content_bundle:update_entity_draft/promote_draft/get_entity
+          - history_read physical_record:list_history bound to logs.diff (not topology_edit_log)
+          - propBindings entries/data from emission.data
+        known_gaps: []
+
+      - seed_surface_key: aggregate_dashboard.v1
+        declared_by_yaml_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml aggregate_dashboard_preset
+        seed_role: aggregation_grouped_measure_dashboard_card_preset_seed
+        record_subjects: [preset_registry, object_mapping, wiring_candidate, compile_snapshot]
+        exchange_units: [section, field, action, table, prop_binding, payload_from]
+        authority_boundary: tmp_canvas_draft_until_preview_validate_apply
+        required_component_categories:
+          - disclosure_structure/section
+          - form_input/input
+          - form_input/select
+          - action/button
+          - disclosure_structure/panel
+          - calc_topology/aggregation_preview_table
+          - calc_topology/hub_statistics_panel
+          - data_display/json
+        required_wiring_categories:
+          - package_wiring targetRef manifest:<manifestId>:<wiringKey> via PackageWiringEditor / manifest:list_screen_read_query_wiring
+          - propBindings data/aggregationResults from emission.data
+        known_gaps:
+          - gap: aggregation_function_ref_wiring
+            classification: ssot_ambiguity_gap
+            status: pending_author_selection_via_package_wiring_editor
+            note: >-
+              not a backend/SSOT implementation gap; remaining state is author selection inside
+              PackageWiringEditor after preset load
+
+      - seed_surface_key: auth.external.credential_management.projection
+        declared_by_yaml_ref: docs/design/instance-port-substrate-ssot.yaml existing_credential_management_projection_extension
+        seed_role: credential_management_projection_manifest_seed
+        record_subjects: [manifest_projection, screen_data_shape, projection_categories]
+        exchange_units: [category, form, field, action, workflow, authority_marker]
+        authority_boundary: draft_import_validate_preview_apply_admin_approve
+        required_component_categories:
+          - form_input/select (user_auth/external/instance_settings mode switch)
+          - form_input/form_field
+          - action/button (json_template_download, json_import, validate, preview, apply)
+          - safety_guard/apply_confirm_dialog
+        required_wiring_categories:
+          - instance_settings_import_form wiring (seed_aligned_json_template_boundary)
+          - instance_address_form wiring
+          - instance_operation_binding_form wiring
+          - instance_operation_approval_form wiring (admin_approve authority boundary)
+        known_gaps:
+          - gap: instance_settings_projection_category_not_yet_represented
+            classification: ssot_ambiguity_gap
+            status: open_at_instance_port_substrate_ssot_level
+            note: >-
+              instance-port-substrate-ssot.yaml existing_credential_management_projection_extension.confirmed_existing_seed.missing_mode
+              records this as not yet represented; this translator only declares the surface,
+              it does not resolve the gap
+
+      - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
+        declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract
+        seed_role: fixed_uuid_components_bucket_and_ui_component_registry_bootstrap_rows
+        record_subjects: [components_bucket, ui_component_registry]
+        exchange_units: [style_ref]
+        authority_boundary: catalog_identity_source_not_active_topology_authority
+        required_component_categories:
+          - disclosure_structure/section (section.alias)
+          - form_input/search_input (search_input.alias)
+          - disclosure_structure/panel (panel.alias)
+          - form_input/textarea (textarea.alias)
+          - data_display/data_grid (data_grid.alias)
+          - data_display/list (list.alias)
+          - action/button (button.primitive)
+          - form_input/input (input.primitive)
+          - form_input/select (select.template)
+          - form_input/form_field (form_field.template)
+          - display/card_list (card_list.primitive)
+          - disclosure/modal (modal.template)
+          - disclosure/tabs (tabs.template)
+          - data_display/json (json_viewer.template)
+          - safety_guard/apply_confirm_dialog (apply_confirm_dialog.primitive)
+          - table_op/row_detail_drawer (row_detail_drawer.primitive)
+          - inline_edit/inline_editable_field (inline_editable_field.primitive)
+          - inline_edit/confirmed_update_button (confirmed_update_button.primitive)
+          - inline_edit/audit_diff_drawer (audit_diff_drawer.primitive)
+          - calc_topology/aggregation_preview_table (aggregation_preview_table.primitive)
+          - calc_topology/hub_statistics_panel (hub_statistics_panel.primitive)
+        required_wiring_categories: []
+        known_gaps: []
+
+  # ===========================================================================
+  # 8. validation_rules
+  # ===========================================================================
+
+  validation_rules:
+    input_format_validation:
+      - inputText_must_not_be_empty
+      - targetSurface_must_resolve_to_declared_seed_surface_catalog_or_carry_known_gap_ref
+      - sourceYamlRefs_must_be_non_empty
+      - mode_must_be_one_of_input_format_contract_mode_vocabulary
+      - no_protected_boundary_vocabulary_value_in_inputText_or_optionalHints
+
+    react_schema_validation:
+      - every_node_has_sourceYamlRefs
+      - every_component_or_control_maps_to_a_declared_seed_surface_catalog_required_component_category_or_known_gap_ref
+      - every_seed_backed_surface_maps_to_a_declared_seed_surface_catalog_entry
+      - every_form_has_fields
+      - every_field_has_label_control_and_required_marker
+      - every_action_has_authorityMarker
+      - no_mutation_action_without_an_owning_form
+      - every_workflow_step_has_order_and_authorityMarker
+      - every_payload_from_matches_a_recognized_source_pattern_or_known_gap_ref
+      - every_prop_binding_source_starts_with_emission_data_or_carries_known_gap_ref
+      - every_style_ref_uses_a_css_dictionary_token_or_topology_layout_class_ref_or_known_gap_ref
+      - no_arbitrary_react_execution_features
+      - no_protected_boundary_vocabulary_value_present
+
+    topology_ui_seed_validation:
+      - emitted_seed_has_sourceReactPath_for_every_record
+      - emitted_seed_has_sourceYamlRefs_for_every_record
+      - emitted_seed_respects_protected_material_boundary_ref
+      - emitted_seed_does_not_create_execution_authority_from_import_or_apply
+      - emitted_seed_marks_unresolved_paths_with_knownGapRefs
+      - emitted_seed_preserves_the_loss_report
+      - emitted_form_and_action_records_carry_authorityMarker
+
+    exchange_report_validation:
+      - source_count_matches_emitted_record_count_or_loss_entries
+      - dropped_properties_are_explicit_in_lossEntries
+      - unresolved_mappings_are_explicit_in_knownGapRefs
+      - reverse_translation_blockers_are_explicit_when_mode_is_round_trip_check
+
+  # ===========================================================================
+  # Minimal instance_settings fixture (kept minimal; not a seed-authoring guide)
+  # ===========================================================================
+
+  minimal_instance_settings_fixture:
+    projection_key: auth.external.credential_management.projection
+    declared_seed_surface_ref: declared_seed_surface_catalog.known_declared_surfaces[auth.external.credential_management.projection]
+    required_categories: [user_auth, external, instance_settings]
+    required_instance_settings_forms:
+      - instance_settings_import_form
+      - instance_address_form
+      - instance_operation_binding_form
+      - instance_operation_approval_form
+    protected_material_boundary_ref: docs/design/instance-port-substrate-ssot.yaml seed_aligned_json_template_boundary.protected_boundary
+    authority_rule: import_and_apply_create_draft_metadata_only; callable_candidates_require_admin_approve_authorityMarker
