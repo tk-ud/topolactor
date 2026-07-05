@@ -8,6 +8,7 @@ import { renderToString } from "preact-render-to-string";
 import { projectionFromEmission } from "../runtime/renderEmission.ts";
 import type { Emission } from "../api/dispatch.ts";
 import type { ProjectionDefinition, UiProjection } from "../runtime/projectionConstructor.ts";
+import { SCREEN_OPERATION_OPTIONS } from "../runtime/screenAuthoringIntent.ts";
 
 type TopologyEntry = Record<string, unknown> & { type?: string };
 type SeedManifest = { seedFile: string; manifestId: string; topology: TopologyEntry[] };
@@ -216,6 +217,32 @@ Deno.test("projection lane collapse: backend SSE identity re-read reaches fronte
     html.includes("projection-lane-seed"),
     `${describeLane(seed)} user-facing ProjectionView must render seedLabel from backend ScreenDataShapeQueryRuntime emission.Data`,
   );
+});
+
+Deno.test("credential management projection: screen_data_shape.screenOperationKinds stays within the generic ScreenOperationKind vocabulary", () => {
+  // manifest 092 (auth.external.credential_management.projection, including the instance_settings
+  // category extension) is physical_binding.mode="seed_projection_marker_only" and excluded from
+  // targetSeedManifests(), but manifest:get / ContentsScreenDesignPanel still load ANY manifest's
+  // screen_data_shape generically (see frontend/lib/manifestScreenDesign.ts screenDesignFromBackendShape,
+  // which casts shape.screenOperationKinds directly to ScreenOperationKind[]). Category-specific action
+  // names (download_json_template / import_json_template / validate / preview / apply) belong in the
+  // dedicated credential_management_admin_action_wiring / operation_entity_bindings / json_template_policy
+  // seed entries, not in this shared vocabulary field, or the generic Screen Design checkbox UI silently
+  // drops them on save.
+  const manifests = parseManifests("db/seed_empty.sql");
+  const credentialManifest = manifests.find((m) => m.manifestId === "00000000-0000-0000-0000-000000000092");
+  assertExists(credentialManifest, "auth.external.credential_management.projection manifest (092) missing from db/seed_empty.sql");
+  const shape = byType(credentialManifest.topology, "screen_data_shape");
+  assertExists(shape, "credential management manifest missing screen_data_shape");
+  const kinds = shape.screenOperationKinds;
+  assert(Array.isArray(kinds) && kinds.length > 0, "credential management screen_data_shape.screenOperationKinds must be a non-empty array");
+  const canonicalKinds = new Set(SCREEN_OPERATION_OPTIONS.map((o) => o.kind));
+  for (const kind of kinds as unknown[]) {
+    assert(
+      typeof kind === "string" && canonicalKinds.has(kind as never),
+      `credential management screenOperationKinds contains non-canonical value "${kind}"; use dedicated instance_settings seed blocks instead of the shared ScreenOperationKind vocabulary`,
+    );
+  }
 });
 
 Deno.test("projection lane NG: missing seedData is explicit and never seedData ?? null silent fallback", () => {

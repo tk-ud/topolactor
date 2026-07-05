@@ -1,6 +1,6 @@
 instance_port_substrate_ssot:
   name: instance_port_substrate
-  version: 0.3.2
+  version: 0.3.3
   status: ssot_design_document
   canonical_path: docs/design/instance-port-substrate-ssot.yaml
 
@@ -588,7 +588,8 @@ instance_port_substrate_ssot:
       - no plaintext credential, connection string, endpoint real value, raw SQL, table authority, or executable function authority appears in seed, projection, logs, or SSOT examples.
       - abstract_function_authority_bindings or successor manifest binding controls instance/function/schema/output authority.
       - external instance is documented and tested as a call target, not Topolactor runtime SSOT.
-      - The existing credential management projection is extended with instance_settings for JSON template download/import, registered Runtime/DB list/edit, operation list/edit, validate, preview, and explicit apply before UI Builder can select instance operations.
+      - The existing credential management projection recognizes instance_settings as a select/mode/category alongside user_auth and external (fixed-form projection, forbidden-field guards, DB-backed approved-candidate source) so UI Builder Design Inspector can select approved instance operations select-only.
+      - JSON template download/import, registered Runtime/DB list/edit, operation list/edit, validate, preview, and explicit apply (admin_authoring_boundary.admin_import_surface) are a distinct future admin-authoring bundle (docs/system-roadmap.yaml known_gap_ref instance_settings_admin_authoring_ui_pending) and are not required for this completion_gate; do not claim they are implemented until that bundle closes.
       - Seed-aligned JSON template generation is sanitized against structural information leakage.
       - Admin UI Builder Design Inspector event authoring uses existing runtimeInteractions trigger/payloadFrom/outputProp and only adds dispatchInstanceOperation / instanceTargetRef as approved instance operation event choices.
       - Topolactor does not implement discovery-driven analysis of legacy DB/runtime targets for this substrate.
