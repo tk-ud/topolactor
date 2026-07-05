@@ -1,413 +1,314 @@
 react_schema_topology_seed_translator_ssot:
-  name: topolactor_react_schema_topology_seed_translator
-  version: 0.1.0
+  name: topolactor_react_schema_topology_seed_exchange_contract
+  version: 0.2.0
   status: experimental_ssot_design_document
   canonical_path: docs/design/react-schema-topology-seed-translator-ssot.yaml
 
   authority:
     parent_ssot: docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml
-    parent_surface: seed_first_method.seed_draft_to_seed_validation
     ui_builder_preset_ecosystem_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml
     mock_intake_compiler_ref: docs/design/mock-preset-intake-compiler-ssot.yaml
     admin_console_ref: docs/design/admin-console-workflow-ssot.yaml
     runtime_orchestration_ref: docs/design/runtime-orchestration-ssot.yaml
-    infra_boundary_ref: docs/file-structure.yaml infra
+    instance_settings_ref: docs/design/instance-port-substrate-ssot.yaml
+    css_dictionary_ref: docs/design/css-dictionary-ssot.yaml
+    component_classification_ref: docs/design/component-catalog-classification-ssot.yaml
     note: >-
-      This SSOT defines an offline-capable translator that generates React-like UI schema
-      from existing YAML SSOT/catalog surfaces and later normalizes that schema into
-      topology UI seed JSON/YAML. It does not redefine canonical runtime routes,
-      topology authority, component implementation, or active topology write policy.
+      This SSOT defines the exchange contract between React-like UI schema and topology UI seed.
+      It owns schema/seed shape, source evidence, validation invariants, and loss/gap reporting.
+      It does not own tool implementation, docker compose wiring, nginx routing, C# integration,
+      or work procedure.
 
-  purpose:
-    summary: >-
-      Provide a Python3 agent tool for serverless schema generation and seed translation:
-      existing seed/wiring/UI YAML references -> generated React schema catalog -> reviewed
-      React schema -> topology UI seed JSON/YAML. The first deliverable is generated schema
-      inspection; seed import/apply comes after gaps are filled.
-    goals:
-      - run_without_backend_or_frontend_server
-      - generate_react_schema_from_existing_yaml_ssot_and_catalog_surfaces
-      - translate_reviewed_react_schema_to_topology_ui_seed_json_yaml
-      - keep_existing_seed_runtime_and_seed_admin_as_validation_scope_not_expanded_authority
-      - allow_CSharp_runtime_or_backend_to_call_the_translator_via_compose_service_when_server_is_running
-      - expose_translator_route_through_nginx_only_as_local_tool_surface
-      - preserve_preview_validate_apply_boundary_before_active_topology_write
-      - make_one_direction_translation_work_before_considering_bidirectional_translation
-    non_goals:
-      - arbitrary_React_execution
-      - useState_or_useEffect_as_topology_authority
-      - hardcoded_instance_settings_screen
-      - replacing_UIBuilder_preview_validate_apply
-      - replacing_component_catalog_or_css_dictionary_authority
-      - replacing_seed_runtime_runtimes_validation
-      - direct_DB_write_from_translator
-      - auto_promoting_generated_schema_to_active_topology
+  scope:
+    owns:
+      - react_schema_shape
+      - topology_ui_seed_shape
+      - schema_to_seed_exchange_mapping
+      - seed_to_schema_exchange_mapping_candidate
+      - source_yaml_reference_catalog
+      - exchange_validation_rules
+      - loss_and_gap_report_contract
+    does_not_own:
+      - python_tool_entrypoint
+      - docker_compose_service_design
+      - nginx_route_design
+      - csharp_invocation_design
+      - agent_work_procedure
+      - active_topology_write_authority
+      - frontend_component_implementation
+      - backend_runtime_route_authority
 
-  existing_scope_lock:
-    seed_runtime_and_seed_admin:
+  exchange_model:
+    canonical_direction:
+      direction: react_schema_to_topology_ui_seed
+      status: required_first_direction
       rule: >-
-        Existing SeedRuntime / SeedAdmin remain the runtimes[] validation, preview, save/load,
-        and import proof surface. They must not be expanded into the React schema compiler.
-      current_scope:
-        - storage_seed_json_save_load
-        - version_and_runtimes_array_validation
-        - runtime_declaration_preview
-        - runtime_declaration_import_apply_boundary
-      translator_relationship: >-
-        The translator may emit seed files that a future import surface can validate, but it
-        must stay a separate tool/runtime surface until a later SSOT explicitly merges them.
-
-  tool_contract:
-    tool_name: react_schema_topology_seed_translator
-    primary_language: python3
-    primary_entrypoint_candidate: .agent/tools/react-schema-topology-seed-translator
-    implementation_candidate: .agent/scripts/react_schema_topology_seed_translator.py
-    server_required: false
-    modes:
-      offline_agent_cli:
-        purpose: Agent can generate schema without docker compose, backend, frontend, nginx, or DB.
-        command_shape:
-          - react-schema-topology-seed-translator collect-yaml
-          - react-schema-topology-seed-translator generate-react-schema
-          - react-schema-topology-seed-translator validate-react-schema
-          - react-schema-topology-seed-translator emit-seed
-        inputs:
-          - repo_root
-          - reference_yaml_manifest
-          - optional_surface_key
-        outputs:
-          - generated/react-schema-catalog.json
-          - generated/react-schema-catalog.yaml
-          - generated/topology-ui-seed.preview.json
-          - generated/translator-report.json
-      compose_service:
-        purpose: C# backend or other local runtime can call translator when compose is running.
-        service_name_candidate: react-schema-translator
-        protocol: http_local_compose_only
-        route_candidate: /tools/react-schema-translator/
-        constraints:
-          - local_demo_tool_surface_only
-          - no_runtime_policy_authority
-          - no_active_topology_write
-          - no_secret_material_projection
-      csharp_call_boundary:
-        purpose: C# can invoke translator as a bounded tool, not as semantic authority.
-        allowed_call_shapes:
-          - subprocess_with_explicit_input_output_paths
-          - compose_http_call_to_react_schema_translator_service
-        required_fail_close:
-          - missing_tool_binary
-          - invalid_generated_schema
-          - unsupported_yaml_reference
-          - forbidden_field_detected
-          - unknown_component_catalog_key
-          - unresolved_wiring_candidate_without_known_gap_ref
-
-  infra_contract:
-    docker_compose:
-      file: infra/docker-compose.yml
-      required_change: add_python3_translator_service_without_changing_db_backend_frontend_nginx_authority
-      service_requirements:
-        - python3_image_or_repo_tool_image
-        - repo_docs_mount_read_only
-        - generated_output_mount
-        - no_database_dependency_required_for_collect_or_generate
-        - optional_backend_network_reachability_for_csharp_compose_call
-      prohibited:
-        - making_translator_required_for_backend_healthcheck
-        - granting_DB_write_credentials_to_translator
-        - moving_runtime_policy_into_compose
-    nginx:
-      file: infra/nginx.conf
-      required_change: expose_local_tool_route_to_translator_service_when_compose_mode_is_enabled
-      route_candidate: /tools/react-schema-translator/
-      prohibited:
-        - putting_topology_policy_in_nginx
-        - exposing_translator_as_public_runtime_authority
-        - routing_seed_apply_directly_around_backend_preview_validate_apply
-
-  translation_pipeline:
-    phase_1_generate_schema_from_yaml:
-      status: first_target
-      input: existing_yaml_reference_catalog
-      output: generated_react_schema_catalog
+        React-like schema may be normalized into topology UI seed only when each node has
+        source evidence, a catalog identity or known_gap_ref, and an explicit authority boundary.
+    reverse_direction:
+      direction: topology_ui_seed_to_react_schema
+      status: future_candidate_after_loss_reporting_is_stable
       rule: >-
-        The first implementation should generate a readable React schema catalog from existing
-        YAML SSOT surfaces. Humans inspect the generated schema and fill gaps before seed emission.
-      generated_schema_must_include:
-        - component_schema_nodes
-        - form_schema_nodes
-        - field_control_schema_nodes
-        - action_schema_nodes
-        - workflow_step_schema_nodes
-        - prop_binding_schema_nodes
-        - payload_from_schema_nodes
-        - style_token_reference_nodes
-        - known_gap_refs
-        - source_yaml_evidence_per_node
-    phase_2_review_and_gap_fill:
-      status: manual_or_agent_assisted_after_phase_1
-      rule: >-
-        Missing fields, labels, controls, wiring candidates, or authority markers are filled in
-        the generated schema, not by hand-editing DB seed SQL directly.
-      gap_policy:
-        - unresolved_paths_must_have_known_gap_ref
-        - component_catalog_gap_must_reference_component_catalog_classification
-        - wiring_gap_must_reference_ui_builder_preset_ecosystem
-        - import_authority_gap_must_reference_instance_port_substrate_when_instance_settings_related
-    phase_3_emit_topology_seed_json_yaml:
-      status: after_generated_schema_review
-      output:
-        - topology_ui_seed.json
-        - topology_ui_seed.yaml
-        - seed_preview_report.json
-      rule: >-
-        Emitted seed is a draft/intake artifact. It cannot mutate active topology until existing
-        preview / validate / apply boundaries accept it.
-    phase_4_reverse_translation_candidate:
-      status: future_theoretical
-      rule: >-
-        Once React schema -> seed is deterministic and loss reporting is explicit, seed -> React
-        schema can be considered. Bidirectionality is not required for phase 1 completion.
+        Reverse translation is allowed only after forward translation records enough identity,
+        source_yaml_refs, and loss markers to reconstruct the authoring schema without silent inference.
+    exchange_units:
+      - projection
+      - category
+      - section
+      - form
+      - field
+      - table
+      - workflow
+      - step
+      - action
+      - validation
+      - prop_binding
+      - payload_from
+      - style_ref
+      - known_gap_ref
 
   react_schema_contract:
     schema_id: topolactor.react_schema.v1
-    source_role: authoring_schema_not_runtime_component
+    role: authoring_schema_not_runtime_component
+    required_root_fields:
+      - schema
+      - presetKey
+      - surface
+      - sourceYamlRefs
+      - root
+    node_common_required_fields:
+      - key
+      - label
+      - sourceYamlRefs
     allowed_node_kinds:
-      - Projection
-      - AdminSection
-      - Tabs
-      - Tab
-      - Section
-      - Form
-      - Field
-      - Table
-      - Workflow
-      - Step
-      - Action
-      - ValidationPanel
-      - JsonViewer
-      - Modal
-      - ConfirmDialog
-    required_node_fields:
-      all_nodes:
-        - key
-        - label
-        - source_yaml_refs
+      Projection:
+        required: [children]
+        emits_seed: topology_ui_projection
+      Category:
+        required: [children]
+        emits_seed: topology_ui_category
+      Section:
+        required: [children]
+        emits_seed: topology_ui_section
       Form:
-        - fields
-        - target
-        - mode
+        required: [target, mode, fields]
+        emits_seed: topology_ui_form
       Field:
-        - control
-        - required
-      Action:
-        - action
-        - authority
-      Workflow:
-        - steps
+        required: [control, required]
+        emits_seed: topology_ui_field
       Table:
-        - source
-        - display
-    prohibited_node_features:
+        required: [source, display]
+        emits_seed: topology_ui_table
+      Workflow:
+        required: [steps]
+        emits_seed: topology_ui_workflow
+      Step:
+        required: [action, authority]
+        emits_seed: topology_ui_workflow_step
+      Action:
+        required: [action, authority]
+        emits_seed: topology_ui_action
+      Validation:
+        required: [rule, severity]
+        emits_seed: topology_ui_validation
+      PropBinding:
+        required: [targetProp, source]
+        emits_seed: topology_ui_prop_binding
+      PayloadFrom:
+        required: [targetField, source]
+        emits_seed: topology_ui_payload_from
+      StyleRef:
+        required: [target, tokenRef]
+        emits_seed: topology_ui_style_ref
+    prohibited_features:
       - arbitrary_component_import
       - arbitrary_js_expression
-      - useState
-      - useEffect
-      - eval
-      - Function_constructor
-      - direct_fetch
-      - direct_DB_write
+      - frontend_direct_persistence
       - unbounded_inline_css
       - unknown_component_key_silent_fallback
+      - unknown_control_silent_fallback
+      - action_without_authority
+      - field_without_label
+      - node_without_source_yaml_refs
 
-  generated_schema_example_shape:
-    projection:
-      key: auth.external.credential_management.projection
-      label: 認証・外部連携・インスタンス管理
-      source_yaml_refs:
-        - file: docs/design/instance-port-substrate-ssot.yaml
-          section: existing_credential_management_projection_extension
-        - file: docs/design/ui-builder-preset-ecosystem-ssot.yaml
-          section: cross_preset_authoring_boundary
-      categories:
-        - key: user_auth
-          label: ユーザー認証
-        - key: external
-          label: 外部連携
-        - key: instance_settings
-          label: インスタンス設定
-          forms:
-            - instance_settings_import_form
-            - instance_address_form
-            - instance_operation_binding_form
-            - instance_operation_approval_form
+  topology_ui_seed_contract:
+    schema_id: topolactor.topology_ui_seed.v1
+    role: draft_intake_artifact_not_active_topology
+    required_root_fields:
+      - schema
+      - seedKey
+      - surface
+      - sourceReactSchema
+      - sourceYamlRefs
+      - projections
+      - exchangeReport
+    record_common_required_fields:
+      - recordType
+      - key
+      - label
+      - sourceYamlRefs
+      - sourceReactPath
+      - knownGapRefs
+    record_types:
+      topology_ui_projection:
+        required: [surface, categories]
+      topology_ui_category:
+        required: [categoryKey, sections]
+      topology_ui_section:
+        required: [sectionKey, sectionKind, children]
+      topology_ui_form:
+        required: [formKey, target, mode, fields, actions]
+      topology_ui_field:
+        required: [fieldKey, control, required, validationRefs]
+      topology_ui_table:
+        required: [tableKey, source, display, columns]
+      topology_ui_workflow:
+        required: [workflowKey, steps]
+      topology_ui_workflow_step:
+        required: [stepKey, actionRef, authority]
+      topology_ui_action:
+        required: [actionKey, actionRef, authority]
+      topology_ui_validation:
+        required: [validationKey, rule, severity]
+      topology_ui_prop_binding:
+        required: [targetProp, source]
+      topology_ui_payload_from:
+        required: [targetField, source]
+      topology_ui_style_ref:
+        required: [target, tokenRef]
+    protected_material_boundary_ref: docs/design/instance-port-substrate-ssot.yaml seed_aligned_json_template_boundary.protected_boundary
+    active_topology_rule: >-
+      Topology UI seed is draft/intake material. It cannot write active topology or create callable
+      execution authority without the existing preview / validate / apply / admin approval boundary.
 
-  yaml_reference_catalog:
+  exchange_mapping:
+    node_mapping:
+      Projection: topology_ui_projection
+      Category: topology_ui_category
+      Section: topology_ui_section
+      Form: topology_ui_form
+      Field: topology_ui_field
+      Table: topology_ui_table
+      Workflow: topology_ui_workflow
+      Step: topology_ui_workflow_step
+      Action: topology_ui_action
+      Validation: topology_ui_validation
+      PropBinding: topology_ui_prop_binding
+      PayloadFrom: topology_ui_payload_from
+      StyleRef: topology_ui_style_ref
+    identity_mapping:
+      react_key: seed.key
+      react_label: seed.label
+      react_path: seed.sourceReactPath
+      sourceYamlRefs: seed.sourceYamlRefs
+      knownGapRefs: seed.knownGapRefs
+    authority_mapping:
+      frontend_intent: draft_or_projection_only
+      backend_validate: validation_only
+      backend_preview: preview_only
+      backend_apply: draft_apply_not_execution_authority
+      admin_approve: execution_candidate_authority_boundary
+      runtime_execute: approved_runtime_execution_only
+    loss_policy:
+      no_silent_loss: true
+      dropped_property_requires_loss_report_entry: true
+      unresolved_mapping_requires_known_gap_ref: true
+      reverse_translation_requires_no_unexplained_loss: true
+
+  source_yaml_reference_catalog:
     seed_system_yaml:
       - file: docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml
-        sections:
-          - authority
-          - purpose
-          - core_rule
-          - development_loop
-          - seed_contract
-          - todo_policy
-        purpose: >-
-          Defines seed-first development, required seed properties, active topology write false
-          until preview/validate/apply, and gap classification before implementation.
+        sections: [authority, core_rule, development_loop, seed_contract, todo_policy]
+        role: seed_first_development_and_gap_reporting_contract
       - file: docs/design/ui-builder-preset-ecosystem-ssot.yaml
-        sections:
-          - cross_preset_authoring_boundary
-          - package_wiring_manifest_bridge
-          - payloadFrom_resolver_contract
-          - hub_search_preset.layout_tree
-          - physical_search_crud_aggregate_preset.layout_tree
-        purpose: >-
-          Defines preset seed contract, layout_tree examples, tmp draft boundary, propBindings,
-          wiring candidates, payloadFrom resolver, and UIBuilder persistence surfaces.
+        sections: [cross_preset_authoring_boundary, package_wiring_manifest_bridge, payloadFrom_resolver_contract, hub_search_preset.layout_tree, physical_search_crud_aggregate_preset.layout_tree]
+        role: preset_seed_layout_tree_wiring_and_payload_contract
       - file: docs/design/mock-preset-intake-compiler-ssot.yaml
-        sections:
-          - purpose
-          - authority_boundary
-          - canonical_flow
-          - ui_builder_integration
-          - source_intake_contract
-          - mapping_contract
-        purpose: >-
-          Defines no-AI intake/compiler boundaries for external XML/Figma-like sources and the
-          preview/validate/apply path for loaded preset drafts. React schema translator should
-          reuse the compiler pattern, but with catalog-aware schema input instead of visual mock mapping.
+        sections: [authority_boundary, canonical_flow, source_intake_contract, mapping_contract]
+        role: intake_snapshot_and_mapping_boundary_reference
       - file: docs/design/instance-port-substrate-ssot.yaml
-        sections:
-          - seed_aligned_json_template_boundary
-          - import_contracts
-          - existing_credential_management_projection_extension
-          - admin_authoring_boundary
-        purpose: >-
-          Provides instance_settings import/template/approval constraints, secret-prohibition fields,
-          public-safe template boundary, and credential-management projection category ownership.
+        sections: [seed_aligned_json_template_boundary, import_contracts, existing_credential_management_projection_extension, admin_authoring_boundary]
+        role: instance_settings_template_import_and_approval_boundary
     wiring_yaml:
       - file: docs/design/runtime-orchestration-ssot.yaml
-        sections:
-          - boundaries
-          - frontend_routes
-          - trigger_contract
-        purpose: >-
-          Defines data-defined route/projection/runtime mapping, hardcoded boundary, admin routes,
-          and client-triggered UI operation boundaries.
+        sections: [boundaries, frontend_routes, trigger_contract]
+        role: runtime_route_projection_and_client_trigger_boundary
       - file: docs/design/admin-console-workflow-ssot.yaml
-        sections:
-          - authority
-          - canonical_sequential_authoring_pipeline
-          - canvas_workspace_contract
-        purpose: >-
-          Defines canonical admin route ownership, /admin/ui-builder responsibility, backend-owned
-          validation/persistence, and no frontend DB authority.
+        sections: [authority, canonical_sequential_authoring_pipeline, ui_builder_canvas_workspace]
+        role: admin_authoring_and_ui_builder_boundary
       - file: docs/design/pipeline-continuity-ssot.yaml
-        sections:
-          - pipeline_and_lane_verification
-          - completion_condition_contracts
-        purpose: >-
-          Defines lane continuity and proof expectations for runtime and projection flow.
+        sections: [pipeline_and_lane_verification, completion_condition_contracts]
+        role: lane_continuity_and_proof_reference
       - file: docs/design/css-dictionary-ssot.yaml
-        sections:
-          - authority_boundary
-          - binding_flow_contract
-          - token_key_rule
-          - css_property_allowlist
-        purpose: >-
-          Defines style token vocabulary and preview/validate/apply flow for design token refs.
+        sections: [authority_boundary, binding_flow_contract, token_key_rule, css_property_allowlist]
+        role: style_token_reference_boundary
     ui_yaml:
       - file: docs/design/ui-ux-primitive-catalog-ssot.yaml
-        sections:
-          - purpose
-          - meaning_boundaries
-          - category_a_search_suggest
-          - category_b_inline_edit_preview_update_audit
-          - category_c_table_list_view_operation
-          - category_h_safety_inspector_operation_guard
-        purpose: >-
-          Defines primitive lineup, mutation boundary, seed role boundary, and UI/UX primitive taxonomy.
+        sections: [purpose, meaning_boundaries, category_a_search_suggest, category_b_inline_edit_preview_update_audit, category_c_table_list_view_operation, category_h_safety_inspector_operation_guard]
+        role: primitive_taxonomy_and_mutation_boundary
       - file: docs/design/component-catalog-classification-ssot.yaml
-        sections:
-          - component_kind
-          - catalog_vocabulary_contract
-          - persistence
-          - seed_boundary
-        purpose: >-
-          Defines component classification vocabulary consumed by frontend/components/catalog.ts and
-          CI membership tests.
+        sections: [component_kind, catalog_vocabulary_contract, persistence, seed_boundary]
+        role: component_classification_vocabulary_and_catalog_membership_contract
       - file: docs/design/topology-layout-class-ssot.yaml
-        sections:
-          - layout_class_vocabulary
-          - validation_contract
-        purpose: >-
-          Defines layout class vocabulary mounted into backend compose for layout_patch validation.
+        sections: [layout_class_vocabulary, validation_contract]
+        role: layout_class_reference_validation_contract
       - file: docs/design/css-dictionary-ssot.yaml
-        sections:
-          - design_principles
-          - binding_flow_contract
-        purpose: >-
-          Defines style/design token refs that generated React schema may use instead of raw CSS.
-    infra_yaml:
-      - file: docs/file-structure.yaml
-        sections:
-          - architecture_philosophy.infra
-          - infra
-        purpose: >-
-          Defines infra as local/demo/bootstrap hosting boundary, compose_service_wiring, nginx reverse proxy,
-          and prohibition against infra owning topology meaning or runtime policy.
+        sections: [design_principles, binding_flow_contract]
+        role: style_design_token_exchange_contract
 
-  validation_rules:
-    generated_react_schema:
+  exchange_validation_rules:
+    react_schema_validation:
       - every_node_has_source_yaml_refs
-      - every_component_key_exists_in_component_catalog_or_is_known_gap
-      - every_field_control_maps_to_component_catalog_or_is_known_gap
+      - every_component_or_control_maps_to_catalog_or_known_gap_ref
+      - every_form_has_fields
+      - every_field_has_label_control_required_marker
       - every_action_has_authority_marker
-      - every_wiring_candidate_has_target_surface_and_target_ref_or_known_gap
-      - every_payloadFrom_matches_recognized_source_pattern_or_known_gap
-      - every_style_ref_uses_css_dictionary_token_or_known_gap
-      - formless_mutation_surface_fails_validation
-      - unknown_yaml_reference_fails_validation
-    seed_emission:
-      - emitted_seed_is_draft_intake_artifact
-      - active_topology_write_false_until_preview_validate_apply
-      - no_secret_material_in_seed
-      - no_connection_string_or_real_endpoint_in_seed
-      - no_raw_sql_in_seed
-      - import_apply_does_not_create_execution_authority
-      - approved_operation_required_before_callable_candidate
+      - every_workflow_step_has_order_and_authority_marker
+      - every_payloadFrom_matches_recognized_source_pattern_or_known_gap_ref
+      - every_propBinding_source_is_declared_or_known_gap_ref
+      - every_style_ref_uses_css_dictionary_token_or_known_gap_ref
+      - no_arbitrary_react_execution_features
+    topology_ui_seed_validation:
+      - emitted_seed_has_sourceReactPath_for_every_record
+      - emitted_seed_has_sourceYamlRefs_for_every_record
+      - emitted_seed_respects_protected_material_boundary_ref
+      - emitted_seed_does_not_create_execution_authority_from_import_or_apply
+      - emitted_seed_marks_unresolved_paths_with_knownGapRefs
+      - emitted_seed_preserves_loss_report
+    exchange_report_validation:
+      - source_count_matches_emitted_record_count_or_loss_entries
+      - dropped_properties_are_explicit
+      - unresolved_mappings_are_explicit
+      - reverse_translation_blockers_are_explicit
 
-  generated_output_policy:
-    location_candidates:
-      - .agent/generated/react-schema-topology-seed/
-      - tmp/react-schema-topology-seed/
-    commit_policy:
-      generated_reports: may_commit_only_when_task_scope_requests_evidence
-      tmp_outputs: do_not_commit_by_default
-      ssot_file: canonical_design_doc_may_commit
-    diff_policy:
-      - generated_schema_diff_must_be_reviewable
-      - seed_emission_diff_must_show_source_yaml_refs
-      - unresolved_gap_refs_must_be_explicit
+  exchange_report_contract:
+    required_fields:
+      - sourceSchemaId
+      - outputSeedSchemaId
+      - sourceYamlRefs
+      - emittedRecords
+      - knownGapRefs
+      - lossEntries
+      - reverseTranslationBlockers
+      - validationErrors
+    loss_entry_fields:
+      - sourceReactPath
+      - property
+      - reason
+      - severity
+      - knownGapRef
+    known_gap_ref_rule: >-
+      A known_gap_ref may explain unresolved schema/seed exchange only when it points to an existing
+      Bundle-level gap or an owner-approved temporary gap. It must not be used to mark incomplete
+      exchange as implemented.
 
-  implementation_surface_candidates:
-    agent_tool:
-      - .agent/tools/react-schema-topology-seed-translator
-      - .agent/scripts/react_schema_topology_seed_translator.py
-    backend_csharp_client:
-      - backend/runtime or backend/adapter thin client selected by implementer after reading runtime SSOT
-    docker_compose:
-      - infra/docker-compose.yml
-    nginx:
-      - infra/nginx.conf
-    tests:
-      - backend/tests/Topolactor.Runtime.Tests or .agent/tests selected by worktype route
-      - translator golden tests for generated schema from fixture YAML
-      - fail-close tests for unknown component, forbidden field, unresolved wiring without known_gap_ref
-
-  open_questions_for_owner:
-    - Should generated React schema be stored as JSON/YAML only, or should a TSX-like authoring file be accepted as input after phase 1?
-    - Should compose service expose HTTP only to backend network, or also through nginx for local browser inspection?
-    - Should instance_settings be the first fixture surface, or should hub_search/physical_crud fixtures validate generic compiler behavior first?
+  minimal_instance_settings_fixture:
+    projection_key: auth.external.credential_management.projection
+    required_categories: [user_auth, external, instance_settings]
+    required_instance_settings_forms:
+      - instance_settings_import_form
+      - instance_address_form
+      - instance_operation_binding_form
+      - instance_operation_approval_form
+    protected_material_boundary_ref: docs/design/instance-port-substrate-ssot.yaml seed_aligned_json_template_boundary.protected_boundary
+    authority_rule: import_and_apply_create_draft_metadata_only_callable_candidates_require_admin_approval
