@@ -649,35 +649,35 @@
     "root": {
       "kind": "Projection",
       "key": "auth_external_credential_management_projection",
-      "label": "Auth / external credential management",
       "sourceYamlRefs": [
         "react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
       ],
+      "label": "Auth / external credential management",
       "children": [
         {
           "kind": "Category",
           "key": "user_auth",
-          "label": "User auth",
           "sourceYamlRefs": [
             "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.user_auth"
           ],
+          "label": "User auth",
           "children": [
             {
               "kind": "Section",
               "key": "user_auth_section",
-              "label": "User auth boundary",
               "sourceYamlRefs": [
                 "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.user_auth"
               ],
+              "label": "User auth boundary",
               "children": [
                 {
                   "kind": "Field",
                   "key": "approval_status",
-                  "label": "Approval status",
                   "sourceYamlRefs": [
                     "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                   ],
+                  "label": "Approval status",
                   "control": "form_input/select",
                   "required": false
                 }
@@ -689,26 +689,26 @@
         {
           "kind": "Category",
           "key": "external",
-          "label": "External",
           "sourceYamlRefs": [
             "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
           ],
+          "label": "External",
           "children": [
             {
               "kind": "Section",
               "key": "external_section",
-              "label": "External port credential context",
               "sourceYamlRefs": [
                 "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
               ],
+              "label": "External port credential context",
               "children": [
                 {
                   "kind": "Field",
                   "key": "credential_reference_key",
-                  "label": "Credential reference key",
                   "sourceYamlRefs": [
                     "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
                   ],
+                  "label": "Credential reference key",
                   "control": "form_input/form_field",
                   "required": false
                 }
@@ -720,42 +720,41 @@
         {
           "kind": "Category",
           "key": "instance_settings",
-          "label": "Instance settings",
           "sourceYamlRefs": [
             "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
           ],
+          "label": "Instance settings",
           "children": [
             {
               "kind": "Section",
               "key": "instance_settings_section",
-              "label": "Instance settings",
               "sourceYamlRefs": [
                 "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
               ],
+              "label": "Instance settings",
               "children": [
                 {
                   "kind": "Form",
                   "key": "instance_settings_import_form",
-                  "label": "Instance settings JSON import",
                   "sourceYamlRefs": [
                     "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary"
                   ],
+                  "label": "Instance settings JSON import",
                   "authorityMarker": "draft_or_projection_only",
                   "children": [
                     {
                       "kind": "Field",
                       "key": "template_file",
-                      "label": "Template file",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.template_kind"
                       ],
+                      "label": "Template file",
                       "control": "form_input/form_field",
                       "required": true
                     },
                     {
                       "kind": "Action",
                       "key": "json_template_download",
-                      "label": "json_template_download",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                       ],
@@ -774,7 +773,6 @@
                     {
                       "kind": "Action",
                       "key": "json_import",
-                      "label": "json_import",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                       ],
@@ -804,86 +802,85 @@
                 {
                   "kind": "Form",
                   "key": "instance_address_form",
-                  "label": "Instance address",
                   "sourceYamlRefs": [
                     "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                   ],
+                  "label": "Instance address",
                   "authorityMarker": "validation_only",
                   "children": [
                     {
                       "kind": "Field",
                       "key": "instance_authority_key",
-                      "label": "Instance authority key",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Instance authority key",
                       "control": "form_input/form_field",
                       "required": true
                     },
                     {
                       "kind": "Field",
                       "key": "instance_display_name",
-                      "label": "Instance display name",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Instance display name",
                       "control": "form_input/form_field",
                       "required": true
                     },
                     {
                       "kind": "Field",
                       "key": "port_kind",
-                      "label": "Port kind",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#port_kinds"
                       ],
+                      "label": "Port kind",
                       "control": "form_input/select",
                       "required": true
                     },
                     {
                       "kind": "Field",
                       "key": "provider_kind",
-                      "label": "Provider kind",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Provider kind",
                       "control": "form_input/form_field",
                       "required": true
                     },
                     {
                       "kind": "Field",
                       "key": "required_by_bundle",
-                      "label": "Required by bundle",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Required by bundle",
                       "control": "form_input/form_field",
                       "required": false
                     },
                     {
                       "kind": "Field",
                       "key": "address_ref",
-                      "label": "Address reference",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Address reference",
                       "control": "form_input/form_field",
                       "required": false
                     },
                     {
                       "kind": "Field",
                       "key": "connection_policy_key",
-                      "label": "Connection policy key",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Connection policy key",
                       "control": "form_input/form_field",
                       "required": false
                     },
                     {
                       "kind": "Action",
                       "key": "validate",
-                      "label": "validate",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
@@ -919,86 +916,85 @@
                 {
                   "kind": "Form",
                   "key": "instance_operation_binding_form",
-                  "label": "Instance operation binding",
                   "sourceYamlRefs": [
                     "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                   ],
+                  "label": "Instance operation binding",
                   "authorityMarker": "preview_only",
                   "children": [
                     {
                       "kind": "Field",
                       "key": "operation_binding_key",
-                      "label": "Operation binding key",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Operation binding key",
                       "control": "form_input/form_field",
                       "required": true
                     },
                     {
                       "kind": "Field",
                       "key": "display_label",
-                      "label": "Display label",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Display label",
                       "control": "form_input/form_field",
                       "required": false
                     },
                     {
                       "kind": "Field",
                       "key": "operation_protocol",
-                      "label": "Operation protocol",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Operation protocol",
                       "control": "form_input/form_field",
                       "required": false
                     },
                     {
                       "kind": "Field",
                       "key": "input_schema_key",
-                      "label": "Input schema key",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Input schema key",
                       "control": "form_input/form_field",
                       "required": false
                     },
                     {
                       "kind": "Field",
                       "key": "output_shape_key",
-                      "label": "Output shape key",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Output shape key",
                       "control": "form_input/form_field",
                       "required": false
                     },
                     {
                       "kind": "Field",
                       "key": "sanitize_policy_key",
-                      "label": "Sanitize policy key",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Sanitize policy key",
                       "control": "form_input/form_field",
                       "required": false
                     },
                     {
                       "kind": "Field",
                       "key": "callable",
-                      "label": "Callable",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Callable",
                       "control": "form_input/select",
                       "required": false
                     },
                     {
                       "kind": "Action",
                       "key": "preview",
-                      "label": "preview",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
@@ -1034,26 +1030,25 @@
                 {
                   "kind": "Form",
                   "key": "instance_operation_approval_form",
-                  "label": "Instance operation approval",
                   "sourceYamlRefs": [
                     "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.guard_rule"
                   ],
+                  "label": "Instance operation approval",
                   "authorityMarker": "execution_candidate_authority_boundary",
                   "children": [
                     {
                       "kind": "Field",
                       "key": "approval_status",
-                      "label": "Approval status",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
                       ],
+                      "label": "Approval status",
                       "control": "form_input/select",
                       "required": true
                     },
                     {
                       "kind": "Action",
                       "key": "apply",
-                      "label": "apply",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
@@ -1073,7 +1068,6 @@
                     {
                       "kind": "Action",
                       "key": "approve",
-                      "label": "approve",
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
@@ -1118,13 +1112,17 @@
       "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
     ],
     "emittedRecords": 35,
-    "knownGapRefs": [],
+    "knownGapRefs": [
+      "instance_settings_projection_category_not_yet_represented"
+    ],
     "lossEntries": [],
     "reverseTranslationBlockers": [],
     "validationErrors": []
   },
   "validationErrors": [],
-  "unresolvedGaps": [],
+  "unresolvedGaps": [
+    "instance_settings_projection_category_not_yet_represented"
+  ],
   "reverseTranslationBlockers": [],
   "scenario": {
     "uuid": "bad04ed9-7d39-4cfc-a22c-db2684d4cb0a",

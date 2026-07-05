@@ -217,6 +217,17 @@ def main():
         no_db_refs_in_output = "db/seed_empty.sql" not in json.dumps(doc.get("reactSchemaCandidate")) if doc else False
         expect("7b. no db/*.sql path appears in reactSchemaCandidate.sourceYamlRefs (seed evidence stays out of sourceYamlRefs)", no_db_refs_in_output)
 
+        # 7c. envelope-level knownGapRefs are not silently dropped: they must
+        # surface in both unresolvedGaps and exchangeReport.knownGapRefs.
+        fixture_envelope = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        envelope_gaps = set(fixture_envelope.get("knownGapRefs") or [])
+        expect(
+            "7c. envelope-level knownGapRefs propagate into unresolvedGaps and exchangeReport.knownGapRefs",
+            bool(envelope_gaps)
+            and envelope_gaps.issubset(set((doc or {}).get("unresolvedGaps") or []))
+            and envelope_gaps.issubset(set(dig(doc or {}, "exchangeReport", "knownGapRefs") or [])),
+        )
+
         schema_candidate = (doc or {}).get("reactSchemaCandidate") or {}
         expect("8. reactSchemaCandidate.schema == topolactor.react_schema.v1", schema_candidate.get("schema") == "topolactor.react_schema.v1")
         expect("9. reactSchemaCandidate.surface == auth.external.credential_management.projection", schema_candidate.get("surface") == "auth.external.credential_management.projection")
@@ -264,6 +275,42 @@ def main():
         tmp19 = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n<script>alert(1)</script>\n[/projection]\n", tmpdir=tmpdir)
         _, doc19 = run_generate(tmp19)
         expect("19. raw HTML tag emission attempt becomes blocking validationError", "RAW_HTML_TAG_EMISSION_ATTEMPT" in rule_ids(doc19))
+
+        # 19a. generate-react-schema rejects an envelope whose mode is not generate_react_schema
+        tmp19a = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[/projection]\n", tmpdir=tmpdir)
+        payload19a = json.loads(tmp19a.read_text(encoding="utf-8"))
+        payload19a["mode"] = "round_trip_check"
+        tmp19a.write_text(json.dumps(payload19a), encoding="utf-8")
+        _, doc19a = run_generate(tmp19a)
+        expect("19a. generate-react-schema + envelope.mode=round_trip_check becomes blocking MODE_MISMATCH", "MODE_MISMATCH" in rule_ids(doc19a))
+
+        # 19b. field/form/section without label becomes blocking validationError (no fallback-to-key)
+        tmp19b_field = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[field key=f1 control=form_input/form_field required=false sourceYamlRefs=a]\n[/projection]\n", tmpdir=tmpdir)
+        _, doc19b_field = run_generate(tmp19b_field)
+        expect("19b. field without label becomes blocking MISSING_LABEL (no fallback-to-key)", "MISSING_LABEL" in rule_ids(doc19b_field))
+
+        tmp19b_form = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[form key=f1 target=t mode=edit authorityMarker=validation_only sourceYamlRefs=a]\n[field key=fl label=lbl control=form_input/form_field required=false sourceYamlRefs=a]\n[/form]\n[/projection]\n", tmpdir=tmpdir)
+        _, doc19b_form = run_generate(tmp19b_form)
+        expect("19b. form without label becomes blocking MISSING_LABEL (no fallback-to-key)", "MISSING_LABEL" in rule_ids(doc19b_form))
+
+        tmp19b_section = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[section key=s1 sourceYamlRefs=a]\n[/section]\n[/projection]\n", tmpdir=tmpdir)
+        _, doc19b_section = run_generate(tmp19b_section)
+        expect("19b. section without label becomes blocking MISSING_LABEL (no fallback-to-key)", "MISSING_LABEL" in rule_ids(doc19b_section))
+
+        # 19c. enum-restricted targetRef placeholder rejects an out-of-enum value
+        tmp19c = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[form key=f1 label=lbl target=t mode=edit authorityMarker=validation_only sourceYamlRefs=a]\n[action key=a1 actionRef=instance:not_allowed_port_kind:x:y wiringLane=external_instance_wiring authorityMarker=validation_only sourceYamlRefs=a]\n[/form]\n[/projection]\n", tmpdir=tmpdir)
+        _, doc19c = run_generate(tmp19c)
+        expect("19c. instance:<enum> targetRef with an out-of-enum first segment becomes blocking TARGET_REF_SHAPE_MISMATCH", "TARGET_REF_SHAPE_MISMATCH" in rule_ids(doc19c))
+
+        # 19d. Form with no Field children becomes blocking validationError
+        tmp19d = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[form key=f1 label=lbl target=t mode=edit authorityMarker=validation_only sourceYamlRefs=a]\n[/form]\n[/projection]\n", tmpdir=tmpdir)
+        _, doc19d = run_generate(tmp19d)
+        expect("19d. Form with no Field children becomes blocking EMPTY_FORM", "EMPTY_FORM" in rule_ids(doc19d))
+
+        # 19e. Action directly under Section (not Form/Workflow) becomes blocking validationError
+        tmp19e = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[section key=s1 label=lbl sourceYamlRefs=a]\n[action key=a1 actionRef=instance:db_instance_port:x:y wiringLane=external_instance_wiring authorityMarker=validation_only sourceYamlRefs=a]\n[/section]\n[/projection]\n", tmpdir=tmpdir)
+        _, doc19e = run_generate(tmp19e)
+        expect("19e. Action directly under Section becomes blocking ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW", "ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW" in rule_ids(doc19e))
 
         # 20 / 21. unimplemented modes fail closed
         proc20 = run_tool(["generate-topology-seed", "--input", str(FIXTURE)])

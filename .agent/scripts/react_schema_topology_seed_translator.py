@@ -72,6 +72,13 @@ CONTAINER_UNITS = {"projection", "category", "section", "form", "workflow"}
 LEAF_UNITS = {"field", "table", "step", "action", "validation", "prop_binding", "payload_from", "style_ref"}
 ALL_TAGGABLE_UNITS = CONTAINER_UNITS | LEAF_UNITS
 
+# input_text_markup_grammar_contract.common_attributes.label.required_on
+LABEL_REQUIRED_UNITS = {"projection", "category", "section", "form", "field", "table", "workflow"}
+
+# react_schema_contract prohibited_features.mutation_action_not_owned_by_a_form:
+# an Action node's direct parent must be a Form or a Workflow.
+VALID_ACTION_OWNER_NODE_KINDS = {"Form", "Workflow"}
+
 UNIT_TO_NODE_KIND = {
     "projection": "Projection",
     "category": "Category",
@@ -278,9 +285,13 @@ def build_node(kind, attrs, source_refs, known_gaps):
     node = {
         "kind": node_kind,
         "key": key,
-        "label": attrs.get("label", key or ""),
         "sourceYamlRefs": source_refs,
     }
+    if kind in LABEL_REQUIRED_UNITS or attrs.get("label"):
+        # no fallback-to-key: a missing label on a LABEL_REQUIRED_UNITS kind is
+        # a blocking MISSING_LABEL validation error raised by the caller
+        # (parse_markup), not a silently-accepted default value here.
+        node["label"] = attrs.get("label")
     if known_gaps:
         node["knownGapRefs"] = list(known_gaps)
     authority_marker = attrs.get("authorityMarker")
@@ -432,6 +443,9 @@ def parse_markup(input_text):
         if kind in ("form", "action", "step", "workflow") and not authority_marker:
             errors.append(err("MISSING_AUTHORITY_MARKER", f"$.inputText:line{lineno}", "blocking", f"[{kind} key={key}] missing required authorityMarker attribute"))
 
+        if kind in LABEL_REQUIRED_UNITS and not attrs.get("label"):
+            errors.append(err("MISSING_LABEL", f"$.inputText:line{lineno}", "blocking", f"[{kind} key={key}] missing required label attribute"))
+
         node = build_node(kind, attrs, source_refs, known_gaps)
 
         if kind == "projection" and root_node is None and not stack:
@@ -516,7 +530,14 @@ def shape_to_regex(shape):
     pattern = ""
     for part in parts:
         if part.startswith("<") and part.endswith(">"):
-            pattern += r'[^:]+'
+            inner = part[1:-1]
+            if "|" in inner:
+                # enum placeholder, e.g. <db_instance_port|runtime_instance_port>:
+                # restrict to the listed alternatives instead of a generic [^:]+.
+                alternatives = [re.escape(a.strip()) for a in inner.split("|") if a.strip()]
+                pattern += "(?:" + "|".join(alternatives) + ")"
+            else:
+                pattern += r'[^:]+'
         else:
             pattern += re.escape(part)
     return re.compile("^" + pattern + "$")
@@ -593,11 +614,31 @@ def validate_ui_catalog_node(node, declared_surface, errors, path):
             errors.append(err("STYLE_REF_NOT_TOKEN", path, "blocking", f"styleRef tokenRef '{token}' is not a css-dictionary/topology-layout-class token and carries no knownGapRef"))
 
 
-def walk_and_validate(node, lanes_def, declared_surface, errors, path="$.root"):
+def validate_structural_node(node, parent, errors, path):
+    """react_schema_contract.prohibited_features: form_without_fields,
+    mutation_action_not_owned_by_a_form."""
+    if node.get("kind") == "Form" and not (node.get("fields") or []):
+        errors.append(err("EMPTY_FORM", path, "blocking", f"Form '{node.get('key')}' has no Field children"))
+
+    if node.get("kind") == "Action":
+        parent_kind = parent.get("kind") if parent else None
+        if parent_kind not in VALID_ACTION_OWNER_NODE_KINDS:
+            errors.append(
+                err(
+                    "ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW",
+                    path,
+                    "blocking",
+                    f"Action '{node.get('key')}' must be a direct child of a Form or Workflow node, not {parent_kind or 'the document root'}",
+                )
+            )
+
+
+def walk_and_validate(node, lanes_def, declared_surface, errors, path="$.root", parent=None):
     validate_wiring_node(node, lanes_def, errors, path)
     validate_ui_catalog_node(node, declared_surface, errors, path)
+    validate_structural_node(node, parent, errors, path)
     for i, child in enumerate(node.get("children") or []):
-        walk_and_validate(child, lanes_def, declared_surface, errors, f"{path}.children[{i}]")
+        walk_and_validate(child, lanes_def, declared_surface, errors, f"{path}.children[{i}]", parent=node)
 
 
 # ---------------------------------------------------------------------------
@@ -700,8 +741,18 @@ def cmd_generate_react_schema(args):
     val_errors, mode, input_text, target_surface = validate_input_envelope(envelope, ssot_root, vocabulary)
     output["validationErrors"].extend(val_errors)
 
-    fatal_rule_ids = {"INPUT_TEXT_EMPTY", "SOURCE_YAML_REFS_EMPTY", "INPUT_MODE_INVALID"}
-    if any(e["ruleId"] in fatal_rule_ids for e in val_errors):
+    if mode is not None and mode != "generate_react_schema":
+        output["validationErrors"].append(
+            err(
+                "MODE_MISMATCH",
+                "$.mode",
+                "blocking",
+                f"generate-react-schema requires envelope mode 'generate_react_schema', got '{mode}'",
+            )
+        )
+
+    fatal_rule_ids = {"INPUT_TEXT_EMPTY", "SOURCE_YAML_REFS_EMPTY", "INPUT_MODE_INVALID", "MODE_MISMATCH"}
+    if any(e["ruleId"] in fatal_rule_ids for e in output["validationErrors"]):
         doc = {"schemaId": "topolactor.translator_output.v1", **output}
         write_output(args, doc)
         return 3
@@ -725,6 +776,9 @@ def cmd_generate_react_schema(args):
     output["reverseTranslationBlockers"] = []
 
     unresolved_gaps = collect_known_gap_refs(root_node) if root_node is not None else []
+    for envelope_gap in envelope.get("knownGapRefs") or []:
+        if envelope_gap not in unresolved_gaps:
+            unresolved_gaps.append(envelope_gap)
     output["unresolvedGaps"] = unresolved_gaps
 
     output["exchangeReport"] = build_exchange_report(
