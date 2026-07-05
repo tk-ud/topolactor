@@ -2,7 +2,7 @@ import {
   assert,
   assertEquals,
   assertFalse,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+} from "@std/assert";
 import {
   ACCEPTANCE_CHECKLIST,
   ADMIN_CONTENTS_GUIDE,
@@ -33,7 +33,6 @@ import {
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_LOGICAL_CONDITION,
   UX_FIELD_NULLABLE,
-  UX_FIELD_OPERATION_KINDS,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
   UX_FIELD_SEARCH_CONDITIONS,
@@ -59,10 +58,7 @@ import {
 } from "../lib/packageWiringPicker.ts";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import {
-  clearManifestScreenDesignLocal,
   emptyManifestScreenDesign,
-  loadManifestScreenDesignLocal,
-  saveManifestScreenDesignLocal,
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
@@ -591,7 +587,7 @@ Deno.test("ContentsScreenDesignPanel: step 3 does not render ページ名 input"
   const src = await Deno.readTextFile(
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
   );
-  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n      \)\}/g)];
+  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n\s{6}\)\}/g)];
   assert(step3Blocks.length > 0, "step 3 rendering blocks must exist");
   for (const match of step3Blocks) {
     assertFalse(
@@ -605,7 +601,7 @@ Deno.test("ContentsScreenDesignPanel: step 3 does not patch screenLabel", async 
   const src = await Deno.readTextFile(
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
   );
-  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n      \)\}/g)];
+  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n\s{6}\)\}/g)];
   for (const match of step3Blocks) {
     assertFalse(
       match[0].includes("screenLabel"),
