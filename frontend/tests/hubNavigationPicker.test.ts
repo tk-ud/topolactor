@@ -55,3 +55,60 @@ Deno.test("listContentHubs: rejects non-array emission.data (explicit API bounda
     globalThis.fetch = original;
   }
 });
+
+Deno.test("listHubNavigationManifests: throws on success:false (not empty list)", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(new Response(JSON.stringify({
+      success: false,
+      errors: [{ message: "HUB_NAV_LIST_FAILED" }],
+    }), { status: 200 }));
+  try {
+    const { listHubNavigationManifests } = await import("../api/adminApi.ts");
+    await assertRejects(
+      () => listHubNavigationManifests(),
+      Error,
+      "HUB_NAV_LIST_FAILED",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("listHubNavigationManifests: throws when success:true but emission.data is missing", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(new Response(JSON.stringify({
+      success: true,
+      emission: null,
+    }), { status: 200 }));
+  try {
+    const { listHubNavigationManifests } = await import("../api/adminApi.ts");
+    await assertRejects(
+      () => listHubNavigationManifests(),
+      Error,
+      "hub_navigation:list_manifests: emission.data must be an array",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("getHubRelationsByManifest: throws on success:false (not empty list)", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(new Response(JSON.stringify({
+      success: false,
+      errors: [{ message: "HUB_RELATIONS_FAILED" }],
+    }), { status: 200 }));
+  try {
+    const { getHubRelationsByManifest } = await import("../api/adminApi.ts");
+    await assertRejects(
+      () => getHubRelationsByManifest("manifest-1"),
+      Error,
+      "HUB_RELATIONS_FAILED",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});

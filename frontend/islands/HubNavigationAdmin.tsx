@@ -71,8 +71,21 @@ export default function HubNavigationAdmin(): JSX.Element {
 
   const loadHubRelations = async (manifestId: string) => {
     if (!manifestId) { setHubRelations([]); return; }
-    const items = await getHubRelationsByManifest(manifestId);
-    setHubRelations(items ?? []);
+    try {
+      const items = await getHubRelationsByManifest(manifestId);
+      if (items === null) {
+        setBackendUnavailable(true);
+        setHubRelations([]);
+        return;
+      }
+      setHubRelations(items);
+    } catch (e) {
+      console.error("HUB_RELATIONS_LOAD_FAILED", e);
+      setErrors([{
+        message: e instanceof Error ? e.message : "ナビ遷移の読み込みに失敗しました。",
+      }]);
+      setHubRelations([]);
+    }
   };
 
   useEffect(() => { loadManifests(); }, []);

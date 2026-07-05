@@ -1162,7 +1162,6 @@ export async function updateAdminPromotionManifestDraft(
 // ---------------------------------------------------------------------------
 
 function expectEmissionList<T>(data: unknown, operation: string): T[] {
-  if (data === undefined || data === null) return [];
   if (!Array.isArray(data)) {
     throw new Error(`${operation}: emission.data must be an array`);
   }
@@ -1473,6 +1472,9 @@ async function callHubNavigation(
 export async function listHubNavigationManifests(): Promise<HubNavigationManifestItem[] | null> {
   const body = await callHubNavigation("list_manifests");
   if (body === null) return null;
+  if (!body.success) {
+    throw new Error(body.errors?.[0]?.message ?? "list hub navigation manifests failed");
+  }
   return expectEmissionList<HubNavigationManifestItem>(
     body.emission?.data,
     "hub_navigation:list_manifests",
@@ -1484,6 +1486,9 @@ export async function getHubRelationsByManifest(
 ): Promise<HubNavigationHubRelationItem[] | null> {
   const body = await callHubNavigation("get_hub_relations", { topologyManifestId });
   if (body === null) return null;
+  if (!body.success) {
+    throw new Error(body.errors?.[0]?.message ?? "get hub relations failed");
+  }
   return expectEmissionList<HubNavigationHubRelationItem>(
     body.emission?.data,
     "hub_navigation:get_hub_relations",
