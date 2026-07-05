@@ -4,7 +4,7 @@
  * SSOT: docs/registrar-admin-ui-specification.md §5
  */
 import type { CalcBinding } from "./frontendLocalCalculationResolver.ts";
-import { isOverlayDisclosureAction } from "../lib/runtimeInteractionAuthoring.ts";
+import { isOverlayDisclosureAction, expectedDisclosureTargetKind } from "../lib/runtimeInteractionAuthoring.ts";
 import { parsePayloadFromSource } from "./payloadFromResolver.ts";
 
 export const RESPONSIVE_BREAKPOINTS = ["sm", "md", "lg", "xl"] as const;
@@ -767,7 +767,7 @@ export function removeFromSelectionSet(
 
 type RuntimeInteractionPatchNode = Pick<
   VisualNodePayload,
-  "nodeId" | "componentKey" | "runtimeInteractions"
+  "nodeId" | "componentKey" | "componentKind" | "runtimeInteractions"
 >;
 
 /** Local pre-save validation for canonical runtimeInteractions on layout nodes. */
@@ -776,6 +776,7 @@ export function findRuntimeInteractionPatchErrors(
 ): string[] {
   const errors: string[] = [];
   const nodeIds = new Set(nodes.map((n) => n.nodeId));
+  const kindsByNodeId = new Map(nodes.map((n) => [n.nodeId, n.componentKind ?? ""]));
   for (const node of nodes) {
     const label = node.componentKey || node.nodeId;
     for (const [idx, interaction] of (node.runtimeInteractions ?? []).entries()) {
@@ -793,6 +794,14 @@ export function findRuntimeInteractionPatchErrors(
           errors.push(`${prefix}: overlay 対象ノードが未設定です`);
         } else if (!nodeIds.has(interaction.targetNodeId)) {
           errors.push(`${prefix}: overlay 対象ノードがキャンバス上に存在しません`);
+        } else {
+          const expected = expectedDisclosureTargetKind(interaction.actionType);
+          const targetKind = kindsByNodeId.get(interaction.targetNodeId) ?? "";
+          if (expected && targetKind !== expected) {
+            errors.push(
+              `${prefix}: overlay 対象 componentKind が ${expected} と一致しません (${targetKind || "missing"})`,
+            );
+          }
         }
       } else if (!interaction.targetNodeId?.trim()) {
         errors.push(`${prefix}: 対象ノードが未設定です`);

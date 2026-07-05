@@ -17,21 +17,37 @@ export type OverlayTargetNode = {
   propsJson?: string;
 };
 
-/** Component kinds that can be opened/closed via disclosure runtime interactions. */
+/** Component kinds valid as disclosure runtime interaction targets (matches backend layout_patch validation). */
 export const OVERLAY_OPENABLE_COMPONENT_KINDS = [
   "disclosure/modal",
   "disclosure/drawer",
   "disclosure/dialog",
-  "table_op/row_detail_drawer",
-  "inline_edit/audit_diff_drawer",
 ] as const;
+
+export type OverlayOpenableComponentKind = typeof OVERLAY_OPENABLE_COMPONENT_KINDS[number];
+
+export function isOverlayOpenableComponentKind(
+  componentKind: string | undefined,
+): componentKind is OverlayOpenableComponentKind {
+  if (!componentKind) return false;
+  return (OVERLAY_OPENABLE_COMPONENT_KINDS as readonly string[]).includes(componentKind);
+}
 
 export function overlaySurfaceFamily(
   componentKind: string | undefined,
-): "modal" | "drawer" | "dialog" {
+): "modal" | "drawer" | "dialog" | null {
   if (componentKind === "disclosure/modal") return "modal";
   if (componentKind === "disclosure/dialog") return "dialog";
-  return "drawer";
+  if (componentKind === "disclosure/drawer") return "drawer";
+  return null;
+}
+
+/** Backend-aligned expected target componentKind for disclosure action types. */
+export function expectedDisclosureTargetKind(actionType: string): OverlayOpenableComponentKind | null {
+  if (actionType.includes("Modal")) return "disclosure/modal";
+  if (actionType.includes("Drawer")) return "disclosure/drawer";
+  if (actionType.includes("Dialog")) return "disclosure/dialog";
+  return null;
 }
 
 export function resolveDisclosureActionType(
@@ -39,6 +55,9 @@ export function resolveDisclosureActionType(
   componentKind: string,
 ): string {
   const family = overlaySurfaceFamily(componentKind);
+  if (!family) {
+    throw new Error(`resolveDisclosureActionType: unsupported componentKind ${componentKind}`);
+  }
   const familyCap = family.charAt(0).toUpperCase() + family.slice(1);
   return `${intent}${familyCap}`;
 }
@@ -101,12 +120,16 @@ export function parsePropsJsonTitle(propsJson?: string): string | null {
 export function friendlyOverlayTargetLabel(node: OverlayTargetNode): string {
   const kind = node.componentKind ?? "";
   const surface = overlaySurfaceFamily(kind);
+  const title = parsePropsJsonTitle(node.propsJson);
+  if (!surface) {
+    const slug = node.componentKey?.split("/").pop() ?? node.nodeId.slice(0, 12);
+    return title ? `${slug}：${title}` : slug;
+  }
   const surfaceJa = surface === "modal"
     ? UX_RUNTIME_INTERACTION_SURFACE_MODAL
     : surface === "dialog"
     ? UX_RUNTIME_INTERACTION_SURFACE_DIALOG
     : UX_RUNTIME_INTERACTION_SURFACE_DRAWER;
-  const title = parsePropsJsonTitle(node.propsJson);
   if (title) return `${surfaceJa}：${title}`;
   const slug = node.componentKey?.split("/").pop() ?? node.nodeId.slice(0, 12);
   return `${surfaceJa}（${slug}）`;
@@ -115,11 +138,7 @@ export function friendlyOverlayTargetLabel(node: OverlayTargetNode): string {
 export function listOverlayTargetNodes(
   nodes: readonly OverlayTargetNode[],
 ): OverlayTargetNode[] {
-  return nodes.filter((n) =>
-    OVERLAY_OPENABLE_COMPONENT_KINDS.includes(
-      (n.componentKind ?? "") as typeof OVERLAY_OPENABLE_COMPONENT_KINDS[number],
-    )
-  );
+  return nodes.filter((n) => isOverlayOpenableComponentKind(n.componentKind));
 }
 
 export function defaultOverlayOpenInteraction(
@@ -155,6 +174,7 @@ export function applyOverlayIntentToInteraction(
   targetNode: OverlayTargetNode | undefined,
 ): typeof interaction {
   if (!targetNode?.componentKind) return interaction;
+  if (!isOverlayOpenableComponentKind(targetNode.componentKind)) return interaction;
   return {
     ...interaction,
     actionType: resolveDisclosureActionType(intent, targetNode.componentKind),
