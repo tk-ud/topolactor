@@ -105,6 +105,27 @@ export function screenOperationLabel(kind: ScreenOperationKind): string {
   return SCREEN_OPERATION_OPTIONS.find((o) => o.kind === kind)?.label ?? kind;
 }
 
+/** Column role for Step 3 operation_entity_bindings matrix (SSOT column_roles_contract). */
+export type OperationEntityColumnRole = "response" | "request" | "operation_target";
+
+export function operationEntityColumnRole(
+  kind: ScreenOperationKind,
+): OperationEntityColumnRole {
+  switch (kind) {
+    case "list":
+    case "search":
+    case "detail":
+    case "aggregation_view":
+      return "response";
+    case "create":
+    case "update":
+      return "request";
+    case "logicalDelete":
+    case "delete":
+      return "operation_target";
+  }
+}
+
 /** Best-effort inverse mapping for list/detail display. */
 export function dispatcherAxesToScreenOperationKind(axes: {
   layer?: string | null;
