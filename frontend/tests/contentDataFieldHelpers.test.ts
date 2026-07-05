@@ -23,6 +23,40 @@ Deno.test("relationUuidCandidatesForColumn resolves FK from related remote key c
       { values: { "auth.user.id": "00000000-0000-0000-0000-0000000000a2" }, lineage: { source: "manual" } },
     ],
   );
-  assertEquals(candidates.includes("00000000-0000-0000-0000-0000000000a1"), true);
-  assertEquals(candidates.includes("00000000-0000-0000-0000-0000000000a2"), true);
+  assertEquals(candidates.some((c) => c.value === "00000000-0000-0000-0000-0000000000a1"), true);
+  assertEquals(candidates.some((c) => c.value === "00000000-0000-0000-0000-0000000000a2"), true);
+  assertEquals(candidates.every((c) => c.label.startsWith("候補 ")), true);
+});
+
+Deno.test("relationUuidCandidatesForColumn uses display column label when available", () => {
+  const candidates = relationUuidCandidatesForColumn(
+    "employees.user_id",
+    [{
+      localTableRef: "employees",
+      localKey: "user_id",
+      joinTableRef: "auth.user",
+      remoteKey: "id",
+    }],
+    [
+      {
+        values: {
+          "auth.user.id": "00000000-0000-0000-0000-0000000000a1",
+          "auth.user.username": "alice",
+        },
+        lineage: { source: "manual" },
+      },
+    ],
+    [{
+      key: "auth.user.id",
+      tableRef: "auth.user",
+      columnName: "id",
+      column: { name: "id", dataType: "uuid", nullable: false },
+    }, {
+      key: "auth.user.username",
+      tableRef: "auth.user",
+      columnName: "username",
+      column: { name: "username", dataType: "text", nullable: false },
+    }],
+  );
+  assertEquals(candidates[0]?.label, "alice");
 });

@@ -10,20 +10,34 @@ alwaysApply: true
 - **Always start from** repository-top [`AGENTS.md`](../../AGENTS.md) (`top/AGENTS.md`). That file is the agent entry contract; Cursor rules here do not override it.
 - Follow the route defined there before any task-specific work.
 
+## 従う効果 / 従わない危険性（必読）
+
+**デフォルト挙動は SSOT を読まずに実装に飛びがちで、このリポジトリでは危険です。**
+
+| 従う（Entry Route + tool-first） | 従わない（いきなりコード修正） |
+|---|---|
+| `initial_contract` で SSOT 節 + `senario-tmp.md` + `tool.log`（`end`） | 既存コードを正本扱いし SSOT 逸脱を「改善」と誤認 |
+| `resolve-ssot` / `sections` で対象 SSOT を読んでから実装 | 実装・テストだけから設計を復元（禁止） |
+| `local_test` 全チェーン（`summary` の `pass_or_fail`）で完了 | 部分テスト PASS だけで「完了」と報告 |
+
+**AGENTS.md Entry Route は省略不可。** ユーザー指示が急でも、対象ドメインの SSOT を読む前に `frontend/` / `backend/` を触らない。
+
 ## Entry route
 
-1. Read **`top/AGENTS.md`** — i.e. [`AGENTS.md`](../../AGENTS.md) at the repository root (agent contract).
-2. Read `.agent/rules/rule.md` for always-on rules and trigger map.
-3. Read `.agent/README.md` when routing work types.
-4. Open `.agent/prompt/<work-type>.md` and triggered protocols/checklists only when their trigger matches the change.
+[`AGENTS.md`](../../AGENTS.md) Entry Route に従う（要約）:
+
+1. [`AGENTS.md`](../../AGENTS.md) → [`.agent/rules/rule.md`](../../.agent/rules/rule.md) → [`.agent/README.md`](../../.agent/README.md)
+2. **Tool-first**（利用可）: `agent-ui-initial-contract` を `end` まで → 実装 → `agent-ui-local-test` を `summary` まで（[`.agent/tools/README.md`](../../.agent/tools/README.md) の `next_step` に従う）
+3. **Fallback**: `.agent/skills/agent-workflow.md` → worktype → `.agent/routes/worktype-required-protocols.yaml` → prompt / protocols / routed `required_checks`
 
 ## Work posture
 
 - Do not load every protocol, doc, or skill by default.
-- **SSOT before implementation:** see [`.cursor/rules/ssot-canonical.mdc`](ssot-canonical.mdc) — `docs/design/*-ssot.*` and `docs/governance/*-ssot.*` are canonical; do not implement without reading the applicable SSOT. Existing code is not authority.
+- **SSOT before implementation:** see [`.cursor/rules/ssot-canonical.mdc`](ssot-canonical.mdc).
+- **その場しのぎ禁止:** 正本は [`.agent/rules/rule.md`](../../.agent/rules/rule.md)（Prohibitions・Repository Design Order Invariant）。`SSOT → wiring → test/proof → implementation` の順を崩さず、症状だけのテスト文字列修正・UI 隠蔽・黙示キャストで CI を通すことは禁止。Cursor 側に別ルールを増やして重複定義しない。
 - Preserve canonical runtime routes and explicit-failure behavior (no silent fallback).
 - Confirm implementation state from **code and tests**, not from `.agent/tasks/todo.md` or `docs/system-roadmap.yaml` alone.
-- Run required local checks before claiming completion; run `bash .agent/tests/check-structure.sh` **last**.
+- **Verification:** tool 利用可なら `agent-ui-local-test` 全チェーン（`summary`）。fallback のみ routed `required_checks` + `check-structure.sh` を最後に。
 
 ## User communication
 

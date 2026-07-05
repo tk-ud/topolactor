@@ -291,6 +291,8 @@ export type FlowLayoutCanvasProps = {
   onNodeSearch?: (nodeId: string, query: string) => void;
   /** Combobox preview options from uiBuilderAutocompleteCandidates local derivation (no backend fetch). */
   comboboxPreviewOptions?: ReadonlyArray<{ label: string; value: string }>;
+  /** When false, canvas avoids h-full/flex-1 so sibling docks keep fixed viewport height. */
+  fillHeight?: boolean;
 };
 
 export function FlowLayoutCanvas({
@@ -316,6 +318,7 @@ export function FlowLayoutCanvas({
   suggestionsByNodeId,
   onNodeSearch,
   comboboxPreviewOptions,
+  fillHeight = true,
 }: FlowLayoutCanvasProps): JSX.Element {
   const childrenMap = buildFlowChildrenMap(nodes);
   const roots = childrenMap.get(undefined) ?? [];
@@ -326,7 +329,7 @@ export function FlowLayoutCanvas({
       ref={canvasRef}
       role="application"
       aria-label="レイアウトキャンバス — クリックで選択。レイアウト構造は右のレイヤーツリーで編集"
-      class="h-full min-h-0 flex-1 overflow-auto rounded-lg border-2 border-dashed border-gray-300 bg-white p-3 focus-within:border-blue-300"
+      class={`${fillHeight ? "h-full flex-1 " : ""}min-h-0 overflow-auto rounded-lg border-2 border-dashed border-gray-300 bg-white p-3 focus-within:border-blue-300`}
       style={{ minHeight: `${minHeight}px` }}
       onClick={() => onDeselectAll?.()}
       onDragOver={onDragOver}

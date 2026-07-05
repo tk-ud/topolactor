@@ -209,6 +209,8 @@ function installAdminDispatchMock(captured: CapturedDispatch[], manifestId: stri
       ? []
       : layer === "hub_navigation" && action === "list_manifests"
       ? []
+      : layer === "content_bundle" && action === "list_hubs"
+      ? []
       : detail;
     return Promise.resolve(
       new Response(JSON.stringify({ success: true, emission: { data } }), {

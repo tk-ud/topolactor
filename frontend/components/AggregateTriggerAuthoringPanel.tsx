@@ -17,6 +17,10 @@ import {
   transactionBoundaryAllowedValues,
   triggerSourceDetailKinds,
 } from "../lib/aggregateTriggerAuthoring.ts";
+import {
+  UX_AGGREGATE_TRIGGER_SECTION_INTRO,
+  UX_AGGREGATE_TRIGGER_SECTION_TITLE,
+} from "../content/adminUxTerms.ts";
 
 type Props = {
   step2LogicalEntityDefinitions: StepTarget[];
@@ -297,12 +301,10 @@ export default function AggregateTriggerAuthoringPanel({
       data-ui-assurance-boundary="structured-authoring-preview-only"
     >
       <h3 class="text-sm font-semibold text-indigo-950">
-        Aggregate trigger structured authoring
+        {UX_AGGREGATE_TRIGGER_SECTION_TITLE}
       </h3>
       <p class="mt-1 text-indigo-900">
-        Step 3 は structured payload の選択と preview
-        のみを担当します。threshold / materialization / approval の final
-        judgment は backend runtime authority です。
+        {UX_AGGREGATE_TRIGGER_SECTION_INTRO}
       </p>
 
       {(targets.length === 0 || hasInvalidTargetSelection) && (

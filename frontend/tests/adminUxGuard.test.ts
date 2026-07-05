@@ -2,7 +2,7 @@ import {
   assert,
   assertEquals,
   assertFalse,
-} from "https://deno.land/std@0.208.0/assert/mod.ts";
+} from "@std/assert";
 import {
   ACCEPTANCE_CHECKLIST,
   ADMIN_CONTENTS_GUIDE,
@@ -58,10 +58,7 @@ import {
 } from "../lib/packageWiringPicker.ts";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import {
-  clearManifestScreenDesignLocal,
   emptyManifestScreenDesign,
-  loadManifestScreenDesignLocal,
-  saveManifestScreenDesignLocal,
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
@@ -408,8 +405,12 @@ Deno.test("UiBuilderAdmin: layout_patch apply uses unified modal with validate t
     "modal must pass layoutId for demo deep-link",
   );
   assert(
-    src.includes('announce("右パネルのデザインインスペクタで選択ノードを編集できます")'),
+    src.includes("openDesignInspectorHandoff"),
     "handoff must route authors to the docked right-panel design inspector",
+  );
+  assert(
+    src.includes("右パネルのデザインインスペクタで保存できます"),
+    "handoff must announce design inspector destination",
   );
   assert(
     src.includes('setLayoutApplyModalPhase("success")'),
@@ -542,6 +543,35 @@ Deno.test("ContentsScreenDesignPanel: step 3 mounts embedded CSV/JSON import sub
 // ─── ContentsScreenDesignPanel Step 3 normal-view regression ───────────────────
 // SSOT: admin-console-workflow-ssot.yaml step 3 normal_view_ui_excludes manual table_ref/import_schema inputs.
 
+Deno.test("ContentsScreenDesignPanel: step 3 embedded import uses page column specs not schema_registry picker", async () => {
+  const panel = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  const adminImport = await Deno.readTextFile(
+    new URL("../islands/AdminImport.tsx", import.meta.url),
+  );
+  assert(panel.includes("columnSpecs={qualifiedColumns.map"));
+  assert(panel.includes("q.column.dataType"));
+  assert(adminImport.includes("usePageColumnImport"));
+  assert(adminImport.includes("UX_IMPORT_RULE_PAGE_COLUMNS"));
+  assert(
+    adminImport.includes("!usePageColumnImport") &&
+      adminImport.includes("handleApply"),
+    "backend apply must be gated off for embedded page-column local preview",
+  );
+});
+
+Deno.test("ContentsScreenDesignPanel: local import preview does not use backend snapshot reload", async () => {
+  const panel = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(panel.includes("isLocalImportPreviewSnapshotId"));
+  assert(
+    panel.includes("!isLocalImportPreviewSnapshotId(lastImportSnapshotId)"),
+    "snapshot reload must be backend snapshot ids only",
+  );
+});
+
 Deno.test("ContentsScreenDesignPanel: step 3 omits legacy table_ref and import_schema_name inputs", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
@@ -557,7 +587,7 @@ Deno.test("ContentsScreenDesignPanel: step 3 does not render ページ名 input"
   const src = await Deno.readTextFile(
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
   );
-  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n      \)\}/g)];
+  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n\s{6}\)\}/g)];
   assert(step3Blocks.length > 0, "step 3 rendering blocks must exist");
   for (const match of step3Blocks) {
     assertFalse(
@@ -571,7 +601,7 @@ Deno.test("ContentsScreenDesignPanel: step 3 does not patch screenLabel", async 
   const src = await Deno.readTextFile(
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
   );
-  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n      \)\}/g)];
+  const step3Blocks = [...src.matchAll(/\{activeStep === 3 && \([\s\S]*?\n\s{6}\)\}/g)];
   for (const match of step3Blocks) {
     assertFalse(
       match[0].includes("screenLabel"),
@@ -1272,7 +1302,7 @@ Deno.test("UiBuilderAdmin: canvas workspace has left docked panel; no separate p
   );
   // canvas workspace section must exist
   assert(src.includes("ui-builder-canvas-workspace"), "canvas must be a dedicated workspace section");
-  assert(src.includes("CANVAS_WORKSPACE_HEIGHT"), "canvas block must use viewport-height sizing");
+  assert(src.includes("CANVAS_WORKSPACE_HEIGHT") || src.includes("UI_BUILDER_DOCK_HEIGHT"), "canvas workspace must use viewport-height sizing for docks");
   // left docked panel must exist inside source (SSOT: canvas_workspace_contract.left_panel)
   assert(src.includes("left-docked-panel"), "palettes must live in a left docked panel inside the canvas workspace");
   assert(src.includes("data-component-add-panel"), "left panel must carry data-component-add-panel marker");
@@ -1936,7 +1966,7 @@ Deno.test("Step3 sample viewing: operation kind select drives preview projection
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
   );
   assert(
-    source.includes("操作種別") &&
+    source.includes("UX_FIELD_OPERATION_KINDS") &&
       source.includes("projectionColumnsForOperationKind") &&
       source.includes("screenOperationLabel(effectivePreviewKind)"),
     "sample preview must switch entityTargetColumns by selected operation kind",
@@ -2023,6 +2053,32 @@ Deno.test("adminUxTerms: Step3 progressive disclosure labels are non-empty", () 
   assertEquals(UX_FIELD_HAVING_CONDITIONS, "集計後の絞り込み（詳細）");
 });
 
+Deno.test("adminUxTerms: aggregate trigger Step3 labels are Japanese-first", async () => {
+  const terms = await Deno.readTextFile(
+    new URL("../content/adminUxTerms.ts", import.meta.url),
+  );
+  assert(terms.includes("UX_AGGREGATE_TRIGGER_SECTION_TITLE"));
+  assert(terms.includes("集計トリガー（構造化入力）"));
+  const panel = await Deno.readTextFile(
+    new URL("../components/AggregateTriggerAuthoringPanel.tsx", import.meta.url),
+  );
+  assert(
+    panel.includes("UX_AGGREGATE_TRIGGER_SECTION_TITLE"),
+    "AggregateTriggerAuthoringPanel must use adminUxTerms",
+  );
+  assertFalse(
+    panel.includes("Aggregate trigger structured authoring"),
+    "English section title must not remain in panel",
+  );
+  const surface = await Deno.readTextFile(
+    new URL("../components/AggregateTriggerAuthoringSurface.tsx", import.meta.url),
+  );
+  assert(
+    surface.includes("UX_AGGREGATE_TRIGGER_GATE_HINT"),
+    "AggregateTriggerAuthoringSurface must gate on aggregation logic",
+  );
+});
+
 // ─── Route navigation wiring preset ──────────────────────────────────────────
 
 Deno.test("encodeRouteNavigationTargetRef: round-trip with parseRouteNavigationTargetRef", () => {
@@ -2103,12 +2159,10 @@ Deno.test("UiBuilderAdmin: route navigation preset exists in normal view without
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  // RouteNavigationWiringPreset component must exist
   assert(
     src.includes("RouteNavigationWiringPreset"),
     "RouteNavigationWiringPreset component must exist",
   );
-  // Must use UX labels (not raw field names)
   assert(
     src.includes("UX_ROUTE_NAVIGATION_PRESET_LABEL"),
     "must use UX_ROUTE_NAVIGATION_PRESET_LABEL",
@@ -2117,7 +2171,6 @@ Deno.test("UiBuilderAdmin: route navigation preset exists in normal view without
     src.includes("UX_ROUTE_NAVIGATION_SAVE_LABEL"),
     "must use UX_ROUTE_NAVIGATION_SAVE_LABEL",
   );
-  // Must use encode/parse helpers
   assert(
     src.includes("encodeRouteNavigationTargetRef"),
     "must use encodeRouteNavigationTargetRef",
@@ -2126,16 +2179,13 @@ Deno.test("UiBuilderAdmin: route navigation preset exists in normal view without
     src.includes("isRouteNavigationTargetRef"),
     "must use isRouteNavigationTargetRef",
   );
-  // RouteNavigationWiringPreset must be placed BEFORE the <details> wiring section
   const presetIdx = src.indexOf("<RouteNavigationWiringPreset");
-  const detailsIdx = src.indexOf(
-    '<details class="mb-4 rounded border border-slate-200 p-3">',
-  );
+  const advancedDetailsIdx = src.indexOf("{UX_PACKAGE_WIRING_ADVANCED_LABEL}");
   assert(presetIdx >= 0, "RouteNavigationWiringPreset must be rendered");
-  assert(detailsIdx >= 0, "details wiring section must exist");
+  assert(advancedDetailsIdx >= 0, "advanced package wiring details must exist");
   assert(
-    presetIdx < detailsIdx,
-    "preset must appear before technical details section",
+    presetIdx < advancedDetailsIdx,
+    "preset must appear before advanced package wiring disclosure",
   );
 });
 
@@ -2189,6 +2239,7 @@ Deno.test("UiBuilderAdmin: ManifestRouteEntry exists and derives routeKey from t
   const entryBody = src.slice(manifestRouteEntryStart, manifestRouteEntryEnd);
   // Confirm derivedRouteKey comes from topologySystemNameToUiBuilderKey not displayName
   assert(entryBody.includes("topologySystemNameToUiBuilderKey(sysName)"), "routeKey must be derived from topologySystemNameToUiBuilderKey(sysName)");
+  assert(entryBody.includes("CONTENTS_ROUTE_MANIFEST_LIST_FILTER"), "contents manifest list filter");
   // Confirm userFacingTopologyLabel is used only for display label, not for routeKey
   assert(entryBody.includes("resolveVisibleTopologyName"), "display label uses resolveVisibleTopologyName");
   assertFalse(entryBody.includes("userFacingTopologyLabel)"), "userFacingTopologyLabel must NOT be passed to routeKey derivation");
@@ -2380,7 +2431,113 @@ Deno.test("ContentsScreenDesignPanel: resume draft uses contents list filter and
   );
   assert(src.includes("resume_existing_draft"), "resume entry mode");
   assert(src.includes("contentsType: \"contents\""), "contents draft list filter");
+  assert(
+    src.includes("requiresTopologySystemName: true"),
+    "contents draft picker excludes Step-1-incomplete shells",
+  );
   assert(src.includes("下書きを再開"), "resume button label");
   assert(src.includes('setActiveStep(2)'), "resume navigates to step 2");
   assert(src.includes("authoringProgressStep"), "restores progress from list item");
+});
+
+Deno.test("UiBuilderAdmin: layout apply handoff and inspector scroll region", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("LayoutPersistHandoffBanner"), "post-apply persistence handoff banner");
+  assert(src.includes("UX_LAYOUT_APPLIED_GO_DESIGN_SAVE"), "design persist CTA label");
+  assert(src.includes('onLayoutApplied={() => setFlowStep("persist")}'), "flow stepper advances on apply");
+  assert(src.includes("UI_BUILDER_DOCK_HEIGHT"), "side docks must use viewport height independent of canvas");
+  assert(src.includes("items-start"), "dock row must not stretch docks to canvas height");
+  assert(src.includes("fillHeight={false}"), "canvas must not dictate sibling dock height");
+  assert(src.includes('data-inspector-scroll-region="true"'), "inspector panel must scroll inside drawer");
+  assert(src.includes("layout-right-dock-scroll"), "right dock scroll wrapper");
+  assert(src.includes("function PackageConnectionPanel("), "package connection must live outside design inspector");
+  const packageConnectionPanelIdx = src.indexOf("function PackageConnectionPanel(");
+  const designPanelIdx = src.indexOf("function PackageDesignPanel(");
+  assert(packageConnectionPanelIdx >= 0 && designPanelIdx > packageConnectionPanelIdx, "PackageConnectionPanel must exist");
+  const manifestPresetIdx = src.indexOf("<ManifestStep3EventWiringPreset", packageConnectionPanelIdx);
+  const advancedIdx = src.indexOf("{UX_PACKAGE_WIRING_ADVANCED_LABEL}", packageConnectionPanelIdx);
+  assert(manifestPresetIdx >= 0, "ManifestStep3EventWiringPreset must be rendered in package connection panel");
+  assert(advancedIdx >= 0, "advanced package wiring disclosure must exist");
+  assert(
+    manifestPresetIdx < advancedIdx,
+    "topology API preset must appear in normal view before advanced package wiring disclosure",
+  );
+  assert(src.includes("<NodeEventAuthoringPanel"), "node event authoring must be in right dock when node selected");
+  assert(src.includes("UX_EVENT_AUTHORING_SECTION"), "right dock event accordion uses SSOT section label");
+  const designPanelEnd = src.indexOf("\nfunction ", designPanelIdx + 30);
+  const designPanelBody = src.slice(designPanelIdx, designPanelEnd > designPanelIdx ? designPanelEnd : designPanelIdx + 8000);
+  assertFalse(designPanelBody.includes("<RouteNavigationWiringPreset"), "package route preset must not be in design inspector");
+  assertFalse(designPanelBody.includes("<ManifestStep3EventWiringPreset"), "Step 3 preset must not be in design inspector");
+  assertFalse(designPanelBody.includes("<NodeEventAuthoringPanel"), "node event authoring must not be in design inspector");
+  assertFalse(designPanelBody.includes('id: "wiring"'), "design inspector must not have runtime wiring tab");
+});
+
+Deno.test("ManifestStep3EventWiringPreset: scoped to committed topology routeKey only", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../components/ManifestStep3EventWiringPreset.tsx", import.meta.url),
+  );
+  assert(src.includes("resolveManifestRouteOptionForRouteKey"));
+  assert(src.includes("UX_MANIFEST_API_EVENT_TOPOLOGY_CONTEXT"));
+  assert(src.includes("formatScreenReadQueryWiringCandidateLabel"));
+  assertFalse(src.includes("listAdminManifests"), "must not list all manifests in global picker");
+  assertFalse(src.includes("UX_MANIFEST_API_EVENT_PAGE_SELECT"), "page picker removed from normal view");
+});
+
+Deno.test("adminUxTerms: external integration / instance operation / topology API labels", async () => {
+  const terms = await import("../content/adminUxTerms.ts");
+  assertEquals(terms.UX_RUNTIME_INTERACTION_ADD_EXTERNAL, "+ 外部連携");
+  assertEquals(terms.UX_RUNTIME_INTERACTION_ADD_INSTANCE, "+ インスタンス操作");
+  assertEquals(terms.UX_TRIGGER_UI_LABEL, "トリガUI指定");
+  assertEquals(terms.UX_TARGET_UI_LABEL, "操作対象UI指定");
+  assertEquals(terms.UX_MANIFEST_API_EVENT_PRESET_LABEL, "トポロジ API 設定");
+  assert(terms.UX_TOPOLOGY_API_SECTION_HINT.includes("Contents dispatch"));
+  assert(terms.UX_EXTERNAL_INTEGRATION_SECTION_HINT.includes("別系統"));
+  assert(terms.UX_INSTANCE_OPERATION_SECTION_HINT.includes("別系統"));
+  assert(terms.UX_EXTERNAL_PORT_EMPTY_HINT.includes("別系統"));
+  assert(terms.UX_INSTANCE_OPERATION_EMPTY_HINT.includes("別系統"));
+  assertFalse(terms.UX_PACKAGE_WIRING_SECTION_TITLE.includes("runtimeDispatch"));
+  assertFalse(terms.UX_RUNTIME_INTERACTION_ADD_EXTERNAL.includes("External API"));
+  assertFalse(terms.UX_RUNTIME_INTERACTION_ADD_INSTANCE.includes("External instance"));
+});
+
+Deno.test("UiBuilderAdmin: event authoring uses SSOT trigger/target vocabulary not screen-common click", async () => {
+  const uiBuilderSrc = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const eventPanelSrc = await Deno.readTextFile(
+    new URL("../components/NodeEventAuthoringPanel.tsx", import.meta.url),
+  );
+  assert(uiBuilderSrc.includes("UX_PACKAGE_WIRING_SECTION_TITLE"));
+  assert(eventPanelSrc.includes("UX_RUNTIME_INTERACTION_SECTION_TITLE"));
+  assert(uiBuilderSrc.includes("NodeEventAuthoringPanel"));
+  assert(eventPanelSrc.includes("UX_TRIGGER_UI_LABEL"));
+  assert(eventPanelSrc.includes("UX_TARGET_UI_LABEL"));
+  assert(eventPanelSrc.includes("UX_EXTERNAL_INTEGRATION_SECTION_TITLE"));
+  assert(uiBuilderSrc.includes("<ManifestStep3EventWiringPreset"));
+  const manifestPresetSrc = await Deno.readTextFile(
+    new URL("../components/ManifestStep3EventWiringPreset.tsx", import.meta.url),
+  );
+  assert(manifestPresetSrc.includes("UX_MANIFEST_API_EVENT_PRESET_LABEL"));
+  assertFalse(uiBuilderSrc.includes("UX_WIRING_SCREEN_COMMON_SECTION_TITLE"));
+  assertFalse(uiBuilderSrc.includes("画面共通のクリック動作"));
+  assertFalse(uiBuilderSrc.includes("UX_RUNTIME_INTERACTION_ADD_DISPATCH"));
+  assertFalse(uiBuilderSrc.includes("dispatchRuntime"));
+  assertFalse(uiBuilderSrc.includes("nodeRuntimeInteractionDispatch"));
+  assertFalse(eventPanelSrc.includes("dispatchRuntime"));
+  assertFalse(eventPanelSrc.includes("nodeRuntimeInteractionDispatch"));
+  assertFalse(uiBuilderSrc.includes("+ External API"));
+  assertFalse(uiBuilderSrc.includes("+ External instance"));
+  assertFalse(eventPanelSrc.includes("+ External API"));
+  assertFalse(eventPanelSrc.includes("+ External instance"));
+});
+
+Deno.test("HubNavigationAdmin: destination picker uses page label not raw hub id", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/HubNavigationAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("UX_HUB_NAV_DESTINATION_LABEL"));
+  assert(src.includes("hubDestinationPickerOptions"));
+  assert(src.includes("hubDestinationOptionLabel"));
 });

@@ -11,7 +11,7 @@ Worktype is `existing_pr_update`, including:
 - PR #xxx 差分に対する追加commit/追加prompt作成
 
 ## tool_first_entry
-When `.agent/tools/agent-ui-initial-contract` is usable, run `start --task-name <name> --worktype existing_pr_update` first to get the routed prompt excerpt and protocol trigger hints; this file remains the fallback router when the tool is not usable.
+When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → `start` → `resolve-ssot` → `sections` → `end` per [`docs/governance/agent-ui-protocol-ssot.yaml`](../../docs/governance/agent-ui-protocol-ssot.yaml). `start` inlines routed prompt and required/triggered protocol **full text**; SSOT sections are read in `resolve-ssot` / `sections`. After implementation, close with the full `agent-ui-local-test` chain through `summary`. This file remains the fallback router when the tool is not usable.
 
 ## required_reads
 - PR diff or patch

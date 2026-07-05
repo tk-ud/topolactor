@@ -4,6 +4,8 @@
  * SSOT: docs/registrar-admin-ui-specification.md §5
  */
 import type { CalcBinding } from "./frontendLocalCalculationResolver.ts";
+import { isOverlayDisclosureAction, expectedDisclosureTargetKind } from "../lib/runtimeInteractionAuthoring.ts";
+import { parsePayloadFromSource } from "./payloadFromResolver.ts";
 
 export const RESPONSIVE_BREAKPOINTS = ["sm", "md", "lg", "xl"] as const;
 export type BreakpointKey = (typeof RESPONSIVE_BREAKPOINTS)[number];
@@ -234,6 +236,8 @@ export interface VisualNodePayload {
     outputProp?: string;
     /** Authoring-only external port candidate targetRef. SSOT: external-port-substrate-ssot.yaml admin_setting_projection */
     portTargetRef?: string;
+    /** Authoring-only approved instance operation targetRef. SSOT: instance-port-substrate-ssot.yaml */
+    instanceTargetRef?: string;
   }>;
 }
 
@@ -405,6 +409,7 @@ function readPatchNode(
           payloadFrom?: Record<string, string>;
           outputProp?: string;
           portTargetRef?: string;
+          instanceTargetRef?: string;
         } =>
         typeof v === "object" && v !== null && !Array.isArray(v) &&
         typeof (v as Record<string, unknown>).trigger === "string" &&
@@ -758,4 +763,58 @@ export function removeFromSelectionSet(
   const next = new Set(current);
   next.delete(nodeId);
   return next;
+}
+
+type RuntimeInteractionPatchNode = Pick<
+  VisualNodePayload,
+  "nodeId" | "componentKey" | "componentKind" | "runtimeInteractions"
+>;
+
+/** Local pre-save validation for canonical runtimeInteractions on layout nodes. */
+export function findRuntimeInteractionPatchErrors(
+  nodes: readonly RuntimeInteractionPatchNode[],
+): string[] {
+  const errors: string[] = [];
+  const nodeIds = new Set(nodes.map((n) => n.nodeId));
+  const kindsByNodeId = new Map(nodes.map((n) => [n.nodeId, n.componentKind ?? ""]));
+  for (const node of nodes) {
+    const label = node.componentKey || node.nodeId;
+    for (const [idx, interaction] of (node.runtimeInteractions ?? []).entries()) {
+      const prefix = `${label} #${idx + 1}`;
+      if (interaction.actionType === "dispatchExternalPort") {
+        if (!interaction.portTargetRef?.trim()) {
+          errors.push(`${prefix}: external port targetRef が未設定です`);
+        }
+      } else if (interaction.actionType === "dispatchInstanceOperation") {
+        if (!interaction.instanceTargetRef?.trim()) {
+          errors.push(`${prefix}: instance operation targetRef が未設定です`);
+        }
+      } else if (isOverlayDisclosureAction(interaction.actionType)) {
+        if (!interaction.targetNodeId?.trim()) {
+          errors.push(`${prefix}: overlay 対象ノードが未設定です`);
+        } else if (!nodeIds.has(interaction.targetNodeId)) {
+          errors.push(`${prefix}: overlay 対象ノードがキャンバス上に存在しません`);
+        } else {
+          const expected = expectedDisclosureTargetKind(interaction.actionType);
+          const targetKind = kindsByNodeId.get(interaction.targetNodeId) ?? "";
+          if (expected && targetKind !== expected) {
+            errors.push(
+              `${prefix}: overlay 対象 componentKind が ${expected} と一致しません (${targetKind || "missing"})`,
+            );
+          }
+        }
+      } else if (!interaction.targetNodeId?.trim()) {
+        errors.push(`${prefix}: 対象ノードが未設定です`);
+      }
+      for (const [field, source] of Object.entries(interaction.payloadFrom ?? {})) {
+        if (!field.trim() || !source.trim()) continue;
+        if (parsePayloadFromSource(source).kind === "unresolved_ref") {
+          errors.push(
+            `${prefix}: "${field}" の payloadFrom "${source}" が未解決です`,
+          );
+        }
+      }
+    }
+  }
+  return errors;
 }

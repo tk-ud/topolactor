@@ -97,6 +97,27 @@ export const AGGREGATION_FUNCTION_OPTIONS: readonly {
 export const UX_FIELD_SAMPLE_VIEWING = "サンプル表示";
 /** 初期データ（通常表示） */
 export const UX_FIELD_INITIAL_DATA = "初期データ";
+
+/** Step 3 CSV/JSON 取り込み: 検証ルールは Step 2 の項目定義 */
+export const UX_IMPORT_RULE_PAGE_COLUMNS = "取り込みルール";
+export const UX_IMPORT_RULE_PAGE_COLUMNS_HINT =
+  "CSV/JSON の列名は Step 2 で定義した項目名（例: employees.name）と一致させてください。プレビューではこのページの項目定義で型・必須を確認します。";
+export const UX_IMPORT_RULE_PAGE_COLUMNS_EMPTY =
+  "Step 2 で項目を定義すると、ここに取り込みルールが表示されます。";
+
+/** スタンドアロン取り込み画面向け — schema_registry の説明（Step 3 では非表示） */
+export const UX_IMPORT_SCHEMA_REGISTRY_HINT =
+  "プラットフォーム登録済みのデータ形です。通常のページ作成（Step 3）では選びません。デモ・管理ランタイム用の登録が含まれます。";
+export const UX_IMPORT_SCHEMA_LABELS: Record<string, string> = {
+  default_schema: "汎用（label のみ・プラットフォーム既定）",
+  admin_schema: "管理画面ランタイム用（通常は未使用）",
+  demo_entity_schema: "デモ用（label / state / hub_id）",
+};
+
+export function uxImportSchemaOptionLabel(name: string): string {
+  return UX_IMPORT_SCHEMA_LABELS[name] ?? name;
+}
+
 /** テーブル結合意図（任意、通常表示） */
 export const UX_FIELD_RELATION_INTENT = "参照データの関連付け（任意）";
 
@@ -105,6 +126,37 @@ export const UX_RELATION_ROW_ID_KEY = "id";
 export const UX_RELATION_ROW_ID_LABEL = "id (record id)";
 /** 操作ごとの対象項目（イベント時、通常表示） */
 export const UX_FIELD_OPERATION_ENTITY = "操作ごとの対象項目";
+
+/** Step 3: この画面で有効にする操作種別 */
+export const UX_FIELD_OPERATION_KINDS = "この画面で有効にする操作";
+export const UX_FIELD_OPERATION_KINDS_HINT =
+  "チェックした操作だけがエンドユーザー画面に現れます。下の表で、各操作に関わる項目を選びます。";
+export const UX_FIELD_OPERATION_KINDS_EMPTY_HINT =
+  "操作を1つ以上有効にすると、操作ごとの対象項目を設定できます。";
+
+/** 操作ごとの対象項目 — マトリクス説明 */
+export const UX_FIELD_OPERATION_ENTITY_INTRO =
+  "有効にした操作ごとに、画面で使う項目を選びます。列見出しの役割（表示／入力）を参考にしてください。検索の入力キーは別途「検索キー」で設定します。";
+
+/** 操作ごとの対象項目 — 列ヘッダの req/res 役割ラベル */
+export const UX_OPERATION_ENTITY_ROLE_RESPONSE = "表示（Res）";
+export const UX_OPERATION_ENTITY_ROLE_REQUEST = "入力（Req）";
+export const UX_OPERATION_ENTITY_ROLE_TARGET = "操作対象";
+
+export const UX_OPERATION_ENTITY_BULK_COLUMN = "列を一括";
+export const UX_OPERATION_ENTITY_BULK_ROW = "行を一括";
+export const UX_OPERATION_ENTITY_BULK_ALL = "すべて";
+export const UX_OPERATION_ENTITY_BULK_NONE = "解除";
+
+export const UX_OPERATION_ENTITY_ROLE_LABELS: Record<string, string> = {
+  response: UX_OPERATION_ENTITY_ROLE_RESPONSE,
+  request: UX_OPERATION_ENTITY_ROLE_REQUEST,
+  operation_target: UX_OPERATION_ENTITY_ROLE_TARGET,
+};
+
+export function uxOperationEntityRoleLabel(role: string): string {
+  return UX_OPERATION_ENTITY_ROLE_LABELS[role] ?? role;
+}
 
 /** 検索条件（詳細表示） */
 export const UX_FIELD_SEARCH_CONDITIONS = "検索条件";
@@ -370,6 +422,75 @@ export const UX_PACKAGE_REQUIRED_FOR_CANVAS = UX_ROUTE_KEY_REQUIRED_FOR_CANVAS;
 export const UX_COMPONENT_BUCKET_CARD_DRAG_HINT =
   "ドラッグしてキャンバスへ配置（部品は自動でパッケージに追加されます）";
 
+/** 右ドック — 操作イベント surface（SSOT: runtimeInteractions / layout_vs_design_split） */
+export const UX_EVENT_AUTHORING_SECTION = "操作イベント";
+/** SSOT: ui_events_trigger_and_target_configurable — 独立 2 軸ラベル */
+export const UX_TRIGGER_UI_LABEL = "トリガUI指定";
+export const UX_TARGET_UI_LABEL = "操作対象UI指定";
+export const UX_RUNTIME_INTERACTION_SECTION_TITLE = "操作イベント（この部品がトリガ）";
+export const UX_RUNTIME_INTERACTION_SECTION_HINT =
+  "選択中の部品がトリガとなり、操作対象の部品または接続先へイベントを届けます。トリガUI指定と操作対象UI指定は独立して設定します。";
+export const UX_RUNTIME_INTERACTION_TRIGGER_UI = "トリガ（この部品）";
+export const UX_RUNTIME_INTERACTION_WHEN = "トリガUI指定";
+export const UX_RUNTIME_INTERACTION_WHAT = "操作の種類";
+export const UX_RUNTIME_INTERACTION_TARGET = "操作対象UI指定";
+/** パッケージ単位の接続 — SSOT: route_navigation_wiring_preset + manifest_screenReadQueryWiring + PackageWiringEditor advanced */
+export const UX_PACKAGE_WIRING_SECTION_TITLE = "パッケージの接続設定";
+export const UX_PACKAGE_WIRING_SECTION_HINT =
+  "このページ（パッケージ）単位の接続です。ルート遷移とトポロジ API を通常画面で設定します。部品ごとのモーダル・外部連携・インスタンス操作は「操作イベント」で設定します。";
+export const UX_PACKAGE_WIRING_ADVANCED_LABEL = "上級: 配線 ID・接続先の直接編集";
+export const UX_RUNTIME_INTERACTION_INTENT_OPEN = "開く";
+export const UX_RUNTIME_INTERACTION_INTENT_CLOSE = "閉じる";
+export const UX_RUNTIME_INTERACTION_INTENT_TOGGLE = "表示を切り替える";
+export const UX_RUNTIME_INTERACTION_SURFACE_MODAL = "モーダル";
+export const UX_RUNTIME_INTERACTION_SURFACE_DRAWER = "ドロワー";
+export const UX_RUNTIME_INTERACTION_SURFACE_DIALOG = "ダイアログ";
+export const UX_RUNTIME_INTERACTION_NO_OVERLAY_TARGETS =
+  "モーダル／ドロワー部品がキャンバスにありません。開閉操作を追加するには先に配置してください。";
+export const UX_RUNTIME_INTERACTION_ADD = "+ 動作を追加";
+export const UX_RUNTIME_INTERACTION_ADD_OVERLAY = "+ モーダル／ドロワー操作";
+export const UX_RUNTIME_INTERACTION_ADD_EXTERNAL = "+ 外部連携";
+export const UX_RUNTIME_INTERACTION_ADD_INSTANCE = "+ インスタンス操作";
+export const UX_RUNTIME_INTERACTION_ADD_EXTERNAL_COMMIT = "外部連携を確定";
+export const UX_RUNTIME_INTERACTION_ADD_INSTANCE_COMMIT = "インスタンス操作を確定";
+export const UX_RUNTIME_INTERACTION_STAGING_CANCEL = "キャンセル";
+export const UX_RUNTIME_INTERACTION_CATEGORY_OVERLAY = "モーダル／ドロワーを操作";
+export const UX_RUNTIME_INTERACTION_CATEGORY_EXTERNAL = "外部連携";
+export const UX_RUNTIME_INTERACTION_CATEGORY_INSTANCE = "インスタンス操作";
+export const UX_EXTERNAL_INTEGRATION_SECTION_TITLE = "外部連携";
+export const UX_EXTERNAL_INTEGRATION_SECTION_HINT =
+  "外部連携レーン: DB 由来の active な external port 候補を操作対象として選びます。Contents Step 3 のトポロジ API 配線とは別系統です。";
+export const UX_INSTANCE_OPERATION_SECTION_TITLE = "インスタンス操作";
+export const UX_INSTANCE_OPERATION_SECTION_HINT =
+  "インスタンス操作レーン: admin 承認済みの instance operation 候補を選びます。外部連携と sibling で、Contents Step 3 とは別系統です。";
+export const UX_EXTERNAL_PORT_EMPTY_HINT =
+  "active な external port 候補がありません。外部連携は Contents Step 3 とは別系統です。認証・外部接続設定で port を登録してください。";
+export const UX_RUNTIME_INTERACTION_EXTERNAL_PORT_SELECT = "操作対象UI指定（external port）";
+export const UX_RUNTIME_INTERACTION_INSTANCE_OPERATION_SELECT = "操作対象UI指定（instance operation）";
+/** @deprecated use UX_EXTERNAL_INTEGRATION_SECTION_TITLE */
+export const UX_RUNTIME_INTERACTION_EXTERNAL_API_SECTION_TITLE = UX_EXTERNAL_INTEGRATION_SECTION_TITLE;
+/** @deprecated use UX_EXTERNAL_INTEGRATION_SECTION_HINT */
+export const UX_RUNTIME_INTERACTION_EXTERNAL_API_SECTION_HINT = UX_EXTERNAL_INTEGRATION_SECTION_HINT;
+/** @deprecated use UX_INSTANCE_OPERATION_SECTION_TITLE */
+export const UX_RUNTIME_INTERACTION_EXTERNAL_INSTANCE_SECTION_TITLE = UX_INSTANCE_OPERATION_SECTION_TITLE;
+/** @deprecated use UX_INSTANCE_OPERATION_SECTION_HINT */
+export const UX_RUNTIME_INTERACTION_EXTERNAL_INSTANCE_SECTION_HINT = UX_INSTANCE_OPERATION_SECTION_HINT;
+
+const UX_RUNTIME_INTERACTION_TRIGGER_LABELS: Record<string, string> = {
+  click: "クリック時",
+  change: "値が変わったとき",
+  submit: "送信時",
+  toggle: "切り替え時",
+  select: "選択時",
+  input: "入力時",
+  focus: "フォーカス時",
+  blur: "フォーカスが外れたとき",
+};
+
+export function uxRuntimeInteractionTriggerLabel(trigger: string): string {
+  return UX_RUNTIME_INTERACTION_TRIGGER_LABELS[trigger] ?? trigger;
+}
+
 /** layout editor 右ドック — 配置インスペクタ見出し */
 export const UX_LAYOUT_INSPECTOR_SECTION = "配置インスペクタ";
 
@@ -385,6 +506,34 @@ export const UX_ROUTE_NAVIGATION_PRESET_LABEL = "クリック時に指定ルー�
 export const UX_ROUTE_NAVIGATION_NONE_LABEL = "（移動しない）";
 export const UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL = "移動先ルートを選択";
 export const UX_ROUTE_NAVIGATION_SAVE_LABEL = "ルート遷移の配線を保存";
+
+/** Step 3 manifest dispatch wiring — normal-view topology API preset (contents_dispatch_ui_wiring_configurable) */
+export const UX_MANIFEST_API_EVENT_PRESET_LABEL = "トポロジ API 設定";
+export const UX_TOPOLOGY_API_SECTION_HINT =
+  "Contents dispatch レーン: Step 3 で定義した read/query 配線を、このパッケージの dispatch 接続先として保存します。外部連携・インスタンス操作とは別です。";
+export const UX_MANIFEST_API_EVENT_TOPOLOGY_CONTEXT = "編集中のページ（Contents Step 3）";
+export const UX_MANIFEST_API_EVENT_PAGE_SELECT = "接続先ページ";
+export const UX_MANIFEST_API_EVENT_WIRING_SELECT = "API イベント（Step 3 で設定した配線）";
+export const UX_MANIFEST_API_EVENT_NONE = "（接続しない）";
+export const UX_MANIFEST_API_EVENT_SAVE_LABEL = "API イベント配線を保存";
+export const UX_MANIFEST_API_EVENT_TOPOLOGY_MISSING =
+  "この画面に対応する Contents ページが見つかりません。/admin/contents で topology.name を登録してください。";
+export const UX_MANIFEST_API_EVENT_NOT_CONTENTS_SCREEN =
+  "このページは Contents の業務画面ではありません（認証管理などの bundle projection）。トポロジ API は /admin/contents で作った画面（例: employees）を UI Builder 上部で選んだときだけ候補が出ます。";
+export const UX_MANIFEST_API_EVENT_NO_STEP3_WIRING =
+  "Step 3 の配線候補がありません。/admin/contents で操作種別・検索・表示列を設定し Step 3 まで保存してください。";
+export const UX_INSTANCE_OPERATION_EMPTY_HINT =
+  "承認済みの instance operation 候補がありません。インスタンス操作は Contents Step 3 とは別系統です。/admin の認証・インスタンス設定で operation を登録・承認してください。";
+export const UX_MANIFEST_API_EVENT_WIRING_FIELD_LABELS: Record<string, string> = {
+  searchConditions: "検索条件",
+  havingConditions: "集計フィルタ（HAVING）",
+  aggregationMeasures: "集計・一覧",
+  displayColumns: "表示列",
+  displayColumnMode: "表示列モード",
+};
+
+/** Hub navigation — destination screen picker */
+export const UX_HUB_NAV_DESTINATION_LABEL = "遷移先の画面";
 
 /** 左 docked panel — 部品追加パネル見出し（SSOT: canvas_workspace_contract.left_panel）。 */
 export const UX_COMPONENT_ADD_PANEL_LABEL = "部品追加";
@@ -402,3 +551,195 @@ export const UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION =
 
 /** design_inspector 上部固定アクション — 選択ノードのデザイン設定を保存。 */
 export const UX_DESIGN_NODE_SAVE_LABEL = "選択ノードのデザインを保存";
+
+/** layout_patch apply 成功後の次アクション案内 */
+export const UX_LAYOUT_APPLIED_HANDOFF_TITLE = "配置の保存が完了しました";
+export const UX_LAYOUT_APPLIED_HANDOFF_HINT =
+  "配置（layout_patch）は DB に反映済みです。色・文言などのデザインは別途永続化が必要です。";
+export const UX_LAYOUT_APPLIED_GO_DESIGN_SAVE = "デザインを永続化（右パネル）";
+export const UX_LAYOUT_APPLIED_GO_DEMO = "デモで投影を確認";
+
+// ---------------------------------------------------------------------------
+// Step 3 — aggregate trigger structured authoring（通常表示用）
+// SSOT: runtime-orchestration-ssot.yaml aggregate_trigger_step3_extension_contract
+// payload キー・enum 値は変更しない。ラベルのみ日本語化する。
+// ---------------------------------------------------------------------------
+
+export const UX_AGGREGATE_TRIGGER_SECTION_TITLE = "集計トリガー（構造化入力）";
+
+export const UX_AGGREGATE_TRIGGER_SECTION_INTRO =
+  "Step 3 では構造化ペイロードの選択とプレビューのみを行います。" +
+  "閾値判定・実体化・承認の最終判断はサーバー側ランタイムが行います。";
+
+export const UX_AGGREGATE_TRIGGER_NO_TARGETS_ALERT =
+  "Step 2 の論理テーブルまたは Step 2.5 の関連が保存されていないため、集計トリガーのペイロードは作成されません。";
+
+export const UX_AGGREGATE_TRIGGER_INVALID_TARGET_ALERT =
+  "未定義の対象が選択されているため、集計トリガーのペイロードは作成されません。";
+
+export const UX_AGGREGATE_TRIGGER_NO_PROCESSING_FUNCTION =
+  "（登録済みの処理関数がありません）";
+
+export const UX_AGGREGATE_TRIGGER_NO_PROCESSING_FUNCTION_REGISTERED =
+  "集計トリガー用の処理関数が未登録です。サーバー側の抽象関数登録が必要です。";
+
+export const UX_AGGREGATE_TRIGGER_NO_PROCESSING_FUNCTION_LOAD_ERROR =
+  "集計トリガー用の処理関数一覧を読み込めませんでした。";
+
+export const UX_AGGREGATE_TRIGGER_PROCESSING_FUNCTION_HINT =
+  "集計トリガー用に登録済みの抽象関数から選択します。未登録・無効・権限不一致はサーバーが拒否します。";
+
+export const UX_AGGREGATE_TRIGGER_OPERATION_DEFINITION_HINT =
+  "Step 1 のトポロジー ID からサーバーが導出する値です（ここでは編集できません）。";
+
+export const UX_AGGREGATE_TRIGGER_NO_AGGREGATE_FIELDS =
+  "集計対象に選択できる列がありません。";
+
+export const UX_AGGREGATE_TRIGGER_ADD_COUNTER = "+ カウンターを追加";
+
+export const UX_AGGREGATE_TRIGGER_ADD_PAYLOAD_ENTRY = "+ 実体化ペイロード行を追加";
+
+export const UX_AGGREGATE_TRIGGER_PAYLOAD_ENTRY_REQUIRED =
+  "実体化ペイロードは最低 1 行必要です。";
+
+export const UX_AGGREGATE_TRIGGER_PREVIEW_HEADING = "構造化ペイロードのプレビュー";
+
+export const UX_AGGREGATE_TRIGGER_MATERIALIZATION_TARGET_EMPTY =
+  "下の一覧から選択";
+
+export const UX_AGGREGATE_TRIGGER_MATERIALIZATION_TARGET_NONE =
+  "利用できる列がありません";
+
+export const UX_AGGREGATE_TRIGGER_COUNTER_NAME_PLACEHOLDER = "カウンター名";
+
+export const UX_AGGREGATE_TRIGGER_SOURCE_FIELD_PLACEHOLDER = "宣言済みイベント項目";
+
+export const UX_AGGREGATE_TRIGGER_SELECT_PLACEHOLDER = "（選択）";
+
+export const UX_AGGREGATE_TRIGGER_FIELDS_WARNING =
+  "Step 2 / 2.5 の対象に列定義がまだないため、競合キーと実体化ペイロードを構成できません。";
+
+export function uxAggregateTriggerStep2TargetLabel(tableName: string): string {
+  return `Step 2 論理テーブル: ${tableName}`;
+}
+
+export function uxAggregateTriggerStep25TargetLabel(
+  localTableRef: string,
+  joinTableRef: string,
+): string {
+  return `Step 2.5 関連: ${localTableRef} → ${joinTableRef}`;
+}
+
+/** enum 値は payload 契約のまま。表示は「日本語（value）」 */
+export function uxAggregateTriggerEnumLabel(
+  value: string,
+  labels: Record<string, string>,
+): string {
+  const label = labels[value];
+  return label ? `${label}（${value}）` : value;
+}
+
+export const UX_AGGREGATE_TRIGGER_FIELD_LABELS = {
+  canonicalTriggerKind: "トリガー種別",
+  triggerSourceDetailKind: "トリガー詳細種別",
+  executionScope: "実行スコープ",
+  transactionBoundary: "トランザクション境界",
+  approvalPolicy: "承認ポリシー",
+  aggregateTargetBinding: "集計対象の紐づけ",
+  materializationTargetBinding: "実体化対象の紐づけ",
+  processingFunctionId: "処理関数 ID",
+  operationDefinitionId: "操作定義 ID",
+  conflictKeyFields: "競合キー（集計対象の列）",
+  deltaMap: "差分カウンター（イベント→集計）",
+  thresholdPolicy: "閾値ポリシー",
+  minimumTrialCount: "最小試行回数",
+  targetRatio: "目標比率",
+  ratioNumeratorField: "比率の分子フィールド",
+  ratioDenominatorField: "比率の分母フィールド",
+  comparisonOperator: "比較演算子",
+  materializationPayloadMap: "実体化ペイロード対応",
+  targetField: "出力先列",
+  source: "値の出所",
+  constantValue: "固定値",
+  sourceField: "参照元項目",
+} as const;
+
+export const UX_AGGREGATE_TRIGGER_CANONICAL_KIND_LABELS: Record<string, string> = {
+  cron: "定期実行",
+  hook: "フック",
+  client: "クライアント操作",
+};
+
+export const UX_AGGREGATE_TRIGGER_SOURCE_DETAIL_LABELS: Record<string, string> = {
+  client_operation_event: "クライアント操作イベント",
+  hook_event: "フックイベント",
+  scheduled_cron_event: "定期実行イベント",
+  runtime_function_event: "ランタイム関数イベント",
+};
+
+export const UX_AGGREGATE_TRIGGER_EXECUTION_SCOPE_LABELS: Record<string, string> = {
+  single_event: "単一イベント",
+  aggregate_key_partition: "集計キー単位",
+  operation_instance: "操作インスタンス単位",
+  tenant_or_workspace_partition: "テナント／ワークスペース単位",
+};
+
+export const UX_AGGREGATE_TRIGGER_TRANSACTION_BOUNDARY_LABELS: Record<
+  string,
+  string
+> = {
+  event_append_only: "イベント追記のみ",
+  event_append_and_aggregate_upsert: "イベント追記＋集計更新",
+  event_append_aggregate_upsert_and_materialization:
+    "イベント追記＋集計更新＋実体化",
+};
+
+export const UX_AGGREGATE_TRIGGER_APPROVAL_POLICY_LABELS: Record<string, string> = {
+  auto_materialize_when_threshold_passes: "閾値通過時に自動実体化",
+  require_backend_approval_before_materialization:
+    "実体化前にサーバー承認が必要",
+  require_human_approval_before_materialization: "実体化前に人の承認が必要",
+};
+
+export const UX_AGGREGATE_TRIGGER_MATERIALIZATION_SOURCE_LABELS: Record<
+  string,
+  string
+> = {
+  function_input_event: "関数入力イベント",
+  aggregate_current_row: "集計現在行",
+  selected_step2_entity_fields: "Step 2 論理テーブルの列",
+  selected_step2_5_relation_fields: "Step 2.5 関連の列",
+  constant: "固定値",
+  generated_value: "生成値",
+  runtime_actor_source_metadata: "実行主体メタデータ",
+};
+
+export const UX_AGGREGATE_TRIGGER_GENERATED_VALUE_LABELS: Record<string, string> = {
+  uuid: "UUID",
+  current_timestamp: "現在日時",
+  monotonic_sequence_within_scope: "スコープ内連番",
+};
+
+export const UX_AGGREGATE_TRIGGER_COMPARISON_OPERATOR_LABELS: Record<
+  string,
+  string
+> = {
+  ">": "より大",
+  ">=": "以上",
+  "<": "より小",
+  "<=": "以下",
+  "=": "等しい",
+  "!=": "等しくない",
+};
+
+export const UX_AGGREGATE_TRIGGER_GATE_HINT =
+  "「集計・サンプル」で集計キーまたは集計式を設定すると、集計トリガーの詳細設定が利用できます。";
+
+export const UX_AGGREGATE_TRIGGER_OPEN_SETTINGS = "集計トリガーを設定…";
+
+export const UX_AGGREGATE_TRIGGER_CONFIGURED_SUMMARY =
+  "集計トリガーの設定があります（クリックして確認・編集）";
+
+export const UX_AGGREGATE_TRIGGER_MODAL_CLOSE = "閉じる";
+
+export const UX_AGGREGATE_TRIGGER_MODAL_DONE = "設定を閉じる";

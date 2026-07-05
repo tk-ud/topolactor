@@ -228,6 +228,28 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     }
 
     [Fact]
+    public async Task ValidateLayoutPatchAsync_RuntimeInteractionOpenDrawerRequiresDisclosureDrawer_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        { "nodes": [
+          { "nodeId": "button-1", "componentKey": "button.primitive", "componentKind": "action/button", "runtimeInteractions": [
+            { "trigger": "click", "actionType": "openDrawer", "targetNodeId": "drawer-1", "statePath": "open" }
+          ] },
+          { "nodeId": "drawer-1", "componentKey": "row_detail_drawer.primitive", "componentKind": "table_op/row_detail_drawer" }
+        ] }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.Equal(
+            "RUNTIME_INTERACTION_TARGET_KIND_MISMATCH:drawer-1:table_op/row_detail_drawer:disclosure/drawer",
+            result.Message);
+    }
+
+    [Fact]
     public async Task ApplyConfirmedLayoutPatchAsync_InvalidRuntimeInteraction_FailsBeforePersistence()
     {
         var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");

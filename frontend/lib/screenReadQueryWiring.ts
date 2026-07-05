@@ -23,6 +23,13 @@ export type ScreenReadQueryWiringCandidate = {
   valueSourceKinds: ConditionValueSourceKind[];
 };
 
+export function formatScreenReadQueryWiringCandidateLabel(
+  candidate: ScreenReadQueryWiringCandidate | string,
+): string {
+  if (typeof candidate === "string") return candidate.trim();
+  return candidate.label?.trim() || candidate.wiringKey;
+}
+
 export function literalValueSource(sampleValue?: string): ConditionValueSource {
   return { kind: "literal", sampleValue: sampleValue ?? "" };
 }

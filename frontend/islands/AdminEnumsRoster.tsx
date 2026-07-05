@@ -202,7 +202,6 @@ export default function AdminEnumsRoster(): JSX.Element {
             <tr class="border-b text-left text-gray-500">
               <th class="px-2 py-1">index</th>
               <th class="px-2 py-1">グループ名</th>
-              <th class="px-2 py-1">groupId</th>
             </tr>
           </thead>
           <tbody>
@@ -214,7 +213,6 @@ export default function AdminEnumsRoster(): JSX.Element {
               >
                 <td class="px-2 py-1 font-mono">{g.indexNum}</td>
                 <td class="px-2 py-1">{g.groupName}</td>
-                <td class="px-2 py-1 font-mono text-gray-500">{g.groupId}</td>
               </tr>
             ))}
           </tbody>
@@ -224,6 +222,10 @@ export default function AdminEnumsRoster(): JSX.Element {
       {selectedId && detail && (
         <section class="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
           <h2 class="text-sm font-semibold text-blue-900">インライン編集</h2>
+          <details class="text-xs text-gray-500">
+            <summary class="cursor-pointer hover:text-gray-700">技術情報</summary>
+            <code class="mt-1 block font-mono text-[11px]">{selectedId}</code>
+          </details>
           <label class="block text-xs font-medium text-gray-700">グループ名</label>
           <input class="input-base w-full max-w-md" value={draftName}
             onInput={(e) => setDraftName((e.target as HTMLInputElement).value)} />

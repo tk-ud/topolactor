@@ -25,7 +25,8 @@
     "tailwindcss": "npm:tailwindcss@3.4.17",
     "postcss": "npm:postcss@8.4.35",
     "autoprefixer": "npm:autoprefixer@10.4.17",
-    "cssnano": "npm:cssnano@6.0.3"
+    "cssnano": "npm:cssnano@6.0.3",
+    "@std/assert": "jsr:@std/assert@1"
   },
   "exclude": ["backend/**", "db/**"]
 }

@@ -107,6 +107,7 @@ import {
 } from "../lib/searchConditionEval.ts";
 import { evaluateMeasureOnRows } from "../lib/aggregationMeasureEval.ts";
 import { importRecordToRowValues } from "../lib/contentDataConformance.ts";
+import { isLocalImportPreviewSnapshotId } from "../lib/initialDataImportPreview.ts";
 import { AdminImportPanel } from "./AdminImport.tsx";
 import {
   listImportSnapshotRecords,
@@ -122,6 +123,7 @@ import {
   UX_FIELD_AGGREGATION_MEASURES,
   UX_FIELD_ENUM_GROUP,
   UX_FIELD_OPERATION_ENTITY,
+  UX_FIELD_OPERATION_KINDS,
   UX_FIELD_ENUM_GROUP_NONE,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
@@ -265,7 +267,7 @@ function SamplePreviewPanel({
       <div class="mb-2 flex flex-wrap items-center gap-2">
         <p class="font-semibold text-slate-700">{UX_FIELD_SAMPLE_VIEWING}</p>
         <label class="flex items-center gap-1 text-slate-600">
-          <span>操作種別</span>
+          <span>{UX_FIELD_OPERATION_KINDS}</span>
           <select
             class="rounded border px-2 py-0.5 text-xs"
             value={effectivePreviewKind}
@@ -276,6 +278,7 @@ function SamplePreviewPanel({
               <option key={kind} value={kind}>{screenOperationLabel(kind)}</option>
             ))}
           </select>
+          <span class="text-slate-500">({screenOperationLabel(effectivePreviewKind)})</span>
         </label>
       </div>
       {activeBlocks.length > 0 && hasRows && (
@@ -391,6 +394,7 @@ function SamplePreviewPanel({
 const CONTENTS_DRAFT_LIST_FILTER: AdminManifestListFilter = {
   status: "draft",
   contentsType: "contents",
+  requiresTopologySystemName: true,
 };
 
 const CONTENTS_CLONE_SOURCE_LIST_FILTER: AdminManifestListFilter = {
@@ -1377,7 +1381,9 @@ export default function ContentsScreenDesignPanel({
   const columnKeysForImport = qualifiedColumns.map((q) => q.key);
 
   const mergeImportPreviewToEditor = (preview: AdminImportPreviewResult) => {
-    setLastImportSnapshotId(preview.snapshotId);
+    if (!isLocalImportPreviewSnapshotId(preview.snapshotId)) {
+      setLastImportSnapshotId(preview.snapshotId);
+    }
     mergeSnapshotRowsIntoEditor(
       preview.snapshotId,
       rowsFromSnapshotPreview(preview, "import_preview"),
@@ -2204,16 +2210,23 @@ export default function ContentsScreenDesignPanel({
         <>
       <h3 class="mt-5 text-xs font-semibold">データ入力 — {UX_FIELD_INITIAL_DATA}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        初期表示のデータ候補。手入力・CSV/JSON 取り込み（プレビュー → 適用）のいずれも、下の同一グリッドで編集・保存できます。
+        初期表示のデータ候補。手入力と CSV/JSON プレビュー（グリッドへ追加）を同一グリッドで編集し、Step 3 保存で反映します。
       </p>
       <AdminImportPanel
         embedded
         defaultManifestId={selectedId}
         lockManifestId={!!selectedId}
+        columnSpecs={qualifiedColumns.map((q) => ({
+          key: q.key,
+          dataType: q.column.dataType,
+          nullable: q.column.nullable,
+          enumGroupId: q.column.enumGroupId,
+        }))}
         onMergePreviewToEditor={mergeImportPreviewToEditor}
         onApplied={handleImportApplied}
       />
-      {lastImportSnapshotId && (
+      {lastImportSnapshotId &&
+        !isLocalImportPreviewSnapshotId(lastImportSnapshotId) && (
         <div class="mb-2 flex flex-wrap gap-2">
           <button
             type="button"

@@ -29,6 +29,10 @@ import {
   UX_DESIGN_INSPECTOR_SECTION,
   UX_DESIGN_NODE_SAVE_LABEL,
   UX_EMPTY_CANVAS_DRAG_GUIDANCE,
+  UX_LAYOUT_APPLIED_GO_DEMO,
+  UX_LAYOUT_APPLIED_GO_DESIGN_SAVE,
+  UX_LAYOUT_APPLIED_HANDOFF_HINT,
+  UX_LAYOUT_APPLIED_HANDOFF_TITLE,
   UX_LAYOUT_EDITOR_SURFACE,
   UX_LAYOUT_INSPECTOR_SECTION,
   UX_ROUTE_KEY_REQUIRED_FOR_CANVAS,
@@ -36,6 +40,11 @@ import {
   UX_ROUTE_NAVIGATION_PRESET_LABEL,
   UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL,
   UX_ROUTE_NAVIGATION_SAVE_LABEL,
+  UX_MANIFEST_API_EVENT_TOPOLOGY_CONTEXT,
+  UX_EVENT_AUTHORING_SECTION,
+  UX_PACKAGE_WIRING_ADVANCED_LABEL,
+  UX_PACKAGE_WIRING_SECTION_HINT,
+  UX_PACKAGE_WIRING_SECTION_TITLE,
 } from "../content/adminUxTerms.ts";
 import {
   buildVisualLayoutPatchJson,
@@ -69,7 +78,10 @@ import {
   type StructuralHtmlTag,
   validateResponsiveTokenRulesJson,
   wouldCreateVisualParentCycle,
+  findRuntimeInteractionPatchErrors,
 } from "../runtime/visualLayoutUtils.ts";
+import NodeEventAuthoringPanel from "../components/NodeEventAuthoringPanel.tsx";
+import ManifestStep3EventWiringPreset from "../components/ManifestStep3EventWiringPreset.tsx";
 import { resolveCanvasRootPreviewClassName } from "../runtime/layoutClassPreviewUtils.ts";
 import {
   FlowLayoutCanvas,
@@ -96,8 +108,13 @@ import {
 } from "../lib/packageWiringPicker.ts";
 import {
   buildScreenReadQueryWiringCandidates,
+  formatScreenReadQueryWiringCandidateLabel,
   type ScreenReadQueryWiringCandidate,
 } from "../lib/screenReadQueryWiring.ts";
+import {
+  CONTENTS_ROUTE_MANIFEST_LIST_FILTER,
+  resolveManifestRouteOptionForRouteKey,
+} from "../lib/manifestRouteResolution.ts";
 import { getAdminManifest, listAdminManifests } from "../api/adminApi.ts";
 import { getStoredScreenLabel } from "../runtime/screenAuthoringIntent.ts";
 import {
@@ -172,7 +189,6 @@ import {
   previewBatchPropBinding,
   previewBatchWiringAssist,
 } from "../lib/uiBuilderBatchOperation.ts";
-import { parsePayloadFromSource } from "../runtime/payloadFromResolver.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -1792,6 +1808,7 @@ function LayoutRightDock({
   onToggleLayoutClassRef,
   onDesignChange,
   routeCandidates,
+  topologyRouteKey,
   canvasDesignDraft,
   calculationBindings,
   draftNodeIds,
@@ -1801,6 +1818,7 @@ function LayoutRightDock({
   onEmissionDataJsonChange,
   onBatchApplyNodes,
   suggestShape,
+  designHandoffKey = 0,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -1819,6 +1837,8 @@ function LayoutRightDock({
   onToggleLayoutClassRef: (classKey: string) => void;
   onDesignChange: (nodeId: string, partial: DesignDraft) => void;
   routeCandidates?: string[];
+  /** Committed topology routeKey for Step 3 API event scoping. */
+  topologyRouteKey?: string;
   calculationBindings: CalcBinding[];
   draftNodeIds: string[];
   calcResults: ReadonlyMap<string, { targetNodeId: string; targetProp: string; result: { ok: true; value: number } | { ok: false; error: string } }>;
@@ -1829,10 +1849,12 @@ function LayoutRightDock({
   onBatchApplyNodes: (nodes: DraftNode[]) => void;
   /** Authoring suggest context — from loaded manifest shape (optional). */
   suggestShape?: ManifestSuggestShape | null;
+  /** Increment to open design inspector accordion after layout apply handoff. */
+  designHandoffKey?: number;
 }): JSX.Element {
   return (
     <aside
-      class="layout-right-dock flex shrink-0 flex-col gap-2 self-stretch overflow-y-auto"
+      class="layout-right-dock flex w-full flex-col gap-2"
       style={{ width: LAYOUT_RIGHT_DOCK_WIDTH, minWidth: "320px", maxWidth: "420px" }}
       aria-label="レイアウト編集ドック"
       data-selected-node-id={selectedNodeId ?? ""}
@@ -1848,6 +1870,14 @@ function LayoutRightDock({
           onReparent={onReparent}
           onCopy={onCopy}
           onDelete={onDelete}
+        />
+      </Accordion>
+
+      <Accordion title={UX_PACKAGE_WIRING_SECTION_TITLE} defaultOpen={false}>
+        <PackageConnectionPanel
+          selectedPackageId={packageId}
+          routeCandidates={routeCandidates}
+          topologyRouteKey={topologyRouteKey}
         />
       </Accordion>
 
@@ -1885,13 +1915,29 @@ function LayoutRightDock({
             />
           </Accordion>
           <Accordion
-            title={`${UX_DESIGN_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
+            title={`${UX_EVENT_AUTHORING_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
             defaultOpen={false}
+          >
+            <NodeEventAuthoringPanel
+              interactions={selectedNode.runtimeInteractions ?? []}
+              targetNodes={(draftNodes ?? []).filter((n) => n.nodeId !== selectedNode.nodeId)}
+              triggerOptions={COMPONENT_EVENT_TYPES}
+              selectedNodeLabel={friendlyNodeLabel(selectedNode)}
+              onCommit={(next, label) =>
+                onCommitNode?.(
+                  { runtimeInteractions: next.length > 0 ? next : undefined },
+                  label,
+                )}
+            />
+          </Accordion>
+          <Accordion
+            key={`design-${selectedNode.nodeId}-${designHandoffKey}`}
+            title={`${UX_DESIGN_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
+            defaultOpen={designHandoffKey > 0}
           >
             <PackageDesignPanel
               selectedPackageId={packageId}
               selectedCanvasNode={selectedNode}
-              routeCandidates={routeCandidates}
               canvasDesignDraft={canvasDesignDraft}
               onDesignPreviewChange={onDesignChange}
               onCommitNode={onCommitNode}
@@ -1999,8 +2045,10 @@ const SNAP_SIZE = 10;
 const DEFAULT_NODE_WIDTH = 140;
 const DEFAULT_NODE_HEIGHT = 60;
 const CANVAS_MIN_HEIGHT = 480;
-/** Canvas workspace height — palettes are left-docked inside the row, no strip overhead. */
-const CANVAS_WORKSPACE_HEIGHT = "calc(100dvh - 11rem)";
+/** Side dock height — viewport-based; must NOT follow canvas content/min-height. */
+const UI_BUILDER_DOCK_HEIGHT = "calc(100dvh - 11rem)";
+/** @deprecated use UI_BUILDER_DOCK_HEIGHT for docks; canvas uses intrinsic min-height + scroll */
+const CANVAS_WORKSPACE_HEIGHT = UI_BUILDER_DOCK_HEIGHT;
 const MAX_HISTORY = 50;
 
 // Gap 3: Error code → actionable cause + fix
@@ -2419,10 +2467,10 @@ function LifecycleStepIndicator(
     { id: "checked", label: "検証済み", phases: ["validating", "validated"] },
     {
       id: "applied",
-      label: "適用済み",
+      label: "適用中",
       phases: ["applying", "applied_ok", "applied_fail"],
     },
-    { id: "persisted", label: "永続化完了", phases: ["persisted"] },
+    { id: "persisted", label: "配置永続化", phases: ["persisted"] },
   ];
   const currentIdx = steps.findIndex((s) => s.phases.includes(phase));
   const isError = phase === "applied_fail";
@@ -2500,7 +2548,52 @@ function LifecycleStepIndicator(
           role="status"
           class="mt-2 rounded border border-green-300 bg-green-50 px-2 py-1.5 text-xs font-medium text-green-800"
         >
-          配置を DB に保存しました — 次のステップへ進んでください。
+          配置（layout_patch）は DB に保存済みです。下の「次のステップ」からデザイン永続化へ進めます。
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LayoutPersistHandoffBanner({
+  layoutId,
+  routeKey,
+  onOpenDesignInspector,
+}: {
+  layoutId: string;
+  routeKey: string;
+  onOpenDesignInspector: () => void;
+}): JSX.Element {
+  const demoHref = layoutId
+    ? `/demo?layoutId=${encodeURIComponent(layoutId)}`
+    : "/demo";
+  return (
+    <div
+      class="mb-4 rounded-lg border border-green-300 bg-green-50 p-3"
+      role="status"
+      aria-label={UX_LAYOUT_APPLIED_HANDOFF_TITLE}
+    >
+      <p class="m-0 text-sm font-semibold text-green-900">
+        {UX_LAYOUT_APPLIED_HANDOFF_TITLE}
+      </p>
+      <p class="mb-0 mt-1 text-xs text-green-800">
+        {UX_LAYOUT_APPLIED_HANDOFF_HINT}
+      </p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="btn-success text-xs"
+          onClick={onOpenDesignInspector}
+        >
+          {UX_LAYOUT_APPLIED_GO_DESIGN_SAVE}
+        </button>
+        <a href={demoHref} class="btn-secondary text-xs no-underline">
+          {UX_LAYOUT_APPLIED_GO_DEMO}
+        </a>
+      </div>
+      {routeKey && (
+        <p class="mb-0 mt-2 text-[0.65rem] text-green-700">
+          route: <code class="font-mono">{routeKey}</code>
         </p>
       )}
     </div>
@@ -2602,12 +2695,14 @@ function ApplyReadinessPanel({
   layoutClassRefError: string | null;
 }): JSX.Element {
   const draftOnlyCount = draftNodes.filter((n) => n.isDraftOnly).length;
+  const runtimeInteractionErrors = findRuntimeInteractionPatchErrors(draftNodes);
   const customPositionedCount = draftNodes.filter(
     (n) =>
       n.x > 0 || n.y > 0 || n.width !== DEFAULT_NODE_WIDTH ||
       n.height !== DEFAULT_NODE_HEIGHT,
   ).length;
-  const allClear = canPatch && draftOnlyCount === 0 && !layoutClassRefError;
+  const allClear = canPatch && draftOnlyCount === 0 && !layoutClassRefError &&
+    runtimeInteractionErrors.length === 0;
 
   return (
     <div
@@ -2676,6 +2771,17 @@ function ApplyReadinessPanel({
             {layoutClassRefError ? layoutClassRefError : "OK"}
           </span>
         </li>
+        {runtimeInteractionErrors.length > 0 && (
+          <li class="flex items-start gap-2">
+            <span class="text-red-600">✗</span>
+            <span class="text-red-700">
+              操作配線:
+              <ul class="mt-1 list-disc pl-4">
+                {runtimeInteractionErrors.map((msg: string) => <li key={msg}>{msg}</li>)}
+              </ul>
+            </span>
+          </li>
+        )}
         <li class="flex items-start gap-2">
           <span class="text-blue-600 text-xs">i</span>
           <span class="text-xs">
@@ -3283,19 +3389,26 @@ function ManifestRouteEntry({
       setLoading(true);
       setLoadError(null);
       try {
-        const items = await listAdminManifests();
+        const items = await listAdminManifests(CONTENTS_ROUTE_MANIFEST_LIST_FILTER);
         if (cancelled || !items) return;
         const resolved: ManifestRouteOption[] = [];
         for (const item of items) {
+          let sysName = item.topologySystemName?.trim() ?? "";
+          let userFacingLabel = item.userFacingTopologyLabel?.trim() ?? "";
           const detail = await getAdminManifest(item.manifestId);
           if (cancelled) return;
           const shape = detail
             ? extractScreenDataShapeFromTopology(detail.topologyRawJson)
             : null;
-          const sysName = shape?.topologySystemName?.trim() ?? "";
+          if (!sysName) {
+            sysName = shape?.topologySystemName?.trim() ?? "";
+          }
+          if (!userFacingLabel) {
+            userFacingLabel = shape?.userFacingTopologyLabel?.trim() ?? "";
+          }
           if (!sysName || !isValidTopologySystemName(sysName)) continue;
           const derivedRouteKey = topologySystemNameToUiBuilderKey(sysName);
-          const label = resolveVisibleTopologyName(shape?.userFacingTopologyLabel, sysName);
+          const label = resolveVisibleTopologyName(userFacingLabel || null, sysName);
           resolved.push({
             manifestId: item.manifestId,
             topologySystemName: sysName,
@@ -4735,7 +4848,7 @@ function LeftDockedPalettePanel({
 
   return (
     <aside
-      class="left-docked-panel flex shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+      class="left-docked-panel flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
       style={{ width: "clamp(180px, 15vw, 240px)", minWidth: "180px", maxWidth: "240px" }}
       aria-label={UX_COMPONENT_ADD_PANEL_LABEL}
       data-component-add-panel="true"
@@ -4808,6 +4921,7 @@ function LayoutBuilderSection({
   onDetachComponentAfterRemove,
   paletteReloadToken = 0,
   suggestShape = null,
+  onLayoutApplied,
 }: {
   scopedPackageId?: string;
   scopedRouteKey?: string | null;
@@ -4817,6 +4931,7 @@ function LayoutBuilderSection({
   onDetachComponentAfterRemove?: (componentKey: string) => Promise<void>;
   paletteReloadToken?: number;
   suggestShape?: ManifestSuggestShape | null;
+  onLayoutApplied?: () => void;
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
   // ── route/layout selection ───────────────────────────────────────────────
@@ -4835,7 +4950,7 @@ function LayoutBuilderSection({
   const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(emptySelectionSet());
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
-
+  const [designHandoffKey, setDesignHandoffKey] = useState(0);
   // Gap 1: Lifecycle state machine
   const [lifecyclePhase, setLifecyclePhase] = useState<LifecyclePhase>("idle");
 
@@ -5350,6 +5465,19 @@ function LayoutBuilderSection({
     setTimeout(() => setLiveAnnouncement(msg), 10);
   };
 
+  const openDesignInspectorHandoff = () => {
+    setRightDrawerOpen(true);
+    setDesignHandoffKey((k) => k + 1);
+    if (!selectedNodeId && draftNodes.length > 0) {
+      const first = draftNodes[0]?.nodeId;
+      if (first) {
+        setSelectedNodeId(first);
+        setSelectedNodeIds(new Set([first]));
+      }
+    }
+    announce("右パネルのデザインインスペクタで保存できます");
+  };
+
   // ── Gap 2: Keyboard undo/redo shortcut ───────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -5742,12 +5870,9 @@ function LayoutBuilderSection({
       } else {
         const donePhase: Record<string, LifecyclePhase> = {
           validate: "validated",
-          apply: "applied_ok",
+          apply: "persisted",
         };
-        const isPersisted = body?.emission?.data?.persisted === true;
-        setLifecyclePhase(
-          isPersisted ? "persisted" : donePhase[action] as LifecyclePhase,
-        );
+        setLifecyclePhase(donePhase[action] as LifecyclePhase);
 
         if (action === "validate" && inApplyModal) {
           setLayoutApplyModalPhase("validated");
@@ -5759,6 +5884,7 @@ function LayoutBuilderSection({
           }
           setTmpSaveStatus("idle");
           setLayoutApplyModalPhase("success");
+          onLayoutApplied?.();
           lifecycleRef.current?.scrollIntoView({
             behavior: "smooth",
             block: "start",
@@ -6202,6 +6328,13 @@ function LayoutBuilderSection({
       {/* Gap 1: Lifecycle step indicator */}
       <div ref={lifecycleRef}>
         <LifecycleStepIndicator phase={lifecyclePhase} />
+        {(lifecyclePhase === "applied_ok" || lifecyclePhase === "persisted") && (
+          <LayoutPersistHandoffBanner
+            layoutId={effectiveLayoutId}
+            routeKey={effectiveRouteKey}
+            onOpenDesignInspector={openDesignInspectorHandoff}
+          />
+        )}
       </div>
 
       {!packageScopedLayout && (
@@ -6313,10 +6446,9 @@ function LayoutBuilderSection({
         </div>
       )}
 
-      {/* Canvas workspace — maximized viewport block (left dock + canvas + right dock) */}
+      {/* Canvas workspace — canvas height is intrinsic; side docks use viewport height */}
       <section
-        class="ui-builder-canvas-workspace mb-4 flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm"
-        style={{ height: CANVAS_WORKSPACE_HEIGHT, minHeight: CANVAS_WORKSPACE_HEIGHT }}
+        class="ui-builder-canvas-workspace mb-4 flex flex-col rounded-xl border border-slate-300 bg-white shadow-sm"
         aria-label="キャンバスワークスペース"
       >
       {/* layout draft プレビュー & 操作ツールバー */}
@@ -6531,12 +6663,13 @@ function LayoutBuilderSection({
         </div>
       )}
 
-      {/* layout draft プレビュー & 操作エリア: left dock + flow canvas + right inspector */}
-      <div class={`flex min-h-0 flex-1 gap-2.5 p-2 ${canvasPreviewClass}`}>
-        {/* Left Drawer shell — display-density chrome only; bucket semantics stay inside existing panel. */}
+      {/* layout draft プレビュー & 操作エリア: docks are viewport-tall; canvas is not their height parent */}
+      <div class={`flex items-start gap-2.5 p-2 ${canvasPreviewClass}`}>
+        {/* Left Drawer — height from viewport, not canvas */}
         {leftDrawerOpen && (
           <div
-            class="ui-builder-left-drawer-shell flex shrink-0 flex-col overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 shadow-sm"
+            class="ui-builder-left-drawer-shell sticky top-2 flex shrink-0 flex-col overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 shadow-sm"
+            style={{ height: UI_BUILDER_DOCK_HEIGHT, maxHeight: UI_BUILDER_DOCK_HEIGHT }}
             data-ui-builder-drawer-shell="left"
             data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
           >
@@ -6551,6 +6684,7 @@ function LayoutBuilderSection({
                 ×
               </button>
             </div>
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
             {packageScopedLayout ? (
               <LeftDockedPalettePanel
                 onDragStart={handleDragStartPalette}
@@ -6569,9 +6703,10 @@ function LayoutBuilderSection({
                 {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
               </aside>
             )}
+            </div>
           </div>
         )}
-        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <div class="relative min-w-0 flex-1">
           <div class="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between">
             <button
               type="button"
@@ -6600,6 +6735,7 @@ function LayoutBuilderSection({
             designDraftByNodeId={designDraftByNodeId}
             canvasRef={canvasRef}
             minHeight={CANVAS_MIN_HEIGHT}
+            fillHeight={false}
             onSelectNode={(id) => {
               setSelectedNodeId(id);
               setSelectedNodeIds(new Set([id]));
@@ -6629,7 +6765,8 @@ function LayoutBuilderSection({
 
         {rightDrawerOpen && (
           <div
-            class="ui-builder-right-drawer-shell flex shrink-0 flex-col overflow-hidden rounded-lg border border-indigo-100 bg-indigo-50/50 shadow-sm"
+            class="ui-builder-right-drawer-shell sticky top-2 flex shrink-0 flex-col overflow-hidden rounded-lg border border-indigo-100 bg-indigo-50/50 shadow-sm"
+            style={{ height: UI_BUILDER_DOCK_HEIGHT, maxHeight: UI_BUILDER_DOCK_HEIGHT }}
             data-ui-builder-drawer-shell="right"
             data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
           >
@@ -6644,6 +6781,10 @@ function LayoutBuilderSection({
                 ×
               </button>
             </div>
+            <div
+              class="layout-right-dock-scroll min-h-0 flex-1 overflow-y-auto p-1"
+              data-inspector-scroll-region="true"
+            >
             <LayoutRightDock
               draftNodes={draftNodes}
               selectedNodeId={selectedNodeId}
@@ -6667,6 +6808,7 @@ function LayoutBuilderSection({
                 selectedNode && toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
               onDesignChange={handleDesignDraftChange}
               routeCandidates={routeOptions}
+              topologyRouteKey={scopedRouteKey?.trim() ?? effectiveRouteKey}
               calculationBindings={calculationBindings}
               draftNodeIds={draftNodes.map((n) => n.nodeId)}
               calcResults={calcResults}
@@ -6679,7 +6821,9 @@ function LayoutBuilderSection({
               emissionDataJson={emissionDataJson}
               onEmissionDataJsonChange={setEmissionDataJson}
               suggestShape={suggestShape}
+              designHandoffKey={designHandoffKey}
             />
+            </div>
           </div>
         )}
       </div>
@@ -6705,7 +6849,8 @@ function LayoutBuilderSection({
 
       {(() => {
         const hasReadinessError = !canPatch ||
-          draftNodes.some((n) => n.isDraftOnly) || !!layoutClassRefError;
+          draftNodes.some((n) => n.isDraftOnly) || !!layoutClassRefError ||
+          findRuntimeInteractionPatchErrors(draftNodes).length > 0;
         return (
           <details class="mb-3" open={hasReadinessError}>
             <summary
@@ -6783,8 +6928,7 @@ function LayoutBuilderSection({
         onGoDesign={() => {
           setLayoutApplyModalOpen(false);
           setLayoutApplyModalPhase("validating");
-          setRightDrawerOpen(true);
-          announce("右パネルのデザインインスペクタで選択ノードを編集できます");
+          openDesignInspectorHandoff();
         }}
       />
 
@@ -6848,94 +6992,6 @@ type AdminPackageWiringRow = {
   targetSurface: string;
   targetRef?: string | null;
 };
-
-/**
- * Reusable hook: loads active ExternalPortAuthoringCandidates from DB-backed admin op.
- * Candidates are derived solely from topology.external_access_ports / external_response_ports /
- * external_hook_ports — no provider or bundle fixed list.
- * SSOT: docs/design/external-port-substrate-ssot.yaml admin_setting_projection
- */
-function useExternalPortAuthoringCandidates(active: boolean): {
-  candidates: ExternalPortAuthoringCandidate[];
-  error: string | null;
-} {
-  const [candidates, setCandidates] = useState<ExternalPortAuthoringCandidate[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!active) {
-      setCandidates([]);
-      setError(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const body = await dispatchAdminOp("ui_topology", "list_external_port_authoring_candidates");
-      if (cancelled) return;
-      const data = body?.emission?.data as { candidates?: ExternalPortAuthoringCandidate[] } | undefined;
-      if (Array.isArray(data?.candidates)) {
-        setCandidates(data.candidates);
-        setError(null);
-      } else {
-        setCandidates([]);
-        setError(body?.errors?.[0]?.message ?? "external port 候補を取得できませんでした。");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [active]);
-  return { candidates, error };
-}
-
-/**
- * Reusable hook: loads seed/data-defined approved instance operation candidates through admin_runtime.
- * Candidates are derived from the credential management projection's approved operation binding metadata.
- * SSOT: docs/design/instance-port-substrate-ssot.yaml admin_event_authoring_boundary
- */
-function useInstanceOperationAuthoringCandidates(active: boolean): {
-  candidates: InstanceOperationAuthoringCandidate[];
-  error: string | null;
-} {
-  const [candidates, setCandidates] = useState<InstanceOperationAuthoringCandidate[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!active) {
-      setCandidates([]);
-      setError(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const body = await dispatchAdminOp("ui_topology", "list_instance_operation_authoring_candidates");
-      if (cancelled) return;
-      const data = body?.emission?.data as { candidates?: InstanceOperationAuthoringCandidate[] } | undefined;
-      if (Array.isArray(data?.candidates)) {
-        setCandidates(data.candidates);
-        setError(null);
-      } else {
-        setCandidates([]);
-        setError(body?.errors?.[0]?.message ?? "instance operation 候補を取得できませんでした。");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [active]);
-  return { candidates, error };
-}
-
-/**
- * Validates a payloadFrom field→source map and returns PAYLOAD_FROM_UNRESOLVED_REF errors.
- * No silent acceptance: unrecognized source patterns are surfaced explicitly.
- * SSOT: docs/design/ui-builder-preset-ecosystem-ssot.yaml payloadFrom_resolver_contract
- */
-function validatePayloadFromEntries(entries: Array<{ field: string; source: string }>): string[] {
-  const errors: string[] = [];
-  for (const { field, source } of entries) {
-    if (!field.trim()) continue;
-    const parsed = parsePayloadFromSource(source.trim());
-    if (parsed.kind === "unresolved_ref") {
-      errors.push(`"${field}": PAYLOAD_FROM_UNRESOLVED_REF — "${source}" は認識されたパターンではありません (node:<nodeId>.value | event.<path> | literal:<value>)`);
-    }
-  }
-  return errors;
-}
 
 /**
  * Normal-view route navigation preset for package-level wiring.
@@ -7093,11 +7149,14 @@ function PackageWiringEditor({
   selectedPackageId,
   packageComponents,
   routeCandidates,
+  topologyRouteKey,
   onWiringSaved,
 }: {
   selectedPackageId: string;
   packageComponents: AdminPackageComponentRow[];
   routeCandidates?: string[];
+  /** Committed UI Builder routeKey — manifest wiring scoped to this topology only. */
+  topologyRouteKey?: string;
   onWiringSaved?: (wiring: AdminPackageWiringRow) => void;
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
@@ -7120,6 +7179,9 @@ function PackageWiringEditor({
   const [manifestOptions, setManifestOptions] = useState<
     ManifestPickerOption[]
   >([]);
+  const [topologyContextError, setTopologyContextError] = useState<string | null>(
+    null,
+  );
   const [loadingManifests, setLoadingManifests] = useState(false);
   const [selectedManifestId, setSelectedManifestId] = useState("");
   const [selectedManifestWiringKey, setSelectedManifestWiringKey] = useState(
@@ -7217,25 +7279,42 @@ function PackageWiringEditor({
       setManifestOptions([]);
       setScreenWiringCandidates([]);
       setCandidateLoadError(null);
+      setTopologyContextError(null);
+      setSelectedManifestId("");
       return;
     }
+    const rk = topologyRouteKey?.trim() ?? "";
+    if (!rk) {
+      setManifestOptions([]);
+      setSelectedManifestId("");
+      setTopologyContextError("編集中ページの routeKey が未確定です。");
+      return;
+    }
+    let cancelled = false;
     (async () => {
       setLoadingManifests(true);
-      try {
-        const [active, draft] = await Promise.all([
-          listAdminManifests("active"),
-          listAdminManifests("draft"),
-        ]);
-        const items = mergeManifestPickerOptions(
-          await buildManifestPickerOptions(active ?? []),
-          await buildManifestPickerOptions(draft ?? []),
+      setTopologyContextError(null);
+      const match = await resolveManifestRouteOptionForRouteKey(rk);
+      if (cancelled) return;
+      if (!match) {
+        setManifestOptions([]);
+        setSelectedManifestId("");
+        setTopologyContextError(
+          "この routeKey に対応する Contents ページがありません。",
         );
-        setManifestOptions(items);
-      } finally {
         setLoadingManifests(false);
+        return;
       }
+      setManifestOptions([{
+        manifestId: match.manifestId,
+        label: match.label,
+        status: match.status,
+      }]);
+      setSelectedManifestId(match.manifestId);
+      setLoadingManifests(false);
     })();
-  }, [targetSurface]);
+    return () => { cancelled = true; };
+  }, [targetSurface, topologyRouteKey]);
 
   useEffect(() => {
     if (targetSurface !== "manifest" || !selectedManifestId.trim()) {
@@ -7377,10 +7456,9 @@ function PackageWiringEditor({
 
   return (
     <section class="mt-3 rounded border border-indigo-100 bg-indigo-50/40 p-3 text-xs">
-      <h4 class="font-semibold text-indigo-900">パッケージ配線（編集）</h4>
+      <h4 class="font-semibold text-indigo-900">配線の直接編集</h4>
       <p class="text-muted-xs mb-2">
-        保存済み配線を読み込み、一覧から選んで接続先を設定します（UUID
-        の手入力は不要です）。
+        通常は上のプリセットで十分です。配線 ID・種別・接続先を直接編集する場合のみ使います。
       </p>
       {loadStatus && <p class="mb-2 text-slate-600">{loadStatus}</p>}
       {wiring && (
@@ -7434,33 +7512,20 @@ function PackageWiringEditor({
 
             {targetSurface === "manifest" && (
               <div class="sm:col-span-2 space-y-3 rounded border border-indigo-200 bg-white p-3">
-                <label class="block">
-                  接続先ページ
-                  <select
-                    class="mt-1 w-full rounded border px-2 py-1 text-xs"
-                    value={selectedManifestId}
-                    onChange={(e) => {
-                      const next = (e.target as HTMLSelectElement).value;
-                      setSelectedManifestId(next);
-                      setSelectedManifestWiringKey("");
-                    }}
-                  >
-                    <option value="">— ページを選択 —</option>
-                    {manifestOptions.map((m) => (
-                      <option key={m.manifestId} value={m.manifestId}>
-                        {m.label} [{m.status}]
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {loadingManifests && (
-                  <p class="text-slate-500">ページ一覧を読み込み中…</p>
+                {topologyContextError && (
+                  <p class="text-amber-800">{topologyContextError}</p>
                 )}
-                {!loadingManifests && manifestOptions.length === 0 && (
-                  <p class="text-amber-800">
-                    選択できるページがありません。先にコンテンツ管理で Step 1
-                    を保存してください。
+                {manifestOptions[0] && topologyRouteKey && (
+                  <p class="text-indigo-800">
+                    {UX_MANIFEST_API_EVENT_TOPOLOGY_CONTEXT}:{" "}
+                    <strong>{manifestOptions[0].label}</strong>
+                    <span class="ml-1 font-mono text-[0.55rem] text-slate-500">
+                      ({topologyRouteKey})
+                    </span>
                   </p>
+                )}
+                {loadingManifests && (
+                  <p class="text-slate-500">Step 3 配線候補を読み込み中…</p>
                 )}
                 {selectedManifestId && (
                   <fieldset>
@@ -7496,11 +7561,11 @@ function PackageWiringEditor({
                                     handleSelectManifestWiring(c.wiringKey)}
                                 />
                                 <span>
-                                  <span class="font-mono text-indigo-900">
-                                    {c.wiringKey}
+                                  <span class="font-semibold text-indigo-900">
+                                    {formatScreenReadQueryWiringCandidateLabel(c)}
                                   </span>
-                                  <span class="mt-0.5 block text-slate-600">
-                                    {c.label}
+                                  <span class="mt-0.5 block font-mono text-[0.55rem] text-slate-400">
+                                    {c.wiringKey}
                                   </span>
                                 </span>
                               </label>
@@ -7619,6 +7684,86 @@ function PackageWiringEditor({
         </p>
       </details>
       <ConfirmDialogHost />
+    </section>
+  );
+}
+
+/** Package-level wiring — SSOT: authoring_surface_reference_map.package_wiring_editor */
+function PackageConnectionPanel({
+  selectedPackageId,
+  routeCandidates,
+  topologyRouteKey,
+}: {
+  selectedPackageId: string;
+  routeCandidates?: string[];
+  topologyRouteKey?: string;
+}): JSX.Element {
+  const [packageComponents, setPackageComponents] = useState<
+    AdminPackageComponentRow[]
+  >([]);
+  const [loadStatus, setLoadStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedPackageId) {
+      setPackageComponents([]);
+      setLoadStatus(null);
+      return;
+    }
+    (async () => {
+      setLoadStatus("部品一覧を読み込み中...");
+      const body = await dispatchAdminOp("ui_topology", "list_package_components", {
+        packageId: selectedPackageId,
+      });
+      const compData = body?.emission?.data;
+      if (Array.isArray(compData)) {
+        const rows = compData as AdminPackageComponentRow[];
+        setPackageComponents(rows);
+        setLoadStatus(rows.length === 0 ? "このパッケージに部品がありません。" : null);
+      } else {
+        setPackageComponents([]);
+        setLoadStatus("部品一覧の取得に失敗しました。");
+      }
+    })();
+  }, [selectedPackageId]);
+
+  if (!selectedPackageId) {
+    return (
+      <p class="rounded border border-dashed border-slate-200 px-2 py-3 text-center text-xs text-slate-500">
+        パッケージが未選択です。
+      </p>
+    );
+  }
+
+  return (
+    <section class="rounded border border-slate-200 bg-slate-50/80 p-3">
+      <h4 class="text-sm font-semibold text-slate-800">パッケージ配線（編集）</h4>
+      <p class="mt-1 text-[0.65rem] text-slate-700">{UX_PACKAGE_WIRING_SECTION_HINT}</p>
+      {loadStatus && <p class="mt-2 text-xs text-slate-500">{loadStatus}</p>}
+      <div class="mt-3 space-y-3">
+        <RouteNavigationWiringPreset
+          selectedPackageId={selectedPackageId}
+          routeCandidates={routeCandidates ?? []}
+        />
+        {topologyRouteKey && (
+          <ManifestStep3EventWiringPreset
+            selectedPackageId={selectedPackageId}
+            routeKey={topologyRouteKey}
+          />
+        )}
+        <details class="rounded border border-slate-200 bg-white p-2">
+          <summary class="cursor-pointer text-[0.65rem] font-semibold text-slate-700">
+            {UX_PACKAGE_WIRING_ADVANCED_LABEL}
+          </summary>
+          <div class="mt-2">
+            <PackageWiringEditor
+              selectedPackageId={selectedPackageId}
+              packageComponents={packageComponents}
+              routeCandidates={routeCandidates}
+              topologyRouteKey={topologyRouteKey}
+            />
+          </div>
+        </details>
+      </div>
     </section>
   );
 }
@@ -8016,7 +8161,7 @@ function CalcBindingEditor({
             key={name}
             name={name}
             source={source}
-            draftNodeIds={draftNodeIds}
+            draftNodes={draftNodes}
             onChange={(s) => updateVarSource(name, s)}
             onRemove={() => removeVar(name)}
             emissionDataJson={emissionDataJson}
@@ -8072,19 +8217,22 @@ function CalcBindingEditor({
 
 function CalcMatchConditionsEditor({
   conditions,
-  draftNodeIds,
+  draftNodes,
   onChange,
   tableFieldCandidates,
 }: {
   conditions: RuleMatchCondition[];
-  draftNodeIds: string[];
+  draftNodes: DraftNode[];
   onChange: (conds: RuleMatchCondition[]) => void;
   tableFieldCandidates?: string[];
 }): JSX.Element {
+  const nodeCandidates = deriveNodeCandidates(draftNodes as DraftNodeMinimal[]);
+  const defaultNodeId = nodeCandidates[0]?.nodeId ?? "";
+
   function addCondition() {
     const newCond: RuleMatchCondition = {
       field: "",
-      valueFrom: { kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" },
+      valueFrom: { kind: "node", nodeId: defaultNodeId, propKey: "value" },
     };
     onChange([...conditions, newCond]);
   }
@@ -8135,7 +8283,7 @@ function CalcMatchConditionsEditor({
                 const kind = (e.currentTarget as HTMLSelectElement).value;
                 const newCond = { ...cond };
                 if (kind === "node") {
-                  newCond.valueFrom = { kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" };
+                  newCond.valueFrom = { kind: "node", nodeId: defaultNodeId, propKey: "value" };
                 } else {
                   newCond.valueFrom = { kind: "literal", value: "" };
                 }
@@ -8163,7 +8311,9 @@ function CalcMatchConditionsEditor({
                   valueFrom: { ...cond.valueFrom as { kind: "node"; nodeId: string; propKey: string }, nodeId: (e.currentTarget as HTMLSelectElement).value },
                 })}
               >
-                {draftNodeIds.map((id) => <option key={id} value={id}>{id}</option>)}
+                {nodeCandidates.map(({ nodeId, label }) => (
+                  <option key={nodeId} value={nodeId}>{label}</option>
+                ))}
               </select>
               <input
                 type="text"
@@ -8198,18 +8348,21 @@ function CalcMatchConditionsEditor({
 function CalcVarEditor({
   name,
   source,
-  draftNodeIds,
+  draftNodes,
   onChange,
   onRemove,
   emissionDataJson,
 }: {
   name: string;
   source: CalcVariableSource;
-  draftNodeIds: string[];
+  draftNodes: DraftNode[];
   onChange: (s: CalcVariableSource) => void;
   onRemove: () => void;
   emissionDataJson?: string;
 }): JSX.Element {
+  const nodeCandidates = deriveNodeCandidates(draftNodes as DraftNodeMinimal[]);
+  const defaultNodeId = nodeCandidates[0]?.nodeId ?? "";
+
   return (
     <div class="flex flex-col gap-0.5 rounded border border-slate-100 bg-white p-1">
       <div class="flex items-center gap-1">
@@ -8220,7 +8373,7 @@ function CalcVarEditor({
           onChange={(e) => {
             const kind = (e.currentTarget as HTMLSelectElement).value;
             if (kind === "literal") onChange({ kind: "literal", value: 0, note: "テスト・固定係数のみ" });
-            else if (kind === "node") onChange({ kind: "node", nodeId: draftNodeIds[0] ?? "", propKey: "value" });
+            else if (kind === "node") onChange({ kind: "node", nodeId: defaultNodeId, propKey: "value" });
             else if (kind === "emission") onChange({ kind: "emission", path: "emission.data." });
             else if (kind === "ruleTable") onChange({ kind: "ruleTable", tablePath: "emission.data.", matchConditions: [], priorityOrder: "desc", effectiveDateHandling: "latest_effective", selectedField: "" });
           }}
@@ -8250,7 +8403,9 @@ function CalcVarEditor({
             value={source.nodeId}
             onChange={(e) => onChange({ ...source, nodeId: (e.currentTarget as HTMLSelectElement).value })}
           >
-            {draftNodeIds.map((id) => <option key={id} value={id}>{id}</option>)}
+            {nodeCandidates.map(({ nodeId, label }) => (
+              <option key={nodeId} value={nodeId}>{label}</option>
+            ))}
           </select>
           <input
             type="text"
@@ -8350,7 +8505,7 @@ function CalcVarEditor({
             )}
             <CalcMatchConditionsEditor
               conditions={source.matchConditions}
-              draftNodeIds={draftNodeIds}
+              draftNodes={draftNodes}
               onChange={(conds) => onChange({ ...source, matchConditions: conds })}
               tableFieldCandidates={fieldCandidates}
             />
@@ -8364,7 +8519,6 @@ function CalcVarEditor({
 function PackageDesignPanel({
   selectedPackageId,
   selectedCanvasNode,
-  routeCandidates,
   canvasDesignDraft,
   onDesignPreviewChange,
   onCommitNode,
@@ -8373,7 +8527,6 @@ function PackageDesignPanel({
 }: {
   selectedPackageId: string;
   selectedCanvasNode: DraftNode | null;
-  routeCandidates?: string[];
   /** Canvas preview state for the selected node — survives deselect/reselect. */
   canvasDesignDraft?: DesignDraft;
   onDesignPreviewChange?: (nodeId: string, partial: DesignDraft) => void;
@@ -8399,15 +8552,9 @@ function PackageDesignPanel({
   const [designTmpStatus, setDesignTmpStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
-  const [packageComponents, setPackageComponents] = useState<
-    AdminPackageComponentRow[]
-  >([]);
   const [savedDesigns, setSavedDesigns] = useState<SavedComponentDesignRow[]>(
     [],
   );
-  const [componentsLoadStatus, setComponentsLoadStatus] = useState<
-    string | null
-  >(null);
   const [designsLoadStatus, setDesignsLoadStatus] = useState<string | null>(
     null,
   );
@@ -8421,17 +8568,6 @@ function PackageDesignPanel({
     selectedCanvasNode?.propBindings ?? {},
   );
   const [propBindingsError, setPropBindingsError] = useState<string | null>(null);
-
-  const hasDispatchPortInteraction = (selectedCanvasNode?.runtimeInteractions ?? []).some(
-    (w) => w.actionType === "dispatchExternalPort",
-  );
-  const hasDispatchInstanceInteraction = (selectedCanvasNode?.runtimeInteractions ?? []).some(
-    (w) => w.actionType === "dispatchInstanceOperation",
-  );
-  const { candidates: externalPortCandidates, error: externalPortCandidateError } =
-    useExternalPortAuthoringCandidates(Boolean(selectedCanvasNode) && hasDispatchPortInteraction);
-  const { candidates: instanceOperationCandidates, error: instanceOperationCandidateError } =
-    useInstanceOperationAuthoringCandidates(Boolean(selectedCanvasNode) && hasDispatchInstanceInteraction);
 
   const componentKind = selectedCanvasNode?.componentKind ?? "";
   const acceptsArrayProps = COMPONENT_ARRAY_PROP_CAPABILITIES[componentKind] ?? [];
@@ -8532,9 +8668,7 @@ function PackageDesignPanel({
 
   useEffect(() => {
     if (!selectedPackageId) {
-      setPackageComponents([]);
       setSavedDesigns([]);
-      setComponentsLoadStatus(null);
       setDesignsLoadStatus(null);
       setStatus(null);
       setSaveOk(null);
@@ -8542,25 +8676,8 @@ function PackageDesignPanel({
       return;
     }
     (async () => {
-      setComponentsLoadStatus("部品一覧を読み込み中...");
       setDesignsLoadStatus("保存済みデザインを読み込み中...");
-      const [compBody] = await Promise.all([
-        dispatchAdminOp("ui_topology", "list_package_components", {
-          packageId: selectedPackageId,
-        }),
-        reloadSavedDesigns(),
-      ]);
-      const compData = compBody?.emission?.data;
-      if (Array.isArray(compData)) {
-        const rows = compData as AdminPackageComponentRow[];
-        setPackageComponents(rows);
-        setComponentsLoadStatus(
-          rows.length === 0 ? "このパッケージに部品がありません。" : null,
-        );
-      } else {
-        setPackageComponents([]);
-        setComponentsLoadStatus("部品一覧の取得に失敗しました。");
-      }
+      await reloadSavedDesigns();
     })();
   }, [selectedPackageId]);
 
@@ -8831,9 +8948,6 @@ function PackageDesignPanel({
         タブごとに編集項目を分けています。変更は _tmp に自動保存され、明示保存で正本に反映されます。
       </p>
 
-      {componentsLoadStatus && (
-        <p class="mb-1 text-xs text-slate-500">{componentsLoadStatus}</p>
-      )}
       {designsLoadStatus && (
         <p class="mb-2 text-xs text-slate-500">{designsLoadStatus}</p>
       )}
@@ -9245,247 +9359,6 @@ function PackageDesignPanel({
             ),
           },
           {
-            id: "wiring",
-            label: "操作配線",
-            content: (
-              <div class="space-y-3">
-                {selectedPackageId && (
-                  <RouteNavigationWiringPreset
-                    selectedPackageId={selectedPackageId}
-                    routeCandidates={routeCandidates ?? []}
-                  />
-                )}
-                <section class="rounded border border-blue-100 bg-blue-50/40 p-3">
-                  <div class="mb-2">
-                    <h4 class="text-xs font-semibold text-blue-900">イベント配線 / 操作配線</h4>
-                    <details class="text-[0.6rem] text-blue-700">
-                      <summary class="cursor-pointer">実装詳細（上級者向け）</summary>
-                      <p class="mt-1">通常 runtime interaction。保存先は layout_patch_json.nodes[].runtimeInteractions です。propsJson.eventWirings は legacy fallback のみ。</p>
-                    </details>
-                  </div>
-                  {(() => {
-                    const interactions = selectedCanvasNode?.runtimeInteractions ?? [];
-                    const targetNodes = (_draftNodes ?? []).filter((n) => n.nodeId !== selectedCanvasNode?.nodeId);
-                    const commitInteractions = (next: ComponentEventWiring[], label: string) => {
-                      onCommitNode?.({ runtimeInteractions: next.length > 0 ? next : undefined }, label);
-                    };
-                    const updateInteraction = (idx: number, updates: Partial<ComponentEventWiring>) => {
-                      const next = interactions.map((w, i) => i === idx ? { ...w, ...updates } : w);
-                      commitInteractions(next, "操作配線を更新");
-                    };
-                    return (
-                      <div class="space-y-2">
-                        {interactions.map((w, i) => {
-                          const payloadFromEntries = Object.entries(w.payloadFrom ?? {});
-                          const payloadFromErrors = validatePayloadFromEntries(
-                            payloadFromEntries.map(([field, source]) => ({ field, source })),
-                          );
-                          const isPortDispatch = w.actionType === "dispatchExternalPort";
-                          const isInstanceDispatch = w.actionType === "dispatchInstanceOperation";
-                          return (
-                            <div key={i} class="rounded border border-blue-100 bg-white p-2 space-y-2">
-                              <div class="grid gap-2 md:grid-cols-4">
-                                <label class="text-[0.65rem]">
-                                  trigger
-                                  <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.trigger ?? w.eventType ?? "click"} onChange={(e) => updateInteraction(i, { trigger: (e.target as HTMLSelectElement).value })}>
-                                    {COMPONENT_EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                                  </select>
-                                </label>
-                                <label class="text-[0.65rem]">
-                                  action
-                                  <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.actionType} onChange={(e) => updateInteraction(i, { actionType: (e.target as HTMLSelectElement).value })}>
-                                    {COMPONENT_ACTION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                                  </select>
-                                </label>
-                                <label class="text-[0.65rem]">
-                                  target node
-                                  <select class="input mt-0.5 px-1 py-0.5 text-xs" value={w.targetNodeId ?? ""} onChange={(e) => updateInteraction(i, { targetNodeId: (e.target as HTMLSelectElement).value || undefined })}>
-                                    <option value="">選択してください</option>
-                                    {targetNodes.map((n) => <option key={n.nodeId} value={n.nodeId}>{n.nodeId} / {n.componentKind ?? n.componentKey}</option>)}
-                                  </select>
-                                </label>
-                                <label class="text-[0.65rem]">
-                                  statePath
-                                  <input class="input-mono mt-0.5 px-1 py-0.5 text-xs" value={w.statePath ?? "open"} onInput={(e) => updateInteraction(i, { statePath: (e.target as HTMLInputElement).value || undefined })} placeholder="open / activeKey" />
-                                </label>
-                              </div>
-                              {isPortDispatch && (
-                                <div class="rounded border border-indigo-100 bg-indigo-50/40 p-2 space-y-2 text-[0.65rem]">
-                                  <div class="font-semibold text-indigo-900">外部ポート接続 / 認証情報バインド（オーサリング）</div>
-                                  <p class="text-[0.6rem] text-indigo-700">
-                                    portTargetRef は DB 由来の active external port 候補のみ選択できます。provider / bundle 固定候補は使用しません。
-                                  </p>
-                                  <label class="block">
-                                    portTargetRef（external port バインド）
-                                    {externalPortCandidateError && (
-                                      <p class="mt-0.5 text-[0.55rem] text-amber-700">{externalPortCandidateError}</p>
-                                    )}
-                                    <select
-                                      class="input mt-0.5 w-full px-1 py-0.5 text-xs"
-                                      value={w.portTargetRef ?? ""}
-                                      onChange={(e) => updateInteraction(i, { portTargetRef: (e.target as HTMLSelectElement).value || undefined })}
-                                    >
-                                      <option value="">— 選択なし —</option>
-                                      {externalPortCandidates.map((c) => (
-                                        <option key={c.targetRef} value={c.targetRef}>
-                                          {c.portKind} / {c.providerKind} / {c.requiredByBundle} (credential: {c.credentialKind}{c.referenceKey ? ` / ${c.referenceKey}` : ""})
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {w.portTargetRef && !externalPortCandidates.some((c) => c.targetRef === w.portTargetRef) && externalPortCandidates.length > 0 && (
-                                      <p class="mt-0.5 text-[0.55rem] text-amber-700">
-                                        現在の portTargetRef は active 候補にありません。候補を再読み込みするか別の port を選択してください。
-                                      </p>
-                                    )}
-                                    {w.portTargetRef && (() => {
-                                      const selected = externalPortCandidates.find((c) => c.targetRef === w.portTargetRef);
-                                      if (!selected) return null;
-                                      return (
-                                        <div class="mt-1 rounded border border-indigo-200 bg-white px-2 py-1 text-[0.6rem] text-indigo-800">
-                                          <span class="font-semibold">portKind:</span> {selected.portKind} ·{" "}
-                                          <span class="font-semibold">credentialKind:</span> {selected.credentialKind} ·{" "}
-                                          <span class="font-semibold">providerKind:</span> {selected.providerKind}
-                                          {selected.consumerBundleBinding && (
-                                            <span> · <span class="font-semibold">consumer:</span> {selected.consumerBundleBinding}</span>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
-                                  </label>
-                                  <fieldset class="flex flex-col gap-1">
-                                    <legend class="font-semibold text-indigo-900">
-                                      フィールドマッピング（リクエストフィールド → ソース）
-                                    </legend>
-                                    <p class="text-[0.6rem] text-indigo-700">
-                                      認識パターン: node:&lt;nodeId&gt;.value | event.&lt;path&gt; | literal:&lt;value&gt;
-                                    </p>
-                                    {payloadFromErrors.length > 0 && (
-                                      <div class="rounded border border-amber-200 bg-amber-50 p-1">
-                                        {payloadFromErrors.map((err, ei) => (
-                                          <p key={ei} class="text-[0.55rem] text-amber-800">{err}</p>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {payloadFromEntries.map(([field, source], pi) => (
-                                      <div key={pi} class="flex items-center gap-1">
-                                        <input
-                                          class="input-mono flex-1 px-1 py-0.5 text-[0.6rem]"
-                                          value={field}
-                                          placeholder="フィールド名"
-                                          onBlur={(e) => {
-                                            const newField = (e.target as HTMLInputElement).value.trim();
-                                            if (newField === field) return;
-                                            const next: Record<string, string> = {};
-                                            payloadFromEntries.forEach(([f, s], idx) => {
-                                              next[idx === pi ? newField : f] = s;
-                                            });
-                                            if (newField) updateInteraction(i, { payloadFrom: next });
-                                          }}
-                                        />
-                                        <span class="text-indigo-400">→</span>
-                                        <input
-                                          class={`input-mono flex-1 px-1 py-0.5 text-[0.6rem] ${parsePayloadFromSource(source).kind === "unresolved_ref" ? "border-amber-400 bg-amber-50" : ""}`}
-                                          value={source}
-                                          placeholder="node:<nodeId>.value"
-                                          onInput={(e) => {
-                                            const newSource = (e.target as HTMLInputElement).value;
-                                            const next: Record<string, string> = {};
-                                            payloadFromEntries.forEach(([f, s], idx) => {
-                                              next[f] = idx === pi ? newSource : s;
-                                            });
-                                            updateInteraction(i, { payloadFrom: Object.keys(next).length > 0 ? next : undefined });
-                                          }}
-                                        />
-                                        <button
-                                          type="button"
-                                          class="text-[0.55rem] text-red-400 hover:underline"
-                                          onClick={() => {
-                                            const next: Record<string, string> = {};
-                                            payloadFromEntries.forEach(([f, s], idx) => { if (idx !== pi) next[f] = s; });
-                                            updateInteraction(i, { payloadFrom: Object.keys(next).length > 0 ? next : undefined });
-                                          }}
-                                        >削除</button>
-                                      </div>
-                                    ))}
-                                    <button
-                                      type="button"
-                                      class="self-start text-[0.6rem] text-indigo-600 hover:underline"
-                                      onClick={() => {
-                                        const next = { ...(w.payloadFrom ?? {}), "": "" };
-                                        updateInteraction(i, { payloadFrom: next });
-                                      }}
-                                    >+ フィールドを追加</button>
-                                  </fieldset>
-                                  <label class="block">
-                                    outputProp（レスポンス受け取り先 prop 名）
-                                    <input
-                                      class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
-                                      value={w.outputProp ?? ""}
-                                      placeholder="例: result / value"
-                                      onInput={(e) => updateInteraction(i, { outputProp: (e.target as HTMLInputElement).value || undefined })}
-                                    />
-                                  </label>
-                                </div>
-                              )}
-
-                              {isInstanceDispatch && (
-                                <div class="rounded border border-emerald-100 bg-emerald-50/40 p-2 space-y-2 text-[0.65rem]">
-                                  <div class="font-semibold text-emerald-900">Instance operation dispatch（オーサリング）</div>
-                                  <p class="text-[0.6rem] text-emerald-700">
-                                    approved instance operation のイベント起点と入出力割当のみを保存します。接続設定本体や権限定義の編集は扱いません。
-                                  </p>
-                                  <label class="block">
-                                    instanceTargetRef（approved instance operation）
-                                    {instanceOperationCandidateError && (
-                                      <p class="mt-0.5 text-[0.55rem] text-amber-700">{instanceOperationCandidateError}</p>
-                                    )}
-                                    <select
-                                      class="input mt-0.5 w-full px-1 py-0.5 text-xs"
-                                      value={w.instanceTargetRef ?? ""}
-                                      onChange={(e) => updateInteraction(i, { instanceTargetRef: (e.target as HTMLSelectElement).value || undefined })}
-                                    >
-                                      <option value="">— 選択なし —</option>
-                                      {instanceOperationCandidates.map((c) => (
-                                        <option key={c.targetRef} value={c.targetRef}>
-                                          {c.portKind} / {c.operationBindingKey} / {c.approvalStatus}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {w.instanceTargetRef && !instanceOperationCandidates.some((c) => c.targetRef === w.instanceTargetRef) && instanceOperationCandidates.length > 0 && (
-                                      <p class="mt-0.5 text-[0.55rem] text-amber-700">
-                                        現在の instanceTargetRef は approved 候補にありません。候補から選択し直してください。
-                                      </p>
-                                    )}
-                                  </label>
-                                </div>
-                              )}
-                              <div class="flex justify-end">
-                                <button type="button" class="text-[0.6rem] text-red-500" onClick={() => commitInteractions(interactions.filter((_, idx) => idx !== i), "操作配線を削除")}>削除</button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        <button type="button" class="btn-secondary text-xs" onClick={() => commitInteractions([...interactions, { trigger: "click", actionType: "openModal", targetNodeId: targetNodes[0]?.nodeId, statePath: "open" }], "操作配線を追加")}>+ 操作配線を追加</button>
-                      </div>
-                    );
-                  })()}
-                </section>
-                <details class="mb-4 rounded border border-slate-200 p-3">
-                  <summary class="cursor-pointer text-xs font-semibold text-slate-700">
-                    パッケージ配線（イベント接続）
-                  </summary>
-                  <div class="mt-2">
-                    <PackageWiringEditor
-                      selectedPackageId={selectedPackageId}
-                      packageComponents={packageComponents}
-                      routeCandidates={routeCandidates}
-                    />
-                  </div>
-                </details>
-              </div>
-            ),
-          },
-          {
             id: "advanced",
             label: "上級",
             content: (
@@ -9828,6 +9701,7 @@ export default function UiBuilderAdmin(): JSX.Element {
           onDetachComponentAfterRemove={handleDetachComponentAfterRemove}
           paletteReloadToken={paletteReloadToken}
           suggestShape={suggestShape}
+          onLayoutApplied={() => setFlowStep("persist")}
         />
       </div>
     </main>
