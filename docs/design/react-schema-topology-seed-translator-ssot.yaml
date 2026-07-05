@@ -901,9 +901,10 @@ react_schema_topology_seed_translator_ssot:
               - "content_bundle:promote_draft"
               - "content_bundle:get_entity"
               - "content_bundle:list_states"
+              - "content_bundle:delete_entity_draft"
           - lane: internal_instance_wiring
             catalog_ref: wiring_lane_contract.lanes.internal_instance_wiring
-            targetRefs: ["ui-local:crud_create_modal.open"]
+            targetRefs: ["ui-local:crud_create_modal.open", "ui-local:crud_create_modal.close"]
         known_gaps:
           - gap: enum_status_select_options_from_content_bundle_list_states
             classification: prop_binding_gap
@@ -911,6 +912,20 @@ react_schema_topology_seed_translator_ssot:
           - gap: form_field_values_to_create_entity_draft_payload
             classification: event_payload_resolver_gap
             status: seed_marks_as_pending
+          - gap: tree_navigation_display_mode_not_yet_cataloged
+            classification: component_catalog_gap
+            status: seed_marks_as_pending
+            note: >-
+              surfaced by the physical-search-crud-aggregate.react-schema.json fixture; a
+              Table.display=tree_node_link mode has no registered frontend componentKind yet
+          - gap: delete_entity_operation_ref_not_yet_declared
+            classification: ssot_ambiguity_gap
+            status: seed_marks_as_pending
+            note: >-
+              ui-builder-preset-ecosystem-ssot.yaml existing_entity_validate_save_dispatch_alignment_contract
+              says delete uses "contents topology assigned remove operation ref (if exists)";
+              content_bundle:delete_entity_draft is used as a naming-convention-consistent
+              placeholder targetRef in the fixture, not a confirmed backend action
 
       - seed_surface_key: physical_details_inline_editor_md_generator.v1
         declared_by_yaml_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml physical_details_inline_editor_md_generator_preset

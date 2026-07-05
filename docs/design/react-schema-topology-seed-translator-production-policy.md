@@ -91,8 +91,11 @@ a future Bundle intends to build a tool around them.
 .agent/scripts/check_react_schema_topology_seed_translator.py
 .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json
 .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json
-tools/generate/schema/translated.json                (committed evidence artifact: generate-react-schema)
-tools/generate/schema/translated-topology-seed.json  (committed evidence artifact: generate-topology-seed)
+.agent/tests/fixtures/react-schema-topology-seed-translator/physical-search-crud-aggregate.react-schema.json
+.agent/tests/fixtures/react-schema-topology-seed-translator/physical-search-crud-aggregate.topology-seed.input.json
+tools/generate/schema/translated.json                                              (evidence: credential-management-0092 generate-react-schema)
+tools/generate/schema/translated-topology-seed.json                                (evidence: credential-management-0092 generate-topology-seed)
+tools/generate/schema/translated-physical-search-crud-aggregate-topology-seed.json (evidence: physical_search_crud_aggregate.v1 generate-topology-seed)
 docs/design/react-schema-topology-seed-translator-ssot.yaml
 ```
 
@@ -123,9 +126,24 @@ asks for an evidence snapshot.
 
 ```text
 1. auth.external.credential_management.projection   (categories + four forms + admin_approve lifecycle) -- done
-2. hub_search.readonly.v1                           (smallest layout_tree, few gaps) -- not started
-3. physical_search_crud_aggregate.v1                (form + workflow coverage) -- not started
+2. physical_search_crud_aggregate.v1                (canonical SPA CRUD schema fixture / schema->seed translation evidence) -- done
+3. hub_search.readonly.v1                           (smallest layout_tree, few gaps) -- not started
 ```
+
+`physical_search_crud_aggregate.v1`'s canonical schema fixture
+(`.agent/tests/fixtures/react-schema-topology-seed-translator/physical-search-crud-aggregate.react-schema.json`)
+is a standalone `topolactor.react_schema.v1` document, independent of its
+topology-seed input envelope. The envelope's `inputText` is a JSON-string
+copy of that same fixture, and a sync check
+(`check_react_schema_topology_seed_translator.py`) asserts
+`json.loads(envelope.inputText) == schema fixture` so the two never drift
+apart silently. Modal/card-list/tree-navigation UI concepts are expressed
+through existing node fields (`Section.sectionKind`, `Form.mode`,
+`Table.display`) rather than new react_schema node kinds -- see
+`declared_seed_surface_catalog.physical_search_crud_aggregate.v1.known_gaps`
+for the two gaps this fixture surfaced (tree-navigation display mode not yet
+cataloged; delete operation ref not SSOT-confirmed, used as a
+naming-convention placeholder only).
 
 ## Compose / C# / nginx direction (deferred)
 

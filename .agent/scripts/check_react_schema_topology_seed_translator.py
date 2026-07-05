@@ -31,6 +31,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL = REPO_ROOT / ".agent" / "tools" / "react-schema-topology-seed-translator"
 FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.input.json"
 TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.topology-seed.input.json"
+CRUD_SCHEMA_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.react-schema.json"
+CRUD_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.topology-seed.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
 SEED_EMPTY_PATH = REPO_ROOT / "db" / "seed_empty.sql"
 
@@ -498,6 +500,101 @@ def main():
         tmp42 = write_topology_seed_tmp_fixture(json.dumps(schema_with_bad_label), tmpdir=tmpdir)
         _, doc42 = run_generate_topology_seed(tmp42)
         expect("42. a supplied schema with a null label deep in the tree becomes blocking SEED_RECORD_MISSING_REQUIRED_FIELD", "SEED_RECORD_MISSING_REQUIRED_FIELD" in rule_ids(doc42))
+
+        # --- physical_search_crud_aggregate.v1 canonical SPA CRUD schema fixture ---
+        # Independent, standalone fixture (not just JSON embedded in the topology-seed
+        # envelope's inputText) plus a sync check that the envelope's inputText really
+        # is that same fixture's content, not a drifted copy.
+
+        crud_schema = json.loads(CRUD_SCHEMA_FIXTURE.read_text(encoding="utf-8"))
+        crud_envelope = json.loads(CRUD_TOPOLOGY_SEED_FIXTURE.read_text(encoding="utf-8"))
+
+        expect("43. physical-search-crud-aggregate.react-schema.json is a topolactor.react_schema.v1 candidate for physical_search_crud_aggregate.v1", crud_schema.get("schema") == "topolactor.react_schema.v1" and crud_schema.get("surface") == "physical_search_crud_aggregate.v1")
+        expect("44. canonical CRUD schema fixture has a non-empty root.sourceYamlRefs and a Projection root with children", bool(crud_schema.get("sourceYamlRefs")) and dig(crud_schema, "root", "kind") == "Projection" and bool(dig(crud_schema, "root", "children")))
+
+        expect("45. topology-seed envelope for physical_search_crud_aggregate.v1 has mode=generate_topology_ui_seed and matching targetSurface", crud_envelope.get("mode") == "generate_topology_ui_seed" and crud_envelope.get("targetSurface") == "physical_search_crud_aggregate.v1" == crud_schema.get("surface"))
+
+        try:
+            embedded_schema = json.loads(crud_envelope.get("inputText", ""))
+        except json.JSONDecodeError:
+            embedded_schema = None
+        expect("46. topology-seed envelope inputText, parsed as JSON, is byte-for-byte identical to the canonical schema fixture (no drifted embedded copy)", embedded_schema == crud_schema)
+
+        crud_root = crud_schema.get("root") or {}
+        crud_section_kinds = set()
+
+        def collect_section_kinds(node, acc):
+            if node.get("kind") == "Section" and node.get("sectionKind"):
+                acc.add(node["sectionKind"])
+            for c in node.get("children") or []:
+                collect_section_kinds(c, acc)
+
+        collect_section_kinds(crud_root, crud_section_kinds)
+        expect("47. canonical CRUD schema expresses search/result/modal-create structure via existing Section.sectionKind values (no new node kind)", {"search_control", "result_projection", "modal_create_control"}.issubset(crud_section_kinds))
+
+        def collect_tables(node, acc):
+            if node.get("kind") == "Table":
+                acc.add(node.get("display"))
+            for c in node.get("children") or []:
+                collect_tables(c, acc)
+
+        crud_table_displays = set()
+        collect_tables(crud_root, crud_table_displays)
+        expect("48. canonical CRUD schema expresses card-list result projection and tree navigation via Table.display (no new node kind)", {"card_list", "tree_node_link"}.issubset(crud_table_displays))
+
+        crud_action_keys = set(collect_keys_by_kind(crud_root, "Action"))
+        expect("49. canonical CRUD schema contains search/add/update/delete actions", {"crud_search_button", "crud_add_button", "update_item", "delete_item"}.issubset(crud_action_keys))
+
+        def find_action_parent_kinds(node, acc, parent_kind=None):
+            if node.get("kind") == "Action":
+                acc.add(parent_kind)
+            for c in node.get("children") or []:
+                find_action_parent_kinds(c, acc, parent_kind=node.get("kind"))
+
+        crud_action_parent_kinds = set()
+        find_action_parent_kinds(crud_root, crud_action_parent_kinds)
+        expect("50. every Action in the canonical CRUD schema is a direct child of a Form (no Action under Section/Table)", crud_action_parent_kinds == {"Form"})
+
+        # generate-topology-seed against the canonical CRUD fixture
+        out_path_crud = Path(tmpdir) / "translated-crud-seed.json"
+        proc_crud, doc_crud = run_generate_topology_seed(CRUD_TOPOLOGY_SEED_FIXTURE, extra_args=[
+            "--output", str(out_path_crud),
+            "--scenario-uuid", SCENARIO_UUID,
+        ])
+        expect("51. generate-topology-seed translates the canonical CRUD fixture with zero validationErrors", out_path_crud.is_file() and doc_crud is not None and not rule_ids(doc_crud))
+
+        crud_tuc = (doc_crud or {}).get("topologyUiSeedCandidate") or {}
+        expect("52. CRUD topologyUiSeedCandidate.schema/role match the contract", crud_tuc.get("schema") == "topolactor.topology_ui_seed.v1" and crud_tuc.get("role") == "draft_intake_artifact_not_active_topology")
+        expect("53. CRUD topologyUiSeedCandidate.projections is populated", bool(crud_tuc.get("projections")))
+        expect("54. CRUD exchangeReport.outputSeedSchemaId == topolactor.topology_ui_seed.v1", dig(doc_crud or {}, "exchangeReport", "outputSeedSchemaId") == "topolactor.topology_ui_seed.v1")
+        expect("55. CRUD run has no unexplained lossEntries (loss only where a knownGapRef backs it)", all(e.get("knownGapRef") for e in dig(doc_crud or {}, "exchangeReport", "lossEntries") or []))
+        expect("56. envelope-level knownGapRefs (pending status/create-payload gaps) propagate into unresolvedGaps", {"enum_status_select_options_from_content_bundle_list_states", "form_field_values_to_create_entity_draft_payload"}.issubset(set((doc_crud or {}).get("unresolvedGaps") or [])))
+        expect("57. node-level knownGapRefs (tree-nav/delete-op gaps discovered while building this fixture) propagate into unresolvedGaps", {"component_catalog_gap:tree_navigation_display_mode_not_yet_cataloged", "ssot_ambiguity_gap:delete_entity_operation_ref_not_yet_declared"}.issubset(set((doc_crud or {}).get("unresolvedGaps") or [])))
+        expect("58. CRUD run carries no active-topology/execution-authority claim", "activeTopology" not in json.dumps(crud_tuc) and "runtimeExecute" not in json.dumps(crud_tuc))
+
+        crud_record_types_seen = set()
+
+        def collect_record_types(rec, acc):
+            acc.add(rec.get("recordType"))
+            for list_field in ("categories", "sections", "children", "fields", "actions", "steps", "columns"):
+                for c in rec.get(list_field) or []:
+                    if isinstance(c, dict):
+                        collect_record_types(c, acc)
+
+        if crud_tuc.get("projections"):
+            collect_record_types(crud_tuc["projections"][0], crud_record_types_seen)
+        expect("59. CRUD seed emits topology_ui_form, topology_ui_table, and topology_ui_action records (search/create/update/delete/tree-nav all round-trip)", {"topology_ui_form", "topology_ui_table", "topology_ui_action"}.issubset(crud_record_types_seen))
+
+        crud_bad_labels = []
+        if crud_tuc.get("projections"):
+            find_bad_labels(crud_tuc["projections"][0], crud_bad_labels)
+        expect("60. no emitted CRUD seed record has a null or empty label", not crud_bad_labels)
+
+        # existing credential-management-0092 fixtures must still be unaffected
+        _, doc_regression = run_generate(FIXTURE)
+        expect("61. credential-management-0092 generate-react-schema fixture still passes with zero validationErrors (no regression)", doc_regression is not None and not rule_ids(doc_regression))
+        _, doc_regression_seed = run_generate_topology_seed(TOPOLOGY_SEED_FIXTURE)
+        expect("62. credential-management-0092 generate-topology-seed fixture still passes with zero validationErrors (no regression)", doc_regression_seed is not None and not rule_ids(doc_regression_seed))
 
     print()
     if FAILURES:
