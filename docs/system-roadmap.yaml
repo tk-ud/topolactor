@@ -727,7 +727,7 @@ system_roadmap_ssot:
       title: Credential-backed instance port substrate
       status: implemented
       production_ready: false
-      public_summary: Design SSOT, runtime-executable DDL/seed surface, instance_port_runtime sibling lane, runtime-only credential reference resolution, call_instance_postgres_function / call_bound_instance_function primitive adapters, authority/allowlist/sanitize/timeout fail-close guards, and regression tests are implemented. Remaining live generic instance integration acceptance is production-readiness evidence, not implementation residue.
+      public_summary: Design SSOT, runtime-executable DDL/seed surface, instance_port_runtime sibling lane, runtime-only credential reference resolution, call_instance_postgres_function / call_bound_instance_function primitive adapters, authority/allowlist/sanitize/timeout fail-close guards, and regression tests are implemented. The existing credential management projection recognizes instance_settings as a select/mode/category alongside user_auth and external (fixed-form projection, forbidden-field guards, DB-backed approved-candidate source), and Admin UI Builder Design Inspector event authoring can select approved instance operations (dispatchInstanceOperation / instanceTargetRef, select-only, fail-close on missing/malformed/unapproved targetRef). Remaining live generic instance integration acceptance is production-readiness evidence, not implementation residue. The instance_settings JSON template download/import/validate/preview/apply and registered Runtime/DB list/edit admin authoring screen described in docs/design/instance-port-substrate-ssot.yaml admin_authoring_boundary remains unimplemented (no frontend route/island and no backend action exist yet); this is a distinct future admin-authoring bundle, not required for Design Inspector operation selection.
       scope:
         - instance_port_substrate_design
         - db_instance_port
@@ -752,6 +752,7 @@ system_roadmap_ssot:
         - .agent/tests/check-instance-port-substrate.sh
       known_gap_ref:
         - generic_instance_integration_acceptance_pending
+        - instance_settings_admin_authoring_ui_pending
 
     product.email_port_consumer:
       bundle_id: email-port-consumer
