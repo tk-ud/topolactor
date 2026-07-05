@@ -391,6 +391,7 @@ function SamplePreviewPanel({
 const CONTENTS_DRAFT_LIST_FILTER: AdminManifestListFilter = {
   status: "draft",
   contentsType: "contents",
+  requiresTopologySystemName: true,
 };
 
 const CONTENTS_CLONE_SOURCE_LIST_FILTER: AdminManifestListFilter = {

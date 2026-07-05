@@ -2,7 +2,25 @@ import type { DispatchRequest, Emission, ValidationError } from "./dispatch.ts";
 import { validationErrorText } from "./dispatch.ts";
 
 import { SESSION_TOKEN_KEY } from "../lib/demoSession.ts";
-import { queueAdminClientCommand } from "../runtime/frontendScheduler.ts";
+import {
+  queueAdminClientCommand,
+  type ScheduledCommandResult,
+} from "../runtime/frontendScheduler.ts";
+
+/** Thin admin dispatch helper for UI Builder authoring hooks. */
+export function dispatchAdminOp(
+  layer: string,
+  action: string,
+  payload?: unknown,
+): Promise<ScheduledCommandResult> {
+  return queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer,
+    action,
+    payload: payload != null ? payload as Record<string, unknown> : undefined,
+  }, getToken());
+}
 
 function getToken(): string | undefined {
   if (typeof globalThis.sessionStorage === "undefined") return undefined;
@@ -246,6 +264,8 @@ export type AdminManifestListFilter = {
   contentsType?: string | string[];
   physical?: boolean;
   logicalTablesMin?: number;
+  /** Client-side post-filter: exclude Step-1 shells missing topologySystemName on list DTO. */
+  requiresTopologySystemName?: boolean;
 };
 
 export type AdminManifestTopologySummary = {
@@ -573,12 +593,20 @@ async function callAdminManifestOp(
 export async function listAdminManifests(
   filter?: string | AdminManifestListFilter,
 ): Promise<AdminManifestListItem[] | null> {
+  const requiresTopologySystemName = typeof filter === "object" &&
+    filter?.requiresTopologySystemName === true;
   const payload = typeof filter === "string"
     ? (filter ? { status: filter } : undefined)
-    : filter;
+    : filter
+    ? (({ requiresTopologySystemName: _omit, ...rest }) => rest)(filter)
+    : undefined;
   const body = await callAdminManifestOp("list", payload);
   if (body === null) return null;
-  return (body.emission?.data ?? []) as AdminManifestListItem[];
+  let items = (body.emission?.data ?? []) as AdminManifestListItem[];
+  if (requiresTopologySystemName) {
+    items = items.filter((item) => Boolean(item.topologySystemName?.trim()));
+  }
+  return items;
 }
 
 export async function getAdminManifest(manifestId: string): Promise<AdminManifestDetail | null> {

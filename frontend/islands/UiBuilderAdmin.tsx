@@ -2777,7 +2777,7 @@ function ApplyReadinessPanel({
             <span class="text-red-700">
               操作配線:
               <ul class="mt-1 list-disc pl-4">
-                {runtimeInteractionErrors.map((msg) => <li key={msg}>{msg}</li>)}
+                {runtimeInteractionErrors.map((msg: string) => <li key={msg}>{msg}</li>)}
               </ul>
             </span>
           </li>
