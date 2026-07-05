@@ -628,16 +628,23 @@ react_schema_topology_seed_translator_ssot:
         examples: [sftp_transfer, file_export, email_send, browser_http_call]
         targetRef_shape: 'external-port:<portKind>:<portId>'
         authority_ref: docs/design/instance-port-substrate-ssot.yaml port_kinds
-        allowed_authority_mapping_values: [validation_only, preview_only, execution_candidate_authority_boundary, approved_runtime_execution_only]
+        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority, execution_candidate_authority_boundary, approved_runtime_execution_only]
         allowed_payload_from_sources: [node_value, event_path, literal]
       external_instance_wiring:
         meaning: registered external instance operation (db_instance_port / runtime_instance_port)
         examples: [registered_db_instance_call, registered_runtime_instance_call, credential_ref_use, connection_policy_ref_use, approved_operation_binding]
         targetRef_shape: 'instance:<db_instance_port|runtime_instance_port>:<instanceAuthorityKey>:<operationBindingKey>'
         authority_ref: docs/design/instance-port-substrate-ssot.yaml authority_model
-        allowed_authority_mapping_values: [validation_only, preview_only, execution_candidate_authority_boundary, approved_runtime_execution_only]
+        allowed_authority_mapping_values: [validation_only, preview_only, draft_apply_not_execution_authority, execution_candidate_authority_boundary, approved_runtime_execution_only]
         allowed_payload_from_sources: [node_value, event_path, literal]
         requires_admin_approve_before_runtime_execute: true
+        gap_discovery_note: >-
+          draft_apply_not_execution_authority was added to this lane's allowed authority values
+          during the credential-management-0092 generate-react-schema fixture build: an
+          instance-operation "apply" step needs a draft-apply stage before admin_approve, the
+          same as contents_api_wiring's create/update draft stage. Recorded here per
+          ui-builder-seed-first-gap-discovery-ssot.yaml as a reusable contract fix rather than a
+          fixture-specific authority workaround.
       internal_instance_wiring:
         meaning: UI-local state / local trigger / projection-local state; no backend dispatch
         examples: [modal_open_close, drawer_open_close, selected_row, tab_state, localStateMutation, calcTriggerCallback, searchCallback_local_only, payloadFrom_node_value_only]
