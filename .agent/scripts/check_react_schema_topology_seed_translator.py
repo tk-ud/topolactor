@@ -474,6 +474,31 @@ def main():
         _, doc40 = run_generate_topology_seed(tmp40)
         expect("40. generate-topology-seed re-validates the supplied schema (rogue Action under Section is still rejected)", "ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW" in rule_ids(doc40))
 
+        # 41. every emitted seed record in the golden run has a non-null, non-empty label
+        # (regression pin: Action/Step/etc. used to fall through with label=null and
+        # validationErrors=[] since LABEL_REQUIRED_UNITS didn't cover them)
+        def find_bad_labels(rec, acc):
+            if rec.get("label") in (None, ""):
+                acc.append((rec.get("recordType"), rec.get("key")))
+            for list_field in ("categories", "sections", "children", "fields", "actions", "steps", "columns"):
+                for c in rec.get(list_field) or []:
+                    if isinstance(c, dict):
+                        find_bad_labels(c, acc)
+
+        bad_labels = []
+        if tuc.get("projections"):
+            find_bad_labels(tuc["projections"][0], bad_labels)
+        expect("41. no emitted seed record (including Action/Step) has a null or empty label", not bad_labels)
+
+        # 42. post-conversion validator catches a null label deep in a supplied schema
+        # even when the markup parser never ran (mode=generate_topology_ui_seed skips
+        # parse_markup entirely, so this must be a standalone recursive check)
+        schema_with_bad_label = json.loads(json.loads(TOPOLOGY_SEED_FIXTURE.read_text(encoding="utf-8"))["inputText"])
+        schema_with_bad_label["root"]["children"][2]["children"][0]["children"][0]["children"][1]["label"] = None
+        tmp42 = write_topology_seed_tmp_fixture(json.dumps(schema_with_bad_label), tmpdir=tmpdir)
+        _, doc42 = run_generate_topology_seed(tmp42)
+        expect("42. a supplied schema with a null label deep in the tree becomes blocking SEED_RECORD_MISSING_REQUIRED_FIELD", "SEED_RECORD_MISSING_REQUIRED_FIELD" in rule_ids(doc42))
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} react-schema-topology-seed-translator check(s) failed ===", file=sys.stderr)

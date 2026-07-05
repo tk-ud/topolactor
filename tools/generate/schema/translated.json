@@ -193,9 +193,10 @@
     {
       "unitKind": "action",
       "key": "json_template_download",
-      "rawFragment": "[action key=json_template_download actionRef=ui-local:instance_settings_import_form.template_download_trigger wiringLane=internal_instance_wiring authorityMarker=draft_or_projection_only trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule payloadFrom=category_key:literal:instance_settings]",
+      "rawFragment": "[action key=json_template_download label=\"Download JSON template\" actionRef=ui-local:instance_settings_import_form.template_download_trigger wiringLane=internal_instance_wiring authorityMarker=draft_or_projection_only trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule payloadFrom=category_key:literal:instance_settings]",
       "attributes": {
         "key": "json_template_download",
+        "label": "Download JSON template",
         "actionRef": "ui-local:instance_settings_import_form.template_download_trigger",
         "wiringLane": "internal_instance_wiring",
         "authorityMarker": "draft_or_projection_only",
@@ -213,9 +214,10 @@
     {
       "unitKind": "action",
       "key": "json_import",
-      "rawFragment": "[action key=json_import actionRef=ui-local:instance_settings_import_form.template_file wiringLane=internal_instance_wiring authorityMarker=draft_or_projection_only trigger=change sourceYamlRefs=instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule payloadFrom=template_file:node:template_file.value]",
+      "rawFragment": "[action key=json_import label=\"Import JSON template\" actionRef=ui-local:instance_settings_import_form.template_file wiringLane=internal_instance_wiring authorityMarker=draft_or_projection_only trigger=change sourceYamlRefs=instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule payloadFrom=template_file:node:template_file.value]",
       "attributes": {
         "key": "json_import",
+        "label": "Import JSON template",
         "actionRef": "ui-local:instance_settings_import_form.template_file",
         "wiringLane": "internal_instance_wiring",
         "authorityMarker": "draft_or_projection_only",
@@ -378,9 +380,10 @@
     {
       "unitKind": "action",
       "key": "validate",
-      "rawFragment": "[action key=validate actionRef=instance:db_instance_port:instance_authority_key:operation_binding_key wiringLane=external_instance_wiring authorityMarker=validation_only trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#authority_model payloadFrom=instance_authority_key:node:instance_authority_key.value,operation_binding_key:node:operation_binding_key.value]",
+      "rawFragment": "[action key=validate label=\"Validate\" actionRef=instance:db_instance_port:instance_authority_key:operation_binding_key wiringLane=external_instance_wiring authorityMarker=validation_only trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#authority_model payloadFrom=instance_authority_key:node:instance_authority_key.value,operation_binding_key:node:operation_binding_key.value]",
       "attributes": {
         "key": "validate",
+        "label": "Validate",
         "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
         "wiringLane": "external_instance_wiring",
         "authorityMarker": "validation_only",
@@ -543,9 +546,10 @@
     {
       "unitKind": "action",
       "key": "preview",
-      "rawFragment": "[action key=preview actionRef=instance:runtime_instance_port:instance_authority_key:operation_binding_key wiringLane=external_instance_wiring authorityMarker=preview_only trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#authority_model payloadFrom=instance_authority_key:node:instance_authority_key.value,operation_binding_key:node:operation_binding_key.value]",
+      "rawFragment": "[action key=preview label=\"Preview\" actionRef=instance:runtime_instance_port:instance_authority_key:operation_binding_key wiringLane=external_instance_wiring authorityMarker=preview_only trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#authority_model payloadFrom=instance_authority_key:node:instance_authority_key.value,operation_binding_key:node:operation_binding_key.value]",
       "attributes": {
         "key": "preview",
+        "label": "Preview",
         "actionRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
         "wiringLane": "external_instance_wiring",
         "authorityMarker": "preview_only",
@@ -600,9 +604,10 @@
     {
       "unitKind": "action",
       "key": "apply",
-      "rawFragment": "[action key=apply actionRef=instance:db_instance_port:instance_authority_key:operation_binding_key wiringLane=external_instance_wiring authorityMarker=draft_apply_not_execution_authority trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#authority_model payloadFrom=instance_authority_key:node:instance_authority_key.value,operation_binding_key:node:operation_binding_key.value]",
+      "rawFragment": "[action key=apply label=\"Apply\" actionRef=instance:db_instance_port:instance_authority_key:operation_binding_key wiringLane=external_instance_wiring authorityMarker=draft_apply_not_execution_authority trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#authority_model payloadFrom=instance_authority_key:node:instance_authority_key.value,operation_binding_key:node:operation_binding_key.value]",
       "attributes": {
         "key": "apply",
+        "label": "Apply",
         "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
         "wiringLane": "external_instance_wiring",
         "authorityMarker": "draft_apply_not_execution_authority",
@@ -620,9 +625,10 @@
     {
       "unitKind": "action",
       "key": "approve",
-      "rawFragment": "[action key=approve actionRef=instance:runtime_instance_port:instance_authority_key:operation_binding_key wiringLane=external_instance_wiring authorityMarker=execution_candidate_authority_boundary trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#authority_model payloadFrom=instance_authority_key:node:instance_authority_key.value,operation_binding_key:node:operation_binding_key.value]",
+      "rawFragment": "[action key=approve label=\"Approve\" actionRef=instance:runtime_instance_port:instance_authority_key:operation_binding_key wiringLane=external_instance_wiring authorityMarker=execution_candidate_authority_boundary trigger=click sourceYamlRefs=instance-port-substrate-ssot.yaml#authority_model payloadFrom=instance_authority_key:node:instance_authority_key.value,operation_binding_key:node:operation_binding_key.value]",
       "attributes": {
         "key": "approve",
+        "label": "Approve",
         "actionRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
         "wiringLane": "external_instance_wiring",
         "authorityMarker": "execution_candidate_authority_boundary",
@@ -758,6 +764,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                       ],
+                      "label": "Download JSON template",
                       "authorityMarker": "draft_or_projection_only",
                       "eventBinding": {
                         "trigger": "click",
@@ -776,6 +783,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                       ],
+                      "label": "Import JSON template",
                       "authorityMarker": "draft_or_projection_only",
                       "eventBinding": {
                         "trigger": "change",
@@ -884,6 +892,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
+                      "label": "Validate",
                       "authorityMarker": "validation_only",
                       "eventBinding": {
                         "trigger": "click",
@@ -998,6 +1007,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
+                      "label": "Preview",
                       "authorityMarker": "preview_only",
                       "eventBinding": {
                         "trigger": "click",
@@ -1052,6 +1062,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
+                      "label": "Apply",
                       "authorityMarker": "draft_apply_not_execution_authority",
                       "eventBinding": {
                         "trigger": "click",
@@ -1071,6 +1082,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
+                      "label": "Approve",
                       "authorityMarker": "execution_candidate_authority_boundary",
                       "eventBinding": {
                         "trigger": "click",

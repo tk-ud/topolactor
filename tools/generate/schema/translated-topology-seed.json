@@ -128,6 +128,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                       ],
+                      "label": "Download JSON template",
                       "authorityMarker": "draft_or_projection_only",
                       "eventBinding": {
                         "trigger": "click",
@@ -147,6 +148,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                       ],
+                      "label": "Import JSON template",
                       "authorityMarker": "draft_or_projection_only",
                       "eventBinding": {
                         "trigger": "change",
@@ -264,6 +266,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
+                      "label": "Validate",
                       "authorityMarker": "validation_only",
                       "eventBinding": {
                         "trigger": "click",
@@ -387,6 +390,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
+                      "label": "Preview",
                       "authorityMarker": "preview_only",
                       "eventBinding": {
                         "trigger": "click",
@@ -444,6 +448,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
+                      "label": "Apply",
                       "authorityMarker": "draft_apply_not_execution_authority",
                       "eventBinding": {
                         "trigger": "click",
@@ -464,6 +469,7 @@
                       "sourceYamlRefs": [
                         "instance-port-substrate-ssot.yaml#authority_model"
                       ],
+                      "label": "Approve",
                       "authorityMarker": "execution_candidate_authority_boundary",
                       "eventBinding": {
                         "trigger": "click",
@@ -633,6 +639,7 @@
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                         ],
+                        "label": "Download JSON template",
                         "authorityMarker": "draft_or_projection_only",
                         "eventBinding": {
                           "trigger": "click",
@@ -652,6 +659,7 @@
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                         ],
+                        "label": "Import JSON template",
                         "authorityMarker": "draft_or_projection_only",
                         "eventBinding": {
                           "trigger": "change",
@@ -769,6 +777,7 @@
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#authority_model"
                         ],
+                        "label": "Validate",
                         "authorityMarker": "validation_only",
                         "eventBinding": {
                           "trigger": "click",
@@ -892,6 +901,7 @@
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#authority_model"
                         ],
+                        "label": "Preview",
                         "authorityMarker": "preview_only",
                         "eventBinding": {
                           "trigger": "click",
@@ -949,6 +959,7 @@
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#authority_model"
                         ],
+                        "label": "Apply",
                         "authorityMarker": "draft_apply_not_execution_authority",
                         "eventBinding": {
                           "trigger": "click",
@@ -969,6 +980,7 @@
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#authority_model"
                         ],
+                        "label": "Approve",
                         "authorityMarker": "execution_candidate_authority_boundary",
                         "eventBinding": {
                           "trigger": "click",
@@ -1161,7 +1173,7 @@
                       {
                         "recordType": "topology_ui_action",
                         "key": "json_template_download",
-                        "label": null,
+                        "label": "Download JSON template",
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                         ],
@@ -1183,7 +1195,7 @@
                       {
                         "recordType": "topology_ui_action",
                         "key": "json_import",
-                        "label": null,
+                        "label": "Import JSON template",
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
                         ],
@@ -1321,7 +1333,7 @@
                       {
                         "recordType": "topology_ui_action",
                         "key": "validate",
-                        "label": null,
+                        "label": "Validate",
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#authority_model"
                         ],
@@ -1460,7 +1472,7 @@
                       {
                         "recordType": "topology_ui_action",
                         "key": "preview",
-                        "label": null,
+                        "label": "Preview",
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#authority_model"
                         ],
@@ -1515,7 +1527,7 @@
                       {
                         "recordType": "topology_ui_action",
                         "key": "apply",
-                        "label": null,
+                        "label": "Apply",
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#authority_model"
                         ],
@@ -1538,7 +1550,7 @@
                       {
                         "recordType": "topology_ui_action",
                         "key": "approve",
-                        "label": null,
+                        "label": "Approve",
                         "sourceYamlRefs": [
                           "instance-port-substrate-ssot.yaml#authority_model"
                         ],

@@ -82,8 +82,12 @@ CONTAINER_UNITS = {"projection", "category", "section", "form", "workflow"}
 LEAF_UNITS = {"field", "table", "step", "action", "validation", "prop_binding", "payload_from", "style_ref"}
 ALL_TAGGABLE_UNITS = CONTAINER_UNITS | LEAF_UNITS
 
-# input_text_markup_grammar_contract.common_attributes.label.required_on
-LABEL_REQUIRED_UNITS = {"projection", "category", "section", "form", "field", "table", "workflow"}
+# input_text_markup_grammar_contract.common_attributes.label.required_on:
+# react_schema_contract.node_common_required_fields requires label on every
+# node kind (not just the container/field-like ones), so this covers all
+# taggable units -- an Action/Step/Validation/PropBinding/PayloadFrom/StyleRef
+# without a label is a MISSING_LABEL error too, never a null seed record label.
+LABEL_REQUIRED_UNITS = set(ALL_TAGGABLE_UNITS)
 
 # react_schema_contract prohibited_features.mutation_action_not_owned_by_a_form:
 # an Action node's direct parent must be a Form or a Workflow.
@@ -837,6 +841,55 @@ def build_exchange_report(source_refs, emitted_count, known_gap_refs, loss_entri
     }
 
 
+COMMON_SEED_RECORD_REQUIRED_FIELDS = ["recordType", "key", "label", "sourceYamlRefs", "sourceReactPath", "knownGapRefs"]
+
+SEED_RECORD_CHILD_LIST_FIELDS = ("categories", "sections", "children", "fields", "actions", "steps", "columns")
+
+
+def validate_seed_record_tree(record, record_types_def, errors):
+    """topology_ui_seed_contract.record_common_required_fields plus each
+    record type's own `required` list, checked recursively over every emitted
+    seed record. A required field that is missing, None, or an empty string
+    is blocking; an empty *list* required field (e.g. an empty `sections`)
+    is not flagged here, since structural rules like EMPTY_FORM already cover
+    the cases where an empty list is actually invalid."""
+    record_type = record.get("recordType")
+    path = record.get("sourceReactPath", "$.root")
+    key = record.get("key")
+
+    for field in COMMON_SEED_RECORD_REQUIRED_FIELDS:
+        value = record.get(field, "__MISSING__")
+        if value == "__MISSING__" or value is None or value == "":
+            errors.append(
+                err(
+                    "SEED_RECORD_MISSING_REQUIRED_FIELD",
+                    path,
+                    "blocking",
+                    f"{record_type} record '{key}' missing required common field '{field}'",
+                )
+            )
+    if not record.get("sourceYamlRefs"):
+        errors.append(err("SEED_RECORD_EMPTY_SOURCE_YAML_REFS", path, "blocking", f"{record_type} record '{key}' has empty sourceYamlRefs"))
+
+    type_def = record_types_def.get(record_type) or {}
+    for field in type_def.get("required", []):
+        value = record.get(field, "__MISSING__")
+        if value == "__MISSING__" or value is None or value == "":
+            errors.append(
+                err(
+                    "SEED_RECORD_MISSING_REQUIRED_FIELD",
+                    path,
+                    "blocking",
+                    f"{record_type} record '{key}' missing required type-specific field '{field}'",
+                )
+            )
+
+    for list_field in SEED_RECORD_CHILD_LIST_FIELDS:
+        for child in record.get(list_field) or []:
+            if isinstance(child, dict) and "recordType" in child:
+                validate_seed_record_tree(child, record_types_def, errors)
+
+
 def build_topology_ui_seed_candidate(supplied_schema, target_surface, root_record, exchange_report):
     return {
         "schema": "topolactor.topology_ui_seed.v1",
@@ -1050,6 +1103,14 @@ def cmd_generate_topology_seed(args):
     for entry in loss_entries:
         if entry["severity"] == "blocking":
             output["validationErrors"].append(err("REACT_NODE_KIND_UNMAPPED", entry["sourceReactPath"], "blocking", entry["reason"]))
+
+    # Post-conversion check: every emitted seed record, recursively, against
+    # topology_ui_seed_contract.record_common_required_fields and its own
+    # record_types[...].required list. A record passing conversion is not
+    # the same as a record satisfying the contract's required-field shape.
+    if root_record is not None:
+        record_types_def = dig(ssot_root, "topology_ui_seed_contract", "record_types") or {}
+        validate_seed_record_tree(root_record, record_types_def, output["validationErrors"])
 
     unresolved_gaps = collect_known_gap_refs(root_node)
     for loss_gap in (e["knownGapRef"] for e in loss_entries if e.get("knownGapRef")):

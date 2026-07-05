@@ -262,7 +262,13 @@ react_schema_topology_seed_translator_ssot:
         required_on: [all_units]
         rule: stable identifier, unique within its parent container
       label:
-        required_on: [projection, category, section, form, field, table, workflow]
+        required_on: [all_units]
+        rule: >-
+          required on every unit, not only containers/fields. react_schema_contract's
+          node_common_required_fields and topology_ui_seed_contract's
+          record_common_required_fields both require label universally (including on
+          Action/Step/Validation/PropBinding/PayloadFrom/StyleRef); a topology UI seed
+          record must never carry label = null.
       sourceYamlRefs:
         required_on: [all_units]
         rule: comma-separated "file#section" tokens, e.g. "ui-builder-preset-ecosystem-ssot.yaml#hub_search_preset"
@@ -393,9 +399,11 @@ react_schema_topology_seed_translator_ssot:
       - form_without_fields
       - mutation_action_not_owned_by_a_form
       - field_without_label
+      - node_without_label
       - node_without_source_yaml_refs
       - protected_boundary_vocabulary_value_present
       - raw_html_tag_emission
+      - topology_ui_seed_record_missing_common_or_type_required_field
       - componentKind_absent_from_ui_catalog_boundary_contract_frontend_component_catalog
 
   # ===========================================================================
@@ -1110,6 +1118,9 @@ react_schema_topology_seed_translator_ssot:
       - emitted_seed_marks_unresolved_paths_with_knownGapRefs
       - emitted_seed_preserves_the_loss_report
       - emitted_form_and_action_records_carry_authorityMarker
+      - every_emitted_seed_record_is_recursively_checked_against_record_common_required_fields
+      - every_emitted_seed_record_is_recursively_checked_against_its_record_type_required_fields
+      - no_emitted_seed_record_carries_a_null_or_empty_required_field
       - emitted_action_and_step_records_carry_a_lane_conforming_eventBinding
 
     wiring_lane_validation:
