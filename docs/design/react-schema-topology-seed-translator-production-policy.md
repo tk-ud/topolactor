@@ -11,30 +11,39 @@ Python3 translator tool, so that content never leaks into the SSOT YAML. The SSO
 owns *what* the input/output shapes and exchange mapping are; this file owns *how*
 a future Bundle intends to build a tool around them.
 
-## Scope for this Bundle
+## Current implementation status
 
-This Bundle (`design_change`) produced the SSOT contract only. No Python code,
-docker compose service, nginx route, or C# call boundary exists yet. Everything
-below is forward-looking guidance for the Bundle that implements the tool.
+- `design_change` Bundle: produced the SSOT contract only (no code). Done.
+- `implementation_change` Bundle (credential-management-0092): implemented
+  `generate-react-schema` only, proven against the
+  `auth.external.credential_management.projection` fixture
+  (`manifest.manifest_id = 00000000-0000-0000-0000-000000000092`). Done.
+  `generate-topology-seed` and `round-trip-check` are still deliberately
+  `not_implemented_out_of_scope` (fail-closed, not silently accepted).
+- No docker compose service, nginx route, or C# call boundary exists yet.
+  Everything under "Deferred" below is still forward-looking guidance.
 
 ## Work boundary
 
-### OK (future implementation Bundle)
+### OK
 
 - Python3 tool that runs from a repo checkout without starting backend, frontend,
-  nginx, or a database.
+  nginx, or a database. (Implemented: `.agent/tools/react-schema-topology-seed-translator`.)
 - Tool reads `docs/design/react-schema-topology-seed-translator-ssot.yaml` and the
-  other SSOT files it references, never `db/*.sql`.
+  caller-supplied input envelope JSON, never `db/*.sql`.
 - Tool implements `input_format_contract` -> `input_text_markup_grammar_contract` ->
-  `text_decomposition_contract` -> `react_schema_contract` / `topology_ui_seed_contract`
-  -> `output_format_contract` from the SSOT.
+  `text_decomposition_contract` -> `react_schema_contract` -> `output_format_contract`
+  from the SSOT for `generate-react-schema`.
 - Tool classifies every action/step `eventBinding` into exactly one
   `wiring_lane_contract` lane, and resolves every componentKind/style ref through
   `ui_catalog_boundary_contract` before treating a node as valid.
-- `projection_render_exchange_contract` is the forward-looking boundary for turning
-  an accepted seed record into a `RuntimeComponentSpec` candidate; this Bundle does
-  not implement that stage, only the contract shape for it.
 - Tool validates every generated node/record against `validation_rules`.
+- If the caller's input envelope carries a pre-resolved `seedEvidence` object
+  (produced by a test/proof/evidence-verification step, not by the translator),
+  the tool passes it through to the output unchanged after a shape check.
+- `topology_ui_seed_contract` and `projection_render_exchange_contract` are
+  still forward-looking boundaries for `generate-topology-seed` and a future
+  `RuntimeComponentSpec` candidate stage; neither is implemented yet.
 - C# may call the tool later through a bounded subprocess or a local compose
   service, treating tool output as a candidate, never as semantic authority.
 
@@ -47,66 +56,83 @@ below is forward-looking guidance for the Bundle that implements the tool.
 - Allowing arbitrary React execution in a generated schema.
 - Bypassing UIBuilder preview / validate / apply.
 - Routing around backend authority for apply/approval.
-- Reading `db/*.sql` as translator input.
+- **Reading `db/*.sql` from inside the translator body.** Seed evidence
+  (e.g. resolving which `manifest.manifest_id` backs a declared seed surface,
+  and ruling out unrelated same-UUID rows in other tables such as
+  `topology.structure_maps`) is a test/proof/evidence-verification concern.
+  It belongs in the paired `check-*.sh`/`check_*.py` for a given fixture
+  (see `.agent/scripts/check_react_schema_topology_seed_translator.py`
+  `resolve_seed_evidence_from_seed_file`), never inside
+  `.agent/scripts/react_schema_topology_seed_translator.py` itself. The
+  translator only ever passes through an already-resolved `seedEvidence`
+  object from the input envelope.
+- Putting `db/*.sql` paths inside `sourceYamlRefs` on any React schema node.
+  `sourceYamlRefs` is SSOT/YAML-facing evidence only; seed-file evidence
+  belongs exclusively under `seedEvidence`.
 
-## Candidate file layout (future Bundle)
+## Implemented file layout
 
 ```text
 .agent/tools/react-schema-topology-seed-translator
 .agent/scripts/react_schema_topology_seed_translator.py
-docs/design/react-schema-topology-seed-translator-ssot.yaml   (already exists; this Bundle's deliverable)
+.agent/tests/check-react-schema-topology-seed-translator.sh
+.agent/scripts/check_react_schema_topology_seed_translator.py
+.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json
+tools/generate/schema/translated.json   (committed evidence artifact)
+docs/design/react-schema-topology-seed-translator-ssot.yaml
 ```
 
-Names may change to fit repository conventions at implementation time.
-
-## Candidate CLI shape
+## Implemented CLI shape
 
 ```text
-react-schema-topology-seed-translator generate-react-schema   --input <inputText/file> --target-surface <key>
-react-schema-topology-seed-translator generate-topology-seed  --input <reactSchemaCandidate.json>
-react-schema-topology-seed-translator round-trip-check        --input <topologyUiSeedCandidate.json>
+react-schema-topology-seed-translator generate-react-schema  --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>]
+react-schema-topology-seed-translator generate-topology-seed --input <envelope.json>   # fails closed: not_implemented_out_of_scope
+react-schema-topology-seed-translator round-trip-check       --input <envelope.json>   # fails closed: not_implemented_out_of_scope
 ```
 
-Each subcommand maps to one `input_format_contract.mode` value.
+`--target-surface` is not a separate CLI flag: `targetSurface` lives in the
+input envelope JSON (`input_format_contract.required_fields.targetSurface`),
+alongside `mode`, `inputText`, `sourceYamlRefs`, and the optional
+`seedEvidence` passthrough object. Each subcommand maps to one
+`input_format_contract.mode` value.
 
-## Candidate output location
+## Output location
+
+`--output` writes the full `output_format_contract`-shaped document (plus the
+`scenario` and `seedEvidence` extension fields) to a repo-relative path;
+paths outside the repository root are rejected. `tools/generate/schema/translated.json`
+is the committed evidence snapshot for the credential-management-0092
+fixture. Do not commit further generated outputs unless a task explicitly
+asks for an evidence snapshot.
+
+## Fixture order
 
 ```text
-.agent/generated/react-schema-topology-seed/react-schema-candidate.json
-.agent/generated/react-schema-topology-seed/topology-ui-seed-candidate.json
-.agent/generated/react-schema-topology-seed/translator-output.json
-```
-
-Generated outputs are evidence artifacts. Do not commit them unless a task
-explicitly asks for an evidence snapshot.
-
-## Suggested fixture order for first implementation
-
-```text
-1. hub_search.readonly.v1                              (smallest layout_tree, few gaps)
-2. physical_search_crud_aggregate.v1                    (form + workflow coverage)
-3. auth.external.credential_management.projection        (category + admin_approve coverage)
+1. auth.external.credential_management.projection   (categories + four forms + admin_approve lifecycle) -- done
+2. hub_search.readonly.v1                           (smallest layout_tree, few gaps) -- not started
+3. physical_search_crud_aggregate.v1                (form + workflow coverage) -- not started
 ```
 
 ## Compose / C# / nginx direction (deferred)
 
-None of these exist yet and none are in scope for the SSOT-completion Bundle:
+None of these exist yet and none are in scope until an owner explicitly asks for them:
 
-- docker compose: only after the offline CLI works; read-only `docs/design` mount,
+- docker compose: only after the offline CLI is fully proven; read-only `docs/design` mount,
   generated-output mount, no DB credentials required, not part of any healthcheck.
 - C# call boundary: subprocess with explicit input/output paths, or a local
   compose HTTP call; output is always a candidate, never semantic authority.
 - nginx: local/demo tool route only (e.g. `/tools/react-schema-translator/`),
   never public runtime authority.
 
-## Completion check for the first implementation attempt
+## Completion check
 
 OK:
 
 ```text
 - tool runs without starting backend/frontend/nginx/a database
-- tool reads only SSOT YAML (this file's sibling contract plus its refs)
-- every generated node/record carries sourceYamlRefs
+- tool reads only SSOT YAML plus the caller-supplied input envelope; never db/*.sql
+- every generated node/record carries sourceYamlRefs, and sourceYamlRefs never contains a db/*.sql path
+- pre-supplied seedEvidence passes through unchanged; the translator never resolves it itself
 - unresolved mappings are explicit knownGapRefs, never silently dropped
 - validation_rules failures surface as validationErrors, not thrown exceptions that hide state
 ```
@@ -118,4 +144,5 @@ NG:
 - generated schema/seed silently invents a component key or catalog identity
 - tool requires backend/frontend/nginx/DB to run generate-react-schema
 - output is treated as active topology or callable execution authority
+- translator body opens db/*.sql for any reason
 ```

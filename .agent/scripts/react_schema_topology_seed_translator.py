@@ -14,12 +14,15 @@ docs/design/react-schema-topology-seed-translator-ssot.yaml:
 this Bundle and fail closed with a `not_implemented_out_of_scope` document
 rather than raising or silently succeeding.
 
-Translator input authority: this script reads the SSOT YAML above (via the
-repo's stdlib-only minimal_yaml loader) and the caller-supplied input
-envelope JSON. It reads db/seed_empty.sql only to resolve seed evidence
-metadata (which manifest.manifest_id backs a declared seed surface) -- never
-as a source of schema/seed generation content, and never as translator input
-authority per translator_input_authority in the SSOT.
+Translator input authority: this script reads only the SSOT YAML above (via
+the repo's stdlib-only minimal_yaml loader) and the caller-supplied input
+envelope JSON, per translator_input_authority in the SSOT. It never opens
+`db/*.sql`. If the caller's input envelope carries a pre-resolved
+`seedEvidence` object, this script passes it through to the output
+unchanged -- it does not resolve, verify, or derive seed evidence itself.
+Resolving `seedEvidence` from `db/seed_empty.sql` is an evidence/proof
+verification concern that lives in
+.agent/scripts/check_react_schema_topology_seed_translator.py, not here.
 
 No network, no database connection, no backend/frontend/nginx process is
 started or required.
@@ -28,7 +31,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -39,7 +41,6 @@ sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 import minimal_yaml as yaml  # noqa: E402
 
 SSOT_REL_PATH = "docs/design/react-schema-topology-seed-translator-ssot.yaml"
-SEED_EMPTY_REL_PATH = "db/seed_empty.sql"
 
 REQUIRED_SSOT_SECTIONS = [
     "input_format_contract",
@@ -96,11 +97,6 @@ EVENT_PATH_RE = re.compile(r'^event(\.[A-Za-z0-9_]+)+$')
 LITERAL_RE = re.compile(r'^literal:.*$')
 
 TOKEN_LIKE_RE = re.compile(r'^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)+$')
-
-MANIFEST_UUID_0092 = "00000000-0000-0000-0000-000000000092"
-MANIFEST_KEY_0092 = "auth.external.credential_management.projection"
-AUTH_USER_BOUNDARY_UUID = "00000000-0000-0000-0000-000000000091"
-BUNDLE_0092 = "auth-external-credential-management-topology-projection"
 
 
 # ---------------------------------------------------------------------------
@@ -166,67 +162,37 @@ def protected_vocabulary(ssot_root):
 
 
 # ---------------------------------------------------------------------------
-# seed evidence resolution (db/seed_empty.sql read for evidence only, never
-# as translator source authority -- see translator_input_authority in SSOT)
+# seedEvidence passthrough
+#
+# The translator NEVER opens db/*.sql. Resolving seedEvidence from
+# db/seed_empty.sql is an evidence/proof verification concern owned by
+# .agent/scripts/check_react_schema_topology_seed_translator.py. If the
+# caller's input envelope already carries a `seedEvidence` object (produced
+# by that verification step, or by a human/agent reading db/*.sql as
+# reference material while authoring the fixture), this translator carries
+# it through to the output unchanged -- it does not look anything up itself.
 # ---------------------------------------------------------------------------
 
-STMT_RE = re.compile(r'INSERT INTO\s+([A-Za-z0-9_.]+)', re.IGNORECASE)
+SEED_EVIDENCE_REQUIRED_FIELDS = ["screenUuidNamespace", "screenUuid", "manifestKey"]
 
 
-def resolve_seed_evidence(repo_root: Path, target_uuid: str, target_manifest_key: str):
-    path = repo_root / SEED_EMPTY_REL_PATH
-    if not path.is_file():
-        return None, [err("SEED_EVIDENCE_FILE_NOT_FOUND", "$.seedEvidence", "blocking", f"reference file not found: {SEED_EMPTY_REL_PATH}")]
-    text = path.read_text(encoding="utf-8")
-    matches = list(STMT_RE.finditer(text))
-    manifest_hit = None
-    other_tables = []
-    for i, m in enumerate(matches):
-        start = m.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        span = text[start:end]
-        if target_uuid not in span:
-            continue
-        table = m.group(1)
-        table_lower = table.strip().lower()
-        if table_lower == "manifest" and target_manifest_key in span:
-            if manifest_hit is None:
-                manifest_hit = table
-        elif "manifest" not in table_lower:
-            # tables whose name contains "manifest" (hubs.topology_manifests,
-            # topology.physical_table_manifest_bindings) are expected companion
-            # writes for the same manifest_id/topology_manifest_id FK family,
-            # not a different UUID namespace -- only report genuinely distinct
-            # namespaces (e.g. topology.structure_maps.structure_map_id).
-            other_tables.append(table)
-
-    if manifest_hit is None:
-        return None, [
+def passthrough_seed_evidence(envelope):
+    seed_evidence = envelope.get("seedEvidence")
+    if seed_evidence is None:
+        return None, []
+    if not isinstance(seed_evidence, dict):
+        return None, [err("SEED_EVIDENCE_SHAPE_INVALID", "$.seedEvidence", "blocking", "seedEvidence must be an object when supplied")]
+    missing = [f for f in SEED_EVIDENCE_REQUIRED_FIELDS if f not in seed_evidence]
+    if missing:
+        return seed_evidence, [
             err(
-                "SEED_EVIDENCE_UNRESOLVED",
+                "SEED_EVIDENCE_SHAPE_INVALID",
                 "$.seedEvidence",
                 "blocking",
-                f"no manifest row found for manifest_id={target_uuid} with manifestKey={target_manifest_key} in {SEED_EMPTY_REL_PATH}",
+                f"supplied seedEvidence missing required field(s): {missing}",
             )
         ]
-
-    evidence = {
-        "screenUuidNamespace": "manifest.manifest_id",
-        "screenUuid": target_uuid,
-        "manifestKey": target_manifest_key,
-        "bundle": BUNDLE_0092 if target_manifest_key == MANIFEST_KEY_0092 else None,
-        "ignoredSameUuidOtherNamespace": None,
-    }
-    other_unique = sorted({t for t in other_tables})
-    if other_unique:
-        first = other_unique[0]
-        namespace = f"{first}.structure_map_id" if "structure_maps" in first else f"{first}.id"
-        evidence["ignoredSameUuidOtherNamespace"] = {
-            "namespace": namespace,
-            "uuid": target_uuid,
-            "reason": "separate namespace; not credential management screen UUID",
-        }
-    return evidence, []
+    return seed_evidence, []
 
 
 # ---------------------------------------------------------------------------
@@ -779,12 +745,10 @@ def cmd_generate_react_schema(args):
             "targetBranch": args.scenario_branch,
         }
 
-    if target_surface == "auth.external.credential_management.projection":
-        seed_evidence, evidence_errors = resolve_seed_evidence(repo_root, MANIFEST_UUID_0092, MANIFEST_KEY_0092)
-        doc["validationErrors"].extend(evidence_errors)
-        if seed_evidence:
-            seed_evidence["relatedAuthUserBoundaryManifestId"] = AUTH_USER_BOUNDARY_UUID
-            doc["seedEvidence"] = seed_evidence
+    seed_evidence, evidence_errors = passthrough_seed_evidence(envelope)
+    doc["validationErrors"].extend(evidence_errors)
+    if seed_evidence is not None:
+        doc["seedEvidence"] = seed_evidence
 
     write_output(args, doc)
     return 1 if any(is_blocking(e) for e in doc["validationErrors"]) else 0

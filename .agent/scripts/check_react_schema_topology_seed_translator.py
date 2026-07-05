@@ -16,6 +16,7 @@ entrypoint/orchestration wrapper only.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,8 +26,63 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL = REPO_ROOT / ".agent" / "tools" / "react-schema-topology-seed-translator"
 FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
+SEED_EMPTY_PATH = REPO_ROOT / "db" / "seed_empty.sql"
 
 SCENARIO_UUID = "bad04ed9-7d39-4cfc-a22c-db2684d4cb0a"
+
+TARGET_MANIFEST_UUID = "00000000-0000-0000-0000-000000000092"
+TARGET_MANIFEST_KEY = "auth.external.credential_management.projection"
+AUTH_USER_BOUNDARY_UUID = "00000000-0000-0000-0000-000000000091"
+BUNDLE = "auth-external-credential-management-topology-projection"
+
+STMT_RE = re.compile(r'INSERT INTO\s+([A-Za-z0-9_.]+)', re.IGNORECASE)
+
+
+def resolve_seed_evidence_from_seed_file(target_uuid, target_manifest_key):
+    """Independently resolves seed evidence straight from db/seed_empty.sql.
+
+    This is the evidence/proof verification side of the seedEvidence contract:
+    the translator itself never reads db/*.sql (see translator_input_authority
+    in the SSOT and passthrough_seed_evidence() in the implementation body);
+    this test script is where that reading is allowed to happen, so the
+    fixture's pre-supplied seedEvidence can be checked against the real seed
+    file instead of trusted blindly.
+    """
+    text = SEED_EMPTY_PATH.read_text(encoding="utf-8")
+    matches = list(STMT_RE.finditer(text))
+    manifest_hit = False
+    other_tables = []
+    for i, m in enumerate(matches):
+        start = m.start()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        span = text[start:end]
+        if target_uuid not in span:
+            continue
+        table = m.group(1)
+        table_lower = table.strip().lower()
+        if table_lower == "manifest" and target_manifest_key in span:
+            manifest_hit = True
+        elif "manifest" not in table_lower:
+            other_tables.append(table)
+    if not manifest_hit:
+        return None
+    evidence = {
+        "screenUuidNamespace": "manifest.manifest_id",
+        "screenUuid": target_uuid,
+        "manifestKey": target_manifest_key,
+        "bundle": BUNDLE,
+        "ignoredSameUuidOtherNamespace": None,
+    }
+    other_unique = sorted(set(other_tables))
+    if other_unique:
+        first = other_unique[0]
+        namespace = f"{first}.structure_map_id" if "structure_maps" in first else f"{first}.id"
+        evidence["ignoredSameUuidOtherNamespace"] = {
+            "namespace": namespace,
+            "uuid": target_uuid,
+            "reason": "separate namespace; not credential management screen UUID",
+        }
+    return evidence
 
 FAILURES = []
 PASS_COUNT = 0
@@ -135,11 +191,31 @@ def main():
         expect("2. translated.json.schemaId == topolactor.translator_output.v1", doc and doc.get("schemaId") == "topolactor.translator_output.v1")
         expect("3. translated.json.scenario.uuid exists", doc and dig(doc, "scenario", "uuid") == SCENARIO_UUID)
 
+        # seedEvidence in translated.json is a passthrough of the fixture's
+        # pre-supplied seedEvidence (the translator body never reads db/*.sql
+        # itself -- see passthrough_seed_evidence() in the implementation).
+        # This test independently re-resolves the same evidence straight from
+        # db/seed_empty.sql and cross-checks the fixture's claim against it,
+        # so evidence verification stays here rather than inside the translator.
+        independent_evidence = resolve_seed_evidence_from_seed_file(TARGET_MANIFEST_UUID, TARGET_MANIFEST_KEY)
+        expect("4a. db/seed_empty.sql independently resolves manifest 0092 evidence", independent_evidence is not None)
+
         seed_evidence = (doc or {}).get("seedEvidence") or {}
         expect("4. seedEvidence.screenUuidNamespace == manifest.manifest_id", seed_evidence.get("screenUuidNamespace") == "manifest.manifest_id")
         expect("5. seedEvidence.screenUuid == 00000000-0000-0000-0000-000000000092", seed_evidence.get("screenUuid") == "00000000-0000-0000-0000-000000000092")
         expect("6. seedEvidence.manifestKey == auth.external.credential_management.projection", seed_evidence.get("manifestKey") == "auth.external.credential_management.projection")
         expect("7. seedEvidence.relatedAuthUserBoundaryManifestId == 00000000-0000-0000-0000-000000000091", seed_evidence.get("relatedAuthUserBoundaryManifestId") == "00000000-0000-0000-0000-000000000091")
+        expect(
+            "7a. fixture-supplied seedEvidence matches independent db/seed_empty.sql resolution "
+            "(screenUuid/manifestKey/ignoredSameUuidOtherNamespace)",
+            independent_evidence is not None
+            and seed_evidence.get("screenUuid") == independent_evidence["screenUuid"]
+            and seed_evidence.get("manifestKey") == independent_evidence["manifestKey"]
+            and seed_evidence.get("ignoredSameUuidOtherNamespace") == independent_evidence["ignoredSameUuidOtherNamespace"],
+        )
+
+        no_db_refs_in_output = "db/seed_empty.sql" not in json.dumps(doc.get("reactSchemaCandidate")) if doc else False
+        expect("7b. no db/*.sql path appears in reactSchemaCandidate.sourceYamlRefs (seed evidence stays out of sourceYamlRefs)", no_db_refs_in_output)
 
         schema_candidate = (doc or {}).get("reactSchemaCandidate") or {}
         expect("8. reactSchemaCandidate.schema == topolactor.react_schema.v1", schema_candidate.get("schema") == "topolactor.react_schema.v1")
@@ -210,17 +286,33 @@ def main():
         forbidden_imports = ["psycopg2", "psycopg", "sqlalchemy", "requests", "httpx", "socket", "asyncpg"]
         expect("22. tool does not require backend/frontend/nginx/DB (no DB/network client imports)", not any(imp in impl_text for imp in forbidden_imports))
 
-        # 23. tool does not treat db/*.sql as translator source authority (the
-        # implementation only reads db/seed_empty.sql for seedEvidence, and its
-        # own docstring/module states this explicitly; assert the boundary text
-        # is present and no other db/*.sql path is referenced).
-        other_sql_refs = [
-            line for line in impl_text.splitlines()
-            if ".sql" in line and "seed_empty.sql" not in line and "SEED_EMPTY_REL_PATH" not in line
-        ]
+        # 23. tool does not treat db/*.sql as translator source authority: the
+        # translator body's executable code (docstring and `#` comments
+        # excluded, since those are exactly where the boundary is explained)
+        # must contain zero ".sql" references or db/ path opens. Reading
+        # db/seed_empty.sql for seedEvidence resolution is this test script's
+        # job (resolve_seed_evidence_from_seed_file above), not the translator's.
+        code_only_lines = []
+        docstring_seen = False
+        docstring_active = False
+        for line in impl_text.splitlines():
+            stripped = line.strip()
+            if not docstring_seen and stripped.startswith('"""'):
+                docstring_seen = True
+                if not (stripped.count('"""') >= 2 and len(stripped) > 3):
+                    docstring_active = True
+                continue
+            if docstring_active:
+                if '"""' in stripped:
+                    docstring_active = False
+                continue
+            if stripped.startswith("#"):
+                continue
+            code_only_lines.append(line)
+        sql_refs_in_translator_code = [line for line in code_only_lines if ".sql" in line.lower() or "db/" in line]
         expect(
-            "23. tool does not treat db/*.sql as translator source authority (only db/seed_empty.sql read, for seedEvidence only)",
-            "translator input authority" in impl_text.lower() and not other_sql_refs,
+            "23. tool does not treat db/*.sql as translator source authority (zero db/*.sql references in executable code; seedEvidence is passthrough-only)",
+            "translator input authority" in impl_text.lower() and not sql_refs_in_translator_code,
         )
 
     print()

@@ -133,6 +133,18 @@ react_schema_topology_seed_translator_ssot:
           freeform authoring hints (e.g. preferred component family, preferred layout class).
           Hints are never authority: they cannot substitute for sourceYamlRefs, cannot resolve
           a knownGapRef, and cannot bypass a validation error.
+      seedEvidence:
+        type: object
+        required_subfields: [screenUuidNamespace, screenUuid, manifestKey]
+        rule: >-
+          pre-resolved seed-backed evidence metadata (e.g. which manifest.manifest_id backs a
+          declared_seed_surface_catalog entry, and which other-namespace UUID collisions were
+          ruled out). The translator never opens db/*.sql to produce this field itself -- see
+          translator_input_authority. Resolving/verifying seedEvidence against db/*.sql is an
+          evidence/proof verification concern outside the translator body (e.g. the paired
+          check-*.sh/*.py test surface for a given fixture). When supplied, the translator
+          validates required_subfields presence and passes the object through to
+          output_format_contract unchanged; it performs no lookup, derivation, or correction.
     mode_vocabulary:
       generate_react_schema: "inputText -> semantic element decomposition -> react schema candidate"
       generate_topology_ui_seed: "react schema candidate (passed as inputText JSON) -> topology ui seed candidate"
@@ -144,6 +156,7 @@ react_schema_topology_seed_translator_ssot:
       - sourceYamlRefs_must_be_non_empty
       - mode_must_be_one_of_mode_vocabulary
       - protectedBoundaryRefs_absence_is_not_a_pass
+      - seedEvidence_when_present_must_carry_required_subfields_and_is_never_resolved_by_the_translator_from_db_files
 
   # ===========================================================================
   # 2. text_decomposition_contract
@@ -1063,6 +1076,7 @@ react_schema_topology_seed_translator_ssot:
       - sourceYamlRefs_must_be_non_empty
       - mode_must_be_one_of_input_format_contract_mode_vocabulary
       - no_protected_boundary_vocabulary_value_in_inputText_or_optionalHints
+      - seedEvidence_is_passthrough_only_never_resolved_by_reading_db_sql_files
 
     input_text_markup_grammar_validation:
       - every_tag_has_a_key_attribute_and_a_sourceYamlRefs_attribute

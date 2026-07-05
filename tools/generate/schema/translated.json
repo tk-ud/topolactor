@@ -105,16 +105,16 @@
     {
       "unitKind": "field",
       "key": "credential_reference_key",
-      "rawFragment": "[field key=credential_reference_key label=\"Credential reference key\" control=form_input/form_field required=false sourceYamlRefs=db/seed_empty.sql#manifest.00000000-0000-0000-0000-000000000092]",
+      "rawFragment": "[field key=credential_reference_key label=\"Credential reference key\" control=form_input/form_field required=false sourceYamlRefs=instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external]",
       "attributes": {
         "key": "credential_reference_key",
         "label": "Credential reference key",
         "control": "form_input/form_field",
         "required": "false",
-        "sourceYamlRefs": "db/seed_empty.sql#manifest.00000000-0000-0000-0000-000000000092"
+        "sourceYamlRefs": "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
       },
       "sourceYamlRefs": [
-        "db/seed_empty.sql#manifest.00000000-0000-0000-0000-000000000092"
+        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
       ],
       "knownGapRefs": [],
       "line": 9,
@@ -644,8 +644,7 @@
     "surface": "auth.external.credential_management.projection",
     "sourceYamlRefs": [
       "docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
-      "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension",
-      "db/seed_empty.sql#manifest.00000000-0000-0000-0000-000000000092"
+      "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
     ],
     "root": {
       "kind": "Projection",
@@ -708,7 +707,7 @@
                   "key": "credential_reference_key",
                   "label": "Credential reference key",
                   "sourceYamlRefs": [
-                    "db/seed_empty.sql#manifest.00000000-0000-0000-0000-000000000092"
+                    "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
                   ],
                   "control": "form_input/form_field",
                   "required": false
@@ -1116,8 +1115,7 @@
     "outputSeedSchemaId": null,
     "sourceYamlRefs": [
       "docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
-      "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension",
-      "db/seed_empty.sql#manifest.00000000-0000-0000-0000-000000000092"
+      "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
     ],
     "emittedRecords": 35,
     "knownGapRefs": [],
