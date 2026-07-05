@@ -25,9 +25,15 @@ below is forward-looking guidance for the Bundle that implements the tool.
   nginx, or a database.
 - Tool reads `docs/design/react-schema-topology-seed-translator-ssot.yaml` and the
   other SSOT files it references, never `db/*.sql`.
-- Tool implements `input_format_contract` -> `text_decomposition_contract` ->
-  `react_schema_contract` / `topology_ui_seed_contract` -> `output_format_contract`
-  from the SSOT.
+- Tool implements `input_format_contract` -> `input_text_markup_grammar_contract` ->
+  `text_decomposition_contract` -> `react_schema_contract` / `topology_ui_seed_contract`
+  -> `output_format_contract` from the SSOT.
+- Tool classifies every action/step `eventBinding` into exactly one
+  `wiring_lane_contract` lane, and resolves every componentKind/style ref through
+  `ui_catalog_boundary_contract` before treating a node as valid.
+- `projection_render_exchange_contract` is the forward-looking boundary for turning
+  an accepted seed record into a `RuntimeComponentSpec` candidate; this Bundle does
+  not implement that stage, only the contract shape for it.
 - Tool validates every generated node/record against `validation_rules`.
 - C# may call the tool later through a bounded subprocess or a local compose
   service, treating tool output as a candidate, never as semantic authority.

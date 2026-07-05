@@ -1022,6 +1022,10 @@ mapping:
       - topology UI seed exchange contract
       - input format ⇆ output format exchange contract
       - text decomposition contract
+      - input text markup grammar contract
+      - wiring lane contract
+      - ui catalog boundary contract
+      - projection render exchange contract
       - declared seed surface catalog
       - docs/design/react-schema-topology-seed-translator-ssot.yaml
       - docs/design/react-schema-topology-seed-translator-production-policy.md
