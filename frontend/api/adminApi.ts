@@ -1161,6 +1161,14 @@ export async function updateAdminPromotionManifestDraft(
 // Content bundle — admin topology content management surface
 // ---------------------------------------------------------------------------
 
+function expectEmissionList<T>(data: unknown, operation: string): T[] {
+  if (data === undefined || data === null) return [];
+  if (!Array.isArray(data)) {
+    throw new Error(`${operation}: emission.data must be an array`);
+  }
+  return data as T[];
+}
+
 export type ContentBundleListItem = {
   id: string;
   kind: "hub" | "entity" | "relation" | "hub_relation";
@@ -1292,35 +1300,50 @@ export async function listContentHubs(): Promise<ContentBundleListItem[] | null>
   const body = await callAdminContentBundleOp("list_hubs");
   if (body === null) return null;
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list hubs failed");
-  return (body.emission?.data ?? []) as ContentBundleListItem[];
+  return expectEmissionList<ContentBundleListItem>(
+    body.emission?.data,
+    "content_bundle:list_hubs",
+  );
 }
 
 export async function listContentEntities(): Promise<ContentBundleListItem[] | null> {
   const body = await callAdminContentBundleOp("list_entities");
   if (body === null) return null;
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list entities failed");
-  return (body.emission?.data ?? []) as ContentBundleListItem[];
+  return expectEmissionList<ContentBundleListItem>(
+    body.emission?.data,
+    "content_bundle:list_entities",
+  );
 }
 
 export async function listContentRelations(): Promise<ContentBundleListItem[] | null> {
   const body = await callAdminContentBundleOp("list_relations");
   if (body === null) return null;
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list relations failed");
-  return (body.emission?.data ?? []) as ContentBundleListItem[];
+  return expectEmissionList<ContentBundleListItem>(
+    body.emission?.data,
+    "content_bundle:list_relations",
+  );
 }
 
 export async function listContentHubRelations(): Promise<ContentBundleListItem[] | null> {
   const body = await callAdminContentBundleOp("list_hub_relations");
   if (body === null) return null;
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list hub relations failed");
-  return (body.emission?.data ?? []) as ContentBundleListItem[];
+  return expectEmissionList<ContentBundleListItem>(
+    body.emission?.data,
+    "content_bundle:list_hub_relations",
+  );
 }
 
 export async function listContentStates(): Promise<ContentBundleStateItem[] | null> {
   const body = await callAdminContentBundleOp("list_states");
   if (body === null) return null;
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list states failed");
-  return (body.emission?.data ?? []) as ContentBundleStateItem[];
+  return expectEmissionList<ContentBundleStateItem>(
+    body.emission?.data,
+    "content_bundle:list_states",
+  );
 }
 
 export async function getContentEntity(entityId: string): Promise<ContentBundleEntityDetail | null> {
@@ -1352,7 +1375,10 @@ export async function searchContentBundle(
   const body = await callAdminContentBundleOp("search", { keyword, kind, state });
   if (body === null) return null;
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "search failed");
-  return (body.emission?.data ?? []) as ContentBundleListItem[];
+  return expectEmissionList<ContentBundleListItem>(
+    body.emission?.data,
+    "content_bundle:search",
+  );
 }
 
 export async function createContentEntityDraft(
@@ -1447,7 +1473,10 @@ async function callHubNavigation(
 export async function listHubNavigationManifests(): Promise<HubNavigationManifestItem[] | null> {
   const body = await callHubNavigation("list_manifests");
   if (body === null) return null;
-  return (body.emission?.data ?? null) as HubNavigationManifestItem[] | null;
+  return expectEmissionList<HubNavigationManifestItem>(
+    body.emission?.data,
+    "hub_navigation:list_manifests",
+  );
 }
 
 export async function getHubRelationsByManifest(
@@ -1455,7 +1484,10 @@ export async function getHubRelationsByManifest(
 ): Promise<HubNavigationHubRelationItem[] | null> {
   const body = await callHubNavigation("get_hub_relations", { topologyManifestId });
   if (body === null) return null;
-  return (body.emission?.data ?? null) as HubNavigationHubRelationItem[] | null;
+  return expectEmissionList<HubNavigationHubRelationItem>(
+    body.emission?.data,
+    "hub_navigation:get_hub_relations",
+  );
 }
 
 export async function createHubRelation(

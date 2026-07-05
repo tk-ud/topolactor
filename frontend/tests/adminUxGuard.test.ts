@@ -2542,6 +2542,6 @@ Deno.test("HubNavigationAdmin: destination picker uses page label not raw hub id
     new URL("../islands/HubNavigationAdmin.tsx", import.meta.url),
   );
   assert(src.includes("UX_HUB_NAV_DESTINATION_LABEL"));
-  assert(src.includes("destinationHubOptions"));
-  assert(src.includes("h.summary"));
+  assert(src.includes("hubDestinationPickerOptions"));
+  assert(src.includes("hubDestinationOptionLabel"));
 });

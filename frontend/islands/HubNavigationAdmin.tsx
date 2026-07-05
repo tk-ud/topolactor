@@ -20,6 +20,10 @@ import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { ADMIN_HUB_NAVIGATION_GUIDE } from "../content/adminGuides.ts";
 import { UX_STATUS_LABELS, UX_HUB_NAV_DESTINATION_LABEL } from "../content/adminUxTerms.ts";
+import {
+  hubDestinationOptionLabel,
+  hubDestinationPickerOptions,
+} from "../lib/hubNavigationPicker.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 
 type PanelError = { code?: string; message: string };
@@ -44,15 +48,25 @@ export default function HubNavigationAdmin(): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
 
   const destinationHubOptions = useMemo(
-    () => hubs.filter((h) => h.summary.trim().length > 0 || h.label.trim().length > 0),
+    () => hubDestinationPickerOptions(hubs),
     [hubs],
   );
 
   const loadManifests = async () => {
-    const [m, h] = await Promise.all([listHubNavigationManifests(), listContentHubs()]);
-    if (m === null || h === null) { setBackendUnavailable(true); return; }
-    setManifests(m);
-    setHubs(h);
+    try {
+      const [m, h] = await Promise.all([listHubNavigationManifests(), listContentHubs()]);
+      if (m === null || h === null) {
+        setBackendUnavailable(true);
+        return;
+      }
+      setManifests(m);
+      setHubs(h);
+    } catch (e) {
+      console.error("HUB_NAVIGATION_LOAD_FAILED", e);
+      setErrors([{
+        message: e instanceof Error ? e.message : "ナビ設定の読み込みに失敗しました。",
+      }]);
+    }
   };
 
   const loadHubRelations = async (manifestId: string) => {
@@ -329,7 +343,7 @@ export default function HubNavigationAdmin(): JSX.Element {
                     <option value="">— 画面を選択 —</option>
                     {destinationHubOptions.map((h) => (
                       <option key={h.id} value={h.id}>
-                        {h.summary || h.label}
+                        {hubDestinationOptionLabel(h)}
                       </option>
                     ))}
                   </select>
