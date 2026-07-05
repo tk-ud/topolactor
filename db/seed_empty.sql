@@ -749,6 +749,26 @@ VALUES
         'active'
     ),
     (
+        '00000000-0000-0000-0000-0000000000d3',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"ui_topology","action":"list_external_port_authoring_candidates"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000d4',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"ui_topology","action":"list_instance_operation_authoring_candidates"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
         '00000000-0000-0000-0000-000000000087',
         NULL,
         ARRAY[
@@ -1232,6 +1252,24 @@ VALUES
         '00000000-0000-0000-0000-000000000091',
         'admin_ui_topology_promoted_palette',
         'admin:ui_topology:promoted_palette',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000d3',
+        'admin_ui_topology_list_external_port_authoring_candidates',
+        'admin:ui_topology:list_external_port_authoring_candidates',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000d4',
+        'admin_ui_topology_list_instance_operation_authoring_candidates',
+        'admin:ui_topology:list_instance_operation_authoring_candidates',
         '00000000-0000-0000-0000-000000000020',
         '00000000-0000-0000-0000-000000000021',
         ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],

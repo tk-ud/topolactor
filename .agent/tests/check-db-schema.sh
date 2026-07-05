@@ -277,6 +277,10 @@ query_equals_one "manifest dispatcher_mapping for ui_topology layout_candidates"
   "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='layout_candidates';"
 query_equals_one "manifest dispatcher_mapping for ui_topology promoted_palette" \
   "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='promoted_palette';"
+query_equals_one "manifest dispatcher_mapping for ui_topology list_external_port_authoring_candidates" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='list_external_port_authoring_candidates';"
+query_equals_one "manifest dispatcher_mapping for ui_topology list_instance_operation_authoring_candidates" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='list_instance_operation_authoring_candidates';"
 
 echo "=== Validating hubs.hub_relations FK chain ==="
 query_equals_one "column exists: hubs.hub_relations.topology_manifest_id" \

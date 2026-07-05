@@ -242,6 +242,7 @@ export default function ContentsDataEditor({
                           q.key,
                           relationIntents,
                           rows,
+                          qualifiedColumns,
                         );
                         return (
                           <td key={q.key} class="px-1 py-1">
@@ -259,8 +260,10 @@ export default function ContentsDataEditor({
                                       )}
                                   >
                                     <option value="">（参照を選択）</option>
-                                    {candidates.map((id) => (
-                                      <option key={id} value={id}>{id}</option>
+                                    {candidates.map((c) => (
+                                      <option key={c.value} value={c.value}>
+                                        {c.label}
+                                      </option>
                                     ))}
                                   </select>
                                 )

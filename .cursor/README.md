@@ -11,10 +11,9 @@ This directory configures **Cursor IDE** agents for this repository. It does not
 
 ## Relationship to `.agent/`
 
-- **Entry contract**: [`top/AGENTS.md`](../AGENTS.md) (repository-root `AGENTS.md`) → `.agent/rules/rule.md` → work-type prompts/protocols.
+- **Entry contract**: [`top/AGENTS.md`](../AGENTS.md) → `.agent/rules/rule.md` → `.agent/README.md` → tool-first (`initial_contract` → implement → `local_test`) or fallback worktype route.
 - Cursor agents must read `top/AGENTS.md` first; see `.cursor/rules/topolactor-agent.mdc`.
-- **Executable checks**: `.agent/tests/*.sh` (same scripts as CI where noted).
-- **Last gate**: `bash .agent/tests/check-structure.sh`
+- **Verification close (tool-first)**: `agent-ui-local-test` through `summary` (`pass_or_fail`). **Fallback**: routed `required_checks` with `check-structure.sh` last. Windows local policy: see `.cursor/rules/local-verification.mdc`.
 
 ## Local environment (Cursor)
 

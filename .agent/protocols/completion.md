@@ -86,7 +86,7 @@ This protocol owns:
      5) update is consistent with completion, todo-carry-over, report-surfaces, and completion-summary protocols.
    - If any condition is unknown, disputed, or pending auditor judgment, defer canonical closure and emit Auditor TODO instead.
 8. Structure Verification
-   - Run `bash .agent/tests/check-structure.sh` last.
+   - When Agent UI tool is usable: `agent-ui-local-test` `checks` / `summary` (includes `check-structure.sh` via routed checks). On fallback only: run `bash .agent/tests/check-structure.sh` last among worktype `required_checks`.
    - Structure Check is the always-on required gate.
    - Structure verification is structural consistency check; it is not a semantic substitute.
 9. Terminal completion-output routing

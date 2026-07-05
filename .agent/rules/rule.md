@@ -1,5 +1,25 @@
 # Agent Rules (Always-On)
 
+## Entry route: effectiveness vs bypass risk
+
+Agents that skip `AGENTS.md` Entry Route and Repository Design Order routinely:
+
+- Implement from user message + existing code without reading `docs/design/*-ssot.*` / `docs/governance/*-ssot.*`
+- Justify SSOT violations as "matching current implementation" or "implementation ahead of SSOT"
+- Omit tool `start` / `end` (scenario contract + `docs/governance/logs/tool.log` usage record)
+- Claim completion without the full `agent-ui-local-test` chain through `summary` (or fallback routed `required_checks`)
+
+Following Entry Route (see repository-top `AGENTS.md`) is **required**, not optional polish:
+
+| Layer | If followed | If skipped |
+|---|---|---|
+| `AGENTS.md` + tool-first (`initial_contract` → implement → `local_test`) | Worktype, SSOT sections, scenario contract, routed checks before/after mutation | Ad-hoc scope; highest SSOT drift risk |
+| SSOT read before implement (`resolve-ssot` / `sections` or fallback) | Design authority from canonical docs | Code becomes false SSOT |
+| `SSOT -> wiring -> test/proof -> implement` | Missing layers repaired before coding | Shipped behavior contradicts design |
+| Explicit verification (`local_test` or fallback `required_checks`) | Completion backed by `pass_or_fail` / runner evidence | False "done" from partial checks |
+
+Tool output and existing code are **never** SSOT authority. Only applicable SSOT sections are.
+
 ## Prohibitions
 
 - Do not bypass Workflow Order Invariant.
@@ -63,7 +83,7 @@ Use `.agent/routes/worktype-required-protocols.yaml` as executable reference for
 
 ## Branch to Prompt
 
-Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, run its `worktypes`/`start` subcommands to resolve the worktype route, full prompt text (`prompt_content`), full required/triggered protocol text (`protocol_trigger_hints[].content`), and workflow step order (`workflow_procedure`, sourced from `.agent/skills/agent-workflow.md`) in one call (see `.agent/tools/README.md` and `.agent/routes/worktype-required-protocols.yaml`'s `agent_ui_tool_entry`) instead of manually opening the prompt router, `.agent/protocols/*`, or `.agent/skills/agent-workflow.md` below.
+Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, follow `next_step` through `initial_contract` (`worktypes` → `start` → `resolve-ssot` → `sections` → `end`) then, after implementation, `agent-ui-local-test` through `summary` (see `.agent/tools/README.md` and `docs/governance/agent-ui-protocol-ssot.yaml`). `start` inlines routed prompt and required/triggered protocol full text; SSOT sections are read in `resolve-ssot` / `sections`, not in `start` alone.
 
 Fallback: after worktype decision, open only matching prompt router:
 

@@ -64,7 +64,7 @@ READ_ENTRY
   - Protocol index hits are route-selection aids only, not pass/fail judgment.
   - `NOT_EXECUTED` is not `PASS`.
 - STRUCTURE_CHECK
-  - Run `bash .agent/tests/check-structure.sh` last when local checks are available.
+  - When Agent UI tool is usable: complete `agent-ui-local-test` (`checks` then `summary`; both include `check-structure.sh` via routed checks). On fallback only: run worktype `required_checks` from `.agent/routes/worktype-required-protocols.yaml` with `bash .agent/tests/check-structure.sh` last among them.
   - Structure check is structural validation, not semantic substitute.
 - PUSH_OR_PR
   - Push or update PR only after triggered gates/checks are handled.
