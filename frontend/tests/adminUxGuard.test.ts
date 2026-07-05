@@ -555,8 +555,25 @@ Deno.test("ContentsScreenDesignPanel: step 3 embedded import uses page column sp
     new URL("../islands/AdminImport.tsx", import.meta.url),
   );
   assert(panel.includes("columnSpecs={qualifiedColumns.map"));
+  assert(panel.includes("q.column.dataType"));
   assert(adminImport.includes("usePageColumnImport"));
   assert(adminImport.includes("UX_IMPORT_RULE_PAGE_COLUMNS"));
+  assert(
+    adminImport.includes("!usePageColumnImport") &&
+      adminImport.includes("handleApply"),
+    "backend apply must be gated off for embedded page-column local preview",
+  );
+});
+
+Deno.test("ContentsScreenDesignPanel: local import preview does not use backend snapshot reload", async () => {
+  const panel = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(panel.includes("isLocalImportPreviewSnapshotId"));
+  assert(
+    panel.includes("!isLocalImportPreviewSnapshotId(lastImportSnapshotId)"),
+    "snapshot reload must be backend snapshot ids only",
+  );
 });
 
 Deno.test("ContentsScreenDesignPanel: step 3 omits legacy table_ref and import_schema_name inputs", async () => {

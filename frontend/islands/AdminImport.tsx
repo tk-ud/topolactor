@@ -21,7 +21,9 @@ import {
   UX_UI_BUILDER,
 } from "../content/adminUxTerms.ts";
 import type { ConformanceColumnSpec } from "../lib/contentDataConformance.ts";
-import { previewInitialDataImportLocal } from "../lib/initialDataImportPreview.ts";
+import {
+  previewInitialDataImportLocal,
+} from "../lib/initialDataImportPreview.ts";
 
 export type AdminImportPanelProps = {
   /** When true, omit page chrome (for /admin/contents data-input section). */
@@ -161,7 +163,7 @@ export function AdminImportPanel({
           content: fileContent,
           columns: columnSpecs,
         });
-        if (!result.ok) {
+        if ("error" in result) {
           setError(result.error);
         } else {
           setPreview(result);
@@ -240,7 +242,7 @@ export function AdminImportPanel({
               </p>
             </div>
           )
-          : schemasEmpty
+          : !usePageColumnImport && schemasEmpty
           ? (
             <div class="alert-info">
               <p class="text-sm font-medium">
@@ -427,27 +429,31 @@ export function AdminImportPanel({
                 編集グリッドへ追加（全 {preview.records.length} 行）
               </button>
               <AdminActionHint>
-                プレビュー行を Step3 の同一グリッドへ追加します（既存行は保持）。型式診断はグリッド上で表示されます。
+                {usePageColumnImport
+                  ? "プレビュー行を Step3 の同一グリッドへ追加します（既存行は保持）。保存は Step 3 の通常保存（assign_screen_data_shape）です。"
+                  : "プレビュー行を Step3 の同一グリッドへ追加します（既存行は保持）。型式診断はグリッド上で表示されます。"}
               </AdminActionHint>
             </div>
           )}
 
-          <div class="mt-4">
-            <h2 class={sectionTitleClass}>
-              {embedded ? "適用（明示操作）" : "4. 適用"}
-            </h2>
-            <button
-              onClick={handleApply}
-              disabled={loading || preview.validCount === 0 ||
-                applyResult !== null}
-              class="btn-primary"
-            >
-              適用 ({preview.validCount} 件有効)
-            </button>
-            <AdminActionHint>
-              プレビューで問題がなかった行だけを取り込みます。適用後はスナップショットから再読込できます。
-            </AdminActionHint>
-          </div>
+          {!usePageColumnImport && (
+            <div class="mt-4">
+              <h2 class={sectionTitleClass}>
+                {embedded ? "適用（明示操作）" : "4. 適用"}
+              </h2>
+              <button
+                onClick={handleApply}
+                disabled={loading || preview.validCount === 0 ||
+                  applyResult !== null}
+                class="btn-primary"
+              >
+                適用 ({preview.validCount} 件有効)
+              </button>
+              <AdminActionHint>
+                プレビューで問題がなかった行だけを取り込みます。適用後はスナップショットから再読込できます。
+              </AdminActionHint>
+            </div>
+          )}
         </section>
       )}
 

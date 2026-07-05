@@ -6,6 +6,15 @@ import {
 } from "./contentDataConformance.ts";
 import type { ContentDataRowDraft } from "./manifestScreenDesign.ts";
 
+/** Frontend-only Step 3 preview id — must not be passed to admin_csv_json_import apply/reload. */
+export const LOCAL_IMPORT_PREVIEW_SNAPSHOT_PREFIX = "local-preview-";
+
+export function isLocalImportPreviewSnapshotId(snapshotId: string): boolean {
+  return snapshotId.startsWith(LOCAL_IMPORT_PREVIEW_SNAPSHOT_PREFIX);
+}
+
+export type LocalInitialDataImportPreviewError = { ok: false; error: string };
+
 function splitCsvLine(line: string): string[] {
   const out: string[] = [];
   let cur = "";
@@ -120,7 +129,7 @@ export function previewInitialDataImportLocal(input: {
   manifestId: string;
   content: string;
   columns: ConformanceColumnSpec[];
-}): AdminImportPreviewResult | { ok: false; error: string } {
+}): AdminImportPreviewResult | LocalInitialDataImportPreviewError {
   if (input.columns.length === 0) {
     return { ok: false, error: "Step 2 で項目を定義してから取り込んでください。" };
   }
@@ -144,7 +153,7 @@ export function previewInitialDataImportLocal(input: {
   const validCount = records.filter((r) => r.status === "valid").length;
   return {
     ok: true,
-    snapshotId: `local-preview-${crypto.randomUUID()}`,
+    snapshotId: `${LOCAL_IMPORT_PREVIEW_SNAPSHOT_PREFIX}${crypto.randomUUID()}`,
     sourceType: input.sourceType,
     manifestId: input.manifestId,
     schemaId: "step2_logical_columns",

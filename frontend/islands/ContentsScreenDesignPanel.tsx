@@ -107,6 +107,7 @@ import {
 } from "../lib/searchConditionEval.ts";
 import { evaluateMeasureOnRows } from "../lib/aggregationMeasureEval.ts";
 import { importRecordToRowValues } from "../lib/contentDataConformance.ts";
+import { isLocalImportPreviewSnapshotId } from "../lib/initialDataImportPreview.ts";
 import { AdminImportPanel } from "./AdminImport.tsx";
 import {
   listImportSnapshotRecords,
@@ -1380,7 +1381,9 @@ export default function ContentsScreenDesignPanel({
   const columnKeysForImport = qualifiedColumns.map((q) => q.key);
 
   const mergeImportPreviewToEditor = (preview: AdminImportPreviewResult) => {
-    setLastImportSnapshotId(preview.snapshotId);
+    if (!isLocalImportPreviewSnapshotId(preview.snapshotId)) {
+      setLastImportSnapshotId(preview.snapshotId);
+    }
     mergeSnapshotRowsIntoEditor(
       preview.snapshotId,
       rowsFromSnapshotPreview(preview, "import_preview"),
@@ -2207,7 +2210,7 @@ export default function ContentsScreenDesignPanel({
         <>
       <h3 class="mt-5 text-xs font-semibold">データ入力 — {UX_FIELD_INITIAL_DATA}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        初期表示のデータ候補。手入力・CSV/JSON 取り込み（プレビュー → 適用）のいずれも、下の同一グリッドで編集・保存できます。
+        初期表示のデータ候補。手入力と CSV/JSON プレビュー（グリッドへ追加）を同一グリッドで編集し、Step 3 保存で反映します。
       </p>
       <AdminImportPanel
         embedded
@@ -2215,13 +2218,15 @@ export default function ContentsScreenDesignPanel({
         lockManifestId={!!selectedId}
         columnSpecs={qualifiedColumns.map((q) => ({
           key: q.key,
-          dataType: q.dataType,
-          nullable: q.nullable,
+          dataType: q.column.dataType,
+          nullable: q.column.nullable,
+          enumGroupId: q.column.enumGroupId,
         }))}
         onMergePreviewToEditor={mergeImportPreviewToEditor}
         onApplied={handleImportApplied}
       />
-      {lastImportSnapshotId && (
+      {lastImportSnapshotId &&
+        !isLocalImportPreviewSnapshotId(lastImportSnapshotId) && (
         <div class="mb-2 flex flex-wrap gap-2">
           <button
             type="button"
