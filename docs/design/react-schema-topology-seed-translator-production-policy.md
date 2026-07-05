@@ -15,11 +15,16 @@ a future Bundle intends to build a tool around them.
 
 - `design_change` Bundle: produced the SSOT contract only (no code). Done.
 - `implementation_change` Bundle (credential-management-0092): implemented
-  `generate-react-schema` only, proven against the
+  `generate-react-schema`, proven against the
   `auth.external.credential_management.projection` fixture
   (`manifest.manifest_id = 00000000-0000-0000-0000-000000000092`). Done.
-  `generate-topology-seed` and `round-trip-check` are still deliberately
-  `not_implemented_out_of_scope` (fail-closed, not silently accepted).
+- Follow-up `implementation_change` Bundle: implemented `generate-topology-seed`,
+  converting that same fixture's own `generate-react-schema` output into a
+  `topology_ui_seed_contract` candidate (identity/source/authority preserved,
+  loss/gap reporting populated). Still draft/intake only -- no active seed
+  write, no `RuntimeComponentSpec` generation. Done.
+  `round-trip-check` is still deliberately `not_implemented_out_of_scope`
+  (fail-closed, not silently accepted).
 - No docker compose service, nginx route, or C# call boundary exists yet.
   Everything under "Deferred" below is still forward-looking guidance.
 
@@ -34,6 +39,14 @@ a future Bundle intends to build a tool around them.
 - Tool implements `input_format_contract` -> `input_text_markup_grammar_contract` ->
   `text_decomposition_contract` -> `react_schema_contract` -> `output_format_contract`
   from the SSOT for `generate-react-schema`.
+- Tool implements `exchange_mapping.schema_to_seed_record_mapping` ->
+  `topology_ui_seed_contract` -> `output_format_contract` for
+  `generate-topology-seed`. Its `inputText` is a JSON string of a
+  `topolactor.react_schema.v1` candidate (see `input_format_contract.mode_vocabulary`),
+  not markup text. The supplied schema is re-validated against
+  `wiring_lane_contract`/`ui_catalog_boundary_contract`/structural rules before
+  conversion -- it is never trusted blindly, even if it came from this
+  translator's own `generate-react-schema` output.
 - Tool classifies every action/step `eventBinding` into exactly one
   `wiring_lane_contract` lane, and resolves every componentKind/style ref through
   `ui_catalog_boundary_contract` before treating a node as valid.
@@ -41,9 +54,8 @@ a future Bundle intends to build a tool around them.
 - If the caller's input envelope carries a pre-resolved `seedEvidence` object
   (produced by a test/proof/evidence-verification step, not by the translator),
   the tool passes it through to the output unchanged after a shape check.
-- `topology_ui_seed_contract` and `projection_render_exchange_contract` are
-  still forward-looking boundaries for `generate-topology-seed` and a future
-  `RuntimeComponentSpec` candidate stage; neither is implemented yet.
+- `projection_render_exchange_contract` is still a forward-looking boundary for
+  a future `RuntimeComponentSpec` candidate stage; not implemented yet.
 - C# may call the tool later through a bounded subprocess or a local compose
   service, treating tool output as a candidate, never as semantic authority.
 
@@ -78,7 +90,9 @@ a future Bundle intends to build a tool around them.
 .agent/tests/check-react-schema-topology-seed-translator.sh
 .agent/scripts/check_react_schema_topology_seed_translator.py
 .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json
-tools/generate/schema/translated.json   (committed evidence artifact)
+.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json
+tools/generate/schema/translated.json                (committed evidence artifact: generate-react-schema)
+tools/generate/schema/translated-topology-seed.json  (committed evidence artifact: generate-topology-seed)
 docs/design/react-schema-topology-seed-translator-ssot.yaml
 ```
 
@@ -86,7 +100,7 @@ docs/design/react-schema-topology-seed-translator-ssot.yaml
 
 ```text
 react-schema-topology-seed-translator generate-react-schema  --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>]
-react-schema-topology-seed-translator generate-topology-seed --input <envelope.json>   # fails closed: not_implemented_out_of_scope
+react-schema-topology-seed-translator generate-topology-seed --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>]
 react-schema-topology-seed-translator round-trip-check       --input <envelope.json>   # fails closed: not_implemented_out_of_scope
 ```
 

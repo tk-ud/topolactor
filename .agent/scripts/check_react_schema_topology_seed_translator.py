@@ -4,14 +4,19 @@
 SSOT: docs/design/react-schema-topology-seed-translator-ssot.yaml
 Tool under test: .agent/tools/react-schema-topology-seed-translator
                  (-> .agent/scripts/react_schema_topology_seed_translator.py)
-Fixture: .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json
+Fixtures:
+  .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json
+  .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json
 
-Runs the 23 acceptance checks from the credential-management-0092
-generate-react-schema implementation task: the golden fixture end to end,
-plus negative-path scenarios built as ephemeral tmp fixtures (no extra
-committed fixture files needed per scenario). Structured JSON assertions
-live here (Python3 stdlib only); the paired check-*.sh is a bash CI
-entrypoint/orchestration wrapper only.
+Runs the acceptance checks for both implemented modes -- generate-react-schema
+(the original credential-management-0092 implementation task) and
+generate-topology-seed (its follow-up, converting that mode's own output into
+a topology_ui_seed_contract candidate) -- against their golden fixtures end
+to end, plus negative-path scenarios built as ephemeral tmp fixtures (no
+extra committed fixture files needed per scenario). round-trip-check stays
+not_implemented_out_of_scope. Structured JSON assertions live here (Python3
+stdlib only); the paired check-*.sh is a bash CI entrypoint/orchestration
+wrapper only.
 """
 from __future__ import annotations
 
@@ -25,6 +30,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL = REPO_ROOT / ".agent" / "tools" / "react-schema-topology-seed-translator"
 FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.input.json"
+TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.topology-seed.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
 SEED_EMPTY_PATH = REPO_ROOT / "db" / "seed_empty.sql"
 
@@ -129,8 +135,28 @@ def run_generate(input_path, extra_args=None):
     return proc, doc
 
 
+def run_generate_topology_seed(input_path, extra_args=None):
+    args = ["generate-topology-seed", "--input", str(input_path)]
+    if extra_args:
+        args.extend(extra_args)
+    proc = run_tool(args)
+    try:
+        doc = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        doc = None
+    return proc, doc
+
+
 def rule_ids(doc):
     return [e.get("ruleId") for e in (doc or {}).get("validationErrors", [])]
+
+
+_TMP_FIXTURE_COUNTER = [0]
+
+
+def _next_tmp_name(prefix):
+    _TMP_FIXTURE_COUNTER[0] += 1
+    return f"{prefix}_{_TMP_FIXTURE_COUNTER[0]}.json"
 
 
 def write_tmp_fixture(input_text, base=None, tmpdir=None):
@@ -141,7 +167,20 @@ def write_tmp_fixture(input_text, base=None, tmpdir=None):
         "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
     }
     payload["inputText"] = input_text
-    path = Path(tmpdir) / "tmp_fixture.json"
+    path = Path(tmpdir) / _next_tmp_name("tmp_fixture")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def write_topology_seed_tmp_fixture(input_text_json_str, tmpdir=None):
+    payload = {
+        "schemaId": "topolactor.translator_input.v1",
+        "mode": "generate_topology_ui_seed",
+        "targetSurface": "auth.external.credential_management.projection",
+        "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
+        "inputText": input_text_json_str,
+    }
+    path = Path(tmpdir) / _next_tmp_name("tmp_topology_seed_fixture")
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
@@ -312,14 +351,8 @@ def main():
         _, doc19e = run_generate(tmp19e)
         expect("19e. Action directly under Section becomes blocking ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW", "ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW" in rule_ids(doc19e))
 
-        # 20 / 21. unimplemented modes fail closed
-        proc20 = run_tool(["generate-topology-seed", "--input", str(FIXTURE)])
-        try:
-            doc20 = json.loads(proc20.stdout)
-        except json.JSONDecodeError:
-            doc20 = None
-        expect("20. generate-topology-seed returns not_implemented / out_of_scope", proc20.returncode != 0 and doc20 is not None and doc20.get("status") == "not_implemented_out_of_scope")
-
+        # 20. generate-topology-seed is now implemented (see checks 24+ below);
+        # round-trip-check remains the only unimplemented mode.
         proc21 = run_tool(["round-trip-check", "--input", str(FIXTURE)])
         try:
             doc21 = json.loads(proc21.stdout)
@@ -361,6 +394,85 @@ def main():
             "23. tool does not treat db/*.sql as translator source authority (zero db/*.sql references in executable code; seedEvidence is passthrough-only)",
             "translator input authority" in impl_text.lower() and not sql_refs_in_translator_code,
         )
+
+        # --- generate-topology-seed (topology_ui_seed_contract) ---
+
+        out_path_seed = Path(tmpdir) / "translated-seed.json"
+        proc_ts, doc_ts = run_generate_topology_seed(TOPOLOGY_SEED_FIXTURE, extra_args=[
+            "--output", str(out_path_seed),
+            "--scenario-uuid", SCENARIO_UUID,
+        ])
+        expect("24. credential-management-0092 topology-seed fixture generates a topologyUiSeedCandidate", out_path_seed.is_file() and doc_ts is not None and not rule_ids(doc_ts))
+
+        tuc = (doc_ts or {}).get("topologyUiSeedCandidate") or {}
+        expect("25. topologyUiSeedCandidate.schema == topolactor.topology_ui_seed.v1", tuc.get("schema") == "topolactor.topology_ui_seed.v1")
+        expect("26. topologyUiSeedCandidate.role == draft_intake_artifact_not_active_topology", tuc.get("role") == "draft_intake_artifact_not_active_topology")
+        expect("27. reactSchemaCandidate is carried through verbatim for audit", (doc_ts or {}).get("reactSchemaCandidate", {}).get("schema") == "topolactor.react_schema.v1")
+        expect("28. exchangeReport.outputSeedSchemaId == topolactor.topology_ui_seed.v1", dig(doc_ts or {}, "exchangeReport", "outputSeedSchemaId") == "topolactor.topology_ui_seed.v1")
+        expect("29. topologyUiSeedCandidate.projections is populated", bool(tuc.get("projections")))
+
+        proj = (tuc.get("projections") or [{}])[0]
+        expect("30. root projection record recordType == topology_ui_projection and surface is set", proj.get("recordType") == "topology_ui_projection" and proj.get("surface") == "auth.external.credential_management.projection")
+
+        category_record_keys = {c.get("categoryKey") for c in proj.get("categories") or []}
+        expect("31. topology_ui_category records preserve user_auth/external/instance_settings", {"user_auth", "external", "instance_settings"}.issubset(category_record_keys))
+
+        instance_settings_cat = next((c for c in proj.get("categories") or [] if c.get("categoryKey") == "instance_settings"), {})
+        section0 = (instance_settings_cat.get("sections") or [{}])[0]
+        form_records = [c for c in section0.get("children") or [] if c.get("recordType") == "topology_ui_form"]
+        expect("32. topology_ui_form records preserve the four instance_settings forms", {"instance_settings_import_form", "instance_address_form", "instance_operation_binding_form", "instance_operation_approval_form"}.issubset({f.get("formKey") for f in form_records}))
+
+        all_action_records = []
+
+        def collect_actions(rec, acc):
+            if rec.get("recordType") == "topology_ui_action":
+                acc.append(rec)
+            for key in ("categories", "sections", "children", "fields", "actions", "steps"):
+                for c in rec.get(key) or []:
+                    if isinstance(c, dict):
+                        collect_actions(c, acc)
+
+        collect_actions(proj, all_action_records)
+        expect("33. topology_ui_action records preserve the six instance_settings actions", {"json_template_download", "json_import", "validate", "preview", "apply", "approve"}.issubset({a.get("actionKey") for a in all_action_records}))
+        expect(
+            "34. topology_ui_action records preserve identity (sourceReactPath/sourceYamlRefs/authorityMarker/eventBinding)",
+            all(a.get("sourceReactPath") and a.get("sourceYamlRefs") and a.get("authorityMarker") and a.get("eventBinding") for a in all_action_records),
+        )
+
+        expect("35. envelope-level knownGapRefs propagate into topology-seed unresolvedGaps and exchangeReport.knownGapRefs", "instance_settings_projection_category_not_yet_represented" in ((doc_ts or {}).get("unresolvedGaps") or []) and "instance_settings_projection_category_not_yet_represented" in (dig(doc_ts or {}, "exchangeReport", "knownGapRefs") or []))
+
+        no_active_topology_write_claim = "activeTopology" not in json.dumps(tuc) and "runtimeExecute" not in json.dumps(tuc)
+        expect("36. topologyUiSeedCandidate carries no active-topology/execution-authority claim", no_active_topology_write_claim)
+
+        # 37. generate-react-schema envelope rejected by generate-topology-seed (mode mismatch)
+        tmp37 = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[/projection]\n", tmpdir=tmpdir)
+        _, doc37 = run_generate_topology_seed(tmp37)
+        expect("37. generate-topology-seed + envelope.mode=generate_react_schema becomes blocking MODE_MISMATCH", "MODE_MISMATCH" in rule_ids(doc37))
+
+        # 38. non-JSON inputText becomes blocking validationError, not a crash
+        tmp38 = write_topology_seed_tmp_fixture("this is not json", tmpdir=tmpdir)
+        proc38, doc38 = run_generate_topology_seed(tmp38)
+        expect("38. non-JSON inputText becomes blocking INPUT_TEXT_NOT_VALID_JSON (no crash)", doc38 is not None and "INPUT_TEXT_NOT_VALID_JSON" in rule_ids(doc38))
+
+        # 39. a react schema candidate with an unmapped node kind produces a loss entry and a blocking error
+        broken_schema = json.loads(json.loads(TOPOLOGY_SEED_FIXTURE.read_text(encoding="utf-8"))["inputText"])
+        broken_schema["root"]["kind"] = "NotARealKind"
+        tmp39 = write_topology_seed_tmp_fixture(json.dumps(broken_schema), tmpdir=tmpdir)
+        _, doc39 = run_generate_topology_seed(tmp39)
+        expect("39. unmapped react schema node kind becomes blocking REACT_NODE_KIND_UNMAPPED and a lossEntries entry", "REACT_NODE_KIND_UNMAPPED" in rule_ids(doc39) and bool(dig(doc39 or {}, "exchangeReport", "lossEntries")))
+
+        # 40. generate-topology-seed re-validates the supplied schema (doesn't trust it blindly):
+        # an Action injected directly under a Section (not Form/Workflow) must still be rejected.
+        tampered_schema = json.loads(json.loads(TOPOLOGY_SEED_FIXTURE.read_text(encoding="utf-8"))["inputText"])
+        rogue_action = {
+            "kind": "Action", "key": "rogue_action", "label": "rogue", "sourceYamlRefs": ["a"],
+            "authorityMarker": "validation_only",
+            "eventBinding": {"trigger": "click", "wiringLane": "external_instance_wiring", "targetRef": "instance:db_instance_port:x:y", "authority": "validation_only"},
+        }
+        tampered_schema["root"]["children"][0]["children"][0]["children"].append(rogue_action)
+        tmp40 = write_topology_seed_tmp_fixture(json.dumps(tampered_schema), tmpdir=tmpdir)
+        _, doc40 = run_generate_topology_seed(tmp40)
+        expect("40. generate-topology-seed re-validates the supplied schema (rogue Action under Section is still rejected)", "ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW" in rule_ids(doc40))
 
     print()
     if FAILURES:

@@ -1,18 +1,28 @@
 #!/usr/bin/env python3
-"""react_schema_topology_seed_translator.py -- generate-react-schema implementation body.
+"""react_schema_topology_seed_translator.py -- generate-react-schema /
+generate-topology-seed implementation body.
 
-Implements the `generate_react_schema` mode of
-docs/design/react-schema-topology-seed-translator-ssot.yaml:
+Implements two modes of docs/design/react-schema-topology-seed-translator-ssot.yaml:
 
-    inputText -> input_text_markup_grammar_contract parse
-              -> text_decomposition_contract normalized elements
-              -> react_schema_contract candidate
-              -> wiring_lane_contract / ui_catalog_boundary_contract validation
-              -> output_format_contract shaped document
+    generate_react_schema:
+      inputText -> input_text_markup_grammar_contract parse
+                -> text_decomposition_contract normalized elements
+                -> react_schema_contract candidate
+                -> wiring_lane_contract / ui_catalog_boundary_contract validation
+                -> output_format_contract shaped document
 
-`generate-topology-seed` and `round-trip-check` are explicitly out of scope for
-this Bundle and fail closed with a `not_implemented_out_of_scope` document
-rather than raising or silently succeeding.
+    generate_topology_ui_seed:
+      inputText (JSON string of a topolactor.react_schema.v1 candidate)
+                -> wiring_lane_contract / ui_catalog_boundary_contract validation
+                   (re-validated; a supplied schema is never trusted blindly)
+                -> exchange_mapping.schema_to_seed_record_mapping conversion
+                -> topology_ui_seed_contract candidate (draft/intake only,
+                   never active topology; see topology_ui_seed_contract.active_topology_rule)
+                -> output_format_contract shaped document
+
+`round-trip-check` is explicitly out of scope for this Bundle and fails
+closed with a `not_implemented_out_of_scope` document rather than raising or
+silently succeeding.
 
 Translator input authority: this script reads only the SSOT YAML above (via
 the repo's stdlib-only minimal_yaml loader) and the caller-supplied input
@@ -642,6 +652,141 @@ def walk_and_validate(node, lanes_def, declared_surface, errors, path="$.root", 
 
 
 # ---------------------------------------------------------------------------
+# react_schema -> topology_ui_seed conversion (generate_topology_ui_seed mode)
+# ---------------------------------------------------------------------------
+
+def assign_paths(node, path="$.root"):
+    """A JSON-deserialized react schema candidate carries no _path bookkeeping
+    (strip_internal removed it on the way out of generate-react-schema); this
+    reconstructs sourceReactPath for every node before conversion/validation."""
+    node["_path"] = path
+    for i, c in enumerate(node.get("children") or []):
+        assign_paths(c, f"{path}.children[{i}]")
+
+
+COMMON_NODE_KEYS = {"kind", "key", "label", "sourceYamlRefs", "knownGapRefs", "authorityMarker", "children", "_path"}
+
+KIND_SPECIFIC_CONSUMED_KEYS = {
+    "Projection": set(),
+    "Category": set(),
+    "Section": {"sectionKind"},
+    "Form": {"target", "mode", "fields", "actions"},
+    "Field": {"control", "required"},
+    "Table": {"source", "display"},
+    "Workflow": {"steps"},
+    "Step": {"eventBinding", "actionRef"},
+    "Action": {"eventBinding", "actionRef"},
+    "Validation": {"rule", "severity", "appliesTo"},
+    "PropBinding": {"targetProp", "source"},
+    "PayloadFrom": {"targetField", "source"},
+    "StyleRef": {"target", "tokenRef"},
+    "Unresolved": {"rawFragment"},
+}
+
+
+def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_entries):
+    """exchange_mapping.schema_to_seed_record_mapping, one react_schema node at a time.
+
+    Appends exchange_report_contract.loss_entry_fields-shaped dicts to
+    loss_entries for anything that could not be mapped (no_silent_loss)."""
+    react_kind = node.get("kind")
+    path = node.get("_path", "$.root")
+    record_type = schema_to_seed_map.get(react_kind)
+    if record_type is None:
+        loss_entries.append({
+            "sourceReactPath": path,
+            "property": "kind",
+            "reason": f"react schema node kind '{react_kind}' has no schema_to_seed_record_mapping entry",
+            "severity": "blocking",
+            "knownGapRef": f"runtime_dispatch_or_projection_gap:unmapped_react_node_kind:{react_kind}",
+        })
+        return None
+
+    record = {
+        "recordType": record_type,
+        "key": node.get("key"),
+        "label": node.get("label"),
+        "sourceYamlRefs": node.get("sourceYamlRefs") or [],
+        "sourceReactPath": path,
+        "knownGapRefs": list(node.get("knownGapRefs") or []),
+    }
+    if node.get("authorityMarker"):
+        record["authorityMarker"] = node["authorityMarker"]
+
+    converted_children = []
+    for c in node.get("children") or []:
+        child_record = convert_node_to_seed_record(c, schema_to_seed_map, target_surface, loss_entries)
+        if child_record is not None:
+            converted_children.append(child_record)
+
+    if react_kind == "Projection":
+        record["surface"] = target_surface
+        record["categories"] = [c for c in converted_children if c["recordType"] == "topology_ui_category"]
+    elif react_kind == "Category":
+        record["categoryKey"] = record["key"]
+        record["sections"] = [c for c in converted_children if c["recordType"] == "topology_ui_section"]
+    elif react_kind == "Section":
+        record["sectionKey"] = record["key"]
+        record["sectionKind"] = node.get("sectionKind", "")
+        record["children"] = converted_children
+    elif react_kind == "Form":
+        record["formKey"] = record["key"]
+        record["target"] = node.get("target", "")
+        record["mode"] = node.get("mode", "")
+        record["fields"] = [c for c in converted_children if c["recordType"] == "topology_ui_field"]
+        record["actions"] = [c for c in converted_children if c["recordType"] == "topology_ui_action"]
+    elif react_kind == "Field":
+        record["fieldKey"] = record["key"]
+        record["control"] = node.get("control", "")
+        record["required"] = bool(node.get("required", False))
+        record["validationRefs"] = [c["key"] for c in converted_children if c["recordType"] == "topology_ui_validation"]
+    elif react_kind == "Table":
+        record["tableKey"] = record["key"]
+        record["source"] = node.get("source", "")
+        record["display"] = node.get("display", "")
+        record["columns"] = converted_children
+    elif react_kind == "Workflow":
+        record["workflowKey"] = record["key"]
+        record["steps"] = [c for c in converted_children if c["recordType"] == "topology_ui_workflow_step"]
+    elif react_kind == "Step":
+        record["stepKey"] = record["key"]
+        record["actionRef"] = node.get("actionRef", "")
+        record["eventBinding"] = node.get("eventBinding")
+    elif react_kind == "Action":
+        record["actionKey"] = record["key"]
+        record["actionRef"] = node.get("actionRef", "")
+        record["eventBinding"] = node.get("eventBinding")
+    elif react_kind == "Validation":
+        record["validationKey"] = record["key"]
+        record["rule"] = node.get("rule", "")
+        record["severity"] = node.get("severity", "warning")
+    elif react_kind == "PropBinding":
+        record["targetProp"] = node.get("targetProp", "")
+        record["source"] = node.get("source", "")
+    elif react_kind == "PayloadFrom":
+        record["targetField"] = node.get("targetField", "")
+        record["source"] = node.get("source", "")
+    elif react_kind == "StyleRef":
+        record["target"] = node.get("target", "")
+        record["tokenRef"] = node.get("tokenRef", "")
+    elif react_kind == "Unresolved":
+        record["rawFragment"] = node.get("rawFragment", "")
+
+    consumed = COMMON_NODE_KEYS | KIND_SPECIFIC_CONSUMED_KEYS.get(react_kind, set())
+    for key in node.keys():
+        if key not in consumed:
+            loss_entries.append({
+                "sourceReactPath": path,
+                "property": key,
+                "reason": f"property '{key}' on a {react_kind} node has no seed-record mapping target",
+                "severity": "warning",
+                "knownGapRef": None,
+            })
+
+    return record
+
+
+# ---------------------------------------------------------------------------
 # output assembly
 # ---------------------------------------------------------------------------
 
@@ -679,16 +824,29 @@ def build_react_schema_candidate(root_node, target_surface, source_refs):
     }
 
 
-def build_exchange_report(source_refs, emitted_count, known_gap_refs, loss_entries, reverse_blockers, validation_errors):
+def build_exchange_report(source_refs, emitted_count, known_gap_refs, loss_entries, reverse_blockers, validation_errors, source_schema_id="topolactor.translator_input.v1", output_seed_schema_id=None):
     return {
-        "sourceSchemaId": "topolactor.translator_input.v1",
-        "outputSeedSchemaId": None,
+        "sourceSchemaId": source_schema_id,
+        "outputSeedSchemaId": output_seed_schema_id,
         "sourceYamlRefs": source_refs,
         "emittedRecords": emitted_count,
         "knownGapRefs": known_gap_refs,
         "lossEntries": loss_entries,
         "reverseTranslationBlockers": reverse_blockers,
         "validationErrors": validation_errors,
+    }
+
+
+def build_topology_ui_seed_candidate(supplied_schema, target_surface, root_record, exchange_report):
+    return {
+        "schema": "topolactor.topology_ui_seed.v1",
+        "role": "draft_intake_artifact_not_active_topology",
+        "seedKey": target_surface,
+        "surface": target_surface,
+        "sourceReactSchema": supplied_schema,
+        "sourceYamlRefs": supplied_schema.get("sourceYamlRefs") or [],
+        "projections": [root_record] if root_record is not None else [],
+        "exchangeReport": exchange_report,
     }
 
 
@@ -808,6 +966,133 @@ def cmd_generate_react_schema(args):
     return 1 if any(is_blocking(e) for e in doc["validationErrors"]) else 0
 
 
+def cmd_generate_topology_seed(args):
+    repo_root = REPO_ROOT
+    output = new_output_shell()
+
+    ssot_root, ssot_errors = load_ssot(repo_root)
+    if ssot_errors:
+        output["validationErrors"].extend(ssot_errors)
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    try:
+        with open(args.input, "r", encoding="utf-8") as f:
+            envelope = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        output["validationErrors"].append(err("INPUT_FILE_UNREADABLE", "$.input", "blocking", str(exc)))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    vocabulary = protected_vocabulary(ssot_root)
+    val_errors, mode, input_text, target_surface = validate_input_envelope(envelope, ssot_root, vocabulary)
+    output["validationErrors"].extend(val_errors)
+
+    if mode is not None and mode != "generate_topology_ui_seed":
+        output["validationErrors"].append(
+            err(
+                "MODE_MISMATCH",
+                "$.mode",
+                "blocking",
+                f"generate-topology-seed requires envelope mode 'generate_topology_ui_seed', got '{mode}'",
+            )
+        )
+
+    fatal_rule_ids = {"INPUT_TEXT_EMPTY", "SOURCE_YAML_REFS_EMPTY", "INPUT_MODE_INVALID", "MODE_MISMATCH"}
+    if any(e["ruleId"] in fatal_rule_ids for e in output["validationErrors"]):
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    # generate_topology_ui_seed's inputText is a JSON string carrying the
+    # react schema candidate to convert (mode_vocabulary.generate_topology_ui_seed),
+    # never free/markup text -- see input_format_contract.mode_vocabulary.
+    try:
+        supplied_schema = json.loads(input_text)
+    except json.JSONDecodeError as exc:
+        output["validationErrors"].append(err("INPUT_TEXT_NOT_VALID_JSON", "$.inputText", "blocking", f"inputText must be a JSON string of a react schema candidate: {exc}"))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    if not isinstance(supplied_schema, dict) or supplied_schema.get("schema") != "topolactor.react_schema.v1":
+        output["validationErrors"].append(err("REACT_SCHEMA_CANDIDATE_SCHEMA_MISMATCH", "$.inputText", "blocking", "parsed inputText must be a topolactor.react_schema.v1 object"))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    root_node = supplied_schema.get("root")
+    if not isinstance(root_node, dict):
+        output["validationErrors"].append(err("REACT_SCHEMA_CANDIDATE_ROOT_MISSING", "$.inputText.root", "blocking", "react schema candidate is missing a root node"))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    output["reactSchemaCandidate"] = supplied_schema  # carried through verbatim, for audit
+
+    assign_paths(root_node)
+    lanes_def = dig(ssot_root, "wiring_lane_contract", "lanes") or {}
+    declared_surfaces = dig(ssot_root, "declared_seed_surface_catalog", "known_declared_surfaces") or []
+    declared_surface = next((s for s in declared_surfaces if s.get("seed_surface_key") == target_surface), None)
+    tree_errors = []
+    # The supplied schema is caller-controlled input, not necessarily this
+    # translator's own generate-react-schema output -- re-validate it against
+    # the same contracts rather than trusting it blindly (exchange_mapping
+    # canonical_direction rule).
+    walk_and_validate(root_node, lanes_def, declared_surface, tree_errors)
+    output["validationErrors"].extend(tree_errors)
+
+    schema_to_seed_map = dig(ssot_root, "exchange_mapping", "schema_to_seed_record_mapping") or {}
+    loss_entries = []
+    root_record = convert_node_to_seed_record(root_node, schema_to_seed_map, target_surface, loss_entries)
+    for entry in loss_entries:
+        if entry["severity"] == "blocking":
+            output["validationErrors"].append(err("REACT_NODE_KIND_UNMAPPED", entry["sourceReactPath"], "blocking", entry["reason"]))
+
+    unresolved_gaps = collect_known_gap_refs(root_node)
+    for loss_gap in (e["knownGapRef"] for e in loss_entries if e.get("knownGapRef")):
+        if loss_gap not in unresolved_gaps:
+            unresolved_gaps.append(loss_gap)
+    for envelope_gap in envelope.get("knownGapRefs") or []:
+        if envelope_gap not in unresolved_gaps:
+            unresolved_gaps.append(envelope_gap)
+    output["unresolvedGaps"] = unresolved_gaps
+    output["reverseTranslationBlockers"] = []
+
+    source_refs = supplied_schema.get("sourceYamlRefs") or []
+    exchange_report = build_exchange_report(
+        source_refs,
+        count_records(root_node),
+        unresolved_gaps,
+        loss_entries,
+        [],
+        output["validationErrors"],
+        source_schema_id="topolactor.react_schema.v1",
+        output_seed_schema_id="topolactor.topology_ui_seed.v1",
+    )
+    output["exchangeReport"] = exchange_report
+    output["topologyUiSeedCandidate"] = build_topology_ui_seed_candidate(supplied_schema, target_surface, root_record, exchange_report)
+
+    doc = {"schemaId": "topolactor.translator_output.v1", **output}
+
+    if args.scenario_uuid:
+        doc["scenario"] = {
+            "uuid": args.scenario_uuid,
+            "worktype": args.scenario_worktype,
+            "targetBranch": args.scenario_branch,
+        }
+
+    seed_evidence, evidence_errors = passthrough_seed_evidence(envelope)
+    doc["validationErrors"].extend(evidence_errors)
+    if seed_evidence is not None:
+        doc["seedEvidence"] = seed_evidence
+
+    write_output(args, doc)
+    return 1 if any(is_blocking(e) for e in doc["validationErrors"]) else 0
+
+
 def _not_implemented_handler(mode):
     def handler(args):
         doc = {
@@ -846,11 +1131,18 @@ def build_arg_parser():
     gen.add_argument("--scenario-branch", default="")
     gen.set_defaults(func=cmd_generate_react_schema)
 
-    for mode, name in (("generate_topology_ui_seed", "generate-topology-seed"), ("round_trip_check", "round-trip-check")):
-        p = sub.add_parser(name)
-        p.add_argument("--input", required=False)
-        p.add_argument("--output")
-        p.set_defaults(func=_not_implemented_handler(mode))
+    gen2 = sub.add_parser("generate-topology-seed")
+    gen2.add_argument("--input", required=True)
+    gen2.add_argument("--output")
+    gen2.add_argument("--scenario-uuid")
+    gen2.add_argument("--scenario-worktype", default="implementation_change")
+    gen2.add_argument("--scenario-branch", default="")
+    gen2.set_defaults(func=cmd_generate_topology_seed)
+
+    rtc = sub.add_parser("round-trip-check")
+    rtc.add_argument("--input", required=False)
+    rtc.add_argument("--output")
+    rtc.set_defaults(func=_not_implemented_handler("round_trip_check"))
 
     return parser
 
