@@ -26,6 +26,7 @@ topolactor_projection_authoring_settings:
   /admin/manifests
 
 initial_projection_side_admin_crud_seed:
+  credentials auth / external api / external instance
   enum CRUD
   user / role / status CRUD
   dashboard configuration CRUD
@@ -44,6 +45,7 @@ non_canonical_hardcoded_routes_to_remove:
 
 - `/auth` and `/super_auth` are gates, not projection pages.
 - `/admin` and its canonical child routes are Topolactor projection-authoring/settings surfaces, not business projection itself.
+- The initial projection-side admin CRUD seed is the correct authority for credentials auth / external api / external instance, enum CRUD, user / role / status CRUD, dashboard configuration CRUD, and scheduler configuration CRUD.
 - `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, and `/admin/scheduler` must not survive as hardcoded standalone frontend routes.
 - Their responsibilities must be expressed as **initial projection-side admin CRUD seed**.
 - The projection engine / canonical admin mechanism should render the seeded CRUD definitions, not route-specific hardcoded pages.
@@ -53,6 +55,10 @@ non_canonical_hardcoded_routes_to_remove:
 ## Corrected seed target
 
 ```text
+credentials auth / external api / external instance:
+  -> initial projection-side admin CRUD seed
+  -> no separate hardcoded frontend route
+
 /admin/enums:
   -> initial projection-side admin CRUD seed for enum groups/items
 
@@ -86,7 +92,7 @@ old proof:
 
 new proof:
   hardcoded non-canonical route is absent
-  initial projection-side admin CRUD seed exists for enum/users/dashboard/scheduler responsibilities
+  initial projection-side admin CRUD seed exists for credentials auth / external api / external instance, enum/users/dashboard/scheduler responsibilities
   seeded CRUD definition is renderable through canonical projection/admin mechanism
   old route-specific page is not needed for the responsibility
   /demo has no seed replacement requirement
@@ -114,6 +120,7 @@ These tests currently preserve old hardcoded route authority and must be rewritt
 - Gate routes are classified as gates.
 - Admin routes are classified as Topolactor projection-authoring/settings surfaces.
 - Removed hardcoded admin CRUD routes have replacement initial projection-side admin CRUD seed definitions:
+  - credentials auth / external api / external instance
   - enum CRUD
   - user / role / status CRUD
   - dashboard configuration CRUD
