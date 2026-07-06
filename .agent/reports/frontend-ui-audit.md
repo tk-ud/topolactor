@@ -7,6 +7,7 @@
 - Evidence boundary: GitHub read fallback audit. `.agent/tools` runtime was not executable from this chat. No CI log or Agent local-test result was available, so test execution success is not used as evidence.
 - Revision note: Finding 1 was revised after owner review. `contents -> ui-builder -> manifests` is a valid operator workflow. The remaining issue is the missing SSOT wording layer that distinguishes `/admin/contents` local submit steps 1-3 from the whole-admin operator workflow stages 4-5.
 - Revision note: Finding 6 records owner direction for a large SSOT redesign. The intended direction is to keep the existing Figma-like layout canvas, add a switchable Markmap-style wiring canvas projection, use existing drag/drop interaction assets for wiring connection edits, keep `runtimeInteractions` as the canonical model, and switch inspectors by canvas mode.
+- Revision note: Finding 7 records owner direction that non-canonical admin/debug/support pages must be removed from the admin workflow route surface and converted into initial seed / projection-app setting data where needed.
 
 ## Finding 1: admin workflow stage wording needs Step 4 / Step 5 SSOT clarification
 
@@ -442,3 +443,99 @@
 - Existing Figma-like layout canvas assets must not be discarded or reimplemented without need.
 - Markmap must not become the canonical persistence model; it is projection over `runtimeInteractions`.
 - Existing click/change/select runtime interaction tests remain useful evidence, but they are not sufficient for the proposed wiring canvas, lifecycle/high-frequency event model, topology movement model, Markmap projection/edit model, and layout/design authoring model.
+
+## Finding 7: non-canonical admin/debug/support routes should become initial seed projection data
+
+### 対象SSOT
+
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- Proposed: projection-place registry / initial-seed projection contract
+
+### Section
+
+- `frontend_routes.public`
+- `frontend_routes.admin`
+- `admin_console_workflow_ssot.authority.canonical_routes`
+- `ADMIN_ROUTE_CARDS`
+- Proposed addition: `canonical_projection_place_boundary`
+- Proposed addition: `initial_seed_projection_surface_contract`
+
+### 不整合実装ファイル
+
+#### 実装側
+
+- `frontend/fresh.gen.ts`
+- `frontend/routes/admin/enums.tsx`
+- `frontend/routes/admin/users.tsx`
+- `frontend/routes/admin/team-dashboard/index.tsx`
+- `frontend/routes/admin/scheduler.tsx`
+- `frontend/routes/demo.tsx`
+- `frontend/routes/runtime-status.tsx`
+- `frontend/content/adminGuides.ts`
+
+#### seed側
+
+- Initial seed files that define app settings, roster defaults, scheduler defaults, preview/demo defaults, runtime status defaults, and projection app configuration.
+
+### 不整合詳細
+
+- Owner direction: the following routes are not canonical admin workflow pages and should not remain standalone admin/debug/support projection places:
+  - `/admin/enums`
+  - `/admin/users`
+  - `/admin/team-dashboard`
+  - `/admin/scheduler`
+  - `/demo`
+  - `/runtime-status`
+- These concerns should be represented as initial seed / projection-app setting data where needed, not as top-level admin workflow pages.
+- `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, and `/admin/scheduler` are app-side settings / roster / dashboard / scheduler configuration concerns. They belong to the projected app's seeded configuration surface, not the admin authoring workflow route set.
+- `/demo` is a preview/projection runtime concern. If it remains useful, it should be backed by seeded preview/projection data and gated as preview, not treated as a canonical page route.
+- `/runtime-status` is debug/ops vocabulary and should not be a user/admin-visible canonical route. Required runtime status defaults or health indicators should be modeled as seed/projection data or ops-only internal diagnostics, not as a normal frontend route.
+- Current route surfaces therefore mix three different meanings:
+  - canonical auth/admin authoring projection places.
+  - projection-app seeded settings.
+  - debug/preview/ops surfaces.
+- This mix weakens SSOT authority because `admin-console-workflow-ssot` is intended to describe the authoring flow, while these routes describe seeded app configuration or debug status.
+
+### 改善案
+
+- Keep canonical projection places limited to:
+  - `/`
+  - `/auth`
+  - `/super_auth`
+  - `/admin`
+  - `/admin/contents`
+  - `/admin/ui-builder`
+  - `/admin/manifests`
+- Remove or reclassify the following from canonical route registries and admin route cards:
+  - `/admin/enums`
+  - `/admin/users`
+  - `/admin/team-dashboard`
+  - `/admin/scheduler`
+  - `/demo`
+  - `/runtime-status`
+- Convert the removed route concerns into initial seed data:
+  - enum groups / items -> seeded app setting tables or projection settings.
+  - users / roles / status defaults -> seeded app roster / auth projection settings.
+  - team dashboard defaults -> seeded app dashboard projection configuration.
+  - scheduler defaults -> seeded scheduler configuration / projection app settings, not admin workflow page.
+  - demo/preview defaults -> seeded preview/projection configuration.
+  - runtime status defaults -> seeded/internal ops diagnostics if needed; no normal route projection.
+- Add SSOT boundary:
+  - `admin-console-workflow-ssot` owns flow only.
+  - route registry owns canonical projection places only.
+  - projection app settings are seeded data, not route authority.
+  - debug/ops diagnostics are not user/admin canonical routes.
+- Add migration/todo requirement before implementation:
+  - identify each route's current data responsibility.
+  - identify target seed file or create seed contract.
+  - remove route card and navigation exposure only after seed replacement exists.
+  - leave no orphan API dependency or broken navigation link.
+
+### Blocker classification
+
+- This is a design_change before route deletion.
+- Direct deletion without seed replacement is prohibited.
+- Keeping the routes as canonical admin workflow surfaces is prohibited.
+- `/runtime-status` must not remain a normal frontend projection route under canonical route authority.
+- If a route is temporarily retained during migration, it must be explicitly classified as deprecated / dev-only / migration-only and excluded from the canonical admin workflow.
