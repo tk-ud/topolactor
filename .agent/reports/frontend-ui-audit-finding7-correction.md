@@ -3,7 +3,7 @@
 - Date: 2026-07-06
 - Target repo: github.com/tk-ud/topolactor
 - Worktype: audit / design_correction
-- Supersedes: `.agent/reports/frontend-ui-audit.md` Finding 7 wording where it says `projection-app setting data` or `seed-backed app settings`.
+- Supersedes: `.agent/reports/frontend-ui-audit.md` Finding 7 wording where it says `projection-app setting data`, `seed-backed app settings`, `demo/preview defaults`, or `runtime/internal diagnostics defaults`.
 
 ## Correction summary
 
@@ -30,10 +30,8 @@ initial_projection_side_admin_crud_seed:
   user / role / status CRUD
   dashboard configuration CRUD
   scheduler configuration CRUD
-  preview/demo configuration CRUD
-  internal diagnostics/status CRUD if needed
 
-non_canonical_hardcoded_routes:
+non_canonical_hardcoded_routes_to_remove:
   /admin/enums
   /admin/users
   /admin/team-dashboard
@@ -46,9 +44,11 @@ non_canonical_hardcoded_routes:
 
 - `/auth` and `/super_auth` are gates, not projection pages.
 - `/admin` and its canonical child routes are Topolactor projection-authoring/settings surfaces, not business projection itself.
-- `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, `/admin/scheduler`, `/demo`, and `/runtime-status` must not survive as hardcoded standalone frontend routes.
+- `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, and `/admin/scheduler` must not survive as hardcoded standalone frontend routes.
 - Their responsibilities must be expressed as **initial projection-side admin CRUD seed**.
 - The projection engine / canonical admin mechanism should render the seeded CRUD definitions, not route-specific hardcoded pages.
+- `/demo` is not required and must not be moved into seed.
+- `/runtime-status` / diagnostics are not required and must not be moved into seed.
 
 ## Corrected seed target
 
@@ -66,11 +66,12 @@ non_canonical_hardcoded_routes:
   -> initial projection-side admin CRUD seed for scheduler configuration
 
 /demo:
-  -> initial projection-side admin CRUD seed or preview seed for demo/preview configuration
+  -> remove hardcoded route
+  -> no seed replacement
 
 /runtime-status:
-  -> initial projection-side admin CRUD seed or internal diagnostics seed if needed
-  -> no normal frontend route projection
+  -> remove hardcoded route
+  -> no diagnostics seed replacement
 ```
 
 ## Test/proof correction
@@ -85,9 +86,11 @@ old proof:
 
 new proof:
   hardcoded non-canonical route is absent
-  initial projection-side admin CRUD seed exists
+  initial projection-side admin CRUD seed exists for enum/users/dashboard/scheduler responsibilities
   seeded CRUD definition is renderable through canonical projection/admin mechanism
   old route-specific page is not needed for the responsibility
+  /demo has no seed replacement requirement
+  /runtime-status has no diagnostics seed replacement requirement
 ```
 
 Affected current test surface:
@@ -110,14 +113,22 @@ These tests currently preserve old hardcoded route authority and must be rewritt
   - `/admin/manifests`
 - Gate routes are classified as gates.
 - Admin routes are classified as Topolactor projection-authoring/settings surfaces.
-- Removed hardcoded routes have replacement initial projection-side admin CRUD seed definitions.
-- Tests prove seeded CRUD renderability through the canonical projection/admin mechanism.
+- Removed hardcoded admin CRUD routes have replacement initial projection-side admin CRUD seed definitions:
+  - enum CRUD
+  - user / role / status CRUD
+  - dashboard configuration CRUD
+  - scheduler configuration CRUD
+- `/demo` is removed without seed replacement.
+- `/runtime-status` / diagnostics are removed without seed replacement.
+- Tests prove seeded CRUD renderability through the canonical projection/admin mechanism only for required CRUD responsibilities.
 
 ## NG axis
 
 - Calling `/auth` or `/super_auth` projection pages.
 - Calling `/admin` business projection itself.
 - Calling the seed target generic `projection-app setting data` without CRUD/seed authority.
+- Moving `/demo` into seed.
+- Moving `/runtime-status` or diagnostics into seed.
 - Keeping `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, `/admin/scheduler`, `/demo`, or `/runtime-status` as canonical hardcoded routes.
-- Deleting tests without replacement seed/CRUD proof.
+- Deleting tests without replacement seed/CRUD proof for the required CRUD responsibilities.
 - Keeping tests that assert seed-migrated routes as canonical pages.
