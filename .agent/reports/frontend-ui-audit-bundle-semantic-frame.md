@@ -228,8 +228,14 @@ owns:
   runtimeInteractions authoring
   external capability selection from seed registry
 
+lineage_boundary:
+  current reusable canvas lineage = FlowLayoutCanvas
+  historical VisualLayoutCanvas direct-manipulation lineage was replaced before this report scope
+  historical VisualLayoutCanvas restoration is not required by this Bundle
+  implementation must not treat old Figma-like wording as current blocking authority
+
 layout_mode:
-  preserve existing Figma-like layout canvas lineage
+  preserve current FlowLayoutCanvas layout canvas lineage
   owns placement / css / responsive / inlineText / URL link / props / propBindings / calculationBindings
   primary inspector = layout / design settings
 
@@ -257,28 +263,65 @@ trigger_vocabulary:
   pointer: click / mouseon / mouseout / hover_start / hover_end
   keyboard: keyon / keydown / keyup / enter / escape
   form: input / change / select / submit / focus / blur
+  rule:
+    stored values may remain raw identifiers
+    visible labels use user-facing projection vocabulary
+    report / SSOT / test must keep the same trigger group mapping
 
 UI_event_settings:
-  API設定:
-    contents Step 3 API candidates
-    screenReadQueryWiring candidates
-    external api candidates
-    external instance candidates
-  状態設定:
-    local UI state mutation
-    monitored variable set / toggle / clear
+  event_trigger:
+    source UI node emits trigger vocabulary event
+    trigger UI and target/effect axes are independent
+
+  frontend_side:
+    UI監視割当:
+      defines state slot / monitored variable / watched dependency source
+      useState-like binding, not a mutation
+      examples: stateKey / initialValue / valueType / scope / watchedBy / readableFrom
+    UI状態更新:
+      writes to an already-declared state slot / monitored variable
+      setState-like mutation
+      examples: set / toggle / clear / open / close / statePath write
+    副作用設定:
+      useEffect-like reaction settings
+      trigger source may be UI event / watched state slot / monitored variable / outputProp / targetNode state
+      write target may be local state slot / monitored variable / outputProp / targetNode state / API result binding
+      payloadFrom / outputProp / targetNode state assignment are effect fields, not the effect authority itself
+      explicit no-side-effect must be selectable
+
+  backend_side:
+    内部API:
+      contents Step 3 API candidates
+      screenReadQueryWiring candidates
+      internal topology/API dispatch candidates
+    外部API連携:
+      external api candidates from seed-backed external port registry
+      selected target writes typed dispatchExternalPort runtimeInteraction reference
+    外部インスタンス連携:
+      external instance candidates from seed-backed instance operation registry
+      selected target writes typed dispatchInstanceOperation runtimeInteraction reference
+
   authority:
-    credential / authority requirement candidate
-  side_effects:
-    monitored variable assignment
-    outputProp assignment
-    targetNode state assignment
-    explicit no-side-effect
+    credential / authority requirement candidate is displayed from selected capability record
+    credential material is never editable in UI Builder
+
   topology_movement:
     hub relation prev
     hub relation next
     explicit jump by user-facing topology label/name
     raw topology ids stay internal
+
+side_effect_cycle_policy:
+  effect target candidates must be filtered by dependency not-in rule before selection
+  selectable_write_targets = all_write_targets - dependency_closure(trigger_source)
+  direct self-loop is prohibited
+  indirect loop must fail-close when dependency graph can detect it
+  debounce/throttle is not loop-safety proof
+  NG examples:
+    watched A -> set A
+    watched A -> outputProp A
+    watched A -> API result writes A
+    A -> B and B -> A without explicit cycle break
 
 external_event_candidates:
   registered external api from initial CRUD seed
@@ -296,6 +339,7 @@ high_frequency_policy:
   mouseon / hover / key repeat must not dispatch backend/external calls by default
   local state / monitored variable update is allowed by default
   backend/API dispatch or topology movement requires debounce/throttle and explicit warning
+  debounce/throttle does not prove side-effect loop safety
 
 drag_drop_wiring_edit:
   valid drop -> typed runtimeInteraction patch
@@ -303,20 +347,34 @@ drag_drop_wiring_edit:
   edit is draft/undoable before apply
 
 OK:
-  existing FlowLayoutCanvas / drag-drop interaction assets are preserved and reused where compatible
+  current FlowLayoutCanvas / drag-drop interaction assets are preserved and reused where compatible
+  wiring graph / Markmap is projection/view only if used
+  runtimeInteractions store typed references
+  UI event settings use report vocabulary, not implementation-derived catch-all categories
+  frontend side separates UI監視割当 / UI状態更新 / 副作用設定
+  backend side separates 内部API / 外部API連携 / 外部インスタンス連携
   registered external api / external instance are selectable in UI Builder event settings
   candidates come from canonical seed-backed registry/projection admin mechanism
-  runtimeInteractions store typed references
-  Markmap/wiring projection is view only if used
+  side-effect write target candidates exclude dependency closure of trigger source
+  tests assert the report vocabulary and fail if implementation collapses categories
 
 NG:
   discarding existing canvas / drag-drop interaction assets without SSOT reason
   replacing the existing layout canvas with a new persistence authority
+  reviving historical VisualLayoutCanvas restoration as current PR574 blocker
+  using implementation categories as SSOT taxonomy
+  collapsing UI監視割当 / UI状態更新 / 副作用設定 into legacy or 状態設定
+  treating monitored variable assignment as both binding and mutation without explicit distinction
+  hiding 内部API outside the wiring inspector while claiming backend side completion
   hardcoded external api / instance choices in UI Builder
+  external api / external port / 外部連携 terminology drift
+  external instance / instance operation / インスタンス操作 terminology drift
   raw route/page references written as event wiring
   event settings unable to use registered external capabilities
   Markmap/rendered graph treated as persistence authority
   lifecycle/high-frequency triggers implemented before policy
+  side-effect target candidates allowing direct or detectable indirect loops
+  treating debounce/throttle as loop-safety proof
 ```
 
 ## Bundle: pipeline-continuity-ssot
@@ -334,6 +392,7 @@ target_test_files:
   frontend/tests/uiBuilderPackageWiring.test.ts
   frontend/tests/runtimeUiInteractionScenario.test.ts
   frontend/tests/adminWiringExecutionLane.test.ts
+  frontend/tests/uiBuilderWiringProjection.test.ts
 
 required_proof:
   route registry contains canonical routes only
@@ -344,9 +403,15 @@ required_proof:
   selected capability writes typed runtimeInteraction
   normal labels do not expose raw ids / UUIDs / internal vocabulary
   whole-admin Step 4/5 wording is qualified
-  existing canvas / drag-drop reuse boundary is preserved or explicitly justified by SSOT
+  current FlowLayoutCanvas / drag-drop reuse boundary is preserved or explicitly justified by SSOT
   runtimeInteractions -> wiring projection round-trip
   valid/invalid drag-drop wiring edit
+  UI event setting taxonomy matches report vocabulary
+  frontend side separates UI監視割当 / UI状態更新 / 副作用設定
+  backend side separates 内部API / 外部API連携 / 外部インスタンス連携
+  effect target candidate filtering excludes dependency closure of trigger source
+  direct side-effect self-loop fails close
+  detectable indirect side-effect loop fails close
   topology movement target label projection
   lifecycle load trigger inert preview
   high-frequency trigger debounce/fail-close
@@ -355,9 +420,12 @@ OK:
   tests follow owning SSOT
   old route-presence tests replaced by seed/render/wiring proof
   test deletion is paired with replacement proof
+  test vocabulary rejects implementation-derived catch-all categories
 
 NG:
   test-only deletion
   old tests asserting seed-migrated routes as canonical
   completion claim without agent-ui-local-test or routed fallback checks
+  tests accepting legacy / 状態設定 catch-all as complete UI event taxonomy
+  tests accepting debounce/throttle as side-effect loop-safety proof
 ```
