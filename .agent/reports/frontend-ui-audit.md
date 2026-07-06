@@ -5,8 +5,9 @@
 - Worktype: audit
 - Scope: admin / projection frontend UI, UX wording, selection surfaces, seed-visible labels, and test surface.
 - Evidence boundary: GitHub read fallback audit. `.agent/tools` runtime was not executable from this chat. No CI log or Agent local-test result was available, so test execution success is not used as evidence.
+- Revision note: Finding 1 was revised after owner review. `contents -> ui-builder -> manifests` is a valid operator workflow. The remaining issue is the missing SSOT wording layer that distinguishes `/admin/contents` local submit steps 1-3 from the whole-admin operator workflow stages 4-5.
 
-## Finding 1: `/admin/contents` frames UI Builder handoff as `Step 4`
+## Finding 1: admin workflow stage wording needs Step 4 / Step 5 SSOT clarification
 
 ### 対象SSOT
 
@@ -17,29 +18,43 @@
 - `purpose.summary`
 - `canonical_sequential_authoring_pipeline`
 - `ui_builder_canvas_workspace`
+- Proposed addition: `canonical_admin_operator_workflow`
 
 ### 不整合実装ファイル
 
 #### 実装側
 
 - `frontend/islands/ContentsScreenDesignPanel.tsx`
-- Section: Step 3 completion banner / UI Builder handoff
+- `frontend/content/adminGuides.ts`
+- `frontend/tests/adminMainFlow.test.ts`
+- Section: Step 3 completion banner / UI Builder handoff / admin main flow labels
 
 #### seed側
 
-- N/A: fixed frontend copy, not seed-derived.
+- N/A: fixed frontend copy and guide/test contract, not seed-derived.
 
 ### 不整合詳細
 
-- SSOT states `/admin/contents` owns steps 1-3, and `/admin/ui-builder` is a standalone canvas workspace route, not a post-pipeline numbered step.
+- `contents -> ui-builder -> manifests` is not an invalid flow. It is the natural admin operator workflow and is already represented by guide/test surfaces.
+- SSOT states `/admin/contents` owns numbered submit steps 1-3, and `/admin/ui-builder` is a canvas workspace route, not a `/admin/contents` local pipeline submit step.
+- SSOT also describes `/admin/manifests` as post-contents hub / relation / navigation management.
 - Implementation renders `保存済み — 次は Step 4 です` and links to `/admin/ui-builder`.
-- This creates a pipeline-step framing that makes UI Builder look like Step 4 of `/admin/contents`, despite the SSOT separating it as the canvas workspace route.
+- The issue is not the UI Builder handoff itself. The issue is that `Step 4` is unqualified, so it can be read as `/admin/contents` local submit step 4 rather than whole-admin operator workflow stage 4.
+- Because `ADMIN_MAIN_FLOW_STEPS` fixes `/admin/contents -> /admin/ui-builder -> /admin/manifests`, SSOT should explicitly define the whole-admin workflow layer and include Step 5 for `/admin/manifests`.
 
 ### 改善案
 
-- Replace `保存済み — 次は Step 4 です` with business-facing non-numbered copy such as `保存済み — 次は画面づくりへ進めます`.
-- Keep the CTA near the Step 3 save result, but do not label UI Builder as Step 4.
-- Add/extend a guard test that scans `ContentsScreenDesignPanel.tsx` for `Step 4` and fails when `/admin/ui-builder` handoff is framed as a numbered contents step.
+- Do not remove the `contents -> ui-builder -> manifests` flow.
+- Add a SSOT block that separates two numbering layers:
+  - `/admin/contents` local submit pipeline: Step 1-3 only.
+  - whole-admin operator workflow: Step 1-3 contents, Step 4 UI Builder, Step 5 manifests.
+- Define `/admin/ui-builder` as `whole-admin Step 4: 画面づくり`, while preserving `not contents submit pipeline step`.
+- Define `/admin/manifests` as `whole-admin Step 5: ページ同士をつなぐ / navigation management`.
+- Update visible copy to qualify the layer, for example `全体工程 Step 4: 画面づくりへ進めます` and `次は全体工程 Step 5: ページ同士をつなぐ`.
+- Add/extend guard tests:
+  - allow `Step 4` only when qualified as whole-admin workflow / 全体工程.
+  - require `Step 5` for `/admin/manifests` in the same workflow layer.
+  - prohibit wording that implies `/admin/ui-builder` or `/admin/manifests` are `/admin/contents` local submit steps.
 
 ## Finding 2: normal-view copy still exposes internal/system vocabulary
 
@@ -192,12 +207,14 @@
 - `test_surface_policy`
 - `user_facing_message_policy.language_policy`
 - `canvas_workspace_contract`
+- Proposed addition: `canonical_admin_operator_workflow`
 
 ### 不整合実装ファイル
 
 #### 実装側
 
 - `frontend/tests/adminUxGuard.test.ts`
+- `frontend/tests/adminMainFlow.test.ts`
 - `frontend/tests/visualLayoutBuilder.test.ts`
 - `frontend/tests/uiBuilderPackageWiring.test.ts`
 
@@ -208,11 +225,11 @@
 
 ### 不整合詳細
 
-- Existing tests provide useful structure guards for UiBuilder workspace, flow canvas, embedded import, column type labels, normal-view banned terms, and guide copy.
+- Existing tests provide useful structure guards for UiBuilder workspace, flow canvas, embedded import, column type labels, normal-view banned terms, guide copy, and admin route order.
 - The current guard pattern excludes technical disclosures and scans source text, but it does not fully cover:
   - actual rendered component text after interpolation
   - UUID regex leakage in visible summaries
-  - `Step 4` handoff framing
+  - whole-admin Step 4 / Step 5 wording layer
   - seed `propsJson` user-visible English labels
   - operator label raw-value exposure
   - mouse travel / visual jump / hierarchy depth as measurable UX surface
@@ -221,15 +238,19 @@
 ### 改善案
 
 - Add static guards:
-  - `ContentsScreenDesignPanel` must not contain `/admin/ui-builder` handoff text with `Step 4`
-  - normal-view copy must not contain UUID regex outside explicit technical details
-  - `adminUxTerms` normal labels must not expose raw SQL/operator labels as primary labels
-  - preset seed `propsJson` visible labels must be localized or explicitly classified as non-user-facing draft placeholder
+  - `ADMIN_MAIN_FLOW_STEPS` must preserve `/admin/contents -> /admin/ui-builder -> /admin/manifests`.
+  - `/admin/ui-builder` may be `Step 4` only when qualified as whole-admin workflow / 全体工程.
+  - `/admin/manifests` must be represented as whole-admin `Step 5` when Step 4 is shown.
+  - wording must not imply `/admin/ui-builder` or `/admin/manifests` are `/admin/contents` local submit steps.
+  - normal-view copy must not contain UUID regex outside explicit technical details.
+  - `adminUxTerms` normal labels must not expose raw SQL/operator labels as primary labels.
+  - preset seed `propsJson` visible labels must be localized or explicitly classified as non-user-facing draft placeholder.
 - Add rendered tests for key admin surfaces:
   - Step 1 entry mode labels
   - Step 2.5 relation summary
   - Step 3 completion handoff
   - UI Builder selected-node inspector primary labels
+  - UI Builder to manifests handoff / Step 5 label if exposed
 - Add UX structure tests where possible:
   - no more than one nested disclosure level on normal authoring path
   - primary next action remains in same panel after save
