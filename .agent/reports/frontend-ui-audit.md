@@ -6,7 +6,7 @@
 - Scope: admin / projection frontend UI, UX wording, selection surfaces, seed-visible labels, and test surface.
 - Evidence boundary: GitHub read fallback audit. `.agent/tools` runtime was not executable from this chat. No CI log or Agent local-test result was available, so test execution success is not used as evidence.
 - Revision note: Finding 1 was revised after owner review. `contents -> ui-builder -> manifests` is a valid operator workflow. The remaining issue is the missing SSOT wording layer that distinguishes `/admin/contents` local submit steps 1-3 from the whole-admin operator workflow stages 4-5.
-- Revision note: Finding 6 records owner direction for a large SSOT redesign. The intended direction is to split UI Builder into switchable `layout canvas` and `wiring canvas`, with mode-specific inspectors, explicit UI-event authoring, topology movement settings, and explicit layout/design settings.
+- Revision note: Finding 6 records owner direction for a large SSOT redesign. The intended direction is to keep the existing Figma-like layout canvas, add a switchable Markmap-style wiring canvas projection, use existing drag/drop interaction assets for wiring connection edits, keep `runtimeInteractions` as the canonical model, and switch inspectors by canvas mode.
 
 ## Finding 1: admin workflow stage wording needs Step 4 / Step 5 SSOT clarification
 
@@ -276,6 +276,9 @@
 - Proposed addition: `ui_builder_canvas_mode_contract`
 - Proposed addition: `ui_builder_layout_canvas_contract`
 - Proposed addition: `ui_builder_wiring_canvas_contract`
+- Proposed addition: `ui_builder_wiring_markmap_projection_contract`
+- Proposed addition: `ui_builder_wiring_drag_drop_connection_edit_contract`
+- Proposed addition: `runtimeInteractions_canonical_model_contract`
 - Proposed addition: `ui_builder_mode_sensitive_inspector_contract`
 - Proposed addition: `ui_builder_ui_event_authoring_contract`
 - Proposed addition: `ui_builder_layout_design_authoring_contract`
@@ -285,13 +288,16 @@
 #### 実装側
 
 - `frontend/islands/UiBuilderAdmin.tsx`
+- `frontend/components/FlowLayoutCanvas.tsx`
 - `frontend/components/NodeEventAuthoringPanel.tsx`
 - `frontend/components/ManifestStep3EventWiringPreset.tsx`
 - `frontend/lib/runtimeInteractionAuthoring.ts`
 - `frontend/lib/uiBuilderEventAuthoringHooks.ts`
+- `frontend/runtime/visualLayoutUtils.ts`
 - `frontend/runtime/renderEmission.ts`
 - `frontend/runtime/runtimeComponentFactory.ts`
 - `frontend/runtime/frontendScheduler.ts`
+- Proposed: `frontend/components/WiringMarkmapCanvas.tsx`
 
 #### test側
 
@@ -306,12 +312,16 @@
 
 ### 不整合詳細
 
-- Existing SSOT defines `/admin/ui-builder` primarily as a single layout/design canvas workspace.
-- Existing implementation already contains runtime interaction authoring concepts such as `trigger`, `actionType`, `targetNodeId`, `payloadFrom`, `outputProp`, `portTargetRef`, and `instanceTargetRef`.
+- Existing implementation already has a Figma-like / mouse-driven layout canvas lineage inside `/admin/ui-builder`; this should be preserved as the layout canvas, not replaced.
+- Existing `FlowLayoutCanvas` is already the layout projection surface for node selection, drag/drop intake, flow-layout preview, inlineText/link preview, calc/search callbacks, and inspector coordination.
+- Existing layout patch serialization already persists `nodes[].runtimeInteractions`; this field should remain the canonical wiring model.
+- Existing `NodeEventAuthoringPanel` already edits runtime interaction concepts such as `trigger`, `actionType`, `targetNodeId`, `statePath`, `payloadFrom`, `outputProp`, `portTargetRef`, and `instanceTargetRef`.
 - Current SSOT does not clearly define a separate wiring authoring canvas for UI event wiring. As a result, API selection, UI state mutation, topology movement, external port dispatch, and instance operation dispatch are spread across PackageWiringEditor / RouteNavigationWiringPreset / NodeEventAuthoringPanel / runtime emission code.
 - Owner direction is to redesign UI Builder as two switchable canvas modes:
-  - layout canvas: current layout/design canvas for placement, flow structure, css/responsive/text/link settings, props/state/propBindings, and layout_patch apply.
-  - wiring canvas: MindMap-style event wiring canvas using the old drag-and-drop interaction model for visualizing and authoring event source -> UI event -> setting category -> target/effect wiring.
+  - layout canvas: existing Figma-like `FlowLayoutCanvas` lineage for placement, flow structure, css/responsive/text/link settings, props/state/propBindings, and layout_patch apply.
+  - wiring canvas: Markmap-style / MindMap-style wiring projection that visualizes and edits `source UI node -> UI event -> setting category -> target/effect` from `draftNodes[].runtimeInteractions`.
+- Markmap must be treated as projection/view, not semantic authority or persistence source.
+- Drag/drop connection changes in the wiring canvas must update `draftNodes[].runtimeInteractions`, then rebuild the Markmap projection.
 - Inspector content must switch by canvas mode:
   - layout mode: layout / design settings inspector.
   - wiring mode: UI event settings inspector.
@@ -332,20 +342,41 @@
 ### 改善案
 
 - Treat this as `design_change` before `implementation_change`.
+- Preserve the existing Figma-like `FlowLayoutCanvas` as the layout canvas implementation lineage.
 - Add a large SSOT section for `ui_builder_canvas_mode_contract`:
   - mode: `layout_canvas`
     - purpose: placement / layout tree / design / css / responsive / inlineText / url link / propBindings / calculationBindings.
+    - implementation lineage: existing `FlowLayoutCanvas` and `UiBuilderAdmin` layout/design inspector assets.
     - primary inspector: layout / design settings inspector.
     - persistence: layout_patch_json, design JSONB, tmp/apply boundary.
   - mode: `wiring_canvas`
     - purpose: UI event graph / API-state-topology-movement target wiring.
-    - visual model: MindMap-style graph using source UI node -> event trigger -> settings tab -> target node/API/variable/topology movement.
+    - implementation lineage: new `WiringMarkmapCanvas` using existing canvas selection/drag-drop interaction assets where possible.
+    - visual model: Markmap-style graph using source UI node -> event trigger -> settings tab -> target node/API/variable/topology movement.
     - primary inspector: UI event settings inspector.
-    - persistence: runtimeInteractions / package wiring / topology movement targetRef / payloadFrom / outputProp / monitored variables.
+    - persistence: `draftNodes[].runtimeInteractions` plus existing layout_patch_json serialization.
+- Add `runtimeInteractions_canonical_model_contract`:
+  - canonical source: `draftNodes[].runtimeInteractions` / `layout_patch_json.nodes[].runtimeInteractions`.
+  - Markmap markdown/tree text is projection only.
+  - Markmap AST / rendered SVG / rendered HTML must not become persistence authority.
+  - drag/drop wiring edits must be translated into typed runtimeInteraction patches before save/apply.
+  - unknown Markmap node kinds or unsupported edit targets must fail close.
+- Add `ui_builder_wiring_markmap_projection_contract`:
+  - projection input: selected route package draft nodes and their runtimeInteractions.
+  - projection output: readable tree of UI node -> trigger -> API設定 / 状態設定 / 副作用設定 / トポロジ移動設定.
+  - projection must preserve user-facing labels while keeping raw ids internal.
+  - projection must rehydrate from runtimeInteractions, not from previously rendered markdown.
+- Add `ui_builder_wiring_drag_drop_connection_edit_contract`:
+  - drag source kinds: UI node, event trigger, action category, target/effect node.
+  - drop target kinds: event trigger, API target, monitored variable, state target, topology movement target.
+  - valid drop produces a typed runtimeInteraction patch.
+  - invalid drop shows explicit error and does not mutate draft.
+  - connection edits must be undoable through existing draft state before explicit apply.
 - Add `ui_builder_mode_sensitive_inspector_contract`:
   - layout mode shows layout tree, CSS settings, responsive settings, inlineText, URL link target settings, sizing, spacing, propBindings, calculation bindings.
   - wiring mode shows selected event node, trigger selector, API設定 tab, 状態設定 tab, side-effect assignment, topology movement settings, target selector, payloadFrom, outputProp, preview/inert status.
   - inspectors must not expose unrelated controls for the inactive mode in the primary path.
+  - existing `NodeEventAuthoringPanel` should be upgraded into the wiring inspector path, not discarded.
 - Add `ui_builder_ui_event_authoring_contract`:
   - trigger vocabulary:
     - lifecycle: load / route_enter / initial_display.
@@ -393,7 +424,10 @@
   - static SSOT guard for trigger vocabulary membership.
   - layout canvas / wiring canvas mode contract test.
   - inspector mode-switch visibility test.
+  - runtimeInteractions -> Markmap projection snapshot test.
+  - Markmap projection -> typed runtimeInteraction patch test.
   - wiring graph serialization round-trip test.
+  - drag/drop connection edit valid/invalid drop tests.
   - topology movement target serialization / label projection test.
   - layout CSS / responsive / inlineText / URL link projection test.
   - lifecycle load trigger inert preview test.
@@ -405,4 +439,6 @@
 - This is not a small wording or inspector refactor.
 - This should be treated as a large SSOT redesign bundle.
 - Implementing `load`, `keyon`, `mouseon`, visual wiring canvas behavior, topology movement setting, or layout design setting expansion before SSOT is defined would violate `SSOT -> wiring -> test/proof surface -> implementation`.
-- Existing click/change/select runtime interaction tests remain useful evidence, but they are not sufficient for the proposed wiring canvas, lifecycle/high-frequency event model, topology movement model, and layout/design authoring model.
+- Existing Figma-like layout canvas assets must not be discarded or reimplemented without need.
+- Markmap must not become the canonical persistence model; it is projection over `runtimeInteractions`.
+- Existing click/change/select runtime interaction tests remain useful evidence, but they are not sufficient for the proposed wiring canvas, lifecycle/high-frequency event model, topology movement model, Markmap projection/edit model, and layout/design authoring model.
