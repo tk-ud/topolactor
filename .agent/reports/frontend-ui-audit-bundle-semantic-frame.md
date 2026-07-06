@@ -233,16 +233,6 @@ layout_mode:
   owns placement / css / responsive / inlineText / URL link / props / propBindings / calculationBindings
   primary inspector = layout / design settings
 
-existing_canvas_reuse_policy:
-  reuse existing Figma-like drag/drop canvas interaction assets for wiring mode where compatible
-  existing canvas remains the primary canvas surface
-  do not replace the existing Figma-like canvas with FlowLayoutCanvas or a separate canvas authority
-  FlowLayoutCanvas is not automatically accepted as the intended Figma-like asset
-  if FlowLayoutCanvas is used, Agent must prove it is the current Figma-like canvas lineage or treat it as non-conformant
-  wiring canvas is a switchable overlay / mode / projection over the same existing canvas
-  new wiring components are allowed only as view/edit layer over runtimeInteractions, not persistence authority
-  existing drag/drop connection edit assets are the preferred adaptation path before new interaction implementation
-
 wiring_mode:
   UI event graph projection
   visual model = source UI node -> event trigger -> setting category -> target/effect
@@ -306,17 +296,12 @@ drag_drop_wiring_edit:
   edit is draft/undoable before apply
 
 OK:
-  existing Figma-like drag/drop canvas asset is identified, preserved, and reused for wiring mode where compatible
-  FlowLayoutCanvas use is accepted only if SSOT/proof shows it is the current Figma-like canvas lineage
   registered external api / external instance are selectable in UI Builder event settings
   candidates come from canonical seed-backed registry/projection admin mechanism
   runtimeInteractions store typed references
   Markmap/wiring projection is view only if used
 
 NG:
-  treating FlowLayoutCanvas as reuse proof merely by name/presence
-  discarding existing Figma-like canvas / drag-drop interaction assets without SSOT reason
-  replacing the existing Figma-like canvas with FlowLayoutCanvas or a new persistence authority
   hardcoded external api / instance choices in UI Builder
   raw route/page references written as event wiring
   event settings unable to use registered external capabilities
@@ -349,7 +334,6 @@ required_proof:
   selected capability writes typed runtimeInteraction
   normal labels do not expose raw ids / UUIDs / internal vocabulary
   whole-admin Step 4/5 wording is qualified
-  existing Figma-like canvas / drag-drop reuse boundary is preserved, or FlowLayoutCanvas lineage equivalence is explicitly proven by SSOT
   runtimeInteractions -> wiring projection round-trip
   valid/invalid drag-drop wiring edit
   topology movement target label projection
