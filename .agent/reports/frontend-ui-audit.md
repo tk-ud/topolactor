@@ -7,7 +7,7 @@
 - Evidence boundary: GitHub read fallback audit. `.agent/tools` runtime was not executable from this chat. No CI log or Agent local-test result was available, so test execution success is not used as evidence.
 - Revision note: Finding 1 was revised after owner review. `contents -> ui-builder -> manifests` is a valid operator workflow. The remaining issue is the missing SSOT wording layer that distinguishes `/admin/contents` local submit steps 1-3 from the whole-admin operator workflow stages 4-5.
 - Revision note: Finding 6 records owner direction for a large SSOT redesign. The intended direction is to keep the existing Figma-like layout canvas, add a switchable Markmap-style wiring canvas projection, use existing drag/drop interaction assets for wiring connection edits, keep `runtimeInteractions` as the canonical model, and switch inspectors by canvas mode.
-- Revision note: Finding 7 records owner direction that non-canonical admin/debug/support pages must be removed from the admin workflow route surface and converted into initial seed / projection-app setting data where needed.
+- Revision note: Finding 7 records owner direction that non-canonical admin/debug/support pages must be removed from the admin workflow route surface and converted into initial seed / projection-app setting data where needed. Existing tests that assert those routes as canonical must be removed or rewritten as seed/projection-contract tests.
 
 ## Finding 1: admin workflow stage wording needs Step 4 / Step 5 SSOT clarification
 
@@ -458,8 +458,10 @@
 - `frontend_routes.admin`
 - `admin_console_workflow_ssot.authority.canonical_routes`
 - `ADMIN_ROUTE_CARDS`
+- `frontend/tests/adminMainFlow.test.ts`
 - Proposed addition: `canonical_projection_place_boundary`
 - Proposed addition: `initial_seed_projection_surface_contract`
+- Proposed addition: `seed_migration_test_contract`
 
 ### 不整合実装ファイル
 
@@ -473,6 +475,13 @@
 - `frontend/routes/demo.tsx`
 - `frontend/routes/runtime-status.tsx`
 - `frontend/content/adminGuides.ts`
+
+#### test側
+
+- `frontend/tests/adminMainFlow.test.ts`
+  - `ADMIN_ROUTE_CARDS contain canonical admin routes only`
+  - `Fresh /admin route registry matches runtime-orchestration SSOT exactly`
+- Any existing or future tests that assert `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, `/admin/scheduler`, `/demo`, or `/runtime-status` as canonical page routes.
 
 #### seed側
 
@@ -495,6 +504,8 @@
   - canonical auth/admin authoring projection places.
   - projection-app seeded settings.
   - debug/preview/ops surfaces.
+- Existing tests currently preserve part of this wrong boundary by asserting route-card and Fresh registry membership for routes that should be seed-migrated.
+- Tests must follow SSOT after design_change. A test that asserts seed-migrated routes as canonical pages is not proof surface; it is stale route authority.
 - This mix weakens SSOT authority because `admin-console-workflow-ssot` is intended to describe the authoring flow, while these routes describe seeded app configuration or debug status.
 
 ### 改善案
@@ -521,6 +532,12 @@
   - scheduler defaults -> seeded scheduler configuration / projection app settings, not admin workflow page.
   - demo/preview defaults -> seeded preview/projection configuration.
   - runtime status defaults -> seeded/internal ops diagnostics if needed; no normal route projection.
+- Update existing tests as part of the same Bundle:
+  - delete route-presence assertions for seed-migrated routes.
+  - rewrite `ADMIN_ROUTE_CARDS` expectations to include only canonical admin authoring pages.
+  - rewrite Fresh route registry tests so seed-migrated routes are absent from canonical page route authority after migration.
+  - add seed/projection-contract tests for the migrated concerns, if the data responsibility remains required.
+  - remove tests that only prove the old page route exists and do not prove the new seed/projection contract.
 - Add SSOT boundary:
   - `admin-console-workflow-ssot` owns flow only.
   - route registry owns canonical projection places only.
@@ -530,6 +547,8 @@
   - identify each route's current data responsibility.
   - identify target seed file or create seed contract.
   - remove route card and navigation exposure only after seed replacement exists.
+  - update or delete existing tests that assert the old route contract.
+  - add replacement seed/projection tests where needed.
   - leave no orphan API dependency or broken navigation link.
 
 ### Blocker classification
@@ -537,5 +556,7 @@
 - This is a design_change before route deletion.
 - Direct deletion without seed replacement is prohibited.
 - Keeping the routes as canonical admin workflow surfaces is prohibited.
+- Keeping tests that assert seed-migrated pages as canonical routes is prohibited.
+- Test-only updates that remove evidence without seed/projection replacement are prohibited.
 - `/runtime-status` must not remain a normal frontend projection route under canonical route authority.
-- If a route is temporarily retained during migration, it must be explicitly classified as deprecated / dev-only / migration-only and excluded from the canonical admin workflow.
+- If a route is temporarily retained during migration, it must be explicitly classified as deprecated / dev-only / migration-only and excluded from the canonical admin workflow and canonical route tests.
