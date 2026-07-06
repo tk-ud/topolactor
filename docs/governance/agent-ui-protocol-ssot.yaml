@@ -12,7 +12,7 @@ agent_protocols:
   purpose:
     - Route Agents from ./AGENTS.md and .agent/rules/rule.md into the Agent UI tool.
     - Issue a usage id when the tool is used.
-    - Append datetime, uuid, task_name, and worktype to docs/governance/logs/tool.log.
+    - Append datetime, uuid, task_name, and worktype to .agent/tools/logs/tool.log.
     - Require PRs and summaries to include datetime, uuid, task_name, and worktype.
 
   reference_wiring:
@@ -59,7 +59,7 @@ agent_protocols:
       - .agent/tests for tool checks
       - docs/governance agent-tool SSOT files
       - docs/governance/reference tool-output reference files
-      - docs/governance/logs/tool.log compact usage evidence
+      - .agent/tools/logs/tool.log compact usage evidence
       - senario-tmp.md local temporary file
     ordinary_use_prohibited:
       - product runtime/source mutation by the tool
@@ -104,7 +104,7 @@ agent_protocols:
     reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
 
   log_contract:
-    path: docs/governance/logs/tool.log
+    path: .agent/tools/logs/tool.log
     fields:
       - datetime
       - uuid

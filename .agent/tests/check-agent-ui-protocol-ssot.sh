@@ -58,7 +58,7 @@ required_files=(
   "docs/governance/reference/agent-ui-tool-output-reference.yaml"
   "docs/governance/reference/agent-ui-senario-tmp-reference.yaml"
   "docs/governance/reference/agent-ui-negative-boundary-reference.yaml"
-  "docs/governance/logs/tool.log"
+  ".agent/tools/logs/tool.log"
   ".agent/scripts/check_agent_ui_protocol.py"
 )
 
@@ -73,7 +73,7 @@ ssot_terms=(
   "initial_contract"
   "implementation"
   "local_test"
-  "docs/governance/logs/tool.log"
+  ".agent/tools/logs/tool.log"
   "senario-tmp.md"
 )
 

@@ -27,6 +27,17 @@ a future Bundle intends to build a tool around them.
   (fail-closed, not silently accepted).
 - No docker compose service, nginx route, or C# call boundary exists yet.
   Everything under "Deferred" below is still forward-looking guidance.
+- Follow-up `implementation_change` Bundle (PR572): extracted the schema<->seed
+  translator entry gate core (`schema_seed_translator_entry_gate.py`,
+  `validate_translator_entry()`) and wired it into this translator's entry
+  (`generate-react-schema` / `generate-topology-seed` both still implemented;
+  a non-`pass` `gateStatus` now fails the entry closed before conversion
+  runs) and into `topology-seed-discussion` (`translator-entry-gate`
+  subcommand). The gate core is translator-entry-gate authority only -- it
+  is not SSOT authority, not proof completion, and not seed adoption
+  authority; see `translator_input_authority`/`declared_seed_surface_catalog`
+  above for those. `round-trip-check` remains deliberately
+  `not_implemented_out_of_scope`. Done.
 
 ## Work boundary
 
@@ -93,11 +104,20 @@ a future Bundle intends to build a tool around them.
 .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json
 .agent/tests/fixtures/react-schema-topology-seed-translator/physical-search-crud-aggregate.react-schema.json
 .agent/tests/fixtures/react-schema-topology-seed-translator/physical-search-crud-aggregate.topology-seed.input.json
-tools/generate/schema/translated.json                                              (evidence: credential-management-0092 generate-react-schema)
-tools/generate/schema/translated-topology-seed.json                                (evidence: credential-management-0092 generate-topology-seed)
-tools/generate/schema/translated-physical-search-crud-aggregate-topology-seed.json (evidence: physical_search_crud_aggregate.v1 generate-topology-seed)
+.agent/tools/generate/schema/translated.json                                              (evidence: credential-management-0092 generate-react-schema)
+.agent/tools/generate/schema/translated-topology-seed.json                                (evidence: credential-management-0092 generate-topology-seed)
+.agent/tools/generate/schema/translated-physical-search-crud-aggregate-topology-seed.json (evidence: physical_search_crud_aggregate.v1 generate-topology-seed)
+.agent/scripts/agent_tools/schema_seed_translator_entry_gate.py    (schema<->seed translator entry gate core; translator-entry-gate authority only)
+.agent/scripts/check_schema_seed_translator_entry_gate.py          (gate core executable proof)
+.agent/tests/check-schema-seed-translator-entry-gate.sh            (gate core CI entrypoint)
+.agent/tools/topology-seed-discussion translator-entry-gate        (external, read-only gate core caller)
 docs/design/react-schema-topology-seed-translator-ssot.yaml
 ```
+
+`.agent/tools/generate/schema/` is a tool-owned generated-evidence surface
+(same authority boundary as the rest of `.agent/tools`): committed snapshots
+of this translator's own output, not active topology and not SSOT
+authority.
 
 ## Implemented CLI shape
 
@@ -117,7 +137,7 @@ alongside `mode`, `inputText`, `sourceYamlRefs`, and the optional
 
 `--output` writes the full `output_format_contract`-shaped document (plus the
 `scenario` and `seedEvidence` extension fields) to a repo-relative path;
-paths outside the repository root are rejected. `tools/generate/schema/translated.json`
+paths outside the repository root are rejected. `.agent/tools/generate/schema/translated.json`
 is the committed evidence snapshot for the credential-management-0092
 fixture. Do not commit further generated outputs unless a task explicitly
 asks for an evidence snapshot.
@@ -158,7 +178,7 @@ topology.mock_preset_registry + topology.mock_preset_compile_snapshot)
   -> topology-seed input envelope
      (.agent/tests/fixtures/.../physical-search-crud-aggregate.topology-seed.input.json)
   -> generated topology seed candidate
-     (tools/generate/schema/translated-physical-search-crud-aggregate-topology-seed.json)
+     (.agent/tools/generate/schema/translated-physical-search-crud-aggregate-topology-seed.json)
 ```
 
 Concretely: `crud_search_button`/`crud_submit_button`/`crud_result_list` node

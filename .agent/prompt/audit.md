@@ -27,7 +27,7 @@ Worktype is `audit`, including any of:
   - PR reviews
   - review thread status
 - tool証跡log when `.agent/tools` / Agent UI run evidence is claimed or required:
-  - docs/governance/logs/tool.log
+  - .agent/tools/logs/tool.log
   - referenced Agent UI uuid / datetime
   - senario-tmp.md or relevant tool summary when referenced
 - .agent/tasks/todo.md

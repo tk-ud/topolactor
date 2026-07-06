@@ -45,7 +45,7 @@ checklist_interview:
     - ask_framework_questions_using_existing_checklists
 
 usage_log:
-  path: docs/governance/logs/tool.log
+  path: .agent/tools/logs/tool.log
   fields:
     - datetime
     - uuid

@@ -416,7 +416,7 @@ worktypes:
       tool_evidence_log:
         required_when: ".agent/tools or Agent UI run evidence is claimed, required, or relied on"
         surfaces:
-          - docs/governance/logs/tool.log
+          - .agent/tools/logs/tool.log
           - referenced Agent UI uuid / datetime
           - senario-tmp.md or relevant tool summary when referenced
       boundary: >-

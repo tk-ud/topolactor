@@ -31,7 +31,7 @@
 # Unlike the read-only observation tools in this directory (directory-map,
 # yaml-section-query, proof-surface-map, topology-seed-discussion), this tool
 # is an evidence-artifact generator: --output is an authorized write of a
-# tool-owned generated JSON document (e.g. tools/generate/schema/*.json), not
+# tool-owned generated JSON document (e.g. .agent/tools/generate/schema/*.json), not
 # a mutation of Topolactor application/runtime/product source. It never
 # writes to a database and never starts backend/frontend/nginx.
 set -euo pipefail

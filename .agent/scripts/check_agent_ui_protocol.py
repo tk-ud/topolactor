@@ -19,7 +19,7 @@ REQUIRED_FILES = [
     "docs/governance/reference/agent-ui-tool-output-reference.yaml",
     "docs/governance/reference/agent-ui-senario-tmp-reference.yaml",
     "docs/governance/reference/agent-ui-negative-boundary-reference.yaml",
-    "docs/governance/logs/tool.log",
+    ".agent/tools/logs/tool.log",
     ".agent/rules/rule.md",
     ".agent/tools/README.md",
     ".gitignore",
@@ -44,7 +44,7 @@ REQUIRED_TERMS = {
         "mutation_boundary",
         "allowed_when_in_agent_ui_scope",
         ".agent/tools implementation files",
-        "docs/governance/logs/tool.log",
+        ".agent/tools/logs/tool.log",
         "senario-tmp.md",
     ],
     "docs/governance/reference/agent-ui-tool-output-reference.yaml": [
@@ -53,7 +53,7 @@ REQUIRED_TERMS = {
         "AI-authored tool.log records",
         "Append only",
         "owner: human",
-        "docs/governance/logs/tool.log",
+        ".agent/tools/logs/tool.log",
     ],
     "docs/governance/reference/agent-ui-senario-tmp-reference.yaml": [
         "senario-tmp.md",

@@ -7,7 +7,7 @@ Implementation change under existing SSOT.
 Worktype is `implementation_change`.
 
 ## tool_first_entry
-When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → `start` → `resolve-ssot` → `sections` → `end` per [`docs/governance/agent-ui-protocol-ssot.yaml`](../../docs/governance/agent-ui-protocol-ssot.yaml). `start` inlines routed prompt and required/triggered protocol **full text** (`prompt_content`, `protocol_trigger_hints[].content`); SSOT sections are **not** resolved in `start` alone. `end` writes `senario-tmp.md` and appends to `docs/governance/logs/tool.log`. After implementation, close with the full `agent-ui-local-test` chain through `summary`. This file remains the fallback router when the tool is not usable.
+When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → `start` → `resolve-ssot` → `sections` → `end` per [`docs/governance/agent-ui-protocol-ssot.yaml`](../../docs/governance/agent-ui-protocol-ssot.yaml). `start` inlines routed prompt and required/triggered protocol **full text** (`prompt_content`, `protocol_trigger_hints[].content`); SSOT sections are **not** resolved in `start` alone. `end` writes `senario-tmp.md` and appends to `.agent/tools/logs/tool.log`. After implementation, close with the full `agent-ui-local-test` chain through `summary`. This file remains the fallback router when the tool is not usable.
 
 ## required_reads
 - .agent/docs/ssot-map.yaml

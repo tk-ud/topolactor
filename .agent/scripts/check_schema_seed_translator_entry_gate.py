@@ -42,7 +42,7 @@ FIXTURES_DIR = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topol
 ENVELOPE_FIXTURE = FIXTURES_DIR / "credential-management-0092.input.json"
 TOPOLOGY_SEED_ENVELOPE_FIXTURE = FIXTURES_DIR / "credential-management-0092.topology-seed.input.json"
 REACT_SCHEMA_FIXTURE = FIXTURES_DIR / "physical-search-crud-aggregate.react-schema.json"
-GENERATED_OUTPUT_FIXTURE = REPO_ROOT / "tools" / "generate" / "schema" / "translated.json"
+GENERATED_OUTPUT_FIXTURE = REPO_ROOT / ".agent" / "tools" / "generate" / "schema" / "translated.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
 
 FAILURES = []
@@ -126,7 +126,7 @@ def main():
         expect("9. valid translator output JSON -> gateStatus pass", result["gateStatus"] == gate.GATE_STATUS_PASS)
         expect("10. translator output result declares detectedShape=translator_output", result["inputDetection"]["detectedShape"] == "translator_output")
     else:
-        fail("9/10. committed translator output fixture missing: tools/generate/schema/translated.json")
+        fail("9/10. committed translator output fixture missing: .agent/tools/generate/schema/translated.json")
 
     # --- fail-close conditions ---------------------------------------------
 

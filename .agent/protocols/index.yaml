@@ -129,7 +129,7 @@ protocols:
         shard: .agent/protocols/audit/02-required-alignment-surfaces.md
         grep_keys:
           intent_keys: ["PR record", "tool log", "alignment surfaces"]
-          body_keys: ["PR body", "PR comments", "review thread", "docs/governance/logs/tool.log"]
+          body_keys: ["PR body", "PR comments", "review thread", ".agent/tools/logs/tool.log"]
           boundary_keys: ["trace/context surfaces only", "do not replace SSOT"]
         read_when: ["PR or tool evidence audit"]
 
