@@ -117,6 +117,7 @@ This keeps user-authored apps flexible while preventing hidden routes, silent fa
 - **Scope note (CI Attention):** CI Attention is input guidance and boundary guidance; canonical dispatch / explicit failure remain runtime/backend responsibilities.
 - **Scope note (SQL Attention):** Topology recommendation current is a child projection consumer, not SQL Attention itself, and does not auto-mutate fixed routes or registry/topology definitions.
 - **AI-Driven Development OS:** Agent work is routed through repository-local contracts, prompts, protocols, and checks so changes remain auditable.
+- **AI Interface (AII):** topolactor exposes repository-local semantic interfaces for AI agents. Agents read SSOT, generate candidates, report gaps, and run validation through controlled contracts before any change becomes runtime authority.
 
 ## Tech Stack
 
