@@ -50,6 +50,19 @@ a future Bundle intends to build a tool around them.
   tracked log). Reverse generation (seed -> schema) is still not
   implemented and out of scope; `round-trip-check` remains
   `not_implemented_out_of_scope`. Done.
+- `design_change` Bundle (PR573 follow-up, `topology_ui_seed_storage_contract_credential_management_ux`):
+  a `topologyUiSeedCandidate` with zero `validationErrors` was still adopted
+  in PR #573 as a single oversized `manifest.topology` array element and
+  broke a real Postgres INSERT (`idx_manifest_topology` GIN index item-size
+  limit). Added `storage_adoption_contract` to the SSOT and implemented it:
+  `generate-topology-seed` now always derives `topologyUiSeedFlatRecords`
+  (one `topology_ui_seed_record` wrapper per node, `parentKey`-linked,
+  independently checked against the storage budget -- blocking
+  `SEED_RECORD_EXCEEDS_STORAGE_BUDGET` on overflow) alongside the existing
+  nested `topologyUiSeedCandidate`, and an opt-in `--seed-sql-fragment`
+  flag renders those flat records as ready-to-paste `jsonb[]` array
+  element lines. The nested candidate remains debug/review-only and must
+  never be adopted as a single array element. Done.
 
 ## Work boundary
 
@@ -146,9 +159,21 @@ generation is still not implemented; see `round-trip-check` below.
 
 ```text
 react-schema-topology-seed-translator generate-react-schema  --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>] [--generate-log <path>] [--nametag <name>] [--task-ref <ref>] [--pr-ref <ref>] [--source-seed-sql <label>]
-react-schema-topology-seed-translator generate-topology-seed --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>] [--generate-log <path>] [--nametag <name>] [--task-ref <ref>] [--pr-ref <ref>] [--source-seed-sql <label>]
+react-schema-topology-seed-translator generate-topology-seed --input <envelope.json> [--output <path>] [--seed-sql-fragment <path>] [--scenario-uuid <uuid>] [--generate-log <path>] [--nametag <name>] [--task-ref <ref>] [--pr-ref <ref>] [--source-seed-sql <label>]
 react-schema-topology-seed-translator round-trip-check       --input <envelope.json>   # fails closed: not_implemented_out_of_scope
 ```
+
+`--seed-sql-fragment <path>` (storage_adoption_contract, added after PR #573):
+`generate-topology-seed` always derives `topologyUiSeedFlatRecords` from the
+same record tree as `topologyUiSeedCandidate` and validates every flattened
+element against the `manifest.topology` / `idx_manifest_topology` GIN index
+byte budget (`SEED_RECORD_EXCEEDS_STORAGE_BUDGET`, blocking, if exceeded).
+`--seed-sql-fragment` is an opt-in convenience that additionally renders
+those flattened records as ready-to-paste `jsonb[]` array element lines to a
+repo-relative path (skipped when any record is over budget). This file is
+still a generated artifact under the same authority boundary as any other
+`--output` -- review it and adopt it into the tracked seed store; it is
+never itself seed adoption authority.
 
 `--target-surface` is not a separate CLI flag: `targetSurface` lives in the
 input envelope JSON (`input_format_contract.required_fields.targetSurface`),

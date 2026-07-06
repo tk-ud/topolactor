@@ -480,6 +480,61 @@ def main():
         no_active_topology_write_claim = "activeTopology" not in json.dumps(tuc) and "runtimeExecute" not in json.dumps(tuc)
         expect("36. topologyUiSeedCandidate carries no active-topology/execution-authority claim", no_active_topology_write_claim)
 
+        # storage_adoption_contract (added after PR #573's idx_manifest_topology
+        # index row size failure): topologyUiSeedFlatRecords is the seed-safe
+        # adoption shape, derived from the same tree as topologyUiSeedCandidate.
+        flat_records = (doc_ts or {}).get("topologyUiSeedFlatRecords") or []
+        expect("36a. topologyUiSeedFlatRecords is populated for the golden fixture", bool(flat_records))
+        expect(
+            "36b. every flattened record independently fits the manifest.topology / idx_manifest_topology storage budget",
+            all(len(json.dumps(r, separators=(",", ":"))) <= 2712 for r in flat_records),
+        )
+        flat_keys = {r.get("record", {}).get("key") for r in flat_records}
+        root_flat = [r for r in flat_records if r.get("parentKey") is None]
+        expect("36c. exactly one flattened record has parentKey == null (the root projection)", len(root_flat) == 1 and root_flat[0].get("record", {}).get("recordType") == "topology_ui_projection")
+        expect(
+            "36d. every non-root flattened record's parentKey resolves to another flattened record's key (parentKey tree is fully reconstructible)",
+            all(r.get("parentKey") in flat_keys for r in flat_records if r.get("parentKey") is not None),
+        )
+        expect(
+            "36e. flattened action records still preserve authorityMarker/eventBinding after flattening",
+            all(
+                r.get("record", {}).get("authorityMarker") and r.get("record", {}).get("eventBinding")
+                for r in flat_records
+                if r.get("record", {}).get("recordType") == "topology_ui_action"
+            ),
+        )
+
+        # 36f-36h: a synthetic oversized single-field candidate must be caught
+        # by storage_adoption_contract's budget check at generation time, not
+        # discovered later as a real Postgres INSERT failure (the PR #573 gap
+        # this section closes).
+        oversize_schema = {
+            "schema": "topolactor.react_schema.v1",
+            "presetKey": "auth.external.credential_management.projection",
+            "surface": "auth.external.credential_management.projection",
+            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
+            "root": {
+                "kind": "Projection", "key": "p", "label": "p", "sourceYamlRefs": ["a"],
+                "children": [{
+                    "kind": "Category", "key": "c1", "label": "c1", "sourceYamlRefs": ["a"],
+                    "children": [{
+                        "kind": "Section", "key": "s1", "label": "s1", "sourceYamlRefs": ["a"], "sectionKind": "readonly_boundary",
+                        "children": [{
+                            "kind": "Field", "key": "f1", "label": "x" * 3000, "sourceYamlRefs": ["a"],
+                            "control": "form_input/form_field", "required": False,
+                        }],
+                    }],
+                }],
+            },
+        }
+        tmp36 = write_topology_seed_tmp_fixture(json.dumps(oversize_schema), tmpdir=tmpdir)
+        oversize_fragment_path = Path(tmpdir) / "oversize-fragment.sql"
+        proc36, doc36 = run_generate_topology_seed(tmp36, extra_args=["--seed-sql-fragment", str(oversize_fragment_path)])
+        expect("36f. an oversized flattened field is reported as blocking SEED_RECORD_EXCEEDS_STORAGE_BUDGET", proc36.returncode != 0 and "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" in rule_ids(doc36))
+        expect("36g. topologyUiSeedFlatRecords is still populated for review even when a record is over budget", bool((doc36 or {}).get("topologyUiSeedFlatRecords")))
+        expect("36h. --seed-sql-fragment is not written when any record is over budget (never hands a reviewer a broken fragment)", not oversize_fragment_path.exists())
+
         # 37. generate-react-schema envelope rejected by generate-topology-seed (mode mismatch)
         tmp37 = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[/projection]\n", tmpdir=tmpdir)
         _, doc37 = run_generate_topology_seed(tmp37)
