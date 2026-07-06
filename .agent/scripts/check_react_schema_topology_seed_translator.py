@@ -780,16 +780,23 @@ def main():
 
         required_record_fields = [
             "datetime", "nametag", "mode", "source", "sourceSeedSql", "seedKey", "manifestId",
-            "command", "outputKind", "outputPath", "sha256", "gateStatus",
-            "validationErrorCount", "unresolvedGapCount", "taskRef", "prRef",
+            "command", "outputKind", "outputSchemaId", "embeddedCandidateKind", "outputPath",
+            "sha256", "gateStatus", "validationErrorCount", "unresolvedGapCount", "taskRef", "prRef",
         ]
         expect(
             "83. every generate.log record carries all required fields (nullable where declared, never absent)",
             all(r is not None and all(f in r for f in required_record_fields) for r in log_records),
         )
         expect(
-            "84. every generate.log record's gateStatus/mode/outputKind reflect an actual gate-connected translator run",
-            all(r.get("gateStatus") == "pass" and r.get("mode") in ("generate_react_schema", "generate_topology_ui_seed") and r.get("outputKind") for r in log_records),
+            "84. every generate.log record's gateStatus/mode/embeddedCandidateKind reflect an actual gate-connected translator run",
+            all(r.get("gateStatus") == "pass" and r.get("mode") in ("generate_react_schema", "generate_topology_ui_seed") and r.get("embeddedCandidateKind") for r in log_records),
+        )
+        expect(
+            "84a. generate.log's outputKind/outputSchemaId describe the actual hashed artifact (the full topolactor.translator_output.v1 document --output writes), not just the candidate embedded inside it",
+            all(
+                r.get("outputKind") == "translator_output_document" and r.get("outputSchemaId") == "topolactor.translator_output.v1"
+                for r in log_records
+            ),
         )
 
         # 85. .agent/tools/generated/* is regeneration-only local output, never
@@ -814,16 +821,31 @@ def main():
             regen_out = Path(tmpdir) / "regenerated-from-generate-log.json"
             proc_regen = run_tool([subcommand, "--input", first_record["source"], "--output", str(regen_out)])
             regen_sha256 = None
+            regen_doc = None
             if regen_out.is_file():
+                regen_bytes = regen_out.read_bytes()
                 h = hashlib.sha256()
-                h.update(regen_out.read_bytes())
+                h.update(regen_bytes)
                 regen_sha256 = h.hexdigest()
+                try:
+                    regen_doc = json.loads(regen_bytes.decode("utf-8"))
+                except json.JSONDecodeError:
+                    regen_doc = None
             expect(
                 "86. re-running generate.log's first record (same source/mode) reproduces the exact recorded sha256 (regeneration index actually regenerates)",
                 regen_sha256 is not None and regen_sha256 == first_record.get("sha256"),
             )
+            expect(
+                "86a. the regenerated (hashed) artifact really is a topolactor.translator_output.v1 document embedding the record's claimed candidate kind (outputKind/embeddedCandidateKind are not mislabeled)",
+                regen_doc is not None
+                and regen_doc.get("schemaId") == first_record.get("outputSchemaId") == "topolactor.translator_output.v1"
+                and regen_doc.get(
+                    "topologyUiSeedCandidate" if first_record.get("embeddedCandidateKind") == "topology_ui_seed_candidate" else "reactSchemaCandidate"
+                ) is not None,
+            )
         else:
             fail("86. no generate.log record available to regenerate")
+            fail("86a. no generate.log record available to regenerate")
 
     print()
     if FAILURES:

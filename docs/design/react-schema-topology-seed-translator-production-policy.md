@@ -164,11 +164,17 @@ that path after writing its own output: `datetime`, `nametag` (defaults to
 the `--input` file stem), `mode`, `source` (the `--input` path),
 `sourceSeedSql` (a caller-supplied passthrough label only -- the translator
 never opens it), `seedKey`, `manifestId` (from a passed-through
-`seedEvidence.screenUuid`, when present), `command`, `outputKind`,
-`outputPath`, `sha256`, `gateStatus`, `validationErrorCount`,
-`unresolvedGapCount`, `taskRef`, and `prRef`. `--source-seed-sql`,
-`--task-ref`, and `--pr-ref` are free-form passthrough labels only; none of
-them cause the translator to read anything beyond its existing
+`seedEvidence.screenUuid`, when present), `command`, `outputKind`
+(always `translator_output_document` -- `sha256` always hashes the full
+`output_format_contract`-shaped document `--output` writes/emits, never a
+bare candidate by itself), `outputSchemaId` (`topolactor.translator_output.v1`),
+`embeddedCandidateKind` (`react_schema_candidate` or
+`topology_ui_seed_candidate` -- which candidate the hashed document
+embeds, not a separate hashed artifact), `outputPath`, `sha256`,
+`gateStatus`, `validationErrorCount`, `unresolvedGapCount`, `taskRef`, and
+`prRef`. `--source-seed-sql`, `--task-ref`, and `--pr-ref` are free-form
+passthrough labels only; none of them cause the translator to read anything
+beyond its existing
 `--input`/SSOT-YAML boundary.
 
 ## Output location

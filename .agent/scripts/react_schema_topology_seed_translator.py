@@ -972,7 +972,7 @@ def resolve_generate_log_path(path_arg):
     return out_path
 
 
-def _generate_log_mode_and_output_kind(doc):
+def _generate_log_mode_and_embedded_candidate_kind(doc):
     if doc.get("topologyUiSeedCandidate") is not None:
         return "generate_topology_ui_seed", "topology_ui_seed_candidate"
     if doc.get("reactSchemaCandidate") is not None:
@@ -988,7 +988,13 @@ def _generate_log_command(args):
 
 
 def build_generate_log_record(args, doc, sha256_value):
-    mode, output_kind = _generate_log_mode_and_output_kind(doc)
+    # sha256_value always hashes the full topolactor.translator_output.v1
+    # document written/emitted by write_output (whether or not --output
+    # persisted it to disk) -- outputKind/outputSchemaId must describe that
+    # same artifact, not the react_schema_candidate/topologyUiSeedCandidate
+    # embedded inside it. embeddedCandidateKind names which candidate the
+    # document embeds, without claiming that candidate alone was hashed.
+    mode, embedded_candidate_kind = _generate_log_mode_and_embedded_candidate_kind(doc)
     seed_evidence = doc.get("seedEvidence") or {}
     schema_candidate = doc.get("reactSchemaCandidate") or {}
     seed_candidate = doc.get("topologyUiSeedCandidate") or {}
@@ -1002,7 +1008,9 @@ def build_generate_log_record(args, doc, sha256_value):
         "seedKey": seed_key,
         "manifestId": seed_evidence.get("screenUuid"),
         "command": _generate_log_command(args),
-        "outputKind": output_kind,
+        "outputKind": "translator_output_document",
+        "outputSchemaId": doc.get("schemaId"),
+        "embeddedCandidateKind": embedded_candidate_kind,
         "outputPath": getattr(args, "output", None),
         "sha256": sha256_value,
         "gateStatus": doc.get("gateStatus"),
