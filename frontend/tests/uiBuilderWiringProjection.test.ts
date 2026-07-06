@@ -1,31 +1,45 @@
 /**
  * Proof surface for docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml.
+ * Vocabulary authority: .agent/reports/frontend-ui-audit-bundle-semantic-frame.md
+ * (Bundle: admin-uibuilder-ui-structure-wiring-ssot) — this proof asserts the
+ * canonical report vocabulary and fails if implementation collapses categories.
  *
  * required_proof coverage:
- * - runtimeInteractions -> wiring projection round-trip (projection derives from
- *   and rehydrates to the same runtimeInteractions authority; view only)
- * - valid drag-drop wiring edit produces a typed runtimeInteraction patch
- * - invalid drag-drop wiring edit produces an explicit error and no draft mutation
- * - lifecycle trigger + backend/external dispatch without confirmation fails close
- * - high-frequency trigger + backend/external dispatch without debounceMs fails close
- * - trigger outside SSOT vocabulary fails close
+ * - runtimeInteractions -> wiring projection round-trip (view only; rehydrate)
+ * - valid / invalid drag-drop wiring edit (typed patch / explicit error, no mutation)
+ * - lifecycle dispatch without confirmation or idempotency policy fails close
+ * - high-frequency dispatch without debounceMs fails close
+ * - trigger outside SSOT vocabulary (including load / loaded) fails close
+ * - actionType outside taxonomy fails close (no catch-all)
+ * - setting category taxonomy = UI監視割当 / UI状態更新 / 副作用設定 / 内部API /
+ *   外部API連携 / 外部インスタンス連携 exactly
+ * - direct / detectable indirect side-effect loops fail close (debounce is not proof)
+ * - selectable write targets exclude dependency_closure(trigger_source)
+ * - UI監視割当 declarations are distinct from UI状態更新 mutations
  * - lifecycle / dispatch interactions are preview-inert
  */
 
-import { assertEquals } from "jsr:@std/assert";
+import { assert, assertEquals } from "jsr:@std/assert";
 import {
   ALL_WIRING_TRIGGERS,
   applyWiringDropEdit,
   buildWiringGraphProjection,
   classifyTrigger,
+  dependencyClosureOfTriggerSource,
+  deriveUiWatchBindings,
   findRuntimeInteractionPolicyErrors,
+  findSideEffectCycleErrors,
   HIGH_FREQUENCY_TRIGGERS,
   isBackendOrExternalDispatchAction,
   isHighFrequencyTrigger,
   isLifecycleTrigger,
   isPreviewInertInteraction,
+  LIFECYCLE_IDEMPOTENCY_POLICIES,
+  selectableWriteTargets,
   TRIGGER_VOCABULARY,
+  WIRING_SETTING_CATEGORIES,
   type WiringNode,
+  wiringSettingCategoryOf,
 } from "../lib/uiBuilderWiringProjection.ts";
 
 function fixtureNodes(): WiringNode[] {
@@ -54,6 +68,7 @@ function fixtureNodes(): WiringNode[] {
       nodeId: "n-modal",
       componentKey: "disclosure/modal",
       componentKind: "disclosure/modal",
+      stateJson: JSON.stringify({ open: false }),
     },
     {
       nodeId: "n-input",
@@ -61,24 +76,32 @@ function fixtureNodes(): WiringNode[] {
       componentKind: "form_input/text",
       runtimeInteractions: [
         {
-          trigger: "change",
+          trigger: "click",
           actionType: "dispatchInstanceOperation",
           instanceTargetRef: "instance-port:db_instance_port:inst-1:op-1",
+          sideEffectNone: true,
         },
       ],
     },
   ];
 }
 
-// ─── trigger vocabulary ───────────────────────────────────────────────────────
+// ─── trigger vocabulary（正本 report 語彙） ──────────────────────────────────
 
-Deno.test("trigger vocabulary: SSOT groups classify and unknown trigger is outside", () => {
-  assertEquals(classifyTrigger("load"), "lifecycle");
+Deno.test("trigger vocabulary: canonical report groups; initial_mount is lifecycle; load is outside", () => {
+  // lifecycle = runtime synthetic triggers only.
+  assertEquals(classifyTrigger("initial_mount"), "lifecycle");
   assertEquals(classifyTrigger("route_enter"), "lifecycle");
   assertEquals(classifyTrigger("initial_display"), "lifecycle");
+  // click belongs to pointer in the report vocabulary.
+  assertEquals(classifyTrigger("click"), "pointer");
   assertEquals(classifyTrigger("mouseon"), "pointer");
   assertEquals(classifyTrigger("keydown"), "keyboard");
-  assertEquals(classifyTrigger("click"), "form");
+  assertEquals(classifyTrigger("change"), "form");
+  // load / loaded / DOM onLoad are NOT lifecycle vocabulary (fail close).
+  assertEquals(classifyTrigger("load"), null);
+  assertEquals(classifyTrigger("loaded"), null);
+  assertEquals(classifyTrigger("onLoad"), null);
   assertEquals(classifyTrigger("not_a_trigger"), null);
   // ALL_WIRING_TRIGGERS is exactly the union of the SSOT groups.
   const union = Object.values(TRIGGER_VOCABULARY).flat();
@@ -86,7 +109,7 @@ Deno.test("trigger vocabulary: SSOT groups classify and unknown trigger is outsi
 });
 
 Deno.test("trigger classification: lifecycle and high-frequency sets", () => {
-  assertEquals(isLifecycleTrigger("load"), true);
+  assertEquals(isLifecycleTrigger("initial_mount"), true);
   assertEquals(isLifecycleTrigger("click"), false);
   for (const t of HIGH_FREQUENCY_TRIGGERS) {
     assertEquals(isHighFrequencyTrigger(t), true, t);
@@ -98,6 +121,86 @@ Deno.test("trigger classification: lifecycle and high-frequency sets", () => {
     true,
   );
   assertEquals(isBackendOrExternalDispatchAction("openModal"), false);
+});
+
+// ─── setting category taxonomy（catch-all拒否） ──────────────────────────────
+
+Deno.test("setting category taxonomy: exactly the six report categories; no legacy catch-all", () => {
+  assertEquals([...WIRING_SETTING_CATEGORIES].sort(), [
+    "external_api_integration",
+    "external_instance_integration",
+    "internal_api",
+    "side_effect_setting",
+    "ui_state_update",
+    "ui_watch_binding",
+  ]);
+  // No implementation-derived catch-all identifiers in the taxonomy.
+  for (const c of WIRING_SETTING_CATEGORIES) {
+    assert(
+      c !== ("legacy" as string),
+      "legacy must not be a taxonomy category",
+    );
+    assert(
+      c !== ("overlay" as string),
+      "implementation id must not be taxonomy",
+    );
+  }
+  // UI状態更新 = declared-slot mutations; 外部API連携 / 外部インスタンス連携 = typed dispatch.
+  assertEquals(
+    wiringSettingCategoryOf({ actionType: "openModal" }),
+    "ui_state_update",
+  );
+  assertEquals(
+    wiringSettingCategoryOf({ actionType: "setState" }),
+    "ui_state_update",
+  );
+  assertEquals(
+    wiringSettingCategoryOf({ actionType: "dispatchExternalPort" }),
+    "external_api_integration",
+  );
+  assertEquals(
+    wiringSettingCategoryOf({ actionType: "dispatchInstanceOperation" }),
+    "external_instance_integration",
+  );
+  // Unknown actionType classifies as null (fails close) — never rounded into a bucket.
+  assertEquals(wiringSettingCategoryOf({ actionType: "somethingElse" }), null);
+});
+
+Deno.test("policy: actionType outside taxonomy fails close (no catch-all rounding)", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "action/button",
+    runtimeInteractions: [{ trigger: "click", actionType: "mysteryAction" }],
+  }];
+  const errors = findRuntimeInteractionPolicyErrors(nodes);
+  assertEquals(errors.length, 1);
+  assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
+});
+
+// ─── UI監視割当（宣言）と UI状態更新（更新）の分離 ───────────────────────────
+
+Deno.test("UI監視割当: declarations derive from state slots and are distinct from mutations", () => {
+  const modal = fixtureNodes()[1];
+  const bindings = deriveUiWatchBindings(modal);
+  assertEquals(bindings, [{
+    kind: "declaration",
+    nodeId: "n-modal",
+    stateKey: "open",
+    initialValue: false,
+  }]);
+  // Declarations are a separate category from mutations: a declaration entry is
+  // kind:"declaration", while a statePath write classifies as ui_state_update.
+  assertEquals(
+    wiringSettingCategoryOf({ actionType: "openModal" }),
+    "ui_state_update",
+  );
+  // stateJson-less node yields no declarations — presence of propsJson/stateJson
+  // elsewhere is never treated as taxonomy-complete proof.
+  assertEquals(deriveUiWatchBindings({ nodeId: "x" }), []);
+  assertEquals(
+    deriveUiWatchBindings({ nodeId: "x", stateJson: "not json" }),
+    [],
+  );
 });
 
 // ─── wiring projection round-trip ────────────────────────────────────────────
@@ -112,6 +215,9 @@ Deno.test("wiring projection: derives edges from runtimeInteractions and maps ba
 
   assertEquals(projection.edges.length, 3);
   assertEquals(projection.unwiredNodeIds, ["n-modal"]);
+  // UI監視割当 declarations are projected alongside edges.
+  assertEquals(projection.watchBindings.length, 1);
+  assertEquals(projection.watchBindings[0].stateKey, "open");
 
   // Every edge rehydrates to exactly the runtimeInteraction it projects.
   for (const edge of projection.edges) {
@@ -128,29 +234,50 @@ Deno.test("wiring projection: derives edges from runtimeInteractions and maps ba
   }
 
   // source UI node -> event trigger -> setting category -> target/effect shape.
-  const overlayEdge = projection.edges[0];
-  assertEquals(overlayEdge.sourceNodeId, "n-button");
-  assertEquals(overlayEdge.category, "overlay");
-  assertEquals(overlayEdge.targetKind, "node");
-  assertEquals(overlayEdge.targetRef, "n-modal");
-  assertEquals(overlayEdge.effect, "openModal(open)");
+  const stateUpdateEdge = projection.edges[0];
+  assertEquals(stateUpdateEdge.sourceNodeId, "n-button");
+  assertEquals(stateUpdateEdge.category, "ui_state_update");
+  assertEquals(stateUpdateEdge.targetKind, "node");
+  assertEquals(stateUpdateEdge.targetRef, "n-modal");
+  assertEquals(stateUpdateEdge.effect, "openModal(open)");
+  assertEquals(stateUpdateEdge.hasSideEffect, false);
 
-  const externalEdge = projection.edges[1];
-  assertEquals(externalEdge.category, "external_port");
-  assertEquals(externalEdge.targetRef, "external-port:access_port:port-1");
+  const externalApiEdge = projection.edges[1];
+  assertEquals(externalApiEdge.category, "external_api_integration");
+  assertEquals(externalApiEdge.targetRef, "external-port:access_port:port-1");
+  // 副作用設定 fields (payloadFrom / outputProp) surface as effect metadata.
+  assertEquals(externalApiEdge.hasSideEffect, true);
 
-  const instanceEdge = projection.edges[2];
-  assertEquals(instanceEdge.category, "instance_operation");
+  const externalInstanceEdge = projection.edges[2];
+  assertEquals(externalInstanceEdge.category, "external_instance_integration");
   assertEquals(
-    instanceEdge.targetRef,
+    externalInstanceEdge.targetRef,
     "instance-port:db_instance_port:inst-1:op-1",
   );
+  // Explicit no-side-effect selection keeps effect metadata false.
+  assertEquals(externalInstanceEdge.hasSideEffect, false);
 
   // Rebuilding from the same authority yields the same projection (rehydrate).
   assertEquals(
     JSON.stringify(buildWiringGraphProjection(nodes)),
     JSON.stringify(projection),
   );
+});
+
+Deno.test("wiring projection: 内部API package lane projects as internal_api category (view only)", () => {
+  const nodes = fixtureNodes();
+  const projection = buildWiringGraphProjection(nodes, [
+    {
+      wiringKey: "employees_search",
+      targetRef: "manifest:abc:employees_search",
+    },
+  ]);
+  const internal = projection.edges.find((e) => e.category === "internal_api");
+  assert(internal, "internal_api edge must be projected inside the taxonomy");
+  assertEquals(internal!.targetKind, "internal_api");
+  assertEquals(internal!.targetRef, "manifest:abc:employees_search");
+  // Projection only: the package-lane edge carries no persistence index.
+  assertEquals(internal!.interactionIndex, -1);
 });
 
 // ─── drag-drop wiring edit ───────────────────────────────────────────────────
@@ -182,34 +309,25 @@ Deno.test("drag-drop wiring edit: invalid drops fail close with explicit error a
   const selfDrop = applyWiringDropEdit(nodes, "n-button", "n-button");
   assertEquals(selfDrop.ok, false);
   if (!selfDrop.ok) {
-    assertEquals(selfDrop.error.startsWith("WIRING_DROP_SELF_TARGET"), true);
+    assert(selfDrop.error.startsWith("WIRING_DROP_SELF_TARGET"));
   }
 
   const unknownSource = applyWiringDropEdit(nodes, "n-missing", "n-modal");
   assertEquals(unknownSource.ok, false);
   if (!unknownSource.ok) {
-    assertEquals(
-      unknownSource.error.startsWith("WIRING_DROP_SOURCE_NOT_FOUND"),
-      true,
-    );
+    assert(unknownSource.error.startsWith("WIRING_DROP_SOURCE_NOT_FOUND"));
   }
 
   const unknownTarget = applyWiringDropEdit(nodes, "n-button", "n-missing");
   assertEquals(unknownTarget.ok, false);
   if (!unknownTarget.ok) {
-    assertEquals(
-      unknownTarget.error.startsWith("WIRING_DROP_TARGET_NOT_FOUND"),
-      true,
-    );
+    assert(unknownTarget.error.startsWith("WIRING_DROP_TARGET_NOT_FOUND"));
   }
 
   const nonWirable = applyWiringDropEdit(nodes, "n-button", "n-input");
   assertEquals(nonWirable.ok, false);
   if (!nonWirable.ok) {
-    assertEquals(
-      nonWirable.error.startsWith("WIRING_DROP_TARGET_NOT_WIRABLE"),
-      true,
-    );
+    assert(nonWirable.error.startsWith("WIRING_DROP_TARGET_NOT_WIRABLE"));
   }
 
   assertEquals(JSON.stringify(nodes), before);
@@ -225,54 +343,76 @@ Deno.test("policy: high-frequency trigger + external dispatch without debounceMs
       trigger: "input",
       actionType: "dispatchExternalPort",
       portTargetRef: "external-port:access_port:port-1",
+      sideEffectNone: true,
     }],
   }];
   const errors = findRuntimeInteractionPolicyErrors(nodes);
   assertEquals(errors.length, 1);
-  assertEquals(
-    errors[0].includes("HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE"),
-    true,
-  );
+  assert(errors[0].includes("HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE"));
 
-  // debounceMs (positive integer) satisfies the policy.
+  // debounceMs (positive integer) satisfies the high-frequency policy.
   nodes[0].runtimeInteractions![0].debounceMs = 300;
   assertEquals(findRuntimeInteractionPolicyErrors(nodes), []);
 });
 
-Deno.test("policy: lifecycle trigger + dispatch without explicit confirmation fails close", () => {
+Deno.test("policy: lifecycle (initial_mount) dispatch requires explicit confirmation AND idempotency policy", () => {
   const nodes: WiringNode[] = [{
     nodeId: "n1",
     componentKey: "action/button",
     runtimeInteractions: [{
-      trigger: "load",
+      trigger: "initial_mount",
       actionType: "dispatchInstanceOperation",
       instanceTargetRef: "instance-port:db_instance_port:inst-1:op-1",
+      sideEffectNone: true,
     }],
   }];
   const errors = findRuntimeInteractionPolicyErrors(nodes);
-  assertEquals(errors.length, 1);
-  assertEquals(
-    errors[0].includes("LIFECYCLE_DISPATCH_REQUIRES_CONFIRMATION"),
-    true,
+  assertEquals(errors.length, 2);
+  assert(
+    errors.some((e) => e.includes("LIFECYCLE_DISPATCH_REQUIRES_CONFIRMATION")),
+  );
+  assert(
+    errors.some((e) =>
+      e.includes("LIFECYCLE_DISPATCH_REQUIRES_IDEMPOTENCY_POLICY")
+    ),
   );
 
+  // Confirmation alone is not enough — idempotency policy is independent.
   nodes[0].runtimeInteractions![0].lifecycleDispatchConfirmed = true;
+  const stillMissing = findRuntimeInteractionPolicyErrors(nodes);
+  assertEquals(stillMissing.length, 1);
+  assert(
+    stillMissing[0].includes("LIFECYCLE_DISPATCH_REQUIRES_IDEMPOTENCY_POLICY"),
+  );
+
+  // initial_mount must not re-dispatch on rerender: once_per_mount is a valid policy.
+  assert(LIFECYCLE_IDEMPOTENCY_POLICIES.includes("once_per_mount"));
+  nodes[0].runtimeInteractions![0].idempotencyPolicy = "once_per_mount";
   assertEquals(findRuntimeInteractionPolicyErrors(nodes), []);
+
+  // An unknown idempotency policy value fails close.
+  nodes[0].runtimeInteractions![0].idempotencyPolicy = "whenever";
+  assert(
+    findRuntimeInteractionPolicyErrors(nodes)[0]
+      .includes("LIFECYCLE_DISPATCH_REQUIRES_IDEMPOTENCY_POLICY"),
+  );
 });
 
-Deno.test("policy: trigger outside SSOT vocabulary fails close", () => {
-  const nodes: WiringNode[] = [{
-    nodeId: "n1",
-    componentKey: "action/button",
-    runtimeInteractions: [{
-      trigger: "dblclick",
-      actionType: "openModal",
-      targetNodeId: "n2",
-    }],
-  }];
-  const errors = findRuntimeInteractionPolicyErrors(nodes);
-  assertEquals(errors.length, 1);
-  assertEquals(errors[0].includes("TRIGGER_OUTSIDE_VOCABULARY"), true);
+Deno.test("policy: trigger outside SSOT vocabulary fails close (load / loaded included)", () => {
+  for (const trigger of ["dblclick", "load", "loaded"]) {
+    const nodes: WiringNode[] = [{
+      nodeId: "n1",
+      componentKey: "action/button",
+      runtimeInteractions: [{
+        trigger,
+        actionType: "openModal",
+        targetNodeId: "n2",
+      }],
+    }];
+    const errors = findRuntimeInteractionPolicyErrors(nodes);
+    assertEquals(errors.length, 1, trigger);
+    assert(errors[0].includes("TRIGGER_OUTSIDE_VOCABULARY"), trigger);
+  }
 });
 
 Deno.test("policy: local UI state mutation on high-frequency trigger is allowed by default", () => {
@@ -289,12 +429,97 @@ Deno.test("policy: local UI state mutation on high-frequency trigger is allowed 
   assertEquals(findRuntimeInteractionPolicyErrors(nodes), []);
 });
 
+// ─── side-effect cycle policy（fail close; debounce は loop-safety proof ではない） ──
+
+Deno.test("side-effect cycle policy: direct self-loop (watched A -> writes A) fails close", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n-a",
+    componentKey: "form_input/text",
+    runtimeInteractions: [{
+      trigger: "change",
+      actionType: "dispatchExternalPort",
+      portTargetRef: "external-port:access_port:port-1",
+      outputProp: "value",
+      debounceMs: 500,
+    }],
+  }];
+  // debounceMs is present — it must NOT clear the loop error (not loop-safety proof).
+  const cycleErrors = findSideEffectCycleErrors(nodes);
+  assertEquals(cycleErrors.length, 1);
+  assert(cycleErrors[0].includes("SIDE_EFFECT_DIRECT_SELF_LOOP"));
+  assert(
+    findRuntimeInteractionPolicyErrors(nodes).some((e) =>
+      e.includes("SIDE_EFFECT_DIRECT_SELF_LOOP")
+    ),
+    "cycle errors must block the same validate/apply path",
+  );
+});
+
+Deno.test("side-effect cycle policy: detectable indirect loop (A -> B, B -> A) fails close", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "n-a",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "setState",
+        targetNodeId: "n-b",
+        statePath: "open",
+      }],
+    },
+    {
+      nodeId: "n-b",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "setState",
+        targetNodeId: "n-a",
+        statePath: "open",
+      }],
+    },
+  ];
+  const errors = findSideEffectCycleErrors(nodes);
+  assertEquals(errors.length, 1);
+  assert(errors[0].includes("SIDE_EFFECT_INDIRECT_LOOP"));
+});
+
+Deno.test("side-effect cycle policy: selectable_write_targets excludes dependency_closure(trigger_source)", () => {
+  const nodes: WiringNode[] = [
+    // n-b writes into n-a on value change: writing to n-b from an n-a-triggered
+    // effect would loop, so n-b is inside dependency_closure(n-a).
+    {
+      nodeId: "n-b",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "setState",
+        targetNodeId: "n-a",
+        statePath: "open",
+      }],
+    },
+    { nodeId: "n-a", componentKey: "form_input/text" },
+    {
+      nodeId: "n-c",
+      componentKey: "disclosure/modal",
+      componentKind: "disclosure/modal",
+    },
+  ];
+  const closure = dependencyClosureOfTriggerSource(nodes, "n-a");
+  assert(closure.has("n-a"), "trigger source itself is always excluded");
+  assert(
+    closure.has("n-b"),
+    "node writing into trigger source is in the closure",
+  );
+  assertEquals(selectableWriteTargets(nodes, "n-a"), ["n-c"]);
+});
+
 // ─── preview inert boundary ──────────────────────────────────────────────────
 
 Deno.test("preview inert: lifecycle triggers and dispatch actions are inert in preview", () => {
+  // initial_mount is runtime synthetic — inert in preview, never DOM onLoad.
   assertEquals(
     isPreviewInertInteraction({
-      trigger: "load",
+      trigger: "initial_mount",
       actionType: "openModal",
       targetNodeId: "n2",
     }),

@@ -183,7 +183,7 @@ Deno.test("runtime-ui-interaction-wiring scenario: canonical runtimeInteractions
     }),
     runtimeInteractions: [
       {
-        trigger: "toggle",
+        trigger: "click",
         actionType: "closeModal",
         targetNodeId: modalNodeId,
         statePath: "open",
@@ -292,7 +292,7 @@ Deno.test("runtime-ui-interaction-wiring scenario: canonical runtimeInteractions
 
   const closeResult = __testOnly.emitBoundEvent(
     openedModal.runtimeSpec,
-    "toggle",
+    "click",
     { open: false },
   );
   assert(closeResult.ok, "modal close should execute local state mutation");

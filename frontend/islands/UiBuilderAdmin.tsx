@@ -604,6 +604,14 @@ export type ComponentEventWiring = {
    * backend/external dispatch. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml lifecycle_policy
    */
   lifecycleDispatchConfirmed?: boolean;
+  /**
+   * Authoring-only: lifecycle dispatch idempotency policy
+   * (once_per_mount / refetch_on_route_enter / dedupe_key). initial_mount dispatch
+   * must not re-dispatch on rerender. SSOT: lifecycle_policy.idempotency_policy_values
+   */
+  idempotencyPolicy?: string;
+  /** Authoring-only: explicit no-side-effect selection (副作用設定). */
+  sideEffectNone?: boolean;
 };
 
 export const COMPONENT_EVENT_TYPES = [
@@ -1945,6 +1953,11 @@ function LayoutRightDock({
                   { runtimeInteractions: next.length > 0 ? next : undefined },
                   label,
                 )}
+              stateJson={selectedNode.stateJson}
+              onCommitStateJson={(nextStateJson, label) =>
+                onCommitNode?.({ stateJson: nextStateJson }, label)}
+              sourceNodeId={selectedNode.nodeId}
+              allNodes={draftNodes}
             />
           </Accordion>
           <Accordion

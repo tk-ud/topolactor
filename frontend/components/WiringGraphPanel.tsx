@@ -4,13 +4,18 @@ import {
   applyWiringDropEdit,
   buildWiringGraphProjection,
   findRuntimeInteractionPolicyErrors,
+  type InternalApiWiringInput,
   type WiringGraphEdge,
   type WiringNode,
+  type WiringSettingCategory,
 } from "../lib/uiBuilderWiringProjection.ts";
 import {
-  UX_RUNTIME_INTERACTION_CATEGORY_EXTERNAL,
-  UX_RUNTIME_INTERACTION_CATEGORY_INSTANCE,
-  UX_RUNTIME_INTERACTION_CATEGORY_OVERLAY,
+  UX_WIRING_CATEGORY_EXTERNAL_API,
+  UX_WIRING_CATEGORY_EXTERNAL_INSTANCE,
+  UX_WIRING_CATEGORY_INTERNAL_API,
+  UX_WIRING_CATEGORY_SIDE_EFFECT,
+  UX_WIRING_CATEGORY_UI_STATE_UPDATE,
+  UX_WIRING_CATEGORY_UI_WATCH_BINDING,
   UX_WIRING_DROP_GUIDANCE,
   UX_WIRING_MODE_EMPTY,
   UX_WIRING_MODE_HINT,
@@ -29,13 +34,17 @@ import {
  * - Invalid drops surface an explicit error and do not mutate the draft.
  */
 
-type CategoryLabelMap = Record<string, string>;
-
-const CATEGORY_LABELS: CategoryLabelMap = {
-  overlay: UX_RUNTIME_INTERACTION_CATEGORY_OVERLAY,
-  external_port: UX_RUNTIME_INTERACTION_CATEGORY_EXTERNAL,
-  instance_operation: UX_RUNTIME_INTERACTION_CATEGORY_INSTANCE,
-  legacy: "状態設定",
+/**
+ * Canonical setting category labels — no implementation-derived catch-all.
+ * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml setting_category_taxonomy
+ */
+const CATEGORY_LABELS: Record<WiringSettingCategory, string> = {
+  ui_watch_binding: UX_WIRING_CATEGORY_UI_WATCH_BINDING,
+  ui_state_update: UX_WIRING_CATEGORY_UI_STATE_UPDATE,
+  side_effect_setting: UX_WIRING_CATEGORY_SIDE_EFFECT,
+  internal_api: UX_WIRING_CATEGORY_INTERNAL_API,
+  external_api_integration: UX_WIRING_CATEGORY_EXTERNAL_API,
+  external_instance_integration: UX_WIRING_CATEGORY_EXTERNAL_INSTANCE,
 };
 
 function edgeTargetLabel(
@@ -55,6 +64,8 @@ type Props<T extends WiringNode> = {
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
   onApplyNodes: (nodes: T[], label: string) => void;
+  /** 内部API package wiring lane rows for projection (view only; persistence stays on package wiring). */
+  internalApiWirings?: readonly InternalApiWiringInput[];
 };
 
 export default function WiringGraphPanel<T extends WiringNode>({
@@ -62,10 +73,14 @@ export default function WiringGraphPanel<T extends WiringNode>({
   selectedNodeId,
   onSelectNode,
   onApplyNodes,
+  internalApiWirings,
 }: Props<T>): JSX.Element {
   const [dropError, setDropError] = useState<string | null>(null);
   // Rehydrated per render from runtimeInteractions — no cached graph state.
-  const projection = buildWiringGraphProjection(nodes);
+  const projection = buildWiringGraphProjection(
+    nodes,
+    internalApiWirings ?? [],
+  );
   const policyErrors = findRuntimeInteractionPolicyErrors(nodes);
 
   const handleDrop = (targetNodeId: string, e: DragEvent) => {
@@ -119,9 +134,29 @@ export default function WiringGraphPanel<T extends WiringNode>({
         </p>
       )}
 
+      {projection.watchBindings.length > 0 && (
+        <div class="mb-2 rounded border border-sky-200 bg-sky-50/50 px-2 py-1">
+          <p class="text-[0.62rem] font-semibold text-sky-900">
+            {UX_WIRING_CATEGORY_UI_WATCH_BINDING}（宣言済み状態スロット）
+          </p>
+          <ul class="flex flex-wrap gap-1 text-[0.58rem] text-sky-800">
+            {projection.watchBindings.map((b) => (
+              <li
+                key={`${b.nodeId}-${b.stateKey}`}
+                class="rounded bg-white px-1 py-0.5"
+              >
+                {b.nodeId}.{b.stateKey}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <ul class="space-y-1">
         {projection.edges.map((edge) => (
-          <li key={`${edge.sourceNodeId}-${edge.interactionIndex}`}>
+          <li
+            key={`${edge.sourceNodeId}-${edge.interactionIndex}-${edge.effect}`}
+          >
             <button
               type="button"
               class={`flex w-full flex-wrap items-center gap-1 rounded border px-2 py-1 text-left text-[0.65rem] ${
@@ -129,8 +164,7 @@ export default function WiringGraphPanel<T extends WiringNode>({
                   ? "border-blue-400 bg-blue-50"
                   : "border-slate-200 bg-white hover:border-blue-300"
               }`}
-              onClick={() =>
-                onSelectNode(edge.sourceNodeId)}
+              onClick={() => onSelectNode(edge.sourceNodeId)}
             >
               <span class="font-semibold text-slate-800">
                 {edge.sourceLabel}
@@ -140,9 +174,22 @@ export default function WiringGraphPanel<T extends WiringNode>({
                 {uxRuntimeInteractionTriggerLabel(edge.trigger)}
               </span>
               <span class="text-slate-400">→</span>
-              <span class="rounded bg-indigo-100 px-1 text-indigo-800">
-                {CATEGORY_LABELS[edge.category] ?? edge.category}
+              <span
+                class={`rounded px-1 ${
+                  edge.category === null
+                    ? "bg-red-100 text-red-800"
+                    : "bg-indigo-100 text-indigo-800"
+                }`}
+              >
+                {edge.category === null
+                  ? "分類語彙外（要修正）"
+                  : CATEGORY_LABELS[edge.category]}
               </span>
+              {edge.hasSideEffect && (
+                <span class="rounded bg-emerald-100 px-1 text-emerald-800">
+                  {UX_WIRING_CATEGORY_SIDE_EFFECT}
+                </span>
+              )}
               <span class="text-slate-400">→</span>
               <span class="text-slate-700">{edgeTargetLabel(edge, nodes)}</span>
               {edge.previewInert && (

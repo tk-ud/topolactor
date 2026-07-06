@@ -44,13 +44,25 @@ forbid_grep() {
 
 # ─── 1. SSOT contract keys ────────────────────────────────────────────────────
 require_file "$SSOT"
-for key in layout_mode wiring_mode persistence_authority trigger_vocabulary \
-  lifecycle_policy high_frequency_policy drag_drop_wiring_edit \
-  ui_event_settings external_event_candidates proof_surface; do
-  require_grep "^  ${key}:|^    ${key}:" "$SSOT" "SSOT contract key"
+for key in lineage_boundary layout_mode wiring_mode persistence_authority \
+  trigger_vocabulary lifecycle_policy high_frequency_policy drag_drop_wiring_edit \
+  side_effect_cycle_policy component_runtime_state_effect_boundary \
+  ui_event_settings setting_category_taxonomy external_event_candidates proof_surface; do
+  require_grep "^  ${key}:|^    ${key}:|^      ${key}:" "$SSOT" "SSOT contract key"
 done
 require_grep "runtimeInteractions" "$SSOT" "persistence authority vocabulary"
 require_grep "ui_builder_preset_ecosystem_ssot_as_owning_ssot_for_this_surface" "$SSOT" "ownership negative boundary"
+
+# Canonical report vocabulary (frontend-ui-audit-bundle-semantic-frame.md).
+require_grep "initial_mount" "$SSOT" "canonical lifecycle trigger"
+for term in "UI監視割当" "UI状態更新" "副作用設定" "内部API" "外部API連携" "外部インスタンス連携"; do
+  require_grep "$term" "$SSOT" "canonical setting category vocabulary"
+done
+# load / loaded / DOM onLoad must appear only as prohibited vocabulary, never in groups.
+require_grep "prohibited_vocabulary" "$SSOT" "lifecycle prohibited vocabulary block"
+if grep -Eq 'lifecycle: \[.*\bload\b' "$SSOT"; then
+  fail "$SSOT lifecycle trigger group contains 'load' (prohibited vocabulary)"
+fi
 
 # ─── 2. Implementation surfaces map to SSOT ──────────────────────────────────
 require_file "$LIB"
@@ -60,11 +72,23 @@ require_file "$ISLAND"
 require_file "$TEST"
 
 require_grep "admin-uibuilder-ui-structure-wiring-ssot" "$LIB" "SSOT reference"
-require_grep "lifecycle" "$LIB" "lifecycle trigger group"
+require_grep "initial_mount" "$LIB" "canonical lifecycle trigger"
 require_grep "debounceMs" "$LIB" "high-frequency policy field"
 require_grep "lifecycleDispatchConfirmed" "$LIB" "lifecycle policy field"
+require_grep "idempotencyPolicy" "$LIB" "lifecycle idempotency policy field"
 require_grep "buildWiringGraphProjection" "$LIB" "wiring projection entry point"
 require_grep "applyWiringDropEdit" "$LIB" "drag-drop wiring edit entry point"
+require_grep "findSideEffectCycleErrors" "$LIB" "side-effect cycle policy entry point"
+require_grep "selectableWriteTargets" "$LIB" "dependency not-in write target filter"
+require_grep "deriveUiWatchBindings" "$LIB" "UI監視割当 declaration derivation"
+# load must not be part of the trigger vocabulary constants.
+if grep -Eq '"load"|"loaded"' "$LIB"; then
+  fail "$LIB contains prohibited lifecycle vocabulary (load/loaded)"
+fi
+# No implementation catch-all in the taxonomy.
+if grep -Eq '"legacy"' "$LIB"; then
+  fail "$LIB taxonomy contains catch-all 'legacy' category"
+fi
 
 require_grep "buildWiringGraphProjection" "$PANEL" "panel derives projection from runtimeInteractions"
 require_grep "buildWiringGraphProjection|WiringGraphPanel" "$ISLAND" "island wires wiring mode"
@@ -74,6 +98,9 @@ require_grep "uiBuilderWiringProjection" "$TEST" "proof test targets projection 
 # Wiring graph panel is projection-only: no direct persistence dispatch from the panel.
 forbid_grep "dispatchAdminOp|queueAdminClientCommand|layout_patch:apply" "$PANEL" \
   "wiring graph must be view/edit projection, not persistence authority"
+
+# No catch-all category label rounding in the wiring panel (legacy = 状態設定 prohibited).
+forbid_grep "legacy:" "$PANEL" "catch-all category rounding prohibited"
 
 # No provider/bundle fixed candidate lists in wiring/event authoring surfaces.
 forbid_grep "email_bundle|export_sftp_bundle|stripe_bundle|webhook_inbox_bundle|Stripe|Gemini" "$PANEL" \
