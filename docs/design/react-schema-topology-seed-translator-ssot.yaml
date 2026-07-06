@@ -475,6 +475,85 @@ react_schema_topology_seed_translator_ssot:
       candidate under projection_render_exchange_contract.
 
   # ===========================================================================
+  # 5a. storage_adoption_contract
+  # ===========================================================================
+  # Added after PR #573 (credential_management_ui_seed_rebuild): a
+  # topologyUiSeedCandidate with validationErrorCount: 0 was adopted into
+  # manifest.topology as a single ~17KB jsonb[] array element and broke a
+  # real Postgres INSERT with "index row size 3776 exceeds maximum 2712 for
+  # index idx_manifest_topology". topology_ui_seed_contract's own
+  # validation_rules never checked the candidate against the actual storage
+  # column's index constraint, only against this SSOT's own record shape
+  # rules. This section closes that gap.
+
+  storage_adoption_contract:
+    target_storage:
+      table: manifest
+      column: topology
+      column_type: jsonb[]
+      index: idx_manifest_topology
+      index_type: gin
+      index_definition_ref: db/manifest_tables.sql
+    constraint:
+      each_jsonb_array_element_must_fit_indexable_item_budget: true
+      budget_bytes: 2712
+      budget_measurement: utf8_encoded_byte_length_not_python_character_length
+      budget_rationale: >-
+        idx_manifest_topology is a GIN index over a jsonb[] column. A GIN index over an array
+        type indexes each array element as one indexable item, subject to Postgres's
+        page-size-derived index item size ceiling (observed failure: "index row size 3776
+        exceeds maximum 2712"). A topologyUiSeedCandidate's nested projections tree, if
+        embedded as a single jsonb[] element, routinely exceeds this budget once it covers more
+        than a handful of fields/actions.
+      rule: >-
+        topology UI seed adoption into manifest.topology must never require a single oversized
+        jsonb[] element. The nested topologyUiSeedCandidate is debug/review output only; only
+        the flattened topologyUiSeedFlatRecords shape (or an equivalent manual flattening) may be
+        adopted into a seed file.
+    allowed_adoption_shapes:
+      - shape: nested_topology_ui_seed_candidate
+        role: local_tmp_review_artifact_only
+        seed_adoptable: false
+      - shape: flattened_topology_ui_seed_record_array
+        role: seed_adoption_shape
+        seed_adoptable: true
+    flattened_record_contract:
+      wrapper_type: topology_ui_seed_record
+      required_fields: [type, seedKey, parentKey, record]
+      parent_link_rule: >-
+        parentKey reconstructs the generated tree: the root projection record's parentKey is
+        null; every other record's parentKey equals the key of the record it was nested under
+        (recordType-specific nesting: topology_ui_projection.categories,
+        topology_ui_category.sections, topology_ui_section.children,
+        topology_ui_form.{fields,actions}, topology_ui_table.columns,
+        topology_ui_workflow.steps -- see exchange_mapping.schema_to_seed_record_mapping for the
+        authoritative node-kind list).
+      record_rule: >-
+        record is the original topology_ui_* node from topology_ui_seed_contract.record_types
+        with its nested list field(s), if any, replaced by a `<listKey>Keys` array of the
+        child records' own `key` values (e.g. topology_ui_category's `sections` becomes
+        `sectionKeys`); record_common_required_fields, authorityMarker (where the record type
+        requires it), and eventBinding (where the record type requires it) are preserved
+        unchanged.
+      generated_json_authority: false
+      seed_sql_authority: true
+    validation_rules:
+      - serialized_flattened_record_must_fit_target_storage_budget
+      - flattened_records_must_reconstruct_a_single_projection_tree_via_parentKey
+      - parentKey_must_resolve_to_another_record_in_the_same_seedKey_group_or_be_null_for_the_root
+      - every_flattened_record_must_preserve_sourceYamlRefs_and_sourceReactPath
+      - every_action_or_workflow_step_record_must_preserve_authorityMarker_and_eventBinding
+      - no_flattened_record_may_carry_protected_boundary_vocabulary
+    tool_ref: >-
+      .agent/scripts/react_schema_topology_seed_translator.py implements this contract:
+      flatten_topology_ui_seed_tree builds the flattened_record_contract shape from the same
+      record tree topologyUiSeedCandidate is built from; validate_flat_seed_records checks the
+      constraint (SEED_RECORD_EXCEEDS_STORAGE_BUDGET, blocking); generate-topology-seed's
+      optional --seed-sql-fragment flag renders the flattened records as ready-to-paste jsonb[]
+      array element lines (still a generated artifact per generated_artifact_operation_policy,
+      not seed adoption authority by itself -- a reviewer must read and adopt it).
+
+  # ===========================================================================
   # 6. output_format_contract
   # ===========================================================================
 
@@ -493,7 +572,19 @@ react_schema_topology_seed_translator_ssot:
         rule: populated when mode is generate_react_schema or round_trip_check; null for generate_topology_ui_seed unless the caller also supplied a react schema candidate to carry through
       topologyUiSeedCandidate:
         type: topolactor.topology_ui_seed.v1 | null
-        rule: populated when mode is generate_topology_ui_seed or round_trip_check; null for generate_react_schema
+        rule: >-
+          populated when mode is generate_topology_ui_seed or round_trip_check; null for
+          generate_react_schema. This nested tree is a debug/review artifact only -- see
+          storage_adoption_contract for why it must never be adopted as a single
+          manifest.topology array element.
+      topologyUiSeedFlatRecords:
+        type: list<topology_ui_seed_record> | null
+        rule: >-
+          populated only for generate_topology_ui_seed, derived from the same tree as
+          topologyUiSeedCandidate but flattened per storage_adoption_contract.flattened_record_contract;
+          null for generate_react_schema and round_trip_check. This is the seed-safe adoption
+          shape -- each element is independently checked against
+          storage_adoption_contract.constraint before being offered to a caller.
       exchangeReport:
         type: exchange_report_contract
         rule: always populated, even when empty (zero records still yields a report shell)
@@ -1049,11 +1140,20 @@ react_schema_topology_seed_translator_ssot:
         known_gaps:
           - gap: instance_settings_projection_category_not_yet_represented
             classification: ssot_ambiguity_gap
-            status: open_at_instance_port_substrate_ssot_level
+            status: represented_in_seed
             note: >-
-              instance-port-substrate-ssot.yaml existing_credential_management_projection_extension.confirmed_existing_seed.missing_mode
-              records this as not yet represented; this translator only declares the surface,
-              it does not resolve the gap
+              Resolved: instance_settings is represented in db/seed_empty.sql manifest
+              00000000-0000-0000-0000-000000000092 as storage_adoption_contract-flattened
+              topology_ui_seed_record entries (categories/sections/forms/fields/actions,
+              including the instance_settings category's four forms), generated from
+              .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092*.input.json
+              via generate-react-schema -> generate-topology-seed --seed-sql-fragment. See
+              docs/design/instance-port-substrate-ssot.yaml
+              existing_credential_management_projection_extension.confirmed_existing_seed
+              (missing_mode.instance_settings updated to match). This closes only the
+              seed-representation gap; docs/system-roadmap.yaml known_gap_ref
+              instance_settings_admin_authoring_ui_pending (the actual admin authoring
+              frontend route/island and backend action) remains open and unrelated.
 
       - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
         declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract
@@ -1146,6 +1246,11 @@ react_schema_topology_seed_translator_ssot:
       - no_emitted_seed_record_carries_a_null_or_empty_required_field
       - emitted_action_and_step_records_carry_a_lane_conforming_eventBinding
 
+    storage_adoption_validation: >-
+      see storage_adoption_contract.validation_rules; enforced by
+      validate_flat_seed_records against every topologyUiSeedFlatRecords element
+      (SEED_RECORD_EXCEEDS_STORAGE_BUDGET, blocking).
+
     wiring_lane_validation:
       - every_action_or_step_eventBinding_maps_to_exactly_one_lane
       - eventBinding_targetRef_matches_the_lanes_targetRef_shape
@@ -1214,6 +1319,11 @@ react_schema_topology_seed_translator_ssot:
       role: trace_and_regeneration_index
       authority: not_proof_completion_not_seed_adoption
     full_translator_output_role: debug_and_proof_artifact_only_not_schema_or_seed_artifact
+    seed_sql_fragment_role: >-
+      generate-topology-seed's optional --seed-sql-fragment output (storage_adoption_contract)
+      writes under generated_artifact_surface the same as any other --output artifact: local/tmp,
+      gitignored, review-required-before-adoption. It is a rendering convenience over
+      topologyUiSeedFlatRecords, not a new authority tier.
     prohibited_authority:
       - generated_json_as_ssot
       - generated_json_as_seed_adoption_authority
@@ -1221,6 +1331,7 @@ react_schema_topology_seed_translator_ssot:
       - full_translator_output_as_seed_artifact
       - generate_log_as_proof_completion
       - generate_log_as_regeneration_source_by_itself
+      - seed_sql_fragment_as_unreviewed_seed_adoption_authority
     regeneration_rule: >-
       Regeneration uses referenced input, SSOT, and when applicable *seed.sql.
       generate.log is an index/evidence trail, not the source material itself.

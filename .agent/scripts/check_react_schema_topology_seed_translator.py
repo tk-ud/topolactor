@@ -187,6 +187,14 @@ def rule_ids(doc):
     return [e.get("ruleId") for e in (doc or {}).get("validationErrors", [])]
 
 
+def record_byte_size(wrapper):
+    """storage_adoption_contract.constraint.budget_measurement: the manifest.topology
+    / idx_manifest_topology GIN index budget is a UTF-8 byte budget, not a Python
+    character-count budget -- multi-byte (e.g. non-ASCII) content must be measured
+    as encoded bytes to match what Postgres actually stores."""
+    return len(json.dumps(wrapper, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+
+
 _TMP_FIXTURE_COUNTER = [0]
 
 
@@ -292,15 +300,30 @@ def main():
         no_db_refs_in_output = "db/seed_empty.sql" not in json.dumps(doc.get("reactSchemaCandidate")) if doc else False
         expect("7b. no db/*.sql path appears in reactSchemaCandidate.sourceYamlRefs (seed evidence stays out of sourceYamlRefs)", no_db_refs_in_output)
 
-        # 7c. envelope-level knownGapRefs are not silently dropped: they must
-        # surface in both unresolvedGaps and exchangeReport.knownGapRefs.
         fixture_envelope = json.loads(FIXTURE.read_text(encoding="utf-8"))
-        envelope_gaps = set(fixture_envelope.get("knownGapRefs") or [])
+
+        # 7c. envelope-level knownGapRefs are not silently dropped: they must
+        # surface in both unresolvedGaps and exchangeReport.knownGapRefs. Uses a
+        # synthetic tmp fixture (not the credential-management-0092 golden
+        # fixture) so this generic-behavior test doesn't depend on that fixture
+        # continuing to carry an open gap -- instance_settings_projection_category_not_yet_represented
+        # was resolved and removed from the golden fixture's knownGapRefs.
+        gap_probe_envelope = {
+            "schemaId": "topolactor.translator_input.v1",
+            "mode": "generate_react_schema",
+            "targetSurface": "auth.external.credential_management.projection",
+            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
+            "knownGapRefs": ["synthetic_probe_gap_for_propagation_check"],
+            "inputText": "[projection key=p label=x sourceYamlRefs=a]\n[/projection]\n",
+        }
+        gap_probe_path = Path(tmpdir) / _next_tmp_name("tmp_gap_probe_fixture")
+        gap_probe_path.write_text(json.dumps(gap_probe_envelope), encoding="utf-8")
+        _, gap_probe_doc = run_generate(gap_probe_path)
+        envelope_gaps = {"synthetic_probe_gap_for_propagation_check"}
         expect(
             "7c. envelope-level knownGapRefs propagate into unresolvedGaps and exchangeReport.knownGapRefs",
-            bool(envelope_gaps)
-            and envelope_gaps.issubset(set((doc or {}).get("unresolvedGaps") or []))
-            and envelope_gaps.issubset(set(dig(doc or {}, "exchangeReport", "knownGapRefs") or [])),
+            envelope_gaps.issubset(set((gap_probe_doc or {}).get("unresolvedGaps") or []))
+            and envelope_gaps.issubset(set(dig(gap_probe_doc or {}, "exchangeReport", "knownGapRefs") or [])),
         )
 
         schema_candidate = (doc or {}).get("reactSchemaCandidate") or {}
@@ -475,10 +498,131 @@ def main():
             all(a.get("sourceReactPath") and a.get("sourceYamlRefs") and a.get("authorityMarker") and a.get("eventBinding") for a in all_action_records),
         )
 
-        expect("35. envelope-level knownGapRefs propagate into topology-seed unresolvedGaps and exchangeReport.knownGapRefs", "instance_settings_projection_category_not_yet_represented" in ((doc_ts or {}).get("unresolvedGaps") or []) and "instance_settings_projection_category_not_yet_represented" in (dig(doc_ts or {}, "exchangeReport", "knownGapRefs") or []))
+        # 35: instance_settings_projection_category_not_yet_represented is resolved
+        # (was previously asserted as a propagating unresolved gap; the fixtures no
+        # longer declare it and the golden run must not report it either -- a
+        # resolved gap must not keep surfacing as if still open). Cross-checked
+        # against the actual seed store, not just the fixture/tool claim, so a
+        # "resolved" status can't be asserted without the real representation
+        # existing.
+        expect(
+            "35. instance_settings_projection_category_not_yet_represented no longer appears in topology-seed unresolvedGaps/exchangeReport.knownGapRefs (resolved, not silently re-surfaced)",
+            "instance_settings_projection_category_not_yet_represented" not in ((doc_ts or {}).get("unresolvedGaps") or [])
+            and "instance_settings_projection_category_not_yet_represented" not in (dig(doc_ts or {}, "exchangeReport", "knownGapRefs") or []),
+        )
+        seed_empty_text = SEED_EMPTY_PATH.read_text(encoding="utf-8")
+        expect(
+            "35a. the gap-resolving instance_settings forms are actually represented as topology_ui_seed_record entries in the real seed store (claim matches seed content, not just fixture/tool output)",
+            all(
+                f'"formKey":"{form_key}"' in seed_empty_text
+                for form_key in ("instance_settings_import_form", "instance_address_form", "instance_operation_binding_form", "instance_operation_approval_form")
+            ),
+        )
 
         no_active_topology_write_claim = "activeTopology" not in json.dumps(tuc) and "runtimeExecute" not in json.dumps(tuc)
         expect("36. topologyUiSeedCandidate carries no active-topology/execution-authority claim", no_active_topology_write_claim)
+
+        # storage_adoption_contract (added after PR #573's idx_manifest_topology
+        # index row size failure): topologyUiSeedFlatRecords is the seed-safe
+        # adoption shape, derived from the same tree as topologyUiSeedCandidate.
+        flat_records = (doc_ts or {}).get("topologyUiSeedFlatRecords") or []
+        expect("36a. topologyUiSeedFlatRecords is populated for the golden fixture", bool(flat_records))
+        expect(
+            "36b. every flattened record independently fits the manifest.topology / idx_manifest_topology storage budget (UTF-8 byte length)",
+            all(record_byte_size(r) <= 2712 for r in flat_records),
+        )
+        flat_keys = {r.get("record", {}).get("key") for r in flat_records}
+        root_flat = [r for r in flat_records if r.get("parentKey") is None]
+        expect("36c. exactly one flattened record has parentKey == null (the root projection)", len(root_flat) == 1 and root_flat[0].get("record", {}).get("recordType") == "topology_ui_projection")
+        expect(
+            "36d. every non-root flattened record's parentKey resolves to another flattened record's key (parentKey tree is fully reconstructible)",
+            all(r.get("parentKey") in flat_keys for r in flat_records if r.get("parentKey") is not None),
+        )
+        expect(
+            "36e. flattened action records still preserve authorityMarker/eventBinding after flattening",
+            all(
+                r.get("record", {}).get("authorityMarker") and r.get("record", {}).get("eventBinding")
+                for r in flat_records
+                if r.get("record", {}).get("recordType") == "topology_ui_action"
+            ),
+        )
+
+        # 36f-36h: a synthetic oversized single-field candidate must be caught
+        # by storage_adoption_contract's budget check at generation time, not
+        # discovered later as a real Postgres INSERT failure (the PR #573 gap
+        # this section closes).
+        oversize_schema = {
+            "schema": "topolactor.react_schema.v1",
+            "presetKey": "auth.external.credential_management.projection",
+            "surface": "auth.external.credential_management.projection",
+            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
+            "root": {
+                "kind": "Projection", "key": "p", "label": "p", "sourceYamlRefs": ["a"],
+                "children": [{
+                    "kind": "Category", "key": "c1", "label": "c1", "sourceYamlRefs": ["a"],
+                    "children": [{
+                        "kind": "Section", "key": "s1", "label": "s1", "sourceYamlRefs": ["a"], "sectionKind": "readonly_boundary",
+                        "children": [{
+                            "kind": "Field", "key": "f1", "label": "x" * 3000, "sourceYamlRefs": ["a"],
+                            "control": "form_input/form_field", "required": False,
+                        }],
+                    }],
+                }],
+            },
+        }
+        tmp36 = write_topology_seed_tmp_fixture(json.dumps(oversize_schema), tmpdir=tmpdir)
+        oversize_fragment_path = Path(tmpdir) / "oversize-fragment.sql"
+        proc36, doc36 = run_generate_topology_seed(tmp36, extra_args=["--seed-sql-fragment", str(oversize_fragment_path)])
+        expect("36f. an oversized flattened field is reported as blocking SEED_RECORD_EXCEEDS_STORAGE_BUDGET", proc36.returncode != 0 and "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" in rule_ids(doc36))
+        expect("36g. topologyUiSeedFlatRecords is still populated for review even when a record is over budget", bool((doc36 or {}).get("topologyUiSeedFlatRecords")))
+        expect("36h. --seed-sql-fragment is not written when any record is over budget (never hands a reviewer a broken fragment)", not oversize_fragment_path.exists())
+
+        # 36i-36j: the budget must be measured in UTF-8 *bytes*, not Python
+        # characters -- a multi-byte (non-ASCII) label can be well under the
+        # 2712 *character* count while its UTF-8 encoding still overflows the
+        # 2712 *byte* budget Postgres actually enforces. 800 "あ" (3 bytes
+        # each in UTF-8) keeps the field's flattened record at ~1.2k
+        # characters (would pass a naive len(str) check) but ~2.8k bytes
+        # (must fail the real byte-length check).
+        def multibyte_field_schema(repeat_count):
+            return {
+                "schema": "topolactor.react_schema.v1",
+                "presetKey": "auth.external.credential_management.projection",
+                "surface": "auth.external.credential_management.projection",
+                "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
+                "root": {
+                    "kind": "Projection", "key": "p", "label": "p", "sourceYamlRefs": ["a"],
+                    "children": [{
+                        "kind": "Category", "key": "c1", "label": "c1", "sourceYamlRefs": ["a"],
+                        "children": [{
+                            "kind": "Section", "key": "s1", "label": "s1", "sourceYamlRefs": ["a"], "sectionKind": "readonly_boundary",
+                            "children": [{
+                                "kind": "Field", "key": "f1", "label": "あ" * repeat_count, "sourceYamlRefs": ["a"],
+                                "control": "form_input/form_field", "required": False,
+                            }],
+                        }],
+                    }],
+                },
+            }
+
+        tmp36i = write_topology_seed_tmp_fixture(json.dumps(multibyte_field_schema(800)), tmpdir=tmpdir)
+        proc36i, doc36i = run_generate_topology_seed(tmp36i)
+        multibyte_over_flat = (doc36i or {}).get("topologyUiSeedFlatRecords") or []
+        multibyte_over_field = next((r for r in multibyte_over_flat if r.get("record", {}).get("key") == "f1"), {})
+        expect(
+            "36i. a multi-byte-label field under 2712 *characters* but over 2712 UTF-8 *bytes* is still caught as blocking SEED_RECORD_EXCEEDS_STORAGE_BUDGET",
+            proc36i.returncode != 0
+            and "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" in rule_ids(doc36i)
+            and len(json.dumps(multibyte_over_field, separators=(",", ":"), ensure_ascii=False)) <= 2712
+            and record_byte_size(multibyte_over_field) > 2712,
+        )
+
+        tmp36j = write_topology_seed_tmp_fixture(json.dumps(multibyte_field_schema(600)), tmpdir=tmpdir)
+        proc36j, doc36j = run_generate_topology_seed(tmp36j)
+        expect(
+            "36j. a smaller multi-byte-label field that stays under the byte budget is not flagged (byte check is not overly conservative)",
+            proc36j.returncode == 0 and "SEED_RECORD_EXCEEDS_STORAGE_BUDGET" not in rule_ids(doc36j),
+        )
 
         # 37. generate-react-schema envelope rejected by generate-topology-seed (mode mismatch)
         tmp37 = write_tmp_fixture("[projection key=p label=x sourceYamlRefs=a]\n[/projection]\n", tmpdir=tmpdir)

@@ -54,6 +54,31 @@ import minimal_yaml as yaml  # noqa: E402
 
 SSOT_REL_PATH = "docs/design/react-schema-topology-seed-translator-ssot.yaml"
 
+# storage_adoption_contract.constraint.budget_source: db/manifest_tables.sql
+# defines idx_manifest_topology as `GIN (topology)` over `manifest.topology
+# jsonb[]`. A GIN index over an array type indexes each array element as one
+# indexable item, subject to Postgres's ~2712-byte index item size ceiling
+# (btree/GIN internal page-size-derived limit). A single oversized jsonb[]
+# element fails INSERT with "index row size N exceeds maximum 2712 for index
+# idx_manifest_topology" -- this is a real DB constraint discovered the hard
+# way in PR #573, not a style preference. See storage_adoption_contract in
+# the SSOT for the documented contract this constant implements.
+MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET = 2712
+
+# exchange_mapping.schema_to_seed_record_mapping's nested list fields, keyed
+# by the seed recordType that owns them, each paired with the flattened
+# "shell" key name that replaces the nested list with a list of child keys
+# (see flatten_topology_ui_seed_tree). Mirrors the nesting convert_node_to_seed_record
+# builds for each react_kind.
+SEED_RECORD_NESTED_LIST_KEYS = {
+    "topology_ui_projection": [("categories", "categoryKeys")],
+    "topology_ui_category": [("sections", "sectionKeys")],
+    "topology_ui_section": [("children", "childKeys")],
+    "topology_ui_form": [("fields", "fieldKeys"), ("actions", "actionKeys")],
+    "topology_ui_table": [("columns", "columnKeys")],
+    "topology_ui_workflow": [("steps", "stepKeys")],
+}
+
 REQUIRED_SSOT_SECTIONS = [
     "input_format_contract",
     "input_text_markup_grammar_contract",
@@ -822,6 +847,14 @@ def new_output_shell():
         "normalizedInputElements": [],
         "reactSchemaCandidate": None,
         "topologyUiSeedCandidate": None,
+        # storage_adoption_contract: populated only for generate_topology_ui_seed,
+        # mirroring topologyUiSeedCandidate's populated-when rule. A flat list of
+        # topology_ui_seed_record wrappers (see flatten_topology_ui_seed_tree),
+        # each sized against MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET -- this
+        # is the seed-safe adoption shape; topologyUiSeedCandidate's nested tree
+        # remains debug/review-only and must never be adopted as a single
+        # manifest.topology array element (see PR #573's index row size failure).
+        "topologyUiSeedFlatRecords": None,
         "exchangeReport": {},
         "validationErrors": [],
         "unresolvedGaps": [],
@@ -924,6 +957,92 @@ def build_topology_ui_seed_candidate(supplied_schema, target_surface, root_recor
         "projections": [root_record] if root_record is not None else [],
         "exchangeReport": exchange_report,
     }
+
+
+def flatten_topology_ui_seed_tree(record, seed_key, parent_key=None, out=None):
+    """storage_adoption_contract.flattened_record_contract: split a nested
+    topology_ui_seed_candidate record tree into a flat list of small
+    `topology_ui_seed_record` wrappers, one per node, each carrying a
+    `parentKey` so the original tree can be reconstructed. Every wrapper's
+    `record` keeps the node's own recordType/key/label/sourceYamlRefs/
+    sourceReactPath/knownGapRefs/authorityMarker/eventBinding (nothing is
+    dropped) -- only nested list fields (categories/sections/children/
+    fields/actions/columns/steps) are replaced with a list of child keys,
+    since those children become their own flat entries."""
+    if out is None:
+        out = []
+    if record is None:
+        return out
+
+    record_type = record.get("recordType")
+    shell = dict(record)
+    nested_specs = SEED_RECORD_NESTED_LIST_KEYS.get(record_type, [])
+    child_records = []
+    for list_key, shell_key in nested_specs:
+        children = shell.pop(list_key, None)
+        if children is None:
+            continue
+        shell[shell_key] = [c.get("key") for c in children]
+        child_records.extend(children)
+
+    out.append({
+        "type": "topology_ui_seed_record",
+        "seedKey": seed_key,
+        "parentKey": parent_key,
+        "record": shell,
+    })
+
+    this_key = record.get("key")
+    for child in child_records:
+        flatten_topology_ui_seed_tree(child, seed_key, this_key, out)
+
+    return out
+
+
+def validate_flat_seed_records(flat_records, budget_bytes=MANIFEST_TOPOLOGY_ARRAY_ELEMENT_BYTE_BUDGET):
+    """storage_adoption_contract.validation_rules: every flattened wrapper
+    must independently fit the manifest.topology jsonb[] GIN index's
+    per-array-element byte budget once it is adopted as a seed array
+    element. Checked on the exact JSON text the seed would carry (compact
+    separators, matching the existing seed store's single-line jsonb
+    literal style) so this catches the failure at generation time instead
+    of at insert time. budget_bytes is a UTF-8 *byte* budget (the Postgres
+    index item size limit is byte-based), so the check must measure UTF-8
+    encoded length, not Python string/character length -- multi-byte
+    labels (e.g. non-ASCII text) would otherwise silently pass a
+    character-count check while still overflowing the real byte budget."""
+    errors = []
+    for wrapper in flat_records:
+        size = len(json.dumps(wrapper, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+        if size > budget_bytes:
+            record = wrapper.get("record") or {}
+            path = record.get("sourceReactPath", "$.root")
+            errors.append(err(
+                "SEED_RECORD_EXCEEDS_STORAGE_BUDGET",
+                path,
+                "blocking",
+                f"flattened record '{record.get('key')}' ({record.get('recordType')}) serializes to "
+                f"{size} bytes, exceeding the {budget_bytes}-byte manifest.topology / "
+                f"idx_manifest_topology storage_adoption_contract budget",
+            ))
+    return errors
+
+
+def render_seed_sql_fragment(flat_records, indent="        "):
+    """Render flattened records as ready-to-paste jsonb[] array element
+    lines, matching the existing seed store's single-line-per-element
+    style. This is still a generated artifact (generated_artifact_operation_policy):
+    a reviewer must read and adopt it into the tracked seed store, not paste it blindly."""
+    lines = []
+    for wrapper in flat_records:
+        text = json.dumps(wrapper, separators=(",", ":"), ensure_ascii=False)
+        if "'" in text:
+            # Defensive: single quotes would break the SQL string literal;
+            # protected_boundary content never contains them, but fail loud
+            # rather than emit broken SQL if some future field ever does.
+            raise SystemExit(f"seed record for key {wrapper.get('record', {}).get('key')} contains a single quote; cannot render as a SQL literal")
+        lines.append(f"{indent}'{text}'::jsonb")
+    return ",\n".join(lines) + "\n" if lines else ""
 
 
 def resolve_safe_output_path(output_arg):
@@ -1296,6 +1415,16 @@ def cmd_generate_topology_seed(args):
     output["exchangeReport"] = exchange_report
     output["topologyUiSeedCandidate"] = build_topology_ui_seed_candidate(supplied_schema, target_surface, root_record, exchange_report)
 
+    # storage_adoption_contract: derive the seed-safe flat adoption shape from
+    # the same root_record the nested candidate above was built from, and
+    # validate every flattened element against the manifest.topology /
+    # idx_manifest_topology GIN index byte budget before it is ever proposed
+    # for seed adoption.
+    flat_records = flatten_topology_ui_seed_tree(root_record, target_surface) if root_record is not None else []
+    output["topologyUiSeedFlatRecords"] = flat_records
+    budget_errors = validate_flat_seed_records(flat_records)
+    output["validationErrors"].extend(budget_errors)
+
     doc = {"schemaId": "topolactor.translator_output.v1", **output}
 
     if args.scenario_uuid:
@@ -1311,6 +1440,18 @@ def cmd_generate_topology_seed(args):
         doc["seedEvidence"] = seed_evidence
 
     write_output(args, doc)
+
+    # --seed-sql-fragment: optional, opt-in convenience artifact rendering
+    # topologyUiSeedFlatRecords as ready-to-paste jsonb[] array element
+    # lines (generated_artifact_operation_policy: still a generated artifact,
+    # not seed adoption authority by itself -- a reviewer must read and
+    # adopt it into *seed.sql). Skipped when any record is over budget so a
+    # broken fragment is never handed to a reviewer as if it were safe.
+    if getattr(args, "seed_sql_fragment", None) and not any(is_blocking(e) for e in doc["validationErrors"]):
+        fragment_path = resolve_safe_output_path(args.seed_sql_fragment)
+        fragment_path.parent.mkdir(parents=True, exist_ok=True)
+        fragment_path.write_text(render_seed_sql_fragment(flat_records), encoding="utf-8")
+
     return 1 if any(is_blocking(e) for e in doc["validationErrors"]) else 0
 
 
@@ -1368,6 +1509,7 @@ def build_arg_parser():
     gen2.add_argument("--task-ref", default=None, help="Optional taskRef value for the generate.log record (e.g. a PR reference).")
     gen2.add_argument("--pr-ref", default=None, help="Optional prRef value for the generate.log record.")
     gen2.add_argument("--source-seed-sql", default=None, help="Passthrough label only, e.g. a seed SQL file reference; recorded in generate.log verbatim, never opened or read by the translator.")
+    gen2.add_argument("--seed-sql-fragment", default=None, help="Optional path (under the repo root) to write topologyUiSeedFlatRecords rendered as ready-to-paste jsonb[] array element lines, one per storage_adoption_contract-flattened record. Still a generated artifact (not seed adoption authority) -- review before pasting into the tracked seed store. Skipped when any record exceeds the manifest.topology / idx_manifest_topology storage budget.")
     gen2.set_defaults(func=cmd_generate_topology_seed)
 
     rtc = sub.add_parser("round-trip-check")
