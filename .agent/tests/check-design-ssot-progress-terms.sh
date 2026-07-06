@@ -65,6 +65,7 @@ DESIGN_SSOTS=(
   "docs/design/external-port-substrate-ssot.yaml"
   "docs/design/mock-preset-intake-compiler-ssot.yaml"
   "docs/design/pipeline-continuity-ssot.yaml"
+  "docs/design/react-schema-topology-seed-translator-ssot.yaml"
   "docs/design/runtime-bundle-audit-approval-ssot.yaml"
   "docs/design/runtime-bundle-email-ssot.yaml"
   "docs/design/runtime-bundle-export-sftp-ssot.yaml"

@@ -1,0 +1,1635 @@
+{
+  "schemaId": "topolactor.translator_output.v1",
+  "normalizedInputElements": [],
+  "reactSchemaCandidate": {
+    "schema": "topolactor.react_schema.v1",
+    "presetKey": "auth.external.credential_management.projection",
+    "surface": "auth.external.credential_management.projection",
+    "sourceYamlRefs": [
+      "docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
+      "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
+    ],
+    "root": {
+      "kind": "Projection",
+      "key": "auth_external_credential_management_projection",
+      "sourceYamlRefs": [
+        "react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
+        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
+      ],
+      "label": "Auth / external credential management",
+      "children": [
+        {
+          "kind": "Category",
+          "key": "user_auth",
+          "sourceYamlRefs": [
+            "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.user_auth"
+          ],
+          "label": "User auth",
+          "children": [
+            {
+              "kind": "Section",
+              "key": "user_auth_section",
+              "sourceYamlRefs": [
+                "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.user_auth"
+              ],
+              "label": "User auth boundary",
+              "children": [
+                {
+                  "kind": "Field",
+                  "key": "approval_status",
+                  "sourceYamlRefs": [
+                    "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                  ],
+                  "label": "Approval status",
+                  "control": "form_input/select",
+                  "required": false,
+                  "_path": "$.root.children[0].children[0].children[0]"
+                }
+              ],
+              "sectionKind": "readonly_boundary",
+              "_path": "$.root.children[0].children[0]"
+            }
+          ],
+          "_path": "$.root.children[0]"
+        },
+        {
+          "kind": "Category",
+          "key": "external",
+          "sourceYamlRefs": [
+            "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+          ],
+          "label": "External",
+          "children": [
+            {
+              "kind": "Section",
+              "key": "external_section",
+              "sourceYamlRefs": [
+                "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+              ],
+              "label": "External port credential context",
+              "children": [
+                {
+                  "kind": "Field",
+                  "key": "credential_reference_key",
+                  "sourceYamlRefs": [
+                    "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+                  ],
+                  "label": "Credential reference key",
+                  "control": "form_input/form_field",
+                  "required": false,
+                  "_path": "$.root.children[1].children[0].children[0]"
+                }
+              ],
+              "sectionKind": "readonly_boundary",
+              "_path": "$.root.children[1].children[0]"
+            }
+          ],
+          "_path": "$.root.children[1]"
+        },
+        {
+          "kind": "Category",
+          "key": "instance_settings",
+          "sourceYamlRefs": [
+            "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+          ],
+          "label": "Instance settings",
+          "children": [
+            {
+              "kind": "Section",
+              "key": "instance_settings_section",
+              "sourceYamlRefs": [
+                "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+              ],
+              "label": "Instance settings",
+              "children": [
+                {
+                  "kind": "Form",
+                  "key": "instance_settings_import_form",
+                  "sourceYamlRefs": [
+                    "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary"
+                  ],
+                  "label": "Instance settings JSON import",
+                  "authorityMarker": "draft_or_projection_only",
+                  "children": [
+                    {
+                      "kind": "Field",
+                      "key": "template_file",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.template_kind"
+                      ],
+                      "label": "Template file",
+                      "control": "form_input/form_field",
+                      "required": true,
+                      "_path": "$.root.children[2].children[0].children[0].children[0]"
+                    },
+                    {
+                      "kind": "Action",
+                      "key": "json_template_download",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
+                      ],
+                      "label": "Download JSON template",
+                      "authorityMarker": "draft_or_projection_only",
+                      "eventBinding": {
+                        "trigger": "click",
+                        "wiringLane": "internal_instance_wiring",
+                        "targetRef": "ui-local:instance_settings_import_form.template_download_trigger",
+                        "authority": "draft_or_projection_only",
+                        "payloadFrom": {
+                          "category_key": "literal:instance_settings"
+                        }
+                      },
+                      "actionRef": "ui-local:instance_settings_import_form.template_download_trigger",
+                      "_path": "$.root.children[2].children[0].children[0].children[1]"
+                    },
+                    {
+                      "kind": "Action",
+                      "key": "json_import",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
+                      ],
+                      "label": "Import JSON template",
+                      "authorityMarker": "draft_or_projection_only",
+                      "eventBinding": {
+                        "trigger": "change",
+                        "wiringLane": "internal_instance_wiring",
+                        "targetRef": "ui-local:instance_settings_import_form.template_file",
+                        "authority": "draft_or_projection_only",
+                        "payloadFrom": {
+                          "template_file": "node:template_file.value"
+                        }
+                      },
+                      "actionRef": "ui-local:instance_settings_import_form.template_file",
+                      "_path": "$.root.children[2].children[0].children[0].children[2]"
+                    }
+                  ],
+                  "target": "instance_settings_json_template",
+                  "mode": "import",
+                  "fields": [
+                    "template_file"
+                  ],
+                  "actions": [
+                    "json_template_download",
+                    "json_import"
+                  ],
+                  "_path": "$.root.children[2].children[0].children[0]"
+                },
+                {
+                  "kind": "Form",
+                  "key": "instance_address_form",
+                  "sourceYamlRefs": [
+                    "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                  ],
+                  "label": "Instance address",
+                  "authorityMarker": "validation_only",
+                  "children": [
+                    {
+                      "kind": "Field",
+                      "key": "instance_authority_key",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Instance authority key",
+                      "control": "form_input/form_field",
+                      "required": true,
+                      "_path": "$.root.children[2].children[0].children[1].children[0]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "instance_display_name",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Instance display name",
+                      "control": "form_input/form_field",
+                      "required": true,
+                      "_path": "$.root.children[2].children[0].children[1].children[1]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "port_kind",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#port_kinds"
+                      ],
+                      "label": "Port kind",
+                      "control": "form_input/select",
+                      "required": true,
+                      "_path": "$.root.children[2].children[0].children[1].children[2]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "provider_kind",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Provider kind",
+                      "control": "form_input/form_field",
+                      "required": true,
+                      "_path": "$.root.children[2].children[0].children[1].children[3]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "required_by_bundle",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Required by bundle",
+                      "control": "form_input/form_field",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[1].children[4]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "address_ref",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Address reference",
+                      "control": "form_input/form_field",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[1].children[5]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "connection_policy_key",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Connection policy key",
+                      "control": "form_input/form_field",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[1].children[6]"
+                    },
+                    {
+                      "kind": "Action",
+                      "key": "validate",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#authority_model"
+                      ],
+                      "label": "Validate",
+                      "authorityMarker": "validation_only",
+                      "eventBinding": {
+                        "trigger": "click",
+                        "wiringLane": "external_instance_wiring",
+                        "targetRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                        "authority": "validation_only",
+                        "payloadFrom": {
+                          "instance_authority_key": "node:instance_authority_key.value",
+                          "operation_binding_key": "node:operation_binding_key.value"
+                        }
+                      },
+                      "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                      "_path": "$.root.children[2].children[0].children[1].children[7]"
+                    }
+                  ],
+                  "target": "db_instance_port",
+                  "mode": "edit",
+                  "fields": [
+                    "instance_authority_key",
+                    "instance_display_name",
+                    "port_kind",
+                    "provider_kind",
+                    "required_by_bundle",
+                    "address_ref",
+                    "connection_policy_key"
+                  ],
+                  "actions": [
+                    "validate"
+                  ],
+                  "_path": "$.root.children[2].children[0].children[1]"
+                },
+                {
+                  "kind": "Form",
+                  "key": "instance_operation_binding_form",
+                  "sourceYamlRefs": [
+                    "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                  ],
+                  "label": "Instance operation binding",
+                  "authorityMarker": "preview_only",
+                  "children": [
+                    {
+                      "kind": "Field",
+                      "key": "operation_binding_key",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Operation binding key",
+                      "control": "form_input/form_field",
+                      "required": true,
+                      "_path": "$.root.children[2].children[0].children[2].children[0]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "display_label",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Display label",
+                      "control": "form_input/form_field",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[2].children[1]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "operation_protocol",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Operation protocol",
+                      "control": "form_input/form_field",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[2].children[2]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "input_schema_key",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Input schema key",
+                      "control": "form_input/form_field",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[2].children[3]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "output_shape_key",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Output shape key",
+                      "control": "form_input/form_field",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[2].children[4]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "sanitize_policy_key",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Sanitize policy key",
+                      "control": "form_input/form_field",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[2].children[5]"
+                    },
+                    {
+                      "kind": "Field",
+                      "key": "callable",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Callable",
+                      "control": "form_input/select",
+                      "required": false,
+                      "_path": "$.root.children[2].children[0].children[2].children[6]"
+                    },
+                    {
+                      "kind": "Action",
+                      "key": "preview",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#authority_model"
+                      ],
+                      "label": "Preview",
+                      "authorityMarker": "preview_only",
+                      "eventBinding": {
+                        "trigger": "click",
+                        "wiringLane": "external_instance_wiring",
+                        "targetRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                        "authority": "preview_only",
+                        "payloadFrom": {
+                          "instance_authority_key": "node:instance_authority_key.value",
+                          "operation_binding_key": "node:operation_binding_key.value"
+                        }
+                      },
+                      "actionRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                      "_path": "$.root.children[2].children[0].children[2].children[7]"
+                    }
+                  ],
+                  "target": "instance_operation_authority_binding",
+                  "mode": "edit",
+                  "fields": [
+                    "operation_binding_key",
+                    "display_label",
+                    "operation_protocol",
+                    "input_schema_key",
+                    "output_shape_key",
+                    "sanitize_policy_key",
+                    "callable"
+                  ],
+                  "actions": [
+                    "preview"
+                  ],
+                  "_path": "$.root.children[2].children[0].children[2]"
+                },
+                {
+                  "kind": "Form",
+                  "key": "instance_operation_approval_form",
+                  "sourceYamlRefs": [
+                    "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.guard_rule"
+                  ],
+                  "label": "Instance operation approval",
+                  "authorityMarker": "execution_candidate_authority_boundary",
+                  "children": [
+                    {
+                      "kind": "Field",
+                      "key": "approval_status",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                      ],
+                      "label": "Approval status",
+                      "control": "form_input/select",
+                      "required": true,
+                      "_path": "$.root.children[2].children[0].children[3].children[0]"
+                    },
+                    {
+                      "kind": "Action",
+                      "key": "apply",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#authority_model"
+                      ],
+                      "label": "Apply",
+                      "authorityMarker": "draft_apply_not_execution_authority",
+                      "eventBinding": {
+                        "trigger": "click",
+                        "wiringLane": "external_instance_wiring",
+                        "targetRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                        "authority": "draft_apply_not_execution_authority",
+                        "payloadFrom": {
+                          "instance_authority_key": "node:instance_authority_key.value",
+                          "operation_binding_key": "node:operation_binding_key.value"
+                        }
+                      },
+                      "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                      "_path": "$.root.children[2].children[0].children[3].children[1]"
+                    },
+                    {
+                      "kind": "Action",
+                      "key": "approve",
+                      "sourceYamlRefs": [
+                        "instance-port-substrate-ssot.yaml#authority_model"
+                      ],
+                      "label": "Approve",
+                      "authorityMarker": "execution_candidate_authority_boundary",
+                      "eventBinding": {
+                        "trigger": "click",
+                        "wiringLane": "external_instance_wiring",
+                        "targetRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                        "authority": "execution_candidate_authority_boundary",
+                        "payloadFrom": {
+                          "instance_authority_key": "node:instance_authority_key.value",
+                          "operation_binding_key": "node:operation_binding_key.value"
+                        }
+                      },
+                      "actionRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                      "_path": "$.root.children[2].children[0].children[3].children[2]"
+                    }
+                  ],
+                  "target": "instance_operation_authority_binding",
+                  "mode": "approve",
+                  "fields": [
+                    "approval_status"
+                  ],
+                  "actions": [
+                    "apply",
+                    "approve"
+                  ],
+                  "_path": "$.root.children[2].children[0].children[3]"
+                }
+              ],
+              "sectionKind": "fixed_form_projection",
+              "_path": "$.root.children[2].children[0]"
+            }
+          ],
+          "_path": "$.root.children[2]"
+        }
+      ],
+      "_path": "$.root"
+    }
+  },
+  "topologyUiSeedCandidate": {
+    "schema": "topolactor.topology_ui_seed.v1",
+    "role": "draft_intake_artifact_not_active_topology",
+    "seedKey": "auth.external.credential_management.projection",
+    "surface": "auth.external.credential_management.projection",
+    "sourceReactSchema": {
+      "schema": "topolactor.react_schema.v1",
+      "presetKey": "auth.external.credential_management.projection",
+      "surface": "auth.external.credential_management.projection",
+      "sourceYamlRefs": [
+        "docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
+        "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
+      ],
+      "root": {
+        "kind": "Projection",
+        "key": "auth_external_credential_management_projection",
+        "sourceYamlRefs": [
+          "react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
+          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
+        ],
+        "label": "Auth / external credential management",
+        "children": [
+          {
+            "kind": "Category",
+            "key": "user_auth",
+            "sourceYamlRefs": [
+              "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.user_auth"
+            ],
+            "label": "User auth",
+            "children": [
+              {
+                "kind": "Section",
+                "key": "user_auth_section",
+                "sourceYamlRefs": [
+                  "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.user_auth"
+                ],
+                "label": "User auth boundary",
+                "children": [
+                  {
+                    "kind": "Field",
+                    "key": "approval_status",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                    ],
+                    "label": "Approval status",
+                    "control": "form_input/select",
+                    "required": false,
+                    "_path": "$.root.children[0].children[0].children[0]"
+                  }
+                ],
+                "sectionKind": "readonly_boundary",
+                "_path": "$.root.children[0].children[0]"
+              }
+            ],
+            "_path": "$.root.children[0]"
+          },
+          {
+            "kind": "Category",
+            "key": "external",
+            "sourceYamlRefs": [
+              "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+            ],
+            "label": "External",
+            "children": [
+              {
+                "kind": "Section",
+                "key": "external_section",
+                "sourceYamlRefs": [
+                  "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+                ],
+                "label": "External port credential context",
+                "children": [
+                  {
+                    "kind": "Field",
+                    "key": "credential_reference_key",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+                    ],
+                    "label": "Credential reference key",
+                    "control": "form_input/form_field",
+                    "required": false,
+                    "_path": "$.root.children[1].children[0].children[0]"
+                  }
+                ],
+                "sectionKind": "readonly_boundary",
+                "_path": "$.root.children[1].children[0]"
+              }
+            ],
+            "_path": "$.root.children[1]"
+          },
+          {
+            "kind": "Category",
+            "key": "instance_settings",
+            "sourceYamlRefs": [
+              "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+            ],
+            "label": "Instance settings",
+            "children": [
+              {
+                "kind": "Section",
+                "key": "instance_settings_section",
+                "sourceYamlRefs": [
+                  "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                ],
+                "label": "Instance settings",
+                "children": [
+                  {
+                    "kind": "Form",
+                    "key": "instance_settings_import_form",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary"
+                    ],
+                    "label": "Instance settings JSON import",
+                    "authorityMarker": "draft_or_projection_only",
+                    "children": [
+                      {
+                        "kind": "Field",
+                        "key": "template_file",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.template_kind"
+                        ],
+                        "label": "Template file",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "_path": "$.root.children[2].children[0].children[0].children[0]"
+                      },
+                      {
+                        "kind": "Action",
+                        "key": "json_template_download",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
+                        ],
+                        "label": "Download JSON template",
+                        "authorityMarker": "draft_or_projection_only",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "internal_instance_wiring",
+                          "targetRef": "ui-local:instance_settings_import_form.template_download_trigger",
+                          "authority": "draft_or_projection_only",
+                          "payloadFrom": {
+                            "category_key": "literal:instance_settings"
+                          }
+                        },
+                        "actionRef": "ui-local:instance_settings_import_form.template_download_trigger",
+                        "_path": "$.root.children[2].children[0].children[0].children[1]"
+                      },
+                      {
+                        "kind": "Action",
+                        "key": "json_import",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
+                        ],
+                        "label": "Import JSON template",
+                        "authorityMarker": "draft_or_projection_only",
+                        "eventBinding": {
+                          "trigger": "change",
+                          "wiringLane": "internal_instance_wiring",
+                          "targetRef": "ui-local:instance_settings_import_form.template_file",
+                          "authority": "draft_or_projection_only",
+                          "payloadFrom": {
+                            "template_file": "node:template_file.value"
+                          }
+                        },
+                        "actionRef": "ui-local:instance_settings_import_form.template_file",
+                        "_path": "$.root.children[2].children[0].children[0].children[2]"
+                      }
+                    ],
+                    "target": "instance_settings_json_template",
+                    "mode": "import",
+                    "fields": [
+                      "template_file"
+                    ],
+                    "actions": [
+                      "json_template_download",
+                      "json_import"
+                    ],
+                    "_path": "$.root.children[2].children[0].children[0]"
+                  },
+                  {
+                    "kind": "Form",
+                    "key": "instance_address_form",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                    ],
+                    "label": "Instance address",
+                    "authorityMarker": "validation_only",
+                    "children": [
+                      {
+                        "kind": "Field",
+                        "key": "instance_authority_key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Instance authority key",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "_path": "$.root.children[2].children[0].children[1].children[0]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "instance_display_name",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Instance display name",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "_path": "$.root.children[2].children[0].children[1].children[1]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "port_kind",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#port_kinds"
+                        ],
+                        "label": "Port kind",
+                        "control": "form_input/select",
+                        "required": true,
+                        "_path": "$.root.children[2].children[0].children[1].children[2]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "provider_kind",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Provider kind",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "_path": "$.root.children[2].children[0].children[1].children[3]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "required_by_bundle",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Required by bundle",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[1].children[4]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "address_ref",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Address reference",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[1].children[5]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "connection_policy_key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Connection policy key",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[1].children[6]"
+                      },
+                      {
+                        "kind": "Action",
+                        "key": "validate",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#authority_model"
+                        ],
+                        "label": "Validate",
+                        "authorityMarker": "validation_only",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "external_instance_wiring",
+                          "targetRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                          "authority": "validation_only",
+                          "payloadFrom": {
+                            "instance_authority_key": "node:instance_authority_key.value",
+                            "operation_binding_key": "node:operation_binding_key.value"
+                          }
+                        },
+                        "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                        "_path": "$.root.children[2].children[0].children[1].children[7]"
+                      }
+                    ],
+                    "target": "db_instance_port",
+                    "mode": "edit",
+                    "fields": [
+                      "instance_authority_key",
+                      "instance_display_name",
+                      "port_kind",
+                      "provider_kind",
+                      "required_by_bundle",
+                      "address_ref",
+                      "connection_policy_key"
+                    ],
+                    "actions": [
+                      "validate"
+                    ],
+                    "_path": "$.root.children[2].children[0].children[1]"
+                  },
+                  {
+                    "kind": "Form",
+                    "key": "instance_operation_binding_form",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                    ],
+                    "label": "Instance operation binding",
+                    "authorityMarker": "preview_only",
+                    "children": [
+                      {
+                        "kind": "Field",
+                        "key": "operation_binding_key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Operation binding key",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "_path": "$.root.children[2].children[0].children[2].children[0]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "display_label",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Display label",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[2].children[1]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "operation_protocol",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Operation protocol",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[2].children[2]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "input_schema_key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Input schema key",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[2].children[3]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "output_shape_key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Output shape key",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[2].children[4]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "sanitize_policy_key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Sanitize policy key",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[2].children[5]"
+                      },
+                      {
+                        "kind": "Field",
+                        "key": "callable",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Callable",
+                        "control": "form_input/select",
+                        "required": false,
+                        "_path": "$.root.children[2].children[0].children[2].children[6]"
+                      },
+                      {
+                        "kind": "Action",
+                        "key": "preview",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#authority_model"
+                        ],
+                        "label": "Preview",
+                        "authorityMarker": "preview_only",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "external_instance_wiring",
+                          "targetRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                          "authority": "preview_only",
+                          "payloadFrom": {
+                            "instance_authority_key": "node:instance_authority_key.value",
+                            "operation_binding_key": "node:operation_binding_key.value"
+                          }
+                        },
+                        "actionRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                        "_path": "$.root.children[2].children[0].children[2].children[7]"
+                      }
+                    ],
+                    "target": "instance_operation_authority_binding",
+                    "mode": "edit",
+                    "fields": [
+                      "operation_binding_key",
+                      "display_label",
+                      "operation_protocol",
+                      "input_schema_key",
+                      "output_shape_key",
+                      "sanitize_policy_key",
+                      "callable"
+                    ],
+                    "actions": [
+                      "preview"
+                    ],
+                    "_path": "$.root.children[2].children[0].children[2]"
+                  },
+                  {
+                    "kind": "Form",
+                    "key": "instance_operation_approval_form",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.guard_rule"
+                    ],
+                    "label": "Instance operation approval",
+                    "authorityMarker": "execution_candidate_authority_boundary",
+                    "children": [
+                      {
+                        "kind": "Field",
+                        "key": "approval_status",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "label": "Approval status",
+                        "control": "form_input/select",
+                        "required": true,
+                        "_path": "$.root.children[2].children[0].children[3].children[0]"
+                      },
+                      {
+                        "kind": "Action",
+                        "key": "apply",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#authority_model"
+                        ],
+                        "label": "Apply",
+                        "authorityMarker": "draft_apply_not_execution_authority",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "external_instance_wiring",
+                          "targetRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                          "authority": "draft_apply_not_execution_authority",
+                          "payloadFrom": {
+                            "instance_authority_key": "node:instance_authority_key.value",
+                            "operation_binding_key": "node:operation_binding_key.value"
+                          }
+                        },
+                        "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                        "_path": "$.root.children[2].children[0].children[3].children[1]"
+                      },
+                      {
+                        "kind": "Action",
+                        "key": "approve",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#authority_model"
+                        ],
+                        "label": "Approve",
+                        "authorityMarker": "execution_candidate_authority_boundary",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "external_instance_wiring",
+                          "targetRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                          "authority": "execution_candidate_authority_boundary",
+                          "payloadFrom": {
+                            "instance_authority_key": "node:instance_authority_key.value",
+                            "operation_binding_key": "node:operation_binding_key.value"
+                          }
+                        },
+                        "actionRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                        "_path": "$.root.children[2].children[0].children[3].children[2]"
+                      }
+                    ],
+                    "target": "instance_operation_authority_binding",
+                    "mode": "approve",
+                    "fields": [
+                      "approval_status"
+                    ],
+                    "actions": [
+                      "apply",
+                      "approve"
+                    ],
+                    "_path": "$.root.children[2].children[0].children[3]"
+                  }
+                ],
+                "sectionKind": "fixed_form_projection",
+                "_path": "$.root.children[2].children[0]"
+              }
+            ],
+            "_path": "$.root.children[2]"
+          }
+        ],
+        "_path": "$.root"
+      }
+    },
+    "sourceYamlRefs": [
+      "docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
+      "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
+    ],
+    "projections": [
+      {
+        "recordType": "topology_ui_projection",
+        "key": "auth_external_credential_management_projection",
+        "label": "Auth / external credential management",
+        "sourceYamlRefs": [
+          "react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
+          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
+        ],
+        "sourceReactPath": "$.root",
+        "knownGapRefs": [],
+        "surface": "auth.external.credential_management.projection",
+        "categories": [
+          {
+            "recordType": "topology_ui_category",
+            "key": "user_auth",
+            "label": "User auth",
+            "sourceYamlRefs": [
+              "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.user_auth"
+            ],
+            "sourceReactPath": "$.root.children[0]",
+            "knownGapRefs": [],
+            "categoryKey": "user_auth",
+            "sections": [
+              {
+                "recordType": "topology_ui_section",
+                "key": "user_auth_section",
+                "label": "User auth boundary",
+                "sourceYamlRefs": [
+                  "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.user_auth"
+                ],
+                "sourceReactPath": "$.root.children[0].children[0]",
+                "knownGapRefs": [],
+                "sectionKey": "user_auth_section",
+                "sectionKind": "readonly_boundary",
+                "children": [
+                  {
+                    "recordType": "topology_ui_field",
+                    "key": "approval_status",
+                    "label": "Approval status",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                    ],
+                    "sourceReactPath": "$.root.children[0].children[0].children[0]",
+                    "knownGapRefs": [],
+                    "fieldKey": "approval_status",
+                    "control": "form_input/select",
+                    "required": false,
+                    "validationRefs": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "recordType": "topology_ui_category",
+            "key": "external",
+            "label": "External",
+            "sourceYamlRefs": [
+              "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+            ],
+            "sourceReactPath": "$.root.children[1]",
+            "knownGapRefs": [],
+            "categoryKey": "external",
+            "sections": [
+              {
+                "recordType": "topology_ui_section",
+                "key": "external_section",
+                "label": "External port credential context",
+                "sourceYamlRefs": [
+                  "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+                ],
+                "sourceReactPath": "$.root.children[1].children[0]",
+                "knownGapRefs": [],
+                "sectionKey": "external_section",
+                "sectionKind": "readonly_boundary",
+                "children": [
+                  {
+                    "recordType": "topology_ui_field",
+                    "key": "credential_reference_key",
+                    "label": "Credential reference key",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.external"
+                    ],
+                    "sourceReactPath": "$.root.children[1].children[0].children[0]",
+                    "knownGapRefs": [],
+                    "fieldKey": "credential_reference_key",
+                    "control": "form_input/form_field",
+                    "required": false,
+                    "validationRefs": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "recordType": "topology_ui_category",
+            "key": "instance_settings",
+            "label": "Instance settings",
+            "sourceYamlRefs": [
+              "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+            ],
+            "sourceReactPath": "$.root.children[2]",
+            "knownGapRefs": [],
+            "categoryKey": "instance_settings",
+            "sections": [
+              {
+                "recordType": "topology_ui_section",
+                "key": "instance_settings_section",
+                "label": "Instance settings",
+                "sourceYamlRefs": [
+                  "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                ],
+                "sourceReactPath": "$.root.children[2].children[0]",
+                "knownGapRefs": [],
+                "sectionKey": "instance_settings_section",
+                "sectionKind": "fixed_form_projection",
+                "children": [
+                  {
+                    "recordType": "topology_ui_form",
+                    "key": "instance_settings_import_form",
+                    "label": "Instance settings JSON import",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary"
+                    ],
+                    "sourceReactPath": "$.root.children[2].children[0].children[0]",
+                    "knownGapRefs": [],
+                    "authorityMarker": "draft_or_projection_only",
+                    "formKey": "instance_settings_import_form",
+                    "target": "instance_settings_json_template",
+                    "mode": "import",
+                    "fields": [
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "template_file",
+                        "label": "Template file",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.template_kind"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[0].children[0]",
+                        "knownGapRefs": [],
+                        "fieldKey": "template_file",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "validationRefs": []
+                      }
+                    ],
+                    "actions": [
+                      {
+                        "recordType": "topology_ui_action",
+                        "key": "json_template_download",
+                        "label": "Download JSON template",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[0].children[1]",
+                        "knownGapRefs": [],
+                        "authorityMarker": "draft_or_projection_only",
+                        "actionKey": "json_template_download",
+                        "actionRef": "ui-local:instance_settings_import_form.template_download_trigger",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "internal_instance_wiring",
+                          "targetRef": "ui-local:instance_settings_import_form.template_download_trigger",
+                          "authority": "draft_or_projection_only",
+                          "payloadFrom": {
+                            "category_key": "literal:instance_settings"
+                          }
+                        }
+                      },
+                      {
+                        "recordType": "topology_ui_action",
+                        "key": "json_import",
+                        "label": "Import JSON template",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#seed_aligned_json_template_boundary.import_download_rule"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[0].children[2]",
+                        "knownGapRefs": [],
+                        "authorityMarker": "draft_or_projection_only",
+                        "actionKey": "json_import",
+                        "actionRef": "ui-local:instance_settings_import_form.template_file",
+                        "eventBinding": {
+                          "trigger": "change",
+                          "wiringLane": "internal_instance_wiring",
+                          "targetRef": "ui-local:instance_settings_import_form.template_file",
+                          "authority": "draft_or_projection_only",
+                          "payloadFrom": {
+                            "template_file": "node:template_file.value"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "recordType": "topology_ui_form",
+                    "key": "instance_address_form",
+                    "label": "Instance address",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                    ],
+                    "sourceReactPath": "$.root.children[2].children[0].children[1]",
+                    "knownGapRefs": [],
+                    "authorityMarker": "validation_only",
+                    "formKey": "instance_address_form",
+                    "target": "db_instance_port",
+                    "mode": "edit",
+                    "fields": [
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "instance_authority_key",
+                        "label": "Instance authority key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[1].children[0]",
+                        "knownGapRefs": [],
+                        "fieldKey": "instance_authority_key",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "instance_display_name",
+                        "label": "Instance display name",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[1].children[1]",
+                        "knownGapRefs": [],
+                        "fieldKey": "instance_display_name",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "port_kind",
+                        "label": "Port kind",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#port_kinds"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[1].children[2]",
+                        "knownGapRefs": [],
+                        "fieldKey": "port_kind",
+                        "control": "form_input/select",
+                        "required": true,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "provider_kind",
+                        "label": "Provider kind",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[1].children[3]",
+                        "knownGapRefs": [],
+                        "fieldKey": "provider_kind",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "required_by_bundle",
+                        "label": "Required by bundle",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[1].children[4]",
+                        "knownGapRefs": [],
+                        "fieldKey": "required_by_bundle",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "address_ref",
+                        "label": "Address reference",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[1].children[5]",
+                        "knownGapRefs": [],
+                        "fieldKey": "address_ref",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "connection_policy_key",
+                        "label": "Connection policy key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[1].children[6]",
+                        "knownGapRefs": [],
+                        "fieldKey": "connection_policy_key",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "validationRefs": []
+                      }
+                    ],
+                    "actions": [
+                      {
+                        "recordType": "topology_ui_action",
+                        "key": "validate",
+                        "label": "Validate",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#authority_model"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[1].children[7]",
+                        "knownGapRefs": [],
+                        "authorityMarker": "validation_only",
+                        "actionKey": "validate",
+                        "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "external_instance_wiring",
+                          "targetRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                          "authority": "validation_only",
+                          "payloadFrom": {
+                            "instance_authority_key": "node:instance_authority_key.value",
+                            "operation_binding_key": "node:operation_binding_key.value"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "recordType": "topology_ui_form",
+                    "key": "instance_operation_binding_form",
+                    "label": "Instance operation binding",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                    ],
+                    "sourceReactPath": "$.root.children[2].children[0].children[2]",
+                    "knownGapRefs": [],
+                    "authorityMarker": "preview_only",
+                    "formKey": "instance_operation_binding_form",
+                    "target": "instance_operation_authority_binding",
+                    "mode": "edit",
+                    "fields": [
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "operation_binding_key",
+                        "label": "Operation binding key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[2].children[0]",
+                        "knownGapRefs": [],
+                        "fieldKey": "operation_binding_key",
+                        "control": "form_input/form_field",
+                        "required": true,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "display_label",
+                        "label": "Display label",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[2].children[1]",
+                        "knownGapRefs": [],
+                        "fieldKey": "display_label",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "operation_protocol",
+                        "label": "Operation protocol",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[2].children[2]",
+                        "knownGapRefs": [],
+                        "fieldKey": "operation_protocol",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "input_schema_key",
+                        "label": "Input schema key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[2].children[3]",
+                        "knownGapRefs": [],
+                        "fieldKey": "input_schema_key",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "output_shape_key",
+                        "label": "Output shape key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[2].children[4]",
+                        "knownGapRefs": [],
+                        "fieldKey": "output_shape_key",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "sanitize_policy_key",
+                        "label": "Sanitize policy key",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[2].children[5]",
+                        "knownGapRefs": [],
+                        "fieldKey": "sanitize_policy_key",
+                        "control": "form_input/form_field",
+                        "required": false,
+                        "validationRefs": []
+                      },
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "callable",
+                        "label": "Callable",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[2].children[6]",
+                        "knownGapRefs": [],
+                        "fieldKey": "callable",
+                        "control": "form_input/select",
+                        "required": false,
+                        "validationRefs": []
+                      }
+                    ],
+                    "actions": [
+                      {
+                        "recordType": "topology_ui_action",
+                        "key": "preview",
+                        "label": "Preview",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#authority_model"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[2].children[7]",
+                        "knownGapRefs": [],
+                        "authorityMarker": "preview_only",
+                        "actionKey": "preview",
+                        "actionRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "external_instance_wiring",
+                          "targetRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                          "authority": "preview_only",
+                          "payloadFrom": {
+                            "instance_authority_key": "node:instance_authority_key.value",
+                            "operation_binding_key": "node:operation_binding_key.value"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "recordType": "topology_ui_form",
+                    "key": "instance_operation_approval_form",
+                    "label": "Instance operation approval",
+                    "sourceYamlRefs": [
+                      "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.guard_rule"
+                    ],
+                    "sourceReactPath": "$.root.children[2].children[0].children[3]",
+                    "knownGapRefs": [],
+                    "authorityMarker": "execution_candidate_authority_boundary",
+                    "formKey": "instance_operation_approval_form",
+                    "target": "instance_operation_authority_binding",
+                    "mode": "approve",
+                    "fields": [
+                      {
+                        "recordType": "topology_ui_field",
+                        "key": "approval_status",
+                        "label": "Approval status",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension.projection_categories.instance_settings"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[3].children[0]",
+                        "knownGapRefs": [],
+                        "fieldKey": "approval_status",
+                        "control": "form_input/select",
+                        "required": true,
+                        "validationRefs": []
+                      }
+                    ],
+                    "actions": [
+                      {
+                        "recordType": "topology_ui_action",
+                        "key": "apply",
+                        "label": "Apply",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#authority_model"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[3].children[1]",
+                        "knownGapRefs": [],
+                        "authorityMarker": "draft_apply_not_execution_authority",
+                        "actionKey": "apply",
+                        "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "external_instance_wiring",
+                          "targetRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                          "authority": "draft_apply_not_execution_authority",
+                          "payloadFrom": {
+                            "instance_authority_key": "node:instance_authority_key.value",
+                            "operation_binding_key": "node:operation_binding_key.value"
+                          }
+                        }
+                      },
+                      {
+                        "recordType": "topology_ui_action",
+                        "key": "approve",
+                        "label": "Approve",
+                        "sourceYamlRefs": [
+                          "instance-port-substrate-ssot.yaml#authority_model"
+                        ],
+                        "sourceReactPath": "$.root.children[2].children[0].children[3].children[2]",
+                        "knownGapRefs": [],
+                        "authorityMarker": "execution_candidate_authority_boundary",
+                        "actionKey": "approve",
+                        "actionRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                        "eventBinding": {
+                          "trigger": "click",
+                          "wiringLane": "external_instance_wiring",
+                          "targetRef": "instance:runtime_instance_port:instance_authority_key:operation_binding_key",
+                          "authority": "execution_candidate_authority_boundary",
+                          "payloadFrom": {
+                            "instance_authority_key": "node:instance_authority_key.value",
+                            "operation_binding_key": "node:operation_binding_key.value"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "exchangeReport": {
+      "sourceSchemaId": "topolactor.react_schema.v1",
+      "outputSeedSchemaId": "topolactor.topology_ui_seed.v1",
+      "sourceYamlRefs": [
+        "docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
+        "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
+      ],
+      "emittedRecords": 35,
+      "knownGapRefs": [
+        "instance_settings_projection_category_not_yet_represented"
+      ],
+      "lossEntries": [],
+      "reverseTranslationBlockers": [],
+      "validationErrors": []
+    }
+  },
+  "exchangeReport": {
+    "sourceSchemaId": "topolactor.react_schema.v1",
+    "outputSeedSchemaId": "topolactor.topology_ui_seed.v1",
+    "sourceYamlRefs": [
+      "docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog",
+      "docs/design/instance-port-substrate-ssot.yaml#existing_credential_management_projection_extension"
+    ],
+    "emittedRecords": 35,
+    "knownGapRefs": [
+      "instance_settings_projection_category_not_yet_represented"
+    ],
+    "lossEntries": [],
+    "reverseTranslationBlockers": [],
+    "validationErrors": []
+  },
+  "validationErrors": [],
+  "unresolvedGaps": [
+    "instance_settings_projection_category_not_yet_represented"
+  ],
+  "reverseTranslationBlockers": [],
+  "scenario": {
+    "uuid": "bad04ed9-7d39-4cfc-a22c-db2684d4cb0a",
+    "worktype": "implementation_change",
+    "targetBranch": "claude/react-schema-topology-ssot-hmis92"
+  },
+  "seedEvidence": {
+    "screenUuidNamespace": "manifest.manifest_id",
+    "screenUuid": "00000000-0000-0000-0000-000000000092",
+    "manifestKey": "auth.external.credential_management.projection",
+    "bundle": "auth-external-credential-management-topology-projection",
+    "ignoredSameUuidOtherNamespace": {
+      "namespace": "topology.structure_maps.structure_map_id",
+      "uuid": "00000000-0000-0000-0000-000000000092",
+      "reason": "separate namespace; not credential management screen UUID"
+    },
+    "relatedAuthUserBoundaryManifestId": "00000000-0000-0000-0000-000000000091"
+  }
+}

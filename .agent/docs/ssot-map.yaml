@@ -1014,6 +1014,46 @@ mapping:
       - docs/design/topolactor-phase-model.md
     protocols: []
 
+  - work_type: react_schema_topology_seed_translator
+    change_surfaces:
+      - React schema topology seed translator
+      - react_schema_topology_seed_translator
+      - react schema exchange contract
+      - topology UI seed exchange contract
+      - input format ⇆ output format exchange contract
+      - text decomposition contract
+      - input text markup grammar contract
+      - wiring lane contract
+      - ui catalog boundary contract
+      - projection render exchange contract
+      - declared seed surface catalog
+      - docs/design/react-schema-topology-seed-translator-ssot.yaml
+      - docs/design/react-schema-topology-seed-translator-production-policy.md
+    required_docs:
+      - docs/design/react-schema-topology-seed-translator-ssot.yaml
+    supporting_docs:
+      - docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml
+      - docs/design/ui-builder-preset-ecosystem-ssot.yaml
+      - docs/design/mock-preset-intake-compiler-ssot.yaml
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/instance-port-substrate-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/css-dictionary-ssot.yaml
+      - docs/design/topology-layout-class-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+    parent_child_boundary:
+      parent: UIBuilder preset ecosystem / seed-first gap discovery method
+      child_surface: react-like authoring schema ⇆ topology UI seed exchange contract
+      not_peer_feature_with: mock-preset-intake-compiler (owns external visual mock intake; this surface owns the React-schema-authored intake path)
+    translator_input_authority_note: >-
+      This SSOT is the only input the next-Bundle Python3 translator tool reads. db/*.sql seed
+      files are reference material for authoring declared_seed_surface_catalog; they are never
+      translator source authority.
+
   - work_type: instance_port_substrate
     change_surfaces:
       - credential-backed instance connection

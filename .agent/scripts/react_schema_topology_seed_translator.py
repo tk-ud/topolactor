@@ -1,0 +1,1218 @@
+#!/usr/bin/env python3
+"""react_schema_topology_seed_translator.py -- generate-react-schema /
+generate-topology-seed implementation body.
+
+Implements two modes of docs/design/react-schema-topology-seed-translator-ssot.yaml:
+
+    generate_react_schema:
+      inputText -> input_text_markup_grammar_contract parse
+                -> text_decomposition_contract normalized elements
+                -> react_schema_contract candidate
+                -> wiring_lane_contract / ui_catalog_boundary_contract validation
+                -> output_format_contract shaped document
+
+    generate_topology_ui_seed:
+      inputText (JSON string of a topolactor.react_schema.v1 candidate)
+                -> wiring_lane_contract / ui_catalog_boundary_contract validation
+                   (re-validated; a supplied schema is never trusted blindly)
+                -> exchange_mapping.schema_to_seed_record_mapping conversion
+                -> topology_ui_seed_contract candidate (draft/intake only,
+                   never active topology; see topology_ui_seed_contract.active_topology_rule)
+                -> output_format_contract shaped document
+
+`round-trip-check` is explicitly out of scope for this Bundle and fails
+closed with a `not_implemented_out_of_scope` document rather than raising or
+silently succeeding.
+
+Translator input authority: this script reads only the SSOT YAML above (via
+the repo's stdlib-only minimal_yaml loader) and the caller-supplied input
+envelope JSON, per translator_input_authority in the SSOT. It never opens
+`db/*.sql`. If the caller's input envelope carries a pre-resolved
+`seedEvidence` object, this script passes it through to the output
+unchanged -- it does not resolve, verify, or derive seed evidence itself.
+Resolving `seedEvidence` from `db/seed_empty.sql` is an evidence/proof
+verification concern that lives in
+.agent/scripts/check_react_schema_topology_seed_translator.py, not here.
+
+No network, no database connection, no backend/frontend/nginx process is
+started or required.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent.parent
+sys.path.insert(0, str(SCRIPT_DIR / "lib"))
+import minimal_yaml as yaml  # noqa: E402
+
+SSOT_REL_PATH = "docs/design/react-schema-topology-seed-translator-ssot.yaml"
+
+REQUIRED_SSOT_SECTIONS = [
+    "input_format_contract",
+    "input_text_markup_grammar_contract",
+    "text_decomposition_contract",
+    "react_schema_contract",
+    "output_format_contract",
+    "exchange_mapping",
+    "wiring_lane_contract",
+    "ui_catalog_boundary_contract",
+    "declared_seed_surface_catalog",
+    "validation_rules",
+]
+
+VALID_MODES = ["generate_react_schema", "generate_topology_ui_seed", "round_trip_check"]
+
+DEFAULT_PROTECTED_VOCABULARY = [
+    "plaintext_secret",
+    "connection_string",
+    "endpoint_real_value",
+    "credential_plaintext",
+    "private_key_material",
+    "runtime_only_decrypted_payload",
+    "raw_SQL",
+    "unapproved_executable_function_or_schema_authority",
+]
+
+CONTAINER_UNITS = {"projection", "category", "section", "form", "workflow"}
+LEAF_UNITS = {"field", "table", "step", "action", "validation", "prop_binding", "payload_from", "style_ref"}
+ALL_TAGGABLE_UNITS = CONTAINER_UNITS | LEAF_UNITS
+
+# input_text_markup_grammar_contract.common_attributes.label.required_on:
+# react_schema_contract.node_common_required_fields requires label on every
+# node kind (not just the container/field-like ones), so this covers all
+# taggable units -- an Action/Step/Validation/PropBinding/PayloadFrom/StyleRef
+# without a label is a MISSING_LABEL error too, never a null seed record label.
+LABEL_REQUIRED_UNITS = set(ALL_TAGGABLE_UNITS)
+
+# react_schema_contract prohibited_features.mutation_action_not_owned_by_a_form:
+# an Action node's direct parent must be a Form or a Workflow.
+VALID_ACTION_OWNER_NODE_KINDS = {"Form", "Workflow"}
+
+UNIT_TO_NODE_KIND = {
+    "projection": "Projection",
+    "category": "Category",
+    "section": "Section",
+    "form": "Form",
+    "field": "Field",
+    "table": "Table",
+    "workflow": "Workflow",
+    "step": "Step",
+    "action": "Action",
+    "validation": "Validation",
+    "prop_binding": "PropBinding",
+    "payload_from": "PayloadFrom",
+    "style_ref": "StyleRef",
+}
+
+TAG_LINE_RE = re.compile(r'^\[(?P<slash>/)?(?P<kind>[A-Za-z_][A-Za-z0-9_]*)(?P<attrs>(?:\s+.+)?)\]$')
+ATTR_RE = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=("(?:[^"\\]|\\.)*"|\S+)')
+HTML_TAG_RE = re.compile(r'<\s*[a-zA-Z][a-zA-Z0-9]*(\s[^<>]*)?/?\s*>')
+
+NODE_VALUE_RE = re.compile(r'^node:[A-Za-z0-9_.]+\.value$')
+EVENT_PATH_RE = re.compile(r'^event(\.[A-Za-z0-9_]+)+$')
+LITERAL_RE = re.compile(r'^literal:.*$')
+
+TOKEN_LIKE_RE = re.compile(r'^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)+$')
+
+
+# ---------------------------------------------------------------------------
+# small helpers
+# ---------------------------------------------------------------------------
+
+def dig(obj, *keys):
+    cur = obj
+    for k in keys:
+        if not isinstance(cur, dict) or k not in cur:
+            return None
+        cur = cur[k]
+    return cur
+
+
+def err(rule_id, path, severity, message):
+    return {"ruleId": rule_id, "path": path, "severity": severity, "message": message}
+
+
+def is_blocking(entry):
+    return entry.get("severity") == "blocking"
+
+
+def split_list(raw):
+    if not raw:
+        return []
+    return [v.strip() for v in raw.split(",") if v.strip()]
+
+
+def unquote(value):
+    if value is None:
+        return None
+    if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+        return value[1:-1].replace('\\"', '"')
+    return value
+
+
+# ---------------------------------------------------------------------------
+# SSOT loading
+# ---------------------------------------------------------------------------
+
+def load_ssot(repo_root: Path):
+    path = repo_root / SSOT_REL_PATH
+    if not path.is_file():
+        return None, [err("SSOT_FILE_NOT_FOUND", "$.ssot", "blocking", f"SSOT file not found: {SSOT_REL_PATH}")]
+    try:
+        data = yaml.load_file(str(path))
+    except Exception as exc:  # noqa: BLE001 - fail-closed with explicit error, not a crash
+        return None, [err("SSOT_PARSE_ERROR", "$.ssot", "blocking", f"failed to parse SSOT YAML: {exc}")]
+    root = data.get("react_schema_topology_seed_translator_ssot") if isinstance(data, dict) else None
+    if root is None:
+        return None, [err("SSOT_ROOT_KEY_MISSING", "$.ssot", "blocking", "react_schema_topology_seed_translator_ssot root key missing")]
+    errors = []
+    for section in REQUIRED_SSOT_SECTIONS:
+        if section not in root:
+            errors.append(err("SSOT_SECTION_MISSING", f"$.ssot.{section}", "blocking", f"required SSOT section missing: {section}"))
+    return root, errors
+
+
+def protected_vocabulary(ssot_root):
+    values = dig(ssot_root, "translator_input_authority", "protected_boundary_vocabulary", "values")
+    return values if isinstance(values, list) and values else list(DEFAULT_PROTECTED_VOCABULARY)
+
+
+# ---------------------------------------------------------------------------
+# seedEvidence passthrough
+#
+# The translator NEVER opens db/*.sql. Resolving seedEvidence from
+# db/seed_empty.sql is an evidence/proof verification concern owned by
+# .agent/scripts/check_react_schema_topology_seed_translator.py. If the
+# caller's input envelope already carries a `seedEvidence` object (produced
+# by that verification step, or by a human/agent reading db/*.sql as
+# reference material while authoring the fixture), this translator carries
+# it through to the output unchanged -- it does not look anything up itself.
+# ---------------------------------------------------------------------------
+
+SEED_EVIDENCE_REQUIRED_FIELDS = ["screenUuidNamespace", "screenUuid", "manifestKey"]
+
+
+def passthrough_seed_evidence(envelope):
+    seed_evidence = envelope.get("seedEvidence")
+    if seed_evidence is None:
+        return None, []
+    if not isinstance(seed_evidence, dict):
+        return None, [err("SEED_EVIDENCE_SHAPE_INVALID", "$.seedEvidence", "blocking", "seedEvidence must be an object when supplied")]
+    missing = [f for f in SEED_EVIDENCE_REQUIRED_FIELDS if f not in seed_evidence]
+    if missing:
+        return seed_evidence, [
+            err(
+                "SEED_EVIDENCE_SHAPE_INVALID",
+                "$.seedEvidence",
+                "blocking",
+                f"supplied seedEvidence missing required field(s): {missing}",
+            )
+        ]
+    return seed_evidence, []
+
+
+# ---------------------------------------------------------------------------
+# input envelope validation
+# ---------------------------------------------------------------------------
+
+def validate_input_envelope(envelope, ssot_root, vocabulary):
+    errors = []
+    if envelope.get("schemaId") != "topolactor.translator_input.v1":
+        errors.append(err("INPUT_SCHEMA_ID_MISMATCH", "$.schemaId", "blocking", "schemaId must equal topolactor.translator_input.v1"))
+
+    mode = envelope.get("mode")
+    if mode not in VALID_MODES:
+        errors.append(err("INPUT_MODE_INVALID", "$.mode", "blocking", f"mode must be one of {VALID_MODES}"))
+
+    input_text = envelope.get("inputText") or ""
+    if not input_text.strip():
+        errors.append(err("INPUT_TEXT_EMPTY", "$.inputText", "blocking", "inputText must not be empty"))
+
+    target_surface = envelope.get("targetSurface")
+    declared_surfaces = dig(ssot_root, "declared_seed_surface_catalog", "known_declared_surfaces") or []
+    declared_keys = {s.get("seed_surface_key") for s in declared_surfaces}
+    known_gap_refs = envelope.get("knownGapRefs") or []
+    if target_surface not in declared_keys and not known_gap_refs:
+        errors.append(
+            err(
+                "TARGET_SURFACE_UNRESOLVED",
+                "$.targetSurface",
+                "blocking",
+                "targetSurface must resolve to a declared_seed_surface_catalog entry, or carry a knownGapRef",
+            )
+        )
+
+    source_refs = envelope.get("sourceYamlRefs") or []
+    if not source_refs:
+        errors.append(err("SOURCE_YAML_REFS_EMPTY", "$.sourceYamlRefs", "blocking", "sourceYamlRefs must be non-empty"))
+
+    for term in vocabulary:
+        if term and term in input_text:
+            errors.append(
+                err(
+                    "PROTECTED_BOUNDARY_VOCABULARY_PRESENT",
+                    "$.inputText",
+                    "blocking",
+                    f"protected boundary vocabulary term found in inputText: {term}",
+                )
+            )
+
+    return errors, mode, input_text, target_surface
+
+
+# ---------------------------------------------------------------------------
+# input_text_markup_grammar_contract parser
+# ---------------------------------------------------------------------------
+
+def parse_attrs(raw_attrs: str):
+    attrs = {}
+    for m in ATTR_RE.finditer(raw_attrs or ""):
+        key, raw_value = m.group(1), m.group(2)
+        attrs[key] = unquote(raw_value)
+    return attrs
+
+
+def parse_payload_from(raw):
+    """`field:source,field2:source2` -> {field: source, field2: source2}."""
+    result = {}
+    if not raw:
+        return result
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+        field, sep, source = pair.partition(":")
+        if not sep:
+            continue
+        result[field.strip()] = source.strip()
+    return result
+
+
+def build_node(kind, attrs, source_refs, known_gaps):
+    node_kind = UNIT_TO_NODE_KIND[kind]
+    key = attrs.get("key")
+    node = {
+        "kind": node_kind,
+        "key": key,
+        "sourceYamlRefs": source_refs,
+    }
+    if kind in LABEL_REQUIRED_UNITS or attrs.get("label"):
+        # no fallback-to-key: a missing label on a LABEL_REQUIRED_UNITS kind is
+        # a blocking MISSING_LABEL validation error raised by the caller
+        # (parse_markup), not a silently-accepted default value here.
+        node["label"] = attrs.get("label")
+    if known_gaps:
+        node["knownGapRefs"] = list(known_gaps)
+    authority_marker = attrs.get("authorityMarker")
+    if authority_marker:
+        node["authorityMarker"] = authority_marker
+
+    if kind in CONTAINER_UNITS:
+        node["children"] = []
+    if kind == "section":
+        node["sectionKind"] = attrs.get("sectionKind", "")
+    if kind == "form":
+        node["target"] = attrs.get("target", "")
+        node["mode"] = attrs.get("mode", "")
+        node["fields"] = []
+        node["actions"] = []
+    if kind == "field":
+        node["control"] = attrs.get("control", "")
+        node["required"] = str(attrs.get("required", "false")).lower() == "true"
+    if kind == "table":
+        node["source"] = attrs.get("source", "")
+        node["display"] = attrs.get("display", "")
+    if kind == "workflow":
+        node["steps"] = []
+    if kind in ("step", "action"):
+        wiring_lane = attrs.get("wiringLane")
+        event_binding = {
+            "trigger": attrs.get("trigger", "click" if kind == "action" else "step"),
+            "wiringLane": wiring_lane,
+            "targetRef": attrs.get("actionRef", ""),
+            "authority": authority_marker,
+        }
+        payload_from_raw = attrs.get("payloadFrom")
+        if payload_from_raw:
+            event_binding["payloadFrom"] = parse_payload_from(payload_from_raw)
+        node["eventBinding"] = event_binding
+        node["actionRef"] = attrs.get("actionRef", "")
+    if kind == "validation":
+        node["rule"] = attrs.get("rule", "")
+        node["severity"] = attrs.get("severity", "warning")
+        node["appliesTo"] = attrs.get("appliesTo", "")
+    if kind == "prop_binding":
+        node["targetProp"] = attrs.get("targetProp", "")
+        node["source"] = attrs.get("source", "")
+    if kind == "payload_from":
+        node["targetField"] = attrs.get("targetField", "")
+        node["source"] = attrs.get("source", "")
+    if kind == "style_ref":
+        node["target"] = attrs.get("target", "")
+        node["tokenRef"] = attrs.get("tokenRef", "")
+    return node
+
+
+def parse_markup(input_text):
+    """Bracket-tag line-based parser per input_text_markup_grammar_contract.
+
+    Returns (normalized_elements, root_node_or_None, parse_errors).
+    """
+    normalized = []
+    errors = []
+    stack = []  # open container nodes, deepest last
+    unit_stack = []  # parallel unitKind stack for close-tag matching
+    key_sets = [set()]  # key-uniqueness-within-parent, parallel to stack (+root sentinel)
+    root_node = None
+
+    def attach(node):
+        if stack:
+            parent = stack[-1]
+            parent.setdefault("children", []).append(node)
+            node["_path"] = f'{parent["_path"]}.children[{len(parent["children"]) - 1}]'
+            return True
+        if root_node is not None:
+            root_node.setdefault("children", []).append(node)
+            node["_path"] = f'{root_node["_path"]}.children[{len(root_node["children"]) - 1}]'
+            return True
+        return False
+
+    for lineno, raw_line in enumerate(input_text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if not line.startswith("[") and HTML_TAG_RE.search(line):
+            gap_ref = f"component_catalog_gap:raw_html_rejected:line_{lineno}"
+            errors.append(err("RAW_HTML_TAG_EMISSION_ATTEMPT", f"$.inputText:line{lineno}", "blocking", f"raw HTML-like tag rejected: {line!r}"))
+            normalized.append({
+                "unitKind": "unresolved", "key": None, "rawFragment": line, "attributes": {},
+                "sourceYamlRefs": [], "knownGapRefs": [gap_ref], "line": lineno, "path": None,
+            })
+            continue
+
+        m = TAG_LINE_RE.match(line)
+        if not m:
+            gap_ref = f"ssot_ambiguity_gap:unclassified_input_fragment:line_{lineno}"
+            node = {"kind": "Unresolved", "key": f"unresolved_line_{lineno}", "rawFragment": line,
+                    "knownGapRefs": [gap_ref], "sourceYamlRefs": []}
+            attached = attach(node)
+            normalized.append({
+                "unitKind": "unresolved", "key": None, "rawFragment": line, "attributes": {},
+                "sourceYamlRefs": [], "knownGapRefs": [gap_ref], "line": lineno,
+                "path": node.get("_path") if attached else None,
+            })
+            continue
+
+        is_close = bool(m.group("slash"))
+        kind = m.group("kind")
+        attrs = parse_attrs(m.group("attrs"))
+
+        if is_close:
+            if unit_stack and unit_stack[-1] == kind:
+                unit_stack.pop()
+                stack.pop()
+                key_sets.pop()
+            else:
+                errors.append(err("MISMATCHED_CLOSE_TAG", f"$.inputText:line{lineno}", "blocking", f"[/{kind}] does not match currently open unit"))
+            continue
+
+        if kind not in ALL_TAGGABLE_UNITS:
+            gap_ref = f"ssot_ambiguity_gap:unknown_unit_kind:{kind}:line_{lineno}"
+            errors.append(err("UNKNOWN_UNIT_KIND", f"$.inputText:line{lineno}", "blocking", f"unknown unitKind '{kind}'"))
+            node = {"kind": "Unresolved", "key": attrs.get("key") or f"unresolved_line_{lineno}",
+                    "rawFragment": line, "knownGapRefs": [gap_ref], "sourceYamlRefs": split_list(attrs.get("sourceYamlRefs"))}
+            attached = attach(node)
+            normalized.append({
+                "unitKind": "unresolved", "key": attrs.get("key"), "rawFragment": line, "attributes": attrs,
+                "sourceYamlRefs": node["sourceYamlRefs"], "knownGapRefs": [gap_ref], "line": lineno,
+                "path": node.get("_path") if attached else None,
+            })
+            continue
+
+        key = attrs.get("key")
+        source_refs = split_list(attrs.get("sourceYamlRefs"))
+        known_gaps = split_list(attrs.get("knownGapRefs"))
+        wiring_lane = attrs.get("wiringLane")
+        authority_marker = attrs.get("authorityMarker")
+
+        if not key:
+            errors.append(err("TAG_MISSING_KEY", f"$.inputText:line{lineno}", "blocking", f"[{kind}] tag missing required key attribute"))
+        elif key in key_sets[-1]:
+            errors.append(err("DUPLICATE_KEY_IN_PARENT", f"$.inputText:line{lineno}", "blocking", f"[{kind} key={key}] duplicates a sibling key"))
+        else:
+            key_sets[-1].add(key)
+
+        if not source_refs:
+            errors.append(err("TAG_MISSING_SOURCE_YAML_REFS", f"$.inputText:line{lineno}", "blocking", f"[{kind} key={key}] missing required sourceYamlRefs attribute"))
+
+        if kind in ("action", "step") and not wiring_lane:
+            errors.append(err("ACTION_OR_STEP_MISSING_WIRING_LANE", f"$.inputText:line{lineno}", "blocking", f"[{kind} key={key}] missing required wiringLane attribute"))
+
+        if kind in ("form", "action", "step", "workflow") and not authority_marker:
+            errors.append(err("MISSING_AUTHORITY_MARKER", f"$.inputText:line{lineno}", "blocking", f"[{kind} key={key}] missing required authorityMarker attribute"))
+
+        if kind in LABEL_REQUIRED_UNITS and not attrs.get("label"):
+            errors.append(err("MISSING_LABEL", f"$.inputText:line{lineno}", "blocking", f"[{kind} key={key}] missing required label attribute"))
+
+        node = build_node(kind, attrs, source_refs, known_gaps)
+
+        if kind == "projection" and root_node is None and not stack:
+            node["_path"] = "$.root"
+            root_node = node
+            stack.append(node)
+            unit_stack.append(kind)
+            key_sets.append(set())
+        else:
+            attached = attach(node)
+            if not attached:
+                errors.append(err("CONTENT_BEFORE_ROOT_PROJECTION", f"$.inputText:line{lineno}", "warning", f"[{kind} key={key}] appears before any [projection] root tag"))
+            if kind in CONTAINER_UNITS:
+                stack.append(node)
+                unit_stack.append(kind)
+                key_sets.append(set())
+
+        normalized.append({
+            "unitKind": kind, "key": key, "rawFragment": line, "attributes": attrs,
+            "sourceYamlRefs": source_refs, "knownGapRefs": known_gaps, "line": lineno,
+            "path": node.get("_path"),
+        })
+
+    if stack:
+        for n in stack:
+            errors.append(err("UNCLOSED_CONTAINER_TAG", "$.inputText", "blocking", f"[{UNIT_TO_NODE_KIND_REVERSE.get(n['kind'], n['kind'])}] key={n.get('key')} was never closed"))
+    if root_node is None:
+        errors.append(err("NO_ROOT_PROJECTION_FOUND", "$.inputText", "blocking", "no [projection ...] root tag found in inputText"))
+
+    return normalized, root_node, errors
+
+
+UNIT_TO_NODE_KIND_REVERSE = {v: k for k, v in UNIT_TO_NODE_KIND.items()}
+
+
+def strip_internal(node):
+    if not isinstance(node, dict):
+        return node
+    cleaned = {k: v for k, v in node.items() if not k.startswith("_")}
+    if "children" in cleaned:
+        cleaned["children"] = [strip_internal(c) for c in cleaned["children"]]
+    return cleaned
+
+
+def finalize_node(node):
+    children = node.get("children")
+    if children is not None:
+        for c in children:
+            finalize_node(c)
+        if node["kind"] == "Form":
+            node["fields"] = [c["key"] for c in children if c.get("kind") == "Field"]
+            node["actions"] = [c["key"] for c in children if c.get("kind") == "Action"]
+        if node["kind"] == "Workflow":
+            node["steps"] = [c["key"] for c in children if c.get("kind") == "Step"]
+    return node
+
+
+def collect_known_gap_refs(node, acc=None):
+    if acc is None:
+        acc = []
+    for g in node.get("knownGapRefs") or []:
+        if g not in acc:
+            acc.append(g)
+    for c in node.get("children") or []:
+        collect_known_gap_refs(c, acc)
+    return acc
+
+
+def count_records(node):
+    total = 1
+    for c in node.get("children") or []:
+        total += count_records(c)
+    return total
+
+
+# ---------------------------------------------------------------------------
+# wiring_lane_contract / ui_catalog_boundary_contract validation
+# ---------------------------------------------------------------------------
+
+def shape_to_regex(shape):
+    parts = re.split(r'(<[^>]+>)', shape)
+    pattern = ""
+    for part in parts:
+        if part.startswith("<") and part.endswith(">"):
+            inner = part[1:-1]
+            if "|" in inner:
+                # enum placeholder, e.g. <db_instance_port|runtime_instance_port>:
+                # restrict to the listed alternatives instead of a generic [^:]+.
+                alternatives = [re.escape(a.strip()) for a in inner.split("|") if a.strip()]
+                pattern += "(?:" + "|".join(alternatives) + ")"
+            else:
+                pattern += r'[^:]+'
+        else:
+            pattern += re.escape(part)
+    return re.compile("^" + pattern + "$")
+
+
+def lane_target_ref_patterns(lane_def):
+    shape = lane_def.get("targetRef_shape")
+    if isinstance(shape, dict) and "one_of" in shape:
+        return [shape_to_regex(s) for s in shape["one_of"]]
+    if isinstance(shape, str):
+        return [shape_to_regex(shape)]
+    return []
+
+
+def classify_source_pattern(value):
+    if not isinstance(value, str):
+        return None
+    if NODE_VALUE_RE.match(value):
+        return "node_value"
+    if EVENT_PATH_RE.match(value):
+        return "event_path"
+    if LITERAL_RE.match(value):
+        return "literal"
+    return None
+
+
+def validate_wiring_node(node, lanes_def, errors, path):
+    if node.get("kind") not in ("Action", "Step"):
+        return
+    eb = node.get("eventBinding") or {}
+    lane_key = eb.get("wiringLane")
+    lane_def = lanes_def.get(lane_key) if lane_key else None
+    if not lane_def:
+        errors.append(err("UNRESOLVED_WIRING_LANE", path, "blocking", f"wiringLane '{lane_key}' is not a recognized wiring_lane_contract lane"))
+        node.setdefault("knownGapRefs", []).append(f"runtime_dispatch_or_projection_gap:unresolved_wiring_lane:{node.get('key')}")
+        return
+
+    target_ref = eb.get("targetRef") or ""
+    patterns = lane_target_ref_patterns(lane_def)
+    if target_ref and patterns and not any(p.match(target_ref) for p in patterns):
+        errors.append(err("TARGET_REF_SHAPE_MISMATCH", path, "blocking", f"targetRef '{target_ref}' does not match lane '{lane_key}' targetRef_shape"))
+
+    authority = eb.get("authority")
+    allowed_auth = lane_def.get("allowed_authority_mapping_values") or []
+    if authority not in allowed_auth:
+        errors.append(err("AUTHORITY_NOT_ALLOWED_FOR_LANE", path, "blocking", f"authority '{authority}' is not allowed for lane '{lane_key}'"))
+    if authority != node.get("authorityMarker"):
+        errors.append(err("EVENT_BINDING_AUTHORITY_MISMATCH", path, "blocking", f"eventBinding.authority '{authority}' must equal owning node authorityMarker '{node.get('authorityMarker')}'"))
+
+    payload_from = eb.get("payloadFrom") or {}
+    allowed_sources = set(lane_def.get("allowed_payload_from_sources") or [])
+    for field, source in payload_from.items():
+        kind = classify_source_pattern(source)
+        if kind is None:
+            errors.append(err("PAYLOAD_FROM_UNRESOLVED_REF", path, "blocking", f"payloadFrom '{field}' source '{source}' does not match a recognized pattern"))
+        elif kind not in allowed_sources:
+            errors.append(err("PAYLOAD_FROM_SOURCE_NOT_ALLOWED_FOR_LANE", path, "blocking", f"payloadFrom '{field}' source kind '{kind}' is not allowed for lane '{lane_key}'"))
+
+
+def validate_ui_catalog_node(node, declared_surface, errors, path):
+    allowed_kinds = set()
+    if declared_surface:
+        for k in dig(declared_surface, "component_catalog_refs", "componentKinds") or []:
+            allowed_kinds.add(k.split(" ")[0])
+
+    if node.get("kind") == "Field":
+        control = node.get("control")
+        if control and allowed_kinds and control not in allowed_kinds and not node.get("knownGapRefs"):
+            errors.append(err("UNKNOWN_COMPONENT_KIND", path, "blocking", f"field control '{control}' is not a registered componentKind for this surface and carries no knownGapRef"))
+
+    if node.get("kind") == "StyleRef":
+        token = node.get("tokenRef", "")
+        if token and not TOKEN_LIKE_RE.match(token) and not node.get("knownGapRefs"):
+            errors.append(err("STYLE_REF_NOT_TOKEN", path, "blocking", f"styleRef tokenRef '{token}' is not a css-dictionary/topology-layout-class token and carries no knownGapRef"))
+
+
+def validate_structural_node(node, parent, errors, path):
+    """react_schema_contract.prohibited_features: form_without_fields,
+    mutation_action_not_owned_by_a_form."""
+    if node.get("kind") == "Form" and not (node.get("fields") or []):
+        errors.append(err("EMPTY_FORM", path, "blocking", f"Form '{node.get('key')}' has no Field children"))
+
+    if node.get("kind") == "Action":
+        parent_kind = parent.get("kind") if parent else None
+        if parent_kind not in VALID_ACTION_OWNER_NODE_KINDS:
+            errors.append(
+                err(
+                    "ACTION_NOT_OWNED_BY_FORM_OR_WORKFLOW",
+                    path,
+                    "blocking",
+                    f"Action '{node.get('key')}' must be a direct child of a Form or Workflow node, not {parent_kind or 'the document root'}",
+                )
+            )
+
+
+def walk_and_validate(node, lanes_def, declared_surface, errors, path="$.root", parent=None):
+    validate_wiring_node(node, lanes_def, errors, path)
+    validate_ui_catalog_node(node, declared_surface, errors, path)
+    validate_structural_node(node, parent, errors, path)
+    for i, child in enumerate(node.get("children") or []):
+        walk_and_validate(child, lanes_def, declared_surface, errors, f"{path}.children[{i}]", parent=node)
+
+
+# ---------------------------------------------------------------------------
+# react_schema -> topology_ui_seed conversion (generate_topology_ui_seed mode)
+# ---------------------------------------------------------------------------
+
+def assign_paths(node, path="$.root"):
+    """A JSON-deserialized react schema candidate carries no _path bookkeeping
+    (strip_internal removed it on the way out of generate-react-schema); this
+    reconstructs sourceReactPath for every node before conversion/validation."""
+    node["_path"] = path
+    for i, c in enumerate(node.get("children") or []):
+        assign_paths(c, f"{path}.children[{i}]")
+
+
+COMMON_NODE_KEYS = {"kind", "key", "label", "sourceYamlRefs", "knownGapRefs", "authorityMarker", "children", "_path"}
+
+KIND_SPECIFIC_CONSUMED_KEYS = {
+    "Projection": set(),
+    "Category": set(),
+    "Section": {"sectionKind"},
+    "Form": {"target", "mode", "fields", "actions"},
+    "Field": {"control", "required"},
+    "Table": {"source", "display"},
+    "Workflow": {"steps"},
+    "Step": {"eventBinding", "actionRef"},
+    "Action": {"eventBinding", "actionRef"},
+    "Validation": {"rule", "severity", "appliesTo"},
+    "PropBinding": {"targetProp", "source"},
+    "PayloadFrom": {"targetField", "source"},
+    "StyleRef": {"target", "tokenRef"},
+    "Unresolved": {"rawFragment"},
+}
+
+
+def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_entries):
+    """exchange_mapping.schema_to_seed_record_mapping, one react_schema node at a time.
+
+    Appends exchange_report_contract.loss_entry_fields-shaped dicts to
+    loss_entries for anything that could not be mapped (no_silent_loss)."""
+    react_kind = node.get("kind")
+    path = node.get("_path", "$.root")
+    record_type = schema_to_seed_map.get(react_kind)
+    if record_type is None:
+        loss_entries.append({
+            "sourceReactPath": path,
+            "property": "kind",
+            "reason": f"react schema node kind '{react_kind}' has no schema_to_seed_record_mapping entry",
+            "severity": "blocking",
+            "knownGapRef": f"runtime_dispatch_or_projection_gap:unmapped_react_node_kind:{react_kind}",
+        })
+        return None
+
+    record = {
+        "recordType": record_type,
+        "key": node.get("key"),
+        "label": node.get("label"),
+        "sourceYamlRefs": node.get("sourceYamlRefs") or [],
+        "sourceReactPath": path,
+        "knownGapRefs": list(node.get("knownGapRefs") or []),
+    }
+    if node.get("authorityMarker"):
+        record["authorityMarker"] = node["authorityMarker"]
+
+    converted_children = []
+    for c in node.get("children") or []:
+        child_record = convert_node_to_seed_record(c, schema_to_seed_map, target_surface, loss_entries)
+        if child_record is not None:
+            converted_children.append(child_record)
+
+    if react_kind == "Projection":
+        record["surface"] = target_surface
+        record["categories"] = [c for c in converted_children if c["recordType"] == "topology_ui_category"]
+    elif react_kind == "Category":
+        record["categoryKey"] = record["key"]
+        record["sections"] = [c for c in converted_children if c["recordType"] == "topology_ui_section"]
+    elif react_kind == "Section":
+        record["sectionKey"] = record["key"]
+        record["sectionKind"] = node.get("sectionKind", "")
+        record["children"] = converted_children
+    elif react_kind == "Form":
+        record["formKey"] = record["key"]
+        record["target"] = node.get("target", "")
+        record["mode"] = node.get("mode", "")
+        record["fields"] = [c for c in converted_children if c["recordType"] == "topology_ui_field"]
+        record["actions"] = [c for c in converted_children if c["recordType"] == "topology_ui_action"]
+    elif react_kind == "Field":
+        record["fieldKey"] = record["key"]
+        record["control"] = node.get("control", "")
+        record["required"] = bool(node.get("required", False))
+        record["validationRefs"] = [c["key"] for c in converted_children if c["recordType"] == "topology_ui_validation"]
+    elif react_kind == "Table":
+        record["tableKey"] = record["key"]
+        record["source"] = node.get("source", "")
+        record["display"] = node.get("display", "")
+        record["columns"] = converted_children
+    elif react_kind == "Workflow":
+        record["workflowKey"] = record["key"]
+        record["steps"] = [c for c in converted_children if c["recordType"] == "topology_ui_workflow_step"]
+    elif react_kind == "Step":
+        record["stepKey"] = record["key"]
+        record["actionRef"] = node.get("actionRef", "")
+        record["eventBinding"] = node.get("eventBinding")
+    elif react_kind == "Action":
+        record["actionKey"] = record["key"]
+        record["actionRef"] = node.get("actionRef", "")
+        record["eventBinding"] = node.get("eventBinding")
+    elif react_kind == "Validation":
+        record["validationKey"] = record["key"]
+        record["rule"] = node.get("rule", "")
+        record["severity"] = node.get("severity", "warning")
+    elif react_kind == "PropBinding":
+        record["targetProp"] = node.get("targetProp", "")
+        record["source"] = node.get("source", "")
+    elif react_kind == "PayloadFrom":
+        record["targetField"] = node.get("targetField", "")
+        record["source"] = node.get("source", "")
+    elif react_kind == "StyleRef":
+        record["target"] = node.get("target", "")
+        record["tokenRef"] = node.get("tokenRef", "")
+    elif react_kind == "Unresolved":
+        record["rawFragment"] = node.get("rawFragment", "")
+
+    consumed = COMMON_NODE_KEYS | KIND_SPECIFIC_CONSUMED_KEYS.get(react_kind, set())
+    for key in node.keys():
+        if key not in consumed:
+            loss_entries.append({
+                "sourceReactPath": path,
+                "property": key,
+                "reason": f"property '{key}' on a {react_kind} node has no seed-record mapping target",
+                "severity": "warning",
+                "knownGapRef": None,
+            })
+
+    return record
+
+
+# ---------------------------------------------------------------------------
+# output assembly
+# ---------------------------------------------------------------------------
+
+def new_output_shell():
+    return {
+        "normalizedInputElements": [],
+        "reactSchemaCandidate": None,
+        "topologyUiSeedCandidate": None,
+        "exchangeReport": {},
+        "validationErrors": [],
+        "unresolvedGaps": [],
+        "reverseTranslationBlockers": [],
+    }
+
+
+def build_react_schema_candidate(root_node, target_surface, source_refs):
+    if root_node is None:
+        fallback = {
+            "kind": "Unresolved",
+            "key": "no_root_projection",
+            "label": "no root projection found",
+            "rawFragment": "",
+            "knownGapRefs": ["ssot_ambiguity_gap:no_root_projection_found"],
+            "sourceYamlRefs": source_refs,
+        }
+        root_out = fallback
+    else:
+        root_out = strip_internal(root_node)
+    return {
+        "schema": "topolactor.react_schema.v1",
+        "presetKey": target_surface,
+        "surface": target_surface,
+        "sourceYamlRefs": source_refs,
+        "root": root_out,
+    }
+
+
+def build_exchange_report(source_refs, emitted_count, known_gap_refs, loss_entries, reverse_blockers, validation_errors, source_schema_id="topolactor.translator_input.v1", output_seed_schema_id=None):
+    return {
+        "sourceSchemaId": source_schema_id,
+        "outputSeedSchemaId": output_seed_schema_id,
+        "sourceYamlRefs": source_refs,
+        "emittedRecords": emitted_count,
+        "knownGapRefs": known_gap_refs,
+        "lossEntries": loss_entries,
+        "reverseTranslationBlockers": reverse_blockers,
+        "validationErrors": validation_errors,
+    }
+
+
+COMMON_SEED_RECORD_REQUIRED_FIELDS = ["recordType", "key", "label", "sourceYamlRefs", "sourceReactPath", "knownGapRefs"]
+
+SEED_RECORD_CHILD_LIST_FIELDS = ("categories", "sections", "children", "fields", "actions", "steps", "columns")
+
+
+def validate_seed_record_tree(record, record_types_def, errors):
+    """topology_ui_seed_contract.record_common_required_fields plus each
+    record type's own `required` list, checked recursively over every emitted
+    seed record. A required field that is missing, None, or an empty string
+    is blocking; an empty *list* required field (e.g. an empty `sections`)
+    is not flagged here, since structural rules like EMPTY_FORM already cover
+    the cases where an empty list is actually invalid."""
+    record_type = record.get("recordType")
+    path = record.get("sourceReactPath", "$.root")
+    key = record.get("key")
+
+    for field in COMMON_SEED_RECORD_REQUIRED_FIELDS:
+        value = record.get(field, "__MISSING__")
+        if value == "__MISSING__" or value is None or value == "":
+            errors.append(
+                err(
+                    "SEED_RECORD_MISSING_REQUIRED_FIELD",
+                    path,
+                    "blocking",
+                    f"{record_type} record '{key}' missing required common field '{field}'",
+                )
+            )
+    if not record.get("sourceYamlRefs"):
+        errors.append(err("SEED_RECORD_EMPTY_SOURCE_YAML_REFS", path, "blocking", f"{record_type} record '{key}' has empty sourceYamlRefs"))
+
+    type_def = record_types_def.get(record_type) or {}
+    for field in type_def.get("required", []):
+        value = record.get(field, "__MISSING__")
+        if value == "__MISSING__" or value is None or value == "":
+            errors.append(
+                err(
+                    "SEED_RECORD_MISSING_REQUIRED_FIELD",
+                    path,
+                    "blocking",
+                    f"{record_type} record '{key}' missing required type-specific field '{field}'",
+                )
+            )
+
+    for list_field in SEED_RECORD_CHILD_LIST_FIELDS:
+        for child in record.get(list_field) or []:
+            if isinstance(child, dict) and "recordType" in child:
+                validate_seed_record_tree(child, record_types_def, errors)
+
+
+def build_topology_ui_seed_candidate(supplied_schema, target_surface, root_record, exchange_report):
+    return {
+        "schema": "topolactor.topology_ui_seed.v1",
+        "role": "draft_intake_artifact_not_active_topology",
+        "seedKey": target_surface,
+        "surface": target_surface,
+        "sourceReactSchema": supplied_schema,
+        "sourceYamlRefs": supplied_schema.get("sourceYamlRefs") or [],
+        "projections": [root_record] if root_record is not None else [],
+        "exchangeReport": exchange_report,
+    }
+
+
+def resolve_safe_output_path(output_arg):
+    repo_root = REPO_ROOT.resolve()
+    candidate = Path(output_arg)
+    out_path = candidate if candidate.is_absolute() else (repo_root / candidate)
+    out_path = out_path.resolve()
+    try:
+        out_path.relative_to(repo_root)
+    except ValueError as exc:
+        raise SystemExit(f"--output path escapes repository root: {output_arg}") from exc
+    return out_path
+
+
+def write_output(args, doc):
+    text = json.dumps(doc, indent=2, ensure_ascii=False, sort_keys=False) + "\n"
+    if getattr(args, "output", None):
+        out_path = resolve_safe_output_path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(text, encoding="utf-8")
+    sys.stdout.write(text)
+
+
+# ---------------------------------------------------------------------------
+# CLI commands
+# ---------------------------------------------------------------------------
+
+def cmd_generate_react_schema(args):
+    repo_root = REPO_ROOT
+    output = new_output_shell()
+
+    ssot_root, ssot_errors = load_ssot(repo_root)
+    if ssot_errors:
+        output["validationErrors"].extend(ssot_errors)
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    try:
+        with open(args.input, "r", encoding="utf-8") as f:
+            envelope = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        output["validationErrors"].append(err("INPUT_FILE_UNREADABLE", "$.input", "blocking", str(exc)))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    vocabulary = protected_vocabulary(ssot_root)
+    val_errors, mode, input_text, target_surface = validate_input_envelope(envelope, ssot_root, vocabulary)
+    output["validationErrors"].extend(val_errors)
+
+    if mode is not None and mode != "generate_react_schema":
+        output["validationErrors"].append(
+            err(
+                "MODE_MISMATCH",
+                "$.mode",
+                "blocking",
+                f"generate-react-schema requires envelope mode 'generate_react_schema', got '{mode}'",
+            )
+        )
+
+    fatal_rule_ids = {"INPUT_TEXT_EMPTY", "SOURCE_YAML_REFS_EMPTY", "INPUT_MODE_INVALID", "MODE_MISMATCH"}
+    if any(e["ruleId"] in fatal_rule_ids for e in output["validationErrors"]):
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    normalized, root_node, parse_errors = parse_markup(input_text)
+    output["normalizedInputElements"] = normalized
+    output["validationErrors"].extend(parse_errors)
+
+    if root_node is not None:
+        finalize_node(root_node)
+        lanes_def = dig(ssot_root, "wiring_lane_contract", "lanes") or {}
+        declared_surfaces = dig(ssot_root, "declared_seed_surface_catalog", "known_declared_surfaces") or []
+        declared_surface = next((s for s in declared_surfaces if s.get("seed_surface_key") == target_surface), None)
+        tree_errors = []
+        walk_and_validate(root_node, lanes_def, declared_surface, tree_errors)
+        output["validationErrors"].extend(tree_errors)
+
+    source_refs = envelope.get("sourceYamlRefs") or []
+    output["reactSchemaCandidate"] = build_react_schema_candidate(root_node, target_surface, source_refs)
+    output["topologyUiSeedCandidate"] = None
+    output["reverseTranslationBlockers"] = []
+
+    unresolved_gaps = collect_known_gap_refs(root_node) if root_node is not None else []
+    for envelope_gap in envelope.get("knownGapRefs") or []:
+        if envelope_gap not in unresolved_gaps:
+            unresolved_gaps.append(envelope_gap)
+    output["unresolvedGaps"] = unresolved_gaps
+
+    output["exchangeReport"] = build_exchange_report(
+        source_refs,
+        count_records(root_node) if root_node is not None else 0,
+        unresolved_gaps,
+        [],
+        [],
+        output["validationErrors"],
+    )
+
+    doc = {"schemaId": "topolactor.translator_output.v1", **output}
+
+    if args.scenario_uuid:
+        doc["scenario"] = {
+            "uuid": args.scenario_uuid,
+            "worktype": args.scenario_worktype,
+            "targetBranch": args.scenario_branch,
+        }
+
+    seed_evidence, evidence_errors = passthrough_seed_evidence(envelope)
+    doc["validationErrors"].extend(evidence_errors)
+    if seed_evidence is not None:
+        doc["seedEvidence"] = seed_evidence
+
+    write_output(args, doc)
+    return 1 if any(is_blocking(e) for e in doc["validationErrors"]) else 0
+
+
+def cmd_generate_topology_seed(args):
+    repo_root = REPO_ROOT
+    output = new_output_shell()
+
+    ssot_root, ssot_errors = load_ssot(repo_root)
+    if ssot_errors:
+        output["validationErrors"].extend(ssot_errors)
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    try:
+        with open(args.input, "r", encoding="utf-8") as f:
+            envelope = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        output["validationErrors"].append(err("INPUT_FILE_UNREADABLE", "$.input", "blocking", str(exc)))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    vocabulary = protected_vocabulary(ssot_root)
+    val_errors, mode, input_text, target_surface = validate_input_envelope(envelope, ssot_root, vocabulary)
+    output["validationErrors"].extend(val_errors)
+
+    if mode is not None and mode != "generate_topology_ui_seed":
+        output["validationErrors"].append(
+            err(
+                "MODE_MISMATCH",
+                "$.mode",
+                "blocking",
+                f"generate-topology-seed requires envelope mode 'generate_topology_ui_seed', got '{mode}'",
+            )
+        )
+
+    fatal_rule_ids = {"INPUT_TEXT_EMPTY", "SOURCE_YAML_REFS_EMPTY", "INPUT_MODE_INVALID", "MODE_MISMATCH"}
+    if any(e["ruleId"] in fatal_rule_ids for e in output["validationErrors"]):
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    # generate_topology_ui_seed's inputText is a JSON string carrying the
+    # react schema candidate to convert (mode_vocabulary.generate_topology_ui_seed),
+    # never free/markup text -- see input_format_contract.mode_vocabulary.
+    try:
+        supplied_schema = json.loads(input_text)
+    except json.JSONDecodeError as exc:
+        output["validationErrors"].append(err("INPUT_TEXT_NOT_VALID_JSON", "$.inputText", "blocking", f"inputText must be a JSON string of a react schema candidate: {exc}"))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    if not isinstance(supplied_schema, dict) or supplied_schema.get("schema") != "topolactor.react_schema.v1":
+        output["validationErrors"].append(err("REACT_SCHEMA_CANDIDATE_SCHEMA_MISMATCH", "$.inputText", "blocking", "parsed inputText must be a topolactor.react_schema.v1 object"))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    root_node = supplied_schema.get("root")
+    if not isinstance(root_node, dict):
+        output["validationErrors"].append(err("REACT_SCHEMA_CANDIDATE_ROOT_MISSING", "$.inputText.root", "blocking", "react schema candidate is missing a root node"))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    output["reactSchemaCandidate"] = supplied_schema  # carried through verbatim, for audit
+
+    assign_paths(root_node)
+    lanes_def = dig(ssot_root, "wiring_lane_contract", "lanes") or {}
+    declared_surfaces = dig(ssot_root, "declared_seed_surface_catalog", "known_declared_surfaces") or []
+    declared_surface = next((s for s in declared_surfaces if s.get("seed_surface_key") == target_surface), None)
+    tree_errors = []
+    # The supplied schema is caller-controlled input, not necessarily this
+    # translator's own generate-react-schema output -- re-validate it against
+    # the same contracts rather than trusting it blindly (exchange_mapping
+    # canonical_direction rule).
+    walk_and_validate(root_node, lanes_def, declared_surface, tree_errors)
+    output["validationErrors"].extend(tree_errors)
+
+    schema_to_seed_map = dig(ssot_root, "exchange_mapping", "schema_to_seed_record_mapping") or {}
+    loss_entries = []
+    root_record = convert_node_to_seed_record(root_node, schema_to_seed_map, target_surface, loss_entries)
+    for entry in loss_entries:
+        if entry["severity"] == "blocking":
+            output["validationErrors"].append(err("REACT_NODE_KIND_UNMAPPED", entry["sourceReactPath"], "blocking", entry["reason"]))
+
+    # Post-conversion check: every emitted seed record, recursively, against
+    # topology_ui_seed_contract.record_common_required_fields and its own
+    # record_types[...].required list. A record passing conversion is not
+    # the same as a record satisfying the contract's required-field shape.
+    if root_record is not None:
+        record_types_def = dig(ssot_root, "topology_ui_seed_contract", "record_types") or {}
+        validate_seed_record_tree(root_record, record_types_def, output["validationErrors"])
+
+    unresolved_gaps = collect_known_gap_refs(root_node)
+    for loss_gap in (e["knownGapRef"] for e in loss_entries if e.get("knownGapRef")):
+        if loss_gap not in unresolved_gaps:
+            unresolved_gaps.append(loss_gap)
+    for envelope_gap in envelope.get("knownGapRefs") or []:
+        if envelope_gap not in unresolved_gaps:
+            unresolved_gaps.append(envelope_gap)
+    output["unresolvedGaps"] = unresolved_gaps
+    output["reverseTranslationBlockers"] = []
+
+    source_refs = supplied_schema.get("sourceYamlRefs") or []
+    exchange_report = build_exchange_report(
+        source_refs,
+        count_records(root_node),
+        unresolved_gaps,
+        loss_entries,
+        [],
+        output["validationErrors"],
+        source_schema_id="topolactor.react_schema.v1",
+        output_seed_schema_id="topolactor.topology_ui_seed.v1",
+    )
+    output["exchangeReport"] = exchange_report
+    output["topologyUiSeedCandidate"] = build_topology_ui_seed_candidate(supplied_schema, target_surface, root_record, exchange_report)
+
+    doc = {"schemaId": "topolactor.translator_output.v1", **output}
+
+    if args.scenario_uuid:
+        doc["scenario"] = {
+            "uuid": args.scenario_uuid,
+            "worktype": args.scenario_worktype,
+            "targetBranch": args.scenario_branch,
+        }
+
+    seed_evidence, evidence_errors = passthrough_seed_evidence(envelope)
+    doc["validationErrors"].extend(evidence_errors)
+    if seed_evidence is not None:
+        doc["seedEvidence"] = seed_evidence
+
+    write_output(args, doc)
+    return 1 if any(is_blocking(e) for e in doc["validationErrors"]) else 0
+
+
+def _not_implemented_handler(mode):
+    def handler(args):
+        doc = {
+            "schemaId": "topolactor.translator_output.v1",
+            "status": "not_implemented_out_of_scope",
+            "mode": mode,
+            "normalizedInputElements": [],
+            "reactSchemaCandidate": None,
+            "topologyUiSeedCandidate": None,
+            "exchangeReport": {},
+            "validationErrors": [
+                err(
+                    "MODE_NOT_IMPLEMENTED",
+                    "$.mode",
+                    "blocking",
+                    f"{mode} is out of scope for this Bundle; see docs/design/react-schema-topology-seed-translator-production-policy.md",
+                )
+            ],
+            "unresolvedGaps": [],
+            "reverseTranslationBlockers": [],
+        }
+        write_output(args, doc)
+        return 3
+    return handler
+
+
+def build_arg_parser():
+    parser = argparse.ArgumentParser(prog="react-schema-topology-seed-translator")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    gen = sub.add_parser("generate-react-schema")
+    gen.add_argument("--input", required=True)
+    gen.add_argument("--output")
+    gen.add_argument("--scenario-uuid")
+    gen.add_argument("--scenario-worktype", default="implementation_change")
+    gen.add_argument("--scenario-branch", default="")
+    gen.set_defaults(func=cmd_generate_react_schema)
+
+    gen2 = sub.add_parser("generate-topology-seed")
+    gen2.add_argument("--input", required=True)
+    gen2.add_argument("--output")
+    gen2.add_argument("--scenario-uuid")
+    gen2.add_argument("--scenario-worktype", default="implementation_change")
+    gen2.add_argument("--scenario-branch", default="")
+    gen2.set_defaults(func=cmd_generate_topology_seed)
+
+    rtc = sub.add_parser("round-trip-check")
+    rtc.add_argument("--input", required=False)
+    rtc.add_argument("--output")
+    rtc.set_defaults(func=_not_implemented_handler("round_trip_check"))
+
+    return parser
+
+
+def main(argv=None):
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
