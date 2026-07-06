@@ -183,6 +183,27 @@ def protected_vocabulary(ssot_root):
 
 
 # ---------------------------------------------------------------------------
+# translator entry gate connection
+#
+# schema_seed_translator_entry_gate.py imports THIS module at its own top
+# level (it reuses validate_input_envelope/parse_markup/walk_and_validate/etc.
+# instead of duplicating them), so this module must not import that one at
+# module-load time -- that would be circular. Loading it lazily, inside the
+# function that needs it, is safe: by the time cmd_generate_react_schema /
+# cmd_generate_topology_seed actually run, this module is already fully
+# initialized in sys.modules, so the gate core's own top-level import of this
+# module resolves instantly from cache instead of re-executing it.
+# ---------------------------------------------------------------------------
+
+def _gate_core():
+    gate_dir = SCRIPT_DIR / "agent_tools"
+    if str(gate_dir) not in sys.path:
+        sys.path.insert(0, str(gate_dir))
+    import schema_seed_translator_entry_gate as gate  # noqa: PLC0415
+    return gate
+
+
+# ---------------------------------------------------------------------------
 # seedEvidence passthrough
 #
 # The translator NEVER opens db/*.sql. Resolving seedEvidence from
@@ -948,6 +969,26 @@ def cmd_generate_react_schema(args):
         write_output(args, doc)
         return 3
 
+    # translator entry gate: same envelope JSON, no separate gate-only input.
+    # gateStatus != pass fails closed before any conversion pipeline runs.
+    gate = _gate_core()
+    gate_result = gate.validate_translator_entry(envelope, ssot_root=ssot_root, expected_mode="generate_react_schema")
+    output["gateStatus"] = gate_result["gateStatus"]
+    if gate_result["gateStatus"] != gate.GATE_STATUS_PASS:
+        output["validationErrors"].extend(gate_result["entryValidation"]["validationErrors"])
+        output["unresolvedGaps"] = gate_result["unresolvedGaps"]
+        output["exchangeReport"] = build_exchange_report(
+            envelope.get("sourceYamlRefs") or [],
+            0,
+            gate_result["unresolvedGaps"],
+            gate_result.get("lossEntries", []),
+            [],
+            output["validationErrors"],
+        )
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
     vocabulary = protected_vocabulary(ssot_root)
     val_errors, mode, input_text, target_surface = validate_input_envelope(envelope, ssot_root, vocabulary)
     output["validationErrors"].extend(val_errors)
@@ -1035,6 +1076,28 @@ def cmd_generate_topology_seed(args):
             envelope = json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
         output["validationErrors"].append(err("INPUT_FILE_UNREADABLE", "$.input", "blocking", str(exc)))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    # translator entry gate: same envelope JSON, no separate gate-only input.
+    # gateStatus != pass fails closed before any conversion pipeline runs.
+    gate = _gate_core()
+    gate_result = gate.validate_translator_entry(envelope, ssot_root=ssot_root, expected_mode="generate_topology_ui_seed")
+    output["gateStatus"] = gate_result["gateStatus"]
+    if gate_result["gateStatus"] != gate.GATE_STATUS_PASS:
+        output["validationErrors"].extend(gate_result["entryValidation"]["validationErrors"])
+        output["unresolvedGaps"] = gate_result["unresolvedGaps"]
+        output["exchangeReport"] = build_exchange_report(
+            envelope.get("sourceYamlRefs") or [],
+            0,
+            gate_result["unresolvedGaps"],
+            gate_result.get("lossEntries", []),
+            [],
+            output["validationErrors"],
+            source_schema_id="topolactor.react_schema.v1",
+            output_seed_schema_id="topolactor.topology_ui_seed.v1",
+        )
         doc = {"schemaId": "topolactor.translator_output.v1", **output}
         write_output(args, doc)
         return 3

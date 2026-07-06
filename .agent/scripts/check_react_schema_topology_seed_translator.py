@@ -709,6 +709,50 @@ def main():
             seed_wiring_by_node.get("crud_result_list") == "content_bundle:get_entity",
         )
 
+        # --- schema<->seed translator entry gate: verify the shared gate core
+        # (.agent/scripts/agent_tools/schema_seed_translator_entry_gate.py) is
+        # actually wired into this translator's entry, not a disconnected
+        # parallel preflight. Full shape-detection/fail-close-condition
+        # coverage lives in the dedicated
+        # check_schema_seed_translator_entry_gate.py proof; these checks only
+        # confirm the connection is real from this translator proof's own
+        # golden/negative fixtures.
+
+        gate_dir = REPO_ROOT / ".agent" / "scripts" / "agent_tools"
+        sys.path.insert(0, str(gate_dir))
+        import schema_seed_translator_entry_gate as gate
+
+        expect(
+            "72. schema_seed_translator_entry_gate core never reads db/*.sql and declares itself read-only/no-db/no-api/no-write",
+            gate.GATE_BOUNDARY.get("read_only") is True
+            and gate.GATE_BOUNDARY.get("db_connection") is False
+            and gate.GATE_BOUNDARY.get("external_api_connection") is False
+            and gate.GATE_BOUNDARY.get("writes_repo_files") is False
+            and gate.GATE_BOUNDARY.get("runs_translator_conversion") is False,
+        )
+
+        expect("73. golden credential-management-0092 generate-react-schema run reports gateStatus == pass (translator entry actually called the gate core)", doc.get("gateStatus") == gate.GATE_STATUS_PASS)
+        expect("74. golden credential-management-0092 generate-topology-seed run reports gateStatus == pass", doc_ts.get("gateStatus") == gate.GATE_STATUS_PASS)
+        expect("75. golden physical_search_crud_aggregate.v1 generate-topology-seed run reports gateStatus == pass", doc_crud.get("gateStatus") == gate.GATE_STATUS_PASS)
+
+        expect(
+            "76. a deliberately-blocking generate-react-schema entry (missing wiringLane) reports gateStatus == blocking (gate connection is real, not translator-only self-reporting)",
+            doc16 is not None and doc16.get("gateStatus") == gate.GATE_STATUS_BLOCKING,
+        )
+        expect(
+            "77. a deliberately-blocking generate-topology-seed entry (non-JSON inputText) reports gateStatus == blocking",
+            doc38 is not None and doc38.get("gateStatus") == gate.GATE_STATUS_BLOCKING,
+        )
+
+        # gate core called directly (bypassing the translator CLI entirely)
+        # must agree with the translator-entry-observed gateStatus above --
+        # same core, same verdict, from either caller.
+        direct_pass = gate.validate_translator_entry(fixture_envelope, expected_mode="generate_react_schema")
+        expect("78. gate core invoked directly on the same golden fixture independently reports gateStatus == pass", direct_pass["gateStatus"] == gate.GATE_STATUS_PASS)
+
+        direct_blocking = gate.validate_translator_entry("not valid json", expected_mode="generate_react_schema")
+        expect("79. gate core invoked directly on invalid JSON reports gateStatus == unsupported_input_shape (fail-closed, not silently accepted)", direct_blocking["gateStatus"] == gate.GATE_STATUS_UNSUPPORTED)
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} react-schema-topology-seed-translator check(s) failed ===", file=sys.stderr)
