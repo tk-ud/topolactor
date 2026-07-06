@@ -238,6 +238,10 @@ export interface VisualNodePayload {
     portTargetRef?: string;
     /** Authoring-only approved instance operation targetRef. SSOT: instance-port-substrate-ssot.yaml */
     instanceTargetRef?: string;
+    /** High-frequency trigger dispatch interval (ms). SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml high_frequency_policy */
+    debounceMs?: number;
+    /** Explicit author confirmation for lifecycle-trigger dispatch. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml lifecycle_policy */
+    lifecycleDispatchConfirmed?: boolean;
   }>;
 }
 
@@ -410,6 +414,8 @@ function readPatchNode(
           outputProp?: string;
           portTargetRef?: string;
           instanceTargetRef?: string;
+          debounceMs?: number;
+          lifecycleDispatchConfirmed?: boolean;
         } =>
         typeof v === "object" && v !== null && !Array.isArray(v) &&
         typeof (v as Record<string, unknown>).trigger === "string" &&

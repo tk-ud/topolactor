@@ -1,0 +1,231 @@
+admin_uibuilder_ui_structure_wiring_ssot:
+  name: admin_uibuilder_ui_structure_wiring
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+
+  purpose:
+    summary: >-
+      Owning SSOT for the /admin/ui-builder UI structure and wiring surface:
+      the layout canvas / wiring canvas boundary, UI event settings,
+      runtimeInteractions authoring, and external capability selection from the
+      seed-backed registry. This document is the canonical design authority for
+      the surface; implementation and tests map to it, never the reverse.
+    owns:
+      - /admin/ui-builder UI structure (mode boundary, dock composition intent)
+      - layout canvas / wiring canvas responsibility boundary
+      - UI event settings (操作イベント) authoring contract
+      - runtimeInteractions authoring persistence authority statement
+      - external capability selection from seed registry (typed reference contract)
+      - trigger vocabulary and lifecycle / high-frequency / drag-drop wiring edit policies
+    does_not_own:
+      - canonical_route_registry: docs/design/runtime-orchestration-ssot.yaml frontend_routes
+      - canvas_workspace_contract_body: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace
+      - runtimeInteractions_descriptor_field_contract: docs/design/admin-console-workflow-ssot.yaml layout_node_props_contract
+      - external_port_record_and_credential_boundary: docs/design/external-port-substrate-ssot.yaml
+      - instance_port_record_and_operation_binding_boundary: docs/design/instance-port-substrate-ssot.yaml
+      - preset_ecosystem: docs/design/ui-builder-preset-ecosystem-ssot.yaml
+      - proof_surface_policy_body: docs/design/pipeline-continuity-ssot.yaml
+    ownership_boundary_note: >-
+      docs/design/ui-builder-preset-ecosystem-ssot.yaml is NOT the owning SSOT for
+      this surface. Preset ecosystem remains a support surface under its own SSOT.
+
+  route_authority:
+    route: /admin/ui-builder
+    canonical_route_registry: docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin
+    workflow_position: docs/design/admin-console-workflow-ssot.yaml (canvas workspace route, not a pipeline step)
+
+  layout_mode:
+    role: primary placement / design authoring mode (Figma-like layout canvas lineage)
+    owns:
+      - placement (flow layout tree, parent/slot/order)
+      - css / responsive token refs
+      - inlineText / URL link (linkHref / linkTarget)
+      - props / propBindings / calculationBindings
+    primary_inspector: layout / design settings (配置インスペクタ / デザインインスペクタ)
+    canvas_component: frontend/components/FlowLayoutCanvas.tsx
+    existing_canvas_reuse_policy:
+      - reuse existing FlowLayoutCanvas / drag-drop interaction assets where compatible
+      - do not replace the existing layout canvas with a separate authority
+      - existing drag/drop connection edit assets are the preferred adaptation path
+        before any new interaction implementation
+    prohibited:
+      - discarding_existing_canvas_or_drag_drop_assets_without_ssot_reason
+      - replacing_existing_layout_canvas_with_new_persistence_authority
+
+  wiring_mode:
+    role: UI event graph projection / edit mode over runtimeInteractions
+    visual_model: source UI node -> event trigger -> setting category -> target/effect
+    primary_inspector: UI event settings (操作イベント)
+    mode_boundary:
+      - wiring canvas is a switchable projection/edit mode over the same draft nodes
+        as layout mode; it is not a separate route, tab hierarchy, or separate draft store
+      - new wiring components are allowed only as view/edit projection,
+        never as persistence authority
+    persistence_authority:
+      authority: draftNodes[].runtimeInteractions -> topology.ui_topology_tensor.layout_patch_json.nodes[].runtimeInteractions
+      rule: >-
+        The wiring graph is derived (rehydrated) from runtimeInteractions on every
+        render. Edits made in wiring mode are expressed as typed runtimeInteraction
+        patches on draft nodes and persist only through the existing layout_patch
+        save_tmp / preview / validate / apply lanes.
+      prohibited:
+        - wiring_graph_or_rendered_projection_as_persistence_source
+        - raw_route_or_page_reference_as_event_wiring_authority
+        - separate_wiring_draft_store_diverging_from_draft_nodes
+    markmap_policy_if_used:
+      - projection/view only
+      - not semantic authority
+      - not persistence source
+      - rehydrate from runtimeInteractions
+
+  trigger_vocabulary:
+    rule: >-
+      Authoring-selectable triggers are limited to this vocabulary. Triggers outside
+      the vocabulary are blocking authoring errors (fail-close), not silent passthrough.
+      Stored trigger values remain raw identifiers; visible labels use user-facing
+      projection vocabulary (adminUxTerms), never raw-first.
+    groups:
+      lifecycle: [load, route_enter, initial_display]
+      pointer: [mouseon, mouseout, hover_start, hover_end]
+      keyboard: [keyon, keydown, keyup, enter, escape]
+      form: [click, change, submit, toggle, select, input, focus, blur]
+    high_frequency_triggers: [mouseon, mouseout, hover_start, hover_end, keyon, keydown, keyup, input]
+    runtime_execution_scope: >-
+      Runtime execution handlers for lifecycle / pointer / keyboard triggers are out of
+      scope for this bundle and deferred to a dedicated runtime bundle, consistent with
+      the dispatchExternalPort authoring-only contract in
+      docs/design/admin-console-workflow-ssot.yaml layout_node_props_contract.
+      Authoring persists the policy fields; preview stays inert.
+
+  lifecycle_policy:
+    rules:
+      - load / route_enter / initial_display are lifecycle triggers, not synthetic click/change
+      - preview is inert by default for lifecycle triggers
+      - backend/external dispatch bound to a lifecycle trigger requires explicit author
+        confirmation persisted as lifecycleDispatchConfirmed: true on the interaction
+      - lifecycle dispatch authoring must state idempotency / route-enter refetch intent
+        before a runtime execution bundle may implement it
+    fail_close:
+      - lifecycle_trigger_with_backend_or_external_dispatch_without_explicit_confirmation
+    prohibited:
+      - implementing_lifecycle_trigger_runtime_execution_before_this_policy
+      - treating_load_as_click_alias
+
+  high_frequency_policy:
+    rules:
+      - mouseon / hover / key-repeat class triggers must not dispatch backend/external
+        calls by default
+      - local UI state / monitored variable update is allowed by default
+      - backend/API dispatch or topology movement on a high-frequency trigger requires
+        an explicit debounceMs value (positive integer) persisted on the interaction
+        plus an explicit authoring warning
+    fail_close:
+      - high_frequency_trigger_with_backend_or_external_dispatch_without_debounce_ms
+    prohibited:
+      - implementing_high_frequency_trigger_runtime_execution_before_this_policy
+      - silent_default_debounce_injection
+
+  drag_drop_wiring_edit:
+    rules:
+      - valid drop produces a typed runtimeInteraction patch on the source draft node
+      - invalid drop (unknown node, self-drop, non-wirable target) produces an explicit
+        error and NO draft mutation
+      - wiring edits are draft-scoped and undoable (draft history) before explicit apply
+    fail_close:
+      - invalid_drop_must_not_mutate_draft
+    prohibited:
+      - silent_drop_rejection_without_visible_error
+      - drop_edit_writing_active_topology_directly
+
+  ui_event_settings:
+    surface: 操作イベント (per selected node; trigger UI and target UI are independent axes)
+    independent_axes_ref: docs/design/admin-console-workflow-ssot.yaml admin_authoring_completion_gate.ui_events_trigger_and_target_configurable
+    setting_categories:
+      api_settings:
+        - contents Step 3 API candidates (package wiring lane; owner: PackageWiringEditor / manifest screenReadQueryWiring)
+        - external api candidates (dispatchExternalPort; portTargetRef)
+        - external instance candidates (dispatchInstanceOperation; instanceTargetRef)
+      state_settings:
+        - local UI state mutation (openModal/closeModal/toggleModal/openDrawer/closeDrawer/toggleDrawer/openDialog/closeDialog/toggleDialog/setActiveKey/setState)
+      authority:
+        - credential / authority requirement is displayed from the selected port record
+          candidate (credentialKind / referenceKey identifier) within port record context;
+          it is never a standalone credential UI and never editable from UI Builder
+      side_effects:
+        - payloadFrom assignment (field -> source pattern map)
+        - outputProp assignment (response capture prop name)
+        - targetNode state assignment (statePath / value)
+        - explicit no-side-effect (interaction without dispatch remains local)
+      topology_movement:
+        - route navigation remains package wiring lane (RouteNavigationWiringPreset);
+          hub relation prev/next and explicit jump use user-facing topology labels;
+          raw topology ids stay internal
+
+  external_event_candidates:
+    sources:
+      - registered external api ports from seed/CRUD-backed registry
+        (topology.external_access_ports / external_response_ports / external_hook_ports,
+        active rows; op: ui_topology:list_external_port_authoring_candidates)
+      - registered external instance operations from admin-approved bindings
+        (op: ui_topology:list_instance_operation_authoring_candidates)
+      - registered credential authority carried by the port record
+        (credential_kind / reference_key identifier; plaintext prohibited)
+    typed_reference_contract:
+      dispatchExternalPort: portTargetRef "external-port:<portKind>:<portId>[:<routeKey>]"
+      dispatchInstanceOperation: instanceTargetRef "instance-port:<portKind>:<instancePortId>:<operationBindingKey>"
+    prohibited:
+      - hardcoded_external_api_or_instance_choices_in_ui_builder
+      - provider_or_bundle_fixed_candidate_lists_in_frontend
+      - raw_route_or_page_reference_written_as_event_wiring
+      - plaintext_credential_material_in_candidates_or_projection
+
+  authoring_metadata_fields:
+    note: >-
+      Authoring-only policy fields on RuntimeInteraction entries. Backend layout_patch
+      validation reads only known fields; these pass through untouched and carry policy
+      evidence for the future runtime execution bundle.
+    fields:
+      debounceMs:
+        type: positive integer (milliseconds)
+        required_when: high-frequency trigger bound to backend/external dispatch
+      lifecycleDispatchConfirmed:
+        type: boolean
+        required_when: lifecycle trigger bound to backend/external dispatch (must be true)
+
+  implementation_surfaces:
+    projection_policy_lib: frontend/lib/uiBuilderWiringProjection.ts
+    wiring_panel: frontend/components/WiringGraphPanel.tsx
+    event_settings_panel: frontend/components/NodeEventAuthoringPanel.tsx
+    island: frontend/islands/UiBuilderAdmin.tsx
+    label_vocabulary: frontend/content/adminUxTerms.ts
+    pre_save_validation: frontend/runtime/visualLayoutUtils.ts findRuntimeInteractionPatchErrors (+ policy errors from projection_policy_lib)
+
+  proof_surface:
+    executable_structure_check: .agent/tests/check-admin-uibuilder-wiring.sh
+    test_files:
+      - frontend/tests/uiBuilderWiringProjection.test.ts
+      - frontend/tests/runtimeInteractionAuthoring.test.ts
+      - frontend/tests/runtimeUiInteractionScenario.test.ts
+      - frontend/tests/visualLayoutBuilder.test.ts
+      - frontend/tests/uiBuilderPackageWiring.test.ts
+      - frontend/tests/adminWiringExecutionLane.test.ts
+    required_proof:
+      - runtimeInteractions -> wiring projection round-trip (projection derives from and
+        rehydrates to the same runtimeInteractions authority)
+      - valid drag-drop wiring edit produces typed runtimeInteraction patch
+      - invalid drag-drop wiring edit produces explicit error and no draft mutation
+      - lifecycle trigger + backend/external dispatch without confirmation fails close
+      - high-frequency trigger + backend/external dispatch without debounceMs fails close
+      - trigger outside SSOT vocabulary fails close
+      - registered external api / external instance selectable; selection writes typed reference
+    policy_ref: docs/design/pipeline-continuity-ssot.yaml test_tier_policy
+
+  prohibited:
+    - using_implementation_as_ssot_authority
+    - ui_builder_preset_ecosystem_ssot_as_owning_ssot_for_this_surface
+    - hardcoded_external_api_or_instance_choices_in_ui_builder
+    - raw_route_or_page_reference_as_event_wiring_authority
+    - markmap_or_rendered_graph_as_persistence_authority
+    - lifecycle_or_high_frequency_trigger_implementation_before_policy
+    - test_only_deletion_as_proof

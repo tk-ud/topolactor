@@ -485,11 +485,46 @@ const UX_RUNTIME_INTERACTION_TRIGGER_LABELS: Record<string, string> = {
   input: "入力時",
   focus: "フォーカス時",
   blur: "フォーカスが外れたとき",
+  // lifecycle triggers — SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml trigger_vocabulary
+  load: "読み込み時（ライフサイクル）",
+  route_enter: "ページ表示時（ライフサイクル）",
+  initial_display: "初期表示時（ライフサイクル）",
+  // pointer triggers（高頻度）
+  mouseon: "マウスが乗ったとき（高頻度）",
+  mouseout: "マウスが離れたとき（高頻度）",
+  hover_start: "ホバー開始時（高頻度）",
+  hover_end: "ホバー終了時（高頻度）",
+  // keyboard triggers
+  keyon: "キー押下中（高頻度）",
+  keydown: "キーを押したとき（高頻度）",
+  keyup: "キーを離したとき（高頻度）",
+  enter: "Enterキー押下時",
+  escape: "Escapeキー押下時",
 };
 
 export function uxRuntimeInteractionTriggerLabel(trigger: string): string {
   return UX_RUNTIME_INTERACTION_TRIGGER_LABELS[trigger] ?? trigger;
 }
+
+/** canvas mode 切替 — SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml layout_mode / wiring_mode */
+export const UX_CANVAS_MODE_LAYOUT = "レイアウト";
+export const UX_CANVAS_MODE_WIRING = "配線";
+export const UX_WIRING_MODE_HINT =
+  "配線ビューは操作イベント（runtimeInteractions）の投影です。ここでの編集は下書きノードへの操作イベント追加として保存され、配線図そのものは保存されません。";
+export const UX_WIRING_MODE_EMPTY =
+  "操作イベントが設定された部品がありません。部品を選択して「操作イベント」から追加するか、部品を開閉対象部品へドラッグして配線してください。";
+export const UX_WIRING_DROP_GUIDANCE =
+  "部品をドラッグして開閉対象部品（モーダル／ドロワー／ダイアログ）へドロップすると配線を追加します。";
+/** lifecycle / high-frequency policy — 明示警告文（SSOT: lifecycle_policy / high_frequency_policy） */
+export const UX_WIRING_POLICY_HIGH_FREQUENCY_WARNING =
+  "高頻度トリガでの外部/バックエンド送出には debounce（ミリ秒）の明示指定が必要です。";
+export const UX_WIRING_POLICY_LIFECYCLE_WARNING =
+  "ライフサイクルトリガでの外部/バックエンド送出は、明示的な確認が必要です。プレビューでは実行されません。";
+export const UX_WIRING_POLICY_LIFECYCLE_CONFIRM_LABEL =
+  "読み込み時の送出を理解して有効化する（再表示時にも再実行されます）";
+export const UX_WIRING_DEBOUNCE_LABEL = "送出間隔（debounce, ミリ秒）";
+/** 外部連携 credential authority 表示（port record context 内; SSOT: external-port-substrate-ssot.yaml admin_setting_projection） */
+export const UX_EXTERNAL_PORT_CREDENTIAL_AUTHORITY_LABEL = "認証情報（port record）";
 
 /** layout editor 右ドック — 配置インスペクタ見出し */
 export const UX_LAYOUT_INSPECTOR_SECTION = "配置インスペクタ";

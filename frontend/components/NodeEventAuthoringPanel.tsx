@@ -43,6 +43,17 @@ import {
   useInstanceOperationAuthoringCandidates,
   validatePayloadFromEntries,
 } from "../lib/uiBuilderEventAuthoringHooks.ts";
+import {
+  isHighFrequencyTrigger,
+  isLifecycleTrigger,
+} from "../lib/uiBuilderWiringProjection.ts";
+import {
+  UX_EXTERNAL_PORT_CREDENTIAL_AUTHORITY_LABEL,
+  UX_WIRING_DEBOUNCE_LABEL,
+  UX_WIRING_POLICY_HIGH_FREQUENCY_WARNING,
+  UX_WIRING_POLICY_LIFECYCLE_CONFIRM_LABEL,
+  UX_WIRING_POLICY_LIFECYCLE_WARNING,
+} from "../content/adminUxTerms.ts";
 import { parsePayloadFromSource } from "../runtime/payloadFromResolver.ts";
 
 export type NodeEventWiring = {
@@ -55,6 +66,10 @@ export type NodeEventWiring = {
   outputProp?: string;
   portTargetRef?: string;
   instanceTargetRef?: string;
+  /** SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml high_frequency_policy */
+  debounceMs?: number;
+  /** SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml lifecycle_policy */
+  lifecycleDispatchConfirmed?: boolean;
 };
 
 type Props = {
@@ -205,6 +220,63 @@ export default function NodeEventAuthoringPanel({
     );
   };
 
+  /**
+   * Lifecycle / high-frequency dispatch policy controls.
+   * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml lifecycle_policy / high_frequency_policy
+   * — backend/external dispatch on these triggers fails close until the author
+   * sets debounceMs (high-frequency) or explicitly confirms (lifecycle).
+   */
+  const renderDispatchPolicyControls = (
+    w: NodeEventWiring,
+    onUpdate: (patch: Partial<NodeEventWiring>) => void,
+  ) => {
+    const highFrequency = isHighFrequencyTrigger(w.trigger);
+    const lifecycle = isLifecycleTrigger(w.trigger);
+    if (!highFrequency && !lifecycle) return null;
+    return (
+      <div class="space-y-1 rounded border border-amber-200 bg-amber-50 p-1.5">
+        {highFrequency && (
+          <>
+            <p class="text-[0.58rem] text-amber-900">{UX_WIRING_POLICY_HIGH_FREQUENCY_WARNING}</p>
+            <label class="block text-[0.62rem]">
+              {UX_WIRING_DEBOUNCE_LABEL}
+              <input
+                type="number"
+                min={1}
+                class="input-mono mt-0.5 w-full px-1 py-0.5 text-xs"
+                value={w.debounceMs ?? ""}
+                placeholder="例: 300"
+                onInput={(e) => {
+                  const raw = (e.target as HTMLInputElement).value.trim();
+                  const parsed = Number.parseInt(raw, 10);
+                  onUpdate({
+                    debounceMs: raw && Number.isInteger(parsed) && parsed > 0 ? parsed : undefined,
+                  });
+                }}
+              />
+            </label>
+          </>
+        )}
+        {lifecycle && (
+          <>
+            <p class="text-[0.58rem] text-amber-900">{UX_WIRING_POLICY_LIFECYCLE_WARNING}</p>
+            <label class="flex items-start gap-1 text-[0.62rem] text-amber-900">
+              <input
+                type="checkbox"
+                checked={w.lifecycleDispatchConfirmed === true}
+                onChange={(e) =>
+                  onUpdate({
+                    lifecycleDispatchConfirmed: (e.target as HTMLInputElement).checked || undefined,
+                  })}
+              />
+              <span>{UX_WIRING_POLICY_LIFECYCLE_CONFIRM_LABEL}</span>
+            </label>
+          </>
+        )}
+      </div>
+    );
+  };
+
   const renderOverlayRow = (w: NodeEventWiring, index: number) => {
     const intent = overlayIntentFromAction(w.actionType);
     return (
@@ -293,6 +365,11 @@ export default function NodeEventAuthoringPanel({
     const onRemove = isDraft
       ? () => setStaging(null)
       : () => removeAt(index);
+    // Credential authority stays inside the port record context (read-only projection).
+    // SSOT: external-port-substrate-ssot.yaml admin_setting_projection
+    const selectedCandidate = w.portTargetRef
+      ? externalPortCandidates.find((c) => c.targetRef === w.portTargetRef)
+      : undefined;
 
     return (
       <div class="rounded border border-indigo-100 bg-indigo-50/40 p-2 space-y-2 text-[0.65rem]">
@@ -339,6 +416,15 @@ export default function NodeEventAuthoringPanel({
             </p>
           )}
         </label>
+        {selectedCandidate && (
+          <p class="rounded border border-indigo-100 bg-white px-1.5 py-1 text-[0.58rem] text-indigo-800">
+            {UX_EXTERNAL_PORT_CREDENTIAL_AUTHORITY_LABEL}: {selectedCandidate.credentialKind}
+            {selectedCandidate.referenceKey
+              ? `（参照キー: ${selectedCandidate.referenceKey}）`
+              : "（参照キーなし）"}
+          </p>
+        )}
+        {renderDispatchPolicyControls(w, onUpdate)}
         {!isDraft && renderPayloadFrom(w, index)}
         {!isDraft && (
           <label class="block">
@@ -432,6 +518,7 @@ export default function NodeEventAuthoringPanel({
             </p>
           )}
         </label>
+        {renderDispatchPolicyControls(w, onUpdate)}
         <div class="flex justify-end gap-2">
           {isDraft && (
             <>
