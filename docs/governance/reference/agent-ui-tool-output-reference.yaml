@@ -89,7 +89,7 @@ authority_split:
     - uuid
     - datetime
     - worktype
-    - docs/governance/logs/tool.log record
+    - .agent/tools/logs/tool.log record
   rule: >-
     AI writes semantic inputs and implementation content. The tool generates
     metadata and writes the log. AI must not hand-write uuid, datetime,
@@ -110,7 +110,7 @@ common_metadata:
   reuse_required:
     - PR body
     - summary
-    - docs/governance/logs/tool.log
+    - .agent/tools/logs/tool.log
 
 initial_contract_outputs:
   step_1_task_name:
@@ -258,12 +258,12 @@ local_test_outputs:
       - next_step
 
 log_record_reference:
-  path: docs/governance/logs/tool.log
+  path: .agent/tools/logs/tool.log
   initial_state: empty_tracked_file
   create_rule:
-    - Keep an empty tracked docs/governance/logs/tool.log in the repository.
+    - Keep an empty tracked .agent/tools/logs/tool.log in the repository.
     - If missing during tool execution, create it before appending.
-    - Create docs/governance/logs directory if it does not exist.
+    - Create .agent/tools/logs directory if it does not exist.
   write_rule:
     - Tool writes the log record, not AI.
     - Append only.

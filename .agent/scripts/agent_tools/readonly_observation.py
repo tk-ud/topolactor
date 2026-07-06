@@ -934,6 +934,42 @@ def _build_tmp_template(space: str, bits):
     return enabled_keys, disabled_keys, template, bits_length
 
 
+def _translator_entry_gate_core():
+    """Lazy import: schema_seed_translator_entry_gate.py sits alongside this
+    file and is the single shared validation core also used by
+    react_schema_topology_seed_translator.py's translator entry and by
+    check_react_schema_topology_seed_translator.py / this tool's own gate
+    proof. Importing it lazily keeps this dispatcher's module-load cheap for
+    the (far more common) non-gate subcommands."""
+    import schema_seed_translator_entry_gate as gate_core  # noqa: PLC0415
+    return gate_core
+
+
+def _run_translator_entry_gate(args) -> int:
+    gate_core = _translator_entry_gate_core()
+    gate_result = gate_core.validate_translator_entry_from_path(args.input, expected_mode=args.expected_mode)
+    return _json({
+        "tool": "topology-seed-discussion",
+        "mode": "translator-entry-gate",
+        "boundary": TOPOLOGY_SEED_DISCUSSION_BOUNDARY | {
+            "translator_entry_gate_core": True,
+            "gate_core_module": ".agent/scripts/agent_tools/schema_seed_translator_entry_gate.py",
+            "proof_completion_judgment": False,
+            "seed_adoption_judgment": False,
+        },
+        "discussion_note": (
+            "This command reads the same translator input JSON the "
+            "react-schema-topology-seed-translator entry and its executable "
+            "proof (.agent/scripts/check_react_schema_topology_seed_translator.py) "
+            "read -- it does not require or produce a separate gate-only JSON. "
+            "gateStatus pass/blocking/unsupported_input_shape is entry-gate "
+            "observation only, never SSOT authority, proof completion, or "
+            "seed adoption evidence."
+        ),
+        "gate_result": gate_result,
+    })
+
+
 def topology_seed_discussion(argv: list[str]) -> int:
     rejected = _reject_mutation_args(argv)
     if rejected is not None:
@@ -951,7 +987,24 @@ def topology_seed_discussion(argv: list[str]) -> int:
     template_source.add_argument("--answers", help="Stage2 answers JSON containing question_space and bits array; read-only.")
     build_parser = sub.add_parser("build", help="Build candidate discussion JSON from AI-filled tmp JSON.")
     build_parser.add_argument("--answers", required=True, help="Path to AI-filled tmp JSON to read; never modified.")
+    gate_parser = sub.add_parser(
+        "translator-entry-gate",
+        help=(
+            "Schema<->seed translator entry gate: validate a translator input envelope / "
+            "react schema candidate / topology ui seed candidate / translator output JSON "
+            "through the shared schema_seed_translator_entry_gate.py core, before translator "
+            "or translator-proof execution."
+        ),
+    )
+    gate_parser.add_argument("--input", required=True, help="Path to the JSON document to gate (same file the translator entry reads; never a separate gate-only JSON).")
+    gate_parser.add_argument(
+        "--expected-mode", choices=["generate_react_schema", "generate_topology_ui_seed", "round_trip_check"], default=None,
+        help="Optional translator subcommand context used to additionally check envelope.mode consistency.",
+    )
     args = parser.parse_args(argv)
+
+    if args.mode == "translator-entry-gate":
+        return _run_translator_entry_gate(args)
 
     if args.mode == "inspect":
         if args.space:

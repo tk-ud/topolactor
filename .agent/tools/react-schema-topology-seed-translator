@@ -3,15 +3,41 @@
 #
 # Delegates all structured processing to
 # .agent/scripts/react_schema_topology_seed_translator.py, which implements
-# generate-react-schema per docs/design/react-schema-topology-seed-translator-ssot.yaml.
-# generate-topology-seed and round-trip-check are explicitly out of scope for
-# this Bundle and fail closed with a not_implemented_out_of_scope document.
+# generate-react-schema and generate-topology-seed (both implemented) per
+# docs/design/react-schema-topology-seed-translator-ssot.yaml.
+# round-trip-check remains explicitly out of scope for this Bundle and fails
+# closed with a not_implemented_out_of_scope document.
+#
+# Before generate-react-schema / generate-topology-seed run their conversion
+# pipeline, the translator entry (cmd_generate_react_schema /
+# cmd_generate_topology_seed in react_schema_topology_seed_translator.py)
+# passes the same --input envelope JSON -- never a separate gate-only JSON --
+# through the shared schema<->seed translator entry gate core
+# (.agent/scripts/agent_tools/schema_seed_translator_entry_gate.py,
+# validate_translator_entry()). A gateStatus other than "pass" fails the
+# entry closed (exit 3, conversion never runs); "pass" lets the existing,
+# unmodified conversion pipeline proceed. The same gate core is also callable
+# from .agent/tools/topology-seed-discussion (translator-entry-gate
+# subcommand) and verified from
+# .agent/scripts/check_react_schema_topology_seed_translator.py /
+# .agent/scripts/check_schema_seed_translator_entry_gate.py -- one core,
+# three callers, not three separate re-implementations. The gate core is
+# entry-gate observation only: it is not SSOT authority, proof completion,
+# or seed adoption evidence, and it never reads db/*.sql.
+#
+# Executable proof: .agent/scripts/check_react_schema_topology_seed_translator.py
+# (paired CI entrypoint: .agent/tests/check-react-schema-topology-seed-translator.sh).
 #
 # Unlike the read-only observation tools in this directory (directory-map,
 # yaml-section-query, proof-surface-map, topology-seed-discussion), this tool
-# is an evidence-artifact generator: --output is an authorized write of a
-# tool-owned generated JSON document (e.g. tools/generate/schema/*.json), not
-# a mutation of Topolactor application/runtime/product source. It never
+# is an evidence-artifact generator: --output writes a local/tmp generated
+# JSON document under .agent/tools/generated/* (gitignored, never tracked --
+# *seed.sql / SSOT docs remain the production storage authority), not
+# a mutation of Topolactor application/runtime/product source. The optional
+# --generate-log flag appends a JSON Lines trace record (what was generated
+# from what, with what command, and its output hash) to the tracked
+# .agent/tools/logs/generate.log; that log is trace evidence only, never
+# seed adoption authority or proof completion by itself. The tool never
 # writes to a database and never starts backend/frontend/nginx.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

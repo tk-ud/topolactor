@@ -28,3 +28,12 @@ nul
 .agent/tmp/topology-seed-discussion*.json
 topology-seed-discussion*.tmp.json
 topology-seed-discussion*.seed.json
+
+# react-schema-topology-seed-translator local/tmp regeneration output.
+# Not tracked evidence: *seed.sql / SSOT docs are the production storage
+# authority; .agent/tools/logs/generate.log is the tracked trace evidence
+# (JSON Lines, one line per generation) that lets a regeneration proof
+# recreate these files on demand and hash-check them. Do not ignore
+# .agent/tools/logs/* or any *seed.sql file.
+.agent/tools/generated/*
+!.agent/tools/generated/.gitkeep

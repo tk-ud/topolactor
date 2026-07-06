@@ -1192,7 +1192,7 @@ mapping:
   - work_type: agent_ui_protocol_governance
     change_surfaces:
       - Agent UI tool contract
-      - docs/governance/logs/tool.log
+      - .agent/tools/logs/tool.log
       - senario-tmp.md
       - Agent UI protocol UI
       - Agent UI governance reference

@@ -136,12 +136,12 @@ required_files:
     - docs/governance/reference/agent-ui-tool-output-reference.yaml
     - docs/governance/reference/agent-ui-senario-tmp-reference.yaml
     - docs/governance/reference/agent-ui-negative-boundary-reference.yaml
-    - docs/governance/logs/tool.log
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml
     - .agent/docs/required-paths.yaml
     - .agent/docs/ssot-map.yaml
+    - .agent/tools/logs/tool.log
     - .agent/rules/rule.md
     - .agent/protocols/completion.md
     - .agent/protocols/index.yaml
@@ -243,6 +243,7 @@ required_files:
     - .agent/tests/check-agent-ui-tool.sh
     - .agent/scripts/check_topology_seed_discussion_bits_length.py
     - .agent/tests/check-topology-seed-discussion-bits-length.sh
+    - .agent/tools/logs/generate.log
     - .agent/protocols/audit/index.md
     - .agent/protocols/audit/02-required-alignment-surfaces.md
     - .agent/protocols/audit/08-output.md
@@ -739,7 +740,7 @@ required_content_terms:
   .agent/protocols/audit/02-required-alignment-surfaces.md:
     - "PR-side record"
     - "tool evidence log"
-    - "docs/governance/logs/tool.log"
+    - ".agent/tools/logs/tool.log"
     - "trace/context surfaces only"
   .agent/protocols/audit/08-output.md:
     - "PR record checked"

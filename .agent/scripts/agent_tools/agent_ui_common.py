@@ -4,7 +4,7 @@
 Distinct from .agent/scripts/agent_tools/readonly_observation.py: these tools are
 Agent UI / governance-side tools. Per docs/governance/agent-ui-protocol-ssot.yaml's
 mutation_boundary, they may write tool-owned governance artifacts
-(docs/governance/logs/tool.log, senario-tmp.md) because that SSOT and this task
+(.agent/tools/logs/tool.log, senario-tmp.md) because that SSOT and this task
 scope explicitly require it -- but they still must not mutate Topolactor
 application/runtime/product source surfaces, and they expose no arbitrary
 --output file-write escape hatch.
@@ -23,7 +23,7 @@ sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 import minimal_yaml as yaml  # noqa: E402
 
 ROUTES_PATH = REPO_ROOT / ".agent" / "routes" / "worktype-required-protocols.yaml"
-TOOL_LOG_PATH = REPO_ROOT / "docs" / "governance" / "logs" / "tool.log"
+TOOL_LOG_PATH = REPO_ROOT / ".agent" / "tools" / "logs" / "tool.log"
 SENARIO_TMP_PATH = REPO_ROOT / "senario-tmp.md"
 YAML_SECTION_QUERY_TOOL = REPO_ROOT / ".agent" / "tools" / "yaml-section-query"
 
@@ -81,7 +81,7 @@ def reject_output_flag(argv: list[str]) -> int | None:
             sys.stderr.write(
                 "FAIL: mutation-oriented --output option is not supported by this Agent UI "
                 "tool; it only writes its own fixed governance-owned artifact surfaces "
-                "(docs/governance/logs/tool.log, senario-tmp.md), never an arbitrary output "
+                "(.agent/tools/logs/tool.log, senario-tmp.md), never an arbitrary output "
                 "file.\n"
             )
             return 2

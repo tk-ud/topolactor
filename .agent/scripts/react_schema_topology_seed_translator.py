@@ -40,9 +40,11 @@ started or required.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -180,6 +182,27 @@ def load_ssot(repo_root: Path):
 def protected_vocabulary(ssot_root):
     values = dig(ssot_root, "translator_input_authority", "protected_boundary_vocabulary", "values")
     return values if isinstance(values, list) and values else list(DEFAULT_PROTECTED_VOCABULARY)
+
+
+# ---------------------------------------------------------------------------
+# translator entry gate connection
+#
+# schema_seed_translator_entry_gate.py imports THIS module at its own top
+# level (it reuses validate_input_envelope/parse_markup/walk_and_validate/etc.
+# instead of duplicating them), so this module must not import that one at
+# module-load time -- that would be circular. Loading it lazily, inside the
+# function that needs it, is safe: by the time cmd_generate_react_schema /
+# cmd_generate_topology_seed actually run, this module is already fully
+# initialized in sys.modules, so the gate core's own top-level import of this
+# module resolves instantly from cache instead of re-executing it.
+# ---------------------------------------------------------------------------
+
+def _gate_core():
+    gate_dir = SCRIPT_DIR / "agent_tools"
+    if str(gate_dir) not in sys.path:
+        sys.path.insert(0, str(gate_dir))
+    import schema_seed_translator_entry_gate as gate  # noqa: PLC0415
+    return gate
 
 
 # ---------------------------------------------------------------------------
@@ -915,13 +938,108 @@ def resolve_safe_output_path(output_arg):
     return out_path
 
 
+# ---------------------------------------------------------------------------
+# generate.log trace evidence
+#
+# *seed.sql / SSOT docs remain the production storage authority; generated
+# JSON is a local/tmp projection (.agent/tools/generated/*, gitignored), not
+# tracked evidence. .agent/tools/logs/generate.log is the tracked JSON
+# Lines regeneration index instead: one line per generation attempt naming
+# what was generated from what, with what command, and its output hash, so a
+# proof can re-run the command and hash-check the result without the heavy
+# JSON itself being committed. Append-only; only written when the caller
+# opts in with --generate-log. This is trace evidence only -- never seed
+# adoption authority, never proof completion by itself.
+# ---------------------------------------------------------------------------
+
+def sha256_file(path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def resolve_generate_log_path(path_arg):
+    repo_root = REPO_ROOT.resolve()
+    candidate = Path(path_arg)
+    out_path = candidate if candidate.is_absolute() else (repo_root / candidate)
+    out_path = out_path.resolve()
+    try:
+        out_path.relative_to(repo_root)
+    except ValueError as exc:
+        raise SystemExit(f"--generate-log path escapes repository root: {path_arg}") from exc
+    return out_path
+
+
+def _generate_log_mode_and_embedded_candidate_kind(doc):
+    if doc.get("topologyUiSeedCandidate") is not None:
+        return "generate_topology_ui_seed", "topology_ui_seed_candidate"
+    if doc.get("reactSchemaCandidate") is not None:
+        return "generate_react_schema", "react_schema_candidate"
+    return None, None
+
+
+def _generate_log_command(args):
+    parts = ["react-schema-topology-seed-translator", getattr(args, "command", ""), "--input", args.input]
+    if getattr(args, "output", None):
+        parts += ["--output", args.output]
+    return " ".join(parts)
+
+
+def build_generate_log_record(args, doc, sha256_value):
+    # sha256_value always hashes the full topolactor.translator_output.v1
+    # document written/emitted by write_output (whether or not --output
+    # persisted it to disk) -- outputKind/outputSchemaId must describe that
+    # same artifact, not the react_schema_candidate/topologyUiSeedCandidate
+    # embedded inside it. embeddedCandidateKind names which candidate the
+    # document embeds, without claiming that candidate alone was hashed.
+    mode, embedded_candidate_kind = _generate_log_mode_and_embedded_candidate_kind(doc)
+    seed_evidence = doc.get("seedEvidence") or {}
+    schema_candidate = doc.get("reactSchemaCandidate") or {}
+    seed_candidate = doc.get("topologyUiSeedCandidate") or {}
+    seed_key = schema_candidate.get("surface") or seed_candidate.get("surface")
+    return {
+        "datetime": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "nametag": getattr(args, "nametag", None) or Path(args.input).stem,
+        "mode": mode,
+        "source": args.input,
+        "sourceSeedSql": getattr(args, "source_seed_sql", None),
+        "seedKey": seed_key,
+        "manifestId": seed_evidence.get("screenUuid"),
+        "command": _generate_log_command(args),
+        "outputKind": "translator_output_document",
+        "outputSchemaId": doc.get("schemaId"),
+        "embeddedCandidateKind": embedded_candidate_kind,
+        "outputPath": getattr(args, "output", None),
+        "sha256": sha256_value,
+        "gateStatus": doc.get("gateStatus"),
+        "validationErrorCount": len(doc.get("validationErrors") or []),
+        "unresolvedGapCount": len(doc.get("unresolvedGaps") or []),
+        "taskRef": getattr(args, "task_ref", None),
+        "prRef": getattr(args, "pr_ref", None),
+    }
+
+
+def append_generate_log(path_arg, record):
+    out_path = resolve_generate_log_path(path_arg)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+
 def write_output(args, doc):
     text = json.dumps(doc, indent=2, ensure_ascii=False, sort_keys=False) + "\n"
+    out_path = None
     if getattr(args, "output", None):
         out_path = resolve_safe_output_path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(text, encoding="utf-8")
     sys.stdout.write(text)
+    if getattr(args, "generate_log", None):
+        sha256_value = sha256_file(out_path) if out_path is not None else hashlib.sha256(text.encode("utf-8")).hexdigest()
+        record = build_generate_log_record(args, doc, sha256_value)
+        append_generate_log(args.generate_log, record)
 
 
 # ---------------------------------------------------------------------------
@@ -944,6 +1062,26 @@ def cmd_generate_react_schema(args):
             envelope = json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
         output["validationErrors"].append(err("INPUT_FILE_UNREADABLE", "$.input", "blocking", str(exc)))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    # translator entry gate: same envelope JSON, no separate gate-only input.
+    # gateStatus != pass fails closed before any conversion pipeline runs.
+    gate = _gate_core()
+    gate_result = gate.validate_translator_entry(envelope, ssot_root=ssot_root, expected_mode="generate_react_schema")
+    output["gateStatus"] = gate_result["gateStatus"]
+    if gate_result["gateStatus"] != gate.GATE_STATUS_PASS:
+        output["validationErrors"].extend(gate_result["entryValidation"]["validationErrors"])
+        output["unresolvedGaps"] = gate_result["unresolvedGaps"]
+        output["exchangeReport"] = build_exchange_report(
+            envelope.get("sourceYamlRefs") or [],
+            0,
+            gate_result["unresolvedGaps"],
+            gate_result.get("lossEntries", []),
+            [],
+            output["validationErrors"],
+        )
         doc = {"schemaId": "topolactor.translator_output.v1", **output}
         write_output(args, doc)
         return 3
@@ -1035,6 +1173,28 @@ def cmd_generate_topology_seed(args):
             envelope = json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
         output["validationErrors"].append(err("INPUT_FILE_UNREADABLE", "$.input", "blocking", str(exc)))
+        doc = {"schemaId": "topolactor.translator_output.v1", **output}
+        write_output(args, doc)
+        return 3
+
+    # translator entry gate: same envelope JSON, no separate gate-only input.
+    # gateStatus != pass fails closed before any conversion pipeline runs.
+    gate = _gate_core()
+    gate_result = gate.validate_translator_entry(envelope, ssot_root=ssot_root, expected_mode="generate_topology_ui_seed")
+    output["gateStatus"] = gate_result["gateStatus"]
+    if gate_result["gateStatus"] != gate.GATE_STATUS_PASS:
+        output["validationErrors"].extend(gate_result["entryValidation"]["validationErrors"])
+        output["unresolvedGaps"] = gate_result["unresolvedGaps"]
+        output["exchangeReport"] = build_exchange_report(
+            envelope.get("sourceYamlRefs") or [],
+            0,
+            gate_result["unresolvedGaps"],
+            gate_result.get("lossEntries", []),
+            [],
+            output["validationErrors"],
+            source_schema_id="topolactor.react_schema.v1",
+            output_seed_schema_id="topolactor.topology_ui_seed.v1",
+        )
         doc = {"schemaId": "topolactor.translator_output.v1", **output}
         write_output(args, doc)
         return 3
@@ -1190,6 +1350,11 @@ def build_arg_parser():
     gen.add_argument("--scenario-uuid")
     gen.add_argument("--scenario-worktype", default="implementation_change")
     gen.add_argument("--scenario-branch", default="")
+    gen.add_argument("--generate-log", default=None, help="Append a JSON-Lines regeneration-trace record to this path (e.g. .agent/tools/logs/generate.log); omit to skip logging entirely.")
+    gen.add_argument("--nametag", default=None, help="Free-form label for the generate.log record; defaults to the --input file stem.")
+    gen.add_argument("--task-ref", default=None, help="Optional taskRef value for the generate.log record (e.g. a PR reference).")
+    gen.add_argument("--pr-ref", default=None, help="Optional prRef value for the generate.log record.")
+    gen.add_argument("--source-seed-sql", default=None, help="Passthrough label only, e.g. a seed SQL file reference; recorded in generate.log verbatim, never opened or read by the translator.")
     gen.set_defaults(func=cmd_generate_react_schema)
 
     gen2 = sub.add_parser("generate-topology-seed")
@@ -1198,6 +1363,11 @@ def build_arg_parser():
     gen2.add_argument("--scenario-uuid")
     gen2.add_argument("--scenario-worktype", default="implementation_change")
     gen2.add_argument("--scenario-branch", default="")
+    gen2.add_argument("--generate-log", default=None, help="Append a JSON-Lines regeneration-trace record to this path (e.g. .agent/tools/logs/generate.log); omit to skip logging entirely.")
+    gen2.add_argument("--nametag", default=None, help="Free-form label for the generate.log record; defaults to the --input file stem.")
+    gen2.add_argument("--task-ref", default=None, help="Optional taskRef value for the generate.log record (e.g. a PR reference).")
+    gen2.add_argument("--pr-ref", default=None, help="Optional prRef value for the generate.log record.")
+    gen2.add_argument("--source-seed-sql", default=None, help="Passthrough label only, e.g. a seed SQL file reference; recorded in generate.log verbatim, never opened or read by the translator.")
     gen2.set_defaults(func=cmd_generate_topology_seed)
 
     rtc = sub.add_parser("round-trip-check")

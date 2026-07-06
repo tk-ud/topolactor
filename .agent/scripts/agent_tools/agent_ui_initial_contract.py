@@ -18,7 +18,7 @@ the current task -- that stays agent judgment.
 
 AI supplies task_name, worktype selection, target SSOT name, section
 selection, and senario content. This tool generates uuid/datetime/worktype
-metadata and owns the docs/governance/logs/tool.log append -- the AI must
+metadata and owns the .agent/tools/logs/tool.log append -- the AI must
 copy those tool-generated values forward between steps rather than
 hand-authoring them (docs/governance/reference/agent-ui-tool-output-reference.yaml
 authority_split).
@@ -402,7 +402,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_sections.add_argument("--select", required=True, help='JSON array of section names, e.g. \'["section_a","section_b"]\'')
     p_sections.set_defaults(func=_cmd_sections)
 
-    p_end = sub.add_parser("end", help="Require senario contract, write senario-tmp.md, append docs/governance/logs/tool.log.")
+    p_end = sub.add_parser("end", help="Require senario contract, write senario-tmp.md, append .agent/tools/logs/tool.log.")
     p_end.add_argument("--task-name", required=True)
     p_end.add_argument("--worktype", required=True)
     p_end.add_argument("--uuid", required=True, help="uuid value emitted by a prior 'start' call; must not be hand-authored")

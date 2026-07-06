@@ -23,7 +23,7 @@ Three phases per [`docs/governance/agent-ui-protocol-ssot.yaml`](docs/governance
 1. **initial_contract** — `agent-ui-initial-contract`: `worktypes` → `start` → `resolve-ssot` → `sections` → `end` (follow each subcommand's `next_step`).
    - `start`: worktype route from [`.agent/routes/worktype-required-protocols.yaml`](.agent/routes/worktype-required-protocols.yaml); tool-generated `uuid`/`datetime`; routed prompt and required/triggered protocol **full text** (`prompt_content`, `protocol_trigger_hints[].content`); `workflow_procedure` from `.agent/skills/agent-workflow.md`. Whether a `triggered_protocols` condition applies to the current task is still an agent judgment call.
    - `resolve-ssot` / `sections`: applicable SSOT section subtrees only — not resolved in `start`.
-   - `end`: writes `senario-tmp.md` (scope + negative cases; must not be committed) and appends compact metadata to [`docs/governance/logs/tool.log`](docs/governance/logs/tool.log). Reuse the same `uuid`/`datetime` through `summary`.
+   - `end`: writes `senario-tmp.md` (scope + negative cases; must not be committed) and appends compact metadata to [`.agent/tools/logs/tool.log`](.agent/tools/logs/tool.log). Reuse the same `uuid`/`datetime` through `summary`.
 
 2. **implementation** — mutate product/runtime/source only within the scenario contract and applicable SSOT. Tool output is not SSOT authority.
 

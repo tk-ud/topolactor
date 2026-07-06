@@ -6,7 +6,7 @@ Agents that skip `AGENTS.md` Entry Route and Repository Design Order routinely:
 
 - Implement from user message + existing code without reading `docs/design/*-ssot.*` / `docs/governance/*-ssot.*`
 - Justify SSOT violations as "matching current implementation" or "implementation ahead of SSOT"
-- Omit tool `start` / `end` (scenario contract + `docs/governance/logs/tool.log` usage record)
+- Omit tool `start` / `end` (scenario contract + `.agent/tools/logs/tool.log` usage record)
 - Claim completion without the full `agent-ui-local-test` chain through `summary` (or fallback routed `required_checks`)
 
 Following Entry Route (see repository-top `AGENTS.md`) is **required**, not optional polish:

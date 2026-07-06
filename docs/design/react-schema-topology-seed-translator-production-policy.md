@@ -27,6 +27,29 @@ a future Bundle intends to build a tool around them.
   (fail-closed, not silently accepted).
 - No docker compose service, nginx route, or C# call boundary exists yet.
   Everything under "Deferred" below is still forward-looking guidance.
+- Follow-up `implementation_change` Bundle (PR572): extracted the schema<->seed
+  translator entry gate core (`schema_seed_translator_entry_gate.py`,
+  `validate_translator_entry()`) and wired it into this translator's entry
+  (`generate-react-schema` / `generate-topology-seed` both still implemented;
+  a non-`pass` `gateStatus` now fails the entry closed before conversion
+  runs) and into `topology-seed-discussion` (`translator-entry-gate`
+  subcommand). The gate core is translator-entry-gate authority only -- it
+  is not SSOT authority, not proof completion, and not seed adoption
+  authority; see `translator_input_authority`/`declared_seed_surface_catalog`
+  above for those. `round-trip-check` remains deliberately
+  `not_implemented_out_of_scope`. Done.
+- Follow-up `implementation_change` Bundle (PR572 second follow-up): stopped
+  treating generated JSON output as tracked evidence. `*seed.sql` files and
+  the SSOT docs above remain the production storage authority; generated
+  JSON is a local/tmp projection only (`.agent/tools/generated/*`,
+  gitignored). `.agent/tools/logs/generate.log` is the tracked JSON
+  Lines regeneration-trace index instead (one record per generation
+  attempt), added via new `--generate-log`/`--nametag`/`--task-ref`/
+  `--pr-ref`/`--source-seed-sql` CLI options on `generate-react-schema` /
+  `generate-topology-seed` (opt-in only; ordinary test runs never touch the
+  tracked log). Reverse generation (seed -> schema) is still not
+  implemented and out of scope; `round-trip-check` remains
+  `not_implemented_out_of_scope`. Done.
 
 ## Work boundary
 
@@ -93,17 +116,37 @@ a future Bundle intends to build a tool around them.
 .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json
 .agent/tests/fixtures/react-schema-topology-seed-translator/physical-search-crud-aggregate.react-schema.json
 .agent/tests/fixtures/react-schema-topology-seed-translator/physical-search-crud-aggregate.topology-seed.input.json
-tools/generate/schema/translated.json                                              (evidence: credential-management-0092 generate-react-schema)
-tools/generate/schema/translated-topology-seed.json                                (evidence: credential-management-0092 generate-topology-seed)
-tools/generate/schema/translated-physical-search-crud-aggregate-topology-seed.json (evidence: physical_search_crud_aggregate.v1 generate-topology-seed)
+.agent/tools/logs/generate.log                                 (tracked JSON Lines regeneration-trace evidence; not seed adoption authority, not proof completion)
+.agent/tools/generated/*                                            (gitignored local/tmp regeneration output; never tracked, never SSOT authority)
+.agent/scripts/agent_tools/schema_seed_translator_entry_gate.py    (schema<->seed translator entry gate core; translator-entry-gate authority only)
+.agent/scripts/check_schema_seed_translator_entry_gate.py          (gate core executable proof)
+.agent/tests/check-schema-seed-translator-entry-gate.sh            (gate core CI entrypoint)
+.agent/tools/topology-seed-discussion translator-entry-gate        (external, read-only gate core caller)
 docs/design/react-schema-topology-seed-translator-ssot.yaml
 ```
+
+Production storage authority for anything this translator's output might
+eventually inform stays with `*seed.sql` files and the SSOT docs above --
+never with generated JSON. `.agent/tools/generated/*` is local/tmp
+regeneration output only (gitignored, recreated on demand); it is never
+tracked and never a substitute for `*seed.sql`/SSOT authority.
+`.agent/tools/logs/generate.log` is the tracked trace instead: a JSON
+Lines file, one record per generation attempt, naming what was generated
+from what (`source`, `sourceSeedSql`, `seedKey`, `manifestId`), with what
+command, and its output hash (`sha256`), so a proof can re-run the same
+command and hash-check the result without the generated JSON itself being
+committed. `generate.log` is trace evidence only -- it is not seed adoption
+authority and not proof completion by itself; a proof treats it as a
+regeneration index, re-running recorded commands into
+`.agent/tools/generated/*` or `.agent/tmp/*` and checking hash consistency
+when it needs the actual generated content. Seed -> schema reverse
+generation is still not implemented; see `round-trip-check` below.
 
 ## Implemented CLI shape
 
 ```text
-react-schema-topology-seed-translator generate-react-schema  --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>]
-react-schema-topology-seed-translator generate-topology-seed --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>]
+react-schema-topology-seed-translator generate-react-schema  --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>] [--generate-log <path>] [--nametag <name>] [--task-ref <ref>] [--pr-ref <ref>] [--source-seed-sql <label>]
+react-schema-topology-seed-translator generate-topology-seed --input <envelope.json> [--output <path>] [--scenario-uuid <uuid>] [--generate-log <path>] [--nametag <name>] [--task-ref <ref>] [--pr-ref <ref>] [--source-seed-sql <label>]
 react-schema-topology-seed-translator round-trip-check       --input <envelope.json>   # fails closed: not_implemented_out_of_scope
 ```
 
@@ -113,14 +156,35 @@ alongside `mode`, `inputText`, `sourceYamlRefs`, and the optional
 `seedEvidence` passthrough object. Each subcommand maps to one
 `input_format_contract.mode` value.
 
+`--generate-log <path>` is opt-in: when omitted (the default for ordinary
+test/CI runs), nothing is appended anywhere, so the tracked
+`.agent/tools/logs/generate.log` is never touched by routine
+invocations. When given, the translator appends one JSON Lines record to
+that path after writing its own output: `datetime`, `nametag` (defaults to
+the `--input` file stem), `mode`, `source` (the `--input` path),
+`sourceSeedSql` (a caller-supplied passthrough label only -- the translator
+never opens it), `seedKey`, `manifestId` (from a passed-through
+`seedEvidence.screenUuid`, when present), `command`, `outputKind`
+(always `translator_output_document` -- `sha256` always hashes the full
+`output_format_contract`-shaped document `--output` writes/emits, never a
+bare candidate by itself), `outputSchemaId` (`topolactor.translator_output.v1`),
+`embeddedCandidateKind` (`react_schema_candidate` or
+`topology_ui_seed_candidate` -- which candidate the hashed document
+embeds, not a separate hashed artifact), `outputPath`, `sha256`,
+`gateStatus`, `validationErrorCount`, `unresolvedGapCount`, `taskRef`, and
+`prRef`. `--source-seed-sql`, `--task-ref`, and `--pr-ref` are free-form
+passthrough labels only; none of them cause the translator to read anything
+beyond its existing
+`--input`/SSOT-YAML boundary.
+
 ## Output location
 
 `--output` writes the full `output_format_contract`-shaped document (plus the
 `scenario` and `seedEvidence` extension fields) to a repo-relative path;
-paths outside the repository root are rejected. `tools/generate/schema/translated.json`
-is the committed evidence snapshot for the credential-management-0092
-fixture. Do not commit further generated outputs unless a task explicitly
-asks for an evidence snapshot.
+paths outside the repository root are rejected. Generated output is not
+committed: `.agent/tools/generated/*` is gitignored local/tmp regeneration
+output, regenerated on demand from a `.agent/tools/logs/generate.log`
+record's `command` and `source`, never a tracked evidence snapshot.
 
 ## Fixture order
 
@@ -158,7 +222,9 @@ topology.mock_preset_registry + topology.mock_preset_compile_snapshot)
   -> topology-seed input envelope
      (.agent/tests/fixtures/.../physical-search-crud-aggregate.topology-seed.input.json)
   -> generated topology seed candidate
-     (tools/generate/schema/translated-physical-search-crud-aggregate-topology-seed.json)
+     (regenerate on demand: .agent/tools/logs/generate.log records the
+     command/source/sha256 for this candidate; the JSON body itself is
+     .agent/tools/generated/* local/tmp output, not tracked)
 ```
 
 Concretely: `crud_search_button`/`crud_submit_button`/`crud_result_list` node
