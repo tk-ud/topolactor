@@ -311,6 +311,31 @@ UI_event_settings:
     explicit jump by user-facing topology label/name
     raw topology ids stay internal
 
+component_runtime_state_effect_boundary:
+  state/effect authoring does not require ad-hoc useEffect code inside every component
+  required runtime boundary:
+    runtime component wrapper / factory owns useEffect-like effect runner
+    primitive components expose event/value surfaces and remain mostly pure renderers
+    state slots live in projection-local state store or equivalent declared runtime state store
+    UI監視割当 declares state slot / dependency source before mutation or effect selection
+    UI状態更新 writes only through runtime state dispatcher
+    副作用設定 resolves dependency graph before execution and runs through effect runner
+  component edit boundary:
+    edit individual component only when required event/value surface is missing
+    unsupported component kind must fail-close in proof tests
+    component-specific state/effect implementation is exception, not default path
+  required receive surfaces:
+    current state values
+    mutation dispatcher
+    effect binding metadata
+    dispatch lanes for internal API / external API / external instance
+  NG:
+    embedding ad-hoc useEffect in every component factory
+    executing effects from rendered graph persistence authority
+    writing component state directly outside declared runtime state dispatcher
+    treating propsJson/stateJson as sufficient UI監視割当 proof
+    treating event -> localStateMutation as sufficient 副作用設定 proof
+
 side_effect_cycle_policy:
   effect target candidates must be filtered by dependency not-in rule before selection
   selectable_write_targets = all_write_targets - dependency_closure(trigger_source)
@@ -355,6 +380,8 @@ OK:
   backend side separates 内部API / 外部API連携 / 外部インスタンス連携
   registered external api / external instance are selectable in UI Builder event settings
   candidates come from canonical seed-backed registry/projection admin mechanism
+  runtime wrapper owns useEffect-like effect execution boundary
+  primitive components remain mostly pure unless event/value surface is missing
   side-effect write target candidates exclude dependency closure of trigger source
   tests assert the report vocabulary and fail if implementation collapses categories
 
@@ -375,6 +402,7 @@ NG:
   lifecycle/high-frequency triggers implemented before policy
   side-effect target candidates allowing direct or detectable indirect loops
   treating debounce/throttle as loop-safety proof
+  requiring ad-hoc useEffect insertion in every component as default implementation strategy
 ```
 
 ## Bundle: pipeline-continuity-ssot
@@ -409,6 +437,9 @@ required_proof:
   UI event setting taxonomy matches report vocabulary
   frontend side separates UI監視割当 / UI状態更新 / 副作用設定
   backend side separates 内部API / 外部API連携 / 外部インスタンス連携
+  component runtime wrapper owns useEffect-like effect runner boundary
+  primitive components expose required event/value surfaces without ad-hoc per-component effect ownership
+  state slot declaration exists before mutation/effect selection
   effect target candidate filtering excludes dependency closure of trigger source
   direct side-effect self-loop fails close
   detectable indirect side-effect loop fails close
@@ -421,6 +452,7 @@ OK:
   old route-presence tests replaced by seed/render/wiring proof
   test deletion is paired with replacement proof
   test vocabulary rejects implementation-derived catch-all categories
+  tests reject ad-hoc component-local effect ownership as default strategy
 
 NG:
   test-only deletion
@@ -428,4 +460,5 @@ NG:
   completion claim without agent-ui-local-test or routed fallback checks
   tests accepting legacy / 状態設定 catch-all as complete UI event taxonomy
   tests accepting debounce/throttle as side-effect loop-safety proof
+  tests accepting event -> localStateMutation as sufficient UI監視割当 / 副作用設定 proof
 ```
