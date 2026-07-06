@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# react-schema-topology-seed-translator -- thin CLI entrypoint.
+#
+# Delegates all structured processing to
+# .agent/scripts/react_schema_topology_seed_translator.py, which implements
+# generate-react-schema per docs/design/react-schema-topology-seed-translator-ssot.yaml.
+# generate-topology-seed and round-trip-check are explicitly out of scope for
+# this Bundle and fail closed with a not_implemented_out_of_scope document.
+#
+# Unlike the read-only observation tools in this directory (directory-map,
+# yaml-section-query, proof-surface-map, topology-seed-discussion), this tool
+# is an evidence-artifact generator: --output is an authorized write of a
+# tool-owned generated JSON document (e.g. tools/generate/schema/*.json), not
+# a mutation of Topolactor application/runtime/product source. It never
+# writes to a database and never starts backend/frontend/nginx.
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+exec python3 "$REPO_ROOT/.agent/scripts/react_schema_topology_seed_translator.py" "$@"
