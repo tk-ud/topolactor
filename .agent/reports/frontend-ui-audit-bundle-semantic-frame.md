@@ -233,6 +233,13 @@ layout_mode:
   owns placement / css / responsive / inlineText / URL link / props / propBindings / calculationBindings
   primary inspector = layout / design settings
 
+existing_canvas_reuse_policy:
+  reuse existing FlowLayoutCanvas / drag-drop interaction assets where compatible
+  do not replace the existing layout canvas with a separate authority
+  wiring canvas is a switchable projection/edit mode over runtimeInteractions
+  new wiring components are allowed only as view/edit projection, not persistence authority
+  existing drag/drop connection edit assets are the preferred adaptation path before new interaction implementation
+
 wiring_mode:
   UI event graph projection
   visual model = source UI node -> event trigger -> setting category -> target/effect
@@ -296,12 +303,15 @@ drag_drop_wiring_edit:
   edit is draft/undoable before apply
 
 OK:
+  existing FlowLayoutCanvas / drag-drop interaction assets are preserved and reused where compatible
   registered external api / external instance are selectable in UI Builder event settings
   candidates come from canonical seed-backed registry/projection admin mechanism
   runtimeInteractions store typed references
   Markmap/wiring projection is view only if used
 
 NG:
+  discarding existing canvas / drag-drop interaction assets without SSOT reason
+  replacing the existing layout canvas with a new persistence authority
   hardcoded external api / instance choices in UI Builder
   raw route/page references written as event wiring
   event settings unable to use registered external capabilities
@@ -334,6 +344,7 @@ required_proof:
   selected capability writes typed runtimeInteraction
   normal labels do not expose raw ids / UUIDs / internal vocabulary
   whole-admin Step 4/5 wording is qualified
+  existing canvas / drag-drop reuse boundary is preserved or explicitly justified by SSOT
   runtimeInteractions -> wiring projection round-trip
   valid/invalid drag-drop wiring edit
   topology movement target label projection
