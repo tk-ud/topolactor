@@ -4,10 +4,10 @@
 - Target repo: github.com/tk-ud/topolactor
 - Worktype: audit / design_correction
 - Purpose: integrated planning view by owning SSOT bundle.
-- Retained audit evidence:
+- Active report: this file.
+- Superseded reports removed after audit close:
   - `.agent/reports/frontend-ui-audit.md`
   - `.agent/reports/frontend-ui-audit-finding7-correction.md`
-- Cleanup rule: retain source/correction reports during audit. Delete auxiliary correction only after audit close.
 
 ## Global rule
 
