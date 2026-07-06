@@ -42,7 +42,6 @@ FIXTURES_DIR = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topol
 ENVELOPE_FIXTURE = FIXTURES_DIR / "credential-management-0092.input.json"
 TOPOLOGY_SEED_ENVELOPE_FIXTURE = FIXTURES_DIR / "credential-management-0092.topology-seed.input.json"
 REACT_SCHEMA_FIXTURE = FIXTURES_DIR / "physical-search-crud-aggregate.react-schema.json"
-GENERATED_OUTPUT_FIXTURE = REPO_ROOT / ".agent" / "tools" / "generate" / "schema" / "translated.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
 
 FAILURES = []
@@ -103,11 +102,15 @@ def main():
     seed_gen_result = gate.validate_translator_entry(topology_seed_envelope, expected_mode="generate_topology_ui_seed")
     expect("5. valid translator input envelope (generate_topology_ui_seed mode) -> gateStatus pass", seed_gen_result["gateStatus"] == gate.GATE_STATUS_PASS)
 
+    # Regenerated on the fly into .agent/tmp (never a committed snapshot --
+    # generated JSON is a local/tmp projection, not tracked evidence; *seed.sql
+    # / SSOT docs remain the production storage authority, and
+    # .agent/tools/logs/generate.log is the tracked trace of this kind of
+    # run, not the JSON body itself). The same regenerated document also
+    # doubles as a topolactor.translator_output.v1 shape and a
+    # topolactor.topology_ui_seed.v1 shape (via its topologyUiSeedCandidate
+    # field), covering both without a second subprocess call.
     with tempfile.TemporaryDirectory(dir=str(AGENT_TMP_DIR)) as tmpdir:
-        # Build a real topology_ui_seed_candidate by running the (already
-        # gate-connected) translator once, then feed its topologyUiSeedCandidate
-        # straight back into the gate as a standalone bare-shape input --
-        # same JSON shape a human/agent would hand the gate for that fixture.
         proc = subprocess.run(
             [str(TRANSLATOR_TOOL), "generate-topology-seed", "--input", str(TOPOLOGY_SEED_ENVELOPE_FIXTURE)],
             cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=30,
@@ -120,13 +123,9 @@ def main():
         expect("7. valid topolactor.topology_ui_seed.v1 candidate -> gateStatus pass", result is not None and result["gateStatus"] == gate.GATE_STATUS_PASS)
         expect("8. topology ui seed candidate result declares detectedShape=topology_ui_seed_candidate", result is not None and result["inputDetection"]["detectedShape"] == "topology_ui_seed_candidate")
 
-    if GENERATED_OUTPUT_FIXTURE.is_file():
-        translator_output_fixture = json.loads(GENERATED_OUTPUT_FIXTURE.read_text(encoding="utf-8"))
-        result = gate.validate_translator_entry(translator_output_fixture)
-        expect("9. valid translator output JSON -> gateStatus pass", result["gateStatus"] == gate.GATE_STATUS_PASS)
-        expect("10. translator output result declares detectedShape=translator_output", result["inputDetection"]["detectedShape"] == "translator_output")
-    else:
-        fail("9/10. committed translator output fixture missing: .agent/tools/generate/schema/translated.json")
+        result = gate.validate_translator_entry(translator_doc) if translator_doc else None
+        expect("9. valid translator output JSON (regenerated on the fly, no committed snapshot required) -> gateStatus pass", result is not None and result["gateStatus"] == gate.GATE_STATUS_PASS)
+        expect("10. translator output result declares detectedShape=translator_output", result is not None and result["inputDetection"]["detectedShape"] == "translator_output")
 
     # --- fail-close conditions ---------------------------------------------
 

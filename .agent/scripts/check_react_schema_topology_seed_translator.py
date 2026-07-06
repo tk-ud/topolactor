@@ -20,6 +20,7 @@ wrapper only.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -752,6 +753,77 @@ def main():
 
         direct_blocking = gate.validate_translator_entry("not valid json", expected_mode="generate_react_schema")
         expect("79. gate core invoked directly on invalid JSON reports gateStatus == unsupported_input_shape (fail-closed, not silently accepted)", direct_blocking["gateStatus"] == gate.GATE_STATUS_UNSUPPORTED)
+
+        # --- generate.log regeneration-trace evidence -------------------------
+        #
+        # *seed.sql / SSOT docs remain the production storage authority;
+        # generated JSON is a local/tmp projection under .agent/tools/generated/
+        # (gitignored, never tracked evidence). .agent/tools/logs/generate.log
+        # is the tracked JSON Lines regeneration index instead. This is trace
+        # evidence only -- never seed adoption authority, never proof completion
+        # by itself -- so these checks verify shape/regeneration-hash-consistency,
+        # not semantic correctness of any one record's content.
+
+        generate_log_path = REPO_ROOT / ".agent" / "tools" / "logs" / "generate.log"
+        expect("80. .agent/tools/logs/generate.log exists as tracked trace evidence", generate_log_path.is_file())
+
+        log_lines = [ln for ln in generate_log_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        expect("81. generate.log is non-empty", bool(log_lines))
+
+        log_records = []
+        for ln in log_lines:
+            try:
+                log_records.append(json.loads(ln))
+            except json.JSONDecodeError:
+                log_records.append(None)
+        expect("82. every generate.log line parses as valid JSON (JSON Lines, one record per line)", log_records and all(r is not None for r in log_records))
+
+        required_record_fields = [
+            "datetime", "nametag", "mode", "source", "sourceSeedSql", "seedKey", "manifestId",
+            "command", "outputKind", "outputPath", "sha256", "gateStatus",
+            "validationErrorCount", "unresolvedGapCount", "taskRef", "prRef",
+        ]
+        expect(
+            "83. every generate.log record carries all required fields (nullable where declared, never absent)",
+            all(r is not None and all(f in r for f in required_record_fields) for r in log_records),
+        )
+        expect(
+            "84. every generate.log record's gateStatus/mode/outputKind reflect an actual gate-connected translator run",
+            all(r.get("gateStatus") == "pass" and r.get("mode") in ("generate_react_schema", "generate_topology_ui_seed") and r.get("outputKind") for r in log_records),
+        )
+
+        # 85. .agent/tools/generated/* is regeneration-only local output, never
+        # a tracked-required path: none of the log's outputPath values are
+        # tracked in git (a clean clone must not assume they already exist).
+        tracked_files = set(
+            subprocess.run(["git", "-C", str(REPO_ROOT), "ls-files"], capture_output=True, text=True, timeout=30).stdout.splitlines()
+        )
+        expect(
+            "85. generate.log outputPath values are not assumed to exist in a clean clone (regenerate-on-demand, not tracked)",
+            all(r.get("outputPath") not in tracked_files for r in log_records if r.get("outputPath")),
+        )
+
+        # 86. regeneration index actually regenerates: re-running the first
+        # record's source/mode with a fresh --output reproduces the same
+        # sha256 (the translator output document carries no timestamps of its
+        # own -- only the generate.log record does -- so re-running the same
+        # --input deterministically reproduces byte-identical output).
+        first_record = log_records[0] if log_records else None
+        if first_record is not None:
+            subcommand = "generate-react-schema" if first_record.get("mode") == "generate_react_schema" else "generate-topology-seed"
+            regen_out = Path(tmpdir) / "regenerated-from-generate-log.json"
+            proc_regen = run_tool([subcommand, "--input", first_record["source"], "--output", str(regen_out)])
+            regen_sha256 = None
+            if regen_out.is_file():
+                h = hashlib.sha256()
+                h.update(regen_out.read_bytes())
+                regen_sha256 = h.hexdigest()
+            expect(
+                "86. re-running generate.log's first record (same source/mode) reproduces the exact recorded sha256 (regeneration index actually regenerates)",
+                regen_sha256 is not None and regen_sha256 == first_record.get("sha256"),
+            )
+        else:
+            fail("86. no generate.log record available to regenerate")
 
     print()
     if FAILURES:

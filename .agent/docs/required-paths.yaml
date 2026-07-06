@@ -243,6 +243,7 @@ required_files:
     - .agent/tests/check-agent-ui-tool.sh
     - .agent/scripts/check_topology_seed_discussion_bits_length.py
     - .agent/tests/check-topology-seed-discussion-bits-length.sh
+    - .agent/tools/logs/generate.log
     - .agent/protocols/audit/index.md
     - .agent/protocols/audit/02-required-alignment-surfaces.md
     - .agent/protocols/audit/08-output.md

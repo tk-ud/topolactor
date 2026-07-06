@@ -30,9 +30,14 @@
 #
 # Unlike the read-only observation tools in this directory (directory-map,
 # yaml-section-query, proof-surface-map, topology-seed-discussion), this tool
-# is an evidence-artifact generator: --output is an authorized write of a
-# tool-owned generated JSON document (e.g. .agent/tools/generate/schema/*.json), not
-# a mutation of Topolactor application/runtime/product source. It never
+# is an evidence-artifact generator: --output writes a local/tmp generated
+# JSON document under .agent/tools/generated/* (gitignored, never tracked --
+# *seed.sql / SSOT docs remain the production storage authority), not
+# a mutation of Topolactor application/runtime/product source. The optional
+# --generate-log flag appends a JSON Lines trace record (what was generated
+# from what, with what command, and its output hash) to the tracked
+# .agent/tools/logs/generate.log; that log is trace evidence only, never
+# seed adoption authority or proof completion by itself. The tool never
 # writes to a database and never starts backend/frontend/nginx.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

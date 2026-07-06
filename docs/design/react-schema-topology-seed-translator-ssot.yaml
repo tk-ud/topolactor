@@ -42,6 +42,7 @@ react_schema_topology_seed_translator_ssot:
       - input_format_to_output_format_exchange_mapping
       - declared_seed_surface_catalog
       - validation_rules
+      - generated_artifact_operation_policy
     does_not_own:
       - python_tool_entrypoint_or_cli_shape
       - docker_compose_service_design
@@ -1186,3 +1187,43 @@ react_schema_topology_seed_translator_ssot:
       - instance_operation_approval_form
     protected_material_boundary_ref: docs/design/instance-port-substrate-ssot.yaml seed_aligned_json_template_boundary.protected_boundary
     authority_rule: import_and_apply_create_draft_metadata_only; callable_candidates_require_admin_approve_authorityMarker
+
+  # ===========================================================================
+  # 13. generated_artifact_operation_policy
+  # ===========================================================================
+
+  generated_artifact_operation_policy:
+    purpose: >-
+      Defines the authority boundary and storage policy for translator-generated
+      schema/seed/debug artifacts. Generated artifacts are projection artifacts,
+      not design authority, not seed adoption authority, and not proof completion.
+    operational_persistence_surface:
+      - "*seed.sql"
+    design_authority:
+      - docs/design/react-schema-topology-seed-translator-ssot.yaml
+      - referenced SSOT docs
+    generated_artifact_surface:
+      path: .agent/tools/generated/*
+      git_policy: ignored
+      role: local_tmp_regeneration_output
+      authority: projection_artifact_only
+    generation_trace_surface:
+      path: .agent/tools/logs/generate.log
+      git_policy: tracked
+      format: json_lines
+      role: trace_and_regeneration_index
+      authority: not_proof_completion_not_seed_adoption
+    full_translator_output_role: debug_and_proof_artifact_only_not_schema_or_seed_artifact
+    prohibited_authority:
+      - generated_json_as_ssot
+      - generated_json_as_seed_adoption_authority
+      - full_translator_output_as_schema_artifact
+      - full_translator_output_as_seed_artifact
+      - generate_log_as_proof_completion
+      - generate_log_as_regeneration_source_by_itself
+    regeneration_rule: >-
+      Regeneration uses referenced input, SSOT, and when applicable *seed.sql.
+      generate.log is an index/evidence trail, not the source material itself.
+    reverse_generation_scope:
+      seed_to_schema: future_scope_not_implemented
+      round_trip_check: not_implemented_out_of_scope
