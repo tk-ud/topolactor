@@ -6,6 +6,7 @@
 - Scope: admin / projection frontend UI, UX wording, selection surfaces, seed-visible labels, and test surface.
 - Evidence boundary: GitHub read fallback audit. `.agent/tools` runtime was not executable from this chat. No CI log or Agent local-test result was available, so test execution success is not used as evidence.
 - Revision note: Finding 1 was revised after owner review. `contents -> ui-builder -> manifests` is a valid operator workflow. The remaining issue is the missing SSOT wording layer that distinguishes `/admin/contents` local submit steps 1-3 from the whole-admin operator workflow stages 4-5.
+- Revision note: Finding 6 records owner direction for a large SSOT redesign. The intended direction is to split UI Builder into switchable `layout canvas` and `wiring canvas`, with mode-specific inspectors and explicit UI-event authoring.
 
 ## Finding 1: admin workflow stage wording needs Step 4 / Step 5 SSOT clarification
 
@@ -255,3 +256,128 @@
   - no more than one nested disclosure level on normal authoring path
   - primary next action remains in same panel after save
   - save/handoff CTA appears near completion banner
+
+## Finding 6: UI Builder event authoring needs large SSOT redesign before implementation
+
+### 対象SSOT
+
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/ui-builder-preset-ecosystem-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+
+### Section
+
+- `ui_builder_canvas_workspace`
+- `authoring_surface_reference_map`
+- `per_component_wiring`
+- `manifest_screenReadQueryWiring`
+- `ui_builder_runtime_interaction_representative_scenario`
+- Proposed addition: `ui_builder_canvas_mode_contract`
+- Proposed addition: `ui_builder_wiring_canvas_contract`
+- Proposed addition: `ui_builder_mode_sensitive_inspector_contract`
+- Proposed addition: `ui_builder_ui_event_authoring_contract`
+
+### 不整合実装ファイル
+
+#### 実装側
+
+- `frontend/islands/UiBuilderAdmin.tsx`
+- `frontend/components/NodeEventAuthoringPanel.tsx`
+- `frontend/components/ManifestStep3EventWiringPreset.tsx`
+- `frontend/lib/runtimeInteractionAuthoring.ts`
+- `frontend/lib/uiBuilderEventAuthoringHooks.ts`
+- `frontend/runtime/renderEmission.ts`
+- `frontend/runtime/runtimeComponentFactory.ts`
+- `frontend/runtime/frontendScheduler.ts`
+
+#### test側
+
+- `frontend/tests/runtimeUiInteractionScenario.test.ts`
+- `frontend/tests/adminWiringExecutionLane.test.ts`
+- `frontend/tests/visualLayoutBuilder.test.ts`
+- `frontend/tests/uiBuilderPackageWiring.test.ts`
+
+#### seed側
+
+- preset seeds that create canvas layout nodes / wiring candidates / unresolved event bindings.
+
+### 不整合詳細
+
+- Existing SSOT defines `/admin/ui-builder` primarily as a single layout/design canvas workspace.
+- Existing implementation already contains runtime interaction authoring concepts such as `trigger`, `actionType`, `targetNodeId`, `payloadFrom`, `outputProp`, `portTargetRef`, and `instanceTargetRef`.
+- Current SSOT does not clearly define a separate wiring authoring canvas for UI event wiring. As a result, API selection, UI state mutation, route navigation, external port dispatch, and instance operation dispatch are spread across PackageWiringEditor / RouteNavigationWiringPreset / NodeEventAuthoringPanel / runtime emission code.
+- The owner direction is to redesign UI Builder as two switchable modes:
+  - layout canvas: current layout/design canvas for placement, flow structure, visual design, props/state/propBindings, and layout_patch apply.
+  - wiring canvas: MindMap-style event wiring canvas using the old drag-and-drop interaction model for visualizing and authoring event source -> action -> target wiring.
+- Inspector content must switch by canvas mode:
+  - layout mode: layout/design settings inspector.
+  - wiring mode: UI event settings inspector.
+- UI event settings should be defined as an explicit authoring model:
+  - select UI event trigger: load / click / keyon / mouseon / etc.
+  - configure via tabs: API設定 / 状態設定（監視変数設定）.
+  - configure side effects: monitored variable assignment / output assignment / state mutation target.
+- Current SSOT has runtime/test fragments for click/change/select and local state mutation, but does not define `load`, `keyon`, `mouseon`, or lifecycle-trigger handling as first-class authoring triggers.
+- `load` / initial display is not equivalent to DOM click/change. It needs a lifecycle lane with idempotency, preview inert behavior, route-enter timing, and refetch policy.
+- `mouseon` / hover-style triggers need explicit policy before implementation because they may cause high-frequency dispatch, accidental external/API calls, or excessive component event logs.
+
+### 改善案
+
+- Treat this as `design_change` before `implementation_change`.
+- Add a large SSOT section for `ui_builder_canvas_mode_contract`:
+  - mode: `layout_canvas`
+    - purpose: placement / layout tree / design / propBindings / calculationBindings.
+    - primary inspector: layout/design settings inspector.
+    - persistence: layout_patch_json, design JSONB, tmp/apply boundary.
+  - mode: `wiring_canvas`
+    - purpose: event wiring graph / API-action-state-route target wiring.
+    - visual model: MindMap-style graph using source UI node -> trigger -> action category -> target node/API/route/variable.
+    - primary inspector: UI event settings inspector.
+    - persistence: runtimeInteractions / package wiring / route targetRef / payloadFrom / outputProp / monitored variables.
+- Add `ui_builder_mode_sensitive_inspector_contract`:
+  - layout mode shows layout tree, design tokens, text/link, sizing, spacing, propBindings, calculation bindings.
+  - wiring mode shows selected event node, trigger selector, API設定 tab, 状態設定 tab, side-effect assignment, target selector, payloadFrom, outputProp, preview/inert status.
+  - inspectors must not expose unrelated controls for the inactive mode in the primary path.
+- Add `ui_builder_ui_event_authoring_contract`:
+  - trigger vocabulary:
+    - lifecycle: load / route_enter / initial_display.
+    - pointer: click / mouseon / mouseout / hover_start / hover_end.
+    - keyboard: keyon / keydown / keyup / enter / escape.
+    - form: input / change / select / submit / focus / blur.
+  - action category:
+    - API設定: contents Step 3 API / manifest screenReadQueryWiring / external port / instance operation.
+    - 状態設定: local UI state mutation / monitored variable set / toggle / clear.
+    - ページ遷移: route navigation.
+  - side effects:
+    - outputProp assignment.
+    - monitored variable assignment.
+    - targetNode state assignment.
+    - explicit no-side-effect option.
+- Define lifecycle trigger policy:
+  - `load` / `initial_display` must not be implemented as synthetic click/change.
+  - preview mode must be inert by default.
+  - backend dispatch from load must require explicit author confirmation and idempotency rule.
+  - route-enter reload behavior must be explicit.
+- Define high-frequency trigger policy:
+  - `mouseon` / hover / key repeat must not dispatch backend or external port by default.
+  - high-frequency triggers may update local state / monitored variables by default.
+  - backend/API dispatch from high-frequency triggers requires debounce/throttle and explicit warning.
+- Define relation to existing contents Step 3:
+  - contents Step 3 produces API/action candidates.
+  - wiring canvas selects those candidates per UI node event, not only at package level.
+  - package-level wiring remains available as default/bulk wiring, but node-level event wiring is the normal explanation surface for user-facing behavior.
+- Add proof surface requirements before implementation:
+  - static SSOT guard for trigger vocabulary membership.
+  - layout canvas / wiring canvas mode contract test.
+  - inspector mode-switch visibility test.
+  - wiring graph serialization round-trip test.
+  - lifecycle load trigger inert preview test.
+  - high-frequency trigger debounce/fail-close test.
+  - contents Step 3 API candidate -> wiring canvas -> renderEmission -> runtimeComponentFactory scenario test.
+
+### Blocker classification
+
+- This is not a small wording or inspector refactor.
+- This should be treated as a large SSOT redesign bundle.
+- Implementing `load`, `keyon`, `mouseon`, or visual wiring canvas behavior before SSOT is defined would violate `SSOT -> wiring -> test/proof surface -> implementation`.
+- Existing click/change/select runtime interaction tests remain useful evidence, but they are not sufficient for the proposed wiring canvas and lifecycle/high-frequency event model.
