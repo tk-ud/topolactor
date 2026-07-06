@@ -259,7 +259,7 @@ Markmap_policy_if_used:
   rehydrate from runtimeInteractions
 
 trigger_vocabulary:
-  lifecycle: load / route_enter / initial_display
+  lifecycle: initial_mount / route_enter / initial_display
   pointer: click / mouseon / mouseout / hover_start / hover_end
   keyboard: keyon / keydown / keyup / enter / escape
   form: input / change / select / submit / focus / blur
@@ -267,6 +267,7 @@ trigger_vocabulary:
     stored values may remain raw identifiers
     visible labels use user-facing projection vocabulary
     report / SSOT / test must keep the same trigger group mapping
+    initial_mount is a runtime synthetic lifecycle trigger, not DOM onLoad / resource loaded
 
 UI_event_settings:
   event_trigger:
@@ -355,10 +356,13 @@ external_event_candidates:
   selected target writes typed runtimeInteraction reference
 
 lifecycle_policy:
-  load / initial_display is not synthetic click/change
+  initial_mount / route_enter / initial_display are runtime synthetic lifecycle triggers
+  initial_mount is not DOM onLoad / resource loaded
+  initial_mount is not click/change alias
   preview is inert by default
-  backend dispatch from load requires explicit author confirmation
-  load dispatch needs idempotency and route-enter/refetch policy
+  backend/external dispatch from lifecycle trigger requires explicit author confirmation
+  initial_mount dispatch needs idempotency and must not re-dispatch on rerender
+  route_enter/refetch dispatch needs idempotency policy
 
 high_frequency_policy:
   mouseon / hover / key repeat must not dispatch backend/external calls by default
@@ -399,6 +403,7 @@ NG:
   raw route/page references written as event wiring
   event settings unable to use registered external capabilities
   Markmap/rendered graph treated as persistence authority
+  using load / loaded / DOM onLoad as lifecycle trigger vocabulary
   lifecycle/high-frequency triggers implemented before policy
   side-effect target candidates allowing direct or detectable indirect loops
   treating debounce/throttle as loop-safety proof
@@ -444,7 +449,9 @@ required_proof:
   direct side-effect self-loop fails close
   detectable indirect side-effect loop fails close
   topology movement target label projection
-  lifecycle load trigger inert preview
+  lifecycle initial_mount trigger inert preview
+  initial_mount is not DOM onLoad / resource loaded
+  initial_mount does not re-dispatch on rerender
   high-frequency trigger debounce/fail-close
 
 OK:
@@ -461,4 +468,5 @@ NG:
   tests accepting legacy / 状態設定 catch-all as complete UI event taxonomy
   tests accepting debounce/throttle as side-effect loop-safety proof
   tests accepting event -> localStateMutation as sufficient UI監視割当 / 副作用設定 proof
+  tests accepting load / loaded / DOM onLoad as lifecycle trigger vocabulary
 ```
