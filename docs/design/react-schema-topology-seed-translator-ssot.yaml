@@ -497,6 +497,7 @@ react_schema_topology_seed_translator_ssot:
     constraint:
       each_jsonb_array_element_must_fit_indexable_item_budget: true
       budget_bytes: 2712
+      budget_measurement: utf8_encoded_byte_length_not_python_character_length
       budget_rationale: >-
         idx_manifest_topology is a GIN index over a jsonb[] column. A GIN index over an array
         type indexes each array element as one indexable item, subject to Postgres's
@@ -1139,11 +1140,20 @@ react_schema_topology_seed_translator_ssot:
         known_gaps:
           - gap: instance_settings_projection_category_not_yet_represented
             classification: ssot_ambiguity_gap
-            status: open_at_instance_port_substrate_ssot_level
+            status: represented_in_seed
             note: >-
-              instance-port-substrate-ssot.yaml existing_credential_management_projection_extension.confirmed_existing_seed.missing_mode
-              records this as not yet represented; this translator only declares the surface,
-              it does not resolve the gap
+              Resolved: instance_settings is represented in db/seed_empty.sql manifest
+              00000000-0000-0000-0000-000000000092 as storage_adoption_contract-flattened
+              topology_ui_seed_record entries (categories/sections/forms/fields/actions,
+              including the instance_settings category's four forms), generated from
+              .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092*.input.json
+              via generate-react-schema -> generate-topology-seed --seed-sql-fragment. See
+              docs/design/instance-port-substrate-ssot.yaml
+              existing_credential_management_projection_extension.confirmed_existing_seed
+              (missing_mode.instance_settings updated to match). This closes only the
+              seed-representation gap; docs/system-roadmap.yaml known_gap_ref
+              instance_settings_admin_authoring_ui_pending (the actual admin authoring
+              frontend route/island and backend action) remains open and unrelated.
 
       - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
         declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract

@@ -1006,10 +1006,14 @@ def validate_flat_seed_records(flat_records, budget_bytes=MANIFEST_TOPOLOGY_ARRA
     element. Checked on the exact JSON text the seed would carry (compact
     separators, matching the existing seed store's single-line jsonb
     literal style) so this catches the failure at generation time instead
-    of at insert time."""
+    of at insert time. budget_bytes is a UTF-8 *byte* budget (the Postgres
+    index item size limit is byte-based), so the check must measure UTF-8
+    encoded length, not Python string/character length -- multi-byte
+    labels (e.g. non-ASCII text) would otherwise silently pass a
+    character-count check while still overflowing the real byte budget."""
     errors = []
     for wrapper in flat_records:
-        size = len(json.dumps(wrapper, separators=(",", ":"), ensure_ascii=False))
+        size = len(json.dumps(wrapper, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
         if size > budget_bytes:
             record = wrapper.get("record") or {}
             path = record.get("sourceReactPath", "$.root")
