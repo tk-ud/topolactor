@@ -52,12 +52,38 @@ non_canonical_hardcoded_routes_to_remove:
 - `/demo` is not required and must not be moved into seed.
 - `/runtime-status` / diagnostics are not required and must not be moved into seed.
 
+## UI Builder event wiring implication
+
+Initial projection-side admin CRUD seed is not complete if the registered external capabilities cannot be used from UI Builder event settings.
+
+Required wiring consequence:
+
+```text
+registered_external_api:
+  source: initial projection-side admin CRUD seed
+  usable_in: /admin/ui-builder UI event settings
+  event_wiring_target: runtimeInteraction external api dispatch target
+
+registered_external_instance:
+  source: initial projection-side admin CRUD seed
+  usable_in: /admin/ui-builder UI event settings
+  event_wiring_target: runtimeInteraction external instance dispatch target
+
+registered_credentials_auth:
+  source: initial projection-side admin CRUD seed
+  usable_in: /admin/ui-builder UI event settings as selectable authority/credential requirement
+  event_wiring_target: runtimeInteraction credential / authority requirement reference
+```
+
+UI Builder must not hardcode external api / external instance choices. It must read selectable candidates from the canonical seed-backed registry/projection admin mechanism and write typed event wiring into the UI structure/wiring authority.
+
 ## Corrected seed target
 
 ```text
 credentials auth / external api / external instance:
   -> initial projection-side admin CRUD seed
   -> no separate hardcoded frontend route
+  -> selectable from /admin/ui-builder UI event settings
 
 /admin/enums:
   -> initial projection-side admin CRUD seed for enum groups/items
@@ -93,6 +119,8 @@ old proof:
 new proof:
   hardcoded non-canonical route is absent
   initial projection-side admin CRUD seed exists for credentials auth / external api / external instance, enum/users/dashboard/scheduler responsibilities
+  registered external api / external instance candidates are selectable in UI Builder event settings
+  UI Builder writes typed runtimeInteraction references for selected external api / external instance / credential authority requirements
   seeded CRUD definition is renderable through canonical projection/admin mechanism
   old route-specific page is not needed for the responsibility
   /demo has no seed replacement requirement
@@ -104,8 +132,9 @@ Affected current test surface:
 - `frontend/tests/adminMainFlow.test.ts`
   - `ADMIN_ROUTE_CARDS contain canonical admin routes only`
   - `Fresh /admin route registry matches runtime-orchestration SSOT exactly`
+- UI Builder event setting tests must cover registered external api / external instance candidate selection and typed runtimeInteraction output.
 
-These tests currently preserve old hardcoded route authority and must be rewritten under the corrected seed/CRUD boundary.
+These tests currently preserve old hardcoded route authority and must be rewritten under the corrected seed/CRUD boundary. UI Builder proof must also show that registered external capabilities become selectable wiring targets.
 
 ## OK axis
 
@@ -125,9 +154,12 @@ These tests currently preserve old hardcoded route authority and must be rewritt
   - user / role / status CRUD
   - dashboard configuration CRUD
   - scheduler configuration CRUD
+- Registered external api / external instance entries are selectable in `/admin/ui-builder` UI event settings.
+- UI Builder event settings write typed runtimeInteraction references, not raw hardcoded route/page references.
 - `/demo` is removed without seed replacement.
 - `/runtime-status` / diagnostics are removed without seed replacement.
 - Tests prove seeded CRUD renderability through the canonical projection/admin mechanism only for required CRUD responsibilities.
+- Tests prove UI Builder event wiring can use registered external api / external instance / credential authority candidates.
 
 ## NG axis
 
@@ -137,5 +169,8 @@ These tests currently preserve old hardcoded route authority and must be rewritt
 - Moving `/demo` into seed.
 - Moving `/runtime-status` or diagnostics into seed.
 - Keeping `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, `/admin/scheduler`, `/demo`, or `/runtime-status` as canonical hardcoded routes.
+- Registering external api / external instance entries without making them selectable in UI Builder event settings.
+- Hardcoding external api / external instance event choices inside UI Builder instead of reading registered candidates.
+- Writing raw route/page references instead of typed runtimeInteraction references.
 - Deleting tests without replacement seed/CRUD proof for the required CRUD responsibilities.
 - Keeping tests that assert seed-migrated routes as canonical pages.
