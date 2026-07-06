@@ -901,7 +901,6 @@ react_schema_topology_seed_translator_ssot:
               - "content_bundle:promote_draft"
               - "content_bundle:get_entity"
               - "content_bundle:list_states"
-              - "content_bundle:delete_entity_draft"
           - lane: internal_instance_wiring
             catalog_ref: wiring_lane_contract.lanes.internal_instance_wiring
             targetRefs: ["ui-local:crud_create_modal.open", "ui-local:crud_create_modal.close"]
@@ -912,20 +911,28 @@ react_schema_topology_seed_translator_ssot:
           - gap: form_field_values_to_create_entity_draft_payload
             classification: event_payload_resolver_gap
             status: seed_marks_as_pending
-          - gap: tree_navigation_display_mode_not_yet_cataloged
-            classification: component_catalog_gap
-            status: seed_marks_as_pending
-            note: >-
-              surfaced by the physical-search-crud-aggregate.react-schema.json fixture; a
-              Table.display=tree_node_link mode has no registered frontend componentKind yet
-          - gap: delete_entity_operation_ref_not_yet_declared
+          - gap: crud_add_button_wiring_candidate_not_present_in_seed_compile_snapshot
             classification: ssot_ambiguity_gap
             status: seed_marks_as_pending
             note: >-
-              ui-builder-preset-ecosystem-ssot.yaml existing_entity_validate_save_dispatch_alignment_contract
-              says delete uses "contents topology assigned remove operation ref (if exists)";
-              content_bundle:delete_entity_draft is used as a naming-convention-consistent
-              placeholder targetRef in the fixture, not a confirmed backend action
+              db/physical_search_crud_aggregate_preset_seed.sql's compile snapshot has no
+              wiring_candidate_json entry at all for crud_add_button (unlike
+              crud_search_button/crud_result_list/crud_submit_button, which each have one);
+              the fixture leaves crud_add_button wired only to the ui-local create-modal-open
+              affordance and marks the missing contents-topology wiring as an honest gap
+              rather than inventing a targetRef the real seed does not declare.
+          - gap: table_item_click_wiring_not_yet_expressible_in_react_schema_contract
+            classification: runtime_dispatch_or_projection_gap
+            status: seed_marks_as_pending
+            note: >-
+              db/physical_search_crud_aggregate_preset_seed.sql wires crud_result_list's
+              item.click to content_bundle:get_entity directly on the card_list node itself
+              (legacy layout_patch_json lets any node carry a wiring_candidate); this SSOT's
+              react_schema_contract Table node kind has no eventBinding field, so this
+              translator cannot yet express table/list item-click dispatch as anything but a
+              knownGapRef on the Table record. Surfaced by connecting
+              physical-search-crud-aggregate.react-schema.json to the real seed's compile
+              snapshot rather than inventing unconnected content.
 
       - seed_surface_key: physical_details_inline_editor_md_generator.v1
         declared_by_yaml_ref: docs/design/ui-builder-preset-ecosystem-ssot.yaml physical_details_inline_editor_md_generator_preset

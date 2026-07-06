@@ -137,13 +137,52 @@ topology-seed input envelope. The envelope's `inputText` is a JSON-string
 copy of that same fixture, and a sync check
 (`check_react_schema_topology_seed_translator.py`) asserts
 `json.loads(envelope.inputText) == schema fixture` so the two never drift
-apart silently. Modal/card-list/tree-navigation UI concepts are expressed
-through existing node fields (`Section.sectionKind`, `Form.mode`,
-`Table.display`) rather than new react_schema node kinds -- see
-`declared_seed_surface_catalog.physical_search_crud_aggregate.v1.known_gaps`
-for the two gaps this fixture surfaced (tree-navigation display mode not yet
-cataloged; delete operation ref not SSOT-confirmed, used as a
-naming-convention placeholder only).
+apart silently. Modal/card-list UI concepts are expressed through existing
+node fields (`Section.sectionKind`, `Form.mode`, `Table.display`) rather than
+new react_schema node kinds.
+
+### Seed-first proof layering (physical_search_crud_aggregate.v1)
+
+This fixture is not an independently-invented schema: its node keys, wiring
+targets, and known gaps are pulled directly from the already-registered
+`db/physical_search_crud_aggregate_preset_seed.sql` preset seed's compile
+snapshot, following `docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml`'s
+methodology of using existing seed/catalog content first and declaring genuine
+gaps explicitly rather than inventing unconnected content. The proof chain is:
+
+```text
+existing seed-first preset seed / compile snapshot (db/physical_search_crud_aggregate_preset_seed.sql,
+topology.mock_preset_registry + topology.mock_preset_compile_snapshot)
+  -> physical-search-crud-aggregate React schema candidate
+     (.agent/tests/fixtures/.../physical-search-crud-aggregate.react-schema.json)
+  -> topology-seed input envelope
+     (.agent/tests/fixtures/.../physical-search-crud-aggregate.topology-seed.input.json)
+  -> generated topology seed candidate
+     (tools/generate/schema/translated-physical-search-crud-aggregate-topology-seed.json)
+```
+
+Concretely: `crud_search_button`/`crud_submit_button`/`crud_result_list` node
+keys and their `content_bundle:search`/`content_bundle:create_entity_draft`/
+`content_bundle:get_entity` wiring targets are taken verbatim from the real
+seed's `wiring_candidate_json`; `crud_status_filter` and `crud_submit_button`
+carry the same `knownGapRef`s as the real seed's `unresolved_json`
+(`enum_status_select_options_from_content_bundle_list_states`,
+`form_field_values_to_create_entity_draft_payload`); `crud_add_button`
+deliberately has no `contents_api_wiring` binding because the real seed's
+compile snapshot has no wiring candidate for it either (an honest
+`ssot_ambiguity_gap`, not an invented one); and `crud_result_list`'s
+`item.click -> content_bundle:get_entity` wiring in the real seed cannot yet
+be expressed by this SSOT's `Table` node kind (no `eventBinding` field), so it
+surfaces as the `runtime_dispatch_or_projection_gap:
+table_item_click_wiring_not_yet_expressible_in_react_schema_contract` known
+gap instead of being silently dropped. `check_react_schema_topology_seed_translator.py`
+reads `db/physical_search_crud_aggregate_preset_seed.sql`'s compile snapshot
+directly (test/proof layer only, mirroring
+`frontend/tests/presetSeedLineContract.test.ts`'s `extractCompileSnapshot()`
+contracts) and cross-references it against the fixture; the translator body
+itself never reads `db/*.sql`. There is no generic, surface-independent UI
+composition template fixture -- every fixture here traces to one declared,
+already-seeded surface.
 
 ## Compose / C# / nginx direction (deferred)
 

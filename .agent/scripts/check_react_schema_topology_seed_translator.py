@@ -35,6 +35,13 @@ CRUD_SCHEMA_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schem
 CRUD_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.topology-seed.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
 SEED_EMPTY_PATH = REPO_ROOT / "db" / "seed_empty.sql"
+CRUD_PRESET_SEED_SQL_PATH = REPO_ROOT / "db" / "physical_search_crud_aggregate_preset_seed.sql"
+
+# Mirrors frontend/tests/presetSeedLineContract.test.ts REQUIRED_NODE_FIELDS,
+# so the seed-first connection checks below apply the same layout node shape
+# contract as the existing generic seed gate.
+REQUIRED_NODE_FIELDS = ["nodeId", "nodeKind", "componentKey", "componentKind", "parentNodeId", "orderIndex"]
+COMPILE_SNAPSHOT_BLOCK_RE = re.compile(r"\$\$([\s\S]*?)\$\$::jsonb")
 
 SCENARIO_UUID = "bad04ed9-7d39-4cfc-a22c-db2684d4cb0a"
 
@@ -91,6 +98,32 @@ def resolve_seed_evidence_from_seed_file(target_uuid, target_manifest_key):
             "reason": "separate namespace; not credential management screen UUID",
         }
     return evidence
+
+
+def extract_compile_snapshot(sql_text, seed_file_label):
+    """Python port of extractCompileSnapshot() in presetSeedLineContract.test.ts.
+
+    Test/proof-layer-only reading of a real preset seed SQL file's compile
+    snapshot INSERT (5 ordered $$...$$::jsonb blocks: layout_patch_json,
+    package_membership_candidate_json, wiring_candidate_json,
+    style_candidate_json, unresolved_json). The translator body never does
+    this; only this check script's seed-first connection checks do.
+    """
+    marker = "INSERT INTO topology.mock_preset_compile_snapshot"
+    idx = sql_text.find(marker)
+    if idx == -1:
+        raise AssertionError(f"{seed_file_label}: compile snapshot INSERT not found")
+    section = sql_text[idx:]
+    blocks = [json.loads(m.group(1).strip()) for m in COMPILE_SNAPSHOT_BLOCK_RE.finditer(section)]
+    if len(blocks) < 5:
+        raise AssertionError(f"{seed_file_label}: expected >=5 jsonb blocks in compile snapshot section, got {len(blocks)}")
+    return {
+        "layoutPatchJson": blocks[0],
+        "packageMembershipCandidateJson": blocks[1],
+        "wiringCandidateJson": blocks[2],
+        "styleCandidateJson": blocks[3],
+        "unresolvedJson": blocks[4],
+    }
 
 FAILURES = []
 PASS_COUNT = 0
@@ -540,10 +573,10 @@ def main():
 
         crud_table_displays = set()
         collect_tables(crud_root, crud_table_displays)
-        expect("48. canonical CRUD schema expresses card-list result projection and tree navigation via Table.display (no new node kind)", {"card_list", "tree_node_link"}.issubset(crud_table_displays))
+        expect("48. canonical CRUD schema expresses card-list result projection via Table.display (no new node kind)", crud_table_displays == {"card_list"})
 
         crud_action_keys = set(collect_keys_by_kind(crud_root, "Action"))
-        expect("49. canonical CRUD schema contains search/add/update/delete actions", {"crud_search_button", "crud_add_button", "update_item", "delete_item"}.issubset(crud_action_keys))
+        expect("49. canonical CRUD schema contains search/add/submit/cancel actions matching the real preset seed's node keys", crud_action_keys == {"crud_search_button", "crud_add_button", "crud_submit_button", "crud_cancel_button"})
 
         def find_action_parent_kinds(node, acc, parent_kind=None):
             if node.get("kind") == "Action":
@@ -568,8 +601,34 @@ def main():
         expect("53. CRUD topologyUiSeedCandidate.projections is populated", bool(crud_tuc.get("projections")))
         expect("54. CRUD exchangeReport.outputSeedSchemaId == topolactor.topology_ui_seed.v1", dig(doc_crud or {}, "exchangeReport", "outputSeedSchemaId") == "topolactor.topology_ui_seed.v1")
         expect("55. CRUD run has no unexplained lossEntries (loss only where a knownGapRef backs it)", all(e.get("knownGapRef") for e in dig(doc_crud or {}, "exchangeReport", "lossEntries") or []))
-        expect("56. envelope-level knownGapRefs (pending status/create-payload gaps) propagate into unresolvedGaps", {"enum_status_select_options_from_content_bundle_list_states", "form_field_values_to_create_entity_draft_payload"}.issubset(set((doc_crud or {}).get("unresolvedGaps") or [])))
-        expect("57. node-level knownGapRefs (tree-nav/delete-op gaps discovered while building this fixture) propagate into unresolvedGaps", {"component_catalog_gap:tree_navigation_display_mode_not_yet_cataloged", "ssot_ambiguity_gap:delete_entity_operation_ref_not_yet_declared"}.issubset(set((doc_crud or {}).get("unresolvedGaps") or [])))
+        crud_expected_gap_refs = {
+            "enum_status_select_options_from_content_bundle_list_states",
+            "ssot_ambiguity_gap:crud_add_button_wiring_candidate_not_present_in_seed_compile_snapshot",
+            "runtime_dispatch_or_projection_gap:table_item_click_wiring_not_yet_expressible_in_react_schema_contract",
+            "form_field_values_to_create_entity_draft_payload",
+        }
+        expect("56. envelope-level knownGapRefs (all four gaps surfaced by connecting to the real preset seed) propagate into unresolvedGaps", crud_expected_gap_refs.issubset(set((doc_crud or {}).get("unresolvedGaps") or [])))
+
+        crud_node_gap_map = {
+            "crud_status_filter": "enum_status_select_options_from_content_bundle_list_states",
+            "crud_add_button": "ssot_ambiguity_gap:crud_add_button_wiring_candidate_not_present_in_seed_compile_snapshot",
+            "crud_result_list": "runtime_dispatch_or_projection_gap:table_item_click_wiring_not_yet_expressible_in_react_schema_contract",
+            "crud_submit_button": "form_field_values_to_create_entity_draft_payload",
+        }
+
+        def find_node_gap_refs(node, key, acc):
+            if node.get("key") == key:
+                acc.extend(node.get("knownGapRefs") or [])
+            for c in node.get("children") or []:
+                find_node_gap_refs(c, key, acc)
+
+        crud_node_gaps_match = True
+        for node_key, expected_gap in crud_node_gap_map.items():
+            found = []
+            find_node_gap_refs(crud_root, node_key, found)
+            if expected_gap not in found:
+                crud_node_gaps_match = False
+        expect("57. each node-level knownGapRef sits on the exact node it was discovered on while connecting to the real preset seed (crud_status_filter/crud_add_button/crud_result_list/crud_submit_button)", crud_node_gaps_match)
         expect("58. CRUD run carries no active-topology/execution-authority claim", "activeTopology" not in json.dumps(crud_tuc) and "runtimeExecute" not in json.dumps(crud_tuc))
 
         crud_record_types_seen = set()
@@ -583,7 +642,7 @@ def main():
 
         if crud_tuc.get("projections"):
             collect_record_types(crud_tuc["projections"][0], crud_record_types_seen)
-        expect("59. CRUD seed emits topology_ui_form, topology_ui_table, and topology_ui_action records (search/create/update/delete/tree-nav all round-trip)", {"topology_ui_form", "topology_ui_table", "topology_ui_action"}.issubset(crud_record_types_seen))
+        expect("59. CRUD seed emits topology_ui_form, topology_ui_table, and topology_ui_action records (search toolbar/result list/create modal all round-trip)", {"topology_ui_form", "topology_ui_table", "topology_ui_action"}.issubset(crud_record_types_seen))
 
         crud_bad_labels = []
         if crud_tuc.get("projections"):
@@ -595,6 +654,60 @@ def main():
         expect("61. credential-management-0092 generate-react-schema fixture still passes with zero validationErrors (no regression)", doc_regression is not None and not rule_ids(doc_regression))
         _, doc_regression_seed = run_generate_topology_seed(TOPOLOGY_SEED_FIXTURE)
         expect("62. credential-management-0092 generate-topology-seed fixture still passes with zero validationErrors (no regression)", doc_regression_seed is not None and not rule_ids(doc_regression_seed))
+
+        # ── Seed-first connection: the fixture must trace to the real, already-registered
+        # db/physical_search_crud_aggregate_preset_seed.sql compile snapshot, not just
+        # invent thematically similar content. Test/proof-layer-only db/*.sql reading,
+        # mirroring frontend/tests/presetSeedLineContract.test.ts's extractCompileSnapshot()
+        # contracts -- the translator body never reads db/*.sql.
+
+        crud_seed_sql = CRUD_PRESET_SEED_SQL_PATH.read_text(encoding="utf-8")
+        snapshot = extract_compile_snapshot(crud_seed_sql, "db/physical_search_crud_aggregate_preset_seed.sql")
+        expect("63. db/physical_search_crud_aggregate_preset_seed.sql's compile snapshot INSERT resolves 5 ordered jsonb blocks", snapshot is not None)
+
+        layout_nodes = dig(snapshot, "layoutPatchJson", "nodes") or []
+        layout_nodes_valid = bool(layout_nodes) and all(all(f in n for f in REQUIRED_NODE_FIELDS) for n in layout_nodes)
+        expect("64. real seed layout_patch_json.nodes is non-empty and every node carries REQUIRED_NODE_FIELDS", layout_nodes_valid)
+
+        pkg = snapshot.get("packageMembershipCandidateJson") or {}
+        expect("65. real seed package_membership_candidate_json.activeTopologyWrite is false", pkg.get("activeTopologyWrite") is False)
+
+        wiring_candidates = snapshot.get("wiringCandidateJson") or []
+        valid_statuses = {"pending", "confirmed", "rejected"}
+        wiring_valid = bool(wiring_candidates) and all(
+            wc.get("status") in valid_statuses and str(wc.get("targetRef", "")).startswith("content_bundle:")
+            for wc in wiring_candidates
+        )
+        expect("66. real seed wiring_candidate_json is non-empty with valid statuses and content_bundle: target refs", wiring_valid)
+
+        unresolved_entries = snapshot.get("unresolvedJson") or []
+        unresolved_valid = bool(unresolved_entries) and all(
+            e.get("nodeId") and e.get("reason") and e.get("knownGapRef") for e in unresolved_entries
+        )
+        expect("67. real seed unresolved_json entries each carry nodeId/reason/knownGapRef (gaps stay explicit, never silently dropped)", unresolved_valid)
+
+        seed_wiring_by_node = {wc.get("nodeId"): wc.get("targetRef") for wc in wiring_candidates}
+        expect(
+            "68. fixture's crud_search_button/crud_submit_button actionRef matches the real seed's wiring_candidate_json targetRef for those same nodeIds",
+            seed_wiring_by_node.get("crud_search_button") == "content_bundle:search"
+            and seed_wiring_by_node.get("crud_submit_button") == "content_bundle:create_entity_draft",
+        )
+        expect(
+            "69. crud_add_button genuinely has no wiring_candidate_json entry in the real seed (the fixture's knownGapRef on it is honestly discovered, not invented)",
+            "crud_add_button" not in seed_wiring_by_node,
+        )
+
+        seed_unresolved_gap_by_node = {e.get("nodeId"): e.get("knownGapRef") for e in unresolved_entries}
+        expect(
+            "70. real seed unresolved_json knownGapRefs for crud_status_filter/crud_submit_button match the fixture's node-level knownGapRefs exactly",
+            seed_unresolved_gap_by_node.get("crud_status_filter") == "enum_status_select_options_from_content_bundle_list_states"
+            and seed_unresolved_gap_by_node.get("crud_submit_button") == "form_field_values_to_create_entity_draft_payload",
+        )
+
+        expect(
+            "71. real seed's crud_result_list item.click wiring (content_bundle:get_entity) is exactly why the fixture's Table node carries the table-item-click knownGapRef (Table has no eventBinding field yet)",
+            seed_wiring_by_node.get("crud_result_list") == "content_bundle:get_entity",
+        )
 
     print()
     if FAILURES:
