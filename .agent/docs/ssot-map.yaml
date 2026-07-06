@@ -986,6 +986,10 @@ mapping:
       - frontend/lib/runtimeInteractionAuthoring.ts
       - frontend/lib/uiBuilderEventAuthoringHooks.ts
       - frontend/tests/uiBuilderWiringProjection.test.ts
+      - frontend/runtime/uiEventEffectRunner.ts
+      - frontend/tests/uiEventEffectRunner.test.ts
+      - runtime state/effect runner boundary (component_runtime_state_effect_boundary)
+      - 外部インスタンス連携 runtime dispatch lane (enqueueInstanceOperationDispatchCommand)
       - .agent/tests/check-admin-uibuilder-wiring.sh
       - docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
     required_docs:

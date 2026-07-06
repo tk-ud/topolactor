@@ -1,10 +1,10 @@
 /**
  * UI Builder wiring mode projection / policy lib.
  *
- * SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
- * Vocabulary authority: .agent/reports/frontend-ui-audit-bundle-semantic-frame.md
- * (Bundle: admin-uibuilder-ui-structure-wiring-ssot) — report / SSOT / test /
- * implementation keep the same trigger group mapping and setting category taxonomy.
+ * SSOT (design authority): docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * — SSOT / test / implementation keep the same trigger group mapping and setting
+ * category taxonomy. The audit report (frontend-ui-audit-bundle-semantic-frame.md)
+ * is audit evidence / the revision basis for that SSOT vocabulary, not an authority.
  *
  * - wiring_mode: the wiring graph is a view/edit projection over
  *   draftNodes[].runtimeInteractions; it is rehydrated from runtimeInteractions

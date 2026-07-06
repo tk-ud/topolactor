@@ -22,6 +22,10 @@ PANEL="frontend/components/WiringGraphPanel.tsx"
 EVENT_PANEL="frontend/components/NodeEventAuthoringPanel.tsx"
 ISLAND="frontend/islands/UiBuilderAdmin.tsx"
 TEST="frontend/tests/uiBuilderWiringProjection.test.ts"
+RUNNER="frontend/runtime/uiEventEffectRunner.ts"
+RUNNER_TEST="frontend/tests/uiEventEffectRunner.test.ts"
+SCHEDULER="frontend/runtime/frontendScheduler.ts"
+PROJECTION_SHELL="frontend/islands/ProjectionShell.tsx"
 
 FAILURES=0
 fail() { echo "FAIL: $1" >&2; FAILURES=$((FAILURES + 1)); }
@@ -93,6 +97,18 @@ fi
 require_grep "buildWiringGraphProjection" "$PANEL" "panel derives projection from runtimeInteractions"
 require_grep "buildWiringGraphProjection|WiringGraphPanel" "$ISLAND" "island wires wiring mode"
 require_grep "uiBuilderWiringProjection" "$TEST" "proof test targets projection lib"
+
+# Runtime state/effect runner boundary (component_runtime_state_effect_boundary).
+require_file "$RUNNER"
+require_file "$RUNNER_TEST"
+require_grep "admin-uibuilder-ui-structure-wiring-ssot" "$RUNNER" "SSOT reference"
+require_grep "createUiEventEffectRunner" "$RUNNER" "effect runner entry point"
+require_grep "createRuntimeStateDispatcher" "$RUNNER" "runtime state dispatcher"
+require_grep "initial_mount" "$RUNNER" "runtime synthetic lifecycle emission"
+require_grep "findSideEffectCycleErrors" "$RUNNER" "runtime loop guard"
+require_grep "enqueueInstanceOperationDispatchCommand" "$SCHEDULER" "外部インスタンス連携 runtime dispatch lane"
+require_grep "createUiEventEffectRunner" "$PROJECTION_SHELL" "runner owned by mount surface (not per-component useEffect)"
+require_grep "uiEventEffectRunner" "$RUNNER_TEST" "runner proof test"
 
 # ─── 3. Negative boundaries ──────────────────────────────────────────────────
 # Wiring graph panel is projection-only: no direct persistence dispatch from the panel.

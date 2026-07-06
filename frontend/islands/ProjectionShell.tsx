@@ -9,6 +9,12 @@ import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { createSseReceiver, type ProjectionHookTrigger, type SseReceiver } from "../runtime/sseReceiver.ts";
 import { createSseDispatcherWithProjectionRuntime } from "../runtime/sseDispatcher.ts";
 import { createProjectionRuntime } from "../runtime/projectionRuntime.ts";
+import {
+  createRuntimeLocalStateStore,
+  createUiEventEffectRunner,
+  type UiEventEffectRunner,
+} from "../runtime/uiEventEffectRunner.ts";
+import type { RuntimeLocalStateStore } from "../runtime/runtimeComponentAdapter.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
@@ -42,6 +48,11 @@ export default function ProjectionShell(): JSX.Element {
   const initialDispatchAxesRef = useRef<UserOperation | null>(null);
   // Ref-backed projection token for SSE closure access — state updates don't update closed-over values.
   const projectionTokenRef = useRef<string | undefined>(undefined);
+  // Runtime state store + effect runner (component_runtime_state_effect_boundary):
+  // the runner — not individual components — owns lifecycle emission and effect
+  // execution. Refs persist across rerenders so initial_mount fires once per mount.
+  const localStateStoreRef = useRef<RuntimeLocalStateStore>(createRuntimeLocalStateStore());
+  const effectRunnerRef = useRef<UiEventEffectRunner | null>(null);
 
   useEffect(() => {
     projectionTokenRef.current = projectionToken;
@@ -134,8 +145,40 @@ export default function ProjectionShell(): JSX.Element {
         return;
       }
       setEmission(nextEmission);
-      setSpecs(renderEmission(nextEmission, defaultComponentRegistry));
+      setSpecs(renderEmission(nextEmission, defaultComponentRegistry, {
+        localStateStore: localStateStoreRef.current,
+      }));
       setLoading(false);
+
+      // uiEventEffectRunner: UI監視割当 slots are declared at runner creation
+      // (before any mutation/effect), then runtime synthetic lifecycle triggers
+      // are emitted once. The fired-registry inside the runner guarantees
+      // initial_mount does not re-dispatch on rerender or SSE refresh.
+      if (!effectRunnerRef.current) {
+        const runnerNodes = (nextEmission.layoutNodes ?? [])
+          .filter((n) => typeof n.nodeId === "string" && n.nodeId)
+          .map((n) => ({
+            nodeId: n.nodeId as string,
+            componentKey: n.componentKey,
+            componentKind: n.componentKind,
+            stateJson: n.stateJson ?? undefined,
+            runtimeInteractions: n.runtimeInteractions ?? undefined,
+          }));
+        const runner = createUiEventEffectRunner({
+          nodes: runnerNodes,
+          store: localStateStoreRef.current,
+        });
+        effectRunnerRef.current = runner;
+        for (const trigger of ["initial_mount", "route_enter", "initial_display"] as const) {
+          const result = runner.emitLifecycle(trigger);
+          if (!result.ok) {
+            console.error(
+              `[ProjectionShell] LIFECYCLE_EFFECT_RUNNER_BLOCKED (${trigger}):`,
+              result.errors,
+            );
+          }
+        }
+      }
 
       // sse_projection_lane wiring per runtime-orchestration-ssot.yaml:
       //   sseReceiver → enqueueProjectionHookTrigger → sseDispatcher → projectionRuntime → onProjectionUpdate
@@ -180,7 +223,11 @@ export default function ProjectionShell(): JSX.Element {
             const updated = result.emission;
             if (!updated) return;
             setEmission(updated);
-            setSpecs(renderEmission(updated, defaultComponentRegistry));
+            // SSE refresh re-render: same localStateStore, and the effect runner's
+            // fired-registry keeps initial_mount idempotent (no re-dispatch here).
+            setSpecs(renderEmission(updated, defaultComponentRegistry, {
+              localStateStore: localStateStoreRef.current,
+            }));
           } catch (err) {
             if (gen !== refreshGenRef.current || !mounted) return;
             console.error("[ProjectionShell] SSE_PROJECTION_REFRESH_ERROR:", err);

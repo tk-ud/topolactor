@@ -1,8 +1,8 @@
 /**
- * Proof surface for docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml.
- * Vocabulary authority: .agent/reports/frontend-ui-audit-bundle-semantic-frame.md
- * (Bundle: admin-uibuilder-ui-structure-wiring-ssot) — this proof asserts the
- * canonical report vocabulary and fails if implementation collapses categories.
+ * SSOT-conformance proof for docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * (design authority). This proof asserts the SSOT trigger vocabulary and setting
+ * category taxonomy, and fails if implementation collapses categories. The audit
+ * report is the revision basis for that SSOT vocabulary, not the proof target.
  *
  * required_proof coverage:
  * - runtimeInteractions -> wiring projection round-trip (view only; rehydrate)
@@ -86,14 +86,14 @@ function fixtureNodes(): WiringNode[] {
   ];
 }
 
-// ─── trigger vocabulary（正本 report 語彙） ──────────────────────────────────
+// ─── trigger vocabulary（SSOT trigger_vocabulary） ───────────────────────────
 
-Deno.test("trigger vocabulary: canonical report groups; initial_mount is lifecycle; load is outside", () => {
+Deno.test("trigger vocabulary: SSOT groups; initial_mount is lifecycle; load is outside", () => {
   // lifecycle = runtime synthetic triggers only.
   assertEquals(classifyTrigger("initial_mount"), "lifecycle");
   assertEquals(classifyTrigger("route_enter"), "lifecycle");
   assertEquals(classifyTrigger("initial_display"), "lifecycle");
-  // click belongs to pointer in the report vocabulary.
+  // click belongs to pointer in the SSOT vocabulary.
   assertEquals(classifyTrigger("click"), "pointer");
   assertEquals(classifyTrigger("mouseon"), "pointer");
   assertEquals(classifyTrigger("keydown"), "keyboard");
@@ -125,7 +125,7 @@ Deno.test("trigger classification: lifecycle and high-frequency sets", () => {
 
 // ─── setting category taxonomy（catch-all拒否） ──────────────────────────────
 
-Deno.test("setting category taxonomy: exactly the six report categories; no legacy catch-all", () => {
+Deno.test("setting category taxonomy: exactly the six SSOT categories; no legacy catch-all", () => {
   assertEquals([...WIRING_SETTING_CATEGORIES].sort(), [
     "external_api_integration",
     "external_instance_integration",

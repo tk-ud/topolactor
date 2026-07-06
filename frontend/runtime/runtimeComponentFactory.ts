@@ -114,6 +114,7 @@ import {
   emitComponentOperationEvent,
   enqueueRuntimeComponentCommand,
   enqueueExternalPortDispatchCommand,
+  enqueueInstanceOperationDispatchCommand,
   type NormalizedComponentEventType,
   type RuntimeDispatchSpec,
 } from "./frontendScheduler.ts";
@@ -142,6 +143,12 @@ type EventBindingValue = {
   };
   externalPortDispatch?: {
     portTargetRef: string;
+    payloadFrom: Record<string, string>;
+    outputProp?: string;
+  };
+  /** 外部インスタンス連携 runtime dispatch lane (instance-port target refs via api_command_lane). */
+  instanceOperationDispatch?: {
+    instanceTargetRef: string;
     payloadFrom: Record<string, string>;
     outputProp?: string;
   };
@@ -243,6 +250,30 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       outputProp: typeof outputProp === "string" ? outputProp.trim() : undefined,
     };
   }
+  const instanceOperationDispatchRaw = (value as Record<string, unknown>).instanceOperationDispatch;
+  let instanceOperationDispatch: EventBindingValue["instanceOperationDispatch"] | undefined;
+  if (instanceOperationDispatchRaw !== undefined) {
+    if (
+      typeof instanceOperationDispatchRaw !== "object" ||
+      instanceOperationDispatchRaw === null ||
+      Array.isArray(instanceOperationDispatchRaw)
+    ) return null;
+    const rawDispatch = instanceOperationDispatchRaw as Record<string, unknown>;
+    const instanceTargetRef = rawDispatch.instanceTargetRef;
+    const payloadFrom = rawDispatch.payloadFrom;
+    const outputProp = rawDispatch.outputProp;
+    if (typeof instanceTargetRef !== "string" || !instanceTargetRef.trim().startsWith("instance-port:")) return null;
+    if (payloadFrom !== undefined) {
+      if (typeof payloadFrom !== "object" || payloadFrom === null || Array.isArray(payloadFrom)) return null;
+      if (!Object.values(payloadFrom).every((v) => typeof v === "string")) return null;
+    }
+    if (outputProp !== undefined && (typeof outputProp !== "string" || !outputProp.trim())) return null;
+    instanceOperationDispatch = {
+      instanceTargetRef: instanceTargetRef.trim(),
+      payloadFrom: (payloadFrom as Record<string, string> | undefined) ?? {},
+      outputProp: typeof outputProp === "string" ? outputProp.trim() : undefined,
+    };
+  }
   const localStateMutationRaw = (value as Record<string, unknown>).localStateMutation;
   let localStateMutation: EventBindingValue["localStateMutation"] | undefined;
   if (localStateMutationRaw !== undefined) {
@@ -273,6 +304,7 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     routeNavigation,
     localStateMutation,
     externalPortDispatch,
+    instanceOperationDispatch,
   };
 }
 
@@ -336,6 +368,23 @@ function emitBoundEvent(
       portTargetRef: binding.externalPortDispatch.portTargetRef,
       payload: resolved.payload,
       outputProp: binding.externalPortDispatch.outputProp,
+    });
+  }
+  // Lane 2 (外部インスタンス連携): dispatchInstanceOperation through the same
+  // api_command_lane. payloadFrom resolution is fail-close like the external lane.
+  if (binding.instanceOperationDispatch) {
+    const resolved = resolvePayloadFrom(
+      binding.instanceOperationDispatch.payloadFrom,
+      spec.payloadFromNodeValues ?? {},
+      payload,
+    );
+    if (!resolved.ok) {
+      return { ok: false, error: resolved.errors.join("; ") };
+    }
+    void enqueueInstanceOperationDispatchCommand({
+      instanceTargetRef: binding.instanceOperationDispatch.instanceTargetRef,
+      payload: resolved.payload,
+      outputProp: binding.instanceOperationDispatch.outputProp,
     });
   }
   // Lane 2 (navigation): frontend-local route navigation — no backend dispatch.

@@ -137,8 +137,13 @@ export type LayoutNode = {
     statePath?: string;
     value?: unknown;
     portTargetRef?: string;
+    instanceTargetRef?: string;
     payloadFrom?: Record<string, string>;
     outputProp?: string;
+    debounceMs?: number;
+    lifecycleDispatchConfirmed?: boolean;
+    idempotencyPolicy?: string;
+    sideEffectNone?: boolean;
   }> | null;
   widthMode?: "auto" | "preset" | "custom";
   heightMode?: "auto" | "preset" | "custom";

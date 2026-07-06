@@ -1,15 +1,17 @@
 admin_uibuilder_ui_structure_wiring_ssot:
   name: admin_uibuilder_ui_structure_wiring
-  version: 0.2.0
+  version: 0.3.0
   status: ssot_design_document
   canonical_path: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
-  vocabulary_authority: >-
-    Classification vocabulary in this SSOT follows the canonical audit report
-    (.agent/reports/frontend-ui-audit-bundle-semantic-frame.md, Bundle:
-    admin-uibuilder-ui-structure-wiring-ssot). Report / SSOT / test /
-    implementation must keep the same trigger group mapping and setting
-    category taxonomy. Implementation-derived catch-all categories are not
-    SSOT taxonomy.
+  authority_hierarchy: >-
+    This SSOT is the design authority (設計正本) for the surface. The audit
+    report (.agent/reports/frontend-ui-audit-bundle-semantic-frame.md) is audit
+    evidence and the semantic frame that motivated this SSOT's vocabulary — it
+    is a revision basis, not a design or vocabulary authority. Tests are
+    SSOT-conformance proof; implementation conforms to SSOT and tests. SSOT /
+    test / implementation must keep the same trigger group mapping and setting
+    category taxonomy defined here; implementation-derived catch-all categories
+    are not SSOT taxonomy.
 
   purpose:
     summary: >-
@@ -118,12 +120,22 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - loaded
       - DOM_onLoad
     high_frequency_triggers: [mouseon, mouseout, hover_start, hover_end, keyon, keydown, keyup, input]
-    runtime_execution_scope: >-
-      Runtime execution handlers for lifecycle / pointer(non-click) / keyboard triggers are
-      out of scope for this bundle and deferred to a dedicated runtime bundle, consistent
-      with the dispatchExternalPort authoring-only contract in
-      docs/design/admin-console-workflow-ssot.yaml layout_node_props_contract.
-      Authoring persists the policy fields; preview stays inert.
+    runtime_execution_scope:
+      in_bundle:
+        - runtime state/effect runner boundary (frontend/runtime/uiEventEffectRunner.ts) —
+          lifecycle emission, state dispatcher routing, loop guard, idempotency guard
+        - initial_mount / route_enter / initial_display runtime synthetic emission
+          (once per mount; preview inert; no re-dispatch on rerender)
+        - UI状態更新 execution through the runtime state dispatcher (local state store)
+        - 外部API連携 runtime dispatch lane (enqueueExternalPortDispatchCommand via api_command_lane)
+        - 外部インスタンス連携 runtime dispatch lane (enqueueInstanceOperationDispatchCommand via api_command_lane)
+      out_of_bundle:
+        - backend resolution of external-port / instance-port dispatch targets
+          (external_port_runtime / instance_port_runtime lanes own execution;
+          unresolved targets fail explicitly on the dispatch lane)
+        - DOM-level binding of pointer(non-click) / keyboard trigger vocabulary to
+          additional primitive components (added per component as event/value
+          surfaces, not as per-component effect semantics)
 
   ui_event_settings:
     surface: 操作イベント (per selected node; trigger UI and target/effect axes are independent)
@@ -208,6 +220,12 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - UI監視割当 declares state slot / dependency source before mutation or effect selection
       - UI状態更新 writes only through the runtime state dispatcher
       - 副作用設定 resolves the dependency graph before execution and runs through the effect runner
+    runtime_boundary_implementation:
+      effect_runner: frontend/runtime/uiEventEffectRunner.ts (createUiEventEffectRunner; owns lifecycle emission, loop guard, idempotency registry)
+      state_dispatcher: frontend/runtime/uiEventEffectRunner.ts createRuntimeStateDispatcher (declare-then-mutate; undeclared-slot writes fail close)
+      event_lanes: frontend/runtime/runtimeComponentFactory.ts emitBoundEvent (event log / internal dispatch / 外部API連携 / 外部インスタンス連携 / route navigation / local state lanes; previewMode inert)
+      mount_integration: frontend/islands/ProjectionShell.tsx (runner created once per mount; initial_mount emitted after first projection render; SSE refresh never re-emits)
+      dispatch_lanes: frontend/runtime/frontendScheduler.ts enqueueExternalPortDispatchCommand / enqueueInstanceOperationDispatchCommand (api_command_lane; typed-ref prefix fail close)
     component_edit_boundary:
       - edit an individual component only when a required event/value surface is missing
       - unsupported component kind must fail-close in proof tests
@@ -337,11 +355,16 @@ admin_uibuilder_ui_structure_wiring_ssot:
     island: frontend/islands/UiBuilderAdmin.tsx
     label_vocabulary: frontend/content/adminUxTerms.ts
     pre_save_validation: frontend/runtime/visualLayoutUtils.ts findRuntimeInteractionPatchErrors (+ policy/cycle errors from projection_policy_lib)
+    runtime_effect_runner: frontend/runtime/uiEventEffectRunner.ts
+    runtime_event_lanes: frontend/runtime/runtimeComponentFactory.ts emitBoundEvent + frontend/runtime/renderEmission.ts dispatch bindings
+    runtime_dispatch_lanes: frontend/runtime/frontendScheduler.ts (enqueueExternalPortDispatchCommand / enqueueInstanceOperationDispatchCommand)
+    runtime_mount_surface: frontend/islands/ProjectionShell.tsx
 
   proof_surface:
     executable_structure_check: .agent/tests/check-admin-uibuilder-wiring.sh
     test_files:
       - frontend/tests/uiBuilderWiringProjection.test.ts
+      - frontend/tests/uiEventEffectRunner.test.ts
       - frontend/tests/runtimeInteractionAuthoring.test.ts
       - frontend/tests/runtimeUiInteractionScenario.test.ts
       - frontend/tests/visualLayoutBuilder.test.ts
@@ -363,10 +386,20 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - detectable indirect side-effect loop fails close even with debounceMs present
       - selectable write targets exclude dependency closure of trigger source
       - registered external api / external instance selectable; selection writes typed reference
+      - runtime runner emits initial_mount once per mount (rerender/refresh does not re-dispatch)
+      - runtime runner is inert in preview mode
+      - UI監視割当 slots are declared to the runtime store before mutation/effect;
+        undeclared-slot writes fail close in the state dispatcher
+      - runtime loop guard fails close on cyclic graphs (nothing executes; debounce is not proof)
+      - unconfirmed / non-idempotent lifecycle dispatch never executes at runtime
+      - dispatchInstanceOperation projects a runtime dispatch binding and rides the
+        api_command_lane with typed instance-port reference (invalid prefix fails close)
     policy_ref: docs/design/pipeline-continuity-ssot.yaml test_tier_policy
 
   prohibited:
     - using_implementation_as_ssot_authority
+    - treating_audit_report_as_design_or_vocabulary_authority (report is audit evidence / revision basis)
+    - authoring_surface_without_the_runtime_runner_boundary_defined_here
     - using_implementation_categories_as_ssot_taxonomy
     - collapsing_ui_watch_binding_ui_state_update_side_effect_setting_into_legacy_or_generic_state_bucket
     - hiding_internal_api_outside_wiring_inspector_taxonomy

@@ -326,6 +326,12 @@ function buildLocalUiStateEventBinding(rawWirings: unknown): Record<string, unkn
   return binding;
 }
 
+/**
+ * Backend-side dispatch bindings (外部API連携 / 外部インスタンス連携).
+ * dispatchExternalPort → externalPortDispatch lane; dispatchInstanceOperation →
+ * instanceOperationDispatch lane. Both execute through the api_command_lane in
+ * emitBoundEvent; preview stays inert (caller skips this builder in previewMode).
+ */
 function buildExternalPortEventBinding(rawWirings: unknown): Record<string, unknown> {
   if (!Array.isArray(rawWirings)) return {};
   const binding: Record<string, unknown> = {};
@@ -333,20 +339,29 @@ function buildExternalPortEventBinding(rawWirings: unknown): Record<string, unkn
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const wiring = raw as Record<string, unknown>;
     const trigger = normalizeAuthoredEventType(wiring.trigger ?? wiring.eventType);
-    if (!trigger || wiring.actionType !== "dispatchExternalPort") continue;
-    const portTargetRef = typeof wiring.portTargetRef === "string" ? wiring.portTargetRef.trim() : "";
+    if (!trigger) continue;
     const payloadFromRaw = wiring.payloadFrom;
     const payloadFrom = (typeof payloadFromRaw === "object" && payloadFromRaw !== null && !Array.isArray(payloadFromRaw))
       ? Object.fromEntries(Object.entries(payloadFromRaw).filter(([, value]) => typeof value === "string")) as Record<string, string>
       : {};
-    binding[trigger] = {
-      eventType: trigger,
-      externalPortDispatch: {
-        portTargetRef,
-        payloadFrom,
-        outputProp: typeof wiring.outputProp === "string" && wiring.outputProp.trim() ? wiring.outputProp.trim() : undefined,
-      },
-    };
+    const outputProp = typeof wiring.outputProp === "string" && wiring.outputProp.trim()
+      ? wiring.outputProp.trim()
+      : undefined;
+    if (wiring.actionType === "dispatchExternalPort") {
+      const portTargetRef = typeof wiring.portTargetRef === "string" ? wiring.portTargetRef.trim() : "";
+      binding[trigger] = {
+        eventType: trigger,
+        externalPortDispatch: { portTargetRef, payloadFrom, outputProp },
+      };
+    } else if (wiring.actionType === "dispatchInstanceOperation") {
+      const instanceTargetRef = typeof wiring.instanceTargetRef === "string"
+        ? wiring.instanceTargetRef.trim()
+        : "";
+      binding[trigger] = {
+        eventType: trigger,
+        instanceOperationDispatch: { instanceTargetRef, payloadFrom, outputProp },
+      };
+    }
   }
   return binding;
 }
