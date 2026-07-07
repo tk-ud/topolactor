@@ -67,14 +67,16 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
     private readonly IInstanceCredentialMaterializer _credentialMaterializer;
     private readonly AbstractFunctionExecutor _abstractFunctionExecutor;
     private readonly IExternalPortRuntimeEventLogRepository? _runtimeEventLog;
+    private readonly IRuntimeDispatchIdempotencyLedger? _idempotencyLedger;
 
-    public InstancePortDispatchRuntime(ILogger<InstancePortDispatchRuntime> logger, IInstancePortPolicyRepository repository, IInstanceCredentialMaterializer credentialMaterializer, AbstractFunctionExecutor abstractFunctionExecutor, IExternalPortRuntimeEventLogRepository? runtimeEventLog = null)
+    public InstancePortDispatchRuntime(ILogger<InstancePortDispatchRuntime> logger, IInstancePortPolicyRepository repository, IInstanceCredentialMaterializer credentialMaterializer, AbstractFunctionExecutor abstractFunctionExecutor, IExternalPortRuntimeEventLogRepository? runtimeEventLog = null, IRuntimeDispatchIdempotencyLedger? idempotencyLedger = null)
     {
         _logger = logger;
         _repository = repository;
         _credentialMaterializer = credentialMaterializer;
         _abstractFunctionExecutor = abstractFunctionExecutor;
         _runtimeEventLog = runtimeEventLog;
+        _idempotencyLedger = idempotencyLedger;
     }
 
     public async Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
@@ -82,6 +84,8 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
         InstancePortRecord? evidencePort = null;
         string? evidenceOperationBindingKey = null;
         string? evidenceFunctionKey = null;
+        string? idempotencyKey = null;
+        var claimedForExecution = false;
 
         try
         {
@@ -123,10 +127,42 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
                 return await FailAsync(ex.Message, "Instance credential could not be materialized for runtime use.", port, operationBindingKey, binding.FunctionKey, ct);
             }
 
+            // Retry-safe dispatch idempotency: mirrors ExternalPortDispatchRuntime. Claim BEFORE
+            // executing the bound function (the actual instance operation side effect). Ledger is a
+            // no-op boundary (skipped) when idempotency_key is absent.
+            idempotencyKey = ReadStringProperty(request.Payload, "idempotency_key");
+            if (_idempotencyLedger is not null && !string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                var claim = await _idempotencyLedger.ClaimAsync(idempotencyKey, "instance_port_runtime", ct);
+                if (claim.Status == RuntimeDispatchIdempotencyClaimStatus.AlreadyCompleted)
+                {
+                    var replayData = JsonSerializer.SerializeToElement(
+                        new { instancePortDispatch = claim.PreviousResult });
+                    return new EndpointResponseDto(true, new Emission(null, null, null, [], replayData, []), []);
+                }
+                if (claim.Status == RuntimeDispatchIdempotencyClaimStatus.InFlight)
+                {
+                    return await FailAsync(
+                        "INSTANCE_PORT_DISPATCH_IN_FLIGHT",
+                        "A dispatch with the same idempotency_key is already processing; not re-executed.",
+                        port, binding.OperationBindingKey, binding.FunctionKey, ct);
+                }
+                claimedForExecution = true;
+            }
+
             var instanceContext = new InstancePortExecutionContext { PortRecord = port, CredentialVaultRecord = credential, ConnectionPolicy = policy, OperationBinding = binding, RuntimeOnlyConnectionString = runtimeOnlyConnectionString, RequestPayload = ReadObjectProperty(request.Payload, "dispatch_payload") };
             var result = await _abstractFunctionExecutor.ExecuteAsync(binding.AbstractFunctionKey, new AbstractFunctionExecutionContext(binding.FunctionKey, ReadObjectProperty(request.Payload, "dispatch_payload"), requiredRuntimeLane: "instance_port_runtime", instancePortContext: instanceContext), ct);
             await AppendEvidenceAsync("instance_port_execution_success", port, binding.OperationBindingKey, binding.FunctionKey, null, ct);
-            var data = JsonSerializer.SerializeToElement(new { instancePortDispatch = new { status = "executed", instanceTargetRef = rawRef, portKind, instancePortId = portId, port.InstanceAuthorityKey, binding.OperationBindingKey, binding.FunctionKey, result = result.ResultContext } });
+            var instanceDispatchResult = new { status = "executed", instanceTargetRef = rawRef, portKind, instancePortId = portId, port.InstanceAuthorityKey, binding.OperationBindingKey, binding.FunctionKey, result = result.ResultContext };
+            var data = JsonSerializer.SerializeToElement(new { instancePortDispatch = instanceDispatchResult });
+            if (claimedForExecution && _idempotencyLedger is not null && idempotencyKey is not null)
+            {
+                // Mark completed AFTER the effect actually ran, storing the result so a retry that
+                // arrives after this response is lost still returns the SAME result without
+                // re-executing the instance operation.
+                await _idempotencyLedger.CompleteAsync(
+                    idempotencyKey, JsonSerializer.SerializeToElement(instanceDispatchResult), ct);
+            }
             return new EndpointResponseDto(true, new Emission(null, null, null, [], data, []), []);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or AbstractFunctionFailCloseException or TimeoutException)
@@ -134,6 +170,17 @@ public sealed class InstancePortDispatchRuntime : IDispatchableRuntime
             var code = ex is AbstractFunctionFailCloseException af ? af.Message : ex.Message;
             if (string.IsNullOrWhiteSpace(code) || !code.StartsWith("INSTANCE_", StringComparison.Ordinal)) code = "INSTANCE_OPERATION_FAILED_CLOSED";
             _logger.LogWarning("Instance port dispatch failed closed with {Code}.", code);
+            if (claimedForExecution && _idempotencyLedger is not null && idempotencyKey is not null)
+            {
+                try
+                {
+                    await _idempotencyLedger.FailAsync(idempotencyKey, code, ct);
+                }
+                catch (Exception ledgerEx)
+                {
+                    _logger.LogWarning(ledgerEx, "Failed to mark idempotency ledger key as failed.");
+                }
+            }
             await AppendEvidenceAsync("instance_port_execution_fail_close", evidencePort, evidenceOperationBindingKey, evidenceFunctionKey, code, ct);
             return Fail(code, "Instance port dispatch failed closed.");
         }

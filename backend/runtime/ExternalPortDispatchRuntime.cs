@@ -21,6 +21,7 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
     private readonly SseEventBroadcaster? _sseBroadcaster;
     private readonly IExternalPortRuntimeEventLogRepository? _runtimeEventLog;
     private readonly IBackendErrorEvidenceAppender? _errorAppender;
+    private readonly IRuntimeDispatchIdempotencyLedger? _idempotencyLedger;
 
     public ExternalPortDispatchRuntime(
         ILogger<ExternalPortDispatchRuntime> logger,
@@ -28,7 +29,8 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
         IExternalPortPolicyStepExecutor policyStepExecutor,
         SseEventBroadcaster? sseBroadcaster = null,
         IExternalPortRuntimeEventLogRepository? runtimeEventLog = null,
-        IBackendErrorEvidenceAppender? errorAppender = null)
+        IBackendErrorEvidenceAppender? errorAppender = null,
+        IRuntimeDispatchIdempotencyLedger? idempotencyLedger = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
@@ -36,11 +38,14 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
         _sseBroadcaster = sseBroadcaster;
         _runtimeEventLog = runtimeEventLog;
         _errorAppender = errorAppender;
+        _idempotencyLedger = idempotencyLedger;
     }
 
     public async Task<EndpointResponseDto> ExecuteAsync(EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
     {
         ExternalPortExecutionContext? context = null;
+        string? idempotencyKey = null;
+        var claimedForExecution = false;
         try
         {
             ExternalPortRecord? record;
@@ -83,6 +88,31 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
             if (policy is null || !policy.Active || policy.PolicySteps.Count == 0)
                 return Fail("EXTERNAL_PORT_POLICY_MISSING", "No active external port policy/steps matched the resolved port record.");
 
+            // Retry-safe dispatch idempotency: when the caller supplies idempotency_key, claim it
+            // BEFORE executing the policy (the actual outbound HTTP call). already_completed means a
+            // prior attempt already ran to completion — return its stored result without re-executing.
+            // in_flight means a concurrent duplicate — do not execute. Ledger is a no-op boundary
+            // (skipped) when idempotency_key is absent, preserving behavior for callers that don't
+            // supply one yet.
+            idempotencyKey = ReadStringProperty(request.Payload, "idempotency_key");
+            if (_idempotencyLedger is not null && !string.IsNullOrWhiteSpace(idempotencyKey))
+            {
+                var claim = await _idempotencyLedger.ClaimAsync(idempotencyKey, "external_port_runtime", ct);
+                if (claim.Status == RuntimeDispatchIdempotencyClaimStatus.AlreadyCompleted)
+                {
+                    var replayData = JsonSerializer.SerializeToElement(
+                        new { externalPortDispatch = claim.PreviousResult });
+                    return new EndpointResponseDto(true, new Emission(null, null, null, [], replayData, []), []);
+                }
+                if (claim.Status == RuntimeDispatchIdempotencyClaimStatus.InFlight)
+                {
+                    return Fail(
+                        "EXTERNAL_PORT_DISPATCH_IN_FLIGHT",
+                        "A dispatch with the same idempotency_key is already processing; not re-executed.");
+                }
+                claimedForExecution = true;
+            }
+
             context = new ExternalPortExecutionContext
             {
                 PortRecord = record,
@@ -117,11 +147,30 @@ public sealed class ExternalPortDispatchRuntime : IDispatchableRuntime
                 JsonSerializer.Serialize(dispatchResult)));
 
             var data = JsonSerializer.SerializeToElement(new { externalPortDispatch = dispatchResult });
+            if (claimedForExecution && _idempotencyLedger is not null && idempotencyKey is not null)
+            {
+                // Mark completed AFTER the effect actually ran, storing the result so a retry that
+                // arrives after this response is lost still returns the SAME result without
+                // re-executing the external API call.
+                await _idempotencyLedger.CompleteAsync(
+                    idempotencyKey, JsonSerializer.SerializeToElement(dispatchResult), ct);
+            }
             return new EndpointResponseDto(true, new Emission(null, null, null, [], data, []), []);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
         {
             _logger.LogWarning(ex, "External port dispatch failed closed.");
+            if (claimedForExecution && _idempotencyLedger is not null && idempotencyKey is not null)
+            {
+                try
+                {
+                    await _idempotencyLedger.FailAsync(idempotencyKey, ex.Message, ct);
+                }
+                catch (Exception ledgerEx)
+                {
+                    _logger.LogWarning(ledgerEx, "Failed to mark idempotency ledger key as failed.");
+                }
+            }
             if (_runtimeEventLog is not null &&
                 string.Equals(ex.Message, "EXTERNAL_SIGNATURE_VERIFICATION_FAILED", StringComparison.Ordinal) &&
                 context is not null &&

@@ -228,8 +228,14 @@ owns:
   runtimeInteractions authoring
   external capability selection from seed registry
 
+lineage_boundary:
+  current reusable canvas lineage = FlowLayoutCanvas
+  historical VisualLayoutCanvas direct-manipulation lineage was replaced before this report scope
+  historical VisualLayoutCanvas restoration is not required by this Bundle
+  implementation must not treat old Figma-like wording as current blocking authority
+
 layout_mode:
-  preserve existing Figma-like layout canvas lineage
+  preserve current FlowLayoutCanvas layout canvas lineage
   owns placement / css / responsive / inlineText / URL link / props / propBindings / calculationBindings
   primary inspector = layout / design settings
 
@@ -253,32 +259,115 @@ Markmap_policy_if_used:
   rehydrate from runtimeInteractions
 
 trigger_vocabulary:
-  lifecycle: load / route_enter / initial_display
+  lifecycle: initial_mount / route_enter / initial_display
   pointer: click / mouseon / mouseout / hover_start / hover_end
   keyboard: keyon / keydown / keyup / enter / escape
   form: input / change / select / submit / focus / blur
+  rule:
+    stored values may remain raw identifiers
+    visible labels use user-facing projection vocabulary
+    report / SSOT / test must keep the same trigger group mapping
+    initial_mount is a runtime synthetic lifecycle trigger, not DOM onLoad / resource loaded
 
 UI_event_settings:
-  API設定:
-    contents Step 3 API candidates
-    screenReadQueryWiring candidates
-    external api candidates
-    external instance candidates
-  状態設定:
-    local UI state mutation
-    monitored variable set / toggle / clear
+  event_trigger:
+    source UI node emits trigger vocabulary event
+    trigger UI and target/effect axes are independent
+
+  frontend_side:
+    UI監視割当:
+      defines state slot / monitored variable / watched dependency source
+      useState-like binding, not a mutation
+      examples: stateKey / initialValue / valueType / scope / watchedBy / readableFrom
+    UI状態更新:
+      writes to an already-declared state slot / monitored variable
+      setState-like mutation
+      examples: set / toggle / clear / open / close / statePath write
+    副作用設定:
+      useEffect-like reaction settings
+      trigger source may be UI event / watched state slot / monitored variable / outputProp / targetNode state
+      write target may be local state slot / monitored variable / outputProp / targetNode state / API result binding
+      payloadFrom / outputProp / targetNode state assignment are effect fields, not the effect authority itself
+      explicit no-side-effect must be selectable
+
+  backend_side:
+    内部API:
+      contents Step 3 API candidates
+      screenReadQueryWiring candidates
+      internal topology/API dispatch candidates
+    外部API連携:
+      external api candidates from seed-backed external port registry
+      selected target writes typed dispatchExternalPort runtimeInteraction reference
+    外部インスタンス連携:
+      external instance candidates from seed-backed instance operation registry
+      selected target writes typed dispatchInstanceOperation runtimeInteraction reference
+
   authority:
-    credential / authority requirement candidate
-  side_effects:
-    monitored variable assignment
-    outputProp assignment
-    targetNode state assignment
-    explicit no-side-effect
+    credential / authority requirement candidate is displayed from selected capability record
+    credential material is never editable in UI Builder
+
   topology_movement:
     hub relation prev
     hub relation next
     explicit jump by user-facing topology label/name
     raw topology ids stay internal
+
+component_runtime_state_effect_boundary:
+  state/effect authoring does not require ad-hoc useEffect code inside every component
+  required runtime boundary:
+    runtime component wrapper / factory owns useEffect-like effect runner
+    primitive components expose event/value surfaces and remain mostly pure renderers
+    state slots live in projection-local state store or equivalent declared runtime state store
+    UI監視割当 declares state slot / dependency source before mutation or effect selection
+    UI状態更新 writes only through runtime state dispatcher
+    副作用設定 resolves dependency graph before execution and runs through effect runner
+  component edit boundary:
+    edit individual component only when required event/value surface is missing
+    unsupported component kind must fail-close in proof tests
+    component-specific state/effect implementation is exception, not default path
+  required receive surfaces:
+    current state values
+    mutation dispatcher
+    effect binding metadata
+    dispatch lanes for internal API / external API / external instance
+  NG:
+    embedding ad-hoc useEffect in every component factory
+    executing effects from rendered graph persistence authority
+    writing component state directly outside declared runtime state dispatcher
+    treating propsJson/stateJson as sufficient UI監視割当 proof
+    treating event -> localStateMutation as sufficient 副作用設定 proof
+  mutation authority unification:
+    exactly one guarded write path (RuntimeGuardedStateStore) for UI状態更新,
+    shared by the lifecycle path (emitLifecycle) and the event path (emitBoundEvent)
+    no write-time auto-declare fallback: a target must be predeclared from the
+    current node list before either path may write it
+    a UI状態更新 target absent from the current node list is never predeclared and
+    fails close identically on both paths, including in the production-equivalent
+    dispatcher construction path (createProjectionStateDispatcher(toWiringNodes(...)))
+  lifecycle runner node reconciliation:
+    the runtime effect runner reconciles (updateNodes) its known node list on SSE
+    refresh instead of staying pinned to its creation-time node list
+    fired-registry is keyed by nodeId + interaction-index: an existing node's
+    already-fired lifecycle interaction does not re-execute; a newly-appeared
+    node's lifecycle interaction executes exactly once on reconciliation
+  NG (mutation authority / reconciliation):
+    event path writing directly to a raw store instead of the shared dispatcher
+    event and lifecycle paths using separate dispatcher instances
+    predeclaring a UI状態更新 target absent from the current node list
+    pinning the runtime effect runner to its creation-time node list
+    ignoring newly-mounted lifecycle interactions on SSE refresh
+
+side_effect_cycle_policy:
+  effect target candidates must be filtered by dependency not-in rule before selection
+  selectable_write_targets = all_write_targets - dependency_closure(trigger_source)
+  direct self-loop is prohibited
+  indirect loop must fail-close when dependency graph can detect it
+  debounce/throttle is not loop-safety proof
+  NG examples:
+    watched A -> set A
+    watched A -> outputProp A
+    watched A -> API result writes A
+    A -> B and B -> A without explicit cycle break
 
 external_event_candidates:
   registered external api from initial CRUD seed
@@ -287,15 +376,37 @@ external_event_candidates:
   selected target writes typed runtimeInteraction reference
 
 lifecycle_policy:
-  load / initial_display is not synthetic click/change
+  initial_mount / route_enter / initial_display are runtime synthetic lifecycle triggers
+  initial_mount is not DOM onLoad / resource loaded
+  initial_mount is not click/change alias
   preview is inert by default
-  backend dispatch from load requires explicit author confirmation
-  load dispatch needs idempotency and route-enter/refetch policy
+  backend/external dispatch from lifecycle trigger requires explicit author confirmation
+  initial_mount dispatch needs idempotency and must not re-dispatch on rerender
+  route_enter/refetch dispatch needs idempotency policy
 
 high_frequency_policy:
   mouseon / hover / key repeat must not dispatch backend/external calls by default
   local state / monitored variable update is allowed by default
   backend/API dispatch or topology movement requires debounce/throttle and explicit warning
+  debounce/throttle does not prove side-effect loop safety
+  enforced at runtime dispatch time (emitBoundEvent), not only authoring/apply time:
+  a high-frequency trigger without valid debounceMs fails close before the external/
+  instance dispatch lane is called — authoring/apply guard alone is insufficient
+
+retry_safe_dispatch_idempotency:
+  idempotencyPolicy is a retry-safe dispatch policy, not merely a frontend runner
+  duplicate-fire guard (fired-registry only survives one runner lifetime; reload /
+  reconnect / runner recreation starts a brand-new fired-registry)
+  deterministic idempotency_key derived from stable identity (layoutId + packageId +
+  nodeId + interactionIndex + trigger + actionType + targetRef) plus resolved
+  dispatch payload — NOT a fresh random value per dispatch call
+  backend ledger (topology.runtime_dispatch_idempotency_ledger) claims the key
+  BEFORE executing the external API call / instance operation and marks it
+  completed/failed AFTER — distinct from runtime_event_log, which is append-only
+  evidence written after execution and never read to gate execution
+  a retry with the same key after completion returns the stored result without
+  re-executing; a concurrent duplicate while in flight does not execute; a failed
+  key is retry-safe to reclaim
 
 drag_drop_wiring_edit:
   valid drop -> typed runtimeInteraction patch
@@ -303,20 +414,38 @@ drag_drop_wiring_edit:
   edit is draft/undoable before apply
 
 OK:
-  existing FlowLayoutCanvas / drag-drop interaction assets are preserved and reused where compatible
+  current FlowLayoutCanvas / drag-drop interaction assets are preserved and reused where compatible
+  wiring graph / Markmap is projection/view only if used
+  runtimeInteractions store typed references
+  UI event settings use report vocabulary, not implementation-derived catch-all categories
+  frontend side separates UI監視割当 / UI状態更新 / 副作用設定
+  backend side separates 内部API / 外部API連携 / 外部インスタンス連携
   registered external api / external instance are selectable in UI Builder event settings
   candidates come from canonical seed-backed registry/projection admin mechanism
-  runtimeInteractions store typed references
-  Markmap/wiring projection is view only if used
+  runtime wrapper owns useEffect-like effect execution boundary
+  primitive components remain mostly pure unless event/value surface is missing
+  side-effect write target candidates exclude dependency closure of trigger source
+  tests assert the report vocabulary and fail if implementation collapses categories
 
 NG:
   discarding existing canvas / drag-drop interaction assets without SSOT reason
   replacing the existing layout canvas with a new persistence authority
+  reviving historical VisualLayoutCanvas restoration as current PR574 blocker
+  using implementation categories as SSOT taxonomy
+  collapsing UI監視割当 / UI状態更新 / 副作用設定 into legacy or 状態設定
+  treating monitored variable assignment as both binding and mutation without explicit distinction
+  hiding 内部API outside the wiring inspector while claiming backend side completion
   hardcoded external api / instance choices in UI Builder
+  external api / external port / 外部連携 terminology drift
+  external instance / instance operation / インスタンス操作 terminology drift
   raw route/page references written as event wiring
   event settings unable to use registered external capabilities
   Markmap/rendered graph treated as persistence authority
+  using load / loaded / DOM onLoad as lifecycle trigger vocabulary
   lifecycle/high-frequency triggers implemented before policy
+  side-effect target candidates allowing direct or detectable indirect loops
+  treating debounce/throttle as loop-safety proof
+  requiring ad-hoc useEffect insertion in every component as default implementation strategy
 ```
 
 ## Bundle: pipeline-continuity-ssot
@@ -334,6 +463,7 @@ target_test_files:
   frontend/tests/uiBuilderPackageWiring.test.ts
   frontend/tests/runtimeUiInteractionScenario.test.ts
   frontend/tests/adminWiringExecutionLane.test.ts
+  frontend/tests/uiBuilderWiringProjection.test.ts
 
 required_proof:
   route registry contains canonical routes only
@@ -344,20 +474,71 @@ required_proof:
   selected capability writes typed runtimeInteraction
   normal labels do not expose raw ids / UUIDs / internal vocabulary
   whole-admin Step 4/5 wording is qualified
-  existing canvas / drag-drop reuse boundary is preserved or explicitly justified by SSOT
+  current FlowLayoutCanvas / drag-drop reuse boundary is preserved or explicitly justified by SSOT
   runtimeInteractions -> wiring projection round-trip
   valid/invalid drag-drop wiring edit
+  UI event setting taxonomy matches report vocabulary
+  frontend side separates UI監視割当 / UI状態更新 / 副作用設定
+  backend side separates 内部API / 外部API連携 / 外部インスタンス連携
+  component runtime wrapper owns useEffect-like effect runner boundary
+  primitive components expose required event/value surfaces without ad-hoc per-component effect ownership
+  state slot declaration exists before mutation/effect selection
+  effect target candidate filtering excludes dependency closure of trigger source
+  direct side-effect self-loop fails close
+  detectable indirect side-effect loop fails close
   topology movement target label projection
-  lifecycle load trigger inert preview
+  lifecycle initial_mount trigger inert preview
+  initial_mount is not DOM onLoad / resource loaded
+  initial_mount does not re-dispatch on rerender
   high-frequency trigger debounce/fail-close
+  runtime event lane high-frequency dispatch fail-close
+  event-triggered UI状態更新 writes through SAME guarded dispatcher
+  stale/deleted target fails close in production equivalent path
+  SSE refresh newly mounted lifecycle node handling
+  store notification -> renderEmission re-run -> rendered props reflection
+  retry-safe dispatch idempotency: response-lost retry does not re-execute the
+  external API call / instance operation and returns the stored result
+  retry-safe dispatch idempotency: concurrent duplicate while in-flight does not execute
+  retry-safe dispatch idempotency: idempotencyKey is stable across separately-created
+  runner instances for the same authored interaction (reload / reconnect proof)
+  retry-safe dispatch idempotency: failed claim is retry-safe to reclaim
 
 OK:
   tests follow owning SSOT
   old route-presence tests replaced by seed/render/wiring proof
   test deletion is paired with replacement proof
+  test vocabulary rejects implementation-derived catch-all categories
+  tests reject ad-hoc component-local effect ownership as default strategy
 
 NG:
   test-only deletion
   old tests asserting seed-migrated routes as canonical
   completion claim without agent-ui-local-test or routed fallback checks
+  tests accepting legacy / 状態設定 catch-all as complete UI event taxonomy
+  tests accepting debounce/throttle as side-effect loop-safety proof
+  tests accepting event -> localStateMutation as sufficient UI監視割当 / 副作用設定 proof
+  tests accepting load / loaded / DOM onLoad as lifecycle trigger vocabulary
+```
+
+## Future Bundle candidates (not PR574 blocking)
+
+```text
+runtime_interaction_identity / projection_time_idempotency_identity:
+  status: recorded as a future Bundle candidate, NOT a PR574 blocking item
+  current_state (PR574):
+    frontend runner (uiEventEffectRunner.ts) + backend ledger
+    (topology.runtime_dispatch_idempotency_ledger) implement retry-safe
+    dispatchExternalPort / dispatchInstanceOperation. The UI composes the
+    idempotency identity itself from nodeId + interactionIndex
+    (computeDispatchIdempotencyKey in uiBuilderWiringProjection.ts).
+  more_correct_design_direction:
+    rather than the UI synthesizing identity from nodeId + interactionIndex,
+    DB / projection emission should assign a stable runtime_interaction_id /
+    idempotency_base_key at the projection-authority layer; the UI would then
+    only forward that DB-assigned identity, not compose it client-side.
+  why_deferred:
+    this is a projection authority / runtime interaction identity concern
+    distinct from PR574's retry-safe dispatch scope; it touches DB schema /
+    projection emission shape rather than the dispatch guard itself.
+  bundle_scope: projection_authority_runtime_interaction_identity (candidate name, not yet opened)
 ```

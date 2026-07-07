@@ -45,6 +45,8 @@ import {
   UX_PACKAGE_WIRING_ADVANCED_LABEL,
   UX_PACKAGE_WIRING_SECTION_HINT,
   UX_PACKAGE_WIRING_SECTION_TITLE,
+  UX_CANVAS_MODE_LAYOUT,
+  UX_CANVAS_MODE_WIRING,
 } from "../content/adminUxTerms.ts";
 import {
   buildVisualLayoutPatchJson,
@@ -81,6 +83,11 @@ import {
   findRuntimeInteractionPatchErrors,
 } from "../runtime/visualLayoutUtils.ts";
 import NodeEventAuthoringPanel from "../components/NodeEventAuthoringPanel.tsx";
+import WiringGraphPanel from "../components/WiringGraphPanel.tsx";
+import {
+  ALL_WIRING_TRIGGERS,
+  findRuntimeInteractionPolicyErrors,
+} from "../lib/uiBuilderWiringProjection.ts";
 import ManifestStep3EventWiringPreset from "../components/ManifestStep3EventWiringPreset.tsx";
 import { resolveCanvasRootPreviewClassName } from "../runtime/layoutClassPreviewUtils.ts";
 import {
@@ -587,6 +594,24 @@ export type ComponentEventWiring = {
    * SSOT: docs/design/instance-port-substrate-ssot.yaml admin_event_authoring_boundary
    */
   instanceTargetRef?: string;
+  /**
+   * Authoring-only: dispatch interval (ms) required when a high-frequency trigger drives
+   * backend/external dispatch. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml high_frequency_policy
+   */
+  debounceMs?: number;
+  /**
+   * Authoring-only: explicit author confirmation required when a lifecycle trigger drives
+   * backend/external dispatch. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml lifecycle_policy
+   */
+  lifecycleDispatchConfirmed?: boolean;
+  /**
+   * Authoring-only: lifecycle dispatch idempotency policy
+   * (once_per_mount / refetch_on_route_enter / dedupe_key). initial_mount dispatch
+   * must not re-dispatch on rerender. SSOT: lifecycle_policy.idempotency_policy_values
+   */
+  idempotencyPolicy?: string;
+  /** Authoring-only: explicit no-side-effect selection (副作用設定). */
+  sideEffectNone?: boolean;
 };
 
 export const COMPONENT_EVENT_TYPES = [
@@ -1921,13 +1946,18 @@ function LayoutRightDock({
             <NodeEventAuthoringPanel
               interactions={selectedNode.runtimeInteractions ?? []}
               targetNodes={(draftNodes ?? []).filter((n) => n.nodeId !== selectedNode.nodeId)}
-              triggerOptions={COMPONENT_EVENT_TYPES}
+              triggerOptions={ALL_WIRING_TRIGGERS}
               selectedNodeLabel={friendlyNodeLabel(selectedNode)}
               onCommit={(next, label) =>
                 onCommitNode?.(
                   { runtimeInteractions: next.length > 0 ? next : undefined },
                   label,
                 )}
+              stateJson={selectedNode.stateJson}
+              onCommitStateJson={(nextStateJson, label) =>
+                onCommitNode?.({ stateJson: nextStateJson }, label)}
+              sourceNodeId={selectedNode.nodeId}
+              allNodes={draftNodes}
             />
           </Accordion>
           <Accordion
@@ -2695,7 +2725,11 @@ function ApplyReadinessPanel({
   layoutClassRefError: string | null;
 }): JSX.Element {
   const draftOnlyCount = draftNodes.filter((n) => n.isDraftOnly).length;
-  const runtimeInteractionErrors = findRuntimeInteractionPatchErrors(draftNodes);
+  // Pre-save validation + SSOT wiring policy (lifecycle / high-frequency) — both blocking.
+  const runtimeInteractionErrors = [
+    ...findRuntimeInteractionPatchErrors(draftNodes),
+    ...findRuntimeInteractionPolicyErrors(draftNodes),
+  ];
   const customPositionedCount = draftNodes.filter(
     (n) =>
       n.x > 0 || n.y > 0 || n.width !== DEFAULT_NODE_WIDTH ||
@@ -4950,6 +4984,10 @@ function LayoutBuilderSection({
   const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(emptySelectionSet());
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  // Layout / wiring canvas mode boundary. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+  // wiring_mode — the wiring canvas is a switchable projection/edit mode over
+  // draftNodes[].runtimeInteractions, never a separate persistence authority.
+  const [canvasMode, setCanvasMode] = useState<"layout" | "wiring">("layout");
   const [designHandoffKey, setDesignHandoffKey] = useState(0);
   // Gap 1: Lifecycle state machine
   const [lifecyclePhase, setLifecyclePhase] = useState<LifecyclePhase>("idle");
@@ -6717,6 +6755,32 @@ function LayoutBuilderSection({
             >
               ◧
             </button>
+            <div class="pointer-events-auto flex items-center gap-1" role="group" aria-label="キャンバスモード切替">
+              <button
+                type="button"
+                class={`rounded-full border px-2 py-1 text-xs font-semibold shadow-sm ${
+                  canvasMode === "layout"
+                    ? "border-blue-400 bg-blue-100 text-blue-900"
+                    : "border-blue-200 bg-white/90 text-blue-800 hover:bg-blue-50"
+                }`}
+                aria-pressed={canvasMode === "layout"}
+                onClick={() => setCanvasMode("layout")}
+              >
+                {UX_CANVAS_MODE_LAYOUT}
+              </button>
+              <button
+                type="button"
+                class={`rounded-full border px-2 py-1 text-xs font-semibold shadow-sm ${
+                  canvasMode === "wiring"
+                    ? "border-indigo-400 bg-indigo-100 text-indigo-900"
+                    : "border-indigo-200 bg-white/90 text-indigo-800 hover:bg-indigo-50"
+                }`}
+                aria-pressed={canvasMode === "wiring"}
+                onClick={() => setCanvasMode("wiring")}
+              >
+                {UX_CANVAS_MODE_WIRING}
+              </button>
+            </div>
             <button
               type="button"
               class="pointer-events-auto rounded-full border border-indigo-200 bg-white/90 px-2 py-1 text-xs font-semibold text-indigo-800 shadow-sm hover:bg-indigo-50"
@@ -6727,6 +6791,27 @@ function LayoutBuilderSection({
               ◨
             </button>
           </div>
+          {canvasMode === "wiring" && (
+            /* Wiring canvas — projection/edit mode over draftNodes[].runtimeInteractions.
+               Persistence authority stays on draft nodes + layout_patch lanes. */
+            <div class="pt-10">
+              <WiringGraphPanel
+                nodes={draftNodes}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={(id) => {
+                  setSelectedNodeId(id);
+                  setSelectedNodeIds(new Set([id]));
+                  setRightDrawerOpen(true);
+                }}
+                onApplyNodes={(nodes, label) => {
+                  setDraftNodes(nodes);
+                  pushHistory(nodes, label);
+                  setLifecyclePhase("idle");
+                }}
+              />
+            </div>
+          )}
+          <div class={canvasMode === "wiring" ? "hidden" : undefined}>
           <FlowLayoutCanvas
             nodes={draftNodes}
             selectedNodeId={selectedNodeId}
@@ -6761,6 +6846,7 @@ function LayoutBuilderSection({
             onNodeSearch={handleNodeSearch}
             comboboxPreviewOptions={comboboxPreviewOptions}
           />
+          </div>
         </div>
 
         {rightDrawerOpen && (
@@ -6850,7 +6936,8 @@ function LayoutBuilderSection({
       {(() => {
         const hasReadinessError = !canPatch ||
           draftNodes.some((n) => n.isDraftOnly) || !!layoutClassRefError ||
-          findRuntimeInteractionPatchErrors(draftNodes).length > 0;
+          findRuntimeInteractionPatchErrors(draftNodes).length > 0 ||
+          findRuntimeInteractionPolicyErrors(draftNodes).length > 0;
         return (
           <details class="mb-3" open={hasReadinessError}>
             <summary

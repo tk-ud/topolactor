@@ -354,6 +354,8 @@ export type ExternalPortDispatchSpec = {
   portTargetRef: string;
   payload: Record<string, unknown>;
   outputProp?: string;
+  /** SSOT lifecycle_policy retry_safe_dispatch_idempotency: forwarded as idempotency_key. */
+  idempotencyKey?: string;
 };
 
 /**
@@ -415,6 +417,54 @@ export async function enqueueExternalPortDispatchCommand(
         port_target_ref: ref,
         dispatch_payload: spec.payload,
         ...(spec.outputProp ? { output_prop: spec.outputProp } : {}),
+        ...(spec.idempotencyKey ? { idempotency_key: spec.idempotencyKey } : {}),
+      },
+    },
+    token,
+  );
+}
+
+export type InstanceOperationDispatchSpec = {
+  instanceTargetRef: string;
+  payload: Record<string, unknown>;
+  outputProp?: string;
+  /** SSOT lifecycle_policy retry_safe_dispatch_idempotency: forwarded as idempotency_key. */
+  idempotencyKey?: string;
+};
+
+/**
+ * Enqueues UI-event-authored dispatchInstanceOperation through the canonical
+ * api_command_lane (外部インスタンス連携 runtime dispatch lane). The frontend only
+ * forwards the admin-approved instanceTargetRef and resolved payload; instance
+ * resolution and credential handling stay on the backend instance_port lane.
+ * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml external_instance_integration /
+ * instance-port-substrate-ssot.yaml admin_event_authoring_boundary
+ */
+export async function enqueueInstanceOperationDispatchCommand(
+  spec: InstanceOperationDispatchSpec,
+): Promise<ScheduledCommandResult> {
+  const ref = spec.instanceTargetRef.trim();
+  if (!ref.startsWith("instance-port:")) {
+    return {
+      success: false,
+      errors: [{
+        code: "INSTANCE_OPERATION_TARGET_REF_INVALID",
+        message: "instanceTargetRef must start with instance-port:",
+      }],
+    };
+  }
+  const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? undefined;
+  return queueAdminClientCommand(
+    {
+      operationType: "dispatchInstanceOperation",
+      target: "instance_port",
+      layer: "instance_port",
+      action: "dispatchInstanceOperation",
+      payload: {
+        instance_target_ref: ref,
+        dispatch_payload: spec.payload,
+        ...(spec.outputProp ? { output_prop: spec.outputProp } : {}),
+        ...(spec.idempotencyKey ? { idempotency_key: spec.idempotencyKey } : {}),
       },
     },
     token,

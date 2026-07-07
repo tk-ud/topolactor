@@ -1,4 +1,8 @@
-import { assertEquals, assertExists, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertExists,
+  assertStringIncludes,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   buildCatalogComponentEventBinding,
   buildRouteNavigationEventBinding,
@@ -12,6 +16,7 @@ import { adaptComponentDataHub } from "../runtime/runtimeComponentAdapter.ts";
 import type { RuntimeDispatchSpec } from "../runtime/frontendScheduler.ts";
 import type { RuntimeComponentSpec } from "../runtime/runtimeComponentAdapter.ts";
 import { __testOnly as factoryTestOnly } from "../runtime/runtimeComponentFactory.ts";
+import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
 
 // ─── mapWiringKindToLayer ─────────────────────────────────────────────────────
 
@@ -60,7 +65,11 @@ Deno.test("buildRuntimeDispatchSpec: unknown wiringKind returns null (fail-close
     wiringKind: "unknown_kind",
     targetSurface: "screen",
   });
-  assertEquals(spec, null, "unknown wiringKind must not silently fall back to entity/raw action");
+  assertEquals(
+    spec,
+    null,
+    "unknown wiringKind must not silently fall back to entity/raw action",
+  );
 });
 
 // ─── buildRuntimeDispatchSpec ─────────────────────────────────────────────────
@@ -175,7 +184,10 @@ Deno.test("buildCatalogComponentEventBinding: Search spec populates all standard
   const binding = buildCatalogComponentEventBinding(spec);
   const triggers = ["click", "change", "select", "submit", "toggle"];
   for (const trigger of triggers) {
-    assertExists(binding[trigger], `Expected trigger '${trigger}' to be present`);
+    assertExists(
+      binding[trigger],
+      `Expected trigger '${trigger}' to be present`,
+    );
     const val = binding[trigger] as Record<string, unknown>;
     assertEquals(val.eventType, trigger);
     const rd = val.runtimeDispatch as Record<string, unknown>;
@@ -265,8 +277,13 @@ Deno.test("adaptComponentDataHub: eventBinding with full runtimeDispatch is pres
     props: { data: { label: "Create" } },
     eventBinding,
   });
-  if (!result.ok) throw new Error(`adaptComponentDataHub failed: ${result.error}`);
-  const clickBinding = result.value.eventBinding["click"] as Record<string, unknown>;
+  if (!result.ok) {
+    throw new Error(`adaptComponentDataHub failed: ${result.error}`);
+  }
+  const clickBinding = result.value.eventBinding["click"] as Record<
+    string,
+    unknown
+  >;
   assertExists(clickBinding);
   const rd = clickBinding.runtimeDispatch as Record<string, unknown>;
   assertExists(rd);
@@ -303,7 +320,10 @@ Deno.test("adaptComponentDataHub: missing componentKind returns explicit error",
   });
   assertEquals(result.ok, false);
   if (result.ok) return;
-  assertEquals(result.error, "RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_KIND");
+  assertEquals(
+    result.error,
+    "RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_KIND",
+  );
 });
 
 // ─── parseEventBinding: targetRef preserved through round-trip ───────────────
@@ -323,9 +343,15 @@ Deno.test("parseEventBinding: targetRef is preserved in parsed runtimeDispatch",
     },
   };
   const parsed = factoryTestOnly.parseEventBinding(rawBinding);
-  assertExists(parsed, "parseEventBinding must return a value for valid binding");
+  assertExists(
+    parsed,
+    "parseEventBinding must return a value for valid binding",
+  );
   assertExists(parsed!.runtimeDispatch, "runtimeDispatch must be present");
-  assertEquals(parsed!.runtimeDispatch!.targetRef, `manifest:${manifestId}:search_key`);
+  assertEquals(
+    parsed!.runtimeDispatch!.targetRef,
+    `manifest:${manifestId}:search_key`,
+  );
   assertEquals(parsed!.runtimeDispatch!.wiringKey, "search_key");
   assertEquals(parsed!.runtimeDispatch!.wiringId, "wiring-001");
   assertEquals(parsed!.runtimeDispatch!.target, "screen");
@@ -370,6 +396,10 @@ Deno.test("parseEventBinding: non-string targetRef is coerced to undefined", () 
 
 import { renderEmission } from "../runtime/renderEmission.ts";
 import type { Emission } from "../api/dispatch.ts";
+import {
+  createRuntimeLocalStateStore,
+  createRuntimeStateDispatcher,
+} from "../runtime/uiEventEffectRunner.ts";
 
 const emptyRegistry = {};
 
@@ -397,7 +427,10 @@ Deno.test("renderEmission: catalog_component with componentKind and wiringKind p
   assertEquals(specs.length, 1);
   const spec = specs[0];
   assertEquals(spec.componentType, "action/button");
-  assertExists(spec.runtimeSpec, "runtimeSpec must be present when componentKind is known");
+  assertExists(
+    spec.runtimeSpec,
+    "runtimeSpec must be present when componentKind is known",
+  );
   assertEquals(spec.componentId, "comp-001");
 });
 
@@ -489,7 +522,10 @@ Deno.test("renderEmission: catalog_component dispatch spec uses screen_list laye
   const specs = renderEmission(emission, emptyRegistry);
   assertEquals(specs.length, 1);
   assertExists(specs[0].runtimeSpec);
-  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<string, unknown>;
+  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<
+    string,
+    unknown
+  >;
   assertExists(clickBinding);
   const rd = clickBinding.runtimeDispatch as Record<string, unknown>;
   assertExists(rd);
@@ -521,7 +557,11 @@ Deno.test("buildRuntimeDispatchSpec: navigation wiringKind returns null (fronten
     targetSurface: "route",
     targetRef: "route:/admin/manifests",
   });
-  assertEquals(spec, null, "navigation wiringKind must not produce a backend dispatch spec");
+  assertEquals(
+    spec,
+    null,
+    "navigation wiringKind must not produce a backend dispatch spec",
+  );
 });
 
 Deno.test("buildRuntimeDispatchSpec: route: targetRef never appears in dispatch spec for navigation wiring", () => {
@@ -531,7 +571,11 @@ Deno.test("buildRuntimeDispatchSpec: route: targetRef never appears in dispatch 
     targetSurface: "route",
     targetRef: "route:/admin",
   });
-  assertEquals(spec, null, "no dispatch spec means route: prefix cannot reach ManifestDispatcher");
+  assertEquals(
+    spec,
+    null,
+    "no dispatch spec means route: prefix cannot reach ManifestDispatcher",
+  );
 });
 
 // ─── buildRouteNavigationEventBinding ─────────────────────────────────────────
@@ -546,18 +590,27 @@ Deno.test("buildRouteNavigationEventBinding: valid route: targetRef builds route
     const rn = val.routeNavigation as Record<string, unknown>;
     assertExists(rn, "routeNavigation must be present");
     assertEquals(rn.targetRef, "route:/admin/manifests");
-    assertEquals(val.runtimeDispatch, undefined, "runtimeDispatch must NOT be present on navigation binding");
+    assertEquals(
+      val.runtimeDispatch,
+      undefined,
+      "runtimeDispatch must NOT be present on navigation binding",
+    );
   }
 });
 
 Deno.test("buildRouteNavigationEventBinding: manifest: targetRef returns empty binding", () => {
-  const binding = buildRouteNavigationEventBinding("manifest:aaaaaaaa-bbbb-cccc-dddd-000000000001:key");
+  const binding = buildRouteNavigationEventBinding(
+    "manifest:aaaaaaaa-bbbb-cccc-dddd-000000000001:key",
+  );
   assertEquals(Object.keys(binding).length, 0);
 });
 
 Deno.test("buildRouteNavigationEventBinding: null/undefined/empty targetRef returns empty binding", () => {
   assertEquals(Object.keys(buildRouteNavigationEventBinding(null)).length, 0);
-  assertEquals(Object.keys(buildRouteNavigationEventBinding(undefined)).length, 0);
+  assertEquals(
+    Object.keys(buildRouteNavigationEventBinding(undefined)).length,
+    0,
+  );
   assertEquals(Object.keys(buildRouteNavigationEventBinding("")).length, 0);
 });
 
@@ -572,7 +625,11 @@ Deno.test("parseEventBinding: routeNavigation binding is parsed correctly", () =
   assertExists(parsed, "parseEventBinding must return a value");
   assertExists(parsed!.routeNavigation, "routeNavigation must be parsed");
   assertEquals(parsed!.routeNavigation!.targetRef, "route:/admin/manifests");
-  assertEquals(parsed!.runtimeDispatch, undefined, "runtimeDispatch must be absent on navigation binding");
+  assertEquals(
+    parsed!.runtimeDispatch,
+    undefined,
+    "runtimeDispatch must be absent on navigation binding",
+  );
 });
 
 Deno.test("parseEventBinding: non-route: routeNavigation targetRef is rejected (undefined)", () => {
@@ -581,14 +638,22 @@ Deno.test("parseEventBinding: non-route: routeNavigation targetRef is rejected (
     routeNavigation: { targetRef: "screen:some-key" },
   };
   const parsed = factoryTestOnly.parseEventBinding(rawBinding);
-  assertExists(parsed, "parseEventBinding must return non-null for valid eventType");
-  assertEquals(parsed!.routeNavigation, undefined, "routeNavigation must be rejected for non-route: prefix");
+  assertExists(
+    parsed,
+    "parseEventBinding must return non-null for valid eventType",
+  );
+  assertEquals(
+    parsed!.routeNavigation,
+    undefined,
+    "routeNavigation must be rejected for non-route: prefix",
+  );
 });
-
 
 Deno.test("emitBoundEvent: routeNavigation click executes frontend-local navigation", () => {
   const originalLocation = globalThis.location;
-  const testLocation = { href: "http://localhost/admin/ui-builder" } as Location;
+  const testLocation = {
+    href: "http://localhost/admin/ui-builder",
+  } as Location;
   Object.defineProperty(globalThis, "location", {
     configurable: true,
     value: testLocation,
@@ -662,12 +727,19 @@ Deno.test("renderEmission: catalog_component with navigation wiringKind uses rou
   const specs = renderEmission(emission, emptyRegistry);
   assertEquals(specs.length, 1);
   assertExists(specs[0].runtimeSpec, "runtimeSpec must be present");
-  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<string, unknown>;
+  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<
+    string,
+    unknown
+  >;
   assertExists(clickBinding, "click binding must be present");
   const rn = clickBinding.routeNavigation as Record<string, unknown>;
   assertExists(rn, "routeNavigation must be present for navigation wiring");
   assertEquals(rn.targetRef, "route:/admin/manifests");
-  assertEquals(clickBinding.runtimeDispatch, undefined, "runtimeDispatch must NOT be present for navigation wiring");
+  assertEquals(
+    clickBinding.runtimeDispatch,
+    undefined,
+    "runtimeDispatch must NOT be present for navigation wiring",
+  );
 });
 
 // ─── mergeNodeLocalProps / propsJson / stateJson pipeline ────────────────────
@@ -684,7 +756,11 @@ Deno.test("mergeNodeLocalProps: no overrides returns base props unchanged", () =
 
 Deno.test("mergeNodeLocalProps: valid propsJson is shallow-merged over base", () => {
   const base = { data: { label: "Default" } };
-  const result = mergeNodeLocalProps(base, '{"data": {"label": "Custom", "variant": "primary"}}', undefined);
+  const result = mergeNodeLocalProps(
+    base,
+    '{"data": {"label": "Custom", "variant": "primary"}}',
+    undefined,
+  );
   assertEquals(result.ok, true);
   if (!result.ok) return;
   const data = result.props.data as Record<string, unknown>;
@@ -740,7 +816,8 @@ Deno.test("renderEmission: node with propsJson overrides default label in runtim
         wiringKind: "search",
         targetSurface: "screen",
         orderIndex: 0,
-        propsJson: '{"data": {"label": "カスタムボタン", "variant": "primary"}}',
+        propsJson:
+          '{"data": {"label": "カスタムボタン", "variant": "primary"}}',
       },
     ],
   };
@@ -789,14 +866,17 @@ Deno.test("renderEmission: node with invalid propsJson returns error spec not si
         componentKind: "action/button",
         componentKey: "btn.primitive",
         orderIndex: 0,
-        propsJson: '{invalid json}',
+        propsJson: "{invalid json}",
       },
     ],
   };
   const specs = renderEmission(emission, emptyRegistry);
   assertEquals(specs.length, 1);
   assertEquals(specs[0].componentType, "error");
-  assertStringIncludes(JSON.stringify(specs[0].def), "LAYOUT_NODE_PROPS_JSON_INVALID");
+  assertStringIncludes(
+    JSON.stringify(specs[0].def),
+    "LAYOUT_NODE_PROPS_JSON_INVALID",
+  );
 });
 
 Deno.test("renderEmission: node with invalid stateJson returns error spec not silent fallback", () => {
@@ -811,14 +891,17 @@ Deno.test("renderEmission: node with invalid stateJson returns error spec not si
         componentKind: "disclosure/modal",
         componentKey: "modal.template",
         orderIndex: 0,
-        stateJson: 'not-json-at-all',
+        stateJson: "not-json-at-all",
       },
     ],
   };
   const specs = renderEmission(emission, emptyRegistry);
   assertEquals(specs.length, 1);
   assertEquals(specs[0].componentType, "error");
-  assertStringIncludes(JSON.stringify(specs[0].def), "LAYOUT_NODE_STATE_JSON_INVALID");
+  assertStringIncludes(
+    JSON.stringify(specs[0].def),
+    "LAYOUT_NODE_STATE_JSON_INVALID",
+  );
 });
 
 // ─── buildRuntimeDispatchSpec: fail-close on absent targetSurface ─────────────
@@ -829,7 +912,11 @@ Deno.test("buildRuntimeDispatchSpec: wiringKind set + empty targetSurface return
     wiringKind: "search",
     targetSurface: "",
   });
-  assertEquals(spec, null, "empty targetSurface must not silently fall back to 'default'");
+  assertEquals(
+    spec,
+    null,
+    "empty targetSurface must not silently fall back to 'default'",
+  );
 });
 
 Deno.test("buildRuntimeDispatchSpec: wiringKind set + whitespace targetSurface returns null", () => {
@@ -838,7 +925,11 @@ Deno.test("buildRuntimeDispatchSpec: wiringKind set + whitespace targetSurface r
     wiringKind: "create",
     targetSurface: "   ",
   });
-  assertEquals(spec, null, "whitespace targetSurface must not silently fall back to 'default'");
+  assertEquals(
+    spec,
+    null,
+    "whitespace targetSurface must not silently fall back to 'default'",
+  );
 });
 
 // ─── runtimeInteractions: input trigger + setActiveKey actionType ─────────────
@@ -866,12 +957,20 @@ Deno.test("renderEmission: runtimeInteractions with input trigger and setActiveK
       },
     ],
   };
-  const specs = renderEmission(emission, emptyRegistry, { localStateStore: { get: () => undefined, set: () => {} } });
+  const specs = renderEmission(emission, emptyRegistry, {
+    localStateStore: createRuntimeStateDispatcher(
+      createRuntimeLocalStateStore(),
+    ),
+  });
   assertEquals(specs.length, 1);
   assertExists(specs[0].runtimeSpec, "runtimeSpec must be present");
-  const inputBinding = specs[0].runtimeSpec!.eventBinding["input"] as Record<string, unknown> | undefined;
+  const inputBinding = specs[0].runtimeSpec!.eventBinding["input"] as
+    | Record<string, unknown>
+    | undefined;
   assertExists(inputBinding, "input trigger binding must be present");
-  const mutation = inputBinding.localStateMutation as Record<string, unknown> | undefined;
+  const mutation = inputBinding.localStateMutation as
+    | Record<string, unknown>
+    | undefined;
   assertExists(mutation, "localStateMutation must be present for setActiveKey");
   assertEquals(mutation.targetNodeId, "tabs_content_node");
   assertEquals(mutation.statePath, "activeKey");
@@ -902,11 +1001,111 @@ Deno.test("renderEmission: runtimeInteractions with onInput trigger normalizes t
       },
     ],
   };
-  const specs = renderEmission(emission, emptyRegistry, { localStateStore: { get: () => undefined, set: () => {} } });
+  const specs = renderEmission(emission, emptyRegistry, {
+    localStateStore: createRuntimeStateDispatcher(
+      createRuntimeLocalStateStore(),
+    ),
+  });
   assertEquals(specs.length, 1);
   assertExists(specs[0].runtimeSpec);
-  const inputBinding = specs[0].runtimeSpec!.eventBinding["input"] as Record<string, unknown> | undefined;
+  const inputBinding = specs[0].runtimeSpec!.eventBinding["input"] as
+    | Record<string, unknown>
+    | undefined;
   assertExists(inputBinding, "onInput must normalize to input binding key");
   const mutation = inputBinding.localStateMutation as Record<string, unknown>;
   assertEquals(mutation.statePath, "activeKey");
+});
+
+// ─── high_frequency_policy runtime guard: emitBoundEvent fails close, not only authoring/apply ──
+
+Deno.test("emitBoundEvent: high-frequency trigger + dispatchExternalPort without debounceMs fails close and never enqueues", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as typeof fetch;
+  try {
+    const emission: Emission = {
+      layoutId: "layout-hf-external-001",
+      layoutNodes: [{
+        nodeId: "node-hf-external",
+        nodeKind: "catalog_component",
+        componentId: "comp-hf-external-001",
+        componentKind: "form_input/input",
+        componentKey: "text_input.primitive",
+        orderIndex: 0,
+        runtimeInteractions: [{
+          trigger: "input",
+          actionType: "dispatchExternalPort",
+          portTargetRef: "external-port:access_port:port-hf-1",
+          outputProp: "result",
+          // debounceMs intentionally absent — "input" is a high-frequency trigger.
+        }],
+      }],
+    };
+    const specs = renderEmission(emission, emptyRegistry);
+    assertExists(specs[0].runtimeSpec, "runtimeSpec must exist");
+    const result = factoryTestOnly.emitBoundEvent(
+      specs[0].runtimeSpec!,
+      "input",
+      { value: "x" },
+    );
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+      assertStringIncludes(result.error, "HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE");
+    }
+    assertEquals(
+      schedulerTestOnly.getCommandQueueLength(),
+      0,
+      "enqueueExternalPortDispatchCommand must not be called when debounceMs is missing",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: high-frequency trigger + dispatchInstanceOperation without debounceMs fails close and never enqueues", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as typeof fetch;
+  try {
+    const emission: Emission = {
+      layoutId: "layout-hf-instance-001",
+      layoutNodes: [{
+        nodeId: "node-hf-instance",
+        nodeKind: "catalog_component",
+        componentId: "comp-hf-instance-001",
+        componentKind: "form_input/input",
+        componentKey: "text_input.primitive",
+        orderIndex: 0,
+        runtimeInteractions: [{
+          trigger: "input",
+          actionType: "dispatchInstanceOperation",
+          instanceTargetRef: "instance-port:db_instance_port:inst-hf-1:op-hf-1",
+          outputProp: "result",
+          // debounceMs intentionally absent — "input" is a high-frequency trigger.
+        }],
+      }],
+    };
+    const specs = renderEmission(emission, emptyRegistry);
+    assertExists(specs[0].runtimeSpec, "runtimeSpec must exist");
+    const result = factoryTestOnly.emitBoundEvent(
+      specs[0].runtimeSpec!,
+      "input",
+      {},
+    );
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+      assertStringIncludes(result.error, "HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE");
+    }
+    assertEquals(
+      schedulerTestOnly.getCommandQueueLength(),
+      0,
+      "enqueueInstanceOperationDispatchCommand must not be called when debounceMs is missing",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
 });

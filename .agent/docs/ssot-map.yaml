@@ -970,6 +970,39 @@ mapping:
       - .agent/protocols/audit.md
       - .agent/protocols/implementation-change.md
 
+  - work_type: admin_uibuilder_ui_structure_wiring
+    change_surfaces:
+      - /admin/ui-builder UI structure
+      - layout canvas / wiring canvas boundary
+      - wiring mode projection over runtimeInteractions
+      - UI event settings (操作イベント) authoring
+      - runtimeInteractions authoring persistence authority
+      - trigger vocabulary (lifecycle / pointer / keyboard / form)
+      - lifecycle / high-frequency / drag-drop wiring edit policy
+      - external capability selection from seed registry (portTargetRef / instanceTargetRef)
+      - frontend/lib/uiBuilderWiringProjection.ts
+      - frontend/components/WiringGraphPanel.tsx
+      - frontend/components/NodeEventAuthoringPanel.tsx
+      - frontend/lib/runtimeInteractionAuthoring.ts
+      - frontend/lib/uiBuilderEventAuthoringHooks.ts
+      - frontend/tests/uiBuilderWiringProjection.test.ts
+      - frontend/runtime/uiEventEffectRunner.ts
+      - frontend/tests/uiEventEffectRunner.test.ts
+      - runtime state/effect runner boundary (component_runtime_state_effect_boundary)
+      - 外部インスタンス連携 runtime dispatch lane (enqueueInstanceOperationDispatchCommand)
+      - .agent/tests/check-admin-uibuilder-wiring.sh
+      - docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+    required_docs:
+      - docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+    supporting_docs:
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/external-port-substrate-ssot.yaml
+      - docs/design/instance-port-substrate-ssot.yaml
+    protocols:
+      - .agent/protocols/implementation-change.md
+
   - work_type: ui_builder_preset_ecosystem
     change_surfaces:
       - UIBuilder preset ecosystem

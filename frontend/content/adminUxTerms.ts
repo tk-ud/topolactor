@@ -434,10 +434,10 @@ export const UX_RUNTIME_INTERACTION_TRIGGER_UI = "トリガ（この部品）";
 export const UX_RUNTIME_INTERACTION_WHEN = "トリガUI指定";
 export const UX_RUNTIME_INTERACTION_WHAT = "操作の種類";
 export const UX_RUNTIME_INTERACTION_TARGET = "操作対象UI指定";
-/** パッケージ単位の接続 — SSOT: route_navigation_wiring_preset + manifest_screenReadQueryWiring + PackageWiringEditor advanced */
-export const UX_PACKAGE_WIRING_SECTION_TITLE = "パッケージの接続設定";
+/** パッケージ単位の接続（内部APIレーン） — SSOT: route_navigation_wiring_preset + manifest_screenReadQueryWiring + PackageWiringEditor advanced */
+export const UX_PACKAGE_WIRING_SECTION_TITLE = "内部API（パッケージ接続・ルート遷移）";
 export const UX_PACKAGE_WIRING_SECTION_HINT =
-  "このページ（パッケージ）単位の接続です。ルート遷移とトポロジ API を通常画面で設定します。部品ごとのモーダル・外部連携・インスタンス操作は「操作イベント」で設定します。";
+  "このページ（パッケージ）単位の接続です。内部API（Contents Step 3 のトポロジ API）とルート遷移を通常画面で設定します。部品ごとのUI状態更新・外部API連携・外部インスタンス連携は「操作イベント」で設定します。";
 export const UX_PACKAGE_WIRING_ADVANCED_LABEL = "上級: 配線 ID・接続先の直接編集";
 export const UX_RUNTIME_INTERACTION_INTENT_OPEN = "開く";
 export const UX_RUNTIME_INTERACTION_INTENT_CLOSE = "閉じる";
@@ -449,22 +449,49 @@ export const UX_RUNTIME_INTERACTION_NO_OVERLAY_TARGETS =
   "モーダル／ドロワー部品がキャンバスにありません。開閉操作を追加するには先に配置してください。";
 export const UX_RUNTIME_INTERACTION_ADD = "+ 動作を追加";
 export const UX_RUNTIME_INTERACTION_ADD_OVERLAY = "+ モーダル／ドロワー操作";
-export const UX_RUNTIME_INTERACTION_ADD_EXTERNAL = "+ 外部連携";
-export const UX_RUNTIME_INTERACTION_ADD_INSTANCE = "+ インスタンス操作";
-export const UX_RUNTIME_INTERACTION_ADD_EXTERNAL_COMMIT = "外部連携を確定";
-export const UX_RUNTIME_INTERACTION_ADD_INSTANCE_COMMIT = "インスタンス操作を確定";
+export const UX_RUNTIME_INTERACTION_ADD_EXTERNAL = "+ 外部API連携";
+export const UX_RUNTIME_INTERACTION_ADD_INSTANCE = "+ 外部インスタンス連携";
+export const UX_RUNTIME_INTERACTION_ADD_EXTERNAL_COMMIT = "外部API連携を確定";
+export const UX_RUNTIME_INTERACTION_ADD_INSTANCE_COMMIT = "外部インスタンス連携を確定";
 export const UX_RUNTIME_INTERACTION_STAGING_CANCEL = "キャンセル";
-export const UX_RUNTIME_INTERACTION_CATEGORY_OVERLAY = "モーダル／ドロワーを操作";
-export const UX_RUNTIME_INTERACTION_CATEGORY_EXTERNAL = "外部連携";
-export const UX_RUNTIME_INTERACTION_CATEGORY_INSTANCE = "インスタンス操作";
-export const UX_EXTERNAL_INTEGRATION_SECTION_TITLE = "外部連携";
+/**
+ * 配線インスペクタ分類語彙（正本: frontend-ui-audit-bundle-semantic-frame.md /
+ * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml setting_category_taxonomy）。
+ * frontend側: UI監視割当 / UI状態更新 / 副作用設定、backend側: 内部API / 外部API連携 / 外部インスタンス連携。
+ */
+export const UX_WIRING_CATEGORY_UI_WATCH_BINDING = "UI監視割当";
+export const UX_WIRING_CATEGORY_UI_STATE_UPDATE = "UI状態更新";
+export const UX_WIRING_CATEGORY_SIDE_EFFECT = "副作用設定";
+export const UX_WIRING_CATEGORY_INTERNAL_API = "内部API";
+export const UX_WIRING_CATEGORY_EXTERNAL_API = "外部API連携";
+export const UX_WIRING_CATEGORY_EXTERNAL_INSTANCE = "外部インスタンス連携";
+export const UX_RUNTIME_INTERACTION_CATEGORY_OVERLAY = UX_WIRING_CATEGORY_UI_STATE_UPDATE;
+export const UX_RUNTIME_INTERACTION_CATEGORY_EXTERNAL = UX_WIRING_CATEGORY_EXTERNAL_API;
+export const UX_RUNTIME_INTERACTION_CATEGORY_INSTANCE = UX_WIRING_CATEGORY_EXTERNAL_INSTANCE;
+export const UX_EXTERNAL_INTEGRATION_SECTION_TITLE = UX_WIRING_CATEGORY_EXTERNAL_API;
 export const UX_EXTERNAL_INTEGRATION_SECTION_HINT =
-  "外部連携レーン: DB 由来の active な external port 候補を操作対象として選びます。Contents Step 3 のトポロジ API 配線とは別系統です。";
-export const UX_INSTANCE_OPERATION_SECTION_TITLE = "インスタンス操作";
+  "外部API連携レーン: DB 由来の active な external port 候補を操作対象として選びます。内部API（Contents Step 3 のトポロジ API 配線）とは別系統です。";
+export const UX_INSTANCE_OPERATION_SECTION_TITLE = UX_WIRING_CATEGORY_EXTERNAL_INSTANCE;
 export const UX_INSTANCE_OPERATION_SECTION_HINT =
-  "インスタンス操作レーン: admin 承認済みの instance operation 候補を選びます。外部連携と sibling で、Contents Step 3 とは別系統です。";
+  "外部インスタンス連携レーン: admin 承認済みの instance operation 候補を選びます。外部API連携と sibling で、内部API（Contents Step 3）とは別系統です。";
 export const UX_EXTERNAL_PORT_EMPTY_HINT =
-  "active な external port 候補がありません。外部連携は Contents Step 3 とは別系統です。認証・外部接続設定で port を登録してください。";
+  "active な external port 候補がありません。外部API連携は内部API（Contents Step 3）とは別系統です。認証・外部接続設定で port を登録してください。";
+/** UI監視割当 — 宣言（useState相当のstate slot割当。更新ではない） */
+export const UX_WIRING_WATCH_BINDING_HINT =
+  "この部品が持つ状態スロット（監視変数）を宣言します。ここは割当（宣言）であり、値の更新は「UI状態更新」、反応は「副作用設定」で行います。";
+export const UX_WIRING_WATCH_BINDING_ADD = "+ 状態スロットを宣言";
+export const UX_WIRING_WATCH_BINDING_EMPTY = "宣言済みの状態スロットはありません。";
+/** 副作用設定 — 明示的な副作用なし選択（SSOT: side_effect_setting.explicit no-side-effect） */
+export const UX_WIRING_SIDE_EFFECT_SECTION_HINT =
+  "応答の受け取り先（outputProp）・データスコープ（payloadFrom）・対象部品への状態反映を設定します。副作用を持たない場合は明示的に「副作用なし」を選択します。";
+export const UX_WIRING_SIDE_EFFECT_NONE_LABEL = "副作用なし（明示）";
+/** lifecycle idempotency policy（SSOT: lifecycle_policy.idempotency_policy_values） */
+export const UX_WIRING_IDEMPOTENCY_LABEL = "再実行ポリシー（idempotency）";
+export const UX_WIRING_IDEMPOTENCY_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "once_per_mount", label: "初期マウントごとに1回（再レンダーで再送出しない）" },
+  { value: "refetch_on_route_enter", label: "ページ表示ごとに再取得" },
+  { value: "dedupe_key", label: "重複排除キーで制御" },
+];
 export const UX_RUNTIME_INTERACTION_EXTERNAL_PORT_SELECT = "操作対象UI指定（external port）";
 export const UX_RUNTIME_INTERACTION_INSTANCE_OPERATION_SELECT = "操作対象UI指定（instance operation）";
 /** @deprecated use UX_EXTERNAL_INTEGRATION_SECTION_TITLE */
@@ -485,11 +512,47 @@ const UX_RUNTIME_INTERACTION_TRIGGER_LABELS: Record<string, string> = {
   input: "入力時",
   focus: "フォーカス時",
   blur: "フォーカスが外れたとき",
+  // lifecycle triggers — SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml trigger_vocabulary
+  // initial_mount は runtime synthetic lifecycle trigger（DOM onLoad / resource loaded ではない）
+  initial_mount: "初期マウント時（ライフサイクル）",
+  route_enter: "ページ表示時（ライフサイクル）",
+  initial_display: "初期表示時（ライフサイクル）",
+  // pointer triggers（高頻度）
+  mouseon: "マウスが乗ったとき（高頻度）",
+  mouseout: "マウスが離れたとき（高頻度）",
+  hover_start: "ホバー開始時（高頻度）",
+  hover_end: "ホバー終了時（高頻度）",
+  // keyboard triggers
+  keyon: "キー押下中（高頻度）",
+  keydown: "キーを押したとき（高頻度）",
+  keyup: "キーを離したとき（高頻度）",
+  enter: "Enterキー押下時",
+  escape: "Escapeキー押下時",
 };
 
 export function uxRuntimeInteractionTriggerLabel(trigger: string): string {
   return UX_RUNTIME_INTERACTION_TRIGGER_LABELS[trigger] ?? trigger;
 }
+
+/** canvas mode 切替 — SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml layout_mode / wiring_mode */
+export const UX_CANVAS_MODE_LAYOUT = "レイアウト";
+export const UX_CANVAS_MODE_WIRING = "配線";
+export const UX_WIRING_MODE_HINT =
+  "配線ビューは操作イベント（runtimeInteractions）の投影です。ここでの編集は下書きノードへの操作イベント追加として保存され、配線図そのものは保存されません。";
+export const UX_WIRING_MODE_EMPTY =
+  "操作イベントが設定された部品がありません。部品を選択して「操作イベント」から追加するか、部品を開閉対象部品へドラッグして配線してください。";
+export const UX_WIRING_DROP_GUIDANCE =
+  "部品をドラッグして開閉対象部品（モーダル／ドロワー／ダイアログ）へドロップすると配線を追加します。";
+/** lifecycle / high-frequency policy — 明示警告文（SSOT: lifecycle_policy / high_frequency_policy） */
+export const UX_WIRING_POLICY_HIGH_FREQUENCY_WARNING =
+  "高頻度トリガでの外部/バックエンド送出には debounce（ミリ秒）の明示指定が必要です。";
+export const UX_WIRING_POLICY_LIFECYCLE_WARNING =
+  "ライフサイクルトリガでの外部/バックエンド送出は、明示的な確認が必要です。プレビューでは実行されません。";
+export const UX_WIRING_POLICY_LIFECYCLE_CONFIRM_LABEL =
+  "読み込み時の送出を理解して有効化する（再表示時にも再実行されます）";
+export const UX_WIRING_DEBOUNCE_LABEL = "送出間隔（debounce, ミリ秒）";
+/** 外部連携 credential authority 表示（port record context 内; SSOT: external-port-substrate-ssot.yaml admin_setting_projection） */
+export const UX_EXTERNAL_PORT_CREDENTIAL_AUTHORITY_LABEL = "認証情報（port record）";
 
 /** layout editor 右ドック — 配置インスペクタ見出し */
 export const UX_LAYOUT_INSPECTOR_SECTION = "配置インスペクタ";

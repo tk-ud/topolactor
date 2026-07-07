@@ -2487,8 +2487,8 @@ Deno.test("ManifestStep3EventWiringPreset: scoped to committed topology routeKey
 
 Deno.test("adminUxTerms: external integration / instance operation / topology API labels", async () => {
   const terms = await import("../content/adminUxTerms.ts");
-  assertEquals(terms.UX_RUNTIME_INTERACTION_ADD_EXTERNAL, "+ 外部連携");
-  assertEquals(terms.UX_RUNTIME_INTERACTION_ADD_INSTANCE, "+ インスタンス操作");
+  assertEquals(terms.UX_RUNTIME_INTERACTION_ADD_EXTERNAL, "+ 外部API連携");
+  assertEquals(terms.UX_RUNTIME_INTERACTION_ADD_INSTANCE, "+ 外部インスタンス連携");
   assertEquals(terms.UX_TRIGGER_UI_LABEL, "トリガUI指定");
   assertEquals(terms.UX_TARGET_UI_LABEL, "操作対象UI指定");
   assertEquals(terms.UX_MANIFEST_API_EVENT_PRESET_LABEL, "トポロジ API 設定");

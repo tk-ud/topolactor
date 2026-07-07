@@ -37,15 +37,42 @@ export type RuntimeComponentSpec = {
    * No mutation / DB write during typing. SSOT: candidate_source_boundary: debounce_backend_readonly_search
    */
   searchCallback?: (componentId: string, query: string) => void;
-  /** Projection-local UI state store used by runtime UI interactions (modal/drawer/dialog open state). */
-  localStateStore?: RuntimeLocalStateStore;
+  /**
+   * Guarded projection-local UI state store used by runtime UI interactions
+   * (modal/drawer/dialog open state, tabs/accordion activeKey, setState).
+   * This is the ONLY mutation path for UI状態更新 — both the lifecycle path
+   * (uiEventEffectRunner) and the event-triggered path (emitBoundEvent) write
+   * through the same guarded dispatcher instance so mutation authority is not
+   * duplicated. set() fails close for a slot that was never declared (via
+   * UI監視割当 stateJson or a predeclared UI状態更新 target).
+   * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml component_runtime_state_effect_boundary
+   */
+  localStateStore?: RuntimeGuardedStateStore;
   /** Snapshot used by dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
   payloadFromNodeValues?: Record<string, unknown>;
 };
 
+/** Raw projection-local state store (read/write, no guard). Wrapped by RuntimeGuardedStateStore. */
 export type RuntimeLocalStateStore = {
   get(targetNodeId: string, statePath: string): unknown;
   set(targetNodeId: string, statePath: string, value: unknown): void;
+};
+
+/**
+ * Guarded mutation surface over a RuntimeLocalStateStore: set() fails close for
+ * undeclared slots instead of writing silently. declare()/isDeclared() enforce
+ * the "UI監視割当 before UI状態更新" ordering. Implemented by
+ * frontend/runtime/uiEventEffectRunner.ts createRuntimeStateDispatcher.
+ */
+export type RuntimeGuardedStateStore = {
+  get(targetNodeId: string, statePath: string): unknown;
+  set(
+    targetNodeId: string,
+    statePath: string,
+    value: unknown,
+  ): { ok: true } | { ok: false; error: string };
+  declare(targetNodeId: string, statePath: string, initialValue: unknown): void;
+  isDeclared(targetNodeId: string, statePath: string): boolean;
 };
 
 type AdaptResult = { ok: true; value: RuntimeComponentSpec } | {

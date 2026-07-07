@@ -922,6 +922,151 @@ COMMENT ON TABLE topology.runtime_event_log IS
     'entity_id is opaque reference identifier only.';
 
 -- ---------------------------------------------------------------------------
+-- Runtime dispatch idempotency ledger.
+-- Retry-safe idempotency for the generic dispatchExternalPort / dispatchInstanceOperation
+-- runtime dispatch lanes (external_port_runtime / instance_port_runtime), keyed by a
+-- client-supplied idempotency_key. Distinct from topology.runtime_event_log above:
+-- runtime_event_log is append-only effect-observed evidence and is never read to
+-- decide whether to execute; this ledger IS read before execution (claim) and
+-- written after (complete/fail) specifically to prevent duplicate execution of the
+-- external API call / instance operation across communication loss, retry, reload,
+-- or runtime-runner recreation. A row transitions processing -> completed|failed
+-- exactly once per idempotency_key under normal operation; a retry against a
+-- completed key returns the stored result without re-executing; a retry against a
+-- failed key is allowed to re-claim (failure is not a permanently poisoned key,
+-- since the underlying effect did not complete) — see topology.rt_claim_dispatch_idempotency_key.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.runtime_dispatch_idempotency_ledger (
+    ledger_id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    idempotency_key   TEXT        NOT NULL UNIQUE,
+    dispatch_lane     TEXT        NOT NULL
+                                  CHECK (dispatch_lane IN ('external_port_runtime', 'instance_port_runtime')),
+    status            TEXT        NOT NULL DEFAULT 'processing'
+                                  CHECK (status IN ('processing', 'completed', 'failed')),
+    result_json       JSONB,
+    failure_code      TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_runtime_dispatch_idempotency_ledger_processing
+    ON topology.runtime_dispatch_idempotency_ledger (status)
+    WHERE status = 'processing';
+
+COMMENT ON TABLE topology.runtime_dispatch_idempotency_ledger IS
+    'Retry-safe idempotency ledger for dispatchExternalPort / dispatchInstanceOperation '
+    'runtime dispatch. Read before execution (claim) and written after (complete/fail). '
+    'NOT an append-only evidence log — see topology.runtime_event_log for that.';
+
+-- rt_claim_dispatch_idempotency_key: attempts to claim p_idempotency_key for
+-- execution. Returns claim_status IN ('claimed', 'in_flight', 'already_completed').
+-- 'claimed': caller must execute the effect, then call rt_complete_/rt_fail_.
+-- 'already_completed': caller must NOT execute the effect again; result_json holds
+--   the previously stored result to return to the retrying client.
+-- 'in_flight': another request is currently processing the same key (true
+--   concurrent duplicate, or a race on reclaiming a failed key) — caller must NOT
+--   execute the effect again.
+CREATE OR REPLACE FUNCTION topology.rt_claim_dispatch_idempotency_key(
+    p_idempotency_key TEXT,
+    p_dispatch_lane   TEXT
+) RETURNS TABLE(claim_status TEXT, result_json JSONB)
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_claimed_id UUID;
+    v_status     TEXT;
+    v_result     JSONB;
+BEGIN
+    IF p_idempotency_key IS NULL OR btrim(p_idempotency_key) = '' THEN
+        RAISE EXCEPTION 'RUNTIME_DISPATCH_IDEMPOTENCY_KEY_REQUIRED';
+    END IF;
+    IF p_dispatch_lane NOT IN ('external_port_runtime', 'instance_port_runtime') THEN
+        RAISE EXCEPTION 'RUNTIME_DISPATCH_LANE_INVALID';
+    END IF;
+
+    INSERT INTO topology.runtime_dispatch_idempotency_ledger (idempotency_key, dispatch_lane, status)
+    VALUES (p_idempotency_key, p_dispatch_lane, 'processing')
+    ON CONFLICT (idempotency_key) DO NOTHING
+    RETURNING ledger_id INTO v_claimed_id;
+
+    IF v_claimed_id IS NOT NULL THEN
+        claim_status := 'claimed';
+        result_json := NULL;
+        RETURN NEXT;
+        RETURN;
+    END IF;
+
+    SELECT t.status, t.result_json INTO v_status, v_result
+      FROM topology.runtime_dispatch_idempotency_ledger AS t
+     WHERE t.idempotency_key = p_idempotency_key;
+
+    IF v_status = 'completed' THEN
+        claim_status := 'already_completed';
+        result_json := v_result;
+        RETURN NEXT;
+        RETURN;
+    END IF;
+
+    IF v_status = 'failed' THEN
+        UPDATE topology.runtime_dispatch_idempotency_ledger
+           SET status = 'processing', failure_code = NULL, updated_at = now()
+         WHERE idempotency_key = p_idempotency_key AND status = 'failed'
+        RETURNING ledger_id INTO v_claimed_id;
+        IF v_claimed_id IS NOT NULL THEN
+            claim_status := 'claimed';
+            result_json := NULL;
+            RETURN NEXT;
+            RETURN;
+        END IF;
+    END IF;
+
+    -- status = 'processing' (genuine concurrent duplicate), or lost the race to
+    -- reclaim a 'failed' key — either way, do not execute again.
+    claim_status := 'in_flight';
+    result_json := NULL;
+    RETURN NEXT;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.rt_claim_dispatch_idempotency_key IS
+    'Claims an idempotency_key before executing dispatchExternalPort / dispatchInstanceOperation. claimed = execute; already_completed = return result_json without executing; in_flight = do not execute (concurrent duplicate).';
+
+CREATE OR REPLACE FUNCTION topology.rt_complete_dispatch_idempotency_key(
+    p_idempotency_key TEXT,
+    p_result_json     JSONB
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    UPDATE topology.runtime_dispatch_idempotency_ledger
+       SET status = 'completed', result_json = p_result_json, updated_at = now()
+     WHERE idempotency_key = p_idempotency_key AND status = 'processing'
+    RETURNING ledger_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.rt_complete_dispatch_idempotency_key IS
+    'Marks a claimed idempotency_key as completed with its result, after successful dispatch execution. Only transitions from processing; returns NULL ledger_id if no matching processing row was found.';
+
+CREATE OR REPLACE FUNCTION topology.rt_fail_dispatch_idempotency_key(
+    p_idempotency_key TEXT,
+    p_failure_code    TEXT
+) RETURNS UUID
+LANGUAGE plpgsql AS $$
+DECLARE v_id UUID;
+BEGIN
+    UPDATE topology.runtime_dispatch_idempotency_ledger
+       SET status = 'failed', failure_code = p_failure_code, updated_at = now()
+     WHERE idempotency_key = p_idempotency_key AND status = 'processing'
+    RETURNING ledger_id INTO v_id;
+    RETURN v_id;
+END;
+$$;
+
+COMMENT ON FUNCTION topology.rt_fail_dispatch_idempotency_key IS
+    'Marks a claimed idempotency_key as failed after a fail-close dispatch execution. failed keys may be reclaimed by rt_claim_dispatch_idempotency_key (retry-safe — failure does not permanently poison the key). Returns NULL ledger_id if no matching processing row was found.';
+
+-- ---------------------------------------------------------------------------
 -- external_port_substrate consumer bundle evidence tables.
 -- These physical tables are generic evidence/projection surfaces only. Provider
 -- credentials, endpoint values, tokens, and signed URLs are never stored here.
