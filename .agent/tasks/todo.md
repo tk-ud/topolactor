@@ -36,19 +36,20 @@ active report は `runtime_interaction_identity / projection_time_idempotency_id
 - PR574 後の残 scope を、次の bundle として実装可能な境界に整理する。
 - 移管済み report file を削除し、未処理作業管理 source を `.agent/tasks/todo.md` へ寄せる。
 
-### PR574 implemented evidence（再実装対象ではない）
+### PR574 reference evidence（再実装対象ではない）
 
 - PR: `#574`
 - title: `Add admin UI Builder UI structure/wiring owning SSOT with wiring mode and trigger policies`
 - merged: true
 - merge_commit_sha: `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c`
 - changed_files: 35 / additions: 10610 / deletions: 3778
-- PR body evidence:
+- evidence role: PR574 body / comments / merged diff are the reference evidence for implemented scope. This TODO keeps only a compact evidence pointer and does not duplicate the full PR574 proof transcript.
+- implemented scope summary:
   - `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` was added as the owning SSOT for `/admin/ui-builder` layout/wiring canvas boundary, `runtimeInteractions` persistence authority, trigger vocabulary, lifecycle policy, high-frequency policy, drag-drop wiring edit policy, and seed-registry external capability selection.
   - wiring mode / trigger vocabulary / lifecycle policy / high_frequency_policy / drag_drop_wiring_edit were implemented and gated by `.agent/tests/check-admin-uibuilder-wiring.sh` registered in `check-structure.sh`.
   - `frontend/lib/uiBuilderWiringProjection.ts`, `frontend/components/WiringGraphPanel.tsx`, `frontend/islands/UiBuilderAdmin.tsx`, and `frontend/components/NodeEventAuthoringPanel.tsx` were part of the implementation/proof surface.
   - runtime interaction execution/idempotency proof was added: `frontend/runtime/uiEventEffectRunner.ts`, `renderEmission` / `runtimeComponentFactory` event bindings, deterministic `computeDispatchIdempotencyKey` / `appendResolvedPayloadToIdempotencyKey`, backend `topology.runtime_dispatch_idempotency_ledger`, `NpgsqlRuntimeDispatchIdempotencyLedgerRepository`, `ExternalPortDispatchRuntime`, and `InstancePortRuntime` claim/complete/fail gating.
-  - Verification recorded in PR body: `deno test frontend/tests/` equivalent frontend tests passed as part of `deno test 1763 passed`; backend unit tests and DB bootstrap/idempotency SQL scenarios passed; `agent-ui-local-test` routed chain evidence was recorded with `check-admin-uibuilder-wiring.sh`, `check-frontend-types.sh`, `check-structure.sh`, `check-worktype-routing.sh`, `check-completion-judgment.sh`, and `check-db-schema.sh` passing.
+  - verification/proof details are traced in PR574 body, review comments, follow-up commits, and merged diff.
 
 ### 改善方針 / 残 scope
 
