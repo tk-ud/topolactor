@@ -11,6 +11,13 @@ base_lineage:
   action: audit_memo_only
   source_change: none
   report_path: .agent/reports/ui-projection-surface-gap-audit-2026-07-07.md
+  parent_active_report: .agent/reports/frontend-ui-audit-bundle-semantic-frame.md
+
+lineage_rule:
+  this memo is subordinate evidence for the active frontend UI audit bundle report.
+  this memo does not supersede the active report.
+  this memo must not create a parallel lineage.
+  this memo must not revive /demo as a canonical route.
 
 status:
   audit_in_progress
@@ -23,9 +30,48 @@ partial:
 
 blocking_summary:
   UI projection confirmation gap spans both demo and production surfaces.
-  /demo is mostly canvas/layout draft preview.
+  /demo is mostly canvas/layout draft preview and remains non-canonical under the active report lineage.
   production ProjectionShell is product projection surface, but initial dispatch is default-bound.
   Therefore UI Builder authored/applied topology is not sufficiently confirmable as user-facing UI projection before real production use.
+```
+
+## Active Report Lineage
+
+```text
+active_report:
+  .agent/reports/frontend-ui-audit-bundle-semantic-frame.md
+
+active_report_status:
+  Active report: this file
+
+active_report_route_taxonomy:
+  projection_entry:
+    /
+
+  canonical_admin_authoring_settings:
+    /admin
+    /admin/contents
+    /admin/ui-builder
+    /admin/manifests
+
+  non_canonical_hardcoded_routes_to_remove:
+    /demo
+    /runtime-status
+    /admin/enums
+    /admin/users
+    /admin/team-dashboard
+    /admin/scheduler
+
+active_report_demo_policy:
+  /demo -> remove route; no seed replacement
+  /demo must not move into seed
+
+lineage_correction:
+  This memo describes the projection-confirmation gap observed around existing /demo and production ProjectionShell.
+  It does not redefine /demo as canonical.
+  It does not request a /demo seed.
+  It does not request preserving /demo as a route.
+  Required future surface must follow the active report route taxonomy and owning SSOT.
 ```
 
 ## Read Scope
@@ -33,6 +79,9 @@ blocking_summary:
 ```text
 entry_contract:
   AGENTS.md
+
+active_report:
+  .agent/reports/frontend-ui-audit-bundle-semantic-frame.md
 
 SSOT:
   docs/design/ui-builder-preset-ecosystem-ssot.yaml
@@ -143,9 +192,14 @@ canvas_preview:
   acceptable_location:
     UI Builder authoring flow
 
-pre_production_ui_projection_demo:
+pre_production_ui_projection_confirmation:
   purpose:
     production-equivalent UI projection confirmation before real production use
+
+  route_policy:
+    must follow active frontend UI audit route taxonomy
+    must not preserve /demo as canonical route unless owning SSOT is amended first
+    must not become a seed fallback
 
   must_confirm:
     applied topology
@@ -168,7 +222,7 @@ production_projection_surface:
 
 ## Current Implementation Evidence
 
-### /demo surface
+### Existing /demo surface
 
 ```text
 file:
@@ -189,10 +243,10 @@ observed:
 
 ```text
 classification:
-  /demo exists.
-  /demo is not absent.
+  /demo exists in current implementation.
   /demo is useful as canvas/layout draft preview.
   /demo is weak as production-equivalent UI projection confirmation.
+  /demo remains non-canonical under the active frontend UI audit report.
 ```
 
 ### production surface
@@ -254,15 +308,19 @@ impact:
 
 ```text
 Gap-1:
-  id: demo_canvas_preview_not_ui_projection_demo
+  id: existing_demo_canvas_preview_not_ui_projection_confirmation
   type:
     implementation_gap
     product_surface_gap
     projection_confirmation_gap
 
   problem:
-    /demo is mainly canvas/layout draft preview.
+    Existing /demo is mainly canvas/layout draft preview.
     It does not sufficiently confirm production-equivalent user-facing UI projection.
+
+  lineage_boundary:
+    /demo is non-canonical in the active frontend UI audit report.
+    This gap must not be fixed by preserving /demo as canonical.
 
   evidence:
     DraftPreviewShell loads selected layoutId.
@@ -273,6 +331,7 @@ Gap-1:
     missing demo route
     seedLabel smoke issue
     credential management 0092 issue
+    request to keep /demo canonical
 
 Gap-2:
   id: production_projection_default_bound
@@ -319,8 +378,10 @@ Gap-4:
 
 ```text
 OK:
-  - Canvas preview remains available for authoring/layout/slot intent confirmation.
-  - Pre-production UI projection demo is separated from canvas preview.
+  - Active report remains the frontend UI audit bundle authority.
+  - /demo remains non-canonical unless owning SSOT is amended first.
+  - Canvas preview remains available within UI Builder authoring flow or another canonical authoring surface.
+  - Pre-production UI projection confirmation is separated from canvas preview.
   - Production projection surface can resolve/select UI Builder applied topology by canonical route/package/manifest/read-query axes.
   - Product projection is not limited to default/screen_list/Search.
   - screen_data_shape_query_result outer shape is preserved unless a projection definition explicitly requests single-row mapping.
@@ -335,6 +396,9 @@ OK:
 
 ```text
 NG:
+  - Treating this memo as a new active report lineage.
+  - Reinstating /demo as a canonical route without SSOT amendment.
+  - Moving /demo into seed.
   - Treating /demo canvas preview as production-equivalent UI projection proof.
   - Treating default/screen_list/Search product shell as sufficient proof for arbitrary UI Builder authored topology.
   - Keeping projectionInputFromData rows[0] collapse for screen_data_shape_query_result collection payload.
@@ -350,15 +414,20 @@ NG:
 bundle:
   UI projection surface architecture reinforcement
 
+parent_lineage:
+  frontend-ui-audit-bundle-semantic-frame.md
+
 scope:
-  demo surface
+  non-canonical existing /demo observation
   production projection surface
   projection constructor collection preservation
   projection proof/test reinforcement
 
 required_work:
-  - split canvas preview from pre-production UI projection demo
-  - make pre-production UI projection demo confirm applied topology as user-facing UI
+  - do not treat this memo as a parallel active report
+  - do not preserve /demo as canonical unless owning SSOT is amended first
+  - split canvas preview from production-equivalent UI projection confirmation
+  - place pre-production UI projection confirmation under canonical route/surface taxonomy
   - make production projection surface route/package/manifest aware instead of default-only
   - preserve screen_data_shape_query_result outer payload shape
   - add proof for rows / activeColumns / displayColumnMode through production-equivalent projection
@@ -377,14 +446,14 @@ partial:
 
 blocking:
   UI projection confirmation is structurally weak on both sides:
-    /demo is canvas/layout draft preview.
+    existing /demo is canvas/layout draft preview and non-canonical.
     production ProjectionShell is default-bound.
 
 result:
   UI Builder authored/applied topology cannot be sufficiently confirmed as real user-facing UI projection before or through a route/package/manifest-aware product surface.
 
 merge_judgment:
-  do not mark implemented until the projection surface gap and rows[0] collection collapse bug are addressed at Bundle scope.
+  do not mark implemented until the projection surface gap and rows[0] collection collapse bug are addressed at Bundle scope under the active frontend UI audit report lineage.
 ```
 
 ## Reference Evidence
@@ -393,6 +462,12 @@ merge_judgment:
 AGENTS.md:
   - Repository Design Order: SSOT -> wiring -> test/proof surface -> implementation
   - Existing implementation is not design authority
+
+active_report_refs:
+  .agent/reports/frontend-ui-audit-bundle-semantic-frame.md
+    - active report declaration
+    - route taxonomy
+    - /demo non-canonical removal policy
 
 SSOT refs:
   docs/design/ui-builder-preset-ecosystem-ssot.yaml
