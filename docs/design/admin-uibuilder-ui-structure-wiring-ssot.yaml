@@ -1,6 +1,6 @@
 admin_uibuilder_ui_structure_wiring_ssot:
   name: admin_uibuilder_ui_structure_wiring
-  version: 0.3.0
+  version: 0.4.0
   status: ssot_design_document
   canonical_path: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
   authority_hierarchy: >-
@@ -220,6 +220,23 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - UI監視割当 declares state slot / dependency source before mutation or effect selection
       - UI状態更新 writes only through the runtime state dispatcher
       - 副作用設定 resolves the dependency graph before execution and runs through the effect runner
+    mutation_authority_unification:
+      rule: >-
+        There is exactly one guarded write path for UI状態更新: the runtime state
+        dispatcher (RuntimeGuardedStateStore). The lifecycle-triggered path
+        (uiEventEffectRunner.emitLifecycle) and the event-triggered path
+        (runtimeComponentFactory.emitBoundEvent localStateMutation lane) both call
+        applyGuardedLocalStateMutation against the SAME dispatcher instance — the
+        event path does not write directly to a raw store. There is no
+        write-time auto-declare fallback: a slot must be predeclared (via
+        UI監視割当 stateJson or a predeclared UI状態更新 target scanned from the
+        current node list) before either path may write it; a target absent
+        from the current node list (e.g. a stale/deleted-node reference) fails
+        close identically on both paths.
+      fail_close:
+        - event_triggered_local_state_mutation_writing_directly_to_a_raw_store
+        - event_and_lifecycle_paths_using_separate_dispatcher_instances_for_the_same_projection
+        - write_time_auto_declare_fallback_for_undeclared_slots
     state_update_projection_rerender_contract:
       rule: >-
         A runtime state store update alone (Map write) is NOT UI状態更新 completion.
@@ -237,10 +254,13 @@ admin_uibuilder_ui_structure_wiring_ssot:
         - sse_refresh_recreating_store_runner_or_fired_registry
     runtime_boundary_implementation:
       effect_runner: frontend/runtime/uiEventEffectRunner.ts (createUiEventEffectRunner; owns lifecycle emission, loop guard, idempotency registry)
-      state_dispatcher: frontend/runtime/uiEventEffectRunner.ts createRuntimeStateDispatcher (declare-then-mutate; undeclared-slot writes fail close)
+      state_dispatcher: frontend/runtime/uiEventEffectRunner.ts createRuntimeStateDispatcher (declare-then-mutate; undeclared-slot writes fail close; no auto-declare fallback)
+      guarded_mutation_shared_entry_point: frontend/runtime/uiEventEffectRunner.ts applyGuardedLocalStateMutation + resolveUiStateUpdateMutation (used by BOTH executeStateUpdate (lifecycle) and runtimeComponentFactory.emitBoundEvent (event-triggered))
+      predeclare: frontend/runtime/uiEventEffectRunner.ts predeclareProjectionState / createProjectionStateDispatcher (declares UI監視割当 stateJson slots and every UI状態更新 target found in runtimeInteractions, before any interaction can execute)
       state_store_notification: frontend/runtime/uiEventEffectRunner.ts createRuntimeLocalStateStore (NotifyingRuntimeLocalStateStore.subscribe -> projection specs re-render)
-      event_lanes: frontend/runtime/runtimeComponentFactory.ts emitBoundEvent (event log / internal dispatch / 外部API連携 / 外部インスタンス連携 / route navigation / local state lanes; previewMode inert)
-      mount_integration: frontend/islands/ProjectionShell.tsx (runner created once per mount; initial_mount emitted after first projection render; SSE refresh never re-emits)
+      event_lanes: frontend/runtime/runtimeComponentFactory.ts emitBoundEvent (event log / internal dispatch / 外部API連携 / 外部インスタンス連携 / route navigation / local state lanes via the shared guarded dispatcher; previewMode inert)
+      binding_builder: frontend/runtime/renderEmission.ts buildLocalUiStateEventBinding (reuses wiringSettingCategoryOf + resolveUiStateUpdateMutation — the same classification/resolution the lifecycle path uses, so the event binding and the lifecycle mutation agree on shape)
+      mount_integration: frontend/islands/ProjectionShell.tsx (single dispatcher created before the first render; passed into both renderEmission and the runner; runner created once per mount; initial_mount emitted after first projection render; SSE refresh predeclares new targets and never re-emits)
       dispatch_lanes: frontend/runtime/frontendScheduler.ts enqueueExternalPortDispatchCommand / enqueueInstanceOperationDispatchCommand (api_command_lane; typed-ref prefix fail close)
     component_edit_boundary:
       - edit an individual component only when a required event/value surface is missing
@@ -415,6 +435,14 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - unconfirmed / non-idempotent lifecycle dispatch never executes at runtime
       - dispatchInstanceOperation projects a runtime dispatch binding and rides the
         api_command_lane with typed instance-port reference (invalid prefix fails close)
+      - event-triggered UI状態更新 (emitBoundEvent localStateMutation) writes through
+        the SAME guarded dispatcher instance as the lifecycle path, not a direct
+        raw-store write
+      - event-triggered mutation targeting an undeclared / stale-node slot fails
+        close identically to the lifecycle path (no auto-declare fallback either path)
+      - event-triggered mutation on a predeclared slot succeeds through the shared dispatcher
+      - event-triggered UI状態更新 -> store notification -> renderEmission re-run ->
+        rendered runtimeSpec props reflect the mutation (not store-Map-only proof)
     policy_ref: docs/design/pipeline-continuity-ssot.yaml test_tier_policy
 
   prohibited:
@@ -437,3 +465,6 @@ admin_uibuilder_ui_structure_wiring_ssot:
     - requiring_ad_hoc_useEffect_insertion_in_every_component_as_default_strategy
     - policy_warning_display_alone_passing_validate_or_apply
     - test_only_deletion_as_proof
+    - event_triggered_local_state_mutation_writing_directly_to_a_raw_store
+    - event_and_lifecycle_paths_using_separate_dispatcher_instances_for_the_same_projection
+    - write_time_auto_declare_fallback_for_undeclared_slots

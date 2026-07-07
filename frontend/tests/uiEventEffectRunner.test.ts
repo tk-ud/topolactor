@@ -19,6 +19,7 @@
 
 import { assert, assertEquals } from "jsr:@std/assert";
 import {
+  createProjectionStateDispatcher,
   createRuntimeLocalStateStore,
   createRuntimeStateDispatcher,
   createUiEventEffectRunner,
@@ -369,21 +370,27 @@ function modalOpenProp(specs: ReturnType<typeof renderEmission>): unknown {
 Deno.test("rerender接続: initial_mount UI状態更新 -> store notification -> rendered runtimeSpec props に反映", () => {
   const store: NotifyingRuntimeLocalStateStore = createRuntimeLocalStateStore();
   const emission = modalEmission();
+  // ProjectionShell equivalent: dispatcher created (predeclared) before the
+  // first render, and reused by both renderEmission and the runner.
+  const dispatcher = createProjectionStateDispatcher(
+    runnerNodesFromEmission(),
+    store,
+  );
 
   // ProjectionShell equivalent: render, subscribe (before lifecycle emission), emit.
   let specs = renderEmission(emission, defaultComponentRegistry, {
-    localStateStore: store,
+    localStateStore: dispatcher,
   });
   let notified = 0;
   store.subscribe(() => {
     notified++;
     specs = renderEmission(emission, defaultComponentRegistry, {
-      localStateStore: store,
+      localStateStore: dispatcher,
     });
   });
   const runner = createUiEventEffectRunner({
     nodes: runnerNodesFromEmission(),
-    store,
+    dispatcher,
   });
   assertEquals(modalOpenProp(specs), false);
 
@@ -473,17 +480,21 @@ Deno.test("rerender接続: loop guard 時は store更新も notification も起�
 
 Deno.test("rerender接続: SSE refresh相当の再renderでも store状態と fired-registry が維持される", () => {
   const store = createRuntimeLocalStateStore();
+  const dispatcher = createProjectionStateDispatcher(
+    runnerNodesFromEmission(),
+    store,
+  );
   const emission = modalEmission();
   const runner = createUiEventEffectRunner({
     nodes: runnerNodesFromEmission(),
-    store,
+    dispatcher,
   });
   runner.emitLifecycle("initial_mount");
   assertEquals(runner.stateDispatcher.get("n-modal", "open"), true);
 
-  // SSE refresh: a NEW emission object is rendered with the SAME store/runner refs.
+  // SSE refresh: a NEW emission object is rendered with the SAME dispatcher/runner refs.
   const refreshed = renderEmission(modalEmission(), defaultComponentRegistry, {
-    localStateStore: store,
+    localStateStore: dispatcher,
   });
   assertEquals(modalOpenProp(refreshed), true);
   // Refresh does not re-create runner/store: lifecycle stays idempotent.

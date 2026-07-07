@@ -1,23 +1,59 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { probeSessionToken, refreshProjectionSession } from "../api/authApi.ts";
-import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
-import { enqueueProjectionHookTrigger, queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
+import {
+  clearSessionToken,
+  persistSessionToken,
+  readClientSessionToken,
+} from "../lib/demoSession.ts";
+import {
+  enqueueProjectionHookTrigger,
+  queueClientCommand,
+  startComponentEventRuntime,
+} from "../runtime/frontendScheduler.ts";
 import type { UserOperation } from "../runtime/resolveOperationVector.ts";
-import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
+import {
+  type ComponentSpec,
+  renderEmission,
+} from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
-import { createSseReceiver, type ProjectionHookTrigger, type SseReceiver } from "../runtime/sseReceiver.ts";
+import {
+  createSseReceiver,
+  type ProjectionHookTrigger,
+  type SseReceiver,
+} from "../runtime/sseReceiver.ts";
 import { createSseDispatcherWithProjectionRuntime } from "../runtime/sseDispatcher.ts";
 import { createProjectionRuntime } from "../runtime/projectionRuntime.ts";
 import {
+  createProjectionStateDispatcher,
   createRuntimeLocalStateStore,
   createUiEventEffectRunner,
   type NotifyingRuntimeLocalStateStore,
+  predeclareProjectionState,
+  type RuntimeStateDispatcher,
   type UiEventEffectRunner,
 } from "../runtime/uiEventEffectRunner.ts";
-import type { Emission } from "../api/dispatch.ts";
+import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
+import type { Emission, LayoutNode } from "../api/dispatch.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
+
+/** Narrow an emission's layoutNodes into the WiringNode shape the runtime state/effect runner consumes. */
+function toRunnerWiringNodes(
+  layoutNodes: readonly LayoutNode[] | undefined,
+): WiringNode[] {
+  return (layoutNodes ?? [])
+    .filter((n): n is LayoutNode & { nodeId: string } =>
+      typeof n.nodeId === "string" && n.nodeId.length > 0
+    )
+    .map((n) => ({
+      nodeId: n.nodeId,
+      componentKey: n.componentKey,
+      componentKind: n.componentKind,
+      stateJson: n.stateJson ?? undefined,
+      runtimeInteractions: n.runtimeInteractions ?? undefined,
+    }));
+}
 
 /**
  * Production application projection shell.
@@ -37,7 +73,9 @@ export default function ProjectionShell(): JSX.Element {
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [authFallback, setAuthFallback] = useState(false);
-  const [projectionToken, setProjectionToken] = useState<string | undefined>(undefined);
+  const [projectionToken, setProjectionToken] = useState<string | undefined>(
+    undefined,
+  );
 
   // Generation counter prevents stale SSE refresh responses from overwriting newer results.
   const refreshGenRef = useRef(0);
@@ -55,6 +93,12 @@ export default function ProjectionShell(): JSX.Element {
   const localStateStoreRef = useRef<NotifyingRuntimeLocalStateStore>(
     createRuntimeLocalStateStore(),
   );
+  // Guarded mutation dispatcher — the ONLY write path for UI状態更新, shared by
+  // BOTH the lifecycle runner (below) and event-triggered mutations (passed into
+  // renderEmission as localStateStore, consumed by emitBoundEvent). A single
+  // dispatcher instance per mount keeps declared-slot state (and the guard) in
+  // sync across both mutation paths.
+  const stateDispatcherRef = useRef<RuntimeStateDispatcher | null>(null);
   const effectRunnerRef = useRef<UiEventEffectRunner | null>(null);
   // Latest emission for store-notification re-render (closed-over state is stale in [] effect).
   const emissionRef = useRef<Emission | null>(null);
@@ -134,12 +178,17 @@ export default function ProjectionShell(): JSX.Element {
         action: "Search",
       };
       initialDispatchAxesRef.current = initialAxes;
-      const dispatchResult = await queueClientCommand(initialAxes, currentToken);
+      const dispatchResult = await queueClientCommand(
+        initialAxes,
+        currentToken,
+      );
 
       if (!mounted) return;
 
       if (!dispatchResult.success) {
-        setError(dispatchResult.errors?.[0]?.message ?? "投影の取得に失敗しました");
+        setError(
+          dispatchResult.errors?.[0]?.message ?? "投影の取得に失敗しました",
+        );
         setLoading(false);
         return;
       }
@@ -150,10 +199,23 @@ export default function ProjectionShell(): JSX.Element {
         setLoading(false);
         return;
       }
+      // Guarded dispatcher created (and UI監視割当 / UI状態更新-target slots
+      // predeclared) BEFORE the first renderEmission call, so the very first
+      // rendered event bindings already write through the guarded, shared
+      // mutation path — there is no separate un-guarded first render.
+      const runnerNodes = toRunnerWiringNodes(nextEmission.layoutNodes);
+      if (!stateDispatcherRef.current) {
+        stateDispatcherRef.current = createProjectionStateDispatcher(
+          runnerNodes,
+          localStateStoreRef.current,
+        );
+      }
+      const stateDispatcher = stateDispatcherRef.current;
+
       setEmission(nextEmission);
       emissionRef.current = nextEmission;
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry, {
-        localStateStore: localStateStoreRef.current,
+        localStateStore: stateDispatcher,
       }));
       setLoading(false);
 
@@ -166,28 +228,27 @@ export default function ProjectionShell(): JSX.Element {
         // runtime dispatcher (runner lifecycle emission or event-lane
         // localStateMutation) re-renders the projection so UI状態更新 reflects
         // into rendered runtimeSpec props. Subscribed BEFORE lifecycle emission.
-        storeUnsubscribeRef.current = localStateStoreRef.current.subscribe(() => {
-          const current = emissionRef.current;
-          if (!current || !mounted) return;
-          setSpecs(renderEmission(current, defaultComponentRegistry, {
-            localStateStore: localStateStoreRef.current,
-          }));
-        });
-        const runnerNodes = (nextEmission.layoutNodes ?? [])
-          .filter((n) => typeof n.nodeId === "string" && n.nodeId)
-          .map((n) => ({
-            nodeId: n.nodeId as string,
-            componentKey: n.componentKey,
-            componentKind: n.componentKind,
-            stateJson: n.stateJson ?? undefined,
-            runtimeInteractions: n.runtimeInteractions ?? undefined,
-          }));
+        storeUnsubscribeRef.current = localStateStoreRef.current.subscribe(
+          () => {
+            const current = emissionRef.current;
+            if (!current || !mounted) return;
+            setSpecs(renderEmission(current, defaultComponentRegistry, {
+              localStateStore: stateDispatcherRef.current ?? stateDispatcher,
+            }));
+          },
+        );
         const runner = createUiEventEffectRunner({
           nodes: runnerNodes,
-          store: localStateStoreRef.current,
+          dispatcher: stateDispatcher,
         });
         effectRunnerRef.current = runner;
-        for (const trigger of ["initial_mount", "route_enter", "initial_display"] as const) {
+        for (
+          const trigger of [
+            "initial_mount",
+            "route_enter",
+            "initial_display",
+          ] as const
+        ) {
           const result = runner.emitLifecycle(trigger);
           if (!result.ok) {
             console.error(
@@ -211,7 +272,9 @@ export default function ProjectionShell(): JSX.Element {
       // No frontend fallback — if absent, projectionRuntime emits PROJECTION_RUNTIME_DEFINITION_MISSING
       // on SSE events (definitionMissingPolicy:"error" default is the explicit fail-close).
       if (nextEmission.projectionDefinition) {
-        projectionRuntime.setProjectionDefinition(nextEmission.projectionDefinition);
+        projectionRuntime.setProjectionDefinition(
+          nextEmission.projectionDefinition,
+        );
       }
 
       projectionRuntime.onProjectionUpdate((_uiProjection, payload) => {
@@ -228,34 +291,53 @@ export default function ProjectionShell(): JSX.Element {
             // Forward all non-absent identity fields from SSE payload without discard.
             const identityPayload: Record<string, unknown> = {};
             if (payload.table_id) identityPayload.table_id = payload.table_id;
-            if (payload.table_registry_id) identityPayload.table_registry_id = payload.table_registry_id;
+            if (payload.table_registry_id) {
+              identityPayload.table_registry_id = payload.table_registry_id;
+            }
 
             const axes: UserOperation = {
               ...storedAxes,
               ...(payload.manifest_id ? { target: payload.manifest_id } : {}),
-              ...(Object.keys(identityPayload).length > 0 ? { payload: identityPayload } : {}),
+              ...(Object.keys(identityPayload).length > 0
+                ? { payload: identityPayload }
+                : {}),
             };
 
             const result = await queueClientCommand(axes, refreshToken);
-            if (!result.success || gen !== refreshGenRef.current || !mounted) return;
+            if (!result.success || gen !== refreshGenRef.current || !mounted) {
+              return;
+            }
             const updated = result.emission;
             if (!updated) return;
             setEmission(updated);
             emissionRef.current = updated;
-            // SSE refresh re-render: same localStateStore / runner / fired-registry
+            // SSE refresh re-render: same dispatcher / runner / fired-registry
             // (refs are never re-created), so state survives and initial_mount
-            // stays idempotent (no lifecycle re-emission here).
+            // stays idempotent (no lifecycle re-emission here). Predeclare covers
+            // any newly-appeared node/interaction in the refreshed projection.
+            if (stateDispatcherRef.current) {
+              predeclareProjectionState(
+                toRunnerWiringNodes(updated.layoutNodes),
+                stateDispatcherRef.current,
+              );
+            }
             setSpecs(renderEmission(updated, defaultComponentRegistry, {
-              localStateStore: localStateStoreRef.current,
+              localStateStore: stateDispatcherRef.current ?? undefined,
             }));
           } catch (err) {
             if (gen !== refreshGenRef.current || !mounted) return;
-            console.error("[ProjectionShell] SSE_PROJECTION_REFRESH_ERROR:", err);
+            console.error(
+              "[ProjectionShell] SSE_PROJECTION_REFRESH_ERROR:",
+              err,
+            );
           }
         })();
       });
 
-      const dispatcher = createSseDispatcherWithProjectionRuntime(projectionRuntime, { unhandledEventPolicy: "log" });
+      const dispatcher = createSseDispatcherWithProjectionRuntime(
+        projectionRuntime,
+        { unhandledEventPolicy: "log" },
+      );
 
       const receiver = createSseReceiver({
         token: projectionTokenRef.current,
@@ -283,7 +365,11 @@ export default function ProjectionShell(): JSX.Element {
 
   if (loading) {
     return (
-      <div class="py-8 text-center text-gray-400" aria-busy="true" aria-live="polite">
+      <div
+        class="py-8 text-center text-gray-400"
+        aria-busy="true"
+        aria-live="polite"
+      >
         投影を取得中...
       </div>
     );
@@ -327,7 +413,10 @@ export default function ProjectionShell(): JSX.Element {
         layoutId={emission?.layoutId}
       />
       {recommendProjection && (
-        <RecommendNavigationIsland spec={recommendProjection} token={projectionToken} />
+        <RecommendNavigationIsland
+          spec={recommendProjection}
+          token={projectionToken}
+        />
       )}
     </div>
   );

@@ -26,6 +26,10 @@ RUNNER="frontend/runtime/uiEventEffectRunner.ts"
 RUNNER_TEST="frontend/tests/uiEventEffectRunner.test.ts"
 SCHEDULER="frontend/runtime/frontendScheduler.ts"
 PROJECTION_SHELL="frontend/islands/ProjectionShell.tsx"
+COMPONENT_FACTORY="frontend/runtime/runtimeComponentFactory.ts"
+RENDER_EMISSION="frontend/runtime/renderEmission.ts"
+ADAPTER="frontend/runtime/runtimeComponentAdapter.ts"
+SCENARIO_TEST="frontend/tests/runtimeUiInteractionScenario.test.ts"
 
 FAILURES=0
 fail() { echo "FAIL: $1" >&2; FAILURES=$((FAILURES + 1)); }
@@ -114,6 +118,31 @@ require_grep "NotifyingRuntimeLocalStateStore" "$RUNNER" "store change notificat
 require_grep "subscribe" "$RUNNER" "store change subscription"
 require_grep "subscribe" "$PROJECTION_SHELL" "store notification -> projection specs re-render hook"
 require_grep "rendered runtimeSpec props|runtimeSpec" "$RUNNER_TEST" "rendered-props reflection proof (not store Map only)"
+
+# Mutation authority unification: event-triggered UI状態更新 goes through the same
+# guarded dispatcher as the lifecycle path — no direct raw-store write in emitBoundEvent.
+require_file "$COMPONENT_FACTORY"
+require_file "$RENDER_EMISSION"
+require_file "$ADAPTER"
+require_file "$SCENARIO_TEST"
+require_grep "applyGuardedLocalStateMutation" "$RUNNER" "shared guarded mutation entry point"
+require_grep "resolveUiStateUpdateMutation" "$RUNNER" "shared UI状態更新 target resolution"
+require_grep "predeclareProjectionState|createProjectionStateDispatcher" "$RUNNER" "predeclare-before-mutate entry point"
+require_grep "RuntimeGuardedStateStore" "$ADAPTER" "guarded state store type (set returns ok/error, not void)"
+require_grep "applyGuardedLocalStateMutation" "$COMPONENT_FACTORY" \
+  "emitBoundEvent must route localStateMutation through the shared guarded dispatcher"
+require_grep "resolveUiStateUpdateMutation" "$RENDER_EMISSION" \
+  "event binding builder must reuse the shared target/action/value resolution"
+require_grep "createProjectionStateDispatcher" "$PROJECTION_SHELL" \
+  "single shared dispatcher created before first render (not per-path stores)"
+require_grep "RUNTIME_STATE_SLOT_NOT_DECLARED" "$SCENARIO_TEST" \
+  "event-triggered undeclared-target fail-close proof"
+require_grep "createProjectionStateDispatcher|createRuntimeStateDispatcher" "$SCENARIO_TEST" \
+  "scenario test must exercise the guarded dispatcher, not a raw ad-hoc store"
+
+# Event path must not bypass the guard with a direct store write.
+forbid_grep '\.localStateStore\.set\(' "$COMPONENT_FACTORY" \
+  "event-triggered mutation must call applyGuardedLocalStateMutation, not spec.localStateStore.set() directly"
 
 # ─── 3. Negative boundaries ──────────────────────────────────────────────────
 # Wiring graph panel is projection-only: no direct persistence dispatch from the panel.

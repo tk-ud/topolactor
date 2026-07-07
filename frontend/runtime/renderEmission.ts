@@ -1,8 +1,20 @@
-import type { Emission, LayoutNode as EmissionLayoutNode } from "../api/dispatch.ts";
+import type {
+  Emission,
+  LayoutNode as EmissionLayoutNode,
+} from "../api/dispatch.ts";
 import type { ComponentRegistry } from "../registry/componentRegistry.ts";
-import { adaptComponentDataHub, type RuntimeComponentSpec, type RuntimeLocalStateStore } from "./runtimeComponentAdapter.ts";
+import {
+  adaptComponentDataHub,
+  type RuntimeComponentSpec,
+  type RuntimeGuardedStateStore,
+} from "./runtimeComponentAdapter.ts";
 import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
-import { constructProjection, type ComponentDataHub, type ProjectionDefinition, type UiProjection } from "./projectionConstructor.ts";
+import {
+  type ComponentDataHub,
+  constructProjection,
+  type ProjectionDefinition,
+  type UiProjection,
+} from "./projectionConstructor.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "./runtimeComponentRegistry.ts";
 import type { RuntimeDispatchSpec } from "./frontendScheduler.ts";
 import { resolvePropBindings } from "./propBindingResolver.ts";
@@ -11,8 +23,14 @@ import { buildPreviewInertEventBinding } from "./previewInertEventBinding.ts";
 import { buildLayoutPreviewPlaceholderProps } from "./layoutComponentPreview.ts";
 import { resolveUnknownCssTokenRefs } from "./cssDictionary.ts";
 import { interpolateLinkHrefReadOnly } from "./linkPlaceholderInterpolation.ts";
-import { evaluateAllCalcBindings, type CalcBinding, type CalcContext } from "./frontendLocalCalculationResolver.ts";
+import {
+  type CalcBinding,
+  type CalcContext,
+  evaluateAllCalcBindings,
+} from "./frontendLocalCalculationResolver.ts";
 import { projectionInputFromData } from "./projectionInput.ts";
+import { wiringSettingCategoryOf } from "../lib/uiBuilderWiringProjection.ts";
+import { resolveUiStateUpdateMutation } from "./uiEventEffectRunner.ts";
 
 export type RenderEmissionOptions = {
   /**
@@ -24,8 +42,13 @@ export type RenderEmissionOptions = {
   calculationBindings?: CalcBinding[];
   /** Live node values for calc binding trigger resolution. */
   calcNodeValues?: Record<string, Record<string, unknown>>;
-  /** Projection-local UI state store consumed by runtime UI interaction wiring. */
-  localStateStore?: RuntimeLocalStateStore;
+  /**
+   * Guarded projection-local UI state store consumed by runtime UI interaction
+   * wiring. Both event-triggered mutations (built here) and lifecycle mutations
+   * (uiEventEffectRunner) write through this same guarded dispatcher instance —
+   * mutation authority is not duplicated across paths.
+   */
+  localStateStore?: RuntimeGuardedStateStore;
   /** Snapshot for dispatchExternalPort payloadFrom node:<nodeId>.value resolution. */
   payloadFromNodeValues?: Record<string, unknown>;
 };
@@ -93,7 +116,10 @@ export function isNavigationWiringKind(wiringKind: string): boolean {
 export function mapWiringKindToLayer(wiringKind: string): string | null {
   if (wiringKind === "search") return "screen_list";
   if (wiringKind === "aggregate") return "screen_aggregation";
-  if (wiringKind === "create" || wiringKind === "update" || wiringKind === "delete") return "entity";
+  if (
+    wiringKind === "create" || wiringKind === "update" ||
+    wiringKind === "delete"
+  ) return "entity";
   return null;
 }
 
@@ -104,12 +130,18 @@ export function mapWiringKindToLayer(wiringKind: string): string | null {
  */
 export function mapWiringKindToAction(wiringKind: string): string | null {
   switch (wiringKind) {
-    case "search": return "Search";
-    case "aggregate": return "Search";
-    case "create": return "Create";
-    case "update": return "diffUpdate";
-    case "delete": return "logicalDelete";
-    default: return null;
+    case "search":
+      return "Search";
+    case "aggregate":
+      return "Search";
+    case "create":
+      return "Create";
+    case "update":
+      return "diffUpdate";
+    case "delete":
+      return "logicalDelete";
+    default:
+      return null;
   }
 }
 
@@ -121,7 +153,9 @@ export function mapWiringKindToAction(wiringKind: string): string | null {
  * wiring misconfiguration and must not silently fall back to "default".
  * Callers that receive null render an error node.
  */
-export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispatchSpec | null {
+export function buildRuntimeDispatchSpec(
+  node: EmissionLayoutNode,
+): RuntimeDispatchSpec | null {
   const wiringKind = node.wiringKind;
   if (!wiringKind) return null;
   if (isNavigationWiringKind(wiringKind)) return null;
@@ -136,9 +170,15 @@ export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispa
     target: targetSurface,
     layer,
     action,
-    wiringKey: (node.wiringKey && node.wiringKey.trim()) ? node.wiringKey.trim() : undefined,
-    wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : undefined,
-    targetRef: (node.targetRef && node.targetRef.trim()) ? node.targetRef.trim() : undefined,
+    wiringKey: (node.wiringKey && node.wiringKey.trim())
+      ? node.wiringKey.trim()
+      : undefined,
+    wiringId: (node.wiringId && node.wiringId.trim())
+      ? node.wiringId.trim()
+      : undefined,
+    targetRef: (node.targetRef && node.targetRef.trim())
+      ? node.targetRef.trim()
+      : undefined,
   };
 }
 
@@ -146,7 +186,9 @@ export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispa
  * Builds minimum renderable props for a catalog_component node.
  * Delegates to canvas preview placeholders when componentKind is known (no fake "input" labels).
  */
-function buildDefaultCatalogComponentProps(node: EmissionLayoutNode): Record<string, unknown> {
+function buildDefaultCatalogComponentProps(
+  node: EmissionLayoutNode,
+): Record<string, unknown> {
   const componentKey = (node.componentKey && node.componentKey.trim())
     ? node.componentKey.trim()
     : (node.nodeId ?? "Component");
@@ -175,10 +217,20 @@ export function mergeNodeLocalProps(
     try {
       parsed = JSON.parse(propsJson.trim());
     } catch {
-      return { ok: false, error: "LAYOUT_NODE_PROPS_JSON_INVALID: propsJson が JSON として解析できません" };
+      return {
+        ok: false,
+        error:
+          "LAYOUT_NODE_PROPS_JSON_INVALID: propsJson が JSON として解析できません",
+      };
     }
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-      return { ok: false, error: "LAYOUT_NODE_PROPS_JSON_INVALID: propsJson はオブジェクトである必要があります" };
+    if (
+      typeof parsed !== "object" || parsed === null || Array.isArray(parsed)
+    ) {
+      return {
+        ok: false,
+        error:
+          "LAYOUT_NODE_PROPS_JSON_INVALID: propsJson はオブジェクトである必要があります",
+      };
     }
     props = { ...props, ...(parsed as Record<string, unknown>) };
   }
@@ -188,15 +240,32 @@ export function mergeNodeLocalProps(
     try {
       parsedState = JSON.parse(stateJson.trim());
     } catch {
-      return { ok: false, error: "LAYOUT_NODE_STATE_JSON_INVALID: stateJson が JSON として解析できません" };
+      return {
+        ok: false,
+        error:
+          "LAYOUT_NODE_STATE_JSON_INVALID: stateJson が JSON として解析できません",
+      };
     }
-    if (typeof parsedState !== "object" || parsedState === null || Array.isArray(parsedState)) {
-      return { ok: false, error: "LAYOUT_NODE_STATE_JSON_INVALID: stateJson はオブジェクトである必要があります" };
+    if (
+      typeof parsedState !== "object" || parsedState === null ||
+      Array.isArray(parsedState)
+    ) {
+      return {
+        ok: false,
+        error:
+          "LAYOUT_NODE_STATE_JSON_INVALID: stateJson はオブジェクトである必要があります",
+      };
     }
     const stateObj = parsedState as Record<string, unknown>;
     const existingData = props.data;
-    if (typeof existingData === "object" && existingData !== null && !Array.isArray(existingData)) {
-      props = { ...props, data: { ...(existingData as Record<string, unknown>), ...stateObj } };
+    if (
+      typeof existingData === "object" && existingData !== null &&
+      !Array.isArray(existingData)
+    ) {
+      props = {
+        ...props,
+        data: { ...(existingData as Record<string, unknown>), ...stateObj },
+      };
     } else {
       props = { ...props, ...stateObj };
     }
@@ -238,7 +307,10 @@ export function buildRouteNavigationEventBinding(
   const triggers = ["click", "change", "select", "submit", "toggle"] as const;
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
-    binding[trigger] = { eventType: trigger, routeNavigation: { targetRef: ref } };
+    binding[trigger] = {
+      eventType: trigger,
+      routeNavigation: { targetRef: ref },
+    };
   }
   return binding;
 }
@@ -268,59 +340,49 @@ function normalizeAuthoredEventType(value: unknown): string | null {
   return map[trimmed] ?? null;
 }
 
-function buildLocalUiStateEventBinding(rawWirings: unknown): Record<string, unknown> {
+/**
+ * UI状態更新 event binding. Classification (wiringSettingCategoryOf) and target
+ * resolution (resolveUiStateUpdateMutation) are shared with the lifecycle path
+ * in uiEventEffectRunner.ts, so both paths agree on exactly which actionTypes
+ * are UI状態更新 and how targetNodeId/statePath/value/action are derived from
+ * them — the actual guarded write happens later in emitBoundEvent, through the
+ * same dispatcher instance the lifecycle path uses.
+ */
+function buildLocalUiStateEventBinding(
+  rawWirings: unknown,
+): Record<string, unknown> {
   if (!Array.isArray(rawWirings)) return {};
   const binding: Record<string, unknown> = {};
   for (const raw of rawWirings) {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const wiring = raw as Record<string, unknown>;
-    const trigger = normalizeAuthoredEventType(wiring.trigger ?? wiring.eventType);
-    const targetNodeId = typeof wiring.targetNodeId === "string" ? wiring.targetNodeId.trim() : "";
-    const actionType = typeof wiring.actionType === "string" ? wiring.actionType.trim() : "";
-    if (!trigger || !targetNodeId || !actionType) continue;
-    let action: "set" | "toggle";
-    let value: unknown;
-    let defaultStatePath = "open";
-    switch (actionType) {
-      case "openModal":
-      case "openDrawer":
-      case "openDialog":
-        action = "set";
-        value = true;
-        break;
-      case "closeModal":
-      case "closeDrawer":
-      case "closeDialog":
-        action = "set";
-        value = false;
-        break;
-      case "toggleModal":
-      case "toggleDrawer":
-      case "toggleDialog":
-        action = "toggle";
-        break;
-      case "setState":
-        action = "set";
-        value = wiring.value;
-        break;
-      case "setActiveKey":
-        action = "set";
-        value = wiring.value;
-        defaultStatePath = "activeKey";
-        break;
-      default:
-        continue;
-    }
-    const statePath = typeof wiring.statePath === "string" && wiring.statePath.trim()
-      ? wiring.statePath.trim()
-      : defaultStatePath;
-    const previous = typeof binding[trigger] === "object" && binding[trigger] !== null
-      ? binding[trigger] as Record<string, unknown>
-      : { eventType: trigger };
+    const trigger = normalizeAuthoredEventType(
+      wiring.trigger ?? wiring.eventType,
+    );
+    const actionType = typeof wiring.actionType === "string"
+      ? wiring.actionType.trim()
+      : "";
+    if (!trigger || !actionType) continue;
+    if (wiringSettingCategoryOf({ actionType }) !== "ui_state_update") continue;
+    const resolved = resolveUiStateUpdateMutation({
+      actionType,
+      targetNodeId: typeof wiring.targetNodeId === "string"
+        ? wiring.targetNodeId
+        : undefined,
+      statePath: typeof wiring.statePath === "string"
+        ? wiring.statePath
+        : undefined,
+      value: wiring.value,
+    });
+    if (!resolved) continue;
+    const previous =
+      typeof binding[trigger] === "object" && binding[trigger] !== null
+        ? binding[trigger] as Record<string, unknown>
+        : { eventType: trigger };
     binding[trigger] = {
       ...previous,
       eventType: trigger,
-      localStateMutation: { targetNodeId, statePath, action, value },
+      localStateMutation: resolved,
     };
   }
   return binding;
@@ -332,23 +394,36 @@ function buildLocalUiStateEventBinding(rawWirings: unknown): Record<string, unkn
  * instanceOperationDispatch lane. Both execute through the api_command_lane in
  * emitBoundEvent; preview stays inert (caller skips this builder in previewMode).
  */
-function buildExternalPortEventBinding(rawWirings: unknown): Record<string, unknown> {
+function buildExternalPortEventBinding(
+  rawWirings: unknown,
+): Record<string, unknown> {
   if (!Array.isArray(rawWirings)) return {};
   const binding: Record<string, unknown> = {};
   for (const raw of rawWirings) {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const wiring = raw as Record<string, unknown>;
-    const trigger = normalizeAuthoredEventType(wiring.trigger ?? wiring.eventType);
+    const trigger = normalizeAuthoredEventType(
+      wiring.trigger ?? wiring.eventType,
+    );
     if (!trigger) continue;
     const payloadFromRaw = wiring.payloadFrom;
-    const payloadFrom = (typeof payloadFromRaw === "object" && payloadFromRaw !== null && !Array.isArray(payloadFromRaw))
-      ? Object.fromEntries(Object.entries(payloadFromRaw).filter(([, value]) => typeof value === "string")) as Record<string, string>
-      : {};
-    const outputProp = typeof wiring.outputProp === "string" && wiring.outputProp.trim()
-      ? wiring.outputProp.trim()
-      : undefined;
+    const payloadFrom =
+      (typeof payloadFromRaw === "object" && payloadFromRaw !== null &&
+          !Array.isArray(payloadFromRaw))
+        ? Object.fromEntries(
+          Object.entries(payloadFromRaw).filter(([, value]) =>
+            typeof value === "string"
+          ),
+        ) as Record<string, string>
+        : {};
+    const outputProp =
+      typeof wiring.outputProp === "string" && wiring.outputProp.trim()
+        ? wiring.outputProp.trim()
+        : undefined;
     if (wiring.actionType === "dispatchExternalPort") {
-      const portTargetRef = typeof wiring.portTargetRef === "string" ? wiring.portTargetRef.trim() : "";
+      const portTargetRef = typeof wiring.portTargetRef === "string"
+        ? wiring.portTargetRef.trim()
+        : "";
       binding[trigger] = {
         eventType: trigger,
         externalPortDispatch: { portTargetRef, payloadFrom, outputProp },
@@ -359,7 +434,11 @@ function buildExternalPortEventBinding(rawWirings: unknown): Record<string, unkn
         : "";
       binding[trigger] = {
         eventType: trigger,
-        instanceOperationDispatch: { instanceTargetRef, payloadFrom, outputProp },
+        instanceOperationDispatch: {
+          instanceTargetRef,
+          payloadFrom,
+          outputProp,
+        },
       };
     }
   }
@@ -369,14 +448,20 @@ function buildExternalPortEventBinding(rawWirings: unknown): Record<string, unkn
 function applyLocalStateOverrides(
   props: Record<string, unknown>,
   nodeId: string | undefined,
-  localStateStore: RuntimeLocalStateStore | undefined,
+  localStateStore: RuntimeGuardedStateStore | undefined,
 ): Record<string, unknown> {
   if (!nodeId || !localStateStore) return props;
   const open = localStateStore.get(nodeId, "open");
   if (open === undefined) return props;
   const existingData = props.data;
-  if (typeof existingData === "object" && existingData !== null && !Array.isArray(existingData)) {
-    return { ...props, data: { ...(existingData as Record<string, unknown>), open } };
+  if (
+    typeof existingData === "object" && existingData !== null &&
+    !Array.isArray(existingData)
+  ) {
+    return {
+      ...props,
+      data: { ...(existingData as Record<string, unknown>), open },
+    };
   }
   return { ...props, open };
 }
@@ -386,7 +471,9 @@ function applyLocalStateOverrides(
  * Root nodes have parentNodeId === undefined; look them up with key undefined.
  * Pure function — no DOM or Preact dependency.
  */
-export function buildChildrenMap(specs: ComponentSpec[]): Map<string | undefined, ComponentSpec[]> {
+export function buildChildrenMap(
+  specs: ComponentSpec[],
+): Map<string | undefined, ComponentSpec[]> {
   const map = new Map<string | undefined, ComponentSpec[]>();
   for (const spec of specs) {
     const key = spec.parentNodeId ?? undefined;
@@ -430,15 +517,23 @@ export function applyCalcBindingsToSpecs(
         continue;
       }
       if (entry.targetProp === "inlineText") {
-        updatedSpec = { ...updatedSpec, inlineText: String(entry.result.value) };
+        updatedSpec = {
+          ...updatedSpec,
+          inlineText: String(entry.result.value),
+        };
       } else if (updatedSpec.runtimeSpec) {
         const existingProps = updatedSpec.runtimeSpec.props ?? {};
         // Inject at top level for any targetProp, AND into props.data when data is an object.
         // Factories (inputFactory, calculationPreviewPanelFactory, etc.) read from props.data.
         const existingData = existingProps.data;
-        const updatedData = (typeof existingData === "object" && existingData !== null && !Array.isArray(existingData))
-          ? { ...(existingData as Record<string, unknown>), [entry.targetProp]: entry.result.value }
-          : existingData;
+        const updatedData =
+          (typeof existingData === "object" && existingData !== null &&
+              !Array.isArray(existingData))
+            ? {
+              ...(existingData as Record<string, unknown>),
+              [entry.targetProp]: entry.result.value,
+            }
+            : existingData;
         updatedSpec = {
           ...updatedSpec,
           runtimeSpec: {
@@ -454,23 +549,41 @@ export function applyCalcBindingsToSpecs(
     }
     if (calcErrors.length > 0) {
       const existing = updatedSpec.def as Record<string, unknown>;
-      updatedSpec = { ...updatedSpec, def: { ...existing, calc_errors: calcErrors } };
+      updatedSpec = {
+        ...updatedSpec,
+        def: { ...existing, calc_errors: calcErrors },
+      };
     }
     return updatedSpec;
   });
 }
 
-export function renderRuntimeComponents(componentDataHubs: ComponentDataHub[]): ComponentSpec[] {
+export function renderRuntimeComponents(
+  componentDataHubs: ComponentDataHub[],
+): ComponentSpec[] {
   return componentDataHubs.map((hub) => {
     const adapted = adaptComponentDataHub(hub);
     if (!adapted.ok) {
-      return { componentType: "error", def: { error: adapted.error, componentId: hub.componentId } };
+      return {
+        componentType: "error",
+        def: { error: adapted.error, componentId: hub.componentId },
+      };
     }
     const rendered = renderRuntimeComponent(adapted.value);
     if (!rendered.ok) {
-      return { componentId: adapted.value.componentId, componentType: "error", def: { error: rendered.error }, runtime: adapted.value };
+      return {
+        componentId: adapted.value.componentId,
+        componentType: "error",
+        def: { error: rendered.error },
+        runtime: adapted.value,
+      };
     }
-    return { componentId: adapted.value.componentId, componentType: adapted.value.componentType, def: { node: rendered.node }, runtime: adapted.value };
+    return {
+      componentId: adapted.value.componentId,
+      componentType: adapted.value.componentType,
+      def: { node: rendered.node },
+      runtime: adapted.value,
+    };
   });
 }
 
@@ -488,7 +601,10 @@ export function renderRuntimeComponents(componentDataHubs: ComponentDataHub[]): 
 export function projectionFromEmission(
   emission: Emission,
   definition: ProjectionDefinition,
-): { projection: UiProjection; error?: undefined } | { projection?: undefined; error: string } {
+): { projection: UiProjection; error?: undefined } | {
+  projection?: undefined;
+  error: string;
+} {
   const jsonKeyValue = projectionInputFromData(emission.data);
   return constructProjection(jsonKeyValue, definition);
 }
@@ -508,7 +624,8 @@ export function renderEmission(
         {
           componentType: "error",
           def: {
-            error: `LAYOUT_NODES_NOT_FOUND: layoutId "${emission.layoutId}" is set but layoutNodes is absent or empty. Broken layout configuration — no fallback.`,
+            error:
+              `LAYOUT_NODES_NOT_FOUND: layoutId "${emission.layoutId}" is set but layoutNodes is absent or empty. Broken layout configuration — no fallback.`,
             layoutId: emission.layoutId,
           },
         },
@@ -544,7 +661,9 @@ export function renderEmission(
             componentId: node.componentId,
             componentType: "error",
             def: {
-              error: `CSS_TOKEN_REF_UNRESOLVED: ${unknownCssTokenRefs.join(", ")}`,
+              error: `CSS_TOKEN_REF_UNRESOLVED: ${
+                unknownCssTokenRefs.join(", ")
+              }`,
               code: "CSS_TOKEN_REF_UNRESOLVED",
               cssTokenRefs: unknownCssTokenRefs,
             },
@@ -580,7 +699,9 @@ export function renderEmission(
           return {
             componentType: "error",
             def: {
-              error: `Layout node "${node.nodeId ?? node.slotKey ?? "(unnamed)"}" (orderIndex=${node.orderIndex}) has no componentId assigned.`,
+              error: `Layout node "${
+                node.nodeId ?? node.slotKey ?? "(unnamed)"
+              }" (orderIndex=${node.orderIndex}) has no componentId assigned.`,
               slotKey: node.slotKey,
               orderIndex: node.orderIndex,
             },
@@ -595,7 +716,10 @@ export function renderEmission(
             componentId: node.componentId,
             componentType: "error",
             def: {
-              error: `CATALOG_COMPONENT_KIND_REQUIRED: catalog_component node "${node.nodeId ?? node.slotKey ?? "(unnamed)"}" (componentId="${node.componentId}") has no componentKind. Ensure ui_component_registry has a component_kind for this component.`,
+              error:
+                `CATALOG_COMPONENT_KIND_REQUIRED: catalog_component node "${
+                  node.nodeId ?? node.slotKey ?? "(unnamed)"
+                }" (componentId="${node.componentId}") has no componentKind. Ensure ui_component_registry has a component_kind for this component.`,
               code: "CATALOG_COMPONENT_KIND_REQUIRED",
               componentId: node.componentId,
               slotKey: node.slotKey,
@@ -609,7 +733,11 @@ export function renderEmission(
 
         ensureRuntimeComponentRegistryInitialized();
         const defaultProps = buildDefaultCatalogComponentProps(node);
-        const mergedProps = mergeNodeLocalProps(defaultProps, node.propsJson, node.stateJson);
+        const mergedProps = mergeNodeLocalProps(
+          defaultProps,
+          node.propsJson,
+          node.stateJson,
+        );
         if (!mergedProps.ok) {
           return {
             componentId: node.componentId,
@@ -621,23 +749,43 @@ export function renderEmission(
         const propsWithDesign = mergeCatalogPropsWithComponentDesign(
           node.componentKind,
           node.componentKey ?? node.nodeId ?? "Component",
-          applyLocalStateOverrides(mergedProps.props, node.nodeId, options?.localStateStore),
-          design ? { ...design, linkHref: linkHrefResult.value || design.linkHref } : undefined,
+          applyLocalStateOverrides(
+            mergedProps.props,
+            node.nodeId,
+            options?.localStateStore,
+          ),
+          design
+            ? { ...design, linkHref: linkHrefResult.value || design.linkHref }
+            : undefined,
         );
         const baseEventBinding = previewMode
           ? buildPreviewInertEventBinding()
           : isNavigationWiringKind(nodeWiringKind)
           ? buildRouteNavigationEventBinding(node.targetRef)
           : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
-        const rawLocalInteractions = node.runtimeInteractions ?? propsWithDesign.eventWirings;
-        const localStateEventBinding = previewMode ? {} : buildLocalUiStateEventBinding(rawLocalInteractions);
-        const externalPortEventBinding = previewMode ? {} : buildExternalPortEventBinding(node.runtimeInteractions);
+        const rawLocalInteractions = node.runtimeInteractions ??
+          propsWithDesign.eventWirings;
+        const localStateEventBinding = previewMode
+          ? {}
+          : buildLocalUiStateEventBinding(rawLocalInteractions);
+        const externalPortEventBinding = previewMode
+          ? {}
+          : buildExternalPortEventBinding(node.runtimeInteractions);
         const componentEventBinding = { ...baseEventBinding };
-        for (const [trigger, localBinding] of Object.entries({ ...localStateEventBinding, ...externalPortEventBinding })) {
-          const existing = typeof componentEventBinding[trigger] === "object" && componentEventBinding[trigger] !== null
+        for (
+          const [trigger, localBinding] of Object.entries({
+            ...localStateEventBinding,
+            ...externalPortEventBinding,
+          })
+        ) {
+          const existing = typeof componentEventBinding[trigger] === "object" &&
+              componentEventBinding[trigger] !== null
             ? componentEventBinding[trigger] as Record<string, unknown>
             : {};
-          componentEventBinding[trigger] = { ...existing, ...(localBinding as Record<string, unknown>) };
+          componentEventBinding[trigger] = {
+            ...existing,
+            ...(localBinding as Record<string, unknown>),
+          };
         }
         let finalProps = propsWithDesign;
         if (node.propBindings && Object.keys(node.propBindings).length > 0) {
@@ -652,7 +800,10 @@ export function renderEmission(
             return {
               componentId: node.componentId,
               componentType: "error",
-              def: { error: bindingResult.error, componentId: node.componentId },
+              def: {
+                error: bindingResult.error,
+                componentId: node.componentId,
+              },
               ...layoutFields,
             };
           }
@@ -669,7 +820,9 @@ export function renderEmission(
           componentKind: node.componentKind,
           packageId: emission.packageId ?? null,
           layoutId: emission.layoutId ?? null,
-          wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : null,
+          wiringId: (node.wiringId && node.wiringId.trim())
+            ? node.wiringId.trim()
+            : null,
           props: finalProps,
           eventBinding: componentEventBinding,
           localStateStore: options?.localStateStore,
@@ -697,7 +850,8 @@ export function renderEmission(
         };
       });
 
-    const bindings = options?.calculationBindings ?? emission.calculationBindings ?? [];
+    const bindings = options?.calculationBindings ??
+      emission.calculationBindings ?? [];
     if (bindings.length === 0) return rawSpecs;
     return applyCalcBindingsToSpecs(
       rawSpecs,
