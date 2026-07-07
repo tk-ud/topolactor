@@ -125,6 +125,83 @@ export function isValidDebounceMs(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
+/** Deterministic, order-independent JSON canonicalization for idempotency-key hashing. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  return `{${
+    keys.map((k) => `${JSON.stringify(k)}:${stableStringify(record[k])}`).join(",")
+  }}`;
+}
+
+/**
+ * SSOT lifecycle_policy retry_safe_dispatch_idempotency: computes a DETERMINISTIC
+ * idempotency_key for dispatchExternalPort / dispatchInstanceOperation dispatch.
+ *
+ * This is deliberately NOT a fresh random value per dispatch call — a random key
+ * would defeat retry-safety entirely, since a retry (communication loss, reload,
+ * reconnect, runtime-runner recreation) must present the SAME key as the original
+ * attempt for the backend ledger (topology.rt_claim_dispatch_idempotency_key) to
+ * recognize it as a retry rather than a new logical dispatch.
+ *
+ * interactionIndex must be the interaction's position within its OWN node's
+ * runtimeInteractions array — the same stable identity uiEventEffectRunner.ts's
+ * fired-registry uses (nodeId + interactionIndex), NOT the node's position in the
+ * overall node list.
+ *
+ * Two distinct authored interactions (different nodeId/interactionIndex/trigger/
+ * actionType/targetRef) always get distinct keys. Two firings of the SAME authored
+ * interaction with the SAME resolved payload get the SAME key (by design, for
+ * lifecycle triggers this is exactly "the same logical initial_mount effect,
+ * fired again after reload"). A firing whose intent must be distinguished from a
+ * prior identical-payload firing of the SAME interaction (e.g. two separate
+ * user-initiated submits of an identical form) requires an author-provided
+ * dedupe seed via authorDedupeKey when idempotencyPolicy is dedupe_key — a purely
+ * deterministic key cannot distinguish those on identity + payload alone.
+ */
+export function computeDispatchIdempotencyKey(input: {
+  layoutId?: string | null;
+  packageId?: string | null;
+  nodeId: string;
+  interactionIndex: number;
+  trigger: string;
+  actionType: string;
+  targetRef: string;
+  payload?: Record<string, unknown>;
+  authorDedupeKey?: string;
+}): string {
+  const parts = [
+    input.layoutId ?? "",
+    input.packageId ?? "",
+    input.nodeId,
+    String(input.interactionIndex),
+    input.trigger,
+    input.actionType,
+    input.targetRef,
+    input.authorDedupeKey ?? "",
+    stableStringify(input.payload ?? {}),
+  ];
+  return parts.join("|");
+}
+
+/**
+ * Extends a build-time identity idempotency key (from computeDispatchIdempotencyKey
+ * with no payload) with the event-time RESOLVED dispatch payload. Used by the
+ * event-triggered path (runtimeComponentFactory.emitBoundEvent), where the static
+ * identity portion is computed once at binding-build time (renderEmission.ts) but
+ * the actual payload values are only known after payloadFrom resolution at event
+ * time — two firings of the same authored interaction with different resolved
+ * payload content must not collide on the same key.
+ */
+export function appendResolvedPayloadToIdempotencyKey(
+  identityKey: string,
+  resolvedPayload: Record<string, unknown>,
+): string {
+  return `${identityKey}|${stableStringify(resolvedPayload)}`;
+}
+
 /**
  * SSOT ui_event_settings.setting_category_taxonomy — the six canonical wiring
  * inspector categories. No implementation-derived catch-all: an actionType

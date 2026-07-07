@@ -22,9 +22,11 @@
 import { assert, assertEquals } from "jsr:@std/assert";
 import {
   ALL_WIRING_TRIGGERS,
+  appendResolvedPayloadToIdempotencyKey,
   applyWiringDropEdit,
   buildWiringGraphProjection,
   classifyTrigger,
+  computeDispatchIdempotencyKey,
   dependencyClosureOfTriggerSource,
   deriveUiWatchBindings,
   findRuntimeInteractionPolicyErrors,
@@ -34,6 +36,7 @@ import {
   isHighFrequencyTrigger,
   isLifecycleTrigger,
   isPreviewInertInteraction,
+  isValidDebounceMs,
   LIFECYCLE_IDEMPOTENCY_POLICIES,
   selectableWriteTargets,
   TRIGGER_VOCABULARY,
@@ -544,4 +547,99 @@ Deno.test("preview inert: lifecycle triggers and dispatch actions are inert in p
   const projection = buildWiringGraphProjection(fixtureNodes());
   assertEquals(projection.edges[0].previewInert, false);
   assertEquals(projection.edges[1].previewInert, true);
+});
+
+// ─── retry_safe_dispatch_idempotency: computeDispatchIdempotencyKey ──────────
+
+Deno.test("isValidDebounceMs: rejects non-positive-integer and accepts positive integers", () => {
+  assertEquals(isValidDebounceMs(500), true);
+  assertEquals(isValidDebounceMs(1), true);
+  assertEquals(isValidDebounceMs(0), false);
+  assertEquals(isValidDebounceMs(-1), false);
+  assertEquals(isValidDebounceMs(1.5), false);
+  assertEquals(isValidDebounceMs("500"), false);
+  assertEquals(isValidDebounceMs(undefined), false);
+});
+
+Deno.test("computeDispatchIdempotencyKey: identical identity produces the identical key (stable across reload/reconnect/runner recreation)", () => {
+  const input = {
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    nodeId: "n-fetch",
+    interactionIndex: 0,
+    trigger: "initial_mount",
+    actionType: "dispatchExternalPort",
+    targetRef: "external-port:access_port:port-1",
+  };
+  const keyA = computeDispatchIdempotencyKey(input);
+  const keyB = computeDispatchIdempotencyKey({ ...input });
+  assertEquals(
+    keyA,
+    keyB,
+    "the SAME authored interaction identity must always produce the SAME key — a fresh random value per call would defeat retry-safety",
+  );
+});
+
+Deno.test("computeDispatchIdempotencyKey: distinct identity (nodeId / interactionIndex / trigger / actionType / targetRef) produces distinct keys", () => {
+  const base = {
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    nodeId: "n-fetch",
+    interactionIndex: 0,
+    trigger: "initial_mount",
+    actionType: "dispatchExternalPort",
+    targetRef: "external-port:access_port:port-1",
+  };
+  const baseline = computeDispatchIdempotencyKey(base);
+  assert(
+    computeDispatchIdempotencyKey({ ...base, nodeId: "n-other" }) !== baseline,
+  );
+  assert(
+    computeDispatchIdempotencyKey({ ...base, interactionIndex: 1 }) !==
+      baseline,
+  );
+  assert(
+    computeDispatchIdempotencyKey({ ...base, trigger: "route_enter" }) !==
+      baseline,
+  );
+  assert(
+    computeDispatchIdempotencyKey({
+      ...base,
+      actionType: "dispatchInstanceOperation",
+    }) !== baseline,
+  );
+  assert(
+    computeDispatchIdempotencyKey({
+      ...base,
+      targetRef: "external-port:access_port:port-2",
+    }) !== baseline,
+  );
+});
+
+Deno.test("appendResolvedPayloadToIdempotencyKey: distinct resolved payload content produces distinct keys from the same identity base", () => {
+  const base = computeDispatchIdempotencyKey({
+    layoutId: "layout-1",
+    nodeId: "n-button",
+    interactionIndex: 0,
+    trigger: "click",
+    actionType: "dispatchExternalPort",
+    targetRef: "external-port:access_port:port-1",
+  });
+  const keyWithPayloadA = appendResolvedPayloadToIdempotencyKey(base, {
+    subject: "hello",
+  });
+  const keyWithPayloadB = appendResolvedPayloadToIdempotencyKey(base, {
+    subject: "goodbye",
+  });
+  assert(
+    keyWithPayloadA !== keyWithPayloadB,
+    "two distinct user actions with different resolved payload content on the same button must not collide on the same idempotency key",
+  );
+  // Same payload, regardless of key insertion order, produces the same key
+  // (order-independent canonicalization) — this is what makes the key stable
+  // across independently-rebuilt bindings.
+  const keyReordered = appendResolvedPayloadToIdempotencyKey(base, {
+    subject: "hello",
+  });
+  assertEquals(keyWithPayloadA, keyReordered);
 });

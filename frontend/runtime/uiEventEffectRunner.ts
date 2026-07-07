@@ -28,6 +28,7 @@
  */
 
 import {
+  computeDispatchIdempotencyKey,
   deriveUiWatchBindings,
   findRuntimeInteractionPolicyErrors,
   findSideEffectCycleErrors,
@@ -283,16 +284,21 @@ export type UiEventEffectRunnerOptions = {
   dispatcher?: RuntimeStateDispatcher;
   store?: RuntimeLocalStateStore;
   previewMode?: boolean;
+  /** Identity context for computeDispatchIdempotencyKey (retry_safe_dispatch_idempotency). */
+  layoutId?: string | null;
+  packageId?: string | null;
   /** Injectable dispatch lanes (production defaults: frontendScheduler api_command_lane). */
   dispatchExternalPort?: (spec: {
     portTargetRef: string;
     payload: Record<string, unknown>;
     outputProp?: string;
+    idempotencyKey?: string;
   }) => unknown;
   dispatchInstanceOperation?: (spec: {
     instanceTargetRef: string;
     payload: Record<string, unknown>;
     outputProp?: string;
+    idempotencyKey?: string;
   }) => unknown;
 };
 
@@ -328,6 +334,7 @@ export function createUiEventEffectRunner(
         portTargetRef: string;
         payload: Record<string, unknown>;
         outputProp?: string;
+        idempotencyKey?: string;
       },
     ) => enqueueExternalPortDispatchCommand(spec));
   const dispatchInstance = options.dispatchInstanceOperation ??
@@ -336,6 +343,7 @@ export function createUiEventEffectRunner(
         instanceTargetRef: string;
         payload: Record<string, unknown>;
         outputProp?: string;
+        idempotencyKey?: string;
       },
     ) => enqueueInstanceOperationDispatchCommand(spec));
 
@@ -407,11 +415,25 @@ export function createUiEventEffectRunner(
             }
           }
           fired.add(fireKey);
+          // retry_safe_dispatch_idempotency: deterministic from stable interaction
+          // identity (NOT a fresh nonce), so the SAME initial_mount/route_enter
+          // firing of the SAME authored interaction produces the SAME key across
+          // reload/reconnect/runner-recreation — the backend ledger recognizes a
+          // retry of the SAME logical dispatch rather than a new one.
           if (w.actionType === "dispatchExternalPort" && w.portTargetRef) {
             dispatchExternal({
               portTargetRef: w.portTargetRef,
               payload: {},
               outputProp: w.outputProp,
+              idempotencyKey: computeDispatchIdempotencyKey({
+                layoutId: options.layoutId,
+                packageId: options.packageId,
+                nodeId: node.nodeId,
+                interactionIndex: idx,
+                trigger: w.trigger,
+                actionType: w.actionType,
+                targetRef: w.portTargetRef,
+              }),
             });
             executed.push(fireKey);
           } else if (
@@ -421,6 +443,15 @@ export function createUiEventEffectRunner(
               instanceTargetRef: w.instanceTargetRef,
               payload: {},
               outputProp: w.outputProp,
+              idempotencyKey: computeDispatchIdempotencyKey({
+                layoutId: options.layoutId,
+                packageId: options.packageId,
+                nodeId: node.nodeId,
+                interactionIndex: idx,
+                trigger: w.trigger,
+                actionType: w.actionType,
+                targetRef: w.instanceTargetRef,
+              }),
             });
             executed.push(fireKey);
           }

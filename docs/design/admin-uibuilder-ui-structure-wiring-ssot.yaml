@@ -1,6 +1,6 @@
 admin_uibuilder_ui_structure_wiring_ssot:
   name: admin_uibuilder_ui_structure_wiring
-  version: 0.5.0
+  version: 0.6.0
   status: ssot_design_document
   canonical_path: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
   authority_hierarchy: >-
@@ -310,7 +310,7 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - initial_mount is not DOM onLoad / resource loaded and not a click/change alias
       - preview is inert by default for lifecycle triggers
       - backend/external dispatch bound to a lifecycle trigger requires explicit author
-        confirmation persisted as lifecycleDispatchConfirmed: true on the interaction
+        confirmation persisted as lifecycleDispatchConfirmed=true on the interaction
       - backend/external dispatch bound to a lifecycle trigger requires an explicit
         idempotency policy persisted as idempotencyPolicy on the interaction
       - initial_mount dispatch must not re-dispatch on rerender (idempotencyPolicy once_per_mount)
@@ -323,6 +323,88 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - implementing_lifecycle_trigger_runtime_execution_before_this_policy
       - treating_initial_mount_as_dom_onload_or_click_alias
       - policy_warning_display_alone_passing_validate_or_apply
+    retry_safe_dispatch_idempotency:
+      rule: >-
+        idempotencyPolicy is a retry-safe DISPATCH policy, not merely a frontend
+        runner duplicate-fire guard. The runner's fired-registry (nodeId +
+        interaction-index) only prevents duplicate lifecycle emission WITHIN a
+        single runner's lifetime; it provides no guarantee across communication
+        loss, retry, reload, reconnect, or runtime-runner recreation — those all
+        construct a brand-new runner with a brand-new (empty) fired-registry.
+        Retry-safety across that boundary requires a stable idempotency_key
+        carried on the dispatch payload plus a backend ledger
+        (topology.runtime_dispatch_idempotency_ledger) that gates execution
+        BEFORE the external API call / instance operation runs — not merely an
+        append-only evidence log recorded after execution.
+      idempotency_policy_semantics:
+        once_per_mount: >-
+          Runner-lifetime duplicate lifecycle emission guard (existing
+          fired-registry behavior) PLUS a deterministic idempotency_key so a
+          retry of the SAME initial_mount firing (communication loss, reload,
+          reconnect, runtime-runner recreation) is recognized by the backend
+          ledger as a retry of the same logical dispatch, not a new one.
+        refetch_on_route_enter: >-
+          Refires on each route_enter emission (existing behavior); each
+          route_enter firing gets its own idempotency_key (recomputed per
+          firing from the same stable identity) so a retry of one SPECIFIC
+          route_enter firing is deduplicated without blocking the next
+          legitimate route_enter firing.
+        dedupe_key: >-
+          The retry-safe dispatch key is the actual enforcement mechanism, not
+          merely an enum value that passes authoring validation. An
+          author-provided dedupe seed, when authored, is folded into
+          idempotency_key generation so it participates in the same backend
+          ledger claim/complete/fail contract as the other two policies.
+      idempotency_key_generation:
+        formula: >-
+          layoutId + packageId + nodeId + stable interaction identity (nodeId +
+          interactionIndex — the SAME identity the fired-registry uses) +
+          trigger + actionType + targetRef (portTargetRef / instanceTargetRef)
+          + resolved dispatch payload (canonicalized, order-independent) +
+          author-provided dedupe seed when idempotencyPolicy is dedupe_key.
+        determinism: >-
+          The key is DETERMINISTIC from this identity — not a fresh random
+          value per dispatch call. A random key would defeat retry-safety,
+          since a retry must present the SAME key as the original attempt for
+          the backend ledger to recognize it.
+        implementation: frontend/lib/uiBuilderWiringProjection.ts computeDispatchIdempotencyKey (identity-only base, computed at binding-build time for the event-triggered path and inline for the lifecycle path) / appendResolvedPayloadToIdempotencyKey (extends the base with the event-time resolved payload)
+      backend_ledger:
+        table: topology.runtime_dispatch_idempotency_ledger (db/topology_tables.sql)
+        functions:
+          - topology.rt_claim_dispatch_idempotency_key (returns claimed / in_flight / already_completed)
+          - topology.rt_complete_dispatch_idempotency_key
+          - topology.rt_fail_dispatch_idempotency_key (failed keys are retry-safe to reclaim — the underlying effect did not complete, so failure does not permanently poison the key)
+        boundary: >-
+          Read BEFORE execution (claim) and written AFTER (complete/fail).
+          Distinct from topology.runtime_event_log, which is append-only
+          effect-OBSERVED evidence, written only after execution, and never
+          read to decide whether to execute.
+        gating: >-
+          The ledger activates only when idempotency_key is present on the
+          request payload. Absence is not fail-close at the generic runtime
+          dispatch boundary — backward-compatible for pre-existing
+          dispatchExternalPort / dispatchInstanceOperation callers outside the
+          UI Builder wiring lane. The UI Builder wiring lane specifically
+          always supplies one: both the lifecycle path
+          (uiEventEffectRunner.ts emitLifecycle) and the event-triggered path
+          (renderEmission.ts binding builder + runtimeComponentFactory.ts
+          emitBoundEvent) compute and forward idempotency_key unconditionally.
+        implementation:
+          - backend/runtime/RuntimeDispatchIdempotencyLedger.cs (IRuntimeDispatchIdempotencyLedger contract)
+          - backend/repository/NpgsqlRuntimeDispatchIdempotencyLedgerRepository.cs
+          - backend/runtime/ExternalPortDispatchRuntime.cs ExecuteAsync (claim before ExecutePolicyAsync; complete/fail after)
+          - backend/runtime/InstancePortRuntime.cs ExecuteAsync (claim before AbstractFunctionExecutor.ExecuteAsync; complete/fail after)
+      fail_close:
+        - dispatch_idempotency_key_present_but_ledger_claim_skipped_before_effect_execution
+        - already_completed_claim_re_executing_the_effect_instead_of_returning_the_stored_result
+        - in_flight_claim_executing_the_effect_concurrently
+      prohibited:
+        - treating_the_frontend_fired_registry_alone_as_retry_safe_dispatch_idempotency
+        - treating_dedupe_key_as_an_enum_value_without_backing_a_real_dedup_key
+        - generating_a_fresh_random_idempotency_key_per_dispatch_call
+        - conflating_runtime_event_log_append_only_evidence_with_the_idempotency_ledger
+      known_gap:
+        - author_provided_dedupe_seed_authoring_field_is_not_yet_added_to_NodeEventAuthoringPanel_this_round_deterministic_identity_plus_payload_key_still_provides_full_retry_safety_without_it
 
   high_frequency_policy:
     rules:
@@ -334,7 +416,7 @@ admin_uibuilder_ui_structure_wiring_ssot:
         plus an explicit authoring warning
       - debounce/throttle is NOT side-effect loop-safety proof; loop checks run independently
       - this requirement is enforced at runtime dispatch time, not only at
-        authoring/apply time: runtimeComponentFactory.emitBoundEvent fails close
+        authoring/apply time — runtimeComponentFactory.emitBoundEvent fails close
         before calling enqueueExternalPortDispatchCommand /
         enqueueInstanceOperationDispatchCommand when the bound trigger is
         high-frequency and the binding's debounceMs is missing/invalid —
@@ -490,6 +572,24 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - SSE refresh reconciles the runtime effect runner's node list
         (runner.updateNodes): an existing node's already-fired initial_mount does
         not re-execute; a newly-appeared node's initial_mount executes exactly once
+      - a retry of a completed dispatchExternalPort / dispatchInstanceOperation
+        request (same idempotency_key, response lost before the client received
+        it) does not re-execute the external API call / instance operation and
+        returns the SAME stored result (topology.rt_claim_dispatch_idempotency_key
+        already_completed branch)
+      - a concurrent duplicate request with the same idempotency_key while the
+        first attempt is still processing does not execute (in_flight branch)
+      - the frontend fired-registry alone is proven insufficient for retry-safety:
+        a brand-new runner instance (simulating reload/reconnect/runner
+        recreation) computes the IDENTICAL idempotency_key for the SAME authored
+        interaction, independent of the fired-registry, which starts empty again
+      - a failed claim (effect did not complete) is retry-safe to reclaim — a
+        subsequent request with the same idempotency_key executes again rather
+        than staying permanently blocked
+      - idempotency_key is derived deterministically from stable identity plus
+        the resolved dispatch payload — two distinct authored interactions, or
+        the same interaction with different resolved payload content, never
+        collide on the same key
     policy_ref: docs/design/pipeline-continuity-ssot.yaml test_tier_policy
 
   prohibited:
@@ -519,3 +619,7 @@ admin_uibuilder_ui_structure_wiring_ssot:
     - runtime_dispatch_of_high_frequency_trigger_without_debounce_ms_at_event_time
     - sse_refresh_ignoring_newly_mounted_lifecycle_interactions
     - pinning_the_runtime_effect_runner_to_its_creation_time_node_list
+    - treating_the_frontend_fired_registry_alone_as_retry_safe_dispatch_idempotency
+    - treating_dedupe_key_as_an_enum_value_without_backing_a_real_dedup_key
+    - generating_a_fresh_random_idempotency_key_per_dispatch_call
+    - conflating_runtime_event_log_append_only_evidence_with_the_idempotency_ledger

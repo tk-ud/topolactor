@@ -240,6 +240,8 @@ export default function ProjectionShell(): JSX.Element {
         const runner = createUiEventEffectRunner({
           nodes: runnerNodes,
           dispatcher: stateDispatcher,
+          layoutId: nextEmission.layoutId,
+          packageId: nextEmission.packageId,
         });
         effectRunnerRef.current = runner;
         for (

@@ -161,12 +161,134 @@ public sealed class InstancePortRuntimeTests
         Assert.Equal("ABSTRACT_FUNCTION_POSTGRES_FUNCTION_INVALID", ex.Message);
     }
 
+    // ─── retry-safe dispatch idempotency (response-lost / retry duplicate prevention) ─────────
+
+    [Fact]
+    public async Task ExecuteAsync_RetryWithSameIdempotencyKeyAfterCompletion_DoesNotReExecuteAndReturnsSameResult()
+    {
+        var adapter = new CountingBoundInstanceFunctionAdapter();
+        var ledger = new FakeIdempotencyLedger();
+        var runtime = BuildRuntimeWithLedger(new FakeInstanceRepo(), adapter, ledger, out _);
+
+        // request 1: dispatchInstanceOperation with idempotency_key = K — backend executes the
+        // instance operation, then marks K completed.
+        var response1 = await runtime.ExecuteAsync(
+            RequestWithIdempotencyKey($"instance-port:db_instance_port:{PortId}:approved", "idem-key-1"), null);
+        Assert.True(response1.Success);
+        Assert.Equal(1, adapter.CallCount);
+
+        // request 2: response to request 1 was lost — client retries with the SAME idempotency_key.
+        var response2 = await runtime.ExecuteAsync(
+            RequestWithIdempotencyKey($"instance-port:db_instance_port:{PortId}:approved", "idem-key-1"), null);
+
+        Assert.True(response2.Success);
+        Assert.Equal(1, adapter.CallCount);
+        Assert.Equal(
+            response1.Emission!.Data!.Value.GetRawText(),
+            response2.Emission!.Data!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ConcurrentDuplicateWhileInFlight_DoesNotExecuteAndFailsClosed()
+    {
+        var adapter = new CountingBoundInstanceFunctionAdapter();
+        var ledger = new FakeIdempotencyLedger();
+        var runtime = BuildRuntimeWithLedger(new FakeInstanceRepo(), adapter, ledger, out var log);
+
+        await ledger.ClaimAsync("idem-key-2", "instance_port_runtime");
+
+        var response = await runtime.ExecuteAsync(
+            RequestWithIdempotencyKey($"instance-port:db_instance_port:{PortId}:approved", "idem-key-2"), null);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "INSTANCE_PORT_DISPATCH_IN_FLIGHT");
+        Assert.Equal(0, adapter.CallCount);
+        Assert.Contains(log.Events, e => e.EventType == "instance_port_execution_fail_close" && e.EntityId!.Contains("failure_code=INSTANCE_PORT_DISPATCH_IN_FLIGHT", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NoIdempotencyKey_SkipsLedgerAndExecutesNormally()
+    {
+        var adapter = new CountingBoundInstanceFunctionAdapter();
+        var ledger = new FakeIdempotencyLedger();
+        var runtime = BuildRuntimeWithLedger(new FakeInstanceRepo(), adapter, ledger, out _);
+
+        var response = await runtime.ExecuteAsync(Request($"instance-port:db_instance_port:{PortId}:approved"), null);
+
+        Assert.True(response.Success);
+        Assert.Equal(1, adapter.CallCount);
+        Assert.Equal(0, ledger.ClaimCallCount);
+    }
+
+    private static InstancePortDispatchRuntime BuildRuntimeWithLedger(FakeInstanceRepo repo, IAbstractFunctionPrimitiveAdapter adapter, IRuntimeDispatchIdempotencyLedger ledger, out FakeRuntimeEventLog log)
+    {
+        log = new FakeRuntimeEventLog();
+        return new InstancePortDispatchRuntime(NullLogger<InstancePortDispatchRuntime>.Instance, repo, new VaultReferenceInstanceCredentialMaterializer(new FakeCredentialCrypto()), new AbstractFunctionExecutor(new FakeManifestRepo(), new[] { adapter }), log, ledger);
+    }
+
+    private static EndpointRequestDto RequestWithIdempotencyKey(string targetRef, string idempotencyKey) =>
+        new EndpointRequestDto("x", null, null, null, null, JsonSerializer.SerializeToElement(new { instanceTargetRef = targetRef, dispatch_payload = new { x = "ok" }, idempotency_key = idempotencyKey }), null);
+
     private static InstancePortDispatchRuntime BuildRuntime(FakeInstanceRepo repo, out FakeRuntimeEventLog log, IAbstractFunctionManifestRepository? manifestRepo = null)
     {
         log = new FakeRuntimeEventLog();
         return new InstancePortDispatchRuntime(NullLogger<InstancePortDispatchRuntime>.Instance, repo, new VaultReferenceInstanceCredentialMaterializer(new FakeCredentialCrypto()), new AbstractFunctionExecutor(manifestRepo ?? new FakeManifestRepo(), new IAbstractFunctionPrimitiveAdapter[] { new CallBoundInstanceFunctionPrimitiveAdapter() }), log);
     }
     private static EndpointRequestDto Request(string targetRef) => new EndpointRequestDto("x", null, null, null, null, JsonSerializer.SerializeToElement(new { instanceTargetRef = targetRef, dispatch_payload = new { x = "ok" } }), null);
+}
+
+/// <summary>
+/// In-memory stand-in mirroring topology.rt_claim_dispatch_idempotency_key /
+/// rt_complete_dispatch_idempotency_key / rt_fail_dispatch_idempotency_key semantics
+/// (see db/topology_tables.sql), validated against a real Postgres instance separately.
+/// </summary>
+internal sealed class FakeIdempotencyLedger : IRuntimeDispatchIdempotencyLedger
+{
+    private readonly Dictionary<string, (string Status, JsonElement? Result)> _entries = new(StringComparer.Ordinal);
+    public int ClaimCallCount { get; private set; }
+
+    public Task<RuntimeDispatchIdempotencyClaimResult> ClaimAsync(string idempotencyKey, string dispatchLane, CancellationToken ct = default)
+    {
+        ClaimCallCount++;
+        if (!_entries.TryGetValue(idempotencyKey, out var entry))
+        {
+            _entries[idempotencyKey] = ("processing", null);
+            return Task.FromResult(new RuntimeDispatchIdempotencyClaimResult(RuntimeDispatchIdempotencyClaimStatus.Claimed, null));
+        }
+        if (entry.Status == "completed")
+            return Task.FromResult(new RuntimeDispatchIdempotencyClaimResult(RuntimeDispatchIdempotencyClaimStatus.AlreadyCompleted, entry.Result));
+        if (entry.Status == "failed")
+        {
+            _entries[idempotencyKey] = ("processing", null);
+            return Task.FromResult(new RuntimeDispatchIdempotencyClaimResult(RuntimeDispatchIdempotencyClaimStatus.Claimed, null));
+        }
+        return Task.FromResult(new RuntimeDispatchIdempotencyClaimResult(RuntimeDispatchIdempotencyClaimStatus.InFlight, null));
+    }
+
+    public Task CompleteAsync(string idempotencyKey, JsonElement resultJson, CancellationToken ct = default)
+    {
+        _entries[idempotencyKey] = ("completed", resultJson);
+        return Task.CompletedTask;
+    }
+
+    public Task FailAsync(string idempotencyKey, string failureCode, CancellationToken ct = default)
+    {
+        _entries[idempotencyKey] = ("failed", null);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Wraps CallBoundInstanceFunctionPrimitiveAdapter to count invocations for duplicate-execution proof.</summary>
+internal sealed class CountingBoundInstanceFunctionAdapter : IAbstractFunctionPrimitiveAdapter
+{
+    private readonly CallBoundInstanceFunctionPrimitiveAdapter _inner = new();
+    public int CallCount { get; private set; }
+    public string PrimitiveKey => _inner.PrimitiveKey;
+    public Task<object?> ExecuteAsync(AbstractFunctionStep step, IReadOnlyDictionary<string, object?> inputs, AbstractFunctionExecutionContext context, CancellationToken ct = default)
+    {
+        CallCount++;
+        return _inner.ExecuteAsync(step, inputs, context, ct);
+    }
 }
 
 internal sealed class FakeCredentialCrypto : IExternalCredentialCrypto

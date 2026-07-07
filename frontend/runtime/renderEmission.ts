@@ -29,7 +29,10 @@ import {
   evaluateAllCalcBindings,
 } from "./frontendLocalCalculationResolver.ts";
 import { projectionInputFromData } from "./projectionInput.ts";
-import { wiringSettingCategoryOf } from "../lib/uiBuilderWiringProjection.ts";
+import {
+  computeDispatchIdempotencyKey,
+  wiringSettingCategoryOf,
+} from "../lib/uiBuilderWiringProjection.ts";
 import { resolveUiStateUpdateMutation } from "./uiEventEffectRunner.ts";
 
 export type RenderEmissionOptions = {
@@ -396,10 +399,11 @@ function buildLocalUiStateEventBinding(
  */
 function buildExternalPortEventBinding(
   rawWirings: unknown,
+  identity: { layoutId?: string | null; packageId?: string | null; nodeId: string },
 ): Record<string, unknown> {
   if (!Array.isArray(rawWirings)) return {};
   const binding: Record<string, unknown> = {};
-  for (const raw of rawWirings) {
+  for (const [interactionIndex, raw] of rawWirings.entries()) {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const wiring = raw as Record<string, unknown>;
     const trigger = normalizeAuthoredEventType(
@@ -426,10 +430,26 @@ function buildExternalPortEventBinding(
     const debounceMs = typeof wiring.debounceMs === "number"
       ? wiring.debounceMs
       : undefined;
+    const actionType = typeof wiring.actionType === "string"
+      ? wiring.actionType
+      : "";
     if (wiring.actionType === "dispatchExternalPort") {
       const portTargetRef = typeof wiring.portTargetRef === "string"
         ? wiring.portTargetRef.trim()
         : "";
+      // retry_safe_dispatch_idempotency: identity-only base key computed here at
+      // binding-build time (stable across reload/reconnect for the SAME authored
+      // interaction); emitBoundEvent extends it with the event-time RESOLVED
+      // payload via appendResolvedPayloadToIdempotencyKey before dispatching.
+      const idempotencyKeyBase = computeDispatchIdempotencyKey({
+        layoutId: identity.layoutId,
+        packageId: identity.packageId,
+        nodeId: identity.nodeId,
+        interactionIndex,
+        trigger,
+        actionType,
+        targetRef: portTargetRef,
+      });
       binding[trigger] = {
         eventType: trigger,
         externalPortDispatch: {
@@ -437,12 +457,22 @@ function buildExternalPortEventBinding(
           payloadFrom,
           outputProp,
           debounceMs,
+          idempotencyKeyBase,
         },
       };
     } else if (wiring.actionType === "dispatchInstanceOperation") {
       const instanceTargetRef = typeof wiring.instanceTargetRef === "string"
         ? wiring.instanceTargetRef.trim()
         : "";
+      const idempotencyKeyBase = computeDispatchIdempotencyKey({
+        layoutId: identity.layoutId,
+        packageId: identity.packageId,
+        nodeId: identity.nodeId,
+        interactionIndex,
+        trigger,
+        actionType,
+        targetRef: instanceTargetRef,
+      });
       binding[trigger] = {
         eventType: trigger,
         instanceOperationDispatch: {
@@ -450,6 +480,7 @@ function buildExternalPortEventBinding(
           payloadFrom,
           outputProp,
           debounceMs,
+          idempotencyKeyBase,
         },
       };
     }
@@ -782,7 +813,11 @@ export function renderEmission(
           : buildLocalUiStateEventBinding(rawLocalInteractions);
         const externalPortEventBinding = previewMode
           ? {}
-          : buildExternalPortEventBinding(node.runtimeInteractions);
+          : buildExternalPortEventBinding(node.runtimeInteractions, {
+            layoutId: emission.layoutId,
+            packageId: emission.packageId,
+            nodeId: node.nodeId ?? "",
+          });
         const componentEventBinding = { ...baseEventBinding };
         for (
           const [trigger, localBinding] of Object.entries({

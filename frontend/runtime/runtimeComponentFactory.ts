@@ -125,6 +125,7 @@ import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
 import { resolvePayloadFrom } from "./payloadFromResolver.ts";
 import { applyGuardedLocalStateMutation } from "./uiEventEffectRunner.ts";
 import {
+  appendResolvedPayloadToIdempotencyKey,
   isHighFrequencyTrigger,
   isValidDebounceMs,
 } from "../lib/uiBuilderWiringProjection.ts";
@@ -155,6 +156,8 @@ type EventBindingValue = {
     outputProp?: string;
     /** SSOT high_frequency_policy: required when the bound trigger is high-frequency. */
     debounceMs?: number;
+    /** SSOT lifecycle_policy retry_safe_dispatch_idempotency: identity-only base key from binding-build time; extended with the resolved payload at event time. */
+    idempotencyKeyBase?: string;
   };
   /** 外部インスタンス連携 runtime dispatch lane (instance-port target refs via api_command_lane). */
   instanceOperationDispatch?: {
@@ -163,6 +166,8 @@ type EventBindingValue = {
     outputProp?: string;
     /** SSOT high_frequency_policy: required when the bound trigger is high-frequency. */
     debounceMs?: number;
+    /** SSOT lifecycle_policy retry_safe_dispatch_idempotency: identity-only base key from binding-build time; extended with the resolved payload at event time. */
+    idempotencyKeyBase?: string;
   };
 };
 
@@ -284,6 +289,9 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       debounceMs: typeof rawDispatch.debounceMs === "number"
         ? rawDispatch.debounceMs
         : undefined,
+      idempotencyKeyBase: typeof rawDispatch.idempotencyKeyBase === "string"
+        ? rawDispatch.idempotencyKeyBase
+        : undefined,
     };
   }
   const instanceOperationDispatchRaw =
@@ -326,6 +334,9 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
         : undefined,
       debounceMs: typeof rawDispatch.debounceMs === "number"
         ? rawDispatch.debounceMs
+        : undefined,
+      idempotencyKeyBase: typeof rawDispatch.idempotencyKeyBase === "string"
+        ? rawDispatch.idempotencyKeyBase
         : undefined,
     };
   }
@@ -441,6 +452,16 @@ function emitBoundEvent(
       portTargetRef: binding.externalPortDispatch.portTargetRef,
       payload: resolved.payload,
       outputProp: binding.externalPortDispatch.outputProp,
+      // retry_safe_dispatch_idempotency: extends the build-time identity base key
+      // with the event-time resolved payload, so a genuine retry of THIS firing
+      // (communication loss, reload) presents the same key while a distinct
+      // firing with different resolved payload content gets a distinct key.
+      idempotencyKey: binding.externalPortDispatch.idempotencyKeyBase
+        ? appendResolvedPayloadToIdempotencyKey(
+          binding.externalPortDispatch.idempotencyKeyBase,
+          resolved.payload,
+        )
+        : undefined,
     });
   }
   // Lane 2 (外部インスタンス連携): dispatchInstanceOperation through the same
@@ -469,6 +490,12 @@ function emitBoundEvent(
       instanceTargetRef: binding.instanceOperationDispatch.instanceTargetRef,
       payload: resolved.payload,
       outputProp: binding.instanceOperationDispatch.outputProp,
+      idempotencyKey: binding.instanceOperationDispatch.idempotencyKeyBase
+        ? appendResolvedPayloadToIdempotencyKey(
+          binding.instanceOperationDispatch.idempotencyKeyBase,
+          resolved.payload,
+        )
+        : undefined,
     });
   }
   // Lane 2 (navigation): frontend-local route navigation — no backend dispatch.

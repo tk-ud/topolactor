@@ -354,6 +354,8 @@ export type ExternalPortDispatchSpec = {
   portTargetRef: string;
   payload: Record<string, unknown>;
   outputProp?: string;
+  /** SSOT lifecycle_policy retry_safe_dispatch_idempotency: forwarded as idempotency_key. */
+  idempotencyKey?: string;
 };
 
 /**
@@ -415,6 +417,7 @@ export async function enqueueExternalPortDispatchCommand(
         port_target_ref: ref,
         dispatch_payload: spec.payload,
         ...(spec.outputProp ? { output_prop: spec.outputProp } : {}),
+        ...(spec.idempotencyKey ? { idempotency_key: spec.idempotencyKey } : {}),
       },
     },
     token,
@@ -425,6 +428,8 @@ export type InstanceOperationDispatchSpec = {
   instanceTargetRef: string;
   payload: Record<string, unknown>;
   outputProp?: string;
+  /** SSOT lifecycle_policy retry_safe_dispatch_idempotency: forwarded as idempotency_key. */
+  idempotencyKey?: string;
 };
 
 /**
@@ -459,6 +464,7 @@ export async function enqueueInstanceOperationDispatchCommand(
         instance_target_ref: ref,
         dispatch_payload: spec.payload,
         ...(spec.outputProp ? { output_prop: spec.outputProp } : {}),
+        ...(spec.idempotencyKey ? { idempotency_key: spec.idempotencyKey } : {}),
       },
     },
     token,

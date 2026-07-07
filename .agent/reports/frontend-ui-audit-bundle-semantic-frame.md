@@ -393,6 +393,21 @@ high_frequency_policy:
   a high-frequency trigger without valid debounceMs fails close before the external/
   instance dispatch lane is called — authoring/apply guard alone is insufficient
 
+retry_safe_dispatch_idempotency:
+  idempotencyPolicy is a retry-safe dispatch policy, not merely a frontend runner
+  duplicate-fire guard (fired-registry only survives one runner lifetime; reload /
+  reconnect / runner recreation starts a brand-new fired-registry)
+  deterministic idempotency_key derived from stable identity (layoutId + packageId +
+  nodeId + interactionIndex + trigger + actionType + targetRef) plus resolved
+  dispatch payload — NOT a fresh random value per dispatch call
+  backend ledger (topology.runtime_dispatch_idempotency_ledger) claims the key
+  BEFORE executing the external API call / instance operation and marks it
+  completed/failed AFTER — distinct from runtime_event_log, which is append-only
+  evidence written after execution and never read to gate execution
+  a retry with the same key after completion returns the stored result without
+  re-executing; a concurrent duplicate while in flight does not execute; a failed
+  key is retry-safe to reclaim
+
 drag_drop_wiring_edit:
   valid drop -> typed runtimeInteraction patch
   invalid drop -> explicit error and no draft mutation
@@ -481,6 +496,12 @@ required_proof:
   stale/deleted target fails close in production equivalent path
   SSE refresh newly mounted lifecycle node handling
   store notification -> renderEmission re-run -> rendered props reflection
+  retry-safe dispatch idempotency: response-lost retry does not re-execute the
+  external API call / instance operation and returns the stored result
+  retry-safe dispatch idempotency: concurrent duplicate while in-flight does not execute
+  retry-safe dispatch idempotency: idempotencyKey is stable across separately-created
+  runner instances for the same authored interaction (reload / reconnect proof)
+  retry-safe dispatch idempotency: failed claim is retry-safe to reclaim
 
 OK:
   tests follow owning SSOT

@@ -166,6 +166,27 @@ require_grep "updateNodes" "$RUNNER_TEST" \
 require_grep "HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE" "$EXECUTION_LANE_TEST" \
   "runtime dispatch guard proof for both external and instance high-frequency lanes"
 
+# Retry-safe dispatch idempotency (Round 5 re-audit): deterministic idempotency_key
+# generation, threaded from binding-build time through event-time dispatch, and
+# from the lifecycle path — the frontend fired-registry alone does not survive
+# reload/reconnect/runner recreation. Backend ledger proof is covered by
+# backend/tests/Topolactor.Runtime.Tests (ExternalPortDispatchRuntimeTests.cs /
+# InstancePortRuntimeTests.cs), outside this frontend-scoped structure gate.
+require_grep "computeDispatchIdempotencyKey" "$LIB" \
+  "deterministic identity-based idempotency key generation"
+require_grep "appendResolvedPayloadToIdempotencyKey" "$LIB" \
+  "event-time resolved-payload extension of the identity-only base key"
+require_grep "computeDispatchIdempotencyKey" "$RENDER_EMISSION" \
+  "binding builder must compute the identity-only idempotencyKeyBase"
+require_grep "idempotencyKeyBase" "$COMPONENT_FACTORY" \
+  "emitBoundEvent must extend the binding's idempotencyKeyBase with the resolved payload"
+require_grep "computeDispatchIdempotencyKey" "$RUNNER" \
+  "lifecycle path must compute idempotencyKey for dispatchExternalPort/dispatchInstanceOperation"
+require_grep "idempotencyKey" "$SCHEDULER" \
+  "frontendScheduler must forward idempotencyKey as idempotency_key on the dispatch payload"
+require_grep "idempotencyKey" "$RUNNER_TEST" \
+  "proof that idempotencyKey is stable across separately-created runner instances (reload/reconnect)"
+
 # ─── 3. Negative boundaries ──────────────────────────────────────────────────
 # Wiring graph panel is projection-only: no direct persistence dispatch from the panel.
 forbid_grep "dispatchAdminOp|queueAdminClientCommand|layout_patch:apply" "$PANEL" \

@@ -1,6 +1,6 @@
 instance_port_substrate_ssot:
   name: instance_port_substrate
-  version: 0.3.3
+  version: 0.4.0
   status: ssot_design_document
   canonical_path: docs/design/instance-port-substrate-ssot.yaml
 
@@ -434,6 +434,39 @@ instance_port_substrate_ssot:
         - INSTANCE_TIMEOUT_EXCEEDED
         - INSTANCE_PROVIDER_SELECTOR_FORBIDDEN
         - INSTANCE_IMPORT_SECRET_MATERIAL_DENIED
+        - INSTANCE_PORT_DISPATCH_IN_FLIGHT
+
+  retry_safe_dispatch_idempotency:
+    rule: >-
+      The instance_port_runtime lane (backend/runtime/InstancePortRuntime.cs
+      InstancePortDispatchRuntime.ExecuteAsync) claims an optional
+      idempotency_key from the request payload against
+      topology.runtime_dispatch_idempotency_ledger BEFORE invoking
+      AbstractFunctionExecutor.ExecuteAsync (the actual bound instance
+      operation), and marks the key completed/failed AFTER. idempotency_policy_key
+      on an instance operation binding (import_contracts.required_guarded_fields)
+      declares intended idempotency semantics of the bound function; this ledger
+      is the runtime ENFORCEMENT of retry-safety at the dispatch boundary, a
+      distinct concern from that declared metadata.
+    claim_outcomes:
+      claimed: no prior attempt (or a prior failed attempt, reclaimed) — execute the bound function
+      already_completed: a prior attempt already completed — return its stored result; do NOT re-execute
+      in_flight: a concurrent duplicate is currently processing — do NOT execute (INSTANCE_PORT_DISPATCH_IN_FLIGHT)
+    gating: >-
+      Ledger activates only when idempotency_key is present on the request
+      payload. Absence is not fail-close at this generic boundary. The UI
+      Builder wiring lane (docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+      lifecycle_policy.retry_safe_dispatch_idempotency) always supplies one for
+      its authored dispatchInstanceOperation runtimeInteractions; key
+      generation is owned by that SSOT, not duplicated here.
+    implementation:
+      table: topology.runtime_dispatch_idempotency_ledger (db/topology_tables.sql; SHARED with external_port_runtime, dispatch_lane column distinguishes rows)
+      functions: [topology.rt_claim_dispatch_idempotency_key, topology.rt_complete_dispatch_idempotency_key, topology.rt_fail_dispatch_idempotency_key]
+      repository: backend/repository/NpgsqlRuntimeDispatchIdempotencyLedgerRepository.cs (IRuntimeDispatchIdempotencyLedger, backend/runtime/RuntimeDispatchIdempotencyLedger.cs)
+      call_site: backend/runtime/InstancePortRuntime.cs InstancePortDispatchRuntime.ExecuteAsync
+    prohibited:
+      - treating_idempotency_policy_key_metadata_as_sufficient_runtime_enforcement
+      - treating_runtime_event_log_reference_only_evidence_as_a_substitute_for_the_idempotency_ledger
 
   abstract_function_primitives:
     selected_shape: abstract_function_primitive_not_external_port_policy_operation_key

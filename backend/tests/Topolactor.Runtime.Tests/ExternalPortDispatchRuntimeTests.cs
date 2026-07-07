@@ -64,6 +64,100 @@ public class ExternalPortDispatchRuntimeTests
         Assert.Equal("EXTERNAL_CREDENTIAL_REQUIREMENT_INVALID", response.Errors[0].Code);
     }
 
+    // ─── retry-safe dispatch idempotency (response-lost / retry duplicate prevention) ─────────
+
+    [Fact]
+    public async Task ExecuteAsync_RetryWithSameIdempotencyKeyAfterCompletion_DoesNotReExecuteAndReturnsSameResult()
+    {
+        var repo = new FakeRepo(NewRecord(ResponsePortId, credentialKind: "none"), NewPolicy());
+        var executor = new CountingPolicyStepExecutor();
+        var ledger = new FakeIdempotencyLedger();
+        var runtime = new ExternalPortDispatchRuntime(
+            NullLogger<ExternalPortDispatchRuntime>.Instance, repo, executor,
+            idempotencyLedger: ledger);
+
+        // request 1: dispatchExternalPort with idempotency_key = K — backend marks K processing,
+        // executes the external API (here: the policy step executor), then marks K completed.
+        var request1 = NewRequestWithIdempotencyKey($"external-port:response_port:{ResponsePortId}", "idem-key-1");
+        var response1 = await runtime.ExecuteAsync(request1, null);
+        Assert.True(response1.Success);
+        Assert.Equal(1, executor.ExecutePolicyCallCount);
+
+        // request 2: response to request 1 was lost before the client received it — client retries
+        // with the SAME idempotency_key. Backend must not execute the external API again.
+        var request2 = NewRequestWithIdempotencyKey($"external-port:response_port:{ResponsePortId}", "idem-key-1");
+        var response2 = await runtime.ExecuteAsync(request2, null);
+
+        Assert.True(response2.Success);
+        Assert.Equal(1, executor.ExecutePolicyCallCount);
+        Assert.Equal(
+            response1.Emission!.Data!.Value.GetRawText(),
+            response2.Emission!.Data!.Value.GetRawText());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ConcurrentDuplicateWhileInFlight_DoesNotExecuteAndFailsClosed()
+    {
+        var repo = new FakeRepo(NewRecord(ResponsePortId, credentialKind: "none"), NewPolicy());
+        var executor = new CountingPolicyStepExecutor();
+        var ledger = new FakeIdempotencyLedger();
+        var runtime = new ExternalPortDispatchRuntime(
+            NullLogger<ExternalPortDispatchRuntime>.Instance, repo, executor,
+            idempotencyLedger: ledger);
+
+        // Simulate a concurrent in-flight duplicate: the key is already claimed (processing) but
+        // never completed/failed.
+        await ledger.ClaimAsync("idem-key-2", "external_port_runtime");
+
+        var response = await runtime.ExecuteAsync(
+            NewRequestWithIdempotencyKey($"external-port:response_port:{ResponsePortId}", "idem-key-2"), null);
+
+        Assert.False(response.Success);
+        Assert.Equal("EXTERNAL_PORT_DISPATCH_IN_FLIGHT", response.Errors[0].Code);
+        Assert.Equal(0, executor.ExecutePolicyCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NoIdempotencyKey_SkipsLedgerAndExecutesNormally()
+    {
+        var repo = new FakeRepo(NewRecord(ResponsePortId, credentialKind: "none"), NewPolicy());
+        var executor = new CountingPolicyStepExecutor();
+        var ledger = new FakeIdempotencyLedger();
+        var runtime = new ExternalPortDispatchRuntime(
+            NullLogger<ExternalPortDispatchRuntime>.Instance, repo, executor,
+            idempotencyLedger: ledger);
+
+        var response = await runtime.ExecuteAsync(NewRequest($"external-port:response_port:{ResponsePortId}"), null);
+
+        Assert.True(response.Success);
+        Assert.Equal(1, executor.ExecutePolicyCallCount);
+        Assert.Equal(0, ledger.ClaimCallCount);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RetryAfterFailure_ReclaimsKeyAndExecutesAgain()
+    {
+        var executor = new CountingPolicyStepExecutor();
+        var ledger = new FakeIdempotencyLedger();
+
+        // Simulate a prior attempt that claimed the key then failed (e.g. the external call itself
+        // errored downstream of the claim). failed keys are retry-safe to reclaim — the underlying
+        // effect did not complete, so a retry must be allowed to execute again.
+        await ledger.ClaimAsync("idem-key-3", "external_port_runtime");
+        await ledger.FailAsync("idem-key-3", "EXTERNAL_PORT_DISPATCH_FAILED");
+
+        var runtime = new ExternalPortDispatchRuntime(
+            NullLogger<ExternalPortDispatchRuntime>.Instance,
+            new FakeRepo(NewRecord(ResponsePortId, credentialKind: "none"), NewPolicy()),
+            executor,
+            idempotencyLedger: ledger);
+        var response = await runtime.ExecuteAsync(
+            NewRequestWithIdempotencyKey($"external-port:response_port:{ResponsePortId}", "idem-key-3"), null);
+
+        Assert.True(response.Success);
+        Assert.Equal(1, executor.ExecutePolicyCallCount);
+    }
+
 
     [Fact]
     public async Task ExternalPortParentCompletion_HookPathRouteKey_ExecutesPolicyEnqueuesLogsEvidenceAndBroadcastsSseProjectionResponse()
@@ -442,6 +536,17 @@ public class ExternalPortDispatchRuntimeTests
         return new EndpointRequestDto("dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort", null, payload, null, "client");
     }
 
+    private static EndpointRequestDto NewRequestWithIdempotencyKey(string targetRef, string idempotencyKey)
+    {
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            port_target_ref = targetRef,
+            dispatch_payload = new { subject = "hello" },
+            idempotency_key = idempotencyKey
+        });
+        return new EndpointRequestDto("dispatchExternalPort", "external_port", "external_port", "dispatchExternalPort", null, payload, null, "client");
+    }
+
     private static EndpointRequestDto NewHookRouteRequest(string hookPath, string routeKey, string signature)
     {
         var payload = JsonSerializer.SerializeToElement(new
@@ -479,6 +584,63 @@ public class ExternalPortDispatchRuntimeTests
         public Task<ExternalPortRecord?> LoadPortRecordByCanonicalBindingAsync(string manifestKey, string tableRef, string portKind, Guid portId, string? routeKey, CancellationToken ct = default) { LastPortId = portId; return Task.FromResult(_record); }
         public Task<ExternalPortRecord?> LoadHookPortRecordAsync(string hookPath, string routeKey, CancellationToken ct = default) { LastHookPath = hookPath; LastHookRouteKey = routeKey; return Task.FromResult(_record); }
         public Task<ExternalPortPolicy?> LoadPolicyAsync(ExternalPortRecord portRecord, CancellationToken ct = default) => Task.FromResult(_policy);
+    }
+
+    private sealed class CountingPolicyStepExecutor : IExternalPortPolicyStepExecutor
+    {
+        public int ExecutePolicyCallCount { get; private set; }
+        public Task ExecuteAsync(ExternalPortPolicyStep step, ExternalPortExecutionContext context, CancellationToken ct = default) =>
+            Task.CompletedTask;
+        public Task ExecutePolicyAsync(ExternalPortPolicy policy, ExternalPortExecutionContext context, CancellationToken ct = default)
+        {
+            ExecutePolicyCallCount++;
+            return Task.CompletedTask;
+        }
+        public ExternalPortHttpRequest BuildTokenRefreshRequest(ExternalTokenRefreshRequest request) =>
+            throw new NotSupportedException();
+        public ExternalTokenRefreshResult ParseTokenRefreshResult(ExternalTokenRefreshRequest request, ExternalPortHttpResponse response) =>
+            throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// In-memory stand-in mirroring topology.rt_claim_dispatch_idempotency_key /
+    /// rt_complete_dispatch_idempotency_key / rt_fail_dispatch_idempotency_key semantics
+    /// (see db/topology_tables.sql), validated against a real Postgres instance separately.
+    /// </summary>
+    private sealed class FakeIdempotencyLedger : IRuntimeDispatchIdempotencyLedger
+    {
+        private readonly Dictionary<string, (string Status, JsonElement? Result)> _entries = new(StringComparer.Ordinal);
+        public int ClaimCallCount { get; private set; }
+
+        public Task<RuntimeDispatchIdempotencyClaimResult> ClaimAsync(string idempotencyKey, string dispatchLane, CancellationToken ct = default)
+        {
+            ClaimCallCount++;
+            if (!_entries.TryGetValue(idempotencyKey, out var entry))
+            {
+                _entries[idempotencyKey] = ("processing", null);
+                return Task.FromResult(new RuntimeDispatchIdempotencyClaimResult(RuntimeDispatchIdempotencyClaimStatus.Claimed, null));
+            }
+            if (entry.Status == "completed")
+                return Task.FromResult(new RuntimeDispatchIdempotencyClaimResult(RuntimeDispatchIdempotencyClaimStatus.AlreadyCompleted, entry.Result));
+            if (entry.Status == "failed")
+            {
+                _entries[idempotencyKey] = ("processing", null);
+                return Task.FromResult(new RuntimeDispatchIdempotencyClaimResult(RuntimeDispatchIdempotencyClaimStatus.Claimed, null));
+            }
+            return Task.FromResult(new RuntimeDispatchIdempotencyClaimResult(RuntimeDispatchIdempotencyClaimStatus.InFlight, null));
+        }
+
+        public Task CompleteAsync(string idempotencyKey, JsonElement resultJson, CancellationToken ct = default)
+        {
+            _entries[idempotencyKey] = ("completed", resultJson);
+            return Task.CompletedTask;
+        }
+
+        public Task FailAsync(string idempotencyKey, string failureCode, CancellationToken ct = default)
+        {
+            _entries[idempotencyKey] = ("failed", null);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeRuntimeEventLogRepository : IExternalPortRuntimeEventLogRepository

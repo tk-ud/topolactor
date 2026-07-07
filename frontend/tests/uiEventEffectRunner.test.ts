@@ -28,7 +28,10 @@ import {
 import { enqueueInstanceOperationDispatchCommand } from "../runtime/frontendScheduler.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
-import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
+import {
+  computeDispatchIdempotencyKey,
+  type WiringNode,
+} from "../lib/uiBuilderWiringProjection.ts";
 
 function modalNodes(): WiringNode[] {
   return [
@@ -287,6 +290,15 @@ Deno.test("renderEmission: dispatchInstanceOperation projects an instanceOperati
     payloadFrom: { amount: "event.value" },
     outputProp: "result",
     debounceMs: undefined,
+    idempotencyKeyBase: computeDispatchIdempotencyKey({
+      layoutId: "layout-1",
+      packageId: undefined,
+      nodeId: "n-1",
+      interactionIndex: 0,
+      trigger: "click",
+      actionType: "dispatchInstanceOperation",
+      targetRef: "instance-port:db_instance_port:inst-1:op-1",
+    }),
   });
   // Preview stays inert: the dispatch binding is not built in previewMode.
   const previewSpecs = renderEmission(emission, defaultComponentRegistry, {
@@ -582,5 +594,105 @@ Deno.test("runner.updateNodes: recomputes the loop guard and predeclared slots a
       s.nodeId === "n-loop-refresh" && s.stateKey === "value"
     ),
     "reconciliation must predeclare UI監視割当 slots from the refreshed nodes",
+  );
+});
+
+// ─── retry_safe_dispatch_idempotency: lifecycle-triggered dispatch ──────────
+//
+// Proves the audit's core distinction: the runner's fired-registry only guards
+// duplicate dispatch WITHIN a single runner's lifetime (proof 3 — "frontend
+// runner guard is not treated as full idempotency"). A page reload / SSE
+// reconnect / runtime-runner recreation constructs a BRAND NEW runner instance
+// with a brand new (empty) fired-registry — so cross-request retry-safety must
+// come from a STABLE idempotencyKey the backend ledger can recognize, not from
+// the fired-registry (which cannot survive the new instance).
+
+function lifecycleDispatchNodes(): WiringNode[] {
+  return [{
+    nodeId: "n-fetch",
+    componentKey: "layout/box",
+    runtimeInteractions: [{
+      trigger: "initial_mount",
+      actionType: "dispatchExternalPort",
+      portTargetRef: "external-port:access_port:port-1",
+      lifecycleDispatchConfirmed: true,
+      idempotencyPolicy: "once_per_mount",
+      sideEffectNone: true,
+    }],
+  }];
+}
+
+Deno.test("retry_safe_dispatch_idempotency: idempotencyKey is stable across two separately-created runner instances for the SAME authored interaction (simulates reload / runner recreation)", () => {
+  const capturedA: Array<{ idempotencyKey?: string }> = [];
+  const runnerA = createUiEventEffectRunner({
+    nodes: lifecycleDispatchNodes(),
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    dispatchExternalPort: (spec) => capturedA.push(spec),
+  });
+  runnerA.emitLifecycle("initial_mount");
+
+  // Simulate reload: a BRAND NEW runner instance (fresh fired-registry, fresh
+  // store) is created from the SAME authored node list and the SAME layoutId/
+  // packageId identity — exactly what ProjectionShell does on remount.
+  const capturedB: Array<{ idempotencyKey?: string }> = [];
+  const runnerB = createUiEventEffectRunner({
+    nodes: lifecycleDispatchNodes(),
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    dispatchExternalPort: (spec) => capturedB.push(spec),
+  });
+  runnerB.emitLifecycle("initial_mount");
+
+  assertEquals(capturedA.length, 1);
+  assertEquals(capturedB.length, 1);
+  assert(capturedA[0].idempotencyKey, "idempotencyKey must be present");
+  assertEquals(
+    capturedA[0].idempotencyKey,
+    capturedB[0].idempotencyKey,
+    "the SAME initial_mount interaction must produce the SAME idempotencyKey across runner recreation — this is what lets the backend ledger recognize a retry rather than a new logical dispatch",
+  );
+});
+
+Deno.test("retry_safe_dispatch_idempotency: distinct authored interactions (different nodeId) produce distinct idempotencyKeys", () => {
+  const captured: Array<{ idempotencyKey?: string }> = [];
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "n-fetch-a",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-1",
+        lifecycleDispatchConfirmed: true,
+        idempotencyPolicy: "once_per_mount",
+        sideEffectNone: true,
+      }],
+    },
+    {
+      nodeId: "n-fetch-b",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-1",
+        lifecycleDispatchConfirmed: true,
+        idempotencyPolicy: "once_per_mount",
+        sideEffectNone: true,
+      }],
+    },
+  ];
+  const runner = createUiEventEffectRunner({
+    nodes,
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    dispatchExternalPort: (spec) => captured.push(spec),
+  });
+  runner.emitLifecycle("initial_mount");
+
+  assertEquals(captured.length, 2);
+  assert(
+    captured[0].idempotencyKey !== captured[1].idempotencyKey,
+    "two distinct authored initial_mount interactions must not collide on the same idempotencyKey",
   );
 });

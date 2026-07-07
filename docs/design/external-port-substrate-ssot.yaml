@@ -1,6 +1,6 @@
 external_port_substrate_ssot:
   name: external_port_substrate
-  version: 0.1.0
+  version: 0.2.0
   status: ssot_design_document
   canonical_path: docs/design/external-port-substrate-ssot.yaml
 
@@ -484,6 +484,38 @@ external_port_substrate_ssot:
       - startup_validation_management
       - standalone_credential_runtime_execution
       - provider_specific_runtime_execution
+
+  retry_safe_dispatch_idempotency:
+    rule: >-
+      The generic dispatchExternalPort runtime dispatch lane (external_port_runtime,
+      backend/runtime/ExternalPortDispatchRuntime.cs) claims an optional
+      idempotency_key from the request payload against
+      topology.runtime_dispatch_idempotency_ledger BEFORE executing the policy
+      (the actual outbound HTTP call), and marks the key completed/failed AFTER.
+      This is distinct from topology.runtime_event_log, which is append-only
+      effect-OBSERVED evidence written only after execution and never read to
+      gate execution.
+    claim_outcomes:
+      claimed: no prior attempt (or a prior failed attempt, reclaimed) — execute the policy
+      already_completed: a prior attempt already completed — return its stored result; do NOT re-execute
+      in_flight: a concurrent duplicate is currently processing — do NOT execute (EXTERNAL_PORT_DISPATCH_IN_FLIGHT)
+    gating: >-
+      Ledger activates only when idempotency_key is present on the request
+      payload. Absence is not fail-close at this generic boundary —
+      backward-compatible for callers that do not yet supply one. The UI
+      Builder wiring lane (docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+      lifecycle_policy.retry_safe_dispatch_idempotency) always supplies one for
+      its authored dispatchExternalPort runtimeInteractions; key generation and
+      the retry-across-reload rationale are owned by that SSOT, not duplicated
+      here.
+    implementation:
+      table: topology.runtime_dispatch_idempotency_ledger (db/topology_tables.sql)
+      functions: [topology.rt_claim_dispatch_idempotency_key, topology.rt_complete_dispatch_idempotency_key, topology.rt_fail_dispatch_idempotency_key]
+      repository: backend/repository/NpgsqlRuntimeDispatchIdempotencyLedgerRepository.cs (IRuntimeDispatchIdempotencyLedger, backend/runtime/RuntimeDispatchIdempotencyLedger.cs)
+      call_site: backend/runtime/ExternalPortDispatchRuntime.cs ExecuteAsync
+    prohibited:
+      - reading_or_writing_the_ledger_from_a_policy_step_instead_of_the_generic_execution_boundary
+      - treating_runtime_event_log_as_a_substitute_for_the_idempotency_ledger
 
   consumer_bundle_relation:
     file_storage_bundle:

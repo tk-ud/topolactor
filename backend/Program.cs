@@ -203,6 +203,8 @@ builder.Services.AddSingleton<IAbstractFunctionPrimitiveAdapter>(sp =>
 builder.Services.AddSingleton<AbstractFunctionExecutor>();
 builder.Services.AddSingleton<IExternalPortRuntimeEventLogRepository>(_ =>
     new NpgsqlExternalPortRuntimeEventLogRepository(connectionString));
+builder.Services.AddSingleton<IRuntimeDispatchIdempotencyLedger>(_ =>
+    new NpgsqlRuntimeDispatchIdempotencyLedgerRepository(connectionString));
 builder.Services.AddSingleton<IExternalPortConsumerEvidenceRepository>(_ =>
     new NpgsqlExternalPortConsumerEvidenceRepository(connectionString));
 builder.Services.AddHttpClient();
@@ -242,14 +244,16 @@ builder.Services.AddSingleton<ExternalPortDispatchRuntime>(sp =>
         sp.GetRequiredService<IExternalPortPolicyStepExecutor>(),
         sp.GetRequiredService<SseEventBroadcaster>(),
         sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>(),
-        sp.GetRequiredService<IBackendErrorEvidenceAppender>()));
+        sp.GetRequiredService<IBackendErrorEvidenceAppender>(),
+        sp.GetRequiredService<IRuntimeDispatchIdempotencyLedger>()));
 builder.Services.AddSingleton<InstancePortDispatchRuntime>(sp =>
     new InstancePortDispatchRuntime(
         sp.GetRequiredService<ILogger<InstancePortDispatchRuntime>>(),
         sp.GetRequiredService<IInstancePortPolicyRepository>(),
         sp.GetRequiredService<IInstanceCredentialMaterializer>(),
         sp.GetRequiredService<AbstractFunctionExecutor>(),
-        sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>()));
+        sp.GetRequiredService<IExternalPortRuntimeEventLogRepository>(),
+        sp.GetRequiredService<IRuntimeDispatchIdempotencyLedger>()));
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>(sp =>
