@@ -11,11 +11,311 @@
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `ui-projection-surface-architecture-reinforcement` | UI projection surface architecture reinforcement | partial | 1 | `product.dynamic_support_nocode_loop` / projection surface carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
+| `runtime-route-taxonomy-hardcoded-route-retirement` | Runtime route taxonomy / hardcoded route retirement | not_started | 1 | `product.dynamic_support_nocode_loop` / canonical route taxonomy | `docs/design/runtime-orchestration-ssot.yaml` |
+| `initial-projection-side-admin-crud-seed-route-retirement` | Initial projection-side admin CRUD seed route retirement | not_started | 1 | initial projection-side admin CRUD seed | `docs/design/initial-projection-side-admin-crud-seed-ssot.yaml`（requested owning SSOT; repository path may need materialization/connection） |
+| `frontend-canonical-surface-structure-label-boundary` | Frontend canonical surface structure / label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
+| `admin-console-workflow-step-wording-boundary` | Admin console workflow Step wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `pipeline-continuity-frontend-route-seed-proof` | Frontend route / seed replacement proof continuity | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
 ---
 
+## Report scope migration classification (2026-07-07)
+
+削除前 ref `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c` の `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md` と `.agent/reports/ui-projection-surface-gap-audit-2026-07-07.md` を全文確認した分類。report 由来 scope は finding 番号ではなく owning SSOT / Bundle 単位で扱う。
+
+- `ui-projection-surface-architecture-reinforcement`: **移管済み / 維持**。PR574 reference evidence、`/demo` cleanup、UI Builder inspection、`ProjectionShell` route/package/manifest awareness、`projectionInput` collection preservation、`runtimeInteraction identity / projection-time idempotency identity` future direction はこの bundle の PR574後残 scope として維持する。route seed 化 / label boundary / admin Step wording / broad pipeline proof は無理に混ぜ潰さない。
+- `runtime-route-taxonomy-hardcoded-route-retirement`: **薄い -> 補強**。canonical route taxonomy と non-canonical hardcoded route retirement を runtime-orchestration bundle として分離する。
+- `initial-projection-side-admin-crud-seed-route-retirement`: **未移管 -> 追加**。`/admin/enums`, `/admin/users`, `/admin/team-dashboard`, `/admin/scheduler` は単純削除ではなく seed replacement 付き route retirement として扱い、`/demo`, `/runtime-status` は no seed replacement として分離する。
+- `frontend-canonical-surface-structure-label-boundary`: **未移管 -> 追加**。canonical surface ごとの UI structure/wiring と normal/technical disclosure label boundary を分離する。
+- `admin-console-workflow-step-wording-boundary`: **未移管 -> 追加**。`/admin/contents -> /admin/ui-builder -> /admin/manifests` の Step wording boundary を admin-console-workflow bundle として分離する。
+- `pipeline-continuity-frontend-route-seed-proof`: **未移管 -> 追加**。route registry / seed CRUD renderability / route removal replacement / label boundary / admin Step wording proof を pipeline-continuity bundle として分離する。
+
+---
+
+
+## Bundle `runtime-route-taxonomy-hardcoded-route-retirement`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/runtime-orchestration-ssot.yaml`
+**移管元 report:** `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み report。削除前 ref `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c` から全文確認済み。）
+
+### 問題点
+
+削除済み frontend UI audit report は canonical frontend route authority / route taxonomy / projection entry・gate・admin authoring settings boundary を `runtime-orchestration-ssot` 所有 scope として分離していたが、現行 TODO では `/demo` cleanup 以外の hardcoded route taxonomy が薄い。non-canonical hardcoded routes を canonical route registry 権威として残すと、projection / gate / admin settings の分類が混線する。
+
+### 目的
+
+canonical route taxonomy を明示し、non-canonical hardcoded routes は canonical route authority から退役させる。canonical route は `/`, `/auth`, `/super_auth`, `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests` のみとする。
+
+### 改善方針
+
+- canonical route taxonomy: `/` = projection entry, `/auth` and `/super_auth` = gates, `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests` = Topolactor projection authoring/settings surfaces。
+- non-canonical hardcoded route retirement: `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, `/admin/scheduler`, `/demo`, `/runtime-status` を canonical route registry authority として扱わない。
+- `/auth` / `/super_auth` を projection pages と分類しない。`/admin` を business projection と分類しない。
+- route retirement の実装順序は関連 seed / proof bundle と整合させ、実装既存状態を SSOT として採用しない。
+
+### 対応資料
+
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み移管元）
+- `.agent/tasks/todo.md`
+
+### 対象ファイル名
+
+- `frontend/routes/index.tsx`
+- `frontend/routes/auth.tsx`
+- `frontend/routes/super_auth.tsx`
+- `frontend/routes/admin/index.tsx`
+- `frontend/routes/admin/contents.tsx`
+- `frontend/routes/admin/ui-builder.tsx`
+- `frontend/routes/admin/manifests.tsx`
+- future route registry / navigation files that enumerate canonical frontend routes
+
+### 対象関数名
+
+- future route registry builder / canonical route enumeration functions
+- future admin navigation route filter functions
+- future projection entry route resolution functions
+
+### 受入条件
+
+- canonical routes are explicitly limited to `/`, `/auth`, `/super_auth`, `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests`.
+- non-canonical hardcoded routes are absent from canonical route registry authority.
+- route taxonomy proof does not treat route presence tests for retired hardcoded routes as canonical proof.
+
+---
+
+## Bundle `initial-projection-side-admin-crud-seed-route-retirement`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/initial-projection-side-admin-crud-seed-ssot.yaml`（requested owning SSOT; if absent/disconnected at implementation time, repair SSOT/wiring before product code）
+**移管元 report:** `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み report。削除前 ref `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c` から全文確認済み。）
+
+### 問題点
+
+削除済み report は initial projection-side admin CRUD seed が credentials auth / external api / external instance / enum CRUD / user-role-status CRUD / dashboard configuration CRUD / scheduler configuration CRUD を所有し、対応する hardcoded admin routes の退役時に seed replacement を要求していた。現行 TODO ではこの seed replacement scope が未移管で、`/admin/enums`, `/admin/users`, `/admin/team-dashboard`, `/admin/scheduler` を単純削除として誤処理する危険がある。
+
+### 目的
+
+required CRUD responsibilities を seed-backed canonical projection/admin mechanism へ移し、hardcoded route を退役させる。`/demo` と `/runtime-status` は seed replacement 対象ではないことを明確化する。
+
+### 改善方針
+
+- `/admin/enums -> enum CRUD seed`。
+- `/admin/users -> user / role / status CRUD seed`。
+- `/admin/team-dashboard -> dashboard configuration CRUD seed`。
+- `/admin/scheduler -> scheduler configuration CRUD seed`。
+- seed CRUD exists before route removal; seeded CRUD renders through canonical projection/admin mechanism.
+- `/demo -> no seed replacement`。standalone demo domain / demo seed fallback / canonical demo revival は NG。
+- `/runtime-status -> no diagnostics seed replacement`。runtime diagnostics を initial CRUD seed に移さない。
+- UI Builder persistence model や diagnostics route replacement をこの seed bundle に混ぜない。
+
+### 対応資料
+
+- `docs/design/initial-projection-side-admin-crud-seed-ssot.yaml`（requested owning SSOT / future or missing path check required）
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み移管元）
+- `.agent/tasks/todo.md`
+
+### 対象ファイル名
+
+- future initial projection-side admin CRUD seed SQL / manifest files
+- `frontend/routes/admin/enums.tsx`
+- `frontend/routes/admin/users.tsx`
+- `frontend/routes/admin/team-dashboard.tsx`
+- `frontend/routes/admin/scheduler.tsx`
+- canonical projection/admin render surfaces that consume seed-backed CRUD
+
+### 対象関数名
+
+- future seed CRUD registration functions
+- future seed-to-admin-projection mapping functions
+- future canonical admin CRUD render functions
+- future route retirement proof helpers
+
+### 受入条件
+
+- `/admin/enums`, `/admin/users`, `/admin/team-dashboard`, `/admin/scheduler` are not treated as simple deletion targets; each has the seed replacement listed above.
+- `/demo` has no seed replacement.
+- `/runtime-status` has no diagnostics seed replacement.
+- old route-presence tests are replaced by seed/render proof where CRUD replacement is required.
+
+---
+
+## Bundle `frontend-canonical-surface-structure-label-boundary`
+
+**Status:** `not_started`
+**Primary SSOT:** canonical surface UI structure/wiring SSOTs, including `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
+**移管元 report:** `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み report。削除前 ref `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c` から全文確認済み。）
+
+### 問題点
+
+削除済み report は canonical surface ごとの UI structure/wiring、visible labels、normal/technical disclosure boundary を frontend surface UI structure/wiring SSOT group として分離していた。現行 TODO では UI Builder architecture 残 scope に寄り過ぎており、全 canonical surface の normal view label boundary が独立 bundle として未移管である。
+
+### 目的
+
+canonical surfaces (`/`, `/auth`, `/super_auth`, `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests`) ごとの UI structure/wiring と表示 label boundary を、implementation-derived raw vocabulary ではなく owning SSOT へ戻す。
+
+### 改善方針
+
+- 各 canonical surface は owning UI structure/wiring SSOT を持ち、implementation/test はその SSOT へ map する。
+- normal view label boundary: raw id / UUID / topology / manifest / screen_data_shape / DB / backend / Route / Primary Table / UI Builder Key 等を通常表示の意味にしない。
+- raw route/page refs, `source_active_manifest_id`, `componentKey`, `componentKind`, `layoutClassRefs`, `orderIndex`, `relationIntents`, `operationEntityBindings` 等は internal value または明示的 technical disclosure として扱う。
+- operator visible labels は raw-first にしない: `like` -> `含む`, `ilike` -> `含む（大小文字を区別しない）`, `between` -> `範囲内`, `in` -> `リストに含まれる`, `is null` -> `空欄`, `AND/OR/NOT` -> `すべて満たす / いずれか満たす / 除外`, `Res/Req` -> `表示 / 入力`。
+- seed propsJson の visible labels は user-facing または explicit draft/technical とし、English-first labels を normal-view authority にしない。
+
+### 対応資料
+
+- canonical surface UI structure/wiring SSOTs
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み移管元）
+- `.agent/tasks/todo.md`
+
+### 対象ファイル名
+
+- `frontend/routes/index.tsx`
+- `frontend/routes/auth.tsx`
+- `frontend/routes/super_auth.tsx`
+- `frontend/routes/admin/index.tsx`
+- `frontend/routes/admin/contents.tsx`
+- `frontend/routes/admin/ui-builder.tsx`
+- `frontend/routes/admin/manifests.tsx`
+- frontend components / islands that render canonical surface labels and technical disclosure
+
+### 対象関数名
+
+- future normal label mapping functions
+- future technical disclosure rendering functions
+- future operator label mapping functions
+- future canonical surface view model builders
+
+### 受入条件
+
+- canonical surfaces have SSOT-mapped UI structure/wiring proof.
+- normal user-facing views do not expose raw ids / UUIDs / internal vocabulary as primary meaning.
+- technical details, if needed, are behind explicit technical disclosure and not normal operation labels.
+
+---
+
+## Bundle `admin-console-workflow-step-wording-boundary`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/admin-console-workflow-ssot.yaml`
+**移管元 report:** `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み report。削除前 ref `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c` から全文確認済み。）
+
+### 問題点
+
+削除済み report は admin-console-workflow-ssot が `/admin/contents -> /admin/ui-builder -> /admin/manifests` と Step wording layer を所有すると定義していた。現行 TODO では workflow Step wording が UI projection architecture 残 scope へ混ざる危険があり、`/admin/ui-builder` を `/admin/contents` local Step 4 と誤表記する余地が残る。
+
+### 目的
+
+admin authoring workflow の Step wording boundary を明示し、local submit pipeline と whole-admin workflow を混同しない。
+
+### 改善方針
+
+- `/admin/contents = local submit pipeline Step 1-3`。
+- `/admin/ui-builder = whole-admin Step 4`。
+- `/admin/manifests = whole-admin Step 5`。
+- `/admin/contents -> /admin/ui-builder -> /admin/manifests` の flow を維持する。
+- `/admin/ui-builder` を `/admin/contents` local Step 4 と呼ばない。`/admin/manifests` の whole-admin Step 5 を落とさない。
+
+### 対応資料
+
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み移管元）
+- `.agent/tasks/todo.md`
+
+### 対象ファイル名
+
+- `frontend/routes/admin/contents.tsx`
+- `frontend/routes/admin/ui-builder.tsx`
+- `frontend/routes/admin/manifests.tsx`
+- frontend admin navigation / header / stepper components
+- tests that assert admin wording and flow labels
+
+### 対象関数名
+
+- future admin workflow step label builders
+- future admin navigation view model functions
+- future admin route stepper rendering functions
+
+### 受入条件
+
+- Step wording proof qualifies `/admin/ui-builder` as whole-admin Step 4 and `/admin/manifests` as whole-admin Step 5.
+- `/admin/contents` local submit pipeline remains Step 1-3 and is not extended to own whole-admin Step 4/5 wording.
+- contents -> ui-builder -> manifests remains the canonical authoring order.
+
+---
+
+## Bundle `pipeline-continuity-frontend-route-seed-proof`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/pipeline-continuity-ssot.yaml`
+**移管元 report:** `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み report。削除前 ref `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c` から全文確認済み。）
+
+### 問題点
+
+削除済み report は proof surface policy と route removal / seed CRUD renderability replacement tests を `pipeline-continuity-ssot` 所有 scope として分離していた。現行 TODO では UI Builder architecture 残 proof はあるが、canonical route only・non-canonical absence・seed CRUD renderability・label boundary・admin Step wording を横断する broad pipeline proof が未移管である。
+
+### 目的
+
+route removal を test-only deletion にせず、canonical routes only / seed replacement / renderability / wording / label boundary の proof chain へ置換する。
+
+### 改善方針
+
+- pipeline proof scope: canonical routes only.
+- non-canonical hardcoded routes absent.
+- required seed CRUD exists.
+- seeded CRUD renders through canonical projection/admin mechanism.
+- old route-presence tests replaced by seed/render proof.
+- route registry proof, seed CRUD renderability proof, route removal replacement proof, label boundary proof, admin Step wording proof を入れる。
+- target proof files are expected around `frontend/tests/adminUxGuard.test.ts`, `frontend/tests/adminMainFlow.test.ts`, `frontend/tests/visualLayoutBuilder.test.ts`, `frontend/tests/uiBuilderPackageWiring.test.ts`, `frontend/tests/runtimeUiInteractionScenario.test.ts`, `frontend/tests/adminWiringExecutionLane.test.ts`, `frontend/tests/uiBuilderWiringProjection.test.ts` or future equivalent proof surfaces.
+
+### 対応資料
+
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
+- `docs/design/initial-projection-side-admin-crud-seed-ssot.yaml`（requested owning SSOT / future or missing path check required）
+- `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（削除済み移管元）
+- `.agent/tasks/todo.md`
+
+### 対象ファイル名
+
+- `frontend/tests/adminUxGuard.test.ts`
+- `frontend/tests/adminMainFlow.test.ts`
+- `frontend/tests/visualLayoutBuilder.test.ts`
+- `frontend/tests/uiBuilderPackageWiring.test.ts`
+- `frontend/tests/runtimeUiInteractionScenario.test.ts`
+- `frontend/tests/adminWiringExecutionLane.test.ts`
+- `frontend/tests/uiBuilderWiringProjection.test.ts`
+- future route registry / seed renderability proof files
+
+### 対象関数名
+
+- future canonical route registry proof helpers
+- future non-canonical route absence assertions
+- future seed CRUD renderability assertions
+- future label boundary assertions
+- future admin Step wording assertions
+
+### 受入条件
+
+- route registry proof covers canonical routes only.
+- non-canonical hardcoded routes are absent and old route-presence tests are not retained as canonical proof.
+- required seed CRUD exists and renders through canonical projection/admin mechanism.
+- proof covers label boundary and admin Step wording boundary.
+
+---
 
 ## Bundle `ui-projection-surface-architecture-reinforcement`
 
