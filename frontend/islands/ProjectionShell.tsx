@@ -12,9 +12,9 @@ import { createProjectionRuntime } from "../runtime/projectionRuntime.ts";
 import {
   createRuntimeLocalStateStore,
   createUiEventEffectRunner,
+  type NotifyingRuntimeLocalStateStore,
   type UiEventEffectRunner,
 } from "../runtime/uiEventEffectRunner.ts";
-import type { RuntimeLocalStateStore } from "../runtime/runtimeComponentAdapter.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
@@ -50,9 +50,15 @@ export default function ProjectionShell(): JSX.Element {
   const projectionTokenRef = useRef<string | undefined>(undefined);
   // Runtime state store + effect runner (component_runtime_state_effect_boundary):
   // the runner — not individual components — owns lifecycle emission and effect
-  // execution. Refs persist across rerenders so initial_mount fires once per mount.
-  const localStateStoreRef = useRef<RuntimeLocalStateStore>(createRuntimeLocalStateStore());
+  // execution. Refs persist across rerenders and SSE refreshes so the store,
+  // fired-registry, and runner are never re-created (initial_mount stays once-per-mount).
+  const localStateStoreRef = useRef<NotifyingRuntimeLocalStateStore>(
+    createRuntimeLocalStateStore(),
+  );
   const effectRunnerRef = useRef<UiEventEffectRunner | null>(null);
+  // Latest emission for store-notification re-render (closed-over state is stale in [] effect).
+  const emissionRef = useRef<Emission | null>(null);
+  const storeUnsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     projectionTokenRef.current = projectionToken;
@@ -145,6 +151,7 @@ export default function ProjectionShell(): JSX.Element {
         return;
       }
       setEmission(nextEmission);
+      emissionRef.current = nextEmission;
       setSpecs(renderEmission(nextEmission, defaultComponentRegistry, {
         localStateStore: localStateStoreRef.current,
       }));
@@ -155,6 +162,17 @@ export default function ProjectionShell(): JSX.Element {
       // are emitted once. The fired-registry inside the runner guarantees
       // initial_mount does not re-dispatch on rerender or SSE refresh.
       if (!effectRunnerRef.current) {
+        // store update -> projection rerender hook: any state write through the
+        // runtime dispatcher (runner lifecycle emission or event-lane
+        // localStateMutation) re-renders the projection so UI状態更新 reflects
+        // into rendered runtimeSpec props. Subscribed BEFORE lifecycle emission.
+        storeUnsubscribeRef.current = localStateStoreRef.current.subscribe(() => {
+          const current = emissionRef.current;
+          if (!current || !mounted) return;
+          setSpecs(renderEmission(current, defaultComponentRegistry, {
+            localStateStore: localStateStoreRef.current,
+          }));
+        });
         const runnerNodes = (nextEmission.layoutNodes ?? [])
           .filter((n) => typeof n.nodeId === "string" && n.nodeId)
           .map((n) => ({
@@ -223,8 +241,10 @@ export default function ProjectionShell(): JSX.Element {
             const updated = result.emission;
             if (!updated) return;
             setEmission(updated);
-            // SSE refresh re-render: same localStateStore, and the effect runner's
-            // fired-registry keeps initial_mount idempotent (no re-dispatch here).
+            emissionRef.current = updated;
+            // SSE refresh re-render: same localStateStore / runner / fired-registry
+            // (refs are never re-created), so state survives and initial_mount
+            // stays idempotent (no lifecycle re-emission here).
             setSpecs(renderEmission(updated, defaultComponentRegistry, {
               localStateStore: localStateStoreRef.current,
             }));
@@ -254,6 +274,8 @@ export default function ProjectionShell(): JSX.Element {
 
     return () => {
       mounted = false;
+      storeUnsubscribeRef.current?.();
+      storeUnsubscribeRef.current = null;
       sseReceiverRef.current?.disconnect();
       sseReceiverRef.current = null;
     };

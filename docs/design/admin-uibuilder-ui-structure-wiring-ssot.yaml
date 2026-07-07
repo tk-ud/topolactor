@@ -220,9 +220,25 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - UI監視割当 declares state slot / dependency source before mutation or effect selection
       - UI状態更新 writes only through the runtime state dispatcher
       - 副作用設定 resolves the dependency graph before execution and runs through the effect runner
+    state_update_projection_rerender_contract:
+      rule: >-
+        A runtime state store update alone (Map write) is NOT UI状態更新 completion.
+        The store carries change notification (subscribe), and the projection mount
+        surface re-renders specs from the same store on notification, so UI状態更新
+        reflects into rendered runtimeSpec props. Notification fires only on actual
+        value change; renderEmission is a pure read of the store, so no
+        notification loop forms. The rerender hook must not re-emit lifecycle
+        triggers (fired-registry keeps initial_mount dispatch single-shot even if
+        emission is re-entered), and preview / loop-guard paths produce no store
+        write and therefore no notification.
+      fail_close:
+        - treating_store_map_update_alone_as_ui_state_update_completion
+        - rerender_hook_re_dispatching_initial_mount
+        - sse_refresh_recreating_store_runner_or_fired_registry
     runtime_boundary_implementation:
       effect_runner: frontend/runtime/uiEventEffectRunner.ts (createUiEventEffectRunner; owns lifecycle emission, loop guard, idempotency registry)
       state_dispatcher: frontend/runtime/uiEventEffectRunner.ts createRuntimeStateDispatcher (declare-then-mutate; undeclared-slot writes fail close)
+      state_store_notification: frontend/runtime/uiEventEffectRunner.ts createRuntimeLocalStateStore (NotifyingRuntimeLocalStateStore.subscribe -> projection specs re-render)
       event_lanes: frontend/runtime/runtimeComponentFactory.ts emitBoundEvent (event log / internal dispatch / 外部API連携 / 外部インスタンス連携 / route navigation / local state lanes; previewMode inert)
       mount_integration: frontend/islands/ProjectionShell.tsx (runner created once per mount; initial_mount emitted after first projection render; SSE refresh never re-emits)
       dispatch_lanes: frontend/runtime/frontendScheduler.ts enqueueExternalPortDispatchCommand / enqueueInstanceOperationDispatchCommand (api_command_lane; typed-ref prefix fail close)
@@ -388,6 +404,11 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - registered external api / external instance selectable; selection writes typed reference
       - runtime runner emits initial_mount once per mount (rerender/refresh does not re-dispatch)
       - runtime runner is inert in preview mode
+      - initial_mount UI状態更新 reflects into rendered runtimeSpec props via store
+        change notification -> projection specs re-render (store Map value alone is not proof)
+      - the notification-driven rerender does not re-execute initial_mount dispatch
+      - preview / loop-guard paths produce no store update and no rerender notification
+      - SSE-refresh-equivalent re-render preserves store state and the fired-registry
       - UI監視割当 slots are declared to the runtime store before mutation/effect;
         undeclared-slot writes fail close in the state dispatcher
       - runtime loop guard fails close on cyclic graphs (nothing executes; debounce is not proof)

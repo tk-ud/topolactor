@@ -22,6 +22,7 @@ import {
   createRuntimeLocalStateStore,
   createRuntimeStateDispatcher,
   createUiEventEffectRunner,
+  type NotifyingRuntimeLocalStateStore,
 } from "../runtime/uiEventEffectRunner.ts";
 import { enqueueInstanceOperationDispatchCommand } from "../runtime/frontendScheduler.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
@@ -293,4 +294,199 @@ Deno.test("renderEmission: dispatchInstanceOperation projects an instanceOperati
     ?.eventBinding
     ?.click as Record<string, unknown> | undefined;
   assertEquals(previewBinding?.instanceOperationDispatch, undefined);
+});
+
+// ─── store update -> projection rerender 接続（rendered props反映まで検査） ────
+
+/** Shared fixture: modal node + root node wiring initial_mount -> openModal. */
+function modalEmission(): Parameters<typeof renderEmission>[0] {
+  return {
+    componentIds: [],
+    data: {},
+    layoutId: "layout-1",
+    layoutNodes: [
+      {
+        nodeId: "n-modal",
+        componentId: "c-modal",
+        componentKey: "disclosure/modal",
+        componentKind: "disclosure/modal",
+        nodeKind: "catalog_component",
+        slotKey: "main",
+        orderIndex: 0,
+        propsJson: JSON.stringify({ title: "案内", open: false }),
+        stateJson: JSON.stringify({ open: false }),
+      },
+      {
+        nodeId: "n-root",
+        componentId: "c-root",
+        componentKey: "action/button",
+        componentKind: "action/button",
+        nodeKind: "catalog_component",
+        slotKey: "main",
+        orderIndex: 1,
+        propsJson: JSON.stringify({ label: "開く" }),
+        runtimeInteractions: [{
+          trigger: "click",
+          actionType: "openModal",
+          targetNodeId: "n-modal",
+          statePath: "open",
+        }],
+      },
+    ],
+    // deno-lint-ignore no-explicit-any
+  } as any;
+}
+
+function runnerNodesFromEmission(): WiringNode[] {
+  return [
+    {
+      nodeId: "n-modal",
+      componentKey: "disclosure/modal",
+      componentKind: "disclosure/modal",
+      stateJson: JSON.stringify({ open: false }),
+    },
+    {
+      nodeId: "n-root",
+      componentKey: "action/button",
+      componentKind: "action/button",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "openModal",
+        targetNodeId: "n-modal",
+        statePath: "open",
+      }],
+    },
+  ];
+}
+
+function modalOpenProp(specs: ReturnType<typeof renderEmission>): unknown {
+  const modal = specs.find((s) =>
+    (s as { nodeId?: string }).nodeId === "n-modal"
+  ) as { runtimeSpec?: { props?: { data?: Record<string, unknown> } } };
+  return modal?.runtimeSpec?.props?.data?.open;
+}
+
+Deno.test("rerender接続: initial_mount UI状態更新 -> store notification -> rendered runtimeSpec props に反映", () => {
+  const store: NotifyingRuntimeLocalStateStore = createRuntimeLocalStateStore();
+  const emission = modalEmission();
+
+  // ProjectionShell equivalent: render, subscribe (before lifecycle emission), emit.
+  let specs = renderEmission(emission, defaultComponentRegistry, {
+    localStateStore: store,
+  });
+  let notified = 0;
+  store.subscribe(() => {
+    notified++;
+    specs = renderEmission(emission, defaultComponentRegistry, {
+      localStateStore: store,
+    });
+  });
+  const runner = createUiEventEffectRunner({
+    nodes: runnerNodesFromEmission(),
+    store,
+  });
+  assertEquals(modalOpenProp(specs), false);
+
+  const result = runner.emitLifecycle("initial_mount");
+  assertEquals(result.ok, true);
+  assert(notified >= 1, "store update must notify the rerender hook");
+  // Rendered runtimeSpec props — not just the store Map — reflect UI状態更新.
+  assertEquals(modalOpenProp(specs), true);
+});
+
+Deno.test("rerender接続: notification再renderがあっても initial_mount dispatch は再実行されない", () => {
+  const store = createRuntimeLocalStateStore();
+  const externalCalls: unknown[] = [];
+  const nodes: WiringNode[] = [
+    ...runnerNodesFromEmission(),
+    {
+      nodeId: "n-fetch",
+      componentKey: "layout/box",
+      runtimeInteractions: [{
+        trigger: "initial_mount",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-1",
+        lifecycleDispatchConfirmed: true,
+        idempotencyPolicy: "once_per_mount",
+        sideEffectNone: true,
+      }],
+    },
+  ];
+  const runner = createUiEventEffectRunner({
+    nodes,
+    store,
+    dispatchExternalPort: (spec) => externalCalls.push(spec),
+  });
+  // Simulate the rerender hook re-entering lifecycle emission on every store change
+  // (worst case): fired-registry must still keep the dispatch single-shot.
+  store.subscribe(() => {
+    runner.emitLifecycle("initial_mount");
+  });
+  runner.emitLifecycle("initial_mount");
+  assertEquals(externalCalls.length, 1);
+  assertEquals(runner.stateDispatcher.get("n-modal", "open"), true);
+});
+
+Deno.test("rerender接続: previewMode では store更新も notification も起きない", () => {
+  const store = createRuntimeLocalStateStore();
+  let notified = 0;
+  store.subscribe(() => notified++);
+  const runner = createUiEventEffectRunner({
+    nodes: runnerNodesFromEmission(),
+    store,
+    previewMode: true,
+  });
+  const result = runner.emitLifecycle("initial_mount");
+  assertEquals(result.inert, true);
+  // Watch-binding declaration wrote only the initial value; the inert emission
+  // must not mutate. Reset counter after creation-time declaration writes:
+  const afterCreation = notified;
+  runner.emitLifecycle("initial_mount");
+  assertEquals(notified, afterCreation);
+  assertEquals(runner.stateDispatcher.get("n-modal", "open"), false);
+});
+
+Deno.test("rerender接続: loop guard 時は store更新も notification も起きない", () => {
+  const store = createRuntimeLocalStateStore();
+  const nodes: WiringNode[] = [
+    ...runnerNodesFromEmission(),
+    {
+      nodeId: "n-loop",
+      componentKey: "form_input/text",
+      runtimeInteractions: [{
+        trigger: "change",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:access_port:port-1",
+        outputProp: "value",
+        debounceMs: 500,
+      }],
+    },
+  ];
+  const runner = createUiEventEffectRunner({ nodes, store });
+  let notified = 0;
+  store.subscribe(() => notified++);
+  const result = runner.emitLifecycle("initial_mount");
+  assertEquals(result.ok, false);
+  assertEquals(notified, 0);
+  assertEquals(runner.stateDispatcher.get("n-modal", "open"), false);
+});
+
+Deno.test("rerender接続: SSE refresh相当の再renderでも store状態と fired-registry が維持される", () => {
+  const store = createRuntimeLocalStateStore();
+  const emission = modalEmission();
+  const runner = createUiEventEffectRunner({
+    nodes: runnerNodesFromEmission(),
+    store,
+  });
+  runner.emitLifecycle("initial_mount");
+  assertEquals(runner.stateDispatcher.get("n-modal", "open"), true);
+
+  // SSE refresh: a NEW emission object is rendered with the SAME store/runner refs.
+  const refreshed = renderEmission(modalEmission(), defaultComponentRegistry, {
+    localStateStore: store,
+  });
+  assertEquals(modalOpenProp(refreshed), true);
+  // Refresh does not re-create runner/store: lifecycle stays idempotent.
+  assertEquals(runner.emitLifecycle("initial_mount").executed, []);
+  void emission;
 });

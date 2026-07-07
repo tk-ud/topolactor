@@ -109,6 +109,11 @@ require_grep "findSideEffectCycleErrors" "$RUNNER" "runtime loop guard"
 require_grep "enqueueInstanceOperationDispatchCommand" "$SCHEDULER" "外部インスタンス連携 runtime dispatch lane"
 require_grep "createUiEventEffectRunner" "$PROJECTION_SHELL" "runner owned by mount surface (not per-component useEffect)"
 require_grep "uiEventEffectRunner" "$RUNNER_TEST" "runner proof test"
+# state update -> projection rerender contract: store notification wired to specs re-render.
+require_grep "NotifyingRuntimeLocalStateStore" "$RUNNER" "store change notification type"
+require_grep "subscribe" "$RUNNER" "store change subscription"
+require_grep "subscribe" "$PROJECTION_SHELL" "store notification -> projection specs re-render hook"
+require_grep "rendered runtimeSpec props|runtimeSpec" "$RUNNER_TEST" "rendered-props reflection proof (not store Map only)"
 
 # ─── 3. Negative boundaries ──────────────────────────────────────────────────
 # Wiring graph panel is projection-only: no direct persistence dispatch from the panel.
