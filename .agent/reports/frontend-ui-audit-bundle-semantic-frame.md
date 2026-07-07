@@ -519,3 +519,26 @@ NG:
   tests accepting event -> localStateMutation as sufficient UI監視割当 / 副作用設定 proof
   tests accepting load / loaded / DOM onLoad as lifecycle trigger vocabulary
 ```
+
+## Future Bundle candidates (not PR574 blocking)
+
+```text
+runtime_interaction_identity / projection_time_idempotency_identity:
+  status: recorded as a future Bundle candidate, NOT a PR574 blocking item
+  current_state (PR574):
+    frontend runner (uiEventEffectRunner.ts) + backend ledger
+    (topology.runtime_dispatch_idempotency_ledger) implement retry-safe
+    dispatchExternalPort / dispatchInstanceOperation. The UI composes the
+    idempotency identity itself from nodeId + interactionIndex
+    (computeDispatchIdempotencyKey in uiBuilderWiringProjection.ts).
+  more_correct_design_direction:
+    rather than the UI synthesizing identity from nodeId + interactionIndex,
+    DB / projection emission should assign a stable runtime_interaction_id /
+    idempotency_base_key at the projection-authority layer; the UI would then
+    only forward that DB-assigned identity, not compose it client-side.
+  why_deferred:
+    this is a projection authority / runtime interaction identity concern
+    distinct from PR574's retry-safe dispatch scope; it touches DB schema /
+    projection emission shape rather than the dispatch guard itself.
+  bundle_scope: projection_authority_runtime_interaction_identity (candidate name, not yet opened)
+```
