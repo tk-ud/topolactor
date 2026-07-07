@@ -9,11 +9,141 @@
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
+| `ui-projection-surface-architecture-reinforcement` | UI projection surface architecture reinforcement | partial | 1 | `product.dynamic_support_nocode_loop` / projection surface carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 注: 上記 consumer bundle は PR#460 により seed binding / credential_requirement / policy_steps が完了済み。client/UI consumer (email / audit_approval) は UI Builder portTargetRef 配線前提が完了済み。hook consumer (stripe / webhook_inbox) は hook_port seed binding が完了済み (UI Builder portTargetRef 配線ではない)。残作業は各 bundle consumer todo 参照。provider-specific runtime / client は追加しない。UI Builder form preset は docs/design/ui-builder-preset-ecosystem-ssot.yaml / db/physical_search_crud_aggregate_preset_seed.sql の CRUD preset seed の写像/派生であり、新規 UI runtime / 専用 component 実装ではない。
 
 ---
+
+
+## Bundle `ui-projection-surface-architecture-reinforcement`
+
+**Status:** `partial`
+**Primary SSOT:** `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
+**移管元 report:** `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`, `.agent/reports/ui-projection-surface-gap-audit-2026-07-07.md`（未処理 scope を本 bundle に統合移管済みのため report file は削除対象。削除後の未処理作業管理 source はこの TODO bundle に一本化する。）
+
+### 問題点
+
+`.agent/reports/` に UI projection / UI Builder audit report が残り、未処理 scope の管理面が report と todo に分散していた。PR574 で `/admin/ui-builder` の UI structure / wiring owning SSOT と実装が進んだため、report 内の PR574 blocking / non-blocking / future candidate の線引きを todo へ移管し、PR574 実装済み範囲を未実装扱いへ戻さない必要がある。
+
+active report は `runtime_interaction_identity / projection_time_idempotency_identity` を future Bundle candidate として残し、subordinate report は `/demo` route ownership、production `ProjectionShell` default-bound、`projectionInputFromData` の `rows[0]` collapse を partial blocking として残していた。report 削除前に、未処理 scope・PR574 証跡・次 bundle 境界をこの bundle へ転記する。
+
+### 目的
+
+- report 由来の未処理 scope を `.agent/tasks/todo.md` の bundle として一本化する。
+- PR574 で実装済みの `/admin/ui-builder` 作り込みを証跡化し、再実装対象または未実装扱いへ戻さない。
+- PR574 後の残 scope を、次の bundle として実装可能な境界に整理する。
+- 移管済み report file を削除し、未処理作業管理 source を `.agent/tasks/todo.md` へ寄せる。
+
+### PR574 implemented evidence（再実装対象ではない）
+
+- PR: `#574`
+- title: `Add admin UI Builder UI structure/wiring owning SSOT with wiring mode and trigger policies`
+- merged: true
+- merge_commit_sha: `018b80fa23949a67a7b03f1853cc9c3f2e45ce3c`
+- changed_files: 35 / additions: 10610 / deletions: 3778
+- PR body evidence:
+  - `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` was added as the owning SSOT for `/admin/ui-builder` layout/wiring canvas boundary, `runtimeInteractions` persistence authority, trigger vocabulary, lifecycle policy, high-frequency policy, drag-drop wiring edit policy, and seed-registry external capability selection.
+  - wiring mode / trigger vocabulary / lifecycle policy / high_frequency_policy / drag_drop_wiring_edit were implemented and gated by `.agent/tests/check-admin-uibuilder-wiring.sh` registered in `check-structure.sh`.
+  - `frontend/lib/uiBuilderWiringProjection.ts`, `frontend/components/WiringGraphPanel.tsx`, `frontend/islands/UiBuilderAdmin.tsx`, and `frontend/components/NodeEventAuthoringPanel.tsx` were part of the implementation/proof surface.
+  - runtime interaction execution/idempotency proof was added: `frontend/runtime/uiEventEffectRunner.ts`, `renderEmission` / `runtimeComponentFactory` event bindings, deterministic `computeDispatchIdempotencyKey` / `appendResolvedPayloadToIdempotencyKey`, backend `topology.runtime_dispatch_idempotency_ledger`, `NpgsqlRuntimeDispatchIdempotencyLedgerRepository`, `ExternalPortDispatchRuntime`, and `InstancePortRuntime` claim/complete/fail gating.
+  - Verification recorded in PR body: `deno test frontend/tests/` equivalent frontend tests passed as part of `deno test 1763 passed`; backend unit tests and DB bootstrap/idempotency SQL scenarios passed; `agent-ui-local-test` routed chain evidence was recorded with `check-admin-uibuilder-wiring.sh`, `check-frontend-types.sh`, `check-structure.sh`, `check-worktype-routing.sh`, `check-completion-judgment.sh`, and `check-db-schema.sh` passing.
+
+### 改善方針 / 残 scope
+
+#### `/demo route ownership cleanup`
+
+- `/demo` remains non-canonical. Standalone `/demo` route retention is NG.
+- `/demo` seed replacement is NG; do not add a demo seed fallback, standalone demo domain, or canonical `/demo` revival.
+- Before implementation, search SSOT/docs for `/demo`; if a canonical `/demo` reference exists, handle as `design_change` first and preserve active route taxonomy.
+- Reusable inspection logic target is `/admin/ui-builder` component / panel / tab, not a standalone route.
+
+#### `UI Builder projection inspection componentization`
+
+- Move reusable inspection behavior into `/admin/ui-builder` component scope as read-only inspection.
+- Required inspection role: production-equivalent render confirmation, canvas preview vs applied projection comparison, applied topology confirmation, route/package/manifest confirmation, read query confirmation, `propBindings` confirmation, `rows` / `activeColumns` / `displayColumnMode` confirmation.
+- The inspection component is not persistence authority, not promotion authority, not canonical projection entry, and not seed fallback.
+
+#### `production projection route/package/manifest awareness`
+
+- `frontend/islands/ProjectionShell.tsx` must not remain default-bound to `default` / `screen_list` / `Search` as the product projection entry.
+- Add route/package/manifest-aware projection entry so arbitrary UI Builder applied topology can be selected through the production projection surface.
+
+#### `projectionInput collection outer shape preservation`
+
+- `frontend/runtime/projectionInput.ts` `projectionInputFromData` must not collapse `screen_data_shape_query_result` to `rows[0]` unless an explicit single-row mapping is selected.
+- Preserve collection outer shape from `backend/runtime/ScreenDataShapeQueryRuntime.cs`: `rows`, `aggregationResults`, `activeColumns`, and `displayColumnMode`.
+
+#### `projection proof reinforcement`
+
+- Add/keep proof that `rows`, `activeColumns`, and `displayColumnMode` survive the projection path.
+- Add/keep proof that `propBindings` resolve from `emission.data` branches, not from first-row sample or `seedLabel` smoke.
+- Do not accept `default/screen_list/Search` as arbitrary topology proof.
+
+#### `runtimeInteraction identity / projection-time idempotency identity`
+
+- PR574 retry-safe dispatch idempotency is implemented evidence and must not be reclassified as missing: frontend runner plus backend ledger protect `dispatchExternalPort` / `dispatchInstanceOperation` retries, concurrent duplicates, reload/reconnect runner recreation, and failed-claim reclaim.
+- Current UI-composed idempotency identity (`nodeId + interactionIndex` plus stable authored fields and resolved payload in `computeDispatchIdempotencyKey` / `appendResolvedPayloadToIdempotencyKey`) is compatibility/current-state, not final projection authority.
+- Future direction: DB / projection emission assigns stable `runtime_interaction_id` / `idempotency_base_key` at the projection-authority layer; UI forwards assigned identity and appends resolved payload deterministically.
+- Backend idempotency ledger remains execution gate and is distinct from `runtime_event_log`; do not turn event-log evidence into execution gate authority.
+
+### 対応資料
+
+- `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（移管元、削除済みにする）
+- `.agent/reports/ui-projection-surface-gap-audit-2026-07-07.md`（移管元、削除済みにする）
+- `.agent/tasks/todo.md`
+- PR574 `Add admin UI Builder UI structure/wiring owning SSOT with wiring mode and trigger policies`
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+
+### 対象ファイル名
+
+- `.agent/tasks/todo.md`
+- `.agent/reports/frontend-ui-audit-bundle-semantic-frame.md`（移管後削除）
+- `.agent/reports/ui-projection-surface-gap-audit-2026-07-07.md`（移管後削除）
+- `frontend/islands/DraftPreviewShell.tsx`
+- `frontend/islands/ProjectionShell.tsx`
+- `frontend/runtime/projectionInput.ts`
+- `backend/runtime/ScreenDataShapeQueryRuntime.cs`
+- `frontend/runtime/renderEmission.ts`
+- `frontend/runtime/runtimeComponentFactory.ts`
+- `frontend/runtime/uiEventEffectRunner.ts`
+- `frontend/lib/uiBuilderWiringProjection.ts`
+- `backend/repository/NpgsqlRuntimeDispatchIdempotencyLedgerRepository.cs`
+- `backend/runtime/ExternalPortDispatchRuntime.cs`
+- `backend/runtime/InstancePortRuntime.cs`
+- `db/topology_tables.sql`
+
+### 対象関数名
+
+- `projectionInputFromData`
+- `computeDispatchIdempotencyKey`
+- `appendResolvedPayloadToIdempotencyKey`
+- `buildExternalPortEventBinding`
+- `buildLocalUiStateEventBinding`
+- `renderEmission`
+- `emitBoundEvent`
+- `createUiEventEffectRunner`
+- `emitLifecycle`
+- `updateNodes`
+- `ClaimAsync`
+- `CompleteAsync`
+- `FailAsync`
+- `rt_claim_dispatch_idempotency_key`
+- `rt_complete_dispatch_idempotency_key`
+- `rt_fail_dispatch_idempotency_key`
+
+### 受入条件
+
+- `/demo` remains non-canonical; standalone `/demo` route retention, canonical revival, demo seed replacement, and `/demo` as product projection proof are rejected.
+- Projection inspection is located in `/admin/ui-builder` component/panel/tab scope and remains read-only.
+- Production projection entry is route/package/manifest aware and not fixed to `default` / `screen_list` / `Search`.
+- `projectionInputFromData` preserves `screen_data_shape_query_result` outer shape (`rows`, `aggregationResults`, `activeColumns`, `displayColumnMode`) unless explicit single-row mapping exists.
+- Proof covers collection shape, `activeColumns`, `displayColumnMode`, and `propBindings` from `emission.data` branches.
+- `runtimeInteraction identity / projection-time idempotency identity` is treated as PR574後の残 scope, not PR574 blocking and not PR574 completion scope.
 
 ## Bundle `helper-manual`
 
