@@ -16,6 +16,7 @@ import { adaptComponentDataHub } from "../runtime/runtimeComponentAdapter.ts";
 import type { RuntimeDispatchSpec } from "../runtime/frontendScheduler.ts";
 import type { RuntimeComponentSpec } from "../runtime/runtimeComponentAdapter.ts";
 import { __testOnly as factoryTestOnly } from "../runtime/runtimeComponentFactory.ts";
+import { __testOnly as schedulerTestOnly } from "../runtime/frontendScheduler.ts";
 
 // ─── mapWiringKindToLayer ─────────────────────────────────────────────────────
 
@@ -1013,4 +1014,98 @@ Deno.test("renderEmission: runtimeInteractions with onInput trigger normalizes t
   assertExists(inputBinding, "onInput must normalize to input binding key");
   const mutation = inputBinding.localStateMutation as Record<string, unknown>;
   assertEquals(mutation.statePath, "activeKey");
+});
+
+// ─── high_frequency_policy runtime guard: emitBoundEvent fails close, not only authoring/apply ──
+
+Deno.test("emitBoundEvent: high-frequency trigger + dispatchExternalPort without debounceMs fails close and never enqueues", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as typeof fetch;
+  try {
+    const emission: Emission = {
+      layoutId: "layout-hf-external-001",
+      layoutNodes: [{
+        nodeId: "node-hf-external",
+        nodeKind: "catalog_component",
+        componentId: "comp-hf-external-001",
+        componentKind: "form_input/input",
+        componentKey: "text_input.primitive",
+        orderIndex: 0,
+        runtimeInteractions: [{
+          trigger: "input",
+          actionType: "dispatchExternalPort",
+          portTargetRef: "external-port:access_port:port-hf-1",
+          outputProp: "result",
+          // debounceMs intentionally absent — "input" is a high-frequency trigger.
+        }],
+      }],
+    };
+    const specs = renderEmission(emission, emptyRegistry);
+    assertExists(specs[0].runtimeSpec, "runtimeSpec must exist");
+    const result = factoryTestOnly.emitBoundEvent(
+      specs[0].runtimeSpec!,
+      "input",
+      { value: "x" },
+    );
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+      assertStringIncludes(result.error, "HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE");
+    }
+    assertEquals(
+      schedulerTestOnly.getCommandQueueLength(),
+      0,
+      "enqueueExternalPortDispatchCommand must not be called when debounceMs is missing",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("emitBoundEvent: high-frequency trigger + dispatchInstanceOperation without debounceMs fails close and never enqueues", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as typeof fetch;
+  try {
+    const emission: Emission = {
+      layoutId: "layout-hf-instance-001",
+      layoutNodes: [{
+        nodeId: "node-hf-instance",
+        nodeKind: "catalog_component",
+        componentId: "comp-hf-instance-001",
+        componentKind: "form_input/input",
+        componentKey: "text_input.primitive",
+        orderIndex: 0,
+        runtimeInteractions: [{
+          trigger: "input",
+          actionType: "dispatchInstanceOperation",
+          instanceTargetRef: "instance-port:db_instance_port:inst-hf-1:op-hf-1",
+          outputProp: "result",
+          // debounceMs intentionally absent — "input" is a high-frequency trigger.
+        }],
+      }],
+    };
+    const specs = renderEmission(emission, emptyRegistry);
+    assertExists(specs[0].runtimeSpec, "runtimeSpec must exist");
+    const result = factoryTestOnly.emitBoundEvent(
+      specs[0].runtimeSpec!,
+      "input",
+      {},
+    );
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+      assertStringIncludes(result.error, "HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE");
+    }
+    assertEquals(
+      schedulerTestOnly.getCommandQueueLength(),
+      0,
+      "enqueueInstanceOperationDispatchCommand must not be called when debounceMs is missing",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
 });

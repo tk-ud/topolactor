@@ -420,13 +420,24 @@ function buildExternalPortEventBinding(
       typeof wiring.outputProp === "string" && wiring.outputProp.trim()
         ? wiring.outputProp.trim()
         : undefined;
+    // high_frequency_policy: debounceMs travels with the binding so the runtime
+    // dispatch guard in emitBoundEvent can fail close at event time — not only
+    // at authoring/apply time — when a high-frequency trigger lacks it.
+    const debounceMs = typeof wiring.debounceMs === "number"
+      ? wiring.debounceMs
+      : undefined;
     if (wiring.actionType === "dispatchExternalPort") {
       const portTargetRef = typeof wiring.portTargetRef === "string"
         ? wiring.portTargetRef.trim()
         : "";
       binding[trigger] = {
         eventType: trigger,
-        externalPortDispatch: { portTargetRef, payloadFrom, outputProp },
+        externalPortDispatch: {
+          portTargetRef,
+          payloadFrom,
+          outputProp,
+          debounceMs,
+        },
       };
     } else if (wiring.actionType === "dispatchInstanceOperation") {
       const instanceTargetRef = typeof wiring.instanceTargetRef === "string"
@@ -438,6 +449,7 @@ function buildExternalPortEventBinding(
           instanceTargetRef,
           payloadFrom,
           outputProp,
+          debounceMs,
         },
       };
     }

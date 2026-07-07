@@ -10,7 +10,6 @@ import { __testOnly } from "../runtime/runtimeComponentFactory.ts";
 import {
   createProjectionStateDispatcher,
   createRuntimeLocalStateStore,
-  createRuntimeStateDispatcher,
 } from "../runtime/uiEventEffectRunner.ts";
 import type { LayoutNode } from "../api/dispatch.ts";
 import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
@@ -411,10 +410,14 @@ Deno.test("event-triggered UI状態更新: undeclared target fails close through
 
   // The button's own runtimeInteractions target modalNodeId, but modalNodeId is
   // NOT present in the node list passed to predeclare — this simulates a
-  // stale/deleted-node target reference. No auto-declare-on-write fallback
-  // exists, so the guarded dispatcher must fail close, not silently write.
-  const dispatcher = createRuntimeStateDispatcher(
-    createRuntimeLocalStateStore(),
+  // stale/deleted-node target reference. Production-equivalent path: the SAME
+  // createProjectionStateDispatcher(toWiringNodes(layoutNodes)) construction
+  // ProjectionShell uses, not a directly-constructed empty dispatcher — proving
+  // predeclareProjectionState itself excludes a target absent from the current
+  // node list, not merely an artificially-empty dispatcher. No auto-declare-on-
+  // write fallback exists, so the guarded dispatcher must fail close.
+  const dispatcher = createProjectionStateDispatcher(
+    toWiringNodes(emission.layoutNodes),
   );
   const specs = renderEmission(emission, defaultComponentRegistry, {
     localStateStore: dispatcher,

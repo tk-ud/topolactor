@@ -286,6 +286,7 @@ Deno.test("renderEmission: dispatchInstanceOperation projects an instanceOperati
     instanceTargetRef: "instance-port:db_instance_port:inst-1:op-1",
     payloadFrom: { amount: "event.value" },
     outputProp: "result",
+    debounceMs: undefined,
   });
   // Preview stays inert: the dispatch binding is not built in previewMode.
   const previewSpecs = renderEmission(emission, defaultComponentRegistry, {
@@ -500,4 +501,86 @@ Deno.test("rerender接続: SSE refresh相当の再renderでも store状態と fi
   // Refresh does not re-create runner/store: lifecycle stays idempotent.
   assertEquals(runner.emitLifecycle("initial_mount").executed, []);
   void emission;
+});
+
+Deno.test("runner.updateNodes: SSE refresh reconciliation — existing node's initial_mount does not re-execute; a newly-appeared node's initial_mount executes exactly once", () => {
+  const externalCalls: unknown[] = [];
+  // Node A: already present at creation, initial_mount fires once on the first emitLifecycle.
+  const nodeA: WiringNode = {
+    nodeId: "n-a-existing",
+    componentKey: "layout/box",
+    runtimeInteractions: [{
+      trigger: "initial_mount",
+      actionType: "dispatchExternalPort",
+      portTargetRef: "external-port:access_port:port-a",
+      lifecycleDispatchConfirmed: true,
+      idempotencyPolicy: "once_per_mount",
+      sideEffectNone: true,
+    }],
+  };
+  const runner = createUiEventEffectRunner({
+    nodes: [nodeA],
+    dispatchExternalPort: (spec) => externalCalls.push(spec),
+  });
+  const firstResult = runner.emitLifecycle("initial_mount");
+  assertEquals(firstResult.ok, true);
+  assertEquals(firstResult.executed, ["n-a-existing#0"]);
+  assertEquals(externalCalls.length, 1);
+
+  // SSE refresh: node A remains, node B (with its own initial_mount interaction) appears.
+  const nodeB: WiringNode = {
+    nodeId: "n-b-new",
+    componentKey: "layout/box",
+    runtimeInteractions: [{
+      trigger: "initial_mount",
+      actionType: "dispatchExternalPort",
+      portTargetRef: "external-port:access_port:port-b",
+      lifecycleDispatchConfirmed: true,
+      idempotencyPolicy: "once_per_mount",
+      sideEffectNone: true,
+    }],
+  };
+  runner.updateNodes([nodeA, nodeB]);
+  const secondResult = runner.emitLifecycle("initial_mount");
+  assertEquals(secondResult.ok, true);
+  // Node A's already-fired interaction (same nodeId + interaction index) does
+  // not re-execute; node B's interaction executes exactly once.
+  assertEquals(secondResult.executed, ["n-b-new#0"]);
+  assertEquals(externalCalls.length, 2);
+
+  // A further reconciliation with the same node list re-emits nothing new.
+  runner.updateNodes([nodeA, nodeB]);
+  const thirdResult = runner.emitLifecycle("initial_mount");
+  assertEquals(thirdResult.executed, []);
+  assertEquals(externalCalls.length, 2);
+});
+
+Deno.test("runner.updateNodes: recomputes the loop guard and predeclared slots against the refreshed node list", () => {
+  const runner = createUiEventEffectRunner({ nodes: [] });
+  assertEquals(runner.cycleErrors.length, 0);
+  assertEquals(runner.declaredSlots, []);
+
+  // A node introducing a direct self-loop only appears after reconciliation.
+  const loopNode: WiringNode = {
+    nodeId: "n-loop-refresh",
+    componentKey: "form_input/text",
+    stateJson: JSON.stringify({ value: "" }),
+    runtimeInteractions: [{
+      trigger: "change",
+      actionType: "setState",
+      targetNodeId: "n-loop-refresh",
+      statePath: "value",
+    }],
+  };
+  runner.updateNodes([loopNode]);
+  assert(
+    runner.cycleErrors.length > 0,
+    "reconciliation must recompute the loop guard against the refreshed nodes",
+  );
+  assert(
+    runner.declaredSlots.some((s) =>
+      s.nodeId === "n-loop-refresh" && s.stateKey === "value"
+    ),
+    "reconciliation must predeclare UI監視割当 slots from the refreshed nodes",
+  );
 });

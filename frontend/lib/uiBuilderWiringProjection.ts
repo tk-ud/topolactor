@@ -114,6 +114,18 @@ export function isBackendOrExternalDispatchAction(actionType: string): boolean {
 }
 
 /**
+ * SSOT high_frequency_policy: a high-frequency trigger bound to backend/external
+ * dispatch requires an explicit positive-integer debounceMs. Shared by the
+ * authoring/apply policy guard (findRuntimeInteractionPolicyErrors) and the
+ * runtime dispatch guard (runtimeComponentFactory.emitBoundEvent) so both gates
+ * apply the identical validity rule — authoring/apply alone does not protect an
+ * out-of-band persisted interaction from dispatching at runtime.
+ */
+export function isValidDebounceMs(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/**
  * SSOT ui_event_settings.setting_category_taxonomy — the six canonical wiring
  * inspector categories. No implementation-derived catch-all: an actionType
  * outside the taxonomy classifies as null and fails close in policy errors.
@@ -376,11 +388,7 @@ export function findRuntimeInteractionPolicyErrors(
       }
       if (!isBackendOrExternalDispatchAction(w.actionType)) continue;
       if (isHighFrequencyTrigger(w.trigger)) {
-        const debounce = w.debounceMs;
-        if (
-          typeof debounce !== "number" || !Number.isInteger(debounce) ||
-          debounce <= 0
-        ) {
+        if (!isValidDebounceMs(w.debounceMs)) {
           errors.push(
             `${prefix}: HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE — 高頻度トリガ "${w.trigger}" での外部/バックエンド送出には debounceMs（正の整数）が必要です`,
           );

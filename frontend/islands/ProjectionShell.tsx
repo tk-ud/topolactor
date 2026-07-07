@@ -311,13 +311,36 @@ export default function ProjectionShell(): JSX.Element {
             if (!updated) return;
             setEmission(updated);
             emissionRef.current = updated;
-            // SSE refresh re-render: same dispatcher / runner / fired-registry
-            // (refs are never re-created), so state survives and initial_mount
-            // stays idempotent (no lifecycle re-emission here). Predeclare covers
-            // any newly-appeared node/interaction in the refreshed projection.
-            if (stateDispatcherRef.current) {
+            // SSE refresh reconciliation: same dispatcher / runner / fired-registry
+            // (refs are never re-created), so existing state and fired lifecycle
+            // interactions survive. The runner's node list is reconciled to the
+            // refreshed projection (predeclaring any newly-appeared UI状態更新
+            // target, recomputing the loop/policy guards), then lifecycle triggers
+            // are re-emitted so a newly-appeared node's initial_mount executes
+            // exactly once — the fired-registry (keyed by nodeId + interaction
+            // index) guarantees an existing node's already-fired interaction does
+            // not re-execute.
+            const refreshedNodes = toRunnerWiringNodes(updated.layoutNodes);
+            if (effectRunnerRef.current) {
+              effectRunnerRef.current.updateNodes(refreshedNodes);
+              for (
+                const trigger of [
+                  "initial_mount",
+                  "route_enter",
+                  "initial_display",
+                ] as const
+              ) {
+                const result = effectRunnerRef.current.emitLifecycle(trigger);
+                if (!result.ok) {
+                  console.error(
+                    `[ProjectionShell] LIFECYCLE_EFFECT_RUNNER_BLOCKED_ON_REFRESH (${trigger}):`,
+                    result.errors,
+                  );
+                }
+              }
+            } else if (stateDispatcherRef.current) {
               predeclareProjectionState(
-                toRunnerWiringNodes(updated.layoutNodes),
+                refreshedNodes,
                 stateDispatcherRef.current,
               );
             }

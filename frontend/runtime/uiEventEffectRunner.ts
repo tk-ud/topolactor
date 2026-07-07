@@ -193,11 +193,20 @@ export function applyGuardedLocalStateMutation(
  * both paths: an authored interaction's target is always predeclared from the
  * same node list it will execute against, while a stale/deleted-node target
  * (absent from the current node list) genuinely fails close on write.
+ *
+ * mutation_authority_unification: a UI状態更新 interaction's targetNodeId is
+ * predeclared ONLY when that id corresponds to an actual node in `nodes` — an
+ * interaction whose author-time target has since been deleted (or was never a
+ * real node) is never predeclared, so it fails close on write exactly like an
+ * entirely undeclared slot. Predeclaring blindly from the referenced
+ * targetNodeId (regardless of whether it exists in the current node list)
+ * would make stale/deleted-node references silently succeed.
  */
 export function predeclareProjectionState(
   nodes: readonly WiringNode[],
   dispatcher: RuntimeStateDispatcher,
 ): Array<{ nodeId: string; stateKey: string }> {
+  const nodeIds = new Set(nodes.map((n) => n.nodeId));
   const declaredSlots: Array<{ nodeId: string; stateKey: string }> = [];
   const pushDeclared = (
     nodeId: string,
@@ -218,6 +227,7 @@ export function predeclareProjectionState(
       if (wiringSettingCategoryOf(w) !== "ui_state_update") continue;
       const resolved = resolveUiStateUpdateMutation(w);
       if (!resolved) continue;
+      if (!nodeIds.has(resolved.targetNodeId)) continue;
       pushDeclared(resolved.targetNodeId, resolved.statePath, undefined);
     }
   }
@@ -247,14 +257,24 @@ export type LifecycleEmitResult = {
 };
 
 export type UiEventEffectRunner = {
-  /** Declared UI監視割当 / UI状態更新-target slots connected at runner creation (before any mutation/effect). */
+  /** Declared UI監視割当 / UI状態更新-target slots connected at runner creation (before any mutation/effect). Grows on updateNodes. */
   declaredSlots: ReadonlyArray<{ nodeId: string; stateKey: string }>;
-  /** Loop-guard verdict computed from the dependency graph at creation. */
+  /** Loop-guard verdict computed from the current node list (recomputed on updateNodes). */
   cycleErrors: ReadonlyArray<string>;
   emitLifecycle(
     trigger: "initial_mount" | "route_enter" | "initial_display",
   ): LifecycleEmitResult;
   stateDispatcher: RuntimeStateDispatcher;
+  /**
+   * Reconcile the runner's known node list (e.g. after an SSE refresh) without
+   * recreating the runner/store/fired-registry. Recomputes predeclared
+   * UI状態更新 targets, the loop guard, and the policy guard against `nodes`.
+   * The fired-registry is keyed by nodeId + interaction-index, so an existing
+   * node's already-fired lifecycle interaction is unaffected — call
+   * emitLifecycle again afterward to run any newly-appeared lifecycle
+   * interaction exactly once.
+   */
+  updateNodes(nodes: readonly WiringNode[]): void;
 };
 
 export type UiEventEffectRunnerOptions = {
@@ -321,18 +341,29 @@ export function createUiEventEffectRunner(
 
   // UI監視割当 + UI状態更新-target → runtime connection: declare everything
   // (idempotent — a dispatcher reused across calls skips already-declared slots).
+  // currentNodes / cycleErrors / policyErrors / declaredSlots are mutable so
+  // updateNodes can reconcile the runner to a refreshed node list (e.g. SSE
+  // refresh) without recreating the runner, store, or fired-registry.
+  let currentNodes: readonly WiringNode[] = options.nodes;
   const declaredSlots = predeclareProjectionState(
-    options.nodes,
+    currentNodes,
     stateDispatcher,
   );
 
   // Loop guard: dependency graph resolved before execution; loops fail close.
-  const cycleErrors = findSideEffectCycleErrors(options.nodes);
+  let cycleErrors = findSideEffectCycleErrors(currentNodes);
   // Policy guard: the same fail-close gate that blocks authoring apply also
   // blocks runtime execution (defense in depth against out-of-band persisted data).
-  const policyErrors = findRuntimeInteractionPolicyErrors(options.nodes);
+  let policyErrors = findRuntimeInteractionPolicyErrors(currentNodes);
 
   const fired = new Set<string>();
+
+  const updateNodes = (nodes: readonly WiringNode[]): void => {
+    currentNodes = nodes;
+    declaredSlots.push(...predeclareProjectionState(nodes, stateDispatcher));
+    cycleErrors = findSideEffectCycleErrors(nodes);
+    policyErrors = findRuntimeInteractionPolicyErrors(nodes);
+  };
 
   const emitLifecycle = (
     trigger: "initial_mount" | "route_enter" | "initial_display",
@@ -351,7 +382,7 @@ export function createUiEventEffectRunner(
     }
     const executed: string[] = [];
     const errors: string[] = [];
-    for (const node of options.nodes) {
+    for (const node of currentNodes) {
       for (const [idx, w] of (node.runtimeInteractions ?? []).entries()) {
         if (w.trigger !== trigger || !isLifecycleTrigger(w.trigger)) continue;
         const fireKey = `${node.nodeId}#${idx}`;
@@ -411,5 +442,13 @@ export function createUiEventEffectRunner(
     return { ok: errors.length === 0, inert: false, executed, errors };
   };
 
-  return { declaredSlots, cycleErrors, emitLifecycle, stateDispatcher };
+  return {
+    declaredSlots,
+    get cycleErrors() {
+      return cycleErrors;
+    },
+    emitLifecycle,
+    stateDispatcher,
+    updateNodes,
+  };
 }

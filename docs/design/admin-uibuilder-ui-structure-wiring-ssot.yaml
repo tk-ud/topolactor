@@ -1,6 +1,6 @@
 admin_uibuilder_ui_structure_wiring_ssot:
   name: admin_uibuilder_ui_structure_wiring
-  version: 0.4.0
+  version: 0.5.0
   status: ssot_design_document
   canonical_path: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
   authority_hierarchy: >-
@@ -232,11 +232,18 @@ admin_uibuilder_ui_structure_wiring_ssot:
         UI監視割当 stateJson or a predeclared UI状態更新 target scanned from the
         current node list) before either path may write it; a target absent
         from the current node list (e.g. a stale/deleted-node reference) fails
-        close identically on both paths.
+        close identically on both paths. Predeclaring a UI状態更新 target is
+        conditioned on that target's nodeId actually appearing in the node list
+        passed to predeclare — an authored interaction whose targetNodeId does
+        not resolve to any node in that list is never predeclared, so it fails
+        close on write exactly like an entirely undeclared slot, whether the
+        dispatcher was built via createProjectionStateDispatcher(nodes) in the
+        production mount path or constructed directly in a test.
       fail_close:
         - event_triggered_local_state_mutation_writing_directly_to_a_raw_store
         - event_and_lifecycle_paths_using_separate_dispatcher_instances_for_the_same_projection
         - write_time_auto_declare_fallback_for_undeclared_slots
+        - predeclaring_a_ui_state_update_target_absent_from_the_current_node_list
     state_update_projection_rerender_contract:
       rule: >-
         A runtime state store update alone (Map write) is NOT UI状態更新 completion.
@@ -252,15 +259,34 @@ admin_uibuilder_ui_structure_wiring_ssot:
         - treating_store_map_update_alone_as_ui_state_update_completion
         - rerender_hook_re_dispatching_initial_mount
         - sse_refresh_recreating_store_runner_or_fired_registry
+    lifecycle_runner_node_reconciliation:
+      rule: >-
+        The runtime effect runner reconciles its known node list on SSE refresh
+        instead of staying pinned to the node list it was created with.
+        Reconciliation (updateNodes) recomputes predeclared UI状態更新 targets,
+        the side-effect loop guard, and the policy guard against the refreshed
+        node list, then the mount surface re-emits the synthetic lifecycle
+        triggers (initial_mount / route_enter / initial_display). The
+        fired-registry is keyed by nodeId + interaction-index (not list
+        position or emission-object identity), so an existing node's
+        already-fired lifecycle interaction does not re-execute on
+        reconciliation, while a newly-appeared node's lifecycle interaction
+        executes exactly once on the reconciliation that introduces it.
+      fail_close:
+        - sse_refresh_ignoring_newly_mounted_lifecycle_interactions
+        - reconciliation_re_executing_an_already_fired_lifecycle_interaction
+      prohibited:
+        - pinning_the_runner_to_its_creation_time_node_list
+        - refetching_lifecycle_dispatch_by_recreating_the_runner_store_or_fired_registry
     runtime_boundary_implementation:
-      effect_runner: frontend/runtime/uiEventEffectRunner.ts (createUiEventEffectRunner; owns lifecycle emission, loop guard, idempotency registry)
+      effect_runner: frontend/runtime/uiEventEffectRunner.ts (createUiEventEffectRunner; owns lifecycle emission, loop guard, idempotency registry; updateNodes reconciles the runner to a refreshed node list without recreating the runner/store/fired-registry)
       state_dispatcher: frontend/runtime/uiEventEffectRunner.ts createRuntimeStateDispatcher (declare-then-mutate; undeclared-slot writes fail close; no auto-declare fallback)
       guarded_mutation_shared_entry_point: frontend/runtime/uiEventEffectRunner.ts applyGuardedLocalStateMutation + resolveUiStateUpdateMutation (used by BOTH executeStateUpdate (lifecycle) and runtimeComponentFactory.emitBoundEvent (event-triggered))
-      predeclare: frontend/runtime/uiEventEffectRunner.ts predeclareProjectionState / createProjectionStateDispatcher (declares UI監視割当 stateJson slots and every UI状態更新 target found in runtimeInteractions, before any interaction can execute)
+      predeclare: frontend/runtime/uiEventEffectRunner.ts predeclareProjectionState / createProjectionStateDispatcher (declares UI監視割当 stateJson slots and every UI状態更新 target whose targetNodeId is present in the current node list, before any interaction can execute; a target absent from that list is never predeclared)
       state_store_notification: frontend/runtime/uiEventEffectRunner.ts createRuntimeLocalStateStore (NotifyingRuntimeLocalStateStore.subscribe -> projection specs re-render)
-      event_lanes: frontend/runtime/runtimeComponentFactory.ts emitBoundEvent (event log / internal dispatch / 外部API連携 / 外部インスタンス連携 / route navigation / local state lanes via the shared guarded dispatcher; previewMode inert)
-      binding_builder: frontend/runtime/renderEmission.ts buildLocalUiStateEventBinding (reuses wiringSettingCategoryOf + resolveUiStateUpdateMutation — the same classification/resolution the lifecycle path uses, so the event binding and the lifecycle mutation agree on shape)
-      mount_integration: frontend/islands/ProjectionShell.tsx (single dispatcher created before the first render; passed into both renderEmission and the runner; runner created once per mount; initial_mount emitted after first projection render; SSE refresh predeclares new targets and never re-emits)
+      event_lanes: frontend/runtime/runtimeComponentFactory.ts emitBoundEvent (event log / internal dispatch / 外部API連携 / 外部インスタンス連携 / route navigation / local state lanes via the shared guarded dispatcher; previewMode inert; high_frequency_policy runtime guard fails close before the external/instance dispatch lane)
+      binding_builder: frontend/runtime/renderEmission.ts buildLocalUiStateEventBinding (reuses wiringSettingCategoryOf + resolveUiStateUpdateMutation — the same classification/resolution the lifecycle path uses, so the event binding and the lifecycle mutation agree on shape) / buildExternalPortEventBinding (carries debounceMs on the externalPortDispatch / instanceOperationDispatch binding so the runtime guard can evaluate it at dispatch time)
+      mount_integration: frontend/islands/ProjectionShell.tsx (single dispatcher created before the first render; passed into both renderEmission and the runner; runner created once per mount; initial_mount emitted after first projection render; SSE refresh calls runner.updateNodes then re-emits lifecycle triggers so newly-appeared nodes execute while existing fired interactions stay idempotent)
       dispatch_lanes: frontend/runtime/frontendScheduler.ts enqueueExternalPortDispatchCommand / enqueueInstanceOperationDispatchCommand (api_command_lane; typed-ref prefix fail close)
     component_edit_boundary:
       - edit an individual component only when a required event/value surface is missing
@@ -307,12 +333,21 @@ admin_uibuilder_ui_structure_wiring_ssot:
         an explicit debounceMs value (positive integer) persisted on the interaction
         plus an explicit authoring warning
       - debounce/throttle is NOT side-effect loop-safety proof; loop checks run independently
+      - this requirement is enforced at runtime dispatch time, not only at
+        authoring/apply time: runtimeComponentFactory.emitBoundEvent fails close
+        before calling enqueueExternalPortDispatchCommand /
+        enqueueInstanceOperationDispatchCommand when the bound trigger is
+        high-frequency and the binding's debounceMs is missing/invalid —
+        authoring/apply policy guard alone does not stop an out-of-band
+        persisted interaction from reaching the dispatch lane at runtime
     fail_close:
       - high_frequency_trigger_with_backend_or_external_dispatch_without_debounce_ms
+      - runtime_dispatch_of_high_frequency_trigger_without_debounce_ms_at_event_time
     prohibited:
       - implementing_high_frequency_trigger_runtime_execution_before_this_policy
       - silent_default_debounce_injection
       - treating_debounce_or_throttle_as_loop_safety_proof
+      - authoring_or_apply_policy_guard_alone_without_a_runtime_dispatch_guard
 
   side_effect_cycle_policy:
     rule: >-
@@ -443,6 +478,18 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - event-triggered mutation on a predeclared slot succeeds through the shared dispatcher
       - event-triggered UI状態更新 -> store notification -> renderEmission re-run ->
         rendered runtimeSpec props reflect the mutation (not store-Map-only proof)
+      - high-frequency trigger + external/instance dispatch without debounceMs fails
+        close at emitBoundEvent (runtime dispatch time), not only at authoring/apply
+        time, and the dispatch lane (enqueueExternalPortDispatchCommand /
+        enqueueInstanceOperationDispatchCommand) is not called
+      - a UI状態更新 interaction whose targetNodeId is absent from the current node
+        list is never predeclared and fails close in the production-equivalent
+        dispatcher path (createProjectionStateDispatcher(toWiringNodes(layoutNodes))
+        -> renderEmission -> emitBoundEvent), not only a directly-constructed
+        empty dispatcher
+      - SSE refresh reconciles the runtime effect runner's node list
+        (runner.updateNodes): an existing node's already-fired initial_mount does
+        not re-execute; a newly-appeared node's initial_mount executes exactly once
     policy_ref: docs/design/pipeline-continuity-ssot.yaml test_tier_policy
 
   prohibited:
@@ -468,3 +515,7 @@ admin_uibuilder_ui_structure_wiring_ssot:
     - event_triggered_local_state_mutation_writing_directly_to_a_raw_store
     - event_and_lifecycle_paths_using_separate_dispatcher_instances_for_the_same_projection
     - write_time_auto_declare_fallback_for_undeclared_slots
+    - predeclaring_a_ui_state_update_target_absent_from_the_current_node_list
+    - runtime_dispatch_of_high_frequency_trigger_without_debounce_ms_at_event_time
+    - sse_refresh_ignoring_newly_mounted_lifecycle_interactions
+    - pinning_the_runtime_effect_runner_to_its_creation_time_node_list

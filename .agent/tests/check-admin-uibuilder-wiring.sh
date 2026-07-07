@@ -30,6 +30,7 @@ COMPONENT_FACTORY="frontend/runtime/runtimeComponentFactory.ts"
 RENDER_EMISSION="frontend/runtime/renderEmission.ts"
 ADAPTER="frontend/runtime/runtimeComponentAdapter.ts"
 SCENARIO_TEST="frontend/tests/runtimeUiInteractionScenario.test.ts"
+EXECUTION_LANE_TEST="frontend/tests/adminWiringExecutionLane.test.ts"
 
 FAILURES=0
 fail() { echo "FAIL: $1" >&2; FAILURES=$((FAILURES + 1)); }
@@ -125,6 +126,7 @@ require_file "$COMPONENT_FACTORY"
 require_file "$RENDER_EMISSION"
 require_file "$ADAPTER"
 require_file "$SCENARIO_TEST"
+require_file "$EXECUTION_LANE_TEST"
 require_grep "applyGuardedLocalStateMutation" "$RUNNER" "shared guarded mutation entry point"
 require_grep "resolveUiStateUpdateMutation" "$RUNNER" "shared UI状態更新 target resolution"
 require_grep "predeclareProjectionState|createProjectionStateDispatcher" "$RUNNER" "predeclare-before-mutate entry point"
@@ -143,6 +145,26 @@ require_grep "createProjectionStateDispatcher|createRuntimeStateDispatcher" "$SC
 # Event path must not bypass the guard with a direct store write.
 forbid_grep '\.localStateStore\.set\(' "$COMPONENT_FACTORY" \
   "event-triggered mutation must call applyGuardedLocalStateMutation, not spec.localStateStore.set() directly"
+
+# Runtime fail-close boundary (Round 4 re-audit): predeclare excludes stale/deleted
+# targets, the runner reconciles its node list on SSE refresh, and emitBoundEvent
+# enforces high_frequency_policy at dispatch time, not only authoring/apply time.
+require_grep "isValidDebounceMs" "$LIB" \
+  "shared high_frequency_policy debounceMs validity check"
+require_grep "isValidDebounceMs" "$COMPONENT_FACTORY" \
+  "emitBoundEvent must reuse the shared debounceMs validity check"
+require_grep "HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE" "$COMPONENT_FACTORY" \
+  "runtime dispatch guard must fail close before the external/instance dispatch lane"
+require_grep "nodeIds\.has\(resolved\.targetNodeId\)" "$RUNNER" \
+  "predeclare must not declare a UI状態更新 target absent from the current node list"
+require_grep "updateNodes" "$RUNNER" \
+  "runner must expose node-list reconciliation for SSE refresh"
+require_grep "updateNodes" "$PROJECTION_SHELL" \
+  "mount surface must reconcile the runner's node list on SSE refresh"
+require_grep "updateNodes" "$RUNNER_TEST" \
+  "SSE refresh reconciliation proof (existing node idempotent, new node fires once)"
+require_grep "HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE" "$EXECUTION_LANE_TEST" \
+  "runtime dispatch guard proof for both external and instance high-frequency lanes"
 
 # ─── 3. Negative boundaries ──────────────────────────────────────────────────
 # Wiring graph panel is projection-only: no direct persistence dispatch from the panel.

@@ -124,6 +124,10 @@ import {
 import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
 import { resolvePayloadFrom } from "./payloadFromResolver.ts";
 import { applyGuardedLocalStateMutation } from "./uiEventEffectRunner.ts";
+import {
+  isHighFrequencyTrigger,
+  isValidDebounceMs,
+} from "../lib/uiBuilderWiringProjection.ts";
 
 type RenderResult = { ok: true; node: VNode<any> } | {
   ok: false;
@@ -149,12 +153,16 @@ type EventBindingValue = {
     portTargetRef: string;
     payloadFrom: Record<string, string>;
     outputProp?: string;
+    /** SSOT high_frequency_policy: required when the bound trigger is high-frequency. */
+    debounceMs?: number;
   };
   /** 外部インスタンス連携 runtime dispatch lane (instance-port target refs via api_command_lane). */
   instanceOperationDispatch?: {
     instanceTargetRef: string;
     payloadFrom: Record<string, string>;
     outputProp?: string;
+    /** SSOT high_frequency_policy: required when the bound trigger is high-frequency. */
+    debounceMs?: number;
   };
 };
 
@@ -273,6 +281,9 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       outputProp: typeof outputProp === "string"
         ? outputProp.trim()
         : undefined,
+      debounceMs: typeof rawDispatch.debounceMs === "number"
+        ? rawDispatch.debounceMs
+        : undefined,
     };
   }
   const instanceOperationDispatchRaw =
@@ -312,6 +323,9 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       payloadFrom: (payloadFrom as Record<string, string> | undefined) ?? {},
       outputProp: typeof outputProp === "string"
         ? outputProp.trim()
+        : undefined,
+      debounceMs: typeof rawDispatch.debounceMs === "number"
+        ? rawDispatch.debounceMs
         : undefined,
     };
   }
@@ -399,8 +413,22 @@ function emitBoundEvent(
     void enqueueRuntimeComponentCommand(binding.runtimeDispatch);
   }
   // Lane 2 (external_port): Design Inspector-authored dispatchExternalPort.
-  // payloadFrom resolution is fail-close: unresolved refs return explicit error and no partial payload is sent.
+  // high_frequency_policy runtime guard: a high-frequency trigger without a
+  // valid debounceMs fails close HERE, at dispatch time — authoring/apply
+  // policy guard alone does not prevent an out-of-band persisted interaction
+  // from reaching the dispatch lane at runtime. No silent default debounce.
   if (binding.externalPortDispatch) {
+    if (
+      isHighFrequencyTrigger(trigger) &&
+      !isValidDebounceMs(binding.externalPortDispatch.debounceMs)
+    ) {
+      return {
+        ok: false,
+        error:
+          `HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE — 高頻度トリガ "${trigger}" での外部送出には debounceMs（正の整数）が必要です`,
+      };
+    }
+    // payloadFrom resolution is fail-close: unresolved refs return explicit error and no partial payload is sent.
     const resolved = resolvePayloadFrom(
       binding.externalPortDispatch.payloadFrom,
       spec.payloadFromNodeValues ?? {},
@@ -416,8 +444,19 @@ function emitBoundEvent(
     });
   }
   // Lane 2 (外部インスタンス連携): dispatchInstanceOperation through the same
-  // api_command_lane. payloadFrom resolution is fail-close like the external lane.
+  // api_command_lane. Same runtime high_frequency_policy guard as the external lane.
   if (binding.instanceOperationDispatch) {
+    if (
+      isHighFrequencyTrigger(trigger) &&
+      !isValidDebounceMs(binding.instanceOperationDispatch.debounceMs)
+    ) {
+      return {
+        ok: false,
+        error:
+          `HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE — 高頻度トリガ "${trigger}" でのインスタンス送出には debounceMs（正の整数）が必要です`,
+      };
+    }
+    // payloadFrom resolution is fail-close like the external lane.
     const resolved = resolvePayloadFrom(
       binding.instanceOperationDispatch.payloadFrom,
       spec.payloadFromNodeValues ?? {},

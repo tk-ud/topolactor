@@ -336,6 +336,26 @@ component_runtime_state_effect_boundary:
     writing component state directly outside declared runtime state dispatcher
     treating propsJson/stateJson as sufficient UI監視割当 proof
     treating event -> localStateMutation as sufficient 副作用設定 proof
+  mutation authority unification:
+    exactly one guarded write path (RuntimeGuardedStateStore) for UI状態更新,
+    shared by the lifecycle path (emitLifecycle) and the event path (emitBoundEvent)
+    no write-time auto-declare fallback: a target must be predeclared from the
+    current node list before either path may write it
+    a UI状態更新 target absent from the current node list is never predeclared and
+    fails close identically on both paths, including in the production-equivalent
+    dispatcher construction path (createProjectionStateDispatcher(toWiringNodes(...)))
+  lifecycle runner node reconciliation:
+    the runtime effect runner reconciles (updateNodes) its known node list on SSE
+    refresh instead of staying pinned to its creation-time node list
+    fired-registry is keyed by nodeId + interaction-index: an existing node's
+    already-fired lifecycle interaction does not re-execute; a newly-appeared
+    node's lifecycle interaction executes exactly once on reconciliation
+  NG (mutation authority / reconciliation):
+    event path writing directly to a raw store instead of the shared dispatcher
+    event and lifecycle paths using separate dispatcher instances
+    predeclaring a UI状態更新 target absent from the current node list
+    pinning the runtime effect runner to its creation-time node list
+    ignoring newly-mounted lifecycle interactions on SSE refresh
 
 side_effect_cycle_policy:
   effect target candidates must be filtered by dependency not-in rule before selection
@@ -369,6 +389,9 @@ high_frequency_policy:
   local state / monitored variable update is allowed by default
   backend/API dispatch or topology movement requires debounce/throttle and explicit warning
   debounce/throttle does not prove side-effect loop safety
+  enforced at runtime dispatch time (emitBoundEvent), not only authoring/apply time:
+  a high-frequency trigger without valid debounceMs fails close before the external/
+  instance dispatch lane is called — authoring/apply guard alone is insufficient
 
 drag_drop_wiring_edit:
   valid drop -> typed runtimeInteraction patch
@@ -453,6 +476,11 @@ required_proof:
   initial_mount is not DOM onLoad / resource loaded
   initial_mount does not re-dispatch on rerender
   high-frequency trigger debounce/fail-close
+  runtime event lane high-frequency dispatch fail-close
+  event-triggered UI状態更新 writes through SAME guarded dispatcher
+  stale/deleted target fails close in production equivalent path
+  SSE refresh newly mounted lifecycle node handling
+  store notification -> renderEmission re-run -> rendered props reflection
 
 OK:
   tests follow owning SSOT
