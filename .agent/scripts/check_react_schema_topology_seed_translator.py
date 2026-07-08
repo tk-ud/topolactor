@@ -991,6 +991,46 @@ def main():
             fail("86. no generate.log record available to regenerate")
             fail("86a. no generate.log record available to regenerate")
 
+
+        runtime_id_pattern = re.compile(r'"runtimeInteractionId"\s*:')
+        seed_runtime_id_surfaces = {
+            "credential-management input fixture": FIXTURE.read_text(encoding="utf-8"),
+            "credential-management topology-seed fixture": TOPOLOGY_SEED_FIXTURE.read_text(encoding="utf-8"),
+            "db/seed_empty.sql": SEED_EMPTY_PATH.read_text(encoding="utf-8"),
+        }
+        expect(
+            "87. credential-management fixtures and db/seed_empty.sql do not hardcode runtimeInteractionId (backend persistence boundary owns final assignment)",
+            all(runtime_id_pattern.search(text) is None for text in seed_runtime_id_surfaces.values()),
+        )
+
+        generated_seed_docs = [doc_ts, doc_crud]
+        expect(
+            "88. generate-topology-seed outputs remain draft/intake candidates and do not mint runtimeInteractionId authority",
+            all(
+                d is not None
+                and runtime_id_pattern.search(json.dumps(d, separators=(",", ":"), ensure_ascii=False)) is None
+                and (dig(d, "topologyUiSeedCandidate", "role") == "draft_intake_artifact_not_active_topology"
+                     or dig(d, "topologyUiSeedCandidate", "schema") == "topolactor.topology_ui_seed.v1")
+                for d in generated_seed_docs
+            ),
+        )
+
+        repo_text_targets = [
+            REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_initial_contract.py",
+            REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_local_test.py",
+            REPO_ROOT / ".agent" / "tools" / "README.md",
+            REPO_ROOT / "docs" / "governance" / "reference" / "agent-ui-tool-output-reference.yaml",
+            REPO_ROOT / ".agent" / "prompt" / "implementation-change.md",
+        ]
+        repo_text = "\n".join(path.read_text(encoding="utf-8") for path in repo_text_targets)
+        expect(
+            "89. Agent UI route wording exposes prompt_content/protocol_trigger_hints full text and does not retain protocol-excerpts/manual-protocol as the tool-first route",
+            "protocol excerpts" not in repo_text.lower()
+            and "triggered protocol excerpts" not in repo_text.lower()
+            and "protocol_trigger_hints[].content" in repo_text
+            and "full text" in repo_text.lower(),
+        )
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} react-schema-topology-seed-translator check(s) failed ===", file=sys.stderr)

@@ -9,7 +9,7 @@
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
-| `seed-template-runtime-interaction-assignment` | Seed/template projection runtimeInteractionId assignment path | not_started | 1 | `product.dynamic_support_nocode_loop` / seed-template projection adoption carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
+| `seed-template-runtime-interaction-assignment` | Seed/template projection runtimeInteractionId assignment path | implemented | 1 | `product.dynamic_support_nocode_loop` / seed-template projection adoption carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `runtime-route-taxonomy-hardcoded-route-retirement` | Runtime route taxonomy / hardcoded route retirement | not_started | 1 | `product.dynamic_support_nocode_loop` / canonical route taxonomy | `docs/design/runtime-orchestration-ssot.yaml` |
 | `initial-projection-side-admin-crud-seed-route-retirement` | Initial projection-side admin CRUD seed route retirement | not_started | 1 | initial projection-side admin CRUD seed | `docs/design/initial-projection-side-admin-crud-seed-ssot.yaml`（requested owning SSOT; repository path may need materialization/connection） |
@@ -35,7 +35,7 @@
 ---
 ## Bundle `seed-template-runtime-interaction-assignment`
 
-**Status:** `not_started`  
+**Status:** `implemented`  
 **Primary SSOT:** `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`  
 **追加 governance SSOT:** `docs/governance/agent-ui-protocol-ssot.yaml`, `docs/governance/agent-governance-routing-ssot.yaml`  
 **追加 governance Reference:** `docs/governance/reference/agent-ui-tool-output-reference.yaml`, `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`, `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`  

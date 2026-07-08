@@ -122,6 +122,17 @@ check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "PR diff or patch"
 check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "changed files"
 check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" ".agent/tasks/todo.md"
 check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "docs/system-roadmap.yaml"
+check_term "$REPO_ROOT/.agent/prompt/implementation-change.md" "protocol_trigger_hints[].content"
+check_term "$REPO_ROOT/.agent/tools/README.md" "protocol_trigger_hints"
+check_term "$REPO_ROOT/docs/governance/reference/agent-ui-tool-output-reference.yaml" "Neither is an arbitrary partial excerpt"
+check_term "$REPO_ROOT/.agent/scripts/agent_tools/agent_ui_initial_contract.py" "triggered protocol full text"
+
+if grep -qiF 'triggered protocol excerpts' "$REPO_ROOT/.agent/scripts/agent_tools/agent_ui_initial_contract.py"; then
+  fail "agent-ui-initial-contract still describes routed protocol output as excerpts"
+else
+  pass "agent-ui-initial-contract does not describe routed protocol output as excerpts"
+fi
+
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "PASS check-worktype-routing.sh assertions=${PASS_COUNT}"
