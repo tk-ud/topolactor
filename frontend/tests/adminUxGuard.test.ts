@@ -402,7 +402,7 @@ Deno.test("UiBuilderAdmin: layout_patch apply uses unified modal with validate t
   );
   assert(
     src.includes("layoutId={effectiveLayoutId}"),
-    "modal must pass layoutId for demo deep-link",
+    "modal must receive the applied layoutId identity",
   );
   assert(
     src.includes("openDesignInspectorHandoff"),
@@ -1018,7 +1018,6 @@ Deno.test("sample viewing: UX_FIELD_SAMPLE_VIEWING is the mandatory preview path
 
 const NORMAL_VIEW_SOURCE_FILES = [
   "../routes/index.tsx",
-  "../routes/demo.tsx",
   "../routes/runtime-status.tsx",
   "../routes/admin/index.tsx",
   "../islands/AdminImport.tsx",
@@ -1030,6 +1029,7 @@ const NORMAL_VIEW_SOURCE_FILES = [
   "../islands/UiBuilderAdmin.tsx",
   "../components/ContentsPipelineStepper.tsx",
   "../components/UiBuilderFlowStepper.tsx",
+  "../components/UiBuilderProjectionInspectionPanel.tsx",
   "../lib/manifestScreenDesign.ts",
 ];
 

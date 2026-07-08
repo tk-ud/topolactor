@@ -74,9 +74,8 @@ export function LayoutPatchApplyModal({
 }: LayoutPatchApplyModalProps): JSX.Element | null {
   if (!open) return null;
 
-  const demoHref = layoutId
-    ? `/demo?layoutId=${encodeURIComponent(layoutId)}`
-    : "/demo";
+  // Read-only projection inspection panel on the same /admin/ui-builder page.
+  const inspectionHref = "#projection-inspection";
   const isSuccess = phase === "success";
   const canConfirm = phase === "validated" && summary?.valid === true && !loading;
 
@@ -201,12 +200,15 @@ export function LayoutPatchApplyModal({
                 </li>
                 <li>
                   <a
-                    href={demoHref}
+                    href={inspectionHref}
+                    onClick={onClose}
                     class="btn-secondary block w-full text-left px-4 py-3 no-underline"
                   >
-                    <span class="block font-semibold">2. デモで投影を確認</span>
+                    <span class="block font-semibold">
+                      2. 投影インスペクションで確認（読み取り専用）
+                    </span>
                     <span class="block text-xs font-normal text-slate-600 mt-0.5">
-                      renderEmission 経路で公開前プレビュー（/demo）
+                      renderEmission 経路で canvas プレビューと applied projection を比較確認（このページ下部）
                     </span>
                   </a>
                 </li>
@@ -217,7 +219,7 @@ export function LayoutPatchApplyModal({
                   >
                     <span class="block font-semibold">3. サンプルデータを追加（任意）</span>
                     <span class="block text-xs font-normal text-slate-600 mt-0.5">
-                      Contents Step 3 の initialDataRows がデモのコンテンツ投影に使われます
+                      Contents Step 3 の initialDataRows がインスペクションのコンテンツ投影に使われます
                     </span>
                   </a>
                 </li>

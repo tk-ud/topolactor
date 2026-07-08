@@ -273,6 +273,68 @@ Deno.test("cloneVisualNode: copies with new id and offset", () => {
   assertEquals(cloned.componentKey, sampleNode.componentKey);
 });
 
+// ─── projection_authority_runtime_interaction_identity duplication_rule ─────
+// PR577 follow-up implementation. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+// lifecycle_policy.projection_authority_runtime_interaction_identity.duplication_rule:
+// a copy must never carry over the source's backend-assigned runtimeInteractionId.
+
+Deno.test("cloneVisualNode: strips runtimeInteractionId from copied runtimeInteractions (duplication_rule)", () => {
+  const sourceWithInteractions: VisualNodePayload = {
+    ...sampleNode,
+    runtimeInteractions: [
+      {
+        trigger: "click",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "port:x",
+        runtimeInteractionId: "aaaaaaaa-0000-0000-0000-000000000001",
+      },
+    ],
+  };
+  const cloned = cloneVisualNode(sourceWithInteractions, "node_copy");
+  assertEquals(cloned.runtimeInteractions?.length, 1);
+  assertEquals(
+    "runtimeInteractionId" in (cloned.runtimeInteractions![0] as Record<string, unknown>),
+    false,
+    "a duplicated interaction must arrive id-less so the backend assigns a fresh id on next persist, never the source's identity",
+  );
+  // Other fields on the interaction still survive the copy.
+  assertEquals(cloned.runtimeInteractions![0].trigger, "click");
+  assertEquals(cloned.runtimeInteractions![0].portTargetRef, "port:x");
+  // The source node itself keeps its own id — cloning is non-destructive.
+  assertEquals(
+    sourceWithInteractions.runtimeInteractions![0].runtimeInteractionId,
+    "aaaaaaaa-0000-0000-0000-000000000001",
+  );
+});
+
+Deno.test("cloneVisualNode: node without runtimeInteractions is unaffected", () => {
+  const cloned = cloneVisualNode(sampleNode, "node_copy_2");
+  assertEquals(cloned.runtimeInteractions, undefined);
+});
+
+Deno.test("runtimeInteractionId round-trips through buildVisualLayoutPatchJson / parseVisualLayoutPatchJson when present", () => {
+  const nodeWithId: VisualNodePayload = {
+    ...sampleNode,
+    runtimeInteractions: [
+      {
+        trigger: "click",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "port:x",
+        runtimeInteractionId: "aaaaaaaa-0000-0000-0000-000000000001",
+      },
+    ],
+  };
+  const json = buildVisualLayoutPatchJson([nodeWithId]);
+  const parsed = parseVisualLayoutPatchJson(json);
+  assertEquals(parsed.ok, true);
+  if (parsed.ok) {
+    assertEquals(
+      parsed.value.nodes[0].runtimeInteractions?.[0].runtimeInteractionId,
+      "aaaaaaaa-0000-0000-0000-000000000001",
+    );
+  }
+});
+
 Deno.test("structural HTML workflow: add, copy, move, save preserves layout/structural_html and htmlTag", () => {
   const added = makeStructuralHtmlNode("section", {
     nodeId: "html-original",

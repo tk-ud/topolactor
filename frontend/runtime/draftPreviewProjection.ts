@@ -63,7 +63,7 @@ export function draftPreviewNodesToAuditInputs(
   return enriched as LayoutPreviewNodeInput[];
 }
 
-/** Parse ?layoutId= from /demo query string. */
+/** Parse ?layoutId= from a preview/inspection deep-link query string. */
 export function parseDraftPreviewQueryParams(
   search: string,
 ): { layoutId: string } {

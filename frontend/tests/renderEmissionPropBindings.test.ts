@@ -9,12 +9,13 @@ import {
   assertEquals,
   assertExists,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { mergeNodeLocalProps } from "../runtime/renderEmission.ts";
+import { mergeNodeLocalProps, renderEmission } from "../runtime/renderEmission.ts";
 import { resolvePropBindings } from "../runtime/propBindingResolver.ts";
 import {
   buildVisualLayoutPatchJson,
   parseVisualLayoutPatchJson,
 } from "../runtime/visualLayoutUtils.ts";
+import type { Emission } from "../api/dispatch.ts";
 
 // ── mergeNodeLocalProps regression: existing behavior unchanged ──────────────
 
@@ -228,6 +229,87 @@ Deno.test("display/card does NOT accept items prop binding (single-record guard)
       true,
     );
   }
+});
+
+// ── projection path survival: renderEmission over collection outer shape ─────
+// Proof that rows / activeColumns / displayColumnMode survive the projection
+// path from a screen_data_shape_query_result emission (outer shape preserved,
+// no rows[0] collapse) into rendered runtimeSpec props via propBindings on an
+// arbitrary (non-default) applied topology.
+
+Deno.test("renderEmission: rows / activeColumns / displayColumnMode survive from emission.data branches into runtimeSpec props", () => {
+  const emission: Emission = {
+    packageId: "bbbbbbbb-0000-0000-0000-000000000002",
+    layoutId: "cccccccc-0000-0000-0000-000000000003",
+    componentIds: [],
+    data: {
+      kind: "screen_data_shape_query_result",
+      manifestId: "aaaaaaaa-0000-0000-0000-000000000001",
+      rows: [
+        { name: "Alice", amount: 10 },
+        { name: "Bob", amount: 20 },
+      ],
+      aggregationResults: [],
+      activeColumns: ["name", "amount"],
+      displayColumnMode: "selected",
+    },
+    layoutNodes: [
+      {
+        nodeId: "table-1",
+        nodeKind: "catalog_component",
+        componentId: "comp-table",
+        componentKind: "data_display/table",
+        componentKey: "table.primitive",
+        orderIndex: 0,
+        propBindings: {
+          rows: { source: "emission.data.rows" },
+          columns: {
+            source: "emission.data.activeColumns",
+            transform: "activeColumnsToTableColumns",
+          },
+        },
+      },
+      {
+        nodeId: "json-1",
+        nodeKind: "catalog_component",
+        componentId: "comp-json",
+        componentKind: "data_display/json",
+        componentKey: "json.primitive",
+        orderIndex: 1,
+        propBindings: {
+          data: { source: "emission.data" },
+        },
+      },
+    ],
+  };
+
+  const specs = renderEmission(emission, {}, { previewMode: true });
+  assertEquals(specs.length, 2);
+
+  const tableSpec = specs.find((s) => s.nodeId === "table-1");
+  assertExists(tableSpec);
+  assertEquals(tableSpec!.componentType, "data_display/table");
+  const tableProps = tableSpec!.runtimeSpec?.props as Record<string, unknown>;
+  assertExists(tableProps, "table runtimeSpec props must be adapted");
+  assertEquals(tableProps.rows, [
+    { name: "Alice", amount: 10 },
+    { name: "Bob", amount: 20 },
+  ]);
+  assertEquals(tableProps.columns, [
+    { key: "name", header: "name" },
+    { key: "amount", header: "amount" },
+  ]);
+
+  const jsonSpec = specs.find((s) => s.nodeId === "json-1");
+  assertExists(jsonSpec);
+  const jsonProps = jsonSpec!.runtimeSpec?.props as Record<string, unknown>;
+  assertExists(jsonProps);
+  const jsonData = jsonProps.data as Record<string, unknown>;
+  // Full emission.data outer shape reaches the component — including
+  // displayColumnMode and activeColumns branches (no rows[0] collapse).
+  assertEquals(jsonData.displayColumnMode, "selected");
+  assertEquals(jsonData.activeColumns, ["name", "amount"]);
+  assertEquals((jsonData.rows as unknown[]).length, 2);
 });
 
 Deno.test("buildVisualLayoutPatchJson: node without propBindings omits the field", () => {

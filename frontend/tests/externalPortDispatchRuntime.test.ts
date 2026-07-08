@@ -35,6 +35,73 @@ Deno.test("dispatchExternalPort runtimeInteractions build external port event bi
   assertEquals(parsed.externalPortDispatch?.payloadFrom, { subject: "literal:hello" });
 });
 
+// ─── projection_authority_runtime_interaction_identity: event-triggered path ─
+// PR577 follow-up implementation. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+// lifecycle_policy.projection_authority_runtime_interaction_identity.
+
+function externalPortEmission(
+  nodeId: string,
+  runtimeInteractionId?: string,
+): Emission {
+  return {
+    layoutId: "layout-external-port",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    data: {},
+    layoutNodes: [{
+      nodeId,
+      nodeKind: "catalog_component",
+      componentId: "button-1",
+      componentKey: "submit_button.primitive",
+      componentKind: "action/button",
+      orderIndex: 0,
+      runtimeInteractions: [{
+        trigger: "click",
+        actionType: "dispatchExternalPort",
+        portTargetRef: "external-port:response_port:00000000-0000-0000-0000-00000000abcd",
+        payloadFrom: { subject: "literal:hello" },
+        outputProp: "externalResult",
+        ...(runtimeInteractionId ? { runtimeInteractionId } : {}),
+      }],
+    }],
+  };
+}
+
+function idempotencyKeyBaseOf(emission: Emission): string | undefined {
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  const parsed = factoryTestOnly.parseEventBinding(
+    specs[0].runtimeSpec!.eventBinding.click,
+  );
+  return parsed?.externalPortDispatch?.idempotencyKeyBase;
+}
+
+Deno.test("renderEmission binding builder: forwards runtimeInteractionId into idempotencyKeyBase — same id survives a nodeId rename", () => {
+  const keyA = idempotencyKeyBaseOf(
+    externalPortEmission("send_button", "aaaaaaaa-0000-0000-0000-000000000001"),
+  );
+  const keyB = idempotencyKeyBaseOf(
+    externalPortEmission(
+      "send_button_renamed",
+      "aaaaaaaa-0000-0000-0000-000000000001",
+    ),
+  );
+  assertExists(keyA);
+  assertEquals(
+    keyA,
+    keyB,
+    "the assigned runtimeInteractionId must survive a nodeId rename in the event-triggered binding builder, same as the lifecycle path",
+  );
+});
+
+Deno.test("renderEmission binding builder: idempotencyKeyBase differs between id-less and id-assigned bindings for the same node (backward-compatible, not colliding)", () => {
+  const withoutId = idempotencyKeyBaseOf(externalPortEmission("send_button"));
+  const withId = idempotencyKeyBaseOf(
+    externalPortEmission("send_button", "aaaaaaaa-0000-0000-0000-000000000001"),
+  );
+  assertExists(withoutId);
+  assertExists(withId);
+  assert(withoutId !== withId);
+});
+
 Deno.test("dispatchExternalPort invalid payloadFrom fails explicitly before enqueue", () => {
   schedulerTestOnly.resetCommandQueue();
   const originalFetch = globalThis.fetch;

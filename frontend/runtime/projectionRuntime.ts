@@ -95,7 +95,10 @@ export function createProjectionRuntime(options?: ProjectionRuntimeOptions): Pro
       return;
     }
 
-    const jsonKeyValue = projectionInputFromData(payload.data ?? {});
+    const jsonKeyValue = projectionInputFromData(
+      payload.data ?? {},
+      currentDefinition.inputMapping,
+    );
     const result = constructProjection(jsonKeyValue, currentDefinition);
 
     if (!result.projection) {

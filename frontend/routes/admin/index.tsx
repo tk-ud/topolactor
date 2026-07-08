@@ -208,7 +208,7 @@ export default function AdminIndex() {
           {" · "}
           <a href="/" class="link">トップ</a>
           {" · "}
-          <a href="/demo" class="link">デモ</a>
+          <a href="/admin/ui-builder#projection-inspection" class="link">投影インスペクション</a>
         </p>
       </main>
     </AdminAuthGate>

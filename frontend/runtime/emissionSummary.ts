@@ -79,7 +79,7 @@ export function toUserFacingResult(summary: EmissionSummary): UserFacingResult {
     return { status: "error", headline, detail, itemCount: 0, hasRecommendation: false };
   }
 
-  // explicit_error recommendation is not surfaced on the /demo preview face.
+  // explicit_error recommendation is not surfaced on the read-only preview face.
   const hasRec = summary.recommendationStatus === "ok";
   const count = summary.componentCount;
   const headline = count > 0 ? `${count} 件のデータが取得できました` : "データを取得しました";

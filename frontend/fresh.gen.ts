@@ -28,7 +28,6 @@ import * as $api_sse from "./routes/api/sse.ts";
 import * as $api_super_auth_login from "./routes/api/super_auth/login.ts";
 import * as $api_super_auth_refresh from "./routes/api/super_auth/refresh.ts";
 import * as $auth from "./routes/auth.tsx";
-import * as $demo from "./routes/demo.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $runtime_status from "./routes/runtime-status.tsx";
 import * as $super_auth from "./routes/super_auth.tsx";
@@ -42,7 +41,6 @@ import * as $ContentsAdmin from "./islands/ContentsAdmin.tsx";
 import * as $ContentsPromotionPanel from "./islands/ContentsPromotionPanel.tsx";
 import * as $ContentsScreenDesignPanel from "./islands/ContentsScreenDesignPanel.tsx";
 import * as $ContextTokenRegistryEditor from "./islands/ContextTokenRegistryEditor.tsx";
-import * as $DraftPreviewShell from "./islands/DraftPreviewShell.tsx";
 import * as $HubNavigationAdmin from "./islands/HubNavigationAdmin.tsx";
 import * as $LoginManifestPanel from "./islands/LoginManifestPanel.tsx";
 import * as $ManifestsAdmin from "./islands/ManifestsAdmin.tsx";
@@ -86,7 +84,6 @@ const manifest = {
     "./routes/api/super_auth/login.ts": $api_super_auth_login,
     "./routes/api/super_auth/refresh.ts": $api_super_auth_refresh,
     "./routes/auth.tsx": $auth,
-    "./routes/demo.tsx": $demo,
     "./routes/index.tsx": $index,
     "./routes/runtime-status.tsx": $runtime_status,
     "./routes/super_auth.tsx": $super_auth,
@@ -102,7 +99,6 @@ const manifest = {
     "./islands/ContentsPromotionPanel.tsx": $ContentsPromotionPanel,
     "./islands/ContentsScreenDesignPanel.tsx": $ContentsScreenDesignPanel,
     "./islands/ContextTokenRegistryEditor.tsx": $ContextTokenRegistryEditor,
-    "./islands/DraftPreviewShell.tsx": $DraftPreviewShell,
     "./islands/HubNavigationAdmin.tsx": $HubNavigationAdmin,
     "./islands/LoginManifestPanel.tsx": $LoginManifestPanel,
     "./islands/ManifestsAdmin.tsx": $ManifestsAdmin,

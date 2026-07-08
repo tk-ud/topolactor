@@ -39,6 +39,16 @@ export type WiringInteraction = {
   idempotencyPolicy?: string;
   /** SSOT ui_event_settings.side_effect_setting: explicit no-side-effect selection. */
   sideEffectNone?: boolean;
+  /**
+   * SSOT lifecycle_policy.projection_authority_runtime_interaction_identity:
+   * stable id assigned by the backend layout_patch persistence boundary (never
+   * client-generated). Read-only from the frontend's perspective — forwarded
+   * verbatim into computeDispatchIdempotencyKey. Absent on entries authored
+   * before this field existed and not yet re-persisted (structural
+   * nodeId+interactionIndex fallback applies). A duplicated node/interaction
+   * must not carry this value over from its source (see cloneVisualNode).
+   */
+  runtimeInteractionId?: string;
 };
 
 export type WiringNode = {
@@ -166,17 +176,31 @@ export function computeDispatchIdempotencyKey(input: {
   packageId?: string | null;
   nodeId: string;
   interactionIndex: number;
+  /**
+   * SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+   * lifecycle_policy.projection_authority_runtime_interaction_identity.
+   * Stable id assigned by the backend layout_patch persistence boundary
+   * (never generated client-side). When present, it REPLACES nodeId +
+   * interactionIndex as the structural identity component — it survives
+   * reordering/duplication of runtimeInteractions on a node, unlike the
+   * positional fallback. When absent (pre-migration entry), the existing
+   * nodeId + interactionIndex fallback applies unchanged (byte-identical
+   * key composition to before this field existed).
+   */
+  runtimeInteractionId?: string | null;
   trigger: string;
   actionType: string;
   targetRef: string;
   payload?: Record<string, unknown>;
   authorDedupeKey?: string;
 }): string {
+  const identityParts = input.runtimeInteractionId
+    ? [`rid:${input.runtimeInteractionId}`]
+    : [input.nodeId, String(input.interactionIndex)];
   const parts = [
     input.layoutId ?? "",
     input.packageId ?? "",
-    input.nodeId,
-    String(input.interactionIndex),
+    ...identityParts,
     input.trigger,
     input.actionType,
     input.targetRef,

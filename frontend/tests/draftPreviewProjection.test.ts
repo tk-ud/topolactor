@@ -56,8 +56,18 @@ Deno.test("draftPreviewNodesToAuditInputs: preset widthMode avoids 160x72 audit 
   assertEquals(nodes[0].layoutClassRefs, ["layout.width.full"]);
 });
 
-Deno.test("draftPreviewProjection: demo handoff link includes layoutId query", () => {
-  const layoutId = "aaaaaaaa-0000-0000-0000-000000000001";
-  const href = `/demo?layoutId=${encodeURIComponent(layoutId)}`;
-  assertStringIncludes(href, "layoutId=aaaaaaaa");
+Deno.test("draftPreviewProjection: preview confirmation is the in-page UI Builder inspection anchor, not a standalone /demo route", async () => {
+  const modalSrc = await Deno.readTextFile(
+    new URL("../components/LayoutPatchApplyModal.tsx", import.meta.url),
+  );
+  const stepperSrc = await Deno.readTextFile(
+    new URL("../components/UiBuilderFlowStepper.tsx", import.meta.url),
+  );
+  assertStringIncludes(modalSrc, "#projection-inspection");
+  assertStringIncludes(stepperSrc, "#projection-inspection");
+  for (const src of [modalSrc, stepperSrc]) {
+    if (src.includes('href="/demo"') || src.includes("`/demo?")) {
+      throw new Error("standalone /demo deep-link must not be retained");
+    }
+  }
 });

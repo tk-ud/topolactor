@@ -37,8 +37,9 @@ import { resolveUiStateUpdateMutation } from "./uiEventEffectRunner.ts";
 
 export type RenderEmissionOptions = {
   /**
-   * Read-only projection (/demo draft preview). Uses inert event bindings and
-   * relaxed factory checks — same contract as UI Builder canvas preview.
+   * Read-only projection (UI Builder inspection / draft preview). Uses inert
+   * event bindings and relaxed factory checks — same contract as UI Builder
+   * canvas preview.
    */
   previewMode?: boolean;
   /** Frontend-local calculation bindings from layout patch root. Evaluated without backend dispatch. */
@@ -433,6 +434,14 @@ function buildExternalPortEventBinding(
     const actionType = typeof wiring.actionType === "string"
       ? wiring.actionType
       : "";
+    // projection_authority_runtime_interaction_identity: read-only forward of the
+    // backend-assigned id (never generated/mutated here). Absent on entries not
+    // yet re-persisted since the field was introduced — computeDispatchIdempotencyKey
+    // falls back to nodeId+interactionIndex in that case.
+    const runtimeInteractionId = typeof wiring.runtimeInteractionId === "string" &&
+        wiring.runtimeInteractionId.trim()
+      ? wiring.runtimeInteractionId.trim()
+      : undefined;
     if (wiring.actionType === "dispatchExternalPort") {
       const portTargetRef = typeof wiring.portTargetRef === "string"
         ? wiring.portTargetRef.trim()
@@ -446,6 +455,7 @@ function buildExternalPortEventBinding(
         packageId: identity.packageId,
         nodeId: identity.nodeId,
         interactionIndex,
+        runtimeInteractionId,
         trigger,
         actionType,
         targetRef: portTargetRef,
@@ -469,6 +479,7 @@ function buildExternalPortEventBinding(
         packageId: identity.packageId,
         nodeId: identity.nodeId,
         interactionIndex,
+        runtimeInteractionId,
         trigger,
         actionType,
         targetRef: instanceTargetRef,
@@ -648,7 +659,10 @@ export function projectionFromEmission(
   projection?: undefined;
   error: string;
 } {
-  const jsonKeyValue = projectionInputFromData(emission.data);
+  const jsonKeyValue = projectionInputFromData(
+    emission.data,
+    definition.inputMapping,
+  );
   return constructProjection(jsonKeyValue, definition);
 }
 

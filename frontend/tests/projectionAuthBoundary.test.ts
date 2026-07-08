@@ -28,10 +28,18 @@ Deno.test("projection auth boundary: SSE refresh uses sse_projection_lane bridge
 
 Deno.test("projection auth boundary: SSE refresh preserves all three identity fields without discard", async () => {
   const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
-  assert(src.includes("manifest_id"), "SSE refresh must preserve manifestId in target override");
+  assert(src.includes("payload.manifest_id"), "SSE refresh must preserve manifestId as identity payload context");
   assert(src.includes("table_id"), "SSE refresh must preserve tableId in identity payload");
   assert(src.includes("table_registry_id"), "SSE refresh must preserve tableRegistryId in identity payload");
   assert(src.includes("identityPayload"), "identity payload must be built for all non-absent identity fields");
+});
+
+Deno.test("projection auth boundary: SSE refresh never writes manifest_id into axes.target (no silent retarget)", async () => {
+  const src = await Deno.readTextFile(new URL("../islands/ProjectionShell.tsx", import.meta.url));
+  assert(
+    !src.includes("target: payload.manifest_id"),
+    "SSE refresh must not overwrite axes.target from the SSE payload — that would silently retarget a route-selected entry",
+  );
 });
 
 Deno.test("projection auth boundary: refresh failure on token invalidity clears carrier, realm mismatch does not", async () => {

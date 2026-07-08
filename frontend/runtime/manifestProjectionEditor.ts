@@ -2,10 +2,27 @@ import type { ProjectionDefinition } from "./projectionConstructor.ts";
 
 export type ManifestProjectionOutputKind = ProjectionDefinition["outputKind"];
 
+/**
+ * Draft-side input mapping selection. "" means "not declared" — the editor
+ * emits no inputMapping key, matching the runtime default (collection outer
+ * shape preserved by projectionInputFromData). "collection" is the explicit
+ * declared form of that same default; "single_row" declares the explicit
+ * rows[0] collapse. There is no other allowed value — see
+ * parseProjectionDefinitionToDraft for the fail-close read boundary.
+ */
+export type ManifestProjectionInputMapping = "" | "collection" | "single_row";
+
+export const PROJECTION_INPUT_MAPPING_OPTIONS: ManifestProjectionInputMapping[] = [
+  "",
+  "collection",
+  "single_row",
+];
+
 export type ManifestProjectionDraft = {
   enabled: boolean;
   constructorKey: string;
   outputKind: ManifestProjectionOutputKind;
+  inputMapping: ManifestProjectionInputMapping;
   packageIds: string;
   componentId: string;
   fieldDefsJson: string;
@@ -24,6 +41,7 @@ export function emptyManifestProjectionDraft(): ManifestProjectionDraft {
     enabled: false,
     constructorKey: "",
     outputKind: "form_inputs",
+    inputMapping: "",
     packageIds: "",
     componentId: "",
     fieldDefsJson: "",
@@ -65,6 +83,21 @@ export function parseProjectionDefinitionToDraft(
   draft.outputKind = PROJECTION_OUTPUT_KIND_OPTIONS.includes(outputKind as ManifestProjectionOutputKind)
     ? (outputKind as ManifestProjectionOutputKind)
     : "form_inputs";
+  if (definition.inputMapping === undefined) {
+    draft.inputMapping = "";
+  } else if (definition.inputMapping === "single_row" || definition.inputMapping === "collection") {
+    draft.inputMapping = definition.inputMapping;
+  } else {
+    // Fail-close: an inputMapping value outside the allowed set must not be
+    // silently normalized away (that would lose or mask the authored data on
+    // the next save) and must not be silently accepted (unknown collapse
+    // behavior). Surface it as an explicit read error instead.
+    throw new Error(
+      `projection_definition.inputMapping must be "collection" or "single_row" (got: ${
+        JSON.stringify(definition.inputMapping)
+      })`,
+    );
+  }
   draft.packageIds = Array.isArray(definition.packageIds)
     ? definition.packageIds.filter((id): id is string => typeof id === "string").join(", ")
     : "";
@@ -124,6 +157,14 @@ export function buildProjectionDefinitionPayload(
       .filter(Boolean),
   };
 
+  // "" (not declared) omits the key entirely — this preserves the runtime
+  // default (collection outer shape) without over-specifying it. Explicit
+  // "collection" / "single_row" are emitted verbatim so a saved single_row
+  // mapping survives the admin editor round-trip instead of disappearing.
+  if (draft.inputMapping === "single_row" || draft.inputMapping === "collection") {
+    payload.inputMapping = draft.inputMapping;
+  }
+
   const componentId = draft.componentId.trim();
   if (componentId) payload.componentId = componentId;
 
@@ -150,5 +191,9 @@ export function formatProjectionSummary(definition: Record<string, unknown> | nu
   const key = typeof definition.constructorKey === "string" ? definition.constructorKey : "?";
   const kind = typeof definition.outputKind === "string" ? definition.outputKind : "?";
   const packageCount = Array.isArray(definition.packageIds) ? definition.packageIds.length : 0;
-  return `${key} → ${kind} (${packageCount} packageId(s))`;
+  const inputMapping = definition.inputMapping === "single_row" ||
+      definition.inputMapping === "collection"
+    ? ` [inputMapping=${definition.inputMapping}]`
+    : "";
+  return `${key} → ${kind} (${packageCount} packageId(s))${inputMapping}`;
 }

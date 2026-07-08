@@ -144,6 +144,13 @@ export type LayoutNode = {
     lifecycleDispatchConfirmed?: boolean;
     idempotencyPolicy?: string;
     sideEffectNone?: boolean;
+    /**
+     * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+     * lifecycle_policy.projection_authority_runtime_interaction_identity.
+     * Backend-assigned stable id (never generated on the frontend). Absent on
+     * entries not yet re-persisted since the field was introduced.
+     */
+    runtimeInteractionId?: string;
   }> | null;
   widthMode?: "auto" | "preset" | "custom";
   heightMode?: "auto" | "preset" | "custom";

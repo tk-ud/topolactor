@@ -903,6 +903,163 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, patch, css, responsive, "Layout patch normalized (placement only).");
     }
 
+    /// <summary>
+    /// SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+    /// lifecycle_policy.projection_authority_runtime_interaction_identity.
+    ///
+    /// Assigns a stable runtimeInteractionId to every nodes[].runtimeInteractions[]
+    /// entry that lacks one, at the layout_patch PERSISTENCE boundary (called from
+    /// ApplyConfirmedLayoutPatchAsync only — never from preview/validate, which do
+    /// not persist). The frontend never generates this id; it only reads the value
+    /// back through layout_patch_json -> emission.layoutNodes[].runtimeInteractions[]
+    /// and forwards it verbatim into computeDispatchIdempotencyKey.
+    ///
+    /// Entries that already carry a VALID UUID-format runtimeInteractionId
+    /// (SSOT field_shape) are left untouched — including a duplicated
+    /// node/interaction that (per the duplication_rule) must arrive here
+    /// WITHOUT the source's id, so it is treated as id-less and receives a
+    /// fresh one, never the source's identity. A present-but-blank,
+    /// present-but-non-string, or present-but-non-UUID-format value is treated
+    /// identically to absent — see HasValidRuntimeInteractionId — and is
+    /// REPLACED (never left in place, and never duplicated as a stray extra
+    /// JSON key alongside the fresh one).
+    ///
+    /// Returns the input unchanged (same string reference) when no entry needed
+    /// an assignment, so an already-migrated patch round-trips byte-identical.
+    /// </summary>
+    public static string AssignRuntimeInteractionIds(string tensorPatchJson)
+    {
+        if (string.IsNullOrWhiteSpace(tensorPatchJson)) return tensorPatchJson;
+
+        using var doc = JsonDocument.Parse(tensorPatchJson);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object ||
+            !doc.RootElement.TryGetProperty("nodes", out var nodes) ||
+            nodes.ValueKind != JsonValueKind.Array)
+        {
+            return tensorPatchJson;
+        }
+
+        var anyAssigned = false;
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("runtimeInteractions", out var interactions) ||
+                interactions.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+            foreach (var interaction in interactions.EnumerateArray())
+            {
+                if (interaction.ValueKind != JsonValueKind.Object) continue;
+                if (!HasValidRuntimeInteractionId(interaction))
+                {
+                    anyAssigned = true;
+                    break;
+                }
+            }
+            if (anyAssigned) break;
+        }
+
+        if (!anyAssigned) return tensorPatchJson;
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            WriteWithAssignedRuntimeInteractionIds(doc.RootElement, writer);
+        }
+        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static void WriteWithAssignedRuntimeInteractionIds(JsonElement root, Utf8JsonWriter writer)
+    {
+        writer.WriteStartObject();
+        foreach (var prop in root.EnumerateObject())
+        {
+            if (prop.NameEquals("nodes") && prop.Value.ValueKind == JsonValueKind.Array)
+            {
+                writer.WritePropertyName(prop.Name);
+                writer.WriteStartArray();
+                foreach (var node in prop.Value.EnumerateArray())
+                {
+                    WriteNodeWithAssignedRuntimeInteractionIds(node, writer);
+                }
+                writer.WriteEndArray();
+            }
+            else
+            {
+                prop.WriteTo(writer);
+            }
+        }
+        writer.WriteEndObject();
+    }
+
+    private static void WriteNodeWithAssignedRuntimeInteractionIds(JsonElement node, Utf8JsonWriter writer)
+    {
+        if (node.ValueKind != JsonValueKind.Object)
+        {
+            node.WriteTo(writer);
+            return;
+        }
+        writer.WriteStartObject();
+        foreach (var prop in node.EnumerateObject())
+        {
+            if (prop.NameEquals("runtimeInteractions") && prop.Value.ValueKind == JsonValueKind.Array)
+            {
+                writer.WritePropertyName(prop.Name);
+                writer.WriteStartArray();
+                foreach (var interaction in prop.Value.EnumerateArray())
+                {
+                    WriteInteractionWithAssignedRuntimeInteractionId(interaction, writer);
+                }
+                writer.WriteEndArray();
+            }
+            else
+            {
+                prop.WriteTo(writer);
+            }
+        }
+        writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// SSOT field_shape enforcement: projection_authority_runtime_interaction_identity
+    /// declares runtimeInteractionId as a UUID string. A present-but-blank,
+    /// present-but-non-string, or present-but-non-UUID-format value is NOT a
+    /// valid existing id — it is treated identically to "absent" so it gets
+    /// replaced by a freshly assigned valid UUID, never preserved as-is.
+    /// </summary>
+    private static bool HasValidRuntimeInteractionId(JsonElement interaction) =>
+        interaction.TryGetProperty("runtimeInteractionId", out var idEl) &&
+        idEl.ValueKind == JsonValueKind.String &&
+        Guid.TryParse(idEl.GetString(), out _);
+
+    private static void WriteInteractionWithAssignedRuntimeInteractionId(JsonElement interaction, Utf8JsonWriter writer)
+    {
+        if (interaction.ValueKind != JsonValueKind.Object)
+        {
+            interaction.WriteTo(writer);
+            return;
+        }
+        var hasValidId = HasValidRuntimeInteractionId(interaction);
+
+        writer.WriteStartObject();
+        foreach (var prop in interaction.EnumerateObject())
+        {
+            // An invalid existing runtimeInteractionId (blank / non-string /
+            // non-UUID-format) is skipped here — never copied through — so the
+            // single fresh id written below never collides with it as a
+            // duplicate JSON key. A valid existing id is copied through as-is
+            // and no fresh one is written.
+            if (prop.NameEquals("runtimeInteractionId") && !hasValidId) continue;
+            prop.WriteTo(writer);
+        }
+        if (!hasValidId)
+        {
+            writer.WriteString("runtimeInteractionId", Guid.NewGuid().ToString());
+        }
+        writer.WriteEndObject();
+    }
+
     private static bool ContainsDraftOnlyNode(string tensorPatchJson)
     {
         using var doc = JsonDocument.Parse(tensorPatchJson);
@@ -1117,6 +1274,11 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         // before any DB access so these explicit errors are never swallowed by a connection failure.
         var valid = await ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
         if (!valid.Ok || !valid.Valid) return valid;
+
+        // projection_authority_runtime_interaction_identity: this IS the persistence
+        // boundary — assign runtimeInteractionId to any id-less runtimeInteractions[]
+        // entry now, on the validated JSON, before it is written to either table below.
+        valid = valid with { TensorPatchJson = AssignRuntimeInteractionIds(valid.TensorPatchJson) };
 
         var bindingError = await VerifyLayoutPatchPackageBindingAsync(packageId, layoutId, routeKey, ct);
         if (bindingError is not null)
