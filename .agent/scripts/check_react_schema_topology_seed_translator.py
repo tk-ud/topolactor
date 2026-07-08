@@ -1031,6 +1031,95 @@ def main():
             and "full text" in repo_text.lower(),
         )
 
+
+        # PR578 scope-authority correction: the todo Bundle body (not the
+        # shortened initial prompt) requires evidence across the listed backend,
+        # frontend forwarding, translator, entry-gate, fixture, seed, and Agent
+        # UI governance surfaces. These static checks deliberately read those
+        # target surfaces so the proof cannot shrink to only the files touched
+        # by the previous PR diff.
+        backend_repo_src = (REPO_ROOT / "backend" / "repository" / "NpgsqlUiTopologyRepository.cs").read_text(encoding="utf-8")
+        apply_idx = backend_repo_src.find("public override async Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync")
+        assign_call_idx = backend_repo_src.find("AssignRuntimeInteractionIds(valid.TensorPatchJson)", apply_idx)
+        persist_idx = backend_repo_src.find("UPDATE topology.ui_topology_tensor SET layout_patch_json=@patch::jsonb", apply_idx)
+        expect(
+            "90. backend persistence wiring calls AssignRuntimeInteractionIds inside ApplyConfirmedLayoutPatchAsync before layout_patch_json persistence",
+            apply_idx >= 0 and assign_call_idx > apply_idx and persist_idx > assign_call_idx,
+        )
+        expect(
+            "91. backend assignment boundary includes HasValidRuntimeInteractionId and invalid-id replacement before persisted layout_patch_json",
+            "private static bool HasValidRuntimeInteractionId" in backend_repo_src
+            and "Guid.TryParse" in backend_repo_src
+            and 'writer.WriteString("runtimeInteractionId", Guid.NewGuid().ToString())' in backend_repo_src,
+        )
+
+        seed_template_persist_bypass = re.search(
+            r"INSERT\s+INTO\s+topology\.ui_topology_tensor\s*\([^)]*layout_patch_json|UPDATE\s+topology\.ui_topology_tensor\s+SET\s+layout_patch_json",
+            backend_repo_src,
+            re.IGNORECASE | re.DOTALL,
+        )
+        expect(
+            "92. NpgsqlUiTopologyRepository has no alternate active layout_patch_json persist path before the assignment boundary check (bypass would be caught here)",
+            seed_template_persist_bypass is not None and seed_template_persist_bypass.start() == persist_idx,
+        )
+
+        render_src = (REPO_ROOT / "frontend" / "runtime" / "renderEmission.ts").read_text(encoding="utf-8")
+        event_builder_idx = render_src.find("function buildExternalPortEventBinding")
+        event_runtime_id_idx = render_src.find("runtimeInteractionId", event_builder_idx)
+        event_forward_idx = render_src.find("runtimeInteractionId,", event_runtime_id_idx)
+        effect_src = (REPO_ROOT / "frontend" / "runtime" / "uiEventEffectRunner.ts").read_text(encoding="utf-8")
+        lifecycle_idx = effect_src.find("const emitLifecycle")
+        lifecycle_forward_idx = effect_src.find("runtimeInteractionId: w.runtimeInteractionId", lifecycle_idx)
+        visual_src = (REPO_ROOT / "frontend" / "runtime" / "visualLayoutUtils.ts").read_text(encoding="utf-8")
+        clone_idx = visual_src.find("export function cloneVisualNode")
+        strip_idx = visual_src.find("runtimeInteractionId: _runtimeInteractionId", clone_idx)
+        shell_src = (REPO_ROOT / "frontend" / "islands" / "ProjectionShell.tsx").read_text(encoding="utf-8")
+        expect(
+            "93. ProjectionShell/renderEmission/uiEventEffectRunner forward persisted runtimeInteractionId through event and lifecycle dispatch lanes",
+            "renderEmission(" in shell_src
+            and "emitLifecycle" in shell_src
+            and event_builder_idx >= 0
+            and event_runtime_id_idx > event_builder_idx
+            and event_forward_idx > event_runtime_id_idx
+            and lifecycle_idx >= 0
+            and lifecycle_forward_idx > lifecycle_idx,
+        )
+        expect(
+            "94. visualLayoutUtils cloneVisualNode strips runtimeInteractionId so duplicated authored interactions receive fresh backend ids",
+            clone_idx >= 0 and strip_idx > clone_idx,
+        )
+
+        translator_src = (REPO_ROOT / ".agent" / "scripts" / "react_schema_topology_seed_translator.py").read_text(encoding="utf-8")
+        entry_gate_src = (REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "schema_seed_translator_entry_gate.py").read_text(encoding="utf-8")
+        expect(
+            "95. translator/entry-gate target functions exist and remain disconnected from db/*.sql/persisted runtimeInteractionId authority",
+            all(name in translator_src for name in (
+                "def convert_node_to_seed_record",
+                "def build_topology_ui_seed_candidate",
+                "def flatten_topology_ui_seed_tree",
+                "def validate_flat_seed_records",
+            ))
+            and "def validate_translator_entry" in entry_gate_src
+            and "runtimeInteractionId" not in translator_src
+            and "runtimeInteractionId" not in entry_gate_src,
+        )
+
+        agent_ui_targets = {
+            "initial": REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_initial_contract.py",
+            "local": REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_local_test.py",
+            "common": REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_common.py",
+        }
+        agent_ui_src = {k: v.read_text(encoding="utf-8") for k, v in agent_ui_targets.items()}
+        expect(
+            "96. Agent UI target functions/common helpers preserve tool-first route and authority boundary wording",
+            all(name in agent_ui_src["initial"] for name in ("def _cmd_start", "def _read_full", "def _cmd_resolve_ssot", "def _cmd_sections", "def _cmd_end", "def build_parser"))
+            and all(name in agent_ui_src["local"] for name in ("def _cmd_run_worktype_tests", "def _cmd_read_senario_tmp", "def _cmd_checklist", "def _cmd_checks", "def _cmd_summary", "def _run_check", "def _checklist_items"))
+            and all(name in agent_ui_src["common"] for name in ("def worktypes", "def reject_output_flag", "def parse_senario_tmp"))
+            and "protocol_trigger_hints_note" in agent_ui_src["initial"]
+            and "not SSOT authority" in agent_ui_src["local"]
+            and "proof\ncompletion" in agent_ui_src["local"],
+        )
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} react-schema-topology-seed-translator check(s) failed ===", file=sys.stderr)
