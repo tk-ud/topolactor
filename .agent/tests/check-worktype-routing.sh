@@ -122,7 +122,20 @@ check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "PR diff or patch"
 check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "changed files"
 check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" ".agent/tasks/todo.md"
 check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "docs/system-roadmap.yaml"
-check_term "$REPO_ROOT/.agent/prompt/implementation-change.md" "protocol_trigger_hints[].content"
+PROMPT_ROUTERS=(
+  ".agent/prompt/audit.md"
+  ".agent/prompt/specific.md"
+  ".agent/prompt/todo-maintenance.md"
+  ".agent/prompt/design-change.md"
+  ".agent/prompt/implementation-change.md"
+  ".agent/prompt/existing-pr-update.md"
+)
+for prompt_router in "${PROMPT_ROUTERS[@]}"; do
+  check_term "$REPO_ROOT/$prompt_router" "## tool_first_entry"
+  check_term "$REPO_ROOT/$prompt_router" "protocol_trigger_hints[].content"
+  check_term "$REPO_ROOT/$prompt_router" "not an extra mandatory manual read"
+  check_term "$REPO_ROOT/$prompt_router" "fallback-route/manual verification references only"
+done
 check_term "$REPO_ROOT/.agent/tools/README.md" "protocol_trigger_hints"
 check_term "$REPO_ROOT/docs/governance/reference/agent-ui-tool-output-reference.yaml" "Neither is an arbitrary partial excerpt"
 check_term "$REPO_ROOT/.agent/scripts/agent_tools/agent_ui_initial_contract.py" "triggered protocol full text"

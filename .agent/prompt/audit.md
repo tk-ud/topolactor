@@ -13,6 +13,8 @@ Worktype is `audit`, including any of:
 - Summary の真偽確認
 - 「差分見て」「リポジトリ進捗見て」「マージしていいか」系依頼
 
+## tool_first_entry
+When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → `start` → `resolve-ssot` → `sections` → `end` per [`docs/governance/agent-ui-protocol-ssot.yaml`](../../docs/governance/agent-ui-protocol-ssot.yaml). `start` inlines the routed prompt as `prompt_content` and the routed required/triggered protocol full text as `protocol_trigger_hints[].content`; SSOT sections are read in `resolve-ssot` / `sections`, not in `start` alone. Protocol file paths listed below are fallback-route/manual verification references only when the tool is unusable, or when checking tool-output absence/routing inconsistency; under tool-first they are already represented by `protocol_trigger_hints[].content` and are not an extra mandatory manual read. After implementation or audit work, close with the full `agent-ui-local-test` chain through `summary`. This file remains the fallback router when the tool is not usable.
 ## required_reads
 - semantic audit top-level SSOT baseline（always for audit worktype）:
   1. docs/framework-core.yaml

@@ -15,3 +15,4 @@
 2026-07-08T10:02:41Z c0419349-32b3-4038-b432-81868291e481 runtime-interaction-id-field-shape-hardening implementation_change
 2026-07-08T12:35:32Z e661f1ee-b4ac-4b73-9d59-760efa2db8ff seed-template-runtime-interaction-assignment implementation_change
 2026-07-08T13:07:36Z 7e011042-0396-4461-b10e-95d88df6fe3a pr578-scope-authority-correction existing_pr_update
+2026-07-08T18:07:58Z 0b7a3baf-20f5-429f-bd2d-7648ac1e4dd8 pr578-prompt-router-tool-first-fallback existing_pr_update
