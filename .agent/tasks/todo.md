@@ -52,13 +52,13 @@ PR577 で UI Builder apply 経路では `runtimeInteractions[]` の `runtimeInte
 
 併せて、`agent-ui-initial-contract` は routed prompt / required protocol / triggered protocol の full text を tool-first output として返す route へ移行しているが、prompt router / governance reference / tool docstring / output wording / local_test summary wording に旧 manual protocol read 表現が残ると、Agent が UI contract 後に別途 protocol を読む route へ戻る危険がある。
 
-特に、tool-first route では `prompt_content` / `protocol_trigger_hints[].content` が resolved worktype / trigger の contract body であり、manual protocol file read は fallback route または補助確認に限定される必要がある。
+特に、tool-first route では `prompt_content` / `protocol_trigger_hints[].content` が resolved worktype / trigger の contract body であり、manual protocol file read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定される必要がある。
 
 ### 目的
 
 seed / template generator / credential management screen seed 由来 projection でも、active persisted `layout_patch_json` に昇格する時点で backend runtimeInteractionId assignment boundary を必ず通し、ProjectionShell / renderEmission / uiEventEffectRunner が persisted `runtimeInteractionId` を読み、PR574 ledger idempotency gate へ安定した idempotency key を渡せる経路を確定する。
 
-同時に、`agent-ui-initial-contract` を manual protocol file read 置換 route として扱う governance 表現を、SSOT / reference / tool / prompt router / local_test / tests で整合させる。manual protocol read は fallback route としてのみ残し、tool-first route では `prompt_content` / `protocol_trigger_hints[].content` が routed contract body であることを明確化する。
+同時に、`agent-ui-initial-contract` を manual protocol file read 置換 route として扱う governance 表現を、SSOT / reference / tool / prompt router / local_test / tests で整合させる。manual protocol read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定し、tool-first route では `prompt_content` / `protocol_trigger_hints[].content` が routed contract body であることを明確化する。
 
 ### 改善方針
 
@@ -77,7 +77,7 @@ seed / template generator / credential management screen seed 由来 projection 
 - `agent-ui-initial-contract start` が返す `prompt_content` / `protocol_trigger_hints[].content` を、resolved worktype / trigger の routed full text として扱う。
 - prompt router の `required_reads` は tool-first route と fallback route の意味を分離する。
 - `.agent/prompt/*.md` の protocol file 直指定は、tool-first route では `protocol_trigger_hints[].content` として取得済みであることを明示する。
-- manual protocol read は fallback route または補助確認としてのみ表現し、tool-first route の追加必須手順として残さない。
+- manual protocol read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定し、tool-first route の追加必須手順として残さない。
 - `agent-ui-local-test` 側の output / summary / checklist route も、旧 manual protocol route へ戻す表現を持たないよう確認・修正する。
 - UI contract output を SSOT authority / proof completion / implemented judgment として扱わない境界は維持する。
 - `SSOT -> wiring -> test/proof surface -> implementation` の順序を崩さない。
