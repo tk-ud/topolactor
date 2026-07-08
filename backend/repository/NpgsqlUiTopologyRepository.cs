@@ -914,10 +914,15 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     /// back through layout_patch_json -> emission.layoutNodes[].runtimeInteractions[]
     /// and forwards it verbatim into computeDispatchIdempotencyKey.
     ///
-    /// Entries that already carry a non-empty runtimeInteractionId are left
-    /// untouched — including a duplicated node/interaction that (per the
-    /// duplication_rule) must arrive here WITHOUT the source's id, so it is
-    /// treated as id-less and receives a fresh one, never the source's identity.
+    /// Entries that already carry a VALID UUID-format runtimeInteractionId
+    /// (SSOT field_shape) are left untouched — including a duplicated
+    /// node/interaction that (per the duplication_rule) must arrive here
+    /// WITHOUT the source's id, so it is treated as id-less and receives a
+    /// fresh one, never the source's identity. A present-but-blank,
+    /// present-but-non-string, or present-but-non-UUID-format value is treated
+    /// identically to absent — see HasValidRuntimeInteractionId — and is
+    /// REPLACED (never left in place, and never duplicated as a stray extra
+    /// JSON key alongside the fresh one).
     ///
     /// Returns the input unchanged (same string reference) when no entry needed
     /// an assignment, so an already-migrated patch round-trips byte-identical.
@@ -946,10 +951,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             foreach (var interaction in interactions.EnumerateArray())
             {
                 if (interaction.ValueKind != JsonValueKind.Object) continue;
-                var hasId = interaction.TryGetProperty("runtimeInteractionId", out var idEl) &&
-                    idEl.ValueKind == JsonValueKind.String &&
-                    !string.IsNullOrWhiteSpace(idEl.GetString());
-                if (!hasId)
+                if (!HasValidRuntimeInteractionId(interaction))
                 {
                     anyAssigned = true;
                     break;
@@ -1019,6 +1021,18 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         writer.WriteEndObject();
     }
 
+    /// <summary>
+    /// SSOT field_shape enforcement: projection_authority_runtime_interaction_identity
+    /// declares runtimeInteractionId as a UUID string. A present-but-blank,
+    /// present-but-non-string, or present-but-non-UUID-format value is NOT a
+    /// valid existing id — it is treated identically to "absent" so it gets
+    /// replaced by a freshly assigned valid UUID, never preserved as-is.
+    /// </summary>
+    private static bool HasValidRuntimeInteractionId(JsonElement interaction) =>
+        interaction.TryGetProperty("runtimeInteractionId", out var idEl) &&
+        idEl.ValueKind == JsonValueKind.String &&
+        Guid.TryParse(idEl.GetString(), out _);
+
     private static void WriteInteractionWithAssignedRuntimeInteractionId(JsonElement interaction, Utf8JsonWriter writer)
     {
         if (interaction.ValueKind != JsonValueKind.Object)
@@ -1026,16 +1040,20 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             interaction.WriteTo(writer);
             return;
         }
-        var hasId = interaction.TryGetProperty("runtimeInteractionId", out var idEl) &&
-            idEl.ValueKind == JsonValueKind.String &&
-            !string.IsNullOrWhiteSpace(idEl.GetString());
+        var hasValidId = HasValidRuntimeInteractionId(interaction);
 
         writer.WriteStartObject();
         foreach (var prop in interaction.EnumerateObject())
         {
+            // An invalid existing runtimeInteractionId (blank / non-string /
+            // non-UUID-format) is skipped here — never copied through — so the
+            // single fresh id written below never collides with it as a
+            // duplicate JSON key. A valid existing id is copied through as-is
+            // and no fresh one is written.
+            if (prop.NameEquals("runtimeInteractionId") && !hasValidId) continue;
             prop.WriteTo(writer);
         }
-        if (!hasId)
+        if (!hasValidId)
         {
             writer.WriteString("runtimeInteractionId", Guid.NewGuid().ToString());
         }

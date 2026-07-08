@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using Topolactor.Repository;
 using Xunit;
@@ -162,8 +163,136 @@ public class NpgsqlUiTopologyRepositoryRuntimeInteractionIdentityTests
 
         var result = NpgsqlUiTopologyRepository.AssignRuntimeInteractionIds(patch);
 
-        var assignedId = Interaction(result, 0, 0).GetProperty("runtimeInteractionId").GetString();
+        var interaction = Interaction(result, 0, 0);
+        var assignedId = interaction.GetProperty("runtimeInteractionId").GetString();
         Assert.False(string.IsNullOrWhiteSpace(assignedId));
         Assert.NotEqual("   ", assignedId);
+        AssertExactlyOneRuntimeInteractionIdKey(interaction);
+    }
+
+    // ── field_shape enforcement: runtimeInteractionId must be a valid UUID string ──
+    // PR577 follow-up fix. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+    // lifecycle_policy.projection_authority_runtime_interaction_identity field_shape.
+
+    private static void AssertExactlyOneRuntimeInteractionIdKey(JsonElement interaction)
+    {
+        var count = interaction.EnumerateObject()
+            .Count(p => p.NameEquals("runtimeInteractionId"));
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public void AssignRuntimeInteractionIds_NonUuidFormatExistingId_IsReplacedWithValidUuid_NotPreserved()
+    {
+        var patch = """
+        {"nodes":[{"nodeId":"n1","runtimeInteractions":[
+          {"trigger":"click","actionType":"dispatchExternalPort","portTargetRef":"port:x","runtimeInteractionId":"not-a-real-uuid"}
+        ]}]}
+        """;
+
+        var result = NpgsqlUiTopologyRepository.AssignRuntimeInteractionIds(patch);
+
+        var interaction = Interaction(result, 0, 0);
+        var assignedId = interaction.GetProperty("runtimeInteractionId").GetString();
+        Assert.NotEqual("not-a-real-uuid", assignedId);
+        Assert.True(Guid.TryParse(assignedId, out _), "replacement id must be a valid UUID string (SSOT field_shape)");
+        AssertExactlyOneRuntimeInteractionIdKey(interaction);
+    }
+
+    [Fact]
+    public void AssignRuntimeInteractionIds_NonStringExistingId_IsReplacedWithValidUuid_NoDuplicateKey()
+    {
+        // A JSON number in the runtimeInteractionId slot (e.g. from a malformed
+        // hand-edited patch) must not be treated as a valid existing id, and must
+        // not survive alongside the freshly assigned one as a duplicate key.
+        var patch = """
+        {"nodes":[{"nodeId":"n1","runtimeInteractions":[
+          {"trigger":"click","actionType":"dispatchExternalPort","portTargetRef":"port:x","runtimeInteractionId":12345}
+        ]}]}
+        """;
+
+        var result = NpgsqlUiTopologyRepository.AssignRuntimeInteractionIds(patch);
+
+        var interaction = Interaction(result, 0, 0);
+        AssertExactlyOneRuntimeInteractionIdKey(interaction);
+        var assignedId = interaction.GetProperty("runtimeInteractionId");
+        Assert.Equal(JsonValueKind.String, assignedId.ValueKind);
+        Assert.True(Guid.TryParse(assignedId.GetString(), out _));
+    }
+
+    [Fact]
+    public void AssignRuntimeInteractionIds_BlankExistingId_ProducesNoDuplicateKey()
+    {
+        var patch = """
+        {"nodes":[{"nodeId":"n1","runtimeInteractions":[
+          {"trigger":"click","actionType":"dispatchExternalPort","portTargetRef":"port:x","runtimeInteractionId":""}
+        ]}]}
+        """;
+
+        var result = NpgsqlUiTopologyRepository.AssignRuntimeInteractionIds(patch);
+
+        AssertExactlyOneRuntimeInteractionIdKey(Interaction(result, 0, 0));
+    }
+
+    [Fact]
+    public void AssignRuntimeInteractionIds_ValidUuidExistingId_ProducesNoDuplicateKeyAndIsPreserved()
+    {
+        const string existingId = "aaaaaaaa-0000-0000-0000-000000000001";
+        var patch = $$"""
+        {"nodes":[{"nodeId":"n1","runtimeInteractions":[
+          {"trigger":"click","actionType":"dispatchExternalPort","portTargetRef":"port:x","runtimeInteractionId":"{{existingId}}"}
+        ]}]}
+        """;
+
+        var result = NpgsqlUiTopologyRepository.AssignRuntimeInteractionIds(patch);
+
+        var interaction = Interaction(result, 0, 0);
+        AssertExactlyOneRuntimeInteractionIdKey(interaction);
+        Assert.Equal(existingId, interaction.GetProperty("runtimeInteractionId").GetString());
+    }
+
+    [Fact]
+    public void AssignRuntimeInteractionIds_AllEntriesHaveNonUuidGarbageIds_PreScanStillTriggersReassignment()
+    {
+        // Regression guard: the cheap pre-scan that decides whether reserialization
+        // is needed at all must use the SAME UUID-format check as the write path.
+        // If every entry has a non-blank but non-UUID string, the pre-scan must
+        // still detect that reassignment is needed — it must not short-circuit to
+        // "nothing to do" just because every value is a non-empty string.
+        var patch = """
+        {"nodes":[{"nodeId":"n1","runtimeInteractions":[
+          {"trigger":"click","actionType":"dispatchExternalPort","portTargetRef":"port:x","runtimeInteractionId":"garbage-value"}
+        ]}]}
+        """;
+
+        var result = NpgsqlUiTopologyRepository.AssignRuntimeInteractionIds(patch);
+
+        Assert.NotSame(patch, result);
+        var assignedId = Interaction(result, 0, 0).GetProperty("runtimeInteractionId").GetString();
+        Assert.True(Guid.TryParse(assignedId, out _));
+    }
+
+    [Fact]
+    public void AssignRuntimeInteractionIds_MixedValidAndInvalidAcrossEntries_OnlyInvalidOnesAreReplaced()
+    {
+        const string validId = "aaaaaaaa-0000-0000-0000-000000000001";
+        var patch = $$"""
+        {"nodes":[{"nodeId":"n1","runtimeInteractions":[
+          {"trigger":"click","actionType":"dispatchExternalPort","portTargetRef":"port:x","runtimeInteractionId":"{{validId}}"},
+          {"trigger":"change","actionType":"dispatchInstanceOperation","instanceTargetRef":"instance:y","runtimeInteractionId":"not-valid"}
+        ]}]}
+        """;
+
+        var result = NpgsqlUiTopologyRepository.AssignRuntimeInteractionIds(patch);
+
+        var first = Interaction(result, 0, 0);
+        var second = Interaction(result, 0, 1);
+        AssertExactlyOneRuntimeInteractionIdKey(first);
+        AssertExactlyOneRuntimeInteractionIdKey(second);
+        Assert.Equal(validId, first.GetProperty("runtimeInteractionId").GetString());
+        var replacedId = second.GetProperty("runtimeInteractionId").GetString();
+        Assert.NotEqual("not-valid", replacedId);
+        Assert.True(Guid.TryParse(replacedId, out _));
+        Assert.NotEqual(validId, replacedId);
     }
 }

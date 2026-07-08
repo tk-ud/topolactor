@@ -448,6 +448,15 @@ admin_uibuilder_ui_structure_wiring_ssot:
       target_contract:
         field: runtimeInteractionId
         field_shape: UUID string, one per authored runtimeInteractions[] entry
+        field_shape_enforcement: >-
+          A present-but-blank, present-but-non-string, or present-but-non-UUID-format
+          value at the persistence boundary is NOT a valid existing id — it is
+          treated identically to absent (NpgsqlUiTopologyRepository.HasValidRuntimeInteractionId
+          / Guid.TryParse) and REPLACED with a freshly assigned valid UUID, never
+          preserved as-is and never forwarded to frontend dispatch identity. The
+          replacement rewrite never emits a duplicate runtimeInteractionId JSON key
+          alongside the stale invalid one — the invalid property is omitted, not
+          copied through, before the single fresh id is written.
         storage: >-
           Inline on the JSONB entry — topology.ui_topology_tensor.layout_patch_json
           nodes[].runtimeInteractions[].runtimeInteractionId. No new relational
