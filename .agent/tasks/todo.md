@@ -35,9 +35,12 @@
 ---
 ## Bundle `seed-template-runtime-interaction-assignment`
 
-**Status:** `not_started`
-**Primary SSOT:** `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
-**関連 implemented evidence:** PR577 `runtimeInteraction identity / projection-time idempotency identity` implemented scope。UI Builder `layout_patch:apply` 経路の `AssignRuntimeInteractionIds` は implemented として扱い、未実装へ戻さない。
+**Status:** `not_started`  
+**Primary SSOT:** `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`  
+**追加 governance SSOT:** `docs/governance/agent-ui-protocol-ssot.yaml`, `docs/governance/agent-governance-routing-ssot.yaml`  
+**追加 governance Reference:** `docs/governance/reference/agent-ui-tool-output-reference.yaml`, `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`, `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`  
+**関連 implemented evidence:** PR577 `runtimeInteraction identity / projection-time idempotency identity` implemented scope。UI Builder `layout_patch:apply` 経路の `AssignRuntimeInteractionIds` は implemented として扱い、未実装へ戻さない。PR574 backend ledger execution gate も implemented evidence として維持し、再実装対象へ戻さない。  
+**追加 governance scope:** `agent-ui-initial-contract` が routed prompt / required protocol / triggered protocol を tool-first route で返すため、旧 manual protocol read 表現が prompt / tool / governance reference / local_test に残っていないかを同一 Bundle 内で閉じる。索引は変更しない。
 
 ### 問題点
 
@@ -47,28 +50,58 @@ PR577 で UI Builder apply 経路では `runtimeInteractions[]` の `runtimeInte
 
 この未整理のままだと、seed / template 由来 projection が `runtimeInteractions[]` を持つ場合に、`AssignRuntimeInteractionIds` を通らず persisted projection へ到達し、projection UI が stable `runtimeInteractionId` を持てず、PR574 ledger idempotency gate への identity component が fallback `nodeId + interactionIndex` へ残る危険がある。
 
+併せて、`agent-ui-initial-contract` は routed prompt / required protocol / triggered protocol の full text を tool-first output として返す route へ移行しているが、prompt router / governance reference / tool docstring / output wording / local_test summary wording に旧 manual protocol read 表現が残ると、Agent が UI contract 後に別途 protocol を読む route へ戻る危険がある。
+
+特に、tool-first route では `prompt_content` / `protocol_trigger_hints[].content` が resolved worktype / trigger の contract body であり、manual protocol file read は fallback route または補助確認に限定される必要がある。
+
 ### 目的
 
 seed / template generator / credential management screen seed 由来 projection でも、active persisted `layout_patch_json` に昇格する時点で backend runtimeInteractionId assignment boundary を必ず通し、ProjectionShell / renderEmission / uiEventEffectRunner が persisted `runtimeInteractionId` を読み、PR574 ledger idempotency gate へ安定した idempotency key を渡せる経路を確定する。
 
+同時に、`agent-ui-initial-contract` を manual protocol file read 置換 route として扱う governance 表現を、SSOT / reference / tool / prompt router / local_test / tests で整合させる。manual protocol read は fallback route としてのみ残し、tool-first route では `prompt_content` / `protocol_trigger_hints[].content` が routed contract body であることを明確化する。
+
 ### 改善方針
 
 - translator / template generator は `runtimeInteractionId` を生成しない。
-- seed JSON / fixture / generated artifact へ `runtimeInteractionId` を直書きしない。
+- ここで禁止する生成は、final / persisted identity authority としての `runtimeInteractionId` 生成である。
+- translator / template generator は `runtimeInteractions[]` を含む candidate / template を扱ってよい。
+- translator / template generator / seed artifact は `runtimeInteractionId` の final authority を持たない。
+- `runtimeInteractionId` assignment authority は backend persistence boundary に限定する。
+- seed JSON / fixture / generated artifact へ固定 `runtimeInteractionId` を直書きしない。
 - seed candidate / template output / credential management screen seed が active projection に昇格する adoption / apply / compile / persist 経路を調査する。
 - active persisted `layout_patch_json` へ到達する直前に、`ApplyConfirmedLayoutPatchAsync` / `AssignRuntimeInteractionIds` と同等の backend persistence assignment boundary を必ず通す。
 - `runtimeInteractions[]` を含む `layout_patch_json` が assignment boundary を通らず persist される bypass を検出する。
 - 必要に応じて seed-adoption proof surface / translator proof surface / credential management seed proof を追加する。
 - PR577 の UI Builder apply 経路 implemented 判定、PR574 の backend ledger execution gate implemented 判定を未実装扱いへ戻さない。
+- `agent-ui-initial-contract` の tool-first route を正本化し、旧表現 `protocol excerpts` / manual protocol required read / fallback-only route の混在を解消する。
+- `agent-ui-initial-contract start` が返す `prompt_content` / `protocol_trigger_hints[].content` を、resolved worktype / trigger の routed full text として扱う。
+- prompt router の `required_reads` は tool-first route と fallback route の意味を分離する。
+- `.agent/prompt/*.md` の protocol file 直指定は、tool-first route では `protocol_trigger_hints[].content` として取得済みであることを明示する。
+- manual protocol read は fallback route または補助確認としてのみ表現し、tool-first route の追加必須手順として残さない。
+- `agent-ui-local-test` 側の output / summary / checklist route も、旧 manual protocol route へ戻す表現を持たないよう確認・修正する。
+- UI contract output を SSOT authority / proof completion / implemented judgment として扱わない境界は維持する。
+- `SSOT -> wiring -> test/proof surface -> implementation` の順序を崩さない。
+- tool更新を伴う場合は、Agent UI route reference / prompt router / worktype routing / local_test / tests を併せて更新する。
 
 ### 対応資料
 
+- `AGENTS.md`
+- `.agent/rules/rule.md`
+- `.agent/README.md`
+- `.agent/skills/agent-workflow.md`
 - `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
 - `docs/design/react-schema-topology-seed-translator-ssot.yaml`
 - `docs/design/react-schema-topology-seed-translator-production-policy.md`
 - `docs/design/instance-port-substrate-ssot.yaml`
 - `docs/design/runtime-orchestration-ssot.yaml`
 - `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/governance/agent-ui-protocol-ssot.yaml`
+- `docs/governance/agent-governance-routing-ssot.yaml`
+- `docs/governance/reference/agent-ui-tool-output-reference.yaml`
+- `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`
+- `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`
+- `.agent/routes/worktype-required-protocols.yaml`
+- `.agent/tools/README.md`
 - `db/seed_empty.sql`
 - `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`
 - `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json`
@@ -80,10 +113,36 @@ seed / template generator / credential management screen seed 由来 projection 
 - `.agent/scripts/check_react_schema_topology_seed_translator.py`
 - `.agent/scripts/agent_tools/schema_seed_translator_entry_gate.py`
 - `backend/repository/NpgsqlUiTopologyRepository.cs`
+- `frontend/runtime/renderEmission.ts`
+- `frontend/runtime/uiEventEffectRunner.ts`
+- `frontend/runtime/visualLayoutUtils.ts`
+- ProjectionShell / projection runtime identity forwarding related files discovered by Agent
 - `db/seed_empty.sql`
 - `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`
 - `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json`
 - future seed/template adoption path files that persist active `layout_patch_json`
+- `.agent/tools/agent-ui-initial-contract`
+- `.agent/scripts/agent_tools/agent_ui_initial_contract.py`
+- `.agent/tools/agent-ui-local-test`
+- `.agent/scripts/agent_tools/agent_ui_local_test.py`
+- `.agent/scripts/agent_tools/agent_ui_common.py`
+- `docs/governance/agent-ui-protocol-ssot.yaml`
+- `docs/governance/reference/agent-ui-tool-output-reference.yaml`
+- `docs/governance/reference/agent-ui-senario-tmp-reference.yaml`
+- `docs/governance/reference/agent-ui-negative-boundary-reference.yaml`
+- `docs/governance/agent-governance-routing-ssot.yaml`
+- `.agent/routes/worktype-required-protocols.yaml`
+- `.agent/prompt/audit.md`
+- `.agent/prompt/specific.md`
+- `.agent/prompt/implementation-change.md`
+- `.agent/prompt/design-change.md`
+- `.agent/prompt/todo-maintenance.md`
+- `.agent/prompt/existing-pr-update.md`
+- `.agent/tests/check-worktype-routing.sh`
+- `.agent/tests/check-completion-judgment.sh`
+- `.agent/tests/check-structure.sh`
+- `AGENTS.md` / `.agent/rules/rule.md` / `.agent/README.md` / `.agent/skills/agent-workflow.md` は確認対象。旧表現が確認された場合のみ変更候補。
+- future Agent UI route / prompt wording proof files
 
 ### 対象関数名
 
@@ -97,16 +156,65 @@ seed / template generator / credential management screen seed 由来 projection 
 - `validate_translator_entry`
 - `extract_compile_snapshot`
 - future seed/template adoption functions that persist active `layout_patch_json`
+- `_cmd_start`
+- `_read_full`
+- `_cmd_resolve_ssot`
+- `_cmd_sections`
+- `_cmd_end`
+- `build_parser`
+- `_cmd_run_worktype_tests`
+- `_cmd_read_senario_tmp`
+- `_cmd_checklist`
+- `_cmd_checks`
+- `_cmd_summary`
+- `_run_check`
+- `_checklist_items`
+- `worktypes`
+- `reject_output_flag`
+- `parse_senario_tmp`
 
 ### 受入条件
 
-- translator / template generator が `runtimeInteractionId` を生成しないことが維持されている。
-- seed JSON / fixture / generated artifact へ `runtimeInteractionId` を直書きしない。
+- translator / template generator は `runtimeInteractionId` を生成しない。
+- ここで禁止する生成は、final / persisted identity authority としての `runtimeInteractionId` 生成である。
+- translator / template generator は `runtimeInteractions[]` を含む candidate / template を扱ってよい。
+- translator / template generator / seed artifact は `runtimeInteractionId` の final authority を持たない。
+- seed JSON / fixture / generated artifact へ固定 `runtimeInteractionId` を直書きしない。
 - credential management screen seed 由来 projection の昇格経路が特定されている。
 - seed / template 由来 projection が active persisted `layout_patch_json` になる前に backend runtimeInteractionId assignment boundary を通る。
 - `runtimeInteractions[]` を含む active projection persist bypass がない、または blocking proof で検出される。
 - ProjectionShell / renderEmission / uiEventEffectRunner は persisted `runtimeInteractionId` を forward する。
 - PR574 backend ledger execution gate と PR577 UI Builder apply assignment は implemented evidence として維持され、再実装対象へ戻さない。
+- `agent-ui-initial-contract start` は routed prompt / required protocol / triggered protocol の full text を tool-first contract body として返す。
+- `protocol excerpts` 等の旧表現が tool / reference / prompt router / local_test から除去または fallback-only 表現へ修正されている。
+- `.agent/prompt/*.md` の protocol file 直指定は、tool-first route では `protocol_trigger_hints[].content` として取得済みであることが明示されている。
+- manual protocol read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定し、tool-first route の追加必須手順として残さない。
+- fallback-only prompt / protocol / checklist が resolved worktype の正規 contract として扱われない。
+- `agent-ui-local-test` の `run-worktype-tests` / `read-senario-tmp` / `checklist` / `checks` / `summary` が、tool-first route と矛盾する旧 manual protocol read を誘導しない。
+- UI contract output は SSOT authority / proof completion / implemented judgment として扱われない。
+- `agent-ui-local-test` と required checks で、Agent UI route / prompt wording / worktype routing の整合が検出可能になっている。
+- SSOT / wiring / test-proof / implementation / Bundle範囲の整合が報告されている。
+
+### Governance NG boundary
+
+- `SSOT -> wiring -> test/proof surface -> implementation` の順序を崩す。
+- SSOT確定前に実装へ進む。
+- wiring未特定のまま関数単位・ファイル単位の小粒修正へ縮退する。
+- test / proof surface 未定義のまま実装変更で完了を主張する。
+- 実装既存状態をSSOTとして扱う。
+- todo本文の対象ファイル・対象関数を落としてBundle scopeを狭める。
+- `.agent/tools/react-schema-topology-seed-translator` / entry gate / check script / fixture / `db/seed_empty.sql` をscope外にする。
+- candidate / generated artifact / template output を active topology authority として扱う。
+- backend assignment boundary のwiring確認なしに persisted `layout_patch_json` の成立を判断する。
+- PR574 / PR577 の既存 implemented evidence を再実装scopeへ戻す。
+- `agent-ui-initial-contract` を使わず、manual protocol read を tool-first 正規routeとして扱う。
+- UI contract が返した routed prompt / required protocol / triggered protocol full text を使わず、Agent判断で別protocolへ逸脱する。
+- fallback-only の prompt / protocol / checklist を resolved worktype の正規contractとして扱う。
+- `agent-ui-initial-contract` の scenario contract を作らず実装へ進む。
+- UI contract output を SSOT authority / implemented judgment / proof completion として扱う。
+- toolを更新しながら、reference / prompt router / worktype routing / local_test / tests を更新しない。
+- `agent-ui-local-test` を省略し、required checks を完了代替なしに飛ばす。
+- todo status更新だけで implemented を主張する。
 
 ---
 
