@@ -16,3 +16,4 @@
 2026-07-08T12:35:32Z e661f1ee-b4ac-4b73-9d59-760efa2db8ff seed-template-runtime-interaction-assignment implementation_change
 2026-07-08T13:07:36Z 7e011042-0396-4461-b10e-95d88df6fe3a pr578-scope-authority-correction existing_pr_update
 2026-07-08T18:07:58Z 0b7a3baf-20f5-429f-bd2d-7648ac1e4dd8 pr578-prompt-router-tool-first-fallback existing_pr_update
+2026-07-08T22:45:57Z 1c22c8ce-adee-41d3-b8a5-6fdc2db6aea1 pr578-translator-template-idempotency-route existing_pr_update

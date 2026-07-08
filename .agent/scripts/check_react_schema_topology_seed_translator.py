@@ -1100,8 +1100,10 @@ def main():
                 "def validate_flat_seed_records",
             ))
             and "def validate_translator_entry" in entry_gate_src
-            and "runtimeInteractionId" not in translator_src
-            and "runtimeInteractionId" not in entry_gate_src,
+            and "Guid.NewGuid" not in translator_src
+            and "uuid4" not in translator_src
+            and "Guid.NewGuid" not in entry_gate_src
+            and "uuid4" not in entry_gate_src,
         )
 
         agent_ui_targets = {
@@ -1118,6 +1120,98 @@ def main():
             and "protocol_trigger_hints_note" in agent_ui_src["initial"]
             and "not SSOT authority" in agent_ui_src["local"]
             and "proof\ncompletion" in agent_ui_src["local"],
+        )
+
+
+        idempotency_schema = {
+            "schema": "topolactor.react_schema.v1",
+            "presetKey": "auth.external.credential_management.projection",
+            "surface": "auth.external.credential_management.projection",
+            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+            "root": {
+                "kind": "Projection",
+                "key": "idempotency_route_projection",
+                "label": "Idempotency route projection",
+                "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+                "children": [{
+                    "kind": "Category",
+                    "key": "idempotency_category",
+                    "label": "Idempotency category",
+                    "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+                    "children": [{
+                        "kind": "Section",
+                        "key": "idempotency_section",
+                        "label": "Idempotency section",
+                        "sectionKind": "fixed_form_projection",
+                        "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+                        "children": [{
+                            "kind": "Form",
+                            "key": "idempotency_form",
+                            "label": "Idempotency form",
+                            "target": "db_instance_port",
+                            "mode": "edit",
+                            "fields": ["instance_authority_key"],
+                            "authorityMarker": "validation_only",
+                            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+                            "children": [{
+                                "kind": "Field",
+                                "key": "instance_authority_key",
+                                "label": "Instance authority key",
+                                "control": "form_input/form_field",
+                                "required": True,
+                                "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"]
+                            }, {
+                                "kind": "Action",
+                                "key": "validate_with_idempotency",
+                                "label": "Validate with idempotency",
+                                "authorityMarker": "validation_only",
+                                "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                                "eventBinding": {
+                                    "trigger": "initial_mount",
+                                    "wiringLane": "external_instance_wiring",
+                                    "targetRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                                    "authority": "validation_only",
+                                    "payloadFrom": {"instance_authority_key": "node:instance_authority_key.value"}
+                                },
+                                "idempotencyPolicy": "once_per_mount",
+                                "lifecycleDispatchConfirmed": True,
+                                "debounceMs": 250,
+                                "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"]
+                            }]
+                        }]
+                    }]
+                }]
+            }
+        }
+        idempotency_fixture = write_topology_seed_tmp_fixture(json.dumps(idempotency_schema, separators=(",", ":")), tmpdir=tmpdir)
+        proc_idem, doc_idem = run_generate_topology_seed(idempotency_fixture)
+        idem_records = (doc_idem or {}).get("topologyUiSeedFlatRecords") or []
+        idem_action_record = None
+        for wrapper in idem_records:
+            record = wrapper.get("record") if isinstance(wrapper, dict) else None
+            if isinstance(record, dict) and record.get("key") == "validate_with_idempotency":
+                idem_action_record = record
+                break
+        idem_runtime = (idem_action_record or {}).get("runtimeInteractions") or []
+        idem_first = idem_runtime[0] if idem_runtime else {}
+        expect(
+            "97. generate-topology-seed preserves eventBinding-derived runtimeInteractions[] candidate with idempotency route fields",
+            proc_idem.returncode == 0
+            and doc_idem is not None
+            and not rule_ids(doc_idem)
+            and idem_action_record is not None
+            and idem_action_record.get("eventBinding", {}).get("targetRef") == "instance:db_instance_port:instance_authority_key:operation_binding_key"
+            and idem_first.get("actionType") == "dispatchInstanceOperation"
+            and idem_first.get("instanceTargetRef") == "instance:db_instance_port:instance_authority_key:operation_binding_key"
+            and idem_first.get("idempotencyPolicy") == "once_per_mount"
+            and idem_first.get("lifecycleDispatchConfirmed") is True
+            and idem_first.get("debounceMs") == 250,
+        )
+        expect(
+            "98. runtimeInteractions[] candidate remains draft/template material and never carries runtimeInteractionId before backend assignment",
+            idem_first
+            and "runtimeInteractionId" not in idem_first
+            and "runtimeInteractionId" not in json.dumps(doc_idem.get("topologyUiSeedCandidate"), separators=(",", ":"), ensure_ascii=False),
         )
 
     print()
