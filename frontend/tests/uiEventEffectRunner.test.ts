@@ -696,3 +696,79 @@ Deno.test("retry_safe_dispatch_idempotency: distinct authored interactions (diff
     "two distinct authored initial_mount interactions must not collide on the same idempotencyKey",
   );
 });
+
+// ─── projection_authority_runtime_interaction_identity: lifecycle path ──────
+// PR577 follow-up implementation. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+// lifecycle_policy.projection_authority_runtime_interaction_identity.
+
+function lifecycleDispatchNodesWithRuntimeInteractionId(
+  nodeId: string,
+): WiringNode[] {
+  return [{
+    nodeId,
+    componentKey: "layout/box",
+    runtimeInteractions: [{
+      trigger: "initial_mount",
+      actionType: "dispatchExternalPort",
+      portTargetRef: "external-port:access_port:port-1",
+      lifecycleDispatchConfirmed: true,
+      idempotencyPolicy: "once_per_mount",
+      sideEffectNone: true,
+      runtimeInteractionId: "aaaaaaaa-0000-0000-0000-000000000001",
+    }],
+  }];
+}
+
+Deno.test("retry_safe_dispatch_idempotency: lifecycle path forwards runtimeInteractionId — same id survives even when nodeId changes (authoring rename)", () => {
+  const capturedA: Array<{ idempotencyKey?: string }> = [];
+  const runnerA = createUiEventEffectRunner({
+    nodes: lifecycleDispatchNodesWithRuntimeInteractionId("n-fetch"),
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    dispatchExternalPort: (spec) => capturedA.push(spec),
+  });
+  runnerA.emitLifecycle("initial_mount");
+
+  // Same authored interaction (same runtimeInteractionId) but the node was
+  // renamed — simulates an authoring edit that changes structural position
+  // without changing the assigned identity.
+  const capturedB: Array<{ idempotencyKey?: string }> = [];
+  const runnerB = createUiEventEffectRunner({
+    nodes: lifecycleDispatchNodesWithRuntimeInteractionId("n-fetch-renamed"),
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    dispatchExternalPort: (spec) => capturedB.push(spec),
+  });
+  runnerB.emitLifecycle("initial_mount");
+
+  assertEquals(capturedA.length, 1);
+  assertEquals(capturedB.length, 1);
+  assertEquals(
+    capturedA[0].idempotencyKey,
+    capturedB[0].idempotencyKey,
+    "runtimeInteractionId must survive a nodeId rename — the stable id, not the structural position, is the identity once assigned",
+  );
+});
+
+Deno.test("retry_safe_dispatch_idempotency: lifecycle path without runtimeInteractionId keeps the pre-existing structural identity (backward compatible)", () => {
+  const capturedWithId: Array<{ idempotencyKey?: string }> = [];
+  createUiEventEffectRunner({
+    nodes: lifecycleDispatchNodesWithRuntimeInteractionId("n-fetch"),
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    dispatchExternalPort: (spec) => capturedWithId.push(spec),
+  }).emitLifecycle("initial_mount");
+
+  const capturedWithoutId: Array<{ idempotencyKey?: string }> = [];
+  createUiEventEffectRunner({
+    nodes: lifecycleDispatchNodes(),
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    dispatchExternalPort: (spec) => capturedWithoutId.push(spec),
+  }).emitLifecycle("initial_mount");
+
+  assert(
+    capturedWithId[0].idempotencyKey !== capturedWithoutId[0].idempotencyKey,
+    "an assigned runtimeInteractionId must produce a different key than the id-less structural fallback for the same nodeId",
+  );
+});

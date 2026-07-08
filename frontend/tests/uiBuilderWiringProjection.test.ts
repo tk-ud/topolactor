@@ -643,3 +643,106 @@ Deno.test("appendResolvedPayloadToIdempotencyKey: distinct resolved payload cont
   });
   assertEquals(keyWithPayloadA, keyReordered);
 });
+
+// ─── projection_authority_runtime_interaction_identity: runtimeInteractionId ──
+// PR577 follow-up implementation. SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+// lifecycle_policy.projection_authority_runtime_interaction_identity.
+
+Deno.test("computeDispatchIdempotencyKey: absent runtimeInteractionId is byte-identical to the pre-existing nodeId+interactionIndex formula", () => {
+  const input = {
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    nodeId: "n-fetch",
+    interactionIndex: 2,
+    trigger: "initial_mount",
+    actionType: "dispatchExternalPort",
+    targetRef: "external-port:access_port:port-1",
+  };
+  const withoutIdField = computeDispatchIdempotencyKey(input);
+  const withExplicitUndefined = computeDispatchIdempotencyKey({
+    ...input,
+    runtimeInteractionId: undefined,
+  });
+  assertEquals(
+    withoutIdField,
+    withExplicitUndefined,
+    "absent runtimeInteractionId must not change the key format from before this field existed (backward-compatible structural fallback)",
+  );
+});
+
+Deno.test("computeDispatchIdempotencyKey: present runtimeInteractionId REPLACES nodeId+interactionIndex as the identity component", () => {
+  const base = {
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    nodeId: "n-fetch",
+    interactionIndex: 0,
+    trigger: "initial_mount",
+    actionType: "dispatchExternalPort",
+    targetRef: "external-port:access_port:port-1",
+  };
+  const withoutId = computeDispatchIdempotencyKey(base);
+  const withId = computeDispatchIdempotencyKey({
+    ...base,
+    runtimeInteractionId: "aaaaaaaa-0000-0000-0000-000000000001",
+  });
+  assert(
+    withoutId !== withId,
+    "an assigned runtimeInteractionId must change the computed key relative to the structural-only fallback",
+  );
+});
+
+Deno.test("computeDispatchIdempotencyKey: runtimeInteractionId survives reordering — same id produces the same key even when nodeId/interactionIndex change", () => {
+  const before = computeDispatchIdempotencyKey({
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    nodeId: "n-a",
+    interactionIndex: 0,
+    runtimeInteractionId: "aaaaaaaa-0000-0000-0000-000000000001",
+    trigger: "click",
+    actionType: "dispatchExternalPort",
+    targetRef: "external-port:access_port:port-1",
+  });
+  // Simulates the SAME authored interaction after the author reordered
+  // runtimeInteractions on the node (interactionIndex changed) or the node was
+  // renamed (nodeId changed) — the stable id must produce the SAME key,
+  // unlike the pre-existing positional fallback.
+  const afterReorder = computeDispatchIdempotencyKey({
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    nodeId: "n-a-renamed",
+    interactionIndex: 3,
+    runtimeInteractionId: "aaaaaaaa-0000-0000-0000-000000000001",
+    trigger: "click",
+    actionType: "dispatchExternalPort",
+    targetRef: "external-port:access_port:port-1",
+  });
+  assertEquals(
+    before,
+    afterReorder,
+    "the SAME runtimeInteractionId must survive nodeId/interactionIndex churn — this is the whole point of the stable identity replacing the positional fallback",
+  );
+});
+
+Deno.test("computeDispatchIdempotencyKey: distinct runtimeInteractionId values produce distinct keys even with identical nodeId/interactionIndex", () => {
+  const shared = {
+    layoutId: "layout-1",
+    packageId: "pkg-1",
+    nodeId: "n-a",
+    interactionIndex: 0,
+    trigger: "click",
+    actionType: "dispatchExternalPort",
+    targetRef: "external-port:access_port:port-1",
+  };
+  const keyA = computeDispatchIdempotencyKey({
+    ...shared,
+    runtimeInteractionId: "aaaaaaaa-0000-0000-0000-000000000001",
+  });
+  const keyB = computeDispatchIdempotencyKey({
+    ...shared,
+    runtimeInteractionId: "bbbbbbbb-0000-0000-0000-000000000002",
+  });
+  assert(
+    keyA !== keyB,
+    "two distinct authored interactions must never collide on the same key merely because they share a nodeId/interactionIndex position",
+  );
+});

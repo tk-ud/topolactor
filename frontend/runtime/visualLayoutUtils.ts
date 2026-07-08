@@ -246,6 +246,14 @@ export interface VisualNodePayload {
     idempotencyPolicy?: string;
     /** Explicit no-side-effect selection (副作用設定). */
     sideEffectNone?: boolean;
+    /**
+     * SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+     * lifecycle_policy.projection_authority_runtime_interaction_identity.
+     * Backend-assigned stable id (never generated on the frontend — the
+     * layout editor only reads/round-trips it). A duplicated node/interaction
+     * must NOT carry this over from its source; see cloneVisualNode.
+     */
+    runtimeInteractionId?: string;
   }>;
 }
 
@@ -280,6 +288,18 @@ export function cloneVisualNode(
     x: source.x + dx,
     y: source.y + dy,
     orderIndex: source.orderIndex + 1,
+    // projection_authority_runtime_interaction_identity duplication_rule: a
+    // copied interaction is a NEW authored entry — it must never carry over
+    // the source's backend-assigned runtimeInteractionId. Stripping it here
+    // makes the copy id-less; the backend assigns a fresh id on next persist,
+    // same as any other id-less entry.
+    ...(source.runtimeInteractions
+      ? {
+        runtimeInteractions: source.runtimeInteractions.map(
+          ({ runtimeInteractionId: _runtimeInteractionId, ...rest }) => rest,
+        ),
+      }
+      : {}),
   };
 }
 
@@ -422,6 +442,7 @@ function readPatchNode(
           lifecycleDispatchConfirmed?: boolean;
           idempotencyPolicy?: string;
           sideEffectNone?: boolean;
+          runtimeInteractionId?: string;
         } =>
         typeof v === "object" && v !== null && !Array.isArray(v) &&
         typeof (v as Record<string, unknown>).trigger === "string" &&

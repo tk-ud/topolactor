@@ -407,15 +407,32 @@ admin_uibuilder_ui_structure_wiring_ssot:
         - author_provided_dedupe_seed_authoring_field_is_not_yet_added_to_NodeEventAuthoringPanel_this_round_deterministic_identity_plus_payload_key_still_provides_full_retry_safety_without_it
 
     projection_authority_runtime_interaction_identity:
-      status: design_only_not_yet_implemented
+      status: implemented
       origin: >-
         .agent/tasks/todo.md Bundle ui-projection-surface-architecture-reinforcement,
         "runtimeInteraction identity / projection-time idempotency identity" future
-        direction. This subsection is the SSOT contract for that future direction —
-        it defines the target shape a later implementation_change bundle implements
-        against. It does not itself authorize implementation; retry_safe_dispatch_idempotency
-        above (PR574, implemented) remains the current execution-gate authority and
-        must not be reclassified as missing or superseded by this section.
+        direction. This subsection was authored as a design_change SSOT contract
+        first (PR577), then implemented as this same Bundle's remaining scope
+        (PR577 follow-up). retry_safe_dispatch_idempotency above (PR574) remains
+        the execution-gate authority and is unchanged by this addition — this
+        section only replaces the STRUCTURAL-IDENTITY component the ledger key is
+        built from; the ledger contract itself is untouched.
+      implementation_surfaces:
+        assignment: backend/repository/NpgsqlUiTopologyRepository.cs AssignRuntimeInteractionIds (called from ApplyConfirmedLayoutPatchAsync only, after validation and before persistence)
+        key_formula: frontend/lib/uiBuilderWiringProjection.ts computeDispatchIdempotencyKey (runtimeInteractionId param; backward-compatible nodeId+interactionIndex fallback when absent)
+        event_triggered_binding: frontend/runtime/renderEmission.ts buildExternalPortEventBinding (forwards wiring.runtimeInteractionId)
+        lifecycle_binding: frontend/runtime/uiEventEffectRunner.ts emitLifecycle (forwards w.runtimeInteractionId)
+        duplication_boundary: frontend/runtime/visualLayoutUtils.ts cloneVisualNode (strips runtimeInteractionId from copied runtimeInteractions)
+        type_surfaces:
+          - frontend/api/dispatch.ts LayoutNode.runtimeInteractions[].runtimeInteractionId
+          - frontend/lib/uiBuilderWiringProjection.ts WiringInteraction.runtimeInteractionId
+          - frontend/runtime/visualLayoutUtils.ts VisualNodePayload.runtimeInteractions[].runtimeInteractionId
+        tests:
+          - backend/tests/Topolactor.Runtime.Tests/NpgsqlUiTopologyRepositoryRuntimeInteractionIdentityTests.cs
+          - frontend/tests/uiBuilderWiringProjection.test.ts (computeDispatchIdempotencyKey runtimeInteractionId cases)
+          - frontend/tests/uiEventEffectRunner.test.ts (lifecycle path forwarding + reorder/rename survival)
+          - frontend/tests/externalPortDispatchRuntime.test.ts (event-triggered binding forwarding)
+          - frontend/tests/visualLayoutBuilder.test.ts (cloneVisualNode duplication_rule + JSON round-trip)
       problem: >-
         idempotency_key_generation (retry_safe_dispatch_idempotency above) derives
         stable interaction identity structurally — nodeId + interactionIndex, i.e.
