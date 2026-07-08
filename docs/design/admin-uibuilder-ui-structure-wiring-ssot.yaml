@@ -406,6 +406,80 @@ admin_uibuilder_ui_structure_wiring_ssot:
       known_gap:
         - author_provided_dedupe_seed_authoring_field_is_not_yet_added_to_NodeEventAuthoringPanel_this_round_deterministic_identity_plus_payload_key_still_provides_full_retry_safety_without_it
 
+    projection_authority_runtime_interaction_identity:
+      status: design_only_not_yet_implemented
+      origin: >-
+        .agent/tasks/todo.md Bundle ui-projection-surface-architecture-reinforcement,
+        "runtimeInteraction identity / projection-time idempotency identity" future
+        direction. This subsection is the SSOT contract for that future direction —
+        it defines the target shape a later implementation_change bundle implements
+        against. It does not itself authorize implementation; retry_safe_dispatch_idempotency
+        above (PR574, implemented) remains the current execution-gate authority and
+        must not be reclassified as missing or superseded by this section.
+      problem: >-
+        idempotency_key_generation (retry_safe_dispatch_idempotency above) derives
+        stable interaction identity structurally — nodeId + interactionIndex, i.e.
+        the interaction's POSITION within topology.ui_topology_tensor.layout_patch_json
+        nodes[].runtimeInteractions[] (frontend/runtime/visualLayoutUtils.ts
+        VisualNodePayload.runtimeInteractions has no persistent per-entry id).
+        Reordering runtimeInteractions on a node, or moving/duplicating a node,
+        changes that structural identity even when the authored interaction's
+        semantic intent is unchanged, and gives a duplicated interaction the SAME
+        identity as its source until the resolved payload happens to differ. This
+        is compatibility/current-state per the parent bundle, not final projection
+        authority.
+      target_contract:
+        field: runtimeInteractionId
+        field_shape: UUID string, one per authored runtimeInteractions[] entry
+        storage: >-
+          Inline on the JSONB entry — topology.ui_topology_tensor.layout_patch_json
+          nodes[].runtimeInteractions[].runtimeInteractionId. No new relational
+          table is required for the initial contract; a normalized child table
+          is an allowed future alternative but out of scope here.
+        assignment_authority: >-
+          Backend layout_patch persistence boundary (the same server-side
+          validate/persist path invoked by layout_patch:apply) assigns
+          runtimeInteractionId to any runtimeInteractions[] entry that lacks one,
+          at persist time. The frontend never generates or mutates this id — it
+          only reads the assigned value back through the existing
+          layout_patch_json -> emission.layoutNodes[].runtimeInteractions[] path
+          and forwards it verbatim. This keeps assignment at the
+          projection-authority (DB/backend-persisted) layer, not the UI layer.
+        duplication_rule: >-
+          A copy/duplicate operation (node copy, interaction copy) that produces
+          a NEW authored runtimeInteractions[] entry must not carry over the
+          source entry's runtimeInteractionId — the backend assigns a fresh one
+          on next persist, same as any other id-less entry. Identity maps 1:1 to
+          a distinct authored interaction, never to a cloned definition.
+        idempotency_base_key_formula_update: >-
+          computeDispatchIdempotencyKey's identity portion becomes
+          runtimeInteractionId (when present) INSTEAD OF nodeId + interactionIndex.
+          layoutId, packageId, trigger, actionType, targetRef, authorDedupeKey, and
+          the resolved-payload extension via appendResolvedPayloadToIdempotencyKey
+          are unchanged — only the structural-position identity component is
+          replaced by the assigned stable id. When runtimeInteractionId is absent
+          (pre-migration entry), the existing nodeId + interactionIndex fallback
+          applies unchanged — this is an additive, backward-compatible formula
+          change, not a ledger contract change.
+        backend_ledger_unchanged: >-
+          topology.runtime_dispatch_idempotency_ledger and its
+          rt_claim_dispatch_idempotency_key / rt_complete_dispatch_idempotency_key /
+          rt_fail_dispatch_idempotency_key functions (retry_safe_dispatch_idempotency
+          above) are unaffected — they gate on whatever idempotency_key string they
+          receive and do not need to know how that string's identity portion was
+          derived.
+        migration: >-
+          Lazy backfill only: existing layout_patch_json entries without
+          runtimeInteractionId keep working via the structural fallback; the
+          backend assigns an id the next time that entry is persisted (e.g. next
+          layout_patch:apply), not via a big-bang migration pass.
+      prohibited:
+        - client_side_generation_of_runtimeInteractionId
+        - carrying_over_source_runtimeInteractionId_on_node_or_interaction_duplication
+        - replacing_the_backend_idempotency_ledger_contract_to_implement_this
+        - treating_this_subsection_as_authorization_to_implement_without_a_dedicated_implementation_change_bundle
+        - reclassifying_retry_safe_dispatch_idempotency_pr574_evidence_as_missing_because_of_this_future_direction
+
   high_frequency_policy:
     rules:
       - mouseon / hover / key-repeat class triggers must not dispatch backend/external

@@ -388,6 +388,7 @@ active report は `runtime_interaction_identity / projection_time_idempotency_id
 - Current UI-composed idempotency identity (`nodeId + interactionIndex` plus stable authored fields and resolved payload in `computeDispatchIdempotencyKey` / `appendResolvedPayloadToIdempotencyKey`) is compatibility/current-state, not final projection authority.
 - Future direction: DB / projection emission assigns stable `runtime_interaction_id` / `idempotency_base_key` at the projection-authority layer; UI forwards assigned identity and appends resolved payload deterministically.
 - Backend idempotency ledger remains execution gate and is distinct from `runtime_event_log`; do not turn event-log evidence into execution gate authority.
+- **SSOT contract now defined (design_change, PR577 follow-up)**: `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `lifecycle_policy.projection_authority_runtime_interaction_identity` (`status: design_only_not_yet_implemented`) specifies the target `runtimeInteractionId` field shape, backend-assignment authority (layout_patch persistence boundary, not client-generated), JSONB storage location, duplication-must-not-carry-id rule, the `idempotency_base_key` formula update (`runtimeInteractionId` replacing `nodeId + interactionIndex` when present, backward-compatible fallback otherwise), and the lazy-backfill migration. This defines the boundary for a **future, separate `implementation_change` bundle** — it is not authorization to implement, and does not change PR574/PR577 completion status.
 
 ### 対応資料
 
