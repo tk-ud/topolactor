@@ -21,8 +21,6 @@ export default function AuthPage(): JSX.Element {
         <a href="/auth#register" class="link">新規登録</a>
         {" · "}
         <a href="/super_auth" class="link">管理ログイン</a>
-        {" · "}
-        <a href="/demo" class="link">デモ</a>
       </div>
     </main>
   );

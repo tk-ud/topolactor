@@ -16,7 +16,7 @@ export default function RuntimeStatus() {
       <h1 class="page-title">topolactor — 接続状態</h1>
       <p class="mb-6 text-muted">
         操作してから画面が表示されるまでの流れを確認できます。
-        実際の表示と操作は <a href="/demo" class="link">デモ</a>{" "}
+        実際の表示と操作は <a href="/" class="link">トップ</a>{" "}
         で確認してください。
       </p>
       <section class="mb-8">

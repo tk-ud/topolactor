@@ -1,5 +1,5 @@
 /**
- * Inert event bindings for read-only layout projection (UI Builder canvas, /demo draft preview).
+ * Inert event bindings for read-only layout projection (UI Builder canvas / projection inspection draft preview).
  * SSOT: preview surfaces do not require wiring-backed runtime dispatch.
  */
 

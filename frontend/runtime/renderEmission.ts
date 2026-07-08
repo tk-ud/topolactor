@@ -37,8 +37,9 @@ import { resolveUiStateUpdateMutation } from "./uiEventEffectRunner.ts";
 
 export type RenderEmissionOptions = {
   /**
-   * Read-only projection (/demo draft preview). Uses inert event bindings and
-   * relaxed factory checks — same contract as UI Builder canvas preview.
+   * Read-only projection (UI Builder inspection / draft preview). Uses inert
+   * event bindings and relaxed factory checks — same contract as UI Builder
+   * canvas preview.
    */
   previewMode?: boolean;
   /** Frontend-local calculation bindings from layout patch root. Evaluated without backend dispatch. */
@@ -648,7 +649,10 @@ export function projectionFromEmission(
   projection?: undefined;
   error: string;
 } {
-  const jsonKeyValue = projectionInputFromData(emission.data);
+  const jsonKeyValue = projectionInputFromData(
+    emission.data,
+    definition.inputMapping,
+  );
   return constructProjection(jsonKeyValue, definition);
 }
 

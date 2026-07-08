@@ -34,6 +34,11 @@ import {
   type UiEventEffectRunner,
 } from "../runtime/uiEventEffectRunner.ts";
 import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
+import {
+  confirmProjectionEntryEmission,
+  parseProjectionEntrySelection,
+  resolveProjectionEntryAxes,
+} from "../runtime/projectionEntry.ts";
 import type { Emission, LayoutNode } from "../api/dispatch.ts";
 import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
@@ -57,8 +62,12 @@ function toRunnerWiringNodes(
 
 /**
  * Production application projection shell.
- * Dispatches default:entity:search on mount and renders the emission
- * using layout-aware renderEmission(). Subscribes to SSE projection events
+ * Route/package/manifest-aware projection entry: the initial dispatch axes are
+ * resolved from the entry URL selection (?route= / ?manifest= / ?package= via
+ * projectionEntry.ts) so any UI Builder applied topology is selectable through
+ * this production surface; without a selection, the default entry axes are
+ * dispatched on mount. The emission is rendered with layout-aware
+ * renderEmission(). Subscribes to SSE projection events
  * via the full sse_projection_lane per runtime-orchestration-ssot.yaml:
  *   sseReceiver → enqueueProjectionHookTrigger → sseDispatcher → projectionRuntime → onProjectionUpdate
  *
@@ -171,12 +180,21 @@ export default function ProjectionShell(): JSX.Element {
 
       const currentToken = refreshResult.token ?? token;
 
-      const initialAxes: UserOperation = {
-        operationType: "Search",
-        target: "default",
-        layer: "screen_list",
-        action: "Search",
-      };
+      // Route/package/manifest-aware entry selection. Malformed selection is a
+      // fail-close explicit error — no silent fallback to the default axes.
+      const entryParse = parseProjectionEntrySelection(
+        globalThis.location?.search ?? "",
+      );
+      if (!entryParse.ok) {
+        setError(entryParse.error);
+        setLoading(false);
+        return;
+      }
+      const entrySelection = entryParse.selection;
+
+      const initialAxes: UserOperation = resolveProjectionEntryAxes(
+        entrySelection,
+      );
       initialDispatchAxesRef.current = initialAxes;
       const dispatchResult = await queueClientCommand(
         initialAxes,
@@ -196,6 +214,17 @@ export default function ProjectionShell(): JSX.Element {
       const nextEmission = dispatchResult.emission;
       if (!nextEmission) {
         setError("投影データを取得できませんでした");
+        setLoading(false);
+        return;
+      }
+      // Explicit package selection is confirmed against the backend-resolved
+      // package identity — mismatch must not render silently.
+      const entryConfirmation = confirmProjectionEntryEmission(
+        entrySelection,
+        nextEmission,
+      );
+      if (!entryConfirmation.ok) {
+        setError(entryConfirmation.error);
         setLoading(false);
         return;
       }
@@ -297,11 +326,18 @@ export default function ProjectionShell(): JSX.Element {
               identityPayload.table_registry_id = payload.table_registry_id;
             }
 
+            // Merge identity fields INTO the stored entry payload (never replace):
+            // a manifest-pinned entry keeps its payload.target_ref across SSE
+            // refresh, so another manifest's event cannot silently retarget it.
+            const mergedPayload = {
+              ...(storedAxes.payload ?? {}),
+              ...identityPayload,
+            };
             const axes: UserOperation = {
               ...storedAxes,
               ...(payload.manifest_id ? { target: payload.manifest_id } : {}),
-              ...(Object.keys(identityPayload).length > 0
-                ? { payload: identityPayload }
+              ...(Object.keys(mergedPayload).length > 0
+                ? { payload: mergedPayload }
                 : {}),
             };
 

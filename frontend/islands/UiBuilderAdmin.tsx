@@ -17,6 +17,7 @@ import { resolveTopologyLayoutClassRefs } from "../runtime/topologyLayoutClassRe
 import { ValidationErrorPanel, type ValidationErrorEntry } from "../components/ValidationErrorPanel.tsx";
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
+import UiBuilderProjectionInspectionPanel from "../components/UiBuilderProjectionInspectionPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
 import UiBuilderFlowStepper, {
   type UiBuilderFlowStepId,
@@ -29,7 +30,7 @@ import {
   UX_DESIGN_INSPECTOR_SECTION,
   UX_DESIGN_NODE_SAVE_LABEL,
   UX_EMPTY_CANVAS_DRAG_GUIDANCE,
-  UX_LAYOUT_APPLIED_GO_DEMO,
+  UX_LAYOUT_APPLIED_GO_INSPECTION,
   UX_LAYOUT_APPLIED_GO_DESIGN_SAVE,
   UX_LAYOUT_APPLIED_HANDOFF_HINT,
   UX_LAYOUT_APPLIED_HANDOFF_TITLE,
@@ -2586,7 +2587,7 @@ function LifecycleStepIndicator(
 }
 
 function LayoutPersistHandoffBanner({
-  layoutId,
+  layoutId: _layoutId,
   routeKey,
   onOpenDesignInspector,
 }: {
@@ -2594,9 +2595,8 @@ function LayoutPersistHandoffBanner({
   routeKey: string;
   onOpenDesignInspector: () => void;
 }): JSX.Element {
-  const demoHref = layoutId
-    ? `/demo?layoutId=${encodeURIComponent(layoutId)}`
-    : "/demo";
+  // Read-only projection inspection lives on this page (no standalone /demo route).
+  const inspectionHref = "#projection-inspection";
   return (
     <div
       class="mb-4 rounded-lg border border-green-300 bg-green-50 p-3"
@@ -2617,8 +2617,8 @@ function LayoutPersistHandoffBanner({
         >
           {UX_LAYOUT_APPLIED_GO_DESIGN_SAVE}
         </button>
-        <a href={demoHref} class="btn-secondary text-xs no-underline">
-          {UX_LAYOUT_APPLIED_GO_DEMO}
+        <a href={inspectionHref} class="btn-secondary text-xs no-underline">
+          {UX_LAYOUT_APPLIED_GO_INSPECTION}
         </a>
       </div>
       {routeKey && (
@@ -9791,6 +9791,12 @@ export default function UiBuilderAdmin(): JSX.Element {
           onLayoutApplied={() => setFlowStep("persist")}
         />
       </div>
+
+      {/* Read-only projection inspection (component scope — not a standalone route). */}
+      <UiBuilderProjectionInspectionPanel
+        scopedRouteKey={selectedPackage?.routeKey ?? committedRouteKey}
+        scopedLayoutId={selectedPackage?.layoutId ?? undefined}
+      />
     </main>
   );
 }

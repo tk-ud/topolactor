@@ -620,7 +620,8 @@ export const UX_LAYOUT_APPLIED_HANDOFF_TITLE = "配置の保存が完了しま�
 export const UX_LAYOUT_APPLIED_HANDOFF_HINT =
   "配置（layout_patch）は DB に反映済みです。色・文言などのデザインは別途永続化が必要です。";
 export const UX_LAYOUT_APPLIED_GO_DESIGN_SAVE = "デザインを永続化（右パネル）";
-export const UX_LAYOUT_APPLIED_GO_DEMO = "デモで投影を確認";
+export const UX_LAYOUT_APPLIED_GO_INSPECTION =
+  "投影インスペクションで確認（読み取り専用）";
 
 // ---------------------------------------------------------------------------
 // Step 3 — aggregate trigger structured authoring（通常表示用）

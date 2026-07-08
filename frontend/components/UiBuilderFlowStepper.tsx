@@ -100,8 +100,11 @@ export default function UiBuilderFlowStepper({
                   {step.label}
                 </div>
                 {step.id === 2 && (
-                  <a href="/demo" class="mt-1 text-[0.58rem] text-blue-600 underline">
-                    確認 →
+                  <a
+                    href="#projection-inspection"
+                    class="mt-1 text-[0.58rem] text-blue-600 underline"
+                  >
+                    投影を確認 →
                   </a>
                 )}
               </div>

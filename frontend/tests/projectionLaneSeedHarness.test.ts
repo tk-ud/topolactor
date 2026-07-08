@@ -135,6 +135,23 @@ Deno.test("projection lane seed integration: seedData loops through lane harness
   }
 });
 
+Deno.test("projection lane seed contract: single-row form_inputs definitions declare inputMapping explicitly (no implicit rows[0] collapse dependency)", () => {
+  // projectionInputFromData preserves the screen_data_shape_query_result outer
+  // shape by default. Seed manifests whose fieldDefs read row fields must
+  // therefore declare inputMapping:"single_row" explicitly — this harness must
+  // never depend on an implicit first-row collapse.
+  for (const seed of targetSeedManifests()) {
+    const definition = projectionDefinition(seed);
+    if (definition.outputKind === "form_inputs") {
+      assertEquals(
+        definition.inputMapping,
+        "single_row",
+        `${describeLane(seed)} form_inputs projection_definition must declare explicit inputMapping:"single_row"`,
+      );
+    }
+  }
+});
+
 Deno.test("projection lane seed contract: screen_data_shape.tableRef has physical table and package wiring seed", () => {
   const allSql = seedFiles.map(readSeed).join("\n");
   for (const seed of targetSeedManifests()) {

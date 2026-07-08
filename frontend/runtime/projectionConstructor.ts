@@ -103,6 +103,13 @@ export type ProjectionDefinition = {
   constructorKey: string;
   packageIds: string[];
   outputKind: "form_inputs" | "component_projection" | "ui_projection";
+  /**
+   * Data-defined input mapping for screen_data_shape_query_result emission data.
+   * "single_row": collapse to rows[0] before construction (explicit declaration only).
+   * Absent / "collection": preserve the collection outer shape
+   * (rows / aggregationResults / activeColumns / displayColumnMode).
+   */
+  inputMapping?: "collection" | "single_row";
   fieldDefs?: Array<{
     key: string;
     label: string;
