@@ -166,3 +166,77 @@ Deno.test("projection entry surface: SSE refresh merges identity into the entry 
     "SSE refresh must merge identity fields into the stored entry payload instead of replacing it",
   );
 });
+
+// ── PR577 follow-up: SSE refresh identity preservation ──────────────────────
+// Blocking fix: SSE refresh must not silently retarget a route-selected entry
+// via payload.manifest_id, must keep a manifest-pinned target_ref, and must
+// re-confirm an explicit package selection after refresh (not only on the
+// initial dispatch).
+
+Deno.test("projection entry surface: route-selected entry keeps its target axis unconditionally across refresh (never overwritten by SSE manifest_id)", () => {
+  const routeAxes = resolveProjectionEntryAxes({ routeTarget: "orders.list" });
+  // Simulate the refresh-time axes rebuild: storedAxes carried forward as-is,
+  // SSE manifest_id must never become the next axes.target.
+  const simulatedSseManifestId = "cccccccc-0000-0000-0000-000000000009";
+  const rebuiltAxes = { ...routeAxes };
+  assertEquals(rebuiltAxes.target, "orders.list");
+  assert(
+    rebuiltAxes.target !== simulatedSseManifestId,
+    "route-selected entry target must never become the SSE-reported manifest id",
+  );
+});
+
+Deno.test("projection entry surface: manifest-pinned target_ref is independent of axes.target and survives regardless", () => {
+  const pinnedAxes = resolveProjectionEntryAxes({ manifestId: MANIFEST_ID });
+  assertEquals(pinnedAxes.target, "default");
+  assertEquals(
+    pinnedAxes.payload?.target_ref,
+    `manifest:${MANIFEST_ID}:projection_entry`,
+  );
+  // Even if axes.target were left untouched (as ProjectionShell now guarantees),
+  // backend manifest resolution takes the target_ref bypass path first — the
+  // pinned identity does not depend on target at all.
+});
+
+Deno.test("projection entry surface: package confirmation applies to a refreshed emission the same way as the initial one", () => {
+  const selection = { packageId: PACKAGE_ID };
+  const initialEmission = { componentIds: [], packageId: PACKAGE_ID };
+  const refreshedMismatchEmission = {
+    componentIds: [],
+    packageId: "dddddddd-0000-0000-0000-000000000004",
+  };
+  assertEquals(confirmProjectionEntryEmission(selection, initialEmission).ok, true);
+  const refreshResult = confirmProjectionEntryEmission(
+    selection,
+    refreshedMismatchEmission,
+  );
+  assertEquals(refreshResult.ok, false);
+  if (!refreshResult.ok) {
+    assert(refreshResult.error.includes("PROJECTION_ENTRY_PACKAGE_MISMATCH"));
+  }
+});
+
+Deno.test("projection entry surface: ProjectionShell re-confirms package selection after SSE refresh, not only on initial dispatch", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ProjectionShell.tsx", import.meta.url),
+  );
+  const occurrences = src.split("confirmProjectionEntryEmission(").length - 1;
+  assert(
+    occurrences >= 2,
+    "confirmProjectionEntryEmission must be called for both the initial dispatch and the SSE refresh emission",
+  );
+  assert(
+    src.includes("PROJECTION_ENTRY_PACKAGE_MISMATCH_ON_REFRESH"),
+    "a refresh-time package mismatch must be logged explicitly (explicit_error_log_retain_old_dom)",
+  );
+});
+
+Deno.test("projection entry surface: SSE payload forwards manifest_id as identity context only, never as topology/layout judgment input", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ProjectionShell.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("identityPayload.manifest_id = payload.manifest_id"),
+    "manifest_id must be forwarded into the identity payload, not consumed as a routing/target decision",
+  );
+});

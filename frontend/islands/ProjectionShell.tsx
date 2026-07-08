@@ -296,8 +296,11 @@ export default function ProjectionShell(): JSX.Element {
       // projectionRuntime is the projection_runtime node in the SSOT lane.
       // It processes the SSE event payload and fires onProjectionUpdate with all three
       // identity fields preserved: manifest_id, table_id, table_registry_id.
-      // The onProjectionUpdate handler re-fetches the full layout emission via queueClientCommand,
-      // forwarding identity fields (manifest_id → target, table_id / table_registry_id → payload).
+      // The onProjectionUpdate handler re-fetches the full layout emission via
+      // queueClientCommand, forwarding all three identity fields verbatim as
+      // payload context (never discarded). It never writes manifest_id into
+      // axes.target — the entry selection's route/default target axis (and any
+      // manifest-pinned payload.target_ref) survive every refresh unchanged.
       const projectionRuntime = createProjectionRuntime();
       // projectionDefinition is a manifest-response data-defined surface (projection_constructor_mapping).
       // No frontend fallback — if absent, projectionRuntime emits PROJECTION_RUNTIME_DEFINITION_MISSING
@@ -319,8 +322,19 @@ export default function ProjectionShell(): JSX.Element {
             const storedAxes = initialDispatchAxesRef.current;
             if (!storedAxes) return;
 
-            // Forward all non-absent identity fields from SSE payload without discard.
+            // SSE payload is an invalidation/refresh trigger only (SSOT:
+            // pipeline-continuity-ssot.yaml sse_projection_lane.refresh_boundary_policy
+            // trigger_role: invalidation_refresh_trigger_only) — it must not perform
+            // frontend topology/layout judgment or silently change WHICH entry is
+            // dispatched. manifest_id / table_id / table_registry_id are forwarded
+            // verbatim as identity-preserving payload context (never discarded), but
+            // never written into axes.target: per runtime-orchestration-ssot.yaml
+            // dispatcher_contract.manifest_resolution, `target` is the axes-resolution
+            // key (dispatcher_mapping.target), while `manifest_id` is a distinct
+            // identity key — conflating them would silently retarget a route-selected
+            // entry (?route=) away from its explicit target on the next refresh.
             const identityPayload: Record<string, unknown> = {};
+            if (payload.manifest_id) identityPayload.manifest_id = payload.manifest_id;
             if (payload.table_id) identityPayload.table_id = payload.table_id;
             if (payload.table_registry_id) {
               identityPayload.table_registry_id = payload.table_registry_id;
@@ -333,9 +347,11 @@ export default function ProjectionShell(): JSX.Element {
               ...(storedAxes.payload ?? {}),
               ...identityPayload,
             };
+            // axes.target is never overwritten from the SSE payload — the entry
+            // selection's route/default target axis is preserved verbatim across
+            // every refresh.
             const axes: UserOperation = {
               ...storedAxes,
-              ...(payload.manifest_id ? { target: payload.manifest_id } : {}),
               ...(Object.keys(mergedPayload).length > 0
                 ? { payload: mergedPayload }
                 : {}),
@@ -347,6 +363,21 @@ export default function ProjectionShell(): JSX.Element {
             }
             const updated = result.emission;
             if (!updated) return;
+            // refresh_boundary_policy.failure_policy: explicit_error_log_retain_old_dom —
+            // an explicit package selection must still be confirmed after refresh;
+            // on mismatch, log explicitly and retain the prior (already-confirmed) DOM
+            // rather than silently rendering a differently-packaged projection.
+            const refreshConfirmation = confirmProjectionEntryEmission(
+              entrySelection,
+              updated,
+            );
+            if (!refreshConfirmation.ok) {
+              console.error(
+                "[ProjectionShell] PROJECTION_ENTRY_PACKAGE_MISMATCH_ON_REFRESH:",
+                refreshConfirmation.error,
+              );
+              return;
+            }
             setEmission(updated);
             emissionRef.current = updated;
             // SSE refresh reconciliation: same dispatcher / runner / fired-registry
