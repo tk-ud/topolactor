@@ -9,6 +9,7 @@
 | Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
 |-----------|------|--------|------|----------------|---------|
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
+| `seed-template-runtime-interaction-assignment` | Seed/template projection runtimeInteractionId assignment path | not_started | 1 | `product.dynamic_support_nocode_loop` / seed-template projection adoption carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `ui-projection-surface-architecture-reinforcement` | UI projection surface architecture reinforcement | partial | 1 | `product.dynamic_support_nocode_loop` / projection surface carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `runtime-route-taxonomy-hardcoded-route-retirement` | Runtime route taxonomy / hardcoded route retirement | not_started | 1 | `product.dynamic_support_nocode_loop` / canonical route taxonomy | `docs/design/runtime-orchestration-ssot.yaml` |
@@ -33,7 +34,82 @@
 - `pipeline-continuity-frontend-route-seed-proof`: **未移管 -> 追加**。route registry / seed CRUD renderability / route removal replacement / label boundary / admin Step wording proof を pipeline-continuity bundle として分離する。
 
 ---
+## Bundle `seed-template-runtime-interaction-assignment`
 
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
+**関連 implemented evidence:** PR577 `runtimeInteraction identity / projection-time idempotency identity` implemented scope。UI Builder `layout_patch:apply` 経路の `AssignRuntimeInteractionIds` は implemented として扱い、未実装へ戻さない。
+
+### 問題点
+
+PR577 で UI Builder apply 経路では `runtimeInteractions[]` の `runtimeInteractionId` が backend persistence boundary で付与され、projection UI が persisted identity を idempotency key 生成へ渡す経路は成立した。
+
+一方で、translator / template generator / credential management screen seed 由来の projection 昇格経路について、active persisted `layout_patch_json` になる前に同じ runtimeInteractionId assignment boundary を必ず通る保証が TODO 化されていない。
+
+この未整理のままだと、seed / template 由来 projection が `runtimeInteractions[]` を持つ場合に、`AssignRuntimeInteractionIds` を通らず persisted projection へ到達し、projection UI が stable `runtimeInteractionId` を持てず、PR574 ledger idempotency gate への identity component が fallback `nodeId + interactionIndex` へ残る危険がある。
+
+### 目的
+
+seed / template generator / credential management screen seed 由来 projection でも、active persisted `layout_patch_json` に昇格する時点で backend runtimeInteractionId assignment boundary を必ず通し、ProjectionShell / renderEmission / uiEventEffectRunner が persisted `runtimeInteractionId` を読み、PR574 ledger idempotency gate へ安定した idempotency key を渡せる経路を確定する。
+
+### 改善方針
+
+- translator / template generator は `runtimeInteractionId` を生成しない。
+- seed JSON / fixture / generated artifact へ `runtimeInteractionId` を直書きしない。
+- seed candidate / template output / credential management screen seed が active projection に昇格する adoption / apply / compile / persist 経路を調査する。
+- active persisted `layout_patch_json` へ到達する直前に、`ApplyConfirmedLayoutPatchAsync` / `AssignRuntimeInteractionIds` と同等の backend persistence assignment boundary を必ず通す。
+- `runtimeInteractions[]` を含む `layout_patch_json` が assignment boundary を通らず persist される bypass を検出する。
+- 必要に応じて seed-adoption proof surface / translator proof surface / credential management seed proof を追加する。
+- PR577 の UI Builder apply 経路 implemented 判定、PR574 の backend ledger execution gate implemented 判定を未実装扱いへ戻さない。
+
+### 対応資料
+
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
+- `docs/design/react-schema-topology-seed-translator-ssot.yaml`
+- `docs/design/react-schema-topology-seed-translator-production-policy.md`
+- `docs/design/instance-port-substrate-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/pipeline-continuity-ssot.yaml`
+- `db/seed_empty.sql`
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json`
+
+### 対象ファイル名
+
+- `.agent/scripts/react_schema_topology_seed_translator.py`
+- `.agent/tools/react-schema-topology-seed-translator`
+- `.agent/scripts/check_react_schema_topology_seed_translator.py`
+- `.agent/scripts/agent_tools/schema_seed_translator_entry_gate.py`
+- `backend/repository/NpgsqlUiTopologyRepository.cs`
+- `db/seed_empty.sql`
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.input.json`
+- `.agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092.topology-seed.input.json`
+- future seed/template adoption path files that persist active `layout_patch_json`
+
+### 対象関数名
+
+- `ApplyConfirmedLayoutPatchAsync`
+- `AssignRuntimeInteractionIds`
+- `HasValidRuntimeInteractionId`
+- `convert_node_to_seed_record`
+- `build_topology_ui_seed_candidate`
+- `flatten_topology_ui_seed_tree`
+- `validate_flat_seed_records`
+- `validate_translator_entry`
+- `extract_compile_snapshot`
+- future seed/template adoption functions that persist active `layout_patch_json`
+
+### 受入条件
+
+- translator / template generator が `runtimeInteractionId` を生成しないことが維持されている。
+- seed JSON / fixture / generated artifact へ `runtimeInteractionId` を直書きしない。
+- credential management screen seed 由来 projection の昇格経路が特定されている。
+- seed / template 由来 projection が active persisted `layout_patch_json` になる前に backend runtimeInteractionId assignment boundary を通る。
+- `runtimeInteractions[]` を含む active projection persist bypass がない、または blocking proof で検出される。
+- ProjectionShell / renderEmission / uiEventEffectRunner は persisted `runtimeInteractionId` を forward する。
+- PR574 backend ledger execution gate と PR577 UI Builder apply assignment は implemented evidence として維持され、再実装対象へ戻さない。
+
+---
 
 ## Bundle `runtime-route-taxonomy-hardcoded-route-retirement`
 
