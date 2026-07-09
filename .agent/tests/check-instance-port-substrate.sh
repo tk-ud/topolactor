@@ -90,8 +90,16 @@ require_term "product.instance_port_substrate" docs/system-roadmap.yaml "roadmap
 # active work). Only a genuinely dedicated instance-port-substrate bundle
 # entry (its own Bundle ID / heading / roadmap-bundle reference / implementation
 # TODO file), not a bare SSOT-doc citation, should fail this check.
-TODO_WITHOUT_SSOT_DOC_CITATIONS="$(rg -v --fixed-strings 'instance-port-substrate-ssot.yaml' .agent/tasks/todo.md || true)"
-if printf '%s\n' "$TODO_WITHOUT_SSOT_DOC_CITATIONS" | rg -n 'instance-port-substrate|product.instance_port_substrate|instance-port-substrate-implementation-todo'; then
+#
+# Filter with the real `grep -v` (a coreutils binary, always present) rather
+# than `rg -v`: this file's own top-of-file `rg` compatibility shim (used
+# when the real ripgrep binary is not installed on the runner) does not
+# recognize -v and silently drops it, which would make an `rg -v` filter here
+# a silent no-op under that shim instead of an inversion.
+TODO_MATCHES="$(rg -n 'instance-port-substrate|product.instance_port_substrate|instance-port-substrate-implementation-todo' .agent/tasks/todo.md || true)"
+TODO_MATCHES_WITHOUT_SSOT_DOC_CITATIONS="$(printf '%s\n' "$TODO_MATCHES" | grep -v -F 'instance-port-substrate-ssot.yaml' || true)"
+if [ -n "$TODO_MATCHES_WITHOUT_SSOT_DOC_CITATIONS" ]; then
+  printf '%s\n' "$TODO_MATCHES_WITHOUT_SSOT_DOC_CITATIONS"
   fail "implemented instance-port-substrate must not remain in active unfinished TODO surface"
 fi
 if [[ -e .agent/tasks/instance-port-substrate-implementation-todo.md ]]; then
