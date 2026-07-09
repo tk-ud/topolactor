@@ -622,6 +622,15 @@ def main():
         adoption = (doc_ts or {}).get("adoptionCandidates") or {}
         expect("36k. adoptionCandidates is populated for the golden fixture", bool(adoption))
         expect("36l. packageAdoptionCandidates has exactly one entry (one Projection record)", len(adoption.get("packageAdoptionCandidates") or []) == 1)
+        expect(
+            "36l1. packageAdoptionCandidates shape matches topology.components_package_design (packageKey + layout array), never the ui_component_package shape",
+            all("packageKey" in c and "layout" in c and isinstance(c["layout"], list) for c in adoption.get("packageAdoptionCandidates") or []),
+        )
+        expect(
+            "36l2. componentGroupBundleAdoptionCandidates is a distinct bucket (topology.ui_component_package, tensor-FK-only) with a key different from packageAdoptionCandidates",
+            len(adoption.get("componentGroupBundleAdoptionCandidates") or []) == 1
+            and (adoption["componentGroupBundleAdoptionCandidates"][0].get("componentGroupBundleKey") != (adoption.get("packageAdoptionCandidates") or [{}])[0].get("packageKey")),
+        )
         expect("36m. layoutAdoptionCandidates is populated (category/section/form/field tree)", bool(adoption.get("layoutAdoptionCandidates")))
         expect("36n. wiringAdoptionCandidates preserves all six instance_settings actions", {"json_template_download", "json_import", "validate", "preview", "apply", "approve"}.issubset({w.get("sourceRecordKey") for w in adoption.get("wiringAdoptionCandidates") or []}))
         tensor_action_keys = set()
@@ -651,13 +660,47 @@ def main():
             and not ({"record", "fields", "actions", "columns", "sections", "categories"} & manifest_refs.keys())
             and manifest_refs.get("packageIds") and manifest_refs.get("layoutId") and manifest_refs.get("wiringId") and manifest_refs.get("tensorId"),
         )
+        component_group_bundle_keys = {f"<{c.get('componentGroupBundleKey')}>" for c in adoption.get("componentGroupBundleAdoptionCandidates") or []}
+        package_keys = {f"<{c.get('packageKey')}>" for c in adoption.get("packageAdoptionCandidates") or []}
         expect(
-            "36r. the six new top_ssot_violation rule ids do not fire on the golden fixture (clean positive path)",
+            "36q1. manifestRefsCandidate.packageIds references packageAdoptionCandidates (topology.components_package_design) keys, never componentGroupBundleAdoptionCandidates (topology.ui_component_package) keys",
+            bool(manifest_refs.get("packageIds"))
+            and set(manifest_refs["packageIds"]).issubset(package_keys)
+            and not (set(manifest_refs["packageIds"]) & component_group_bundle_keys),
+        )
+        expect(
+            "36q2. tensorAdoptionCandidates packageIdRef references componentGroupBundleAdoptionCandidates (topology.ui_component_package) keys, never packageAdoptionCandidates (topology.components_package_design) keys",
+            all(
+                t.get("packageIdRef") in component_group_bundle_keys and t.get("packageIdRef") not in package_keys
+                for t in adoption.get("tensorAdoptionCandidates") or []
+            ),
+        )
+        expect(
+            "36r. the seven new top_ssot_violation rule ids do not fire on the golden fixture (clean positive path)",
             not (rule_ids(doc_ts) and set(rule_ids(doc_ts)) & {
                 "MANIFEST_TOPOLOGY_CONTAINS_UI_PAYLOAD_MATERIAL", "FLATTENED_SEED_RECORD_USED_AS_MANIFEST_FINAL_SHAPE",
                 "UI_PAYLOAD_NOT_SPLIT_TO_PACKAGE_LAYOUT_DESIGN_WIRING_TENSOR", "RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH",
                 "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH", "CREDENTIAL_SECRET_PROJECTION_DETECTED",
+                "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH",
             }),
+        )
+
+        # 36r1: cross-file proof that the SSOT's documented package authority target
+        # actually agrees with docs/design/db-schema.yaml -- the real "DB design
+        # authority" this whole fix exists to track, read independently of the
+        # translator's own self-reported behavior above (which could pass even if
+        # both files drifted the same wrong way together).
+        db_schema_text = (REPO_ROOT / "docs" / "design" / "db-schema.yaml").read_text(encoding="utf-8")
+        translator_ssot_text = (REPO_ROOT / "docs" / "design" / "react-schema-topology-seed-translator-ssot.yaml").read_text(encoding="utf-8")
+        packages_block_match = re.search(r"\n    packages:\n(?:.+\n)+?      manifest_reference: (\S+)", db_schema_text)
+        expect(
+            "36r2. docs/design/db-schema.yaml packages entry declares manifest_reference: manifest.topology[ui_projection].packageIds (the DB design authority this fix tracks)",
+            packages_block_match is not None and packages_block_match.group(1) == "manifest.topology[ui_projection].packageIds",
+        )
+        package_target_table_match = re.search(r"packageAdoptionCandidates:\n\s+target_table: (\S+)", translator_ssot_text)
+        expect(
+            "36r3. translator SSOT packageAdoptionCandidates.target_table agrees with docs/design/db-schema.yaml's manifest-facing package authority (topology.components_package_design, not topology.ui_component_package)",
+            package_target_table_match is not None and package_target_table_match.group(1) == "topology.components_package_design",
         )
 
         # 36s-36y: unit-level negative-path proof that validate_adoption_candidates
@@ -723,6 +766,49 @@ def main():
             [],
         )
         expect("36z. credential_secret_projection_detected does NOT false-positive on a forbidden_fields guard-list array (values, not a denylisted key)", "CREDENTIAL_SECRET_PROJECTION_DETECTED" not in [e["ruleId"] for e in guard_list_errors])
+
+        # 36z1-36z3: package_authority_target_table_mismatch -- the rule added for
+        # the ui_component_package / components_package_design conflation this
+        # section exists to prevent from silently reproducing.
+        swapped_manifest_refs_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {"type": "ui_projection", "packageIds": ["<seed.component_group_bundle>"]},
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "componentGroupBundleAdoptionCandidates": [{"componentGroupBundleKey": "seed.component_group_bundle"}],
+            },
+            [],
+        )
+        expect(
+            "36z1. package_authority_target_table_mismatch fires when manifestRefsCandidate.packageIds references a componentGroupBundleAdoptionCandidates key",
+            "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH" in [e["ruleId"] for e in swapped_manifest_refs_errors],
+        )
+
+        swapped_tensor_ref_errors = translator_impl.validate_adoption_candidates(
+            {
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "componentGroupBundleAdoptionCandidates": [{"componentGroupBundleKey": "seed.component_group_bundle"}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor", "packageIdRef": "<seed.package>", "layoutPatchJson": {"nodes": []}}],
+            },
+            [],
+        )
+        expect(
+            "36z2. package_authority_target_table_mismatch fires when tensorAdoptionCandidates.packageIdRef references a packageAdoptionCandidates key",
+            "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH" in [e["ruleId"] for e in swapped_tensor_ref_errors],
+        )
+
+        correctly_wired_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {"type": "ui_projection", "packageIds": ["<seed.package>"]},
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "componentGroupBundleAdoptionCandidates": [{"componentGroupBundleKey": "seed.component_group_bundle"}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor", "packageIdRef": "<seed.component_group_bundle>", "layoutPatchJson": {"nodes": []}}],
+            },
+            [],
+        )
+        expect(
+            "36z3. package_authority_target_table_mismatch does NOT false-positive when packageIds/packageIdRef are wired to the correct respective buckets",
+            "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH" not in [e["ruleId"] for e in correctly_wired_errors],
+        )
 
         # 36f-36h: a synthetic oversized single-field candidate must be caught
         # by storage_adoption_contract's budget check at generation time, not

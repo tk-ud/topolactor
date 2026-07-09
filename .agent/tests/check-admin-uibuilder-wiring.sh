@@ -70,9 +70,15 @@ for lane in package_internal_api_wiring_lane runtime_interactions_lane external_
 done
 require_grep "manifest_topology_boundary:" "$SSOT" "manifest.topology refs-only boundary statement"
 require_grep "manifest_topology_array_element_embedding_layout_or_wiring_payload_directly" "$SSOT" "manifest.topology UI-payload-embedding negative boundary"
+# package authority boundary: manifest.packageIds must reference
+# topology.components_package_design (DB design authority), never
+# topology.ui_component_package (a distinct tensor-FK-only identity) -- see
+# docs/design/db-schema.yaml packages/components_package_design.manifest_reference.
+require_grep "topology.components_package_design" "$SSOT" "manifest-facing package authority table"
+require_grep "packageIds_referencing_topology_ui_component_package_instead_of_topology_components_package_design" "$SSOT" "package authority negative boundary"
 # package_internal_api_wiring_lane idempotency applicability must stay an
 # explicit known_gap, not silently asserted resolved.
-if ! grep -Pzo "(?s)package_internal_api_wiring_lane:.{0,600}?idempotency_applicability: known_gap" "$SSOT" >/dev/null 2>&1; then
+if ! grep -Pzo "(?s)package_internal_api_wiring_lane:.{0,2000}?idempotency_applicability: known_gap" "$SSOT" >/dev/null 2>&1; then
   fail "$SSOT package_internal_api_wiring_lane must declare idempotency_applicability: known_gap (not silently assumed included)"
 fi
 

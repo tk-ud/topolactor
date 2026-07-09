@@ -90,7 +90,19 @@ admin_uibuilder_ui_structure_wiring_ssot:
       package_internal_api_wiring_lane:
         label_ja: 内部API (package/internal API wiring lane)
         authoring_surface: ManifestStep3EventWiringPreset / PackageConnectionPanel (ui_event_settings.setting_category_taxonomy.backend_side.internal_api)
-        persistence_target: topology.ui_component_package + topology.ui_wiring_registry + topology.ui_topology_tensor relation (ui_topology:update_package_wiring), never manifest.topology payload
+        persistence_target: >-
+          topology.components_package_design (manifest-facing package authority, role
+          component_design_bundle_referenced_by_manifest, manifest_reference:
+          manifest.topology[ui_projection].packageIds per docs/design/db-schema.yaml) +
+          topology.ui_wiring_registry + topology.ui_topology_tensor relation
+          (ui_topology:update_package_wiring), never manifest.topology payload directly.
+          topology.ui_component_package (role component_group_bundle) is a DIFFERENT,
+          narrower identity: it exists only to satisfy topology.ui_topology_tensor.package_id's
+          own FK constraint, and this lane must never treat it as interchangeable with
+          topology.components_package_design or as a manifest.packageIds target -- see
+          docs/design/react-schema-topology-seed-translator-ssot.yaml
+          storage_adoption_contract.adoption_candidate_separation_contract.package_authority_boundary,
+          which states and enforces the same two-identity split for translator output.
         runtime_path: package/wiring persistence read at projection build time; not a per-event runtimeInteractions dispatch
         idempotency_applicability: known_gap
         idempotency_note: >-
@@ -144,9 +156,18 @@ admin_uibuilder_ui_structure_wiring_ssot:
         only. A manifest.topology array element that embeds field/action/form-level UI
         structure directly (e.g. a flattened topology_ui_seed_record tree) is a top SSOT
         violation for this surface, regardless of which lane authored it.
+      packageIds_authority_rule: >-
+        packageIds specifically must resolve to topology.components_package_design rows
+        (docs/design/db-schema.yaml packages/components_package_design.manifest_reference),
+        never topology.ui_component_package rows -- the latter is a distinct
+        component_group_bundle identity required only by
+        topology.ui_topology_tensor.package_id's FK, not a manifest-facing authority. Refs
+        pointing at the wrong table are still a top SSOT violation even though the entry
+        itself stays refs-only in shape.
       prohibited:
         - manifest_topology_array_element_embedding_layout_or_wiring_payload_directly
         - treating_any_lane_above_as_manifest_topology_storage_authority
+        - packageIds_referencing_topology_ui_component_package_instead_of_topology_components_package_design
 
   wiring_mode:
     role: UI event graph projection / edit mode over runtimeInteractions

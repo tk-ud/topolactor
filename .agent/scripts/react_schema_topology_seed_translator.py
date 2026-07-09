@@ -1133,7 +1133,17 @@ def validate_flat_seed_records(flat_records, budget_bytes=MANIFEST_TOPOLOGY_ARRA
 # ---------------------------------------------------------------------------
 
 def split_flat_records_into_adoption_candidates(flat_records, seed_key):
+    """adoption_candidate_separation_contract.package_authority_boundary: two DISTINCT
+    package identities, never conflated.
+
+    packageAdoptionCandidates targets topology.components_package_design -- the
+    manifest-facing package authority (manifest_reference:
+    manifest.topology[ui_projection].packageIds per docs/design/db-schema.yaml).
+    componentGroupBundleAdoptionCandidates targets topology.ui_component_package --
+    a narrower identity required only by topology.ui_topology_tensor.package_id's
+    own FK constraint, never a manifest.packageIds target."""
     package_candidates = []
+    component_group_bundle_candidates = []
     layout_records = []
     design_candidates = []
     wiring_candidates = []
@@ -1145,8 +1155,16 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
         key = record.get("key")
 
         if record_type == "topology_ui_projection":
+            # components_package_design.layout shape: [{componentId?, layoutNodeId?,
+            # designId}, ...] -- honestly empty here since this exchange never
+            # authors component+design pairs via UI Component Builder itself.
             package_candidates.append({
                 "packageKey": f"{seed_key}.package",
+                "layout": [],
+                "sourceRecordKey": key,
+            })
+            component_group_bundle_candidates.append({
+                "componentGroupBundleKey": f"{seed_key}.component_group_bundle",
                 "packageKind": "fixed_form_projection",
                 "packageSchemaJson": {
                     "seedKey": seed_key,
@@ -1215,6 +1233,11 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             merged[nid]["runtimeInteractions"].extend(node["runtimeInteractions"])
         tensor_candidates.append({
             "tensorKey": f"{seed_key}.tensor",
+            # The persisted tensor row's package_id FK needs a real
+            # topology.ui_component_package id -- reference the
+            # componentGroupBundleAdoptionCandidates key, NEVER the
+            # packageAdoptionCandidates key (package_authority_boundary).
+            "packageIdRef": f"<{component_group_bundle_candidates[0]['componentGroupBundleKey']}>" if component_group_bundle_candidates else None,
             "layoutPatchJson": {"nodes": [merged[nid] for nid in order]},
         })
 
@@ -1222,6 +1245,9 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
     if package_candidates or layout_candidates or wiring_candidates or tensor_candidates:
         manifest_refs_candidate = {
             "type": "ui_projection",
+            # packageIds references packageAdoptionCandidates (components_package_design)
+            # keys, NEVER componentGroupBundleAdoptionCandidates (ui_component_package)
+            # keys -- package_authority_boundary.
             "packageIds": [f"<{c['packageKey']}>" for c in package_candidates],
             "layoutId": f"<{layout_candidates[0]['layoutKey']}>" if layout_candidates else None,
             "wiringId": f"<{seed_key}.wiring>" if wiring_candidates else None,
@@ -1230,6 +1256,7 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
 
     return {
         "packageAdoptionCandidates": package_candidates,
+        "componentGroupBundleAdoptionCandidates": component_group_bundle_candidates,
         "layoutAdoptionCandidates": layout_candidates,
         "designAdoptionCandidates": design_candidates,
         "wiringAdoptionCandidates": wiring_candidates,
@@ -1284,7 +1311,7 @@ def _find_denylisted_keys(value, denylist, acc, path):
 
 def validate_adoption_candidates(candidates, flat_records):
     """storage_adoption_contract.top_ssot_violation_rule_definitions: checks the
-    built adoptionCandidates bundle for all six new rule ids. Collects every
+    built adoptionCandidates bundle for all seven new rule ids. Collects every
     violation found -- never returns on the first failure (fail-fast is
     prohibited for this check)."""
     errors = []
@@ -1305,6 +1332,37 @@ def validate_adoption_candidates(candidates, flat_records):
                 "$.adoptionCandidates.manifestRefsCandidate",
                 "blocking",
                 "manifestRefsCandidate must never itself be (or embed) a topology_ui_seed_record wrapper",
+            ))
+
+    # package_authority_target_table_mismatch: package_authority_boundary --
+    # manifestRefsCandidate.packageIds must reference packageAdoptionCandidates
+    # (topology.components_package_design) keys, never
+    # componentGroupBundleAdoptionCandidates (topology.ui_component_package) keys;
+    # tensorAdoptionCandidates[].packageIdRef is the reverse (must reference
+    # componentGroupBundleAdoptionCandidates, never packageAdoptionCandidates).
+    package_keys = {f"<{c.get('packageKey')}>" for c in candidates.get("packageAdoptionCandidates") or []}
+    component_group_bundle_keys = {f"<{c.get('componentGroupBundleKey')}>" for c in candidates.get("componentGroupBundleAdoptionCandidates") or []}
+    if manifest_refs is not None:
+        for ref in manifest_refs.get("packageIds") or []:
+            if ref in component_group_bundle_keys:
+                errors.append(err(
+                    "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH",
+                    "$.adoptionCandidates.manifestRefsCandidate.packageIds",
+                    "blocking",
+                    f"manifestRefsCandidate.packageIds entry '{ref}' references a componentGroupBundleAdoptionCandidates "
+                    "(topology.ui_component_package) key -- manifest.packageIds must reference "
+                    "packageAdoptionCandidates (topology.components_package_design) keys only",
+                ))
+    for tensor in candidates.get("tensorAdoptionCandidates") or []:
+        ref = tensor.get("packageIdRef")
+        if ref is not None and ref in package_keys:
+            errors.append(err(
+                "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH",
+                "$.adoptionCandidates.tensorAdoptionCandidates.packageIdRef",
+                "blocking",
+                f"tensorAdoptionCandidates packageIdRef '{ref}' references a packageAdoptionCandidates "
+                "(topology.components_package_design) key -- topology.ui_topology_tensor.package_id must "
+                "reference componentGroupBundleAdoptionCandidates (topology.ui_component_package) keys only",
             ))
 
     if flat_records and not any([
@@ -1372,8 +1430,8 @@ def validate_adoption_candidates(candidates, flat_records):
                 ))
 
     for bucket_name in (
-        "packageAdoptionCandidates", "layoutAdoptionCandidates", "designAdoptionCandidates",
-        "wiringAdoptionCandidates", "tensorAdoptionCandidates",
+        "packageAdoptionCandidates", "componentGroupBundleAdoptionCandidates", "layoutAdoptionCandidates",
+        "designAdoptionCandidates", "wiringAdoptionCandidates", "tensorAdoptionCandidates",
     ):
         for i, item in enumerate(candidates.get(bucket_name) or []):
             hits = []

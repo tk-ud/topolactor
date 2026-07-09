@@ -9,9 +9,20 @@ Temporary projection design surface. Not top SSOT. Must not contradict:
 - `docs/design/instance-port-substrate-ssot.yaml` `existing_credential_management_projection_extension`
 - `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `lane_storage_boundary`
 - `docs/design/react-schema-topology-seed-translator-ssot.yaml` `storage_adoption_contract`
+- `docs/design/db-schema.yaml` (DB table authority / role / `manifest_reference` design of
+  record — see `package_authority_boundary` below, corrected after PR review)
 
 If this document and any of the above disagree, the SSOT above wins and this document is
 wrong and must be fixed in the same PR that discovers the disagreement.
+
+**PR review correction**: the first version of this bundle referenced
+`topology.ui_component_package` from `manifest.topology[ui_projection].packageIds`. A PR
+review verified against `docs/design/db-schema.yaml` that this is the wrong table —
+`topology.ui_component_package` (role `component_group_bundle`) exists only to satisfy
+`topology.ui_topology_tensor.package_id`'s FK constraint; the manifest-facing package
+authority (`manifest_reference: manifest.topology[ui_projection].packageIds`) is
+`topology.components_package_design`. See `package_authority_boundary` in the SSOT sections
+below and the corrected seed/translator/test content in this same PR.
 
 ## Purpose
 
@@ -94,8 +105,19 @@ Built by `.agent/tools/react-schema-topology-seed-translator generate-topology-s
 per `docs/design/react-schema-topology-seed-translator-ssot.yaml`
 `storage_adoption_contract.adoption_candidate_separation_contract`:
 
-- **package** (`topology.ui_component_package`): one row for the
-  `auth_external_credential_management_projection` Projection record.
+- **package authority** (`topology.components_package_design`): one row (`layout: []`,
+  no component+design pairs authored — this is a `fixed_form_projection`, not a UI
+  Component Builder screen). This is the row `manifest.topology[ui_projection].packageIds`
+  references, per `docs/design/db-schema.yaml` `packages`/`components_package_design`
+  `manifest_reference: manifest.topology[ui_projection].packageIds`. **Not**
+  `topology.ui_component_package` — see the distinct identity below. (Corrected after a PR
+  review finding: the first version of this bundle used `topology.ui_component_package` for
+  this reference, which is the wrong table per DB design authority.)
+- **component group bundle** (`topology.ui_component_package`): a second, distinct row,
+  required only because `topology.ui_topology_tensor.package_id` has a physical FK
+  constraint against this table (`db/ui_topology_tables.sql`). It has its own key
+  (`...component_group_bundle`, deliberately different from the package authority row's
+  key) and is never referenced from `manifest.topology[ui_projection].packageIds`.
 - **layout** (`topology.components_layout_design`): one row holding the flattened
   category → section → form → field/action/validation tree (the same
   `topology_ui_seed_record[]` shape previously embedded in `manifest.topology`, now stored
@@ -139,14 +161,16 @@ runtime-assigned:
 
 - **Removed**: 37 `topology_ui_seed_record` array elements (previous
   `instance_settings_projection_category_not_yet_represented` gap-closure shape).
-- **Added elsewhere in the same file**: `topology.ui_component_package` /
-  `topology.components_layout_design` / `topology.ui_wiring_registry` /
+- **Added elsewhere in the same file**: `topology.ui_component_package` (component group
+  bundle, tensor-FK-only) / `topology.components_package_design` (manifest-facing package
+  authority) / `topology.components_layout_design` / `topology.ui_wiring_registry` /
   `topology.ui_topology_tensor` rows carrying the same tree/action content, under a
   dedicated deterministic UUID block reserved for this bundle (`…-0000000cd0xx`) — chosen to
   avoid any collision with the existing `structure_maps` `091`/`092` rows or any other
   seeded id.
 - **Added to manifest 092's array**: one refs-only `ui_projection` entry pointing at the
-  four new rows.
+  five new rows, with `packageIds` referencing the `components_package_design` row (not the
+  `ui_component_package` row).
 - **Not changed**: manifest `091`, `auth.users`, `auth.credentials`, `/admin/users`, and
   every non-`topology_ui_seed_record` element already in manifest `092` (these were already
   manifest-appropriate refs/policy/schema content, not UI-entity payload — see the manifest

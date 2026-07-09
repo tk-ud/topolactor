@@ -2024,7 +2024,7 @@ VALUES (
         --   | generate-topology-seed --input .../credential-management-0092.topology-seed.input.json
         -- Resolves declared_seed_surface_catalog known_gap
         -- instance_settings_projection_category_not_yet_represented.
-        '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000cd001"],"layoutId":"00000000-0000-0000-0000-0000000cd002","wiringId":"00000000-0000-0000-0000-0000000cd003","tensorId":"00000000-0000-0000-0000-0000000cd004"}'::jsonb
+        '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000cd005"],"layoutId":"00000000-0000-0000-0000-0000000cd002","wiringId":"00000000-0000-0000-0000-0000000cd003","tensorId":"00000000-0000-0000-0000-0000000cd004"}'::jsonb
     ]::jsonb[],
     'active'
 )
@@ -2043,7 +2043,7 @@ ON CONFLICT (manifest_id) DO UPDATE
 INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
 VALUES (
     '00000000-0000-0000-0000-0000000cd001',
-    'auth.external.credential_management.projection.package',
+    'auth.external.credential_management.projection.component_group_bundle',
     'fixed_form_projection',
     '{"seedKey":"auth.external.credential_management.projection","surface":"auth.external.credential_management.projection","categoryKeys":["user_auth","external","instance_settings"]}'::jsonb,
     'active'
@@ -2051,6 +2051,26 @@ VALUES (
 ON CONFLICT (package_id) DO UPDATE
     SET package_schema_json = EXCLUDED.package_schema_json,
         status = EXCLUDED.status;
+
+-- topology.ui_component_package (above) is a distinct "component group
+-- bundle" identity required only by topology.ui_topology_tensor.package_id's
+-- FK constraint. It is NOT the manifest-facing package authority -- per
+-- docs/design/db-schema.yaml packages/components_package_design.manifest_reference
+-- (manifest.topology[ui_projection].packageIds), that role belongs to
+-- topology.components_package_design below. This surface authored no
+-- component+design pairs via UI Component Builder (fixed_form_projection,
+-- ui_builder_authority:false), so layout is honestly empty rather than
+-- inventing componentId/designId pairs that were never authored.
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000cd005',
+    'auth.external.credential_management.projection.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
 
 INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
 VALUES (

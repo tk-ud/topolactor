@@ -575,14 +575,48 @@ react_schema_topology_seed_translator_ssot:
         split_flat_records_into_adoption_candidates implements this contract, called from
         generate-topology-seed after flatten_topology_ui_seed_tree /
         validate_flat_seed_records.
+      package_authority_boundary:
+        note: >-
+          docs/design/db-schema.yaml draws two DISTINCT "package" table identities that must
+          never be conflated:
+            - topology.components_package_design (formerly packages): role
+              component_design_bundle_referenced_by_manifest, with an explicit
+              manifest_reference: manifest.topology[ui_projection].packageIds. This is the
+              manifest-facing package authority -- the same one
+              projection_constructor_mapping / sse_projection manifest entries already
+              reference (db/manifest_tables.sql).
+            - topology.ui_component_package: role component_group_bundle, required only by
+              topology.ui_topology_tensor.package_id's own FK constraint
+              (db/ui_topology_tables.sql). It is a supporting identity for tensor
+              persistence, never a manifest.packageIds target.
+          packageAdoptionCandidates below targets the former (manifest authority).
+          componentGroupBundleAdoptionCandidates targets the latter (tensor FK
+          prerequisite) -- a distinct bucket, not a renaming of the same concept, because
+          persisting a tensorAdoptionCandidates row requires a real row in
+          topology.ui_component_package to satisfy its package_id FK, independent of
+          whatever the manifest-facing package authority is.
       candidate_buckets:
         packageAdoptionCandidates:
+          target_table: topology.components_package_design
+          source_record_types: [topology_ui_projection]
+          shape: >-
+            one candidate per Projection record: {packageKey, layout: []}. layout mirrors
+            topology.components_package_design.layout's shape
+            ([{componentId?, layoutNodeId?, designId}, ...]) and is honestly empty when the
+            surface authored no component+design pairs via UI Component Builder (e.g. a
+            fixed_form_projection with ui_builder_authority:false) -- never invented.
+            packageKey is derived from seedKey, never invented.
+        componentGroupBundleAdoptionCandidates:
           target_table: topology.ui_component_package
           source_record_types: [topology_ui_projection]
           shape: >-
-            one candidate per Projection record: {packageKey, packageKind:
+            one candidate per Projection record: {componentGroupBundleKey, packageKind:
             "fixed_form_projection"|"ui_builder_authored", packageSchemaJson: {seedKey,
-            surface, categoryKeys}}. packageKey is derived from seedKey, never invented.
+            surface, categoryKeys}}. componentGroupBundleKey is derived from seedKey, never
+            invented, and MUST NOT reuse packageAdoptionCandidates' packageKey verbatim (see
+            package_authority_boundary) -- distinct identities need distinguishable keys.
+            Exists solely so tensorAdoptionCandidates has a real package_id to persist
+            against; not itself a manifest.packageIds target.
         layoutAdoptionCandidates:
           target_table: topology.components_layout_design
           source_record_types: [topology_ui_category, topology_ui_section, topology_ui_form, topology_ui_field, topology_ui_table, topology_ui_workflow, topology_ui_workflow_step, topology_ui_validation, topology_ui_unresolved]
@@ -610,9 +644,13 @@ react_schema_topology_seed_translator_ssot:
           target_table: topology.ui_topology_tensor
           source_record_types: [topology_ui_action, topology_ui_workflow_step]
           shape: >-
-            one layout_patch_json candidate per Projection: {nodes: [{nodeId: <owning
-            Form/Section key>, nodeKind, runtimeInteractions: [<build_runtime_interaction_candidate
-            output per action, no runtimeInteractionId -- see
+            one layout_patch_json candidate per Projection, plus the packageId reference the
+            persisted tensor row's own package_id FK needs: {tensorKey, packageIdRef:
+            <componentGroupBundleAdoptionCandidates componentGroupBundleKey for this same
+            Projection -- NEVER packageAdoptionCandidates' packageKey, per
+            package_authority_boundary>, nodes: [{nodeId: <owning Form/Section key>,
+            nodeKind, runtimeInteractions: [<build_runtime_interaction_candidate output per
+            action, no runtimeInteractionId -- see
             runtime_interactions_candidate_contract.forbidden>]}]}. This is the carrier
             runtime_interactions_not_persisted_layout_path checks: every Action/Step
             eventBinding with a dispatch-shaped wiringLane (external_integration_wiring /
@@ -621,8 +659,10 @@ react_schema_topology_seed_translator_ssot:
         manifestRefsCandidate:
           target_table: manifest
           shape: >-
-            {"type":"ui_projection","packageIds":[<packageAdoptionCandidates ids once
-            persisted>],"layoutId":<layoutAdoptionCandidates id>,"wiringId":<wiringAdoptionCandidates
+            {"type":"ui_projection","packageIds":[<packageAdoptionCandidates
+            (topology.components_package_design) ids once persisted -- NEVER
+            componentGroupBundleAdoptionCandidates ids, per package_authority_boundary>],
+            "layoutId":<layoutAdoptionCandidates id>,"wiringId":<wiringAdoptionCandidates
             id>,"tensorId":<tensorAdoptionCandidates id>} -- ids are placeholders
             (candidate-local keys) until a reviewer persists the referenced rows and fills
             in real UUIDs; the translator never invents or assigns UUIDs itself.
@@ -631,11 +671,15 @@ react_schema_topology_seed_translator_ssot:
       required_rules:
         - every_topologyUiSeedFlatRecords_element_is_assigned_to_exactly_one_non_manifest_bucket_by_recordType
         - manifestRefsCandidate_never_carries_ui_payload_fields
+        - manifestRefsCandidate_packageIds_reference_packageAdoptionCandidates_never_componentGroupBundleAdoptionCandidates
+        - tensorAdoptionCandidates_packageIdRef_references_componentGroupBundleAdoptionCandidates_never_packageAdoptionCandidates
         - tensor_candidate_runtimeInteractions_never_carries_runtimeInteractionId
         - empty_bucket_is_valid_when_no_source_record_type_present_not_an_error
       prohibited:
         - proposing_topologyUiSeedFlatRecords_or_topologyUiSeedCandidate_as_a_manifest_topology_adoption_candidate
         - manifestRefsCandidate_embedding_record_or_nested_list_fields
+        - conflating_components_package_design_and_ui_component_package_as_the_same_authority
+        - manifestRefsCandidate_packageIds_pointing_at_a_componentGroupBundleAdoptionCandidates_id
     flattened_record_contract:
       wrapper_type: topology_ui_seed_record
       required_fields: [type, seedKey, parentKey, record]
@@ -677,9 +721,10 @@ react_schema_topology_seed_translator_ssot:
       - runtime_interactions_not_persisted_layout_path
       - idempotency_carrier_missing_for_runtime_dispatch
       - credential_secret_projection_detected
+      - package_authority_target_table_mismatch
     top_ssot_violation_rule_definitions:
       note: >-
-        Full definitions of the six top-SSOT-violation rule ids added above (kept here,
+        Full definitions of the seven top-SSOT-violation rule ids added above (kept here,
         adjacent to the contract they enforce, rather than only in validation_rules'
         flatter list, since these are new rules with non-obvious detection conditions).
       manifest_topology_contains_ui_payload_material:
@@ -718,6 +763,27 @@ react_schema_topology_seed_translator_ssot:
           restatement of translator_input_authority.protected_boundary_vocabulary.rule so the
           check runs again at the adoption-candidate boundary, not only at input-envelope time
         severity: blocking
+      package_authority_target_table_mismatch:
+        detects: >-
+          package_authority_boundary violated -- either manifestRefsCandidate.packageIds
+          references a componentGroupBundleAdoptionCandidates key instead of a
+          packageAdoptionCandidates key, or tensorAdoptionCandidates' packageIdRef
+          references a packageAdoptionCandidates key instead of a
+          componentGroupBundleAdoptionCandidates key. Added after a real PR review finding
+          (ui-seed-translator-uibuilder-top-ssot-alignment bundle follow-up) that conflated
+          topology.ui_component_package (component_group_bundle, tensor-FK-only) with
+          topology.components_package_design (component_design_bundle_referenced_by_manifest,
+          the actual manifest.topology[ui_projection].packageIds authority per
+          docs/design/db-schema.yaml) -- this rule exists specifically so that conflation
+          cannot silently reproduce.
+        severity: blocking
+        checker_ref: >-
+          .agent/scripts/check_react_schema_topology_seed_translator.py additionally
+          cross-reads docs/design/db-schema.yaml's packages/components_package_design
+          manifest_reference field and this SSOT's packageAdoptionCandidates.target_table
+          field and fails if they disagree, since the translator itself never reads
+          db-schema.yaml (translator_input_authority) -- that cross-check is a
+          checker-side-only concern.
     tool_ref: >-
       .agent/scripts/react_schema_topology_seed_translator.py implements this contract:
       flatten_topology_ui_seed_tree builds the flattened_record_contract shape from the same
