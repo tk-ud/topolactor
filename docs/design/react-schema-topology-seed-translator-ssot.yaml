@@ -575,6 +575,33 @@ react_schema_topology_seed_translator_ssot:
         split_flat_records_into_adoption_candidates implements this contract, called from
         generate-topology-seed after flatten_topology_ui_seed_tree /
         validate_flat_seed_records.
+      primary_and_derived_candidate_relationship:
+        note: >-
+          PR580 review follow-up: topology_ui_action / topology_ui_workflow_step records
+          contribute to THREE candidate buckets (layoutAdoptionCandidates,
+          wiringAdoptionCandidates, tensorAdoptionCandidates), which required_rules'
+          every_topologyUiSeedFlatRecords_element_is_assigned_to_exactly_one_non_manifest_bucket_by_recordType
+          could misread as three competing primary-bucket assignments. This is not a top
+          SSOT change -- it clarifies, within this subordinate SSOT, which of the three is
+          the PRIMARY storage bucket and which are DERIVED candidates projected from that
+          same primary record:
+            - PRIMARY bucket: layoutAdoptionCandidates. topology_ui_action /
+              topology_ui_workflow_step records are structural layout-tree content (label,
+              eventBinding, authorityMarker) exactly like topology_ui_category /
+              topology_ui_section / topology_ui_form / etc., and are stored in full inside
+              layoutAdoptionCandidates.layoutSchemaJson.records, the same as every other
+              layout-tree record type. This satisfies "exactly one non-manifest bucket by
+              recordType" -- the PRIMARY assignment.
+            - DERIVED bucket 1: wiringAdoptionCandidates. A narrower projection of the same
+              record (eventBinding + authorityMarker only) for topology.ui_wiring_registry
+              persistence -- see the aggregate shape below.
+            - DERIVED bucket 2: tensorAdoptionCandidates. A narrower projection of the same
+              record's runtimeInteractions for topology.ui_topology_tensor persistence.
+          Derived candidates are additional projections built FROM the primary record, not
+          a second full storage of it, and do not violate "exactly one" at the primary-bucket
+          level. tool_ref: split_flat_records_into_adoption_candidates's module-level and
+          inline comments implement and document this relationship directly (see
+          "primary_and_derived_candidate_relationship" docstring reference in that function).
       package_authority_boundary:
         note: >-
           docs/design/db-schema.yaml draws two DISTINCT "package" table identities that must
@@ -619,7 +646,13 @@ react_schema_topology_seed_translator_ssot:
             against; not itself a manifest.packageIds target.
         layoutAdoptionCandidates:
           target_table: topology.components_layout_design
-          source_record_types: [topology_ui_category, topology_ui_section, topology_ui_form, topology_ui_field, topology_ui_table, topology_ui_workflow, topology_ui_workflow_step, topology_ui_validation, topology_ui_unresolved]
+          source_record_types: [topology_ui_category, topology_ui_section, topology_ui_form, topology_ui_field, topology_ui_table, topology_ui_workflow, topology_ui_action, topology_ui_workflow_step, topology_ui_validation, topology_ui_unresolved]
+          primary_bucket_note: >-
+            The PRIMARY storage bucket for topology_ui_action / topology_ui_workflow_step
+            too (see primary_and_derived_candidate_relationship above) -- their full record
+            content lives here, same as every other structural layout-tree record type.
+            wiringAdoptionCandidates / tensorAdoptionCandidates below are derived
+            projections of the same record, not a second primary assignment.
           shape: >-
             one candidate per Projection record: {layoutKey, layoutKind,
             layoutSchemaJson: {records: <the same topology_ui_seed_record[] wrapper list
@@ -637,9 +670,25 @@ react_schema_topology_seed_translator_ssot:
           target_table: topology.ui_wiring_registry
           source_record_types: [topology_ui_action, topology_ui_workflow_step]
           shape: >-
-            one candidate per Action/Step record carrying eventBinding: {wiringKey,
-            wiringKind: eventBinding.wiringLane, targetSurface: "manifest",
-            wiringSchemaJson: {eventBinding, actionKey/stepKey, authorityMarker}}
+            ONE aggregate candidate per Projection (never one per Action/Step -- see
+            cardinality_note below): {wiringKey: "<seedKey>.wiring", wiringKind:
+            "action_bundle", targetSurface: "manifest", wiringSchemaJson: {actions: [one
+            entry per Action/Step record carrying eventBinding: {wiringKey, wiringKind:
+            eventBinding.wiringLane, targetSurface: "manifest", wiringSchemaJson:
+            {eventBinding, sourceActionKey, authorityMarker}, sourceRecordKey}, ...]}}.
+          cardinality_note: >-
+            PR580 review follow-up (Blocking 2): db/manifest_tables.sql's ui_projection
+            shape (top SSOT, unchanged) declares wiringId as a single ref, and
+            topology.ui_topology_tensor.wiring_id / topology.ui_wiring_registry.wiring_id
+            are both singular (db/ui_topology_tables.sql). A translator that emitted one
+            wiringAdoptionCandidates entry per Action/Step (as an earlier version of this
+            contract did) produces a manifestRefsCandidate.wiringId that cannot resolve to
+            any single one of them. This aggregate shape -- matching
+            db/seed_empty.sql's already-adopted
+            auth.external.credential_management.projection.wiring row, whose
+            wiring_schema_json carries an "actions" array of six individual action wiring
+            entries -- is the correct, already-proven-in-production shape; the translator
+            implementation was the out-of-sync side, not the seed or top SSOT.
         tensorAdoptionCandidates:
           target_table: topology.ui_topology_tensor
           source_record_types: [topology_ui_action, topology_ui_workflow_step]
@@ -668,6 +717,11 @@ react_schema_topology_seed_translator_ssot:
             in real UUIDs; the translator never invents or assigns UUIDs itself.
             required_rules: manifestRefsCandidate must never carry a `record`, `fields`,
             `actions`, `columns`, `sections`, or `categories` key -- refs and vectors only.
+            Being refs-only is necessary but not sufficient: every ref (packageIds entries,
+            layoutId, wiringId, tensorId) must also resolve to a key an emitted candidate
+            in the matching bucket actually carries -- see
+            manifest_refs_candidate_reference_resolution below. A refs-only shape whose refs
+            point at nothing is not proof of correct wiring.
       required_rules:
         - every_topologyUiSeedFlatRecords_element_is_assigned_to_exactly_one_non_manifest_bucket_by_recordType
         - manifestRefsCandidate_never_carries_ui_payload_fields
@@ -675,11 +729,14 @@ react_schema_topology_seed_translator_ssot:
         - tensorAdoptionCandidates_packageIdRef_references_componentGroupBundleAdoptionCandidates_never_packageAdoptionCandidates
         - tensor_candidate_runtimeInteractions_never_carries_runtimeInteractionId
         - empty_bucket_is_valid_when_no_source_record_type_present_not_an_error
+        - manifest_refs_candidate_reference_resolution
       prohibited:
         - proposing_topologyUiSeedFlatRecords_or_topologyUiSeedCandidate_as_a_manifest_topology_adoption_candidate
         - manifestRefsCandidate_embedding_record_or_nested_list_fields
         - conflating_components_package_design_and_ui_component_package_as_the_same_authority
         - manifestRefsCandidate_packageIds_pointing_at_a_componentGroupBundleAdoptionCandidates_id
+        - manifestRefsCandidate_ref_field_pointing_at_a_key_no_emitted_candidate_in_the_matching_bucket_carries
+        - emitting_one_wiringAdoptionCandidates_entry_per_Action_or_Step_record_instead_of_one_aggregate_entry_per_Projection
     flattened_record_contract:
       wrapper_type: topology_ui_seed_record
       required_fields: [type, seedKey, parentKey, record]
@@ -722,9 +779,10 @@ react_schema_topology_seed_translator_ssot:
       - idempotency_carrier_missing_for_runtime_dispatch
       - credential_secret_projection_detected
       - package_authority_target_table_mismatch
+      - manifest_refs_candidate_reference_resolution
     top_ssot_violation_rule_definitions:
       note: >-
-        Full definitions of the seven top-SSOT-violation rule ids added above (kept here,
+        Full definitions of the eight top-SSOT-violation rule ids added above (kept here,
         adjacent to the contract they enforce, rather than only in validation_rules'
         flatter list, since these are new rules with non-obvious detection conditions).
       manifest_topology_contains_ui_payload_material:
@@ -784,13 +842,33 @@ react_schema_topology_seed_translator_ssot:
           field and fails if they disagree, since the translator itself never reads
           db-schema.yaml (translator_input_authority) -- that cross-check is a
           checker-side-only concern.
+      manifest_refs_candidate_reference_resolution:
+        detects: >-
+          manifestRefsCandidate.packageIds / layoutId / wiringId / tensorId carries a
+          value that does not equal any actually-emitted candidate key in the matching
+          bucket (packageAdoptionCandidates[].packageKey / layoutAdoptionCandidates[].
+          layoutKey / wiringAdoptionCandidates[].wiringKey / tensorAdoptionCandidates[].
+          tensorKey, each `<...>`-wrapped). Added after a real PR review finding (PR580
+          translator-adoptionCandidates-top-ssot-conformance follow-up): a refs-only
+          manifestRefsCandidate shape is necessary but not sufficient proof of correct
+          wiring -- the refs must also resolve. The concrete bug this rule targets: an
+          earlier translator version emitted one wiringAdoptionCandidates entry per
+          Action/Step record but a single aggregate-style wiringId
+          (`<seedKey>.wiring`), which could never match any of the per-Action keys
+          (`<seedKey>.<actionKey>.wiring`) actually emitted -- see
+          candidate_buckets.wiringAdoptionCandidates.cardinality_note.
+        severity: blocking
+        checker_ref: >-
+          .agent/scripts/react_schema_topology_seed_translator.py validate_adoption_candidates
+          checks all four ref fields against the actual emitted candidate key sets built
+          from the same candidates bundle, not existence-of-any-value alone.
     tool_ref: >-
       .agent/scripts/react_schema_topology_seed_translator.py implements this contract:
       flatten_topology_ui_seed_tree builds the flattened_record_contract shape from the same
       record tree topologyUiSeedCandidate is built from; validate_flat_seed_records checks the
       constraint (SEED_RECORD_EXCEEDS_STORAGE_BUDGET, blocking);
       split_flat_records_into_adoption_candidates implements adoption_candidate_separation_contract;
-      validate_adoption_candidates implements the six top_ssot_violation_rule_definitions
+      validate_adoption_candidates implements the eight top_ssot_violation_rule_definitions
       above, collecting every violation found rather than stopping at the first
       (fail-fast is prohibited for this check -- see validation_rules ordering note in
       react_schema_validation); generate-topology-seed's optional --seed-sql-fragment flag

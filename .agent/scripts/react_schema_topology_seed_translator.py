@@ -1141,12 +1141,24 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
     manifest.topology[ui_projection].packageIds per docs/design/db-schema.yaml).
     componentGroupBundleAdoptionCandidates targets topology.ui_component_package --
     a narrower identity required only by topology.ui_topology_tensor.package_id's
-    own FK constraint, never a manifest.packageIds target."""
+    own FK constraint, never a manifest.packageIds target.
+
+    adoption_candidate_separation_contract.primary_and_derived_candidate_relationship:
+    topology_ui_action / topology_ui_workflow_step records have exactly one PRIMARY
+    storage bucket -- layoutAdoptionCandidates, alongside every other structural
+    layout-tree record type, since that is where the record's full content
+    (label/eventBinding/authorityMarker) is canonically stored. wiringAdoptionCandidates
+    and tensorAdoptionCandidates are DERIVED candidates projected FROM that same
+    primary record for their respective persistence targets (ui_wiring_registry,
+    ui_topology_tensor) -- narrower views, not a second full storage of the record --
+    so every_topologyUiSeedFlatRecords_element_is_assigned_to_exactly_one_non_manifest_bucket_by_recordType
+    (required_rules) is satisfied at the PRIMARY-bucket level; derived candidates are
+    additional projections, not competing primary assignments."""
     package_candidates = []
     component_group_bundle_candidates = []
     layout_records = []
     design_candidates = []
-    wiring_candidates = []
+    wiring_action_entries = []
     tensor_nodes = []
 
     for wrapper in flat_records:
@@ -1181,16 +1193,24 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             })
         else:
             # topology_ui_category / section / form / field / table / workflow /
-            # workflow_step / validation / unresolved -- structural layout tree
-            # content. topology_ui_action / topology_ui_workflow_step also land
-            # here (their eventBinding/label/authorityMarker are layout-tree
-            # content) in addition to contributing a wiring + tensor candidate
-            # below -- they are not mutually exclusive buckets.
+            # workflow_step / validation / unresolved / action -- structural
+            # layout tree content; this is the PRIMARY storage bucket for
+            # topology_ui_action / topology_ui_workflow_step too (see
+            # primary_and_derived_candidate_relationship above). wiring/tensor
+            # candidates below are derived projections of the same record, not
+            # a second primary-bucket assignment.
             layout_records.append(wrapper)
 
         if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
             event_binding = record.get("eventBinding") or {}
-            wiring_candidates.append({
+            # Derived wiring projection, collected here and aggregated into a
+            # single wiringAdoptionCandidates entry after the loop (below) --
+            # topology.ui_wiring_registry.wiring_id is a singular FK from
+            # topology.ui_topology_tensor and manifest.topology[ui_projection]
+            # carries a singular wiringId (db/manifest_tables.sql, top SSOT,
+            # unchanged), so one Projection's N actions/steps must resolve to
+            # ONE wiring row, not N independent rows.
+            wiring_action_entries.append({
                 "wiringKey": f"{seed_key}.{key}.wiring",
                 "wiringKind": event_binding.get("wiringLane"),
                 "targetSurface": "manifest",
@@ -1219,6 +1239,22 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             "layoutKey": f"{seed_key}.layout",
             "layoutKind": "fixed_form_projection",
             "layoutSchemaJson": {"records": layout_records},
+        })
+
+    # One aggregate wiringAdoptionCandidates entry per Projection, never one per
+    # Action/Step (topology.ui_wiring_registry.wiring_id is a singular FK from
+    # topology.ui_topology_tensor.wiring_id, and manifest.topology[ui_projection]
+    # carries a single wiringId, per db/manifest_tables.sql -- top SSOT, unchanged).
+    # wiringSchemaJson.actions[] holds each action's individual wiring entry from
+    # wiring_action_entries above, matching db/seed_empty.sql's already-adopted
+    # auth.external.credential_management.projection.wiring row shape.
+    wiring_candidates = []
+    if wiring_action_entries:
+        wiring_candidates.append({
+            "wiringKey": f"{seed_key}.wiring",
+            "wiringKind": "action_bundle",
+            "targetSurface": "manifest",
+            "wiringSchemaJson": {"actions": wiring_action_entries},
         })
 
     tensor_candidates = []
@@ -1311,7 +1347,7 @@ def _find_denylisted_keys(value, denylist, acc, path):
 
 def validate_adoption_candidates(candidates, flat_records):
     """storage_adoption_contract.top_ssot_violation_rule_definitions: checks the
-    built adoptionCandidates bundle for all seven new rule ids. Collects every
+    built adoptionCandidates bundle for all eight new rule ids. Collects every
     violation found -- never returns on the first failure (fail-fast is
     prohibited for this check)."""
     errors = []
@@ -1363,6 +1399,48 @@ def validate_adoption_candidates(candidates, flat_records):
                 f"tensorAdoptionCandidates packageIdRef '{ref}' references a packageAdoptionCandidates "
                 "(topology.components_package_design) key -- topology.ui_topology_tensor.package_id must "
                 "reference componentGroupBundleAdoptionCandidates (topology.ui_component_package) keys only",
+            ))
+
+    # manifest_refs_candidate_reference_resolution: manifestRefsCandidate's ref
+    # fields must resolve to an actually-emitted candidate key in the matching
+    # bucket -- a refs-only shape alone is not proof the refs are wired
+    # correctly (PR580 review finding: wiringId pointed at a key no
+    # wiringAdoptionCandidates entry ever emitted).
+    layout_keys = {f"<{c.get('layoutKey')}>" for c in candidates.get("layoutAdoptionCandidates") or []}
+    wiring_keys = {f"<{c.get('wiringKey')}>" for c in candidates.get("wiringAdoptionCandidates") or []}
+    tensor_keys = {f"<{c.get('tensorKey')}>" for c in candidates.get("tensorAdoptionCandidates") or []}
+    if manifest_refs is not None:
+        for ref in manifest_refs.get("packageIds") or []:
+            if ref not in package_keys:
+                errors.append(err(
+                    "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED",
+                    "$.adoptionCandidates.manifestRefsCandidate.packageIds",
+                    "blocking",
+                    f"manifestRefsCandidate.packageIds entry '{ref}' does not resolve to any emitted packageAdoptionCandidates[].packageKey",
+                ))
+        layout_id = manifest_refs.get("layoutId")
+        if layout_id is not None and layout_id not in layout_keys:
+            errors.append(err(
+                "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED",
+                "$.adoptionCandidates.manifestRefsCandidate.layoutId",
+                "blocking",
+                f"manifestRefsCandidate.layoutId '{layout_id}' does not resolve to any emitted layoutAdoptionCandidates[].layoutKey",
+            ))
+        wiring_id = manifest_refs.get("wiringId")
+        if wiring_id is not None and wiring_id not in wiring_keys:
+            errors.append(err(
+                "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED",
+                "$.adoptionCandidates.manifestRefsCandidate.wiringId",
+                "blocking",
+                f"manifestRefsCandidate.wiringId '{wiring_id}' does not resolve to any emitted wiringAdoptionCandidates[].wiringKey",
+            ))
+        tensor_id = manifest_refs.get("tensorId")
+        if tensor_id is not None and tensor_id not in tensor_keys:
+            errors.append(err(
+                "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED",
+                "$.adoptionCandidates.manifestRefsCandidate.tensorId",
+                "blocking",
+                f"manifestRefsCandidate.tensorId '{tensor_id}' does not resolve to any emitted tensorAdoptionCandidates[].tensorKey",
             ))
 
     if flat_records and not any([
