@@ -527,13 +527,115 @@ react_schema_topology_seed_translator_ssot:
         jsonb[] element. The nested topologyUiSeedCandidate is debug/review output only; only
         the flattened topologyUiSeedFlatRecords shape (or an equivalent manual flattening) may be
         adopted into a seed file.
+    top_ssot_alignment:
+      note: >-
+        Added for the ui-seed-translator-uibuilder-top-ssot-alignment bundle. top SSOT
+        (docs/framework-core.yaml topolactor_space_model, docs/framework-policy.yaml
+        ui_topology_tensor_persistence, db/manifest_tables.sql) holds that manifest.topology
+        is a registry-refs / package-refs / layout-refs / relay-refs / runtime-vector store,
+        never a UI-entity payload store. PR #573's fix (this section, pre-alignment) treated
+        the flattened_topology_ui_seed_record_array shape itself as "the seed adoption
+        shape" for manifest.topology -- i.e. it fixed the GIN-index byte-budget failure by
+        splitting the array into smaller elements, but kept adopting UI-entity payload
+        (record trees) directly into manifest.topology, which top SSOT does not allow
+        regardless of element size. adoption_candidate_separation_contract below is the
+        actual fix: UI payload moves to topology.ui_component_package /
+        components_layout_design / components_style_design / components_package_design /
+        ui_wiring_registry / ui_topology_tensor (db/ui_topology_tables.sql), and
+        manifest.topology receives only a refs-only ui_projection-shaped entry
+        (packageIds / layoutId / wiringId / tensorId) per db/manifest_tables.sql.
     allowed_adoption_shapes:
       - shape: nested_topology_ui_seed_candidate
         role: local_tmp_review_artifact_only
         seed_adoptable: false
       - shape: flattened_topology_ui_seed_record_array
+        role: review_migration_temporary_adoption_artifact
+        seed_adoptable: false
+        manifest_topology_final_shape: false
+        note: >-
+          Downgraded from PR #573's "seed_adoption_shape". This shape remains useful as a
+          reviewable, byte-budget-checked intermediate rendering of a topologyUiSeedCandidate
+          tree (e.g. for a human/agent to read before hand-authoring package/layout/wiring/
+          tensor rows, or as a migration source for adoption_candidate_separation_contract's
+          bucketing step), but it must never be pasted into manifest.topology as final
+          content -- see manifest_topology_contains_ui_payload_material and
+          flattened_seed_record_used_as_manifest_final_shape in validation_rules below.
+      - shape: adoption_candidate_bundle
         role: seed_adoption_shape
         seed_adoptable: true
+        ref: adoption_candidate_separation_contract
+    adoption_candidate_separation_contract:
+      purpose: >-
+        The actual seed-safe adoption shape. Splits a topologyUiSeedFlatRecords list (or the
+        tree it was flattened from) into per-target-table candidate buckets plus a refs-only
+        manifest candidate, so nothing UI-entity-shaped is ever proposed for adoption into
+        manifest.topology.
+      tool_ref: >-
+        .agent/scripts/react_schema_topology_seed_translator.py
+        split_flat_records_into_adoption_candidates implements this contract, called from
+        generate-topology-seed after flatten_topology_ui_seed_tree /
+        validate_flat_seed_records.
+      candidate_buckets:
+        packageAdoptionCandidates:
+          target_table: topology.ui_component_package
+          source_record_types: [topology_ui_projection]
+          shape: >-
+            one candidate per Projection record: {packageKey, packageKind:
+            "fixed_form_projection"|"ui_builder_authored", packageSchemaJson: {seedKey,
+            surface, categoryKeys}}. packageKey is derived from seedKey, never invented.
+        layoutAdoptionCandidates:
+          target_table: topology.components_layout_design
+          source_record_types: [topology_ui_category, topology_ui_section, topology_ui_form, topology_ui_field, topology_ui_table, topology_ui_workflow, topology_ui_workflow_step, topology_ui_validation, topology_ui_unresolved]
+          shape: >-
+            one candidate per Projection record: {layoutKey, layoutKind,
+            layoutSchemaJson: {records: <the same topology_ui_seed_record[] wrapper list
+            flatten_topology_ui_seed_tree produces, unmodified>}}. layout_schema_json has
+            no per-array-element GIN index budget (plain jsonb column, not jsonb[]), so no
+            further flattening/splitting is required once it lives here -- the
+            storage_adoption_contract.constraint byte budget applies only to
+            manifest.topology's idx_manifest_topology GIN index, which this candidate never
+            targets.
+        designAdoptionCandidates:
+          target_table: topology.components_style_design
+          source_record_types: [topology_ui_style_ref]
+          shape: one candidate per StyleRef record; empty list when a surface has no style_ref records (not an error -- design/style content is optional, not every surface uses it)
+        wiringAdoptionCandidates:
+          target_table: topology.ui_wiring_registry
+          source_record_types: [topology_ui_action, topology_ui_workflow_step]
+          shape: >-
+            one candidate per Action/Step record carrying eventBinding: {wiringKey,
+            wiringKind: eventBinding.wiringLane, targetSurface: "manifest",
+            wiringSchemaJson: {eventBinding, actionKey/stepKey, authorityMarker}}
+        tensorAdoptionCandidates:
+          target_table: topology.ui_topology_tensor
+          source_record_types: [topology_ui_action, topology_ui_workflow_step]
+          shape: >-
+            one layout_patch_json candidate per Projection: {nodes: [{nodeId: <owning
+            Form/Section key>, nodeKind, runtimeInteractions: [<build_runtime_interaction_candidate
+            output per action, no runtimeInteractionId -- see
+            runtime_interactions_candidate_contract.forbidden>]}]}. This is the carrier
+            runtime_interactions_not_persisted_layout_path checks: every Action/Step
+            eventBinding with a dispatch-shaped wiringLane (external_integration_wiring /
+            external_instance_wiring) must appear inside some tensor candidate's
+            nodes[].runtimeInteractions[], never dropped silently.
+        manifestRefsCandidate:
+          target_table: manifest
+          shape: >-
+            {"type":"ui_projection","packageIds":[<packageAdoptionCandidates ids once
+            persisted>],"layoutId":<layoutAdoptionCandidates id>,"wiringId":<wiringAdoptionCandidates
+            id>,"tensorId":<tensorAdoptionCandidates id>} -- ids are placeholders
+            (candidate-local keys) until a reviewer persists the referenced rows and fills
+            in real UUIDs; the translator never invents or assigns UUIDs itself.
+            required_rules: manifestRefsCandidate must never carry a `record`, `fields`,
+            `actions`, `columns`, `sections`, or `categories` key -- refs and vectors only.
+      required_rules:
+        - every_topologyUiSeedFlatRecords_element_is_assigned_to_exactly_one_non_manifest_bucket_by_recordType
+        - manifestRefsCandidate_never_carries_ui_payload_fields
+        - tensor_candidate_runtimeInteractions_never_carries_runtimeInteractionId
+        - empty_bucket_is_valid_when_no_source_record_type_present_not_an_error
+      prohibited:
+        - proposing_topologyUiSeedFlatRecords_or_topologyUiSeedCandidate_as_a_manifest_topology_adoption_candidate
+        - manifestRefsCandidate_embedding_record_or_nested_list_fields
     flattened_record_contract:
       wrapper_type: topology_ui_seed_record
       required_fields: [type, seedKey, parentKey, record]
@@ -553,7 +655,15 @@ react_schema_topology_seed_translator_ssot:
         requires it), and eventBinding (where the record type requires it) are preserved
         unchanged.
       generated_json_authority: false
-      seed_sql_authority: true
+      seed_sql_authority: false
+      seed_sql_authority_note: >-
+        Downgraded from PR #573 (true -> false): this shape by itself is never final
+        manifest.topology content (manifest_topology_final_shape: false above). It becomes
+        seed-adoptable only after adoption_candidate_separation_contract buckets it into
+        packageAdoptionCandidates / layoutAdoptionCandidates / designAdoptionCandidates /
+        wiringAdoptionCandidates / tensorAdoptionCandidates plus a refs-only
+        manifestRefsCandidate -- those candidates carry seed_sql_authority, this
+        intermediate shape does not.
     validation_rules:
       - serialized_flattened_record_must_fit_target_storage_budget
       - flattened_records_must_reconstruct_a_single_projection_tree_via_parentKey
@@ -561,14 +671,66 @@ react_schema_topology_seed_translator_ssot:
       - every_flattened_record_must_preserve_sourceYamlRefs_and_sourceReactPath
       - every_action_or_workflow_step_record_must_preserve_authorityMarker_and_eventBinding
       - no_flattened_record_may_carry_protected_boundary_vocabulary
+      - manifest_topology_contains_ui_payload_material
+      - flattened_seed_record_used_as_manifest_final_shape
+      - ui_payload_not_split_to_package_layout_design_wiring_tensor
+      - runtime_interactions_not_persisted_layout_path
+      - idempotency_carrier_missing_for_runtime_dispatch
+      - credential_secret_projection_detected
+    top_ssot_violation_rule_definitions:
+      note: >-
+        Full definitions of the six top-SSOT-violation rule ids added above (kept here,
+        adjacent to the contract they enforce, rather than only in validation_rules'
+        flatter list, since these are new rules with non-obvious detection conditions).
+      manifest_topology_contains_ui_payload_material:
+        detects: a candidate proposed for manifest.topology adoption (manifestRefsCandidate
+          or an ad hoc equivalent) carries a `record`, `fields`, `actions`, `columns`,
+          `sections`, or `categories` key instead of only ref/vector fields
+        severity: blocking
+      flattened_seed_record_used_as_manifest_final_shape:
+        detects: any topology_ui_seed_record-typed element (flattened or nested) appears in
+          output destined for manifest.topology rather than layoutAdoptionCandidates
+        severity: blocking
+      ui_payload_not_split_to_package_layout_design_wiring_tensor:
+        detects: generate-topology-seed output omits
+          adoption_candidate_separation_contract candidate buckets entirely (i.e. only the
+          legacy topologyUiSeedFlatRecords/topologyUiSeedCandidate shapes are present) when
+          topologyUiSeedFlatRecords is non-empty
+        severity: blocking
+      runtime_interactions_not_persisted_layout_path:
+        detects: an Action/Step record whose eventBinding.wiringLane is
+          external_integration_wiring or external_instance_wiring has no corresponding
+          entry in any tensorAdoptionCandidates[].layout_patch_json.nodes[].runtimeInteractions[]
+        severity: blocking
+      idempotency_carrier_missing_for_runtime_dispatch:
+        detects: a tensorAdoptionCandidates runtimeInteractions[] entry with actionType
+          dispatchExternalPort or dispatchInstanceOperation is missing the idempotency route
+          fields it must carry through to the backend persistence boundary (trigger,
+          actionType, targetRef/portTargetRef/instanceTargetRef, payloadFrom) -- NOT a check
+          for idempotencyPolicy/lifecycleDispatchConfirmed, which lifecycle_policy in
+          docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml already requires only for
+          lifecycle-triggered dispatch, and NOT a check for runtimeInteractionId, which this
+          translator must never generate (see runtime_interactions_candidate_contract.forbidden)
+        severity: blocking
+      credential_secret_projection_detected:
+        detects: any candidate bucket (package/layout/design/wiring/tensor/manifestRefs)
+          carries a protected_boundary_vocabulary value; a stricter, adoption-candidate-scoped
+          restatement of translator_input_authority.protected_boundary_vocabulary.rule so the
+          check runs again at the adoption-candidate boundary, not only at input-envelope time
+        severity: blocking
     tool_ref: >-
       .agent/scripts/react_schema_topology_seed_translator.py implements this contract:
       flatten_topology_ui_seed_tree builds the flattened_record_contract shape from the same
       record tree topologyUiSeedCandidate is built from; validate_flat_seed_records checks the
-      constraint (SEED_RECORD_EXCEEDS_STORAGE_BUDGET, blocking); generate-topology-seed's
-      optional --seed-sql-fragment flag renders the flattened records as ready-to-paste jsonb[]
-      array element lines (still a generated artifact per generated_artifact_operation_policy,
-      not seed adoption authority by itself -- a reviewer must read and adopt it).
+      constraint (SEED_RECORD_EXCEEDS_STORAGE_BUDGET, blocking);
+      split_flat_records_into_adoption_candidates implements adoption_candidate_separation_contract;
+      validate_adoption_candidates implements the six top_ssot_violation_rule_definitions
+      above, collecting every violation found rather than stopping at the first
+      (fail-fast is prohibited for this check -- see validation_rules ordering note in
+      react_schema_validation); generate-topology-seed's optional --seed-sql-fragment flag
+      renders the flattened records as ready-to-paste jsonb[] array element lines (still a
+      generated artifact per generated_artifact_operation_policy, not seed adoption
+      authority by itself -- a reviewer must read and adopt it).
 
   # ===========================================================================
   # 6. output_format_contract
@@ -599,9 +761,21 @@ react_schema_topology_seed_translator_ssot:
         rule: >-
           populated only for generate_topology_ui_seed, derived from the same tree as
           topologyUiSeedCandidate but flattened per storage_adoption_contract.flattened_record_contract;
-          null for generate_react_schema and round_trip_check. This is the seed-safe adoption
-          shape -- each element is independently checked against
-          storage_adoption_contract.constraint before being offered to a caller.
+          null for generate_react_schema and round_trip_check. This is a review/migration
+          intermediate artifact only (storage_adoption_contract.flattened_record_contract.seed_sql_authority
+          is false) -- each element is independently checked against
+          storage_adoption_contract.constraint, but the seed-safe adoption shape is
+          adoptionCandidates below, not this field directly.
+      adoptionCandidates:
+        type: adoption_candidate_bundle | null
+        rule: >-
+          populated only for generate_topology_ui_seed, built from topologyUiSeedFlatRecords
+          per storage_adoption_contract.adoption_candidate_separation_contract; null for
+          generate_react_schema and round_trip_check. Object with fields
+          packageAdoptionCandidates / layoutAdoptionCandidates / designAdoptionCandidates /
+          wiringAdoptionCandidates / tensorAdoptionCandidates / manifestRefsCandidate (each a
+          list except manifestRefsCandidate, which is a single refs-only object or null when
+          the surface emitted no Projection record). This is the seed-safe adoption shape.
       exchangeReport:
         type: exchange_report_contract
         rule: always populated, even when empty (zero records still yields a report shell)
@@ -1162,13 +1336,19 @@ react_schema_topology_seed_translator_ssot:
             classification: ssot_ambiguity_gap
             status: represented_in_seed
             note: >-
-              Resolved: instance_settings is represented in db/seed_empty.sql manifest
-              00000000-0000-0000-0000-000000000092 as storage_adoption_contract-flattened
-              topology_ui_seed_record entries (categories/sections/forms/fields/actions,
-              including the instance_settings category's four forms), generated from
+              Resolved (re-verified for ui-seed-translator-uibuilder-top-ssot-alignment):
+              instance_settings is represented via topology.ui_component_package /
+              topology.components_layout_design / topology.ui_wiring_registry /
+              topology.ui_topology_tensor rows keyed to seedKey
+              auth.external.credential_management.projection, generated from
               .agent/tests/fixtures/react-schema-topology-seed-translator/credential-management-0092*.input.json
-              via generate-react-schema -> generate-topology-seed --seed-sql-fragment. See
-              docs/design/instance-port-substrate-ssot.yaml
+              via generate-react-schema -> generate-topology-seed
+              (adoptionCandidates -- see storage_adoption_contract.adoption_candidate_separation_contract).
+              db/seed_empty.sql manifest 00000000-0000-0000-0000-000000000092 carries only a
+              refs-only ui_projection entry (packageIds/layoutId/wiringId/tensorId) pointing
+              at those rows; it no longer embeds topology_ui_seed_record tree content
+              directly (pre-alignment PR #573 shape -- see storage_adoption_contract.top_ssot_alignment).
+              See docs/design/instance-port-substrate-ssot.yaml
               existing_credential_management_projection_extension.confirmed_existing_seed
               (missing_mode.instance_settings updated to match). This closes only the
               seed-representation gap; docs/system-roadmap.yaml known_gap_ref
@@ -1269,7 +1449,17 @@ react_schema_topology_seed_translator_ssot:
     storage_adoption_validation: >-
       see storage_adoption_contract.validation_rules; enforced by
       validate_flat_seed_records against every topologyUiSeedFlatRecords element
-      (SEED_RECORD_EXCEEDS_STORAGE_BUDGET, blocking).
+      (SEED_RECORD_EXCEEDS_STORAGE_BUDGET, blocking), and by validate_adoption_candidates
+      against the built adoptionCandidates bundle for the six
+      top_ssot_violation_rule_definitions ids (manifest_topology_contains_ui_payload_material /
+      flattened_seed_record_used_as_manifest_final_shape /
+      ui_payload_not_split_to_package_layout_design_wiring_tensor /
+      runtime_interactions_not_persisted_layout_path /
+      idempotency_carrier_missing_for_runtime_dispatch / credential_secret_projection_detected).
+      All validators in this SSOT (not only this one) collect every detected violation into
+      validationErrors rather than stopping at the first blocking error -- fail-fast
+      short-circuiting on the first error is prohibited; output_format_contract.validationErrors
+      is defined as the full list, and a caller must be able to see every violation from one run.
 
     wiring_lane_validation:
       - every_action_or_step_eventBinding_maps_to_exactly_one_lane

@@ -29,8 +29,19 @@
 -- topology jsonb[] ENTRY SHAPE (ID references and vectors only, no actual data):
 --   { "type": "dispatcher_mapping", "role": "...", "target": "...", "layer": "...", "action": "..." }
 --   { "type": "runtime_mapping", "triggerKind": "...", "target": "..." }
---   { "type": "ui_projection", "packageIds": ["uuid", ...], "layoutId": "uuid" }
---       packageIds → packages.package_id (UI Component Builder layer)
+--   { "type": "ui_projection", "packageIds": ["uuid", ...], "layoutId": "uuid",
+--       "wiringId": "uuid", "tensorId": "uuid" }
+--       packageIds → topology.ui_component_package.package_id
+--       layoutId   → topology.components_layout_design.layout_id
+--       wiringId   → topology.ui_wiring_registry.wiring_id
+--       tensorId   → topology.ui_topology_tensor.tensor_id
+--       wiringId/tensorId are optional refs (only present when the projection
+--       has wiring/runtimeInteractions content); packageIds/layoutId remain
+--       the minimum ui_projection shape. Actual UI-entity payload (form/field/
+--       action/layout structure) lives in the referenced package/layout/
+--       design/wiring/tensor tables, never inline in this jsonb[] entry -- see
+--       docs/design/react-schema-topology-seed-translator-ssot.yaml
+--       storage_adoption_contract.adoption_candidate_separation_contract.
 --   { "type": "projection_constructor_mapping", "constructorKey": "...", "packageIds": [...] }
 --       packageIds → packages.package_id
 --   { "type": "sse_projection", "eventKind": "...", "packageIds": [...] }

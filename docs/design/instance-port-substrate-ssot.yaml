@@ -269,14 +269,20 @@ instance_port_substrate_ssot:
         user_auth: represented by auth.user.boundary and joined from the credential management projection.
         external: represented by external_port_context and policy_template_selection.
         instance_settings: >-
-          represented as storage_adoption_contract-flattened topology_ui_seed_record entries
-          (categories/sections/forms/fields/actions) in db/seed_empty.sql manifest
-          00000000-0000-0000-0000-000000000092, generated via
+          represented as topology.ui_component_package / topology.components_layout_design /
+          topology.ui_wiring_registry / topology.ui_topology_tensor rows (seedKey
+          auth.external.credential_management.projection), generated via
           react-schema-topology-seed-translator generate-react-schema -> generate-topology-seed
-          --seed-sql-fragment from the credential-management-0092 fixtures. This closes the
-          seed-representation gap only; the admin authoring frontend route/island and backend
-          action for JSON template download/import/validate/preview/apply/approve remain
-          unimplemented (docs/system-roadmap.yaml known_gap_ref instance_settings_admin_authoring_ui_pending).
+          adoptionCandidates from the credential-management-0092 fixtures per
+          docs/design/react-schema-topology-seed-translator-ssot.yaml
+          storage_adoption_contract.adoption_candidate_separation_contract. db/seed_empty.sql
+          manifest 00000000-0000-0000-0000-000000000092 carries only a refs-only
+          ui_projection entry (packageIds/layoutId/wiringId/tensorId) pointing at those rows
+          -- it no longer embeds topology_ui_seed_record tree content directly (superseded
+          pre-alignment shape). This closes the seed-representation gap only; the admin
+          authoring frontend route/island and backend action for JSON template
+          download/import/validate/preview/apply/approve remain unimplemented
+          (docs/system-roadmap.yaml known_gap_ref instance_settings_admin_authoring_ui_pending).
       missing_mode: {}
     selected_shape: extend_existing_credential_management_projection
     rule: >-
@@ -454,11 +460,14 @@ instance_port_substrate_ssot:
       in_flight: a concurrent duplicate is currently processing — do NOT execute (INSTANCE_PORT_DISPATCH_IN_FLIGHT)
     gating: >-
       Ledger activates only when idempotency_key is present on the request
-      payload. Absence is not fail-close at this generic boundary. The UI
-      Builder wiring lane (docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
-      lifecycle_policy.retry_safe_dispatch_idempotency) always supplies one for
-      its authored dispatchInstanceOperation runtimeInteractions; key
-      generation is owned by that SSOT, not duplicated here.
+      payload. Absence is not fail-close at this generic boundary. The
+      runtime_interactions_lane specifically (docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+      lane_storage_boundary.lanes.runtime_interactions_lane and
+      lifecycle_policy.retry_safe_dispatch_idempotency — not the same SSOT's
+      package_internal_api_wiring_lane, whose idempotency applicability is a
+      separate known_gap) always supplies one for its authored
+      dispatchInstanceOperation runtimeInteractions; key generation is owned
+      by that SSOT, not duplicated here.
     implementation:
       table: topology.runtime_dispatch_idempotency_ledger (db/topology_tables.sql; SHARED with external_port_runtime, dispatch_lane column distinguishes rows)
       functions: [topology.rt_claim_dispatch_idempotency_key, topology.rt_complete_dispatch_idempotency_key, topology.rt_fail_dispatch_idempotency_key]
