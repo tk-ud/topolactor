@@ -2,9 +2,13 @@
 
 This protocol is condition-triggered. It is not an always-on read.
 
+## Route scope
+
+`.agent/tmp/tmp.txt` (this protocol) is the **fallback-route** scenario contract, used only when `.agent/tools/agent-ui-initial-contract` is unavailable. When the tool is usable, `senario-tmp.md` (created exclusively by `agent-ui-initial-contract end`, per `docs/governance/agent-ui-protocol-ssot.yaml` `senario_tmp_contract.generation_authority`) is the tool-first scenario contract instead -- do not create `.agent/tmp/tmp.txt` as a second/duplicate contract when the tool-first route already produced `senario-tmp.md`.
+
 ## Trigger scope
 
-Create and verify `.agent/tmp/tmp.txt` when changes include runtime claim, canonical route behavior, persistence behavior, or projection behavior.
+Create and verify `.agent/tmp/tmp.txt` when changes include runtime claim, canonical route behavior, persistence behavior, or projection behavior, and the tool-first route is unavailable.
 
 ## Precondition: Workflow Order Invariant Gate
 

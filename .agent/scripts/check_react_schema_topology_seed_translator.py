@@ -617,6 +617,311 @@ def main():
             ),
         )
 
+        # 36k-36q: storage_adoption_contract.adoption_candidate_separation_contract
+        # -- the actual seed-safe adoption shape built from flat_records above.
+        adoption = (doc_ts or {}).get("adoptionCandidates") or {}
+        expect("36k. adoptionCandidates is populated for the golden fixture", bool(adoption))
+        expect("36l. packageAdoptionCandidates has exactly one entry (one Projection record)", len(adoption.get("packageAdoptionCandidates") or []) == 1)
+        expect(
+            "36l1. packageAdoptionCandidates shape matches topology.components_package_design (packageKey + layout array), never the ui_component_package shape",
+            all("packageKey" in c and "layout" in c and isinstance(c["layout"], list) for c in adoption.get("packageAdoptionCandidates") or []),
+        )
+        expect(
+            "36l2. componentGroupBundleAdoptionCandidates is a distinct bucket (topology.ui_component_package, tensor-FK-only) with a key different from packageAdoptionCandidates",
+            len(adoption.get("componentGroupBundleAdoptionCandidates") or []) == 1
+            and (adoption["componentGroupBundleAdoptionCandidates"][0].get("componentGroupBundleKey") != (adoption.get("packageAdoptionCandidates") or [{}])[0].get("packageKey")),
+        )
+        expect("36m. layoutAdoptionCandidates is populated (category/section/form/field tree)", bool(adoption.get("layoutAdoptionCandidates")))
+        layout_records_list = dig(adoption, "layoutAdoptionCandidates") or []
+        layout_tree_records = dig(layout_records_list[0], "layoutSchemaJson", "records") if layout_records_list else []
+        expect(
+            "36m1. layoutAdoptionCandidates' layout tree carries the topology_ui_action records too (PRIMARY storage bucket per primary_and_derived_candidate_relationship, not only wiring/tensor derived candidates)",
+            any(dig(w, "record", "recordType") == "topology_ui_action" for w in layout_tree_records or []),
+        )
+        wiring_candidates_list = adoption.get("wiringAdoptionCandidates") or []
+        wiring_actions = dig(wiring_candidates_list[0], "wiringSchemaJson", "actions") if wiring_candidates_list else []
+        expect(
+            "36n. wiringAdoptionCandidates is ONE aggregate entry per Projection (never one per Action/Step -- cardinality_note) whose wiringSchemaJson.actions[] preserves all six instance_settings actions",
+            len(wiring_candidates_list) == 1
+            and {"json_template_download", "json_import", "validate", "preview", "apply", "approve"}.issubset(
+                {a.get("sourceRecordKey") for a in wiring_actions or []}
+            ),
+        )
+        tensor_action_keys = set()
+        for tensor in adoption.get("tensorAdoptionCandidates") or []:
+            for node in dig(tensor, "layoutPatchJson", "nodes") or []:
+                for interaction in node.get("runtimeInteractions") or []:
+                    if interaction.get("sourceActionKey"):
+                        tensor_action_keys.add(interaction["sourceActionKey"])
+        expect(
+            "36o. every wiring candidate's action is reachable from a tensorAdoptionCandidates runtimeInteractions[] entry (runtime_interactions_not_persisted_layout_path is clean on the golden fixture)",
+            {"validate", "preview", "apply", "approve"}.issubset(tensor_action_keys),
+        )
+        expect(
+            "36p. tensor runtimeInteractions entries carry idempotency route fields (trigger/actionType/instanceTargetRef/payloadFrom) and never runtimeInteractionId",
+            all(
+                interaction.get("trigger") and interaction.get("actionType") and interaction.get("instanceTargetRef") and "payloadFrom" in interaction and "runtimeInteractionId" not in interaction
+                for tensor in adoption.get("tensorAdoptionCandidates") or []
+                for node in dig(tensor, "layoutPatchJson", "nodes") or []
+                for interaction in node.get("runtimeInteractions") or []
+                if interaction.get("actionType") == "dispatchInstanceOperation"
+            ),
+        )
+        manifest_refs = adoption.get("manifestRefsCandidate") or {}
+        expect(
+            "36q. manifestRefsCandidate carries only ref/vector fields (type/packageIds/layoutId/wiringId/tensorId), never record/fields/actions/categories",
+            manifest_refs.get("type") == "ui_projection"
+            and not ({"record", "fields", "actions", "columns", "sections", "categories"} & manifest_refs.keys())
+            and manifest_refs.get("packageIds") and manifest_refs.get("layoutId") and manifest_refs.get("wiringId") and manifest_refs.get("tensorId"),
+        )
+        component_group_bundle_keys = {f"<{c.get('componentGroupBundleKey')}>" for c in adoption.get("componentGroupBundleAdoptionCandidates") or []}
+        package_keys = {f"<{c.get('packageKey')}>" for c in adoption.get("packageAdoptionCandidates") or []}
+        expect(
+            "36q1. manifestRefsCandidate.packageIds references packageAdoptionCandidates (topology.components_package_design) keys, never componentGroupBundleAdoptionCandidates (topology.ui_component_package) keys",
+            bool(manifest_refs.get("packageIds"))
+            and set(manifest_refs["packageIds"]).issubset(package_keys)
+            and not (set(manifest_refs["packageIds"]) & component_group_bundle_keys),
+        )
+        expect(
+            "36q2. tensorAdoptionCandidates packageIdRef references componentGroupBundleAdoptionCandidates (topology.ui_component_package) keys, never packageAdoptionCandidates (topology.components_package_design) keys",
+            all(
+                t.get("packageIdRef") in component_group_bundle_keys and t.get("packageIdRef") not in package_keys
+                for t in adoption.get("tensorAdoptionCandidates") or []
+            ),
+        )
+        layout_keys_36q3 = {f"<{c.get('layoutKey')}>" for c in adoption.get("layoutAdoptionCandidates") or []}
+        wiring_keys_36q3 = {f"<{c.get('wiringKey')}>" for c in wiring_candidates_list}
+        tensor_keys_36q3 = {f"<{c.get('tensorKey')}>" for c in adoption.get("tensorAdoptionCandidates") or []}
+        expect(
+            "36q3. manifestRefsCandidate's packageIds/layoutId/wiringId/tensorId each resolve to an actually-emitted candidate key in the matching bucket (manifest_refs_candidate_reference_resolution -- refs-only is not by itself proof the refs are wired correctly; PR580 review finding was exactly a wiringId that resolved to nothing)",
+            set(manifest_refs.get("packageIds") or []).issubset(package_keys)
+            and manifest_refs.get("layoutId") in layout_keys_36q3
+            and manifest_refs.get("wiringId") in wiring_keys_36q3
+            and manifest_refs.get("tensorId") in tensor_keys_36q3,
+        )
+        expect(
+            "36r. the eight new top_ssot_violation rule ids do not fire on the golden fixture (clean positive path)",
+            not (rule_ids(doc_ts) and set(rule_ids(doc_ts)) & {
+                "MANIFEST_TOPOLOGY_CONTAINS_UI_PAYLOAD_MATERIAL", "FLATTENED_SEED_RECORD_USED_AS_MANIFEST_FINAL_SHAPE",
+                "UI_PAYLOAD_NOT_SPLIT_TO_PACKAGE_LAYOUT_DESIGN_WIRING_TENSOR", "RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH",
+                "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH", "CREDENTIAL_SECRET_PROJECTION_DETECTED",
+                "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH", "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED",
+            }),
+        )
+
+        # 36r1: cross-file proof that the SSOT's documented package authority target
+        # actually agrees with docs/design/db-schema.yaml -- the real "DB design
+        # authority" this whole fix exists to track, read independently of the
+        # translator's own self-reported behavior above (which could pass even if
+        # both files drifted the same wrong way together).
+        db_schema_text = (REPO_ROOT / "docs" / "design" / "db-schema.yaml").read_text(encoding="utf-8")
+        translator_ssot_text = (REPO_ROOT / "docs" / "design" / "react-schema-topology-seed-translator-ssot.yaml").read_text(encoding="utf-8")
+        packages_block_match = re.search(r"\n    packages:\n(?:.+\n)+?      manifest_reference: (\S+)", db_schema_text)
+        expect(
+            "36r2. docs/design/db-schema.yaml packages entry declares manifest_reference: manifest.topology[ui_projection].packageIds (the DB design authority this fix tracks)",
+            packages_block_match is not None and packages_block_match.group(1) == "manifest.topology[ui_projection].packageIds",
+        )
+        package_target_table_match = re.search(r"packageAdoptionCandidates:\n\s+target_table: (\S+)", translator_ssot_text)
+        expect(
+            "36r3. translator SSOT packageAdoptionCandidates.target_table agrees with docs/design/db-schema.yaml's manifest-facing package authority (topology.components_package_design, not topology.ui_component_package)",
+            package_target_table_match is not None and package_target_table_match.group(1) == "topology.components_package_design",
+        )
+
+        # 36s-36y: unit-level negative-path proof that validate_adoption_candidates
+        # actually detects each of the six top_ssot_violation_rule_definitions --
+        # these are translator-self-consistency guards a well-formed CLI input
+        # cannot organically trigger (the translator itself never emits a bad
+        # manifestRefsCandidate), so they are exercised by importing the
+        # implementation module directly and feeding it hand-built candidate
+        # bundles, per this file's role as the structured-assertion layer.
+        sys.path.insert(0, str(REPO_ROOT / ".agent" / "scripts"))
+        import react_schema_topology_seed_translator as translator_impl  # noqa: E402
+
+        bad_manifest_refs_payload = translator_impl.validate_adoption_candidates(
+            {"manifestRefsCandidate": {"type": "ui_projection", "packageIds": ["x"], "record": {"key": "leak"}}},
+            [],
+        )
+        expect("36s. manifest_topology_contains_ui_payload_material fires when manifestRefsCandidate carries a `record` key", "MANIFEST_TOPOLOGY_CONTAINS_UI_PAYLOAD_MATERIAL" in [e["ruleId"] for e in bad_manifest_refs_payload])
+
+        bad_manifest_refs_type = translator_impl.validate_adoption_candidates(
+            {"manifestRefsCandidate": {"type": "topology_ui_seed_record", "packageIds": []}},
+            [],
+        )
+        expect("36t. flattened_seed_record_used_as_manifest_final_shape fires when manifestRefsCandidate.type == topology_ui_seed_record", "FLATTENED_SEED_RECORD_USED_AS_MANIFEST_FINAL_SHAPE" in [e["ruleId"] for e in bad_manifest_refs_type])
+
+        unsplit_errors = translator_impl.validate_adoption_candidates(
+            {"packageAdoptionCandidates": [], "layoutAdoptionCandidates": [], "wiringAdoptionCandidates": [], "tensorAdoptionCandidates": []},
+            [{"record": {"recordType": "topology_ui_field", "key": "orphan"}}],
+        )
+        expect("36u. ui_payload_not_split_to_package_layout_design_wiring_tensor fires when flat_records is non-empty but every candidate bucket is empty", "UI_PAYLOAD_NOT_SPLIT_TO_PACKAGE_LAYOUT_DESIGN_WIRING_TENSOR" in [e["ruleId"] for e in unsplit_errors])
+
+        orphan_dispatch_action = {
+            "record": {
+                "recordType": "topology_ui_action", "key": "orphan_action", "sourceReactPath": "$.root.x",
+                "eventBinding": {"wiringLane": "external_instance_wiring", "targetRef": "instance:db_instance_port:a:b"},
+                "runtimeInteractions": [{"actionType": "dispatchInstanceOperation", "sourceActionKey": "orphan_action"}],
+            },
+        }
+        orphan_errors = translator_impl.validate_adoption_candidates({"tensorAdoptionCandidates": []}, [orphan_dispatch_action])
+        orphan_rule_ids = [e["ruleId"] for e in orphan_errors]
+        expect("36v. runtime_interactions_not_persisted_layout_path fires when a dispatch-lane action has no tensorAdoptionCandidates runtimeInteractions[] entry", "RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH" in orphan_rule_ids)
+        expect("36w. idempotency_carrier_missing_for_runtime_dispatch fires when a dispatchInstanceOperation candidate is missing instanceTargetRef/payloadFrom", "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH" in orphan_rule_ids)
+
+        stray_id_action = {
+            "record": {
+                "recordType": "topology_ui_action", "key": "stray_id_action", "sourceReactPath": "$.root.y",
+                "eventBinding": {"wiringLane": "internal_instance_wiring"},
+                "runtimeInteractions": [{"actionType": "localStateMutation", "runtimeInteractionId": "should-not-be-here"}],
+            },
+        }
+        stray_id_errors = translator_impl.validate_adoption_candidates({"tensorAdoptionCandidates": []}, [stray_id_action])
+        expect("36x. idempotency_carrier_missing_for_runtime_dispatch fires when a runtimeInteractions candidate carries runtimeInteractionId (translator must never generate one)", "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH" in [e["ruleId"] for e in stray_id_errors])
+
+        secret_leak_errors = translator_impl.validate_adoption_candidates(
+            {"wiringAdoptionCandidates": [{"wiringKey": "leak", "wiringSchemaJson": {"password_hash": "should-never-appear"}}]},
+            [],
+        )
+        expect("36y. credential_secret_projection_detected fires when an adoption candidate carries a password_hash key", "CREDENTIAL_SECRET_PROJECTION_DETECTED" in [e["ruleId"] for e in secret_leak_errors])
+
+        # forbidden-field guard-list declarations (documentation, not leakage)
+        # must NOT false-positive credential_secret_projection_detected.
+        guard_list_errors = translator_impl.validate_adoption_candidates(
+            {"wiringAdoptionCandidates": [{"wiringKey": "policy", "wiringSchemaJson": {"forbidden_fields": ["secret", "plaintext_secret", "token"]}}]},
+            [],
+        )
+        expect("36z. credential_secret_projection_detected does NOT false-positive on a forbidden_fields guard-list array (values, not a denylisted key)", "CREDENTIAL_SECRET_PROJECTION_DETECTED" not in [e["ruleId"] for e in guard_list_errors])
+
+        # 36z1-36z3: package_authority_target_table_mismatch -- the rule added for
+        # the ui_component_package / components_package_design conflation this
+        # section exists to prevent from silently reproducing.
+        swapped_manifest_refs_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {"type": "ui_projection", "packageIds": ["<seed.component_group_bundle>"]},
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "componentGroupBundleAdoptionCandidates": [{"componentGroupBundleKey": "seed.component_group_bundle"}],
+            },
+            [],
+        )
+        expect(
+            "36z1. package_authority_target_table_mismatch fires when manifestRefsCandidate.packageIds references a componentGroupBundleAdoptionCandidates key",
+            "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH" in [e["ruleId"] for e in swapped_manifest_refs_errors],
+        )
+
+        swapped_tensor_ref_errors = translator_impl.validate_adoption_candidates(
+            {
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "componentGroupBundleAdoptionCandidates": [{"componentGroupBundleKey": "seed.component_group_bundle"}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor", "packageIdRef": "<seed.package>", "layoutPatchJson": {"nodes": []}}],
+            },
+            [],
+        )
+        expect(
+            "36z2. package_authority_target_table_mismatch fires when tensorAdoptionCandidates.packageIdRef references a packageAdoptionCandidates key",
+            "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH" in [e["ruleId"] for e in swapped_tensor_ref_errors],
+        )
+
+        correctly_wired_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {"type": "ui_projection", "packageIds": ["<seed.package>"]},
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "componentGroupBundleAdoptionCandidates": [{"componentGroupBundleKey": "seed.component_group_bundle"}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor", "packageIdRef": "<seed.component_group_bundle>", "layoutPatchJson": {"nodes": []}}],
+            },
+            [],
+        )
+        expect(
+            "36z3. package_authority_target_table_mismatch does NOT false-positive when packageIds/packageIdRef are wired to the correct respective buckets",
+            "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH" not in [e["ruleId"] for e in correctly_wired_errors],
+        )
+
+        # 36z4-36z6: manifest_refs_candidate_reference_resolution -- reproduces the
+        # exact PR580 review finding (an earlier translator version emitted one
+        # wiringAdoptionCandidates entry per Action/Step but a single
+        # aggregate-style wiringId that matched none of them) as a unit-level
+        # negative-path proof, plus a clean-resolution positive-path proof so the
+        # rule cannot false-positive on correctly-wired candidates.
+        unresolved_wiring_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {
+                    "type": "ui_projection",
+                    "packageIds": ["<seed.package>"],
+                    "layoutId": "<seed.layout>",
+                    "wiringId": "<seed.wiring>",
+                    "tensorId": "<seed.tensor>",
+                },
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "layoutAdoptionCandidates": [{"layoutKey": "seed.layout"}],
+                # Old, incorrect per-Action shape: no candidate actually carries the
+                # aggregate key "seed.wiring" the manifestRefsCandidate references.
+                "wiringAdoptionCandidates": [{"wiringKey": "seed.validate.wiring"}, {"wiringKey": "seed.approve.wiring"}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor"}],
+            },
+            [],
+        )
+        expect(
+            "36z4. manifest_refs_candidate_reference_resolution fires when manifestRefsCandidate.wiringId does not match any emitted wiringAdoptionCandidates[].wiringKey (the exact PR580 review finding)",
+            "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED" in [e["ruleId"] for e in unresolved_wiring_errors],
+        )
+
+        unresolved_layout_tensor_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {
+                    "type": "ui_projection",
+                    "packageIds": ["<seed.package>"],
+                    "layoutId": "<seed.wrong_layout>",
+                    "wiringId": "<seed.wiring>",
+                    "tensorId": "<seed.wrong_tensor>",
+                },
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "layoutAdoptionCandidates": [{"layoutKey": "seed.layout"}],
+                "wiringAdoptionCandidates": [{"wiringKey": "seed.wiring"}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor"}],
+            },
+            [],
+        )
+        expect(
+            "36z5. manifest_refs_candidate_reference_resolution fires independently for an unresolved layoutId and an unresolved tensorId in the same candidates bundle (collects every violation, not just the first)",
+            {"$.adoptionCandidates.manifestRefsCandidate.layoutId", "$.adoptionCandidates.manifestRefsCandidate.tensorId"}.issubset(
+                {e["path"] for e in unresolved_layout_tensor_errors if e["ruleId"] == "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED"}
+            ),
+        )
+
+        resolved_refs_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {
+                    "type": "ui_projection",
+                    "packageIds": ["<seed.package>"],
+                    "layoutId": "<seed.layout>",
+                    "wiringId": "<seed.wiring>",
+                    "tensorId": "<seed.tensor>",
+                },
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "layoutAdoptionCandidates": [{"layoutKey": "seed.layout"}],
+                "wiringAdoptionCandidates": [{"wiringKey": "seed.wiring", "wiringSchemaJson": {"actions": [{"wiringKey": "seed.validate.wiring"}, {"wiringKey": "seed.approve.wiring"}]}}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor"}],
+            },
+            [],
+        )
+        expect(
+            "36z6. manifest_refs_candidate_reference_resolution does NOT false-positive when every ref (packageIds/layoutId/wiringId/tensorId) resolves to its matching bucket's actually-emitted key, including the aggregate wiringId shape",
+            "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED" not in [e["ruleId"] for e in resolved_refs_errors],
+        )
+
+        # 36z7: grep guard against the retired "one row per Action record" wiring
+        # cardinality wording re-appearing in docs after the Blocking 2 fix above
+        # (PR580 review follow-up) -- the correct wording is one aggregate row
+        # per Projection with wiringSchemaJson.actions[]/wiring_schema_json.actions[].
+        wiring_cardinality_doc_targets = [
+            REPO_ROOT / "docs" / "projection_design" / "credential-management-projection-design.md",
+            REPO_ROOT / "docs" / "design" / "react-schema-topology-seed-translator-ssot.yaml",
+        ]
+        wiring_cardinality_doc_text = "\n".join(p.read_text(encoding="utf-8") for p in wiring_cardinality_doc_targets)
+        expect(
+            "36z7. no doc reintroduces the retired \"one row per Action record\" wiring cardinality wording (must read one aggregate row per Projection instead)",
+            "one row per Action record" not in wiring_cardinality_doc_text
+            and "one candidate per Action/Step record carrying eventBinding" not in wiring_cardinality_doc_text,
+        )
+
         # 36f-36h: a synthetic oversized single-field candidate must be caught
         # by storage_adoption_contract's budget check at generation time, not
         # discovered later as a real Postgres INSERT failure (the PR #573 gap
@@ -1094,10 +1399,12 @@ def main():
         ]
         repo_text = "\n".join(path.read_text(encoding="utf-8") for path in repo_text_targets)
         expect(
-            "89. Agent UI route wording exposes prompt_content/protocol_trigger_hints full text and does not retain protocol-excerpts/manual-protocol as the tool-first route",
+            "89. Agent UI route wording exposes prompt_content full text plus normalized protocol_obligations[] and does not retain protocol-excerpts/manual-protocol/retired protocol_trigger_hints as the tool-first route",
             "protocol excerpts" not in repo_text.lower()
             and "triggered protocol excerpts" not in repo_text.lower()
-            and "protocol_trigger_hints[].content" in repo_text
+            and "protocol_trigger_hints" not in repo_text
+            and "protocol_obligations" in repo_text
+            and "fallback_protocol_ref" in repo_text
             and "full text" in repo_text.lower(),
         )
 
@@ -1187,7 +1494,9 @@ def main():
             all(name in agent_ui_src["initial"] for name in ("def _cmd_start", "def _read_full", "def _cmd_resolve_ssot", "def _cmd_sections", "def _cmd_end", "def build_parser"))
             and all(name in agent_ui_src["local"] for name in ("def _cmd_run_worktype_tests", "def _cmd_read_senario_tmp", "def _cmd_checklist", "def _cmd_checks", "def _cmd_summary", "def _run_check", "def _checklist_items"))
             and all(name in agent_ui_src["common"] for name in ("def worktypes", "def reject_output_flag", "def parse_senario_tmp"))
-            and "protocol_trigger_hints_note" in agent_ui_src["initial"]
+            and "protocol_obligations_note" in agent_ui_src["initial"] and "PROTOCOL_OBLIGATION_NOTE" in agent_ui_src["initial"]
+            and "protocol_trigger_hints" not in agent_ui_src["initial"]
+            and "def _build_protocol_obligation" in agent_ui_src["initial"]
             and "not SSOT authority" in agent_ui_src["local"]
             and "proof\ncompletion" in agent_ui_src["local"],
         )
@@ -1297,6 +1606,55 @@ def main():
         expect(
             "100. cross-boundary proof fails closed on eventBinding instance: vocabulary when used as runtimeInteractions[].instanceTargetRef",
             invalid_boundary_error == "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:instance:db_instance_port:instance_authority_key:operation_binding_key",
+        )
+
+        agent_tools_dir = REPO_ROOT / ".agent" / "scripts" / "agent_tools"
+        if str(agent_tools_dir) not in sys.path:
+            sys.path.insert(0, str(agent_tools_dir))
+        import agent_ui_initial_contract as initial_contract_impl
+
+        impl_change_obligation, impl_change_truncated = initial_contract_impl._build_protocol_obligation(
+            ".agent/protocols/implementation-change.md", "required", "always",
+        )
+        expect(
+            "101. protocol_obligations[] entry for a required protocol is a normalized extraction (not full text), routes/applies are set from the caller, and unmapped fields are honestly null rather than fabricated",
+            impl_change_obligation is not None
+            and impl_change_truncated is False
+            and impl_change_obligation["protocol_path"] == ".agent/protocols/implementation-change.md"
+            and impl_change_obligation["route_mode"] == "required"
+            and impl_change_obligation["applies"] == "always"
+            and impl_change_obligation["fallback_protocol_ref"] == ".agent/protocols/implementation-change.md"
+            and impl_change_obligation["trigger_condition"] is not None
+            and "Runtime/code changes under existing SSOT." in "\n".join(impl_change_obligation["trigger_condition"])
+            and impl_change_obligation["blocking_conditions"] is not None
+            and any("db-schema.yaml" in line for line in impl_change_obligation["blocking_conditions"])
+            and impl_change_obligation["classification_vocab"] is None,
+        )
+
+        ssot_impact_obligation, _ = initial_contract_impl._build_protocol_obligation(
+            ".agent/protocols/ssot-change-impact.md", "triggered:ssot_change", "agent_judgment_required",
+        )
+        expect(
+            "102. protocol_obligations[] heading-alias matching normalizes heterogeneous real heading spellings (## Trigger / ## Required / ## Prohibited / ## Output Expectation) into the same canonical fields other protocols reach via ## trigger_condition / ## blocking_conditions / ## pass_conditions",
+            ssot_impact_obligation is not None
+            and ssot_impact_obligation["route_mode"] == "triggered:ssot_change"
+            and ssot_impact_obligation["applies"] == "agent_judgment_required"
+            and ssot_impact_obligation["trigger_condition"] is not None
+            and any("SSOT files" in line for line in ssot_impact_obligation["trigger_condition"])
+            and ssot_impact_obligation["required_fields"] is not None
+            and any("impact checks" in line for line in ssot_impact_obligation["required_fields"])
+            and ssot_impact_obligation["blocking_conditions"] is not None
+            and any("stale expectations" in line for line in ssot_impact_obligation["blocking_conditions"])
+            and ssot_impact_obligation["output_boundary"] is not None
+            and any("lightweight" in line for line in ssot_impact_obligation["output_boundary"]),
+        )
+
+        missing_obligation, _ = initial_contract_impl._build_protocol_obligation(
+            ".agent/protocols/__does_not_exist__.md", "required", "always",
+        )
+        expect(
+            "103. protocol_obligations[] extraction fails closed (returns None, not a fabricated empty entry) for a routed path that does not exist on disk, matching _read_full's missing-file contract",
+            missing_obligation is None,
         )
 
     print()

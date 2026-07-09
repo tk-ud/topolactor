@@ -14,13 +14,14 @@ Worktype is `audit`, including any of:
 - 「差分見て」「リポジトリ進捗見て」「マージしていいか」系依頼
 
 ## tool_first_entry
-When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → `start` → `resolve-ssot` → `sections` → `end` per [`docs/governance/agent-ui-protocol-ssot.yaml`](../../docs/governance/agent-ui-protocol-ssot.yaml). `start` inlines the routed prompt as `prompt_content` and the routed required/triggered protocol full text as `protocol_trigger_hints[].content`; SSOT sections are read in `resolve-ssot` / `sections`, not in `start` alone. Protocol file paths listed below are fallback-route/manual verification references only when the tool is unusable, or when checking tool-output absence/routing inconsistency; under tool-first they are already represented by `protocol_trigger_hints[].content` and are not an extra mandatory manual read. After implementation or audit work, close with the full `agent-ui-local-test` chain through `summary`. This file remains the fallback router when the tool is not usable.
+When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → `start` → `resolve-ssot` → `sections` → `end` per [`docs/governance/agent-ui-protocol-ssot.yaml`](../../docs/governance/agent-ui-protocol-ssot.yaml). `start` inlines the routed prompt as `prompt_content` (full text) and the routed required/triggered protocol as `protocol_obligations[]` (normalized structured fields extracted from each protocol file's own headings -- trigger_condition/judgment_scope/foundation_ssot_read_gate/blocking_conditions/pass_conditions/required_fields/classification_vocab/output_boundary -- not that file's full text); SSOT sections are read in `resolve-ssot` / `sections`, not in `start` alone. Protocol file paths listed below are fallback-route/manual verification references only when the tool is unusable, when checking tool-output absence/routing inconsistency, or when reading beyond `protocol_obligations[]`'s 8 canonical fields is needed (each entry's `fallback_protocol_ref` points back to the same path); under tool-first they are already represented by `protocol_obligations[]` and are not an extra mandatory manual read. After implementation or audit work, close with the full `agent-ui-local-test` chain through `summary`. This file remains the fallback router when the tool is not usable.
 ## required_reads
 - semantic audit top-level SSOT baseline（always for audit worktype）:
   1. docs/framework-core.yaml
   2. docs/framework-policy.yaml
   3. docs/design/runtime-orchestration-ssot.yaml
   4. docs/design/pipeline-continuity-ssot.yaml
+  5. docs/design/db-schema.yaml -- additionally mandatory when the audited diff touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets (see `.agent/protocols/audit.md` `foundation_ssot_read_gate`)
 - PR diff or patch
 - changed file list
 - PR上の記録 when the audit target is a PR:
@@ -116,6 +117,7 @@ When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → 
 - framework_policy_read: yes/no
 - runtime_orchestration_read: yes/no
 - pipeline_continuity_read: yes/no
+- db_schema_read: yes/no/not_required (not_required only when the diff does not touch DB/manifest/seed/UI-topology/package/layout/design/wiring/tensor/translator-adoption surfaces)
 - target_ssot_read_after_foundation:
 
 ## top_level_ssot_checked
@@ -123,3 +125,4 @@ When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → 
 - docs/framework-policy.yaml: yes/no
 - docs/design/runtime-orchestration-ssot.yaml: yes/no
 - docs/design/pipeline-continuity-ssot.yaml: yes/no
+- docs/design/db-schema.yaml: yes/no/not_required

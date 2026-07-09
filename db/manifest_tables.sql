@@ -29,8 +29,32 @@
 -- topology jsonb[] ENTRY SHAPE (ID references and vectors only, no actual data):
 --   { "type": "dispatcher_mapping", "role": "...", "target": "...", "layer": "...", "action": "..." }
 --   { "type": "runtime_mapping", "triggerKind": "...", "target": "..." }
---   { "type": "ui_projection", "packageIds": ["uuid", ...], "layoutId": "uuid" }
---       packageIds → packages.package_id (UI Component Builder layer)
+--   { "type": "ui_projection", "packageIds": ["uuid", ...], "layoutId": "uuid",
+--       "wiringId": "uuid", "tensorId": "uuid" }
+--       packageIds → topology.components_package_design.package_id
+--           (docs/design/db-schema.yaml packages/components_package_design:
+--           role component_design_bundle_referenced_by_manifest, with
+--           manifest_reference: manifest.topology[ui_projection].packageIds --
+--           this is the SAME package authority the pre-existing
+--           projection_constructor_mapping / sse_projection entries below
+--           reference. NOT topology.ui_component_package -- that is a
+--           DIFFERENT identity, role component_group_bundle, required only by
+--           topology.ui_topology_tensor.package_id's own FK constraint; it is
+--           never a manifest.packageIds target.)
+--       layoutId   → topology.components_layout_design.layout_id
+--       wiringId   → topology.ui_wiring_registry.wiring_id
+--       tensorId   → topology.ui_topology_tensor.tensor_id
+--           (the referenced tensor row's OWN internal package_id column
+--           references topology.ui_component_package, a separate id from
+--           this entry's packageIds -- see the component_group_bundle note
+--           above; the two are related but not the same value.)
+--       wiringId/tensorId are optional refs (only present when the projection
+--       has wiring/runtimeInteractions content); packageIds/layoutId remain
+--       the minimum ui_projection shape. Actual UI-entity payload (form/field/
+--       action/layout structure) lives in the referenced package/layout/
+--       design/wiring/tensor tables, never inline in this jsonb[] entry -- see
+--       docs/design/react-schema-topology-seed-translator-ssot.yaml
+--       storage_adoption_contract.adoption_candidate_separation_contract.
 --   { "type": "projection_constructor_mapping", "constructorKey": "...", "packageIds": [...] }
 --       packageIds → packages.package_id
 --   { "type": "sse_projection", "eventKind": "...", "packageIds": [...] }

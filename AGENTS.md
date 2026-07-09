@@ -21,7 +21,7 @@ Agent executes requested repository work while preserving canonical runtime rout
 Three phases per [`docs/governance/agent-ui-protocol-ssot.yaml`](docs/governance/agent-ui-protocol-ssot.yaml) `flow_order` (see [`.agent/tools/README.md`](.agent/tools/README.md)):
 
 1. **initial_contract** — `agent-ui-initial-contract`: `worktypes` → `start` → `resolve-ssot` → `sections` → `end` (follow each subcommand's `next_step`).
-   - `start`: worktype route from [`.agent/routes/worktype-required-protocols.yaml`](.agent/routes/worktype-required-protocols.yaml); tool-generated `uuid`/`datetime`; routed prompt and required/triggered protocol **full text** (`prompt_content`, `protocol_trigger_hints[].content`); `workflow_procedure` from `.agent/skills/agent-workflow.md`. Whether a `triggered_protocols` condition applies to the current task is still an agent judgment call.
+   - `start`: worktype route from [`.agent/routes/worktype-required-protocols.yaml`](.agent/routes/worktype-required-protocols.yaml); tool-generated `uuid`/`datetime`; routed prompt **full text** (`prompt_content`) plus routed required/triggered protocol **normalized structured fields** (`protocol_obligations[]` — trigger_condition/judgment_scope/foundation_ssot_read_gate/blocking_conditions/pass_conditions/required_fields/classification_vocab/output_boundary per file, extracted from that file's own headings, not its full body; each entry's `fallback_protocol_ref` points back to the file for fallback-route/deeper reads); `workflow_procedure` from `.agent/skills/agent-workflow.md`. Whether a `triggered_protocols` condition applies to the current task is still an agent judgment call.
    - `resolve-ssot` / `sections`: applicable SSOT section subtrees only — not resolved in `start`.
    - `end`: writes `senario-tmp.md` (scope + negative cases; must not be committed) and appends compact metadata to [`.agent/tools/logs/tool.log`](.agent/tools/logs/tool.log). Reuse the same `uuid`/`datetime` through `summary`.
 
@@ -68,7 +68,7 @@ Condition-triggered surfaces from worktype routing (`.agent/routes/worktype-requ
 - Temporary Scenario Contract — [`.agent/protocols/scenario-contract.md`](.agent/protocols/scenario-contract.md) when triggered (e.g. `implementation_change` + persistence/projection changes).
 - Recursive Verification Gate / completion governance — [`.agent/protocols/completion.md`](.agent/protocols/completion.md).
 
-Under tool-first, required protocol text is inlined at `start`; triggered protocol text is inlined with its `trigger_condition` — the agent still decides whether that condition applies before treating it as binding.
+Under tool-first, required protocol obligations are emitted at `start` as normalized structured fields (not full text — see `protocol_obligations[]` above); triggered protocol obligations are emitted the same way, each entry's `route_mode` carrying its `trigger_condition` key — the agent still decides whether that condition applies before treating it as binding.
 
 ## Work Posture
 

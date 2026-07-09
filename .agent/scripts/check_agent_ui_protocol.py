@@ -22,6 +22,7 @@ REQUIRED_FILES = [
     ".agent/tools/logs/tool.log",
     ".agent/rules/rule.md",
     ".agent/tools/README.md",
+    "AGENTS.md",
     ".gitignore",
 ]
 
@@ -39,13 +40,11 @@ REQUIRED_TERMS = {
         "Tool-side and governance-side writes",
         "explicit SSOT/task scope",
         "product/runtime/source",
+        "protocol_obligations[]",
     ],
-    "docs/governance/agent-ui-protocol-ssot.yaml": [
-        "mutation_boundary",
-        "allowed_when_in_agent_ui_scope",
-        ".agent/tools implementation files",
-        ".agent/tools/logs/tool.log",
-        "senario-tmp.md",
+    "AGENTS.md": [
+        "protocol_obligations[]",
+        "fallback_protocol_ref",
     ],
     "docs/governance/reference/agent-ui-tool-output-reference.yaml": [
         "authority_split",
@@ -54,6 +53,17 @@ REQUIRED_TERMS = {
         "Append only",
         "owner: human",
         ".agent/tools/logs/tool.log",
+        "protocol_obligations",
+        "fallback_protocol_ref",
+    ],
+    "docs/governance/agent-ui-protocol-ssot.yaml": [
+        "mutation_boundary",
+        "allowed_when_in_agent_ui_scope",
+        ".agent/tools implementation files",
+        ".agent/tools/logs/tool.log",
+        "senario-tmp.md",
+        "tool_first_normalized_obligations",
+        "db_schema_mandatory_ssot_rule",
     ],
     "docs/governance/reference/agent-ui-senario-tmp-reference.yaml": [
         "senario-tmp.md",
@@ -69,9 +79,23 @@ FORBIDDEN_TERMS = {
     ".agent/tools/README.md": [
         "Tools in this directory must not mutate repository files",
         "must not mutate repository files, edit TODO/roadmap/SSOT/proof manifests",
+        "protocol_trigger_hints",
     ],
     ".agent/rules/rule.md": [
         "Do not use `.agent/tools` for repository mutation; `.agent/tools` is an Agent-facing read-only repo observation surface",
+        "protocol_trigger_hints",
+        "required/triggered protocol full text",
+    ],
+    "AGENTS.md": [
+        "protocol_trigger_hints",
+        "protocol text is inlined",
+    ],
+    "docs/governance/agent-ui-protocol-ssot.yaml": [
+        "protocol_trigger_hints",
+    ],
+    "docs/governance/reference/agent-ui-tool-output-reference.yaml": [
+        "protocol_trigger_hints",
+        "which prompt/protocol file(s) apply, return that file's full content",
     ],
 }
 

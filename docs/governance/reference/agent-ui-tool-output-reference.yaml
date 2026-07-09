@@ -3,8 +3,10 @@
 # Compact reference for Agent UI tool output. This is rebuilt for tool output
 # and must not indiscriminately dump every legacy prompt/protocol/checklist
 # file. It may, and for `start` does, return the full text of the specific
-# prompt/protocol file(s) a worktype/trigger has already resolved -- that is
-# a targeted read of exactly what applies, not the breadth this guards against.
+# worktype-routed prompt file, and normalized structured obligations
+# (protocol_obligations[], not full text) for the specific required/triggered
+# protocol file(s) a worktype/trigger has already resolved -- that is a
+# targeted read of exactly what applies, not the breadth this guards against.
 
 version: 1
 status: draft_reference
@@ -21,7 +23,8 @@ reference_policy:
     - Emit compact structured output per tool step.
     - Do not emit verbose execution logs.
     - Do not read/return prompt or protocol files outside the current worktype/trigger routing (no indiscriminate all-worktype or all-protocol reads).
-    - Once routing resolves which prompt/protocol file(s) apply, return that file's full content rather than an arbitrary partial excerpt -- a truncated blocking/pass-condition section can look complete while silently omitting the rest.
+    - Once routing resolves which prompt file applies, return that file's full content rather than an arbitrary partial excerpt -- a truncated section can look complete while silently omitting the rest.
+    - Once routing resolves which protocol file(s) apply, return protocol_obligations[] -- a normalized structured extraction of each file's own headings (trigger_condition/judgment_scope/foundation_ssot_read_gate/blocking_conditions/pass_conditions/required_fields/classification_vocab/output_boundary), not that file's full text and not an execution procedure to follow verbatim. A field is null when the file has no matching heading, honestly, not as a truncation. fallback_protocol_ref on every entry still points at the full file for the fallback route or deeper manual review.
     - Prefer fields and selected SSOT sections for anything not yet routing-resolved (e.g. SSOT section listing/selection stays selection-only).
     - Expose this Reference's basis as structured fields (reference_basis), not markdown wording; a UI may render markdown from those fields, but the fields are the authority, not the rendered text.
 
@@ -67,7 +70,7 @@ next_step_field:
     agent does not need to separately consult .agent/prompt/*,
     .agent/protocols/*, or .agent/skills/agent-workflow.md for sequencing --
     only for judgment content that a given next_step surfaces (e.g.
-    protocol_trigger_hints content, checklist_interview_items) is not itself
+    protocol_obligations fields, checklist_interview_items) is not itself
     a judgment.
   emitted_by:
     - agent-ui-initial-contract worktypes / start / resolve-ssot / sections / end
@@ -136,14 +139,42 @@ initial_contract_outputs:
       - prompt_content
       - prompt_content_truncated
       - required_reads_from_prompt
-      - protocol_trigger_hints
-      - protocol_trigger_hints_note
+      - protocol_obligations
+      - protocol_obligations_note
       - next_step
+    protocol_obligations_field_shape:
+      per_entry_fields:
+        - protocol_path
+        - route_mode
+        - applies
+        - trigger_condition
+        - judgment_scope
+        - foundation_ssot_read_gate
+        - blocking_conditions
+        - pass_conditions
+        - required_fields
+        - classification_vocab
+        - output_boundary
+        - fallback_protocol_ref
+        - tool_first_instruction_note
+      meaning: >-
+        Each entry is one routed required/triggered protocol file, normalized
+        into structured fields extracted from that file's own "## heading"
+        sections (alias-matched, case-insensitive) -- not the full markdown
+        body inlined as an execution procedure. route_mode is "required" or
+        "triggered:<condition_key>"; applies is "always" for required
+        protocols or "agent_judgment_required" for triggered ones (whether a
+        triggered condition actually applies to the current task stays agent
+        judgment). A field is null when the source file has no section under
+        any recognized heading alias for it -- that is an honest report of
+        the file's structure, not a truncated/incomplete read.
+        fallback_protocol_ref repeats protocol_path so the fallback route (or
+        deeper manual review) can still read that file's full text directly.
     constraints:
-      - prompt_content is the full text of the one worktype-routed prompt file; protocol_trigger_hints[].content is the full text of each routed required/triggered protocol file. Neither is an arbitrary partial excerpt.
-      - This is not "dump every prompt/protocol"; it is the full text of only the file(s) worktype/trigger routing already resolved to.
-      - Each file read is bounded by a fail-explicit safety cap (FULL_READ_LINE_CAP in agent_ui_initial_contract.py); if a file exceeds it, truncated/prompt_content_truncated is set true rather than silently returning a partial read.
-      - protocol_trigger_hints content text is retrieval only. Whether a triggered_protocols condition (trigger_condition != "always") applies to the current task is still agent judgment, never tool output.
+      - prompt_content is the full text of the one worktype-routed prompt file, and protocol_obligations[] is a normalized structured extraction (not full text) of each routed required/triggered protocol file's own headings, not an execution procedure to follow verbatim -- flow_order remains the sole execution-order authority. Neither is an arbitrary partial excerpt.
+      - This is not "dump every prompt/protocol"; prompt_content full text and protocol_obligations[] extraction both cover only the file(s) worktype/trigger routing already resolved to.
+      - prompt file reads are bounded by a fail-explicit safety cap (FULL_READ_LINE_CAP in agent_ui_initial_contract.py); if a file exceeds it, prompt_content_truncated is set true (and, for a protocol file, the corresponding obligation's tool_first_instruction_note records the same) rather than silently returning a partial read.
+      - protocol_obligations content is retrieval/extraction only, not judgment. Whether a triggered_protocols condition (route_mode starting "triggered:") applies to the current task is still agent judgment, never tool output.
   step_4_target_ssot:
     ai_input:
       - target_ssot_name

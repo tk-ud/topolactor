@@ -16,12 +16,14 @@ Before judging or changing runtime/frontend/backend/db behavior, apply foundatio
 2. `docs/design/runtime-orchestration-ssot.yaml`
 3. `docs/design/pipeline-continuity-ssot.yaml`
 4. target-specific SSOT / DB / implementation files
+5. `docs/design/db-schema.yaml` -- mandatory in addition to the above whenever work touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets. `db/*.sql` is the canonical DDL/seed surface, but table authority, table role, and `manifest_reference` meaning must be cross-checked against this SSOT; a refs-only `manifest.topology` shape alone is not proof that the refs point at the DB-design-authoritative table.
 
 Do not treat this as always-read for unrelated typo/format-only edits. When skipped, record explicit `not_required` reason.
 
 ## blocking_conditions
-- Missing scenario-contract when runtime/persistence/projection changed.
+- Missing scenario-contract when runtime/persistence/projection changed (route-aware: tool-first route -- required scenario-contract fields `target_file`/`senario_summary`/`ng_boundary` not passed to `agent-ui-initial-contract end`; fallback route -- missing manually-created `.agent/tmp/tmp.txt` scenario-contract only when the tool is unavailable).
 - Missing policy-judgment when scoring/threshold/policy changed.
+- DB/manifest/seed SQL/UI topology/package/layout/design/wiring/tensor persistence or translator adoption target work without cross-checking `docs/design/db-schema.yaml` table authority/role/`manifest_reference`.
 
 ## pass_conditions
 - Required conditional protocols were applied when triggered.

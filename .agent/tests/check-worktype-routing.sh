@@ -132,18 +132,24 @@ PROMPT_ROUTERS=(
 )
 for prompt_router in "${PROMPT_ROUTERS[@]}"; do
   check_term "$REPO_ROOT/$prompt_router" "## tool_first_entry"
-  check_term "$REPO_ROOT/$prompt_router" "protocol_trigger_hints[].content"
+  check_term "$REPO_ROOT/$prompt_router" "protocol_obligations[]"
   check_term "$REPO_ROOT/$prompt_router" "not an extra mandatory manual read"
   check_term "$REPO_ROOT/$prompt_router" "fallback-route/manual verification references only"
 done
-check_term "$REPO_ROOT/.agent/tools/README.md" "protocol_trigger_hints"
+check_term "$REPO_ROOT/.agent/tools/README.md" "protocol_obligations"
 check_term "$REPO_ROOT/docs/governance/reference/agent-ui-tool-output-reference.yaml" "Neither is an arbitrary partial excerpt"
-check_term "$REPO_ROOT/.agent/scripts/agent_tools/agent_ui_initial_contract.py" "triggered protocol full text"
+check_term "$REPO_ROOT/.agent/scripts/agent_tools/agent_ui_initial_contract.py" "triggered protocol_obligations[]"
 
 if grep -qiF 'triggered protocol excerpts' "$REPO_ROOT/.agent/scripts/agent_tools/agent_ui_initial_contract.py"; then
   fail "agent-ui-initial-contract still describes routed protocol output as excerpts"
 else
   pass "agent-ui-initial-contract does not describe routed protocol output as excerpts"
+fi
+
+if grep -qF 'protocol_trigger_hints' "$REPO_ROOT/.agent/scripts/agent_tools/agent_ui_initial_contract.py"; then
+  fail "agent-ui-initial-contract still emits the retired protocol_trigger_hints[].content full-text shape"
+else
+  pass "agent-ui-initial-contract no longer emits protocol_trigger_hints"
 fi
 
 

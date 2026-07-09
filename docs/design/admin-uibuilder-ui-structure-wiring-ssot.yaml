@@ -73,6 +73,102 @@ admin_uibuilder_ui_structure_wiring_ssot:
       - replacing_existing_layout_canvas_with_new_persistence_authority
       - reviving_historical_visual_layout_canvas_restoration_as_current_blocker
 
+  lane_storage_boundary:
+    role: >-
+      top_ssot_alignment surface. Formalizes the five authoring/runtime lanes this
+      surface's authoring model spans, their persistence target, and their idempotency
+      applicability, so no lane statement below is written as if lanes were undifferentiated.
+      top SSOT (docs/framework-core.yaml topolactor_space_model / docs/framework-policy.yaml
+      ui_topology_tensor_persistence, db/manifest_tables.sql) holds that manifest.topology
+      is a registry-refs / package-refs / layout-refs / relay-refs / runtime-vector store,
+      never a UI-entity payload store; UI package/layout/design/wiring/tensor content lives
+      in topology.ui_component_package / topology.components_layout_design /
+      topology.components_style_design / topology.components_package_design /
+      topology.ui_wiring_registry / topology.ui_topology_tensor (db/ui_topology_tables.sql).
+      This section is this surface's binding statement of that split for its own lanes.
+    lanes:
+      package_internal_api_wiring_lane:
+        label_ja: 内部API (package/internal API wiring lane)
+        authoring_surface: ManifestStep3EventWiringPreset / PackageConnectionPanel (ui_event_settings.setting_category_taxonomy.backend_side.internal_api)
+        persistence_target: >-
+          topology.components_package_design (manifest-facing package authority, role
+          component_design_bundle_referenced_by_manifest, manifest_reference:
+          manifest.topology[ui_projection].packageIds per docs/design/db-schema.yaml) +
+          topology.ui_wiring_registry + topology.ui_topology_tensor relation
+          (ui_topology:update_package_wiring), never manifest.topology payload directly.
+          topology.ui_component_package (role component_group_bundle) is a DIFFERENT,
+          narrower identity: it exists only to satisfy topology.ui_topology_tensor.package_id's
+          own FK constraint, and this lane must never treat it as interchangeable with
+          topology.components_package_design or as a manifest.packageIds target -- see
+          docs/design/react-schema-topology-seed-translator-ssot.yaml
+          storage_adoption_contract.adoption_candidate_separation_contract.package_authority_boundary,
+          which states and enforces the same two-identity split for translator output.
+        runtime_path: package/wiring persistence read at projection build time; not a per-event runtimeInteractions dispatch
+        idempotency_applicability: known_gap
+        idempotency_note: >-
+          This lane is a design-time package/wiring persistence operation
+          (ui_topology:update_package_wiring), not a runtime dispatch call, so it is not
+          currently a runtime_dispatch_idempotency_ledger target. If a future bundle makes
+          package/internal API wiring itself a retryable runtime dispatch, it must either
+          convert that dispatch into a runtimeInteractions carrier (this lane's own entry
+          below) or define its own stable identity carrier under a dedicated design_change
+          SSOT amendment here — it must never silently inherit runtime_interactions_lane's
+          idempotency_key carrier by proximity. Left as known_gap, not asserted complete.
+      runtime_interactions_lane:
+        label_ja: 副作用設定 / 外部API連携 / 外部インスタンス連携 (runtimeInteractions lane)
+        authoring_surface: wiring_mode (WiringGraphPanel / NodeEventAuthoringPanel)
+        persistence_target: topology.ui_topology_tensor.layout_patch_json.nodes[].runtimeInteractions[]
+        runtime_path: >-
+          layout_patch_json.nodes[].runtimeInteractions[] -> ApplyConfirmedLayoutPatchAsync ->
+          AssignRuntimeInteractionIds -> renderEmission / uiEventEffectRunner ->
+          frontendScheduler payload.idempotency_key
+        idempotency_applicability: always_for_dispatchExternalPort_and_dispatchInstanceOperation_actionTypes
+        idempotency_note: >-
+          Precise scope of retry_safe_dispatch_idempotency.gating below: this lane's
+          dispatchExternalPort / dispatchInstanceOperation runtimeInteractions entries always
+          compute and forward idempotency_key (lifecycle path uiEventEffectRunner.ts
+          emitLifecycle; event-triggered path renderEmission.ts + runtimeComponentFactory.ts
+          emitBoundEvent). localStateMutation / routeNavigation entries in this same lane are
+          not backend/external dispatch and carry no idempotency_key.
+      external_api_lane:
+        label_ja: 外部API連携
+        authoring_surface: wiring_mode setting_category external_api_integration
+        persistence_target: runtime_interactions_lane carrier (dispatchExternalPort runtimeInteractions entry); registry authority in topology.external_access_ports / external_response_ports / external_hook_ports
+        runtime_path: same as runtime_interactions_lane; ExternalPortDispatchRuntime.cs ExecuteAsync claims the ledger before ExecutePolicyAsync
+        idempotency_applicability: always
+      external_instance_lane:
+        label_ja: 外部インスタンス連携
+        authoring_surface: wiring_mode setting_category external_instance_integration
+        persistence_target: runtime_interactions_lane carrier (dispatchInstanceOperation runtimeInteractions entry); registry authority in topology.db_instance_port / runtime_instance_port / instance_operation_authority_binding
+        runtime_path: same as runtime_interactions_lane; InstancePortRuntime.cs ExecuteAsync claims the ledger before AbstractFunctionExecutor.ExecuteAsync
+        idempotency_applicability: always
+      local_ui_state_lane:
+        label_ja: UI監視割当 / UI状態更新
+        authoring_surface: wiring_mode setting_category ui_watch_binding / ui_state_update
+        persistence_target: topology.ui_topology_tensor.layout_patch_json.nodes[].runtimeInteractions[] (actionType localStateMutation) for declared mutations; projection-local runtime state store (frontend/runtime/uiEventEffectRunner.ts createRuntimeLocalStateStore) for the live value at runtime -- never manifest.topology, never a separate persistence table
+        runtime_path: applyGuardedLocalStateMutation via the shared guarded dispatcher; no backend/external dispatch
+        idempotency_applicability: not_applicable
+        idempotency_note: local state mutation never calls dispatchExternalPort/dispatchInstanceOperation, so it carries no idempotency_key by design, not by omission.
+    manifest_topology_boundary:
+      rule: >-
+        manifest.topology entries for this surface (ui_projection type per
+        db/manifest_tables.sql) carry packageIds / layoutId / wiringId / tensorId references
+        only. A manifest.topology array element that embeds field/action/form-level UI
+        structure directly (e.g. a flattened topology_ui_seed_record tree) is a top SSOT
+        violation for this surface, regardless of which lane authored it.
+      packageIds_authority_rule: >-
+        packageIds specifically must resolve to topology.components_package_design rows
+        (docs/design/db-schema.yaml packages/components_package_design.manifest_reference),
+        never topology.ui_component_package rows -- the latter is a distinct
+        component_group_bundle identity required only by
+        topology.ui_topology_tensor.package_id's FK, not a manifest-facing authority. Refs
+        pointing at the wrong table are still a top SSOT violation even though the entry
+        itself stays refs-only in shape.
+      prohibited:
+        - manifest_topology_array_element_embedding_layout_or_wiring_payload_directly
+        - treating_any_lane_above_as_manifest_topology_storage_authority
+        - packageIds_referencing_topology_ui_component_package_instead_of_topology_components_package_design
+
   wiring_mode:
     role: UI event graph projection / edit mode over runtimeInteractions
     visual_model: source UI node -> event trigger -> setting category -> target/effect
@@ -383,12 +479,17 @@ admin_uibuilder_ui_structure_wiring_ssot:
           The ledger activates only when idempotency_key is present on the
           request payload. Absence is not fail-close at the generic runtime
           dispatch boundary — backward-compatible for pre-existing
-          dispatchExternalPort / dispatchInstanceOperation callers outside the
-          UI Builder wiring lane. The UI Builder wiring lane specifically
-          always supplies one: both the lifecycle path
-          (uiEventEffectRunner.ts emitLifecycle) and the event-triggered path
-          (renderEmission.ts binding builder + runtimeComponentFactory.ts
-          emitBoundEvent) compute and forward idempotency_key unconditionally.
+          dispatchExternalPort / dispatchInstanceOperation callers outside
+          this surface's runtime_interactions_lane (see lane_storage_boundary
+          above — this is a runtime_interactions_lane statement, not a
+          package_internal_api_wiring_lane one; that lane's idempotency
+          applicability is a separate known_gap, not implied here).
+          runtime_interactions_lane specifically always supplies one for its
+          dispatchExternalPort / dispatchInstanceOperation entries: both the
+          lifecycle path (uiEventEffectRunner.ts emitLifecycle) and the
+          event-triggered path (renderEmission.ts binding builder +
+          runtimeComponentFactory.ts emitBoundEvent) compute and forward
+          idempotency_key unconditionally.
         implementation:
           - backend/runtime/RuntimeDispatchIdempotencyLedger.cs (IRuntimeDispatchIdempotencyLedger contract)
           - backend/repository/NpgsqlRuntimeDispatchIdempotencyLedgerRepository.cs

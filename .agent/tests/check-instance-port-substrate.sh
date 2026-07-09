@@ -83,7 +83,23 @@ require_term "sibling_substrate_not_external_port_extension" "$SSOT" "sibling su
 require_term "instance_port_substrate_ref: docs/design/instance-port-substrate-ssot.yaml" docs/design/external-port-substrate-ssot.yaml "external-port sibling reference"
 require_term "instance_port_runtime" docs/design/external-port-substrate-ssot.yaml "instance lane distinction"
 require_term "product.instance_port_substrate" docs/system-roadmap.yaml "roadmap bundle"
-if rg -n 'instance-port-substrate|product.instance_port_substrate|instance-port-substrate-implementation-todo' .agent/tasks/todo.md; then
+# Exclude lines that merely cite docs/design/instance-port-substrate-ssot.yaml
+# as a supporting/reference doc for a DIFFERENT bundle (legitimate -- other
+# not_started bundles, e.g. admin-surface-topology-seed-conversion, may need
+# to reference this SSOT without reopening instance-port-substrate itself as
+# active work). Only a genuinely dedicated instance-port-substrate bundle
+# entry (its own Bundle ID / heading / roadmap-bundle reference / implementation
+# TODO file), not a bare SSOT-doc citation, should fail this check.
+#
+# Filter with the real `grep -v` (a coreutils binary, always present) rather
+# than `rg -v`: this file's own top-of-file `rg` compatibility shim (used
+# when the real ripgrep binary is not installed on the runner) does not
+# recognize -v and silently drops it, which would make an `rg -v` filter here
+# a silent no-op under that shim instead of an inversion.
+TODO_MATCHES="$(rg -n 'instance-port-substrate|product.instance_port_substrate|instance-port-substrate-implementation-todo' .agent/tasks/todo.md || true)"
+TODO_MATCHES_WITHOUT_SSOT_DOC_CITATIONS="$(printf '%s\n' "$TODO_MATCHES" | grep -v -F 'instance-port-substrate-ssot.yaml' || true)"
+if [ -n "$TODO_MATCHES_WITHOUT_SSOT_DOC_CITATIONS" ]; then
+  printf '%s\n' "$TODO_MATCHES_WITHOUT_SSOT_DOC_CITATIONS"
   fail "implemented instance-port-substrate must not remain in active unfinished TODO surface"
 fi
 if [[ -e .agent/tasks/instance-port-substrate-implementation-todo.md ]]; then

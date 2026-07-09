@@ -50,15 +50,17 @@ PR577 で UI Builder apply 経路では `runtimeInteractions[]` の `runtimeInte
 
 この未整理のままだと、seed / template 由来 projection が `runtimeInteractions[]` を持つ場合に、`AssignRuntimeInteractionIds` を通らず persisted projection へ到達し、projection UI が stable `runtimeInteractionId` を持てず、PR574 ledger idempotency gate への identity component が fallback `nodeId + interactionIndex` へ残る危険がある。
 
-併せて、`agent-ui-initial-contract` は routed prompt / required protocol / triggered protocol の full text を tool-first output として返す route へ移行しているが、prompt router / governance reference / tool docstring / output wording / local_test summary wording に旧 manual protocol read 表現が残ると、Agent が UI contract 後に別途 protocol を読む route へ戻る危険がある。
+併せて、`agent-ui-initial-contract` は routed prompt / required protocol / triggered protocol を tool-first output として返す route へ移行しているが、prompt router / governance reference / tool docstring / output wording / local_test summary wording に旧 manual protocol read 表現が残ると、Agent が UI contract 後に別途 protocol を読む route へ戻る危険がある。
 
-特に、tool-first route では `prompt_content` / `protocol_trigger_hints[].content` が resolved worktype / trigger の contract body であり、manual protocol file read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定される必要がある。
+**PR580 follow-up (`agent-ui-protocol-obligations-normalization`) で用語更新**: required/triggered protocol の tool-first 表現は、protocol 全文を execution procedure として inline する `protocol_trigger_hints[].content` から、その protocol 自身の見出しに基づく正規化構造field群 `protocol_obligations[]`（`protocol_path` / `route_mode` / `applies` / `trigger_condition` / `judgment_scope` / `foundation_ssot_read_gate` / `blocking_conditions` / `pass_conditions` / `required_fields` / `classification_vocab` / `output_boundary` / `fallback_protocol_ref` / `tool_first_instruction_note`）へ置き換わった。以下の本文中の `protocol_trigger_hints[].content` 表現は `protocol_obligations[]` の意味で読み替える（本Bundleの `implemented` 判定・受入条件の実質は変わらない — tool-first route が required/triggered protocol を返す、という契約自体は維持されている）。
+
+特に、tool-first route では `prompt_content`（routed prompt の full text）/ `protocol_obligations[]`（routed protocol の normalized structured fields; full text は各entryの `fallback_protocol_ref` 経由）が resolved worktype / trigger の contract body であり、manual protocol file read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定される必要がある。
 
 ### 目的
 
 seed / template generator / credential management screen seed 由来 projection でも、active persisted `layout_patch_json` に昇格する時点で backend runtimeInteractionId assignment boundary を必ず通し、ProjectionShell / renderEmission / uiEventEffectRunner が persisted `runtimeInteractionId` を読み、PR574 ledger idempotency gate へ安定した idempotency key を渡せる経路を確定する。
 
-同時に、`agent-ui-initial-contract` を manual protocol file read 置換 route として扱う governance 表現を、SSOT / reference / tool / prompt router / local_test / tests で整合させる。manual protocol read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定し、tool-first route では `prompt_content` / `protocol_trigger_hints[].content` が routed contract body であることを明確化する。
+同時に、`agent-ui-initial-contract` を manual protocol file read 置換 route として扱う governance 表現を、SSOT / reference / tool / prompt router / local_test / tests で整合させる。manual protocol read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定し、tool-first route では `prompt_content`（full text）/ `protocol_obligations[]`（normalized structured fields）が routed contract body であることを明確化する。
 
 ### 改善方針
 
@@ -74,9 +76,9 @@ seed / template generator / credential management screen seed 由来 projection 
 - 必要に応じて seed-adoption proof surface / translator proof surface / credential management seed proof を追加する。
 - PR577 の UI Builder apply 経路 implemented 判定、PR574 の backend ledger execution gate implemented 判定を未実装扱いへ戻さない。
 - `agent-ui-initial-contract` の tool-first route を正本化し、旧表現 `protocol excerpts` / manual protocol required read / fallback-only route の混在を解消する。
-- `agent-ui-initial-contract start` が返す `prompt_content` / `protocol_trigger_hints[].content` を、resolved worktype / trigger の routed full text として扱う。
+- `agent-ui-initial-contract start` が返す `prompt_content`（full text）と `protocol_obligations[]`（normalized structured fields; full text は各entryの `fallback_protocol_ref` 経由）を、resolved worktype / trigger の routed contract body として扱う。
 - prompt router の `required_reads` は tool-first route と fallback route の意味を分離する。
-- `.agent/prompt/*.md` の protocol file 直指定は、tool-first route では `protocol_trigger_hints[].content` として取得済みであることを明示する。
+- `.agent/prompt/*.md` の protocol file 直指定は、tool-first route では `protocol_obligations[]` として取得済みであることを明示する。
 - manual protocol read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定し、tool-first route の追加必須手順として残さない。
 - `agent-ui-local-test` 側の output / summary / checklist route も、旧 manual protocol route へ戻す表現を持たないよう確認・修正する。
 - UI contract output を SSOT authority / proof completion / implemented judgment として扱わない境界は維持する。
@@ -185,9 +187,9 @@ seed / template generator / credential management screen seed 由来 projection 
 - `runtimeInteractions[]` を含む active projection persist bypass がない、または blocking proof で検出される。
 - ProjectionShell / renderEmission / uiEventEffectRunner は persisted `runtimeInteractionId` を forward する。
 - PR574 backend ledger execution gate と PR577 UI Builder apply assignment は implemented evidence として維持され、再実装対象へ戻さない。
-- `agent-ui-initial-contract start` は routed prompt / required protocol / triggered protocol の full text を tool-first contract body として返す。
+- `agent-ui-initial-contract start` は routed prompt の full text と、required protocol / triggered protocol の normalized `protocol_obligations[]` を tool-first contract body として返す。
 - `protocol excerpts` 等の旧表現が tool / reference / prompt router / local_test から除去または fallback-only 表現へ修正されている。
-- `.agent/prompt/*.md` の protocol file 直指定は、tool-first route では `protocol_trigger_hints[].content` として取得済みであることが明示されている。
+- `.agent/prompt/*.md` の protocol file 直指定は、tool-first route では `protocol_obligations[]` として取得済みであることが明示されている。
 - manual protocol read は fallback route、または tool output 欠損・routing不整合を検証する場合に限定し、tool-first route の追加必須手順として残さない。
 - fallback-only prompt / protocol / checklist が resolved worktype の正規 contract として扱われない。
 - `agent-ui-local-test` の `run-worktype-tests` / `read-senario-tmp` / `checklist` / `checks` / `summary` が、tool-first route と矛盾する旧 manual protocol read を誘導しない。
@@ -208,7 +210,7 @@ seed / template generator / credential management screen seed 由来 projection 
 - backend assignment boundary のwiring確認なしに persisted `layout_patch_json` の成立を判断する。
 - PR574 / PR577 の既存 implemented evidence を再実装scopeへ戻す。
 - `agent-ui-initial-contract` を使わず、manual protocol read を tool-first 正規routeとして扱う。
-- UI contract が返した routed prompt / required protocol / triggered protocol full text を使わず、Agent判断で別protocolへ逸脱する。
+- UI contract が返した routed prompt full text / required protocol / triggered protocol の `protocol_obligations[]` を使わず、Agent判断で別protocolへ逸脱する。
 - fallback-only の prompt / protocol / checklist を resolved worktype の正規contractとして扱う。
 - `agent-ui-initial-contract` の scenario contract を作らず実装へ進む。
 - UI contract output を SSOT authority / implemented judgment / proof completion として扱う。

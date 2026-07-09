@@ -75,6 +75,9 @@ ssot_terms=(
   "local_test"
   ".agent/tools/logs/tool.log"
   "senario-tmp.md"
+  "protocol_obligations"
+  "db_schema_mandatory_ssot_rule"
+  "docs/design/db-schema.yaml"
 )
 
 for term in "${ssot_terms[@]}"; do
@@ -83,6 +86,7 @@ done
 
 ssot_forbidden_terms=(
   "markdown_template: |-"
+  "protocol_trigger_hints"
 )
 
 for term in "${ssot_forbidden_terms[@]}"; do
@@ -100,10 +104,20 @@ tool_output_terms=(
   "AI-authored datetime"
   "AI-authored worktype metadata"
   "AI-authored tool.log records"
+  "protocol_obligations"
+  "fallback_protocol_ref"
 )
 
 for term in "${tool_output_terms[@]}"; do
   require_term "docs/governance/reference/agent-ui-tool-output-reference.yaml" "$term"
+done
+
+tool_output_forbidden_terms=(
+  "protocol_trigger_hints"
+)
+
+for term in "${tool_output_forbidden_terms[@]}"; do
+  forbid_term "docs/governance/reference/agent-ui-tool-output-reference.yaml" "$term"
 done
 
 senario_tmp_terms=(
