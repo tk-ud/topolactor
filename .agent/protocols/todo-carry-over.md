@@ -16,6 +16,7 @@ When TODO/roadmap classification touches projection/runtime lanes/API/SSE/event-
 2. `docs/design/runtime-orchestration-ssot.yaml`
 3. `docs/design/pipeline-continuity-ssot.yaml`
 4. target SSOT / DB / implementation surfaces
+5. `docs/design/db-schema.yaml` -- additionally mandatory whenever the classified work touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets; table authority/role/`manifest_reference` must be cross-checked against this SSOT, not assumed from a refs-only `manifest.topology` shape alone.
 
 Skip is allowed only for typo/format-only/unrelated text cleanup with explicit `not_required` reason.
 

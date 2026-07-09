@@ -144,6 +144,7 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 3. `docs/design/runtime-orchestration-ssot.yaml`
 4. `docs/design/pipeline-continuity-ssot.yaml`
 5. target-specific SSOT / DB / implementation files (via `.agent/docs/ssot-map.yaml` as discovery aid)
+6. `docs/design/db-schema.yaml` -- additionally mandatory (not optional target-specific reading) whenever the audited diff touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets. A refs-only `manifest.topology` shape alone is not proof; the refs' target table authority/role/`manifest_reference` must be cross-checked against this SSOT.
 
 `全部読むな` は維持するが、これは `.agent/docs` 全読みに対する制約であり、audit baseline 4SSOT の省略を許可しない。
 

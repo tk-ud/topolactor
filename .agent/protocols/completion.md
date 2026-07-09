@@ -34,9 +34,10 @@ This protocol owns:
 
 ## Execution procedure
 
-1. Scenario Contract
-   - When scenario-contract trigger applies, create `.agent/tmp/tmp.txt` before implementation.
-   - Fix intent before coding: user-visible scenario/runtime claim, expected route, expected read/write/append/cache/return order, expected status, and failure paths.
+1. Scenario Contract (route-aware; see `docs/governance/agent-ui-protocol-ssot.yaml` `senario_tmp_contract.generation_authority`)
+   - Tool-first route: when scenario-contract trigger applies, `agent-ui-initial-contract end` is the exclusive generation authority for `senario-tmp.md`, from `target_file`/`senario_summary`/`ng_boundary` fields supplied before implementation.
+   - Fallback route (tool unavailable only): create `.agent/tmp/tmp.txt` before implementation per `.agent/protocols/scenario-contract.md` (`bash .agent/scripts/create-tmp.sh`). This is not a second way to produce `senario-tmp.md` and must not be used merely by preference when the tool is usable.
+   - Either artifact: fix intent before coding -- user-visible scenario/runtime claim, expected route, expected read/write/append/cache/return order, expected status, and failure paths.
 2. Implementation
    - Implement against the scenario contract when present.
    - If implementation intentionally diverges from contract, update contract with explicit reason.
