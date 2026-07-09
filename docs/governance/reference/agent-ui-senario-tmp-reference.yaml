@@ -11,6 +11,16 @@ senario_tmp:
   created_at: initial_contract_end
   gitignore_required: true
   git_tracked: false
+  generation_authority:
+    tool_first: >-
+      agent-ui-initial-contract end owns senario-tmp.md generation
+      exclusively when the tool is usable (tool-first route).
+    fallback: >-
+      .agent/protocols/scenario-contract.md's .agent/tmp/tmp.txt (created via
+      bash .agent/scripts/create-tmp.sh, deleted via
+      bash .agent/scripts/delete-tmp.sh) is a separate fallback-route
+      artifact, used only when agent-ui-initial-contract is unavailable --
+      not an alternate way to produce senario-tmp.md itself.
 
 markdown_template: |-
   # contracts

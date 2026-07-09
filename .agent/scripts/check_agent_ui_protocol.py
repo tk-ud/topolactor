@@ -40,13 +40,6 @@ REQUIRED_TERMS = {
         "explicit SSOT/task scope",
         "product/runtime/source",
     ],
-    "docs/governance/agent-ui-protocol-ssot.yaml": [
-        "mutation_boundary",
-        "allowed_when_in_agent_ui_scope",
-        ".agent/tools implementation files",
-        ".agent/tools/logs/tool.log",
-        "senario-tmp.md",
-    ],
     "docs/governance/reference/agent-ui-tool-output-reference.yaml": [
         "authority_split",
         "tool_generated",
@@ -54,6 +47,17 @@ REQUIRED_TERMS = {
         "Append only",
         "owner: human",
         ".agent/tools/logs/tool.log",
+        "protocol_obligations",
+        "fallback_protocol_ref",
+    ],
+    "docs/governance/agent-ui-protocol-ssot.yaml": [
+        "mutation_boundary",
+        "allowed_when_in_agent_ui_scope",
+        ".agent/tools implementation files",
+        ".agent/tools/logs/tool.log",
+        "senario-tmp.md",
+        "tool_first_normalized_obligations",
+        "db_schema_mandatory_ssot_rule",
     ],
     "docs/governance/reference/agent-ui-senario-tmp-reference.yaml": [
         "senario-tmp.md",
@@ -69,9 +73,16 @@ FORBIDDEN_TERMS = {
     ".agent/tools/README.md": [
         "Tools in this directory must not mutate repository files",
         "must not mutate repository files, edit TODO/roadmap/SSOT/proof manifests",
+        "protocol_trigger_hints",
     ],
     ".agent/rules/rule.md": [
         "Do not use `.agent/tools` for repository mutation; `.agent/tools` is an Agent-facing read-only repo observation surface",
+    ],
+    "docs/governance/agent-ui-protocol-ssot.yaml": [
+        "protocol_trigger_hints",
+    ],
+    "docs/governance/reference/agent-ui-tool-output-reference.yaml": [
+        "protocol_trigger_hints",
     ],
 }
 

@@ -5,15 +5,21 @@ Implements docs/governance/agent-ui-protocol-ssot.yaml's
 agent_protocols.flow_order.initial_contract as a stateless, multi-invocation
 CLI (mirroring the existing topology-seed-discussion tool's step-by-step
 model): task_name/worktype input -> worktype prompt guidance + required/
-triggered protocol full text + workflow procedure order -> target SSOT
+triggered protocol_obligations[] + workflow procedure order -> target SSOT
 resolution -> section listing/selection -> senario-tmp.md + tool.log on quit.
 
 `start` absorbs the reads an agent would otherwise have to open
 `.agent/protocols/*` and `.agent/skills/agent-workflow.md` separately for:
 once a worktype/trigger has narrowed which prompt/protocol files apply, it
-returns those specific files' full content (not every worktype's files --
-that breadth guard is unchanged) so no separate manual open is needed. It
-does not itself judge whether a triggered_protocols condition applies to
+returns normalized structured obligations (trigger_condition/judgment_scope/
+foundation_ssot_read_gate/blocking_conditions/pass_conditions/required_fields/
+classification_vocab/output_boundary) extracted from each specific file's own
+headings, not that file's full body presented as an execution procedure. The
+tool-first route's own flow_order remains the sole execution-order authority;
+protocol_obligations[] supplies judgment content, not sequencing. Each entry's
+fallback_protocol_ref repeats its protocol_path so the fallback route (or
+deeper manual review) can still read the file's full text directly. This
+tool does not itself judge whether a triggered_protocols condition applies to
 the current task -- that stays agent judgment.
 
 AI supplies task_name, worktype selection, target SSOT name, section
@@ -30,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -107,6 +114,104 @@ def _read_full(path_text: str | None) -> tuple[list[str] | None, bool]:
     return lines, False
 
 
+_MARKDOWN_H2_RE = re.compile(r"^##\s+(.*)$")
+
+# Heading-name variants actually used across .agent/protocols/*.md for each
+# canonical protocol_obligations field, lowercased. This is real-heading
+# extraction, not per-file hand-authored summary text: a field is populated
+# only when the source file has a matching "## <heading>" section, and is
+# null (not fabricated) otherwise. New heading spellings can be added here
+# without touching the extraction logic or any protocol file.
+PROTOCOL_OBLIGATION_HEADING_ALIASES: dict[str, tuple[str, ...]] = {
+    "trigger_condition": ("trigger_condition", "trigger", "trigger scope", "trigger condition"),
+    "judgment_scope": ("judgment_scope",),
+    "foundation_ssot_read_gate": ("foundation_ssot_read_gate",),
+    "blocking_conditions": ("blocking_conditions", "prohibited"),
+    "pass_conditions": ("pass_conditions",),
+    "required_fields": ("required", "required_output_contract"),
+    "classification_vocab": ("evidence_based_classification",),
+    "output_boundary": ("output expectation", "output_boundary"),
+}
+
+PROTOCOL_OBLIGATION_NOTE = (
+    "Each field above is a normalized extraction of this single protocol file's "
+    "own \"## <heading>\" section(s) (case-insensitive, alias-matched) -- not a "
+    "rewritten summary and not the full markdown body presented as an execution "
+    "procedure. A null field means this file has no section under any recognized "
+    "heading alias for that field; that is not information loss, it is an honest "
+    "report of this protocol's actual structure. Sections not covered by the 8 "
+    "canonical fields (workflow_guard stage-scoping, worked examples, tables "
+    "embedded inside a matched section, etc.) are not duplicated here -- read "
+    "fallback_protocol_ref directly for those or for guaranteed-complete content. "
+    "Whether a triggered obligation (route_mode starting 'triggered:') actually "
+    "applies to the current task remains agent judgment, never tool output."
+)
+
+
+def _extract_markdown_h2_sections(text: str) -> dict[str, list[str]]:
+    """Splits markdown text into ``## heading`` (lowercased) -> body-lines sections.
+
+    Only exact "## " (two hashes + whitespace) headings are section boundaries;
+    "### " subheadings and deeper stay nested inside their enclosing "## "
+    section's body rather than being silently dropped or promoted.
+    """
+    sections: dict[str, list[str]] = {}
+    current_key: str | None = None
+    current_lines: list[str] = []
+    for line in text.splitlines():
+        match = _MARKDOWN_H2_RE.match(line.rstrip())
+        if match:
+            if current_key is not None:
+                sections.setdefault(current_key, []).extend(current_lines)
+            current_key = match.group(1).strip().lower()
+            current_lines = []
+            continue
+        if current_key is not None:
+            current_lines.append(line)
+    if current_key is not None:
+        sections.setdefault(current_key, []).extend(current_lines)
+    return sections
+
+
+def _first_matching_section(sections: dict[str, list[str]], aliases: tuple[str, ...]) -> list[str] | None:
+    for alias in aliases:
+        if alias in sections:
+            return sections[alias]
+    return None
+
+
+def _build_protocol_obligation(path: str, route_mode: str, applies: str) -> tuple[dict | None, bool]:
+    """Builds one protocol_obligations[] entry for a routed protocol file.
+
+    Returns (None, False) when the file is missing (caller records it under
+    missing_paths, same fail-closed contract as _read_full). Returns
+    (obligation_dict, truncated) otherwise; truncated mirrors _read_full's
+    fail-explicit safety cap so a huge protocol file never silently yields
+    incomplete section extraction without saying so.
+    """
+    lines, truncated = _read_full(path)
+    if lines is None:
+        return None, False
+    sections = _extract_markdown_h2_sections("\n".join(lines))
+    note = PROTOCOL_OBLIGATION_NOTE
+    if truncated:
+        note += (
+            " NOTE: this source file exceeds FULL_READ_LINE_CAP; section extraction "
+            "only covers the file up to the cap -- read fallback_protocol_ref "
+            "directly for guaranteed-complete content."
+        )
+    obligation = {
+        "protocol_path": path,
+        "route_mode": route_mode,
+        "applies": applies,
+        "fallback_protocol_ref": path,
+        "tool_first_instruction_note": note,
+    }
+    for field, aliases in PROTOCOL_OBLIGATION_HEADING_ALIASES.items():
+        obligation[field] = _first_matching_section(sections, aliases)
+    return obligation, truncated
+
+
 def _extract_fenced_block_after_heading(text: str, heading: str) -> list[str]:
     """Extracts the fenced code block immediately following a markdown heading line."""
     collecting = False
@@ -147,30 +252,24 @@ def _cmd_start(args: argparse.Namespace) -> int:
     if prompt_content is None:
         missing_paths.append(prompt_path or "<route.prompt unset in worktype-required-protocols.yaml>")
 
-    protocol_trigger_hints: list[dict] = []
+    protocol_obligations: list[dict] = []
     for path in route.get("required_protocols", []) or []:
-        content, truncated = _read_full(path)
-        if content is None:
+        obligation, _truncated = _build_protocol_obligation(path, "required", "always")
+        if obligation is None:
             missing_paths.append(path)
-        protocol_trigger_hints.append({
-            "path": path,
-            "trigger_condition": "always",
-            "content": content or [],
-            "truncated": truncated,
-        })
+            continue
+        protocol_obligations.append(obligation)
     triggered = route.get("triggered_protocols") or {}
     if isinstance(triggered, dict):
         for condition, paths in sorted(triggered.items()):
             for path in paths or []:
-                content, truncated = _read_full(path)
-                if content is None:
+                obligation, _truncated = _build_protocol_obligation(
+                    path, f"triggered:{condition}", "agent_judgment_required"
+                )
+                if obligation is None:
                     missing_paths.append(path)
-                protocol_trigger_hints.append({
-                    "path": path,
-                    "trigger_condition": condition,
-                    "content": content or [],
-                    "truncated": truncated,
-                })
+                    continue
+                protocol_obligations.append(obligation)
 
     workflow_file = REPO_ROOT / WORKFLOW_SKILL_PATH
     workflow_procedure: list[str] = []
@@ -217,12 +316,12 @@ def _cmd_start(args: argparse.Namespace) -> int:
         "prompt_content": prompt_content,
         "prompt_content_truncated": prompt_truncated,
         "required_reads_from_prompt": ["AGENTS.md", ".agent/rules/rule.md", prompt_path],
-        "protocol_trigger_hints": protocol_trigger_hints,
-        "protocol_trigger_hints_note": "each entry's content is that single file's full text (already narrowed to this worktype/trigger, not every protocol) -- reading it is not judgment; whether a non-'always' trigger_condition applies to the current task is still the agent's call.",
+        "protocol_obligations": protocol_obligations,
+        "protocol_obligations_note": PROTOCOL_OBLIGATION_NOTE,
         "workflow_procedure_path": WORKFLOW_SKILL_PATH,
         "workflow_procedure": workflow_procedure,
         "reference_basis": REFERENCE_BASIS,
-        "next_step": "Read prompt_content/protocol_trigger_hints above for the target SSOT name(s) to check, then run `resolve-ssot --target <ssot_name>` for each.",
+        "next_step": "Read prompt_content/protocol_obligations above for the target SSOT name(s) to check, then run `resolve-ssot --target <ssot_name>` for each.",
     })
 
 
@@ -260,7 +359,7 @@ def _cmd_resolve_ssot(args: argparse.Namespace) -> int:
             "ssot_resolution_status": "not_found",
             "target_ssot_path": None,
             "section_list": [],
-            "next_step": "Retry `resolve-ssot` with a corrected --target name (check protocol_trigger_hints/prompt_content from `start` for the exact SSOT name).",
+            "next_step": "Retry `resolve-ssot` with a corrected --target name (check protocol_obligations/prompt_content from `start` for the exact SSOT name).",
         })
     if len(matches) > 1:
         return emit_json({
@@ -369,7 +468,7 @@ def _cmd_end(args: argparse.Namespace) -> int:
         },
         "next_step": (
             "initial_contract is closed. Implement within the defined scope from prompt_content/"
-            "protocol_trigger_hints and the senario contract above, then run agent-ui-local-test's "
+            "protocol_obligations and the senario contract above, then run agent-ui-local-test's "
             f"`run-worktype-tests --worktype {args.worktype}` to begin local_test."
         ),
     })

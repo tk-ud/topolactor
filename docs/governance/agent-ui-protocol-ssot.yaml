@@ -31,18 +31,31 @@ agent_protocols:
       - .agent/checklists/*.md (listed by agent-ui-local-test checklist as headings only, not inlined)
     tool_first_full_text:
       - the resolved worktype's routed .agent/prompt/<worktype>.md, in full, as start's prompt_content
-      - the resolved worktype's required/triggered .agent/protocols/*.md file(s), in full, as start's protocol_trigger_hints[].content
       - .agent/skills/agent-workflow.md's Execution Order block, as start's workflow_procedure -- this file backs both the tool-first and fallback routes, it is not fallback-only
+    tool_first_normalized_obligations:
+      - the resolved worktype's required/triggered .agent/protocols/*.md file(s), as start's protocol_obligations[] -- a normalized structured extraction (protocol_path/route_mode/applies/trigger_condition/judgment_scope/foundation_ssot_read_gate/blocking_conditions/pass_conditions/required_fields/classification_vocab/output_boundary/fallback_protocol_ref/tool_first_instruction_note) of that file's own headings, not the full markdown body presented as an execution procedure
+      - rule: >-
+          protocol_obligations[] replaces the retired shape that previously
+          inlined routed protocol full text as start's output.
+          flow_order remains the sole execution-order authority; protocol
+          obligations supply judgment content (trigger/scope/gates/blocking/
+          pass conditions), never sequencing. Each entry's
+          fallback_protocol_ref repeats protocol_path so the fallback route
+          (or deeper manual review) can still read that file's full text
+          directly; a field that is null because the source file has no
+          matching heading must not be treated as the field being satisfied.
     rule: >-
       Non-routed .agent prompt/protocol/checklist/skill surfaces remain
       fallback-only, for Agents that cannot use the tool or for worktypes/
       conditions other than the one currently resolved. For the current
-      worktype/trigger's routed file(s), tool output returns full text (see
-      tool_first_full_text), not an indiscriminate dump of every legacy
-      surface -- routing still narrows which files are read; only the
-      excerpt-vs-full-text axis changed for the narrowed set. Tool output
-      references under docs/governance/reference document these output
-      fields; they do not themselves relax this contract.
+      worktype/trigger's routed prompt file, tool output returns full text
+      (see tool_first_full_text); for routed protocol file(s), tool output
+      returns normalized protocol_obligations[] (see
+      tool_first_normalized_obligations), not full text and not an
+      indiscriminate dump of every legacy surface -- routing still narrows
+      which files are read. Tool output references under
+      docs/governance/reference document these output fields; they do not
+      themselves relax this contract.
 
   tool_principles:
     - Keep output minimal to reduce context load.
@@ -92,6 +105,20 @@ agent_protocols:
     gitignore_required: true
     shape_reference: docs/governance/reference/agent-ui-senario-tmp-reference.yaml
     boundary_reference: docs/governance/reference/agent-ui-negative-boundary-reference.yaml
+    generation_authority:
+      tool_first: >-
+        agent-ui-initial-contract end is the exclusive senario-tmp.md
+        generation authority for the tool-first route. It is created at
+        initial_contract end from ai_authored target_file/senario_summary/
+        ng_boundary fields, read by checklist interview, and must not be
+        committed.
+      fallback: >-
+        Manual scenario-contract creation (.agent/protocols/scenario-contract.md's
+        .agent/tmp/tmp.txt, via bash .agent/scripts/create-tmp.sh) is a
+        distinct fallback-route artifact, used only when
+        agent-ui-initial-contract is unavailable. It is not a second way to
+        produce senario-tmp.md, and the tool-first route must not fall back
+        to it merely by preference.
     rule: >-
       senario-tmp.md is a local temporary scenario checklist. It is created at
       initial_contract end, read by checklist interview, and must not be committed.
@@ -111,6 +138,21 @@ agent_protocols:
       - task_name
       - worktype
     rule: compact metadata only
+
+  db_schema_mandatory_ssot_rule:
+    ssot: docs/design/db-schema.yaml
+    applies_when: >-
+      Work touches DB / manifest / seed SQL / UI topology / package / layout /
+      design / wiring / tensor persistence / translator adoption targets.
+    rule: >-
+      docs/design/db-schema.yaml is a mandatory applicable SSOT (alongside top
+      SSOT) whenever applies_when is true, in .agent/protocols/*.md
+      foundation_ssot_read_gate sections and in target_ssot_name resolution
+      during initial_contract. db/*.sql is the canonical DDL/seed surface, but
+      table authority, table role, and manifest_reference meaning must be
+      cross-checked against docs/design/db-schema.yaml -- a refs-only
+      manifest.topology shape alone is not proof; the refs' target table must
+      also match this SSOT's documented authority.
 
   completion_contract:
     required_summary_fields:

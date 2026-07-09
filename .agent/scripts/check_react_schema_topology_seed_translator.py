@@ -1287,10 +1287,12 @@ def main():
         ]
         repo_text = "\n".join(path.read_text(encoding="utf-8") for path in repo_text_targets)
         expect(
-            "89. Agent UI route wording exposes prompt_content/protocol_trigger_hints full text and does not retain protocol-excerpts/manual-protocol as the tool-first route",
+            "89. Agent UI route wording exposes prompt_content full text plus normalized protocol_obligations[] and does not retain protocol-excerpts/manual-protocol/retired protocol_trigger_hints as the tool-first route",
             "protocol excerpts" not in repo_text.lower()
             and "triggered protocol excerpts" not in repo_text.lower()
-            and "protocol_trigger_hints[].content" in repo_text
+            and "protocol_trigger_hints" not in repo_text
+            and "protocol_obligations" in repo_text
+            and "fallback_protocol_ref" in repo_text
             and "full text" in repo_text.lower(),
         )
 
@@ -1380,7 +1382,9 @@ def main():
             all(name in agent_ui_src["initial"] for name in ("def _cmd_start", "def _read_full", "def _cmd_resolve_ssot", "def _cmd_sections", "def _cmd_end", "def build_parser"))
             and all(name in agent_ui_src["local"] for name in ("def _cmd_run_worktype_tests", "def _cmd_read_senario_tmp", "def _cmd_checklist", "def _cmd_checks", "def _cmd_summary", "def _run_check", "def _checklist_items"))
             and all(name in agent_ui_src["common"] for name in ("def worktypes", "def reject_output_flag", "def parse_senario_tmp"))
-            and "protocol_trigger_hints_note" in agent_ui_src["initial"]
+            and "protocol_obligations_note" in agent_ui_src["initial"] and "PROTOCOL_OBLIGATION_NOTE" in agent_ui_src["initial"]
+            and "protocol_trigger_hints" not in agent_ui_src["initial"]
+            and "def _build_protocol_obligation" in agent_ui_src["initial"]
             and "not SSOT authority" in agent_ui_src["local"]
             and "proof\ncompletion" in agent_ui_src["local"],
         )
@@ -1490,6 +1494,55 @@ def main():
         expect(
             "100. cross-boundary proof fails closed on eventBinding instance: vocabulary when used as runtimeInteractions[].instanceTargetRef",
             invalid_boundary_error == "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:instance:db_instance_port:instance_authority_key:operation_binding_key",
+        )
+
+        agent_tools_dir = REPO_ROOT / ".agent" / "scripts" / "agent_tools"
+        if str(agent_tools_dir) not in sys.path:
+            sys.path.insert(0, str(agent_tools_dir))
+        import agent_ui_initial_contract as initial_contract_impl
+
+        impl_change_obligation, impl_change_truncated = initial_contract_impl._build_protocol_obligation(
+            ".agent/protocols/implementation-change.md", "required", "always",
+        )
+        expect(
+            "101. protocol_obligations[] entry for a required protocol is a normalized extraction (not full text), routes/applies are set from the caller, and unmapped fields are honestly null rather than fabricated",
+            impl_change_obligation is not None
+            and impl_change_truncated is False
+            and impl_change_obligation["protocol_path"] == ".agent/protocols/implementation-change.md"
+            and impl_change_obligation["route_mode"] == "required"
+            and impl_change_obligation["applies"] == "always"
+            and impl_change_obligation["fallback_protocol_ref"] == ".agent/protocols/implementation-change.md"
+            and impl_change_obligation["trigger_condition"] is not None
+            and "Runtime/code changes under existing SSOT." in "\n".join(impl_change_obligation["trigger_condition"])
+            and impl_change_obligation["blocking_conditions"] is not None
+            and any("db-schema.yaml" in line for line in impl_change_obligation["blocking_conditions"])
+            and impl_change_obligation["classification_vocab"] is None,
+        )
+
+        ssot_impact_obligation, _ = initial_contract_impl._build_protocol_obligation(
+            ".agent/protocols/ssot-change-impact.md", "triggered:ssot_change", "agent_judgment_required",
+        )
+        expect(
+            "102. protocol_obligations[] heading-alias matching normalizes heterogeneous real heading spellings (## Trigger / ## Required / ## Prohibited / ## Output Expectation) into the same canonical fields other protocols reach via ## trigger_condition / ## blocking_conditions / ## pass_conditions",
+            ssot_impact_obligation is not None
+            and ssot_impact_obligation["route_mode"] == "triggered:ssot_change"
+            and ssot_impact_obligation["applies"] == "agent_judgment_required"
+            and ssot_impact_obligation["trigger_condition"] is not None
+            and any("SSOT files" in line for line in ssot_impact_obligation["trigger_condition"])
+            and ssot_impact_obligation["required_fields"] is not None
+            and any("impact checks" in line for line in ssot_impact_obligation["required_fields"])
+            and ssot_impact_obligation["blocking_conditions"] is not None
+            and any("stale expectations" in line for line in ssot_impact_obligation["blocking_conditions"])
+            and ssot_impact_obligation["output_boundary"] is not None
+            and any("lightweight" in line for line in ssot_impact_obligation["output_boundary"]),
+        )
+
+        missing_obligation, _ = initial_contract_impl._build_protocol_obligation(
+            ".agent/protocols/__does_not_exist__.md", "required", "always",
+        )
+        expect(
+            "103. protocol_obligations[] extraction fails closed (returns None, not a fabricated empty entry) for a routed path that does not exist on disk, matching _read_full's missing-file contract",
+            missing_obligation is None,
         )
 
     print()
