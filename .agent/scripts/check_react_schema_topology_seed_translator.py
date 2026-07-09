@@ -43,6 +43,76 @@ CRUD_PRESET_SEED_SQL_PATH = REPO_ROOT / "db" / "physical_search_crud_aggregate_p
 # contract as the existing generic seed gate.
 REQUIRED_NODE_FIELDS = ["nodeId", "nodeKind", "componentKey", "componentKind", "parentNodeId", "orderIndex"]
 COMPILE_SNAPSHOT_BLOCK_RE = re.compile(r"\$\$([\s\S]*?)\$\$::jsonb")
+BACKEND_INSTANCE_TARGET_REF_RE = re.compile(r"^instance-port:[^:]+:[^:]+:[^:]+$")
+
+
+def layout_patch_from_seed_runtime_interaction(seed_action_record):
+    """Connect a topology seed action record to the backend layout_patch_json shape.
+
+    The proof surface deliberately leaves translator-output-only checks and builds
+    the minimal nodes[].runtimeInteractions[] payload consumed by
+    NpgsqlUiTopologyRepository.ValidateRuntimeInteractions /
+    ApplyConfirmedLayoutPatchAsync before AssignRuntimeInteractionIds.
+    """
+    return {
+        "nodes": [{
+            "nodeId": seed_action_record.get("key") or seed_action_record.get("actionKey") or "seed-action-node",
+            "nodeKind": "catalog_component",
+            "componentKey": "button.primitive",
+            "componentKind": "action/button",
+            "runtimeInteractions": seed_action_record.get("runtimeInteractions") or [],
+        }]
+    }
+
+
+def validate_runtime_interactions_boundary_equivalent(layout_patch_json, approved_instance_target_refs):
+    """Python proof mirror of backend ValidateRuntimeInteractions targetRef boundary.
+
+    This is intentionally small and vocabulary-focused: it catches seed/template
+    candidate targetRef drift before the proof claims ApplyConfirmedLayoutPatchAsync
+    can reach AssignRuntimeInteractionIds.
+    """
+    nodes = layout_patch_json.get("nodes") if isinstance(layout_patch_json, dict) else None
+    if not isinstance(nodes, list):
+        return "LAYOUT_PATCH_NODES_MUST_BE_ARRAY"
+    for source_node in nodes:
+        interactions = source_node.get("runtimeInteractions") if isinstance(source_node, dict) else None
+        if interactions is None:
+            continue
+        if not isinstance(interactions, list):
+            return "RUNTIME_INTERACTIONS_MUST_BE_ARRAY"
+        for interaction in interactions:
+            if not isinstance(interaction, dict):
+                return "RUNTIME_INTERACTION_MUST_BE_OBJECT"
+            trigger = interaction.get("trigger")
+            if not isinstance(trigger, str) or not trigger.strip():
+                return "RUNTIME_INTERACTION_TRIGGER_REQUIRED"
+            action_type = interaction.get("actionType")
+            if not isinstance(action_type, str) or not action_type.strip():
+                return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED"
+            if action_type == "dispatchInstanceOperation":
+                target_ref = interaction.get("instanceTargetRef")
+                if not isinstance(target_ref, str) or not target_ref.strip():
+                    return "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_REQUIRED"
+                if not BACKEND_INSTANCE_TARGET_REF_RE.match(target_ref):
+                    return f"RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:{target_ref}"
+                if target_ref not in approved_instance_target_refs:
+                    return f"RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED:{target_ref}"
+            elif action_type == "dispatchExternalPort":
+                target_ref = interaction.get("portTargetRef")
+                if not isinstance(target_ref, str) or not target_ref.strip():
+                    return "RUNTIME_INTERACTION_PORT_TARGET_REF_REQUIRED"
+                if not target_ref.startswith("external-port:"):
+                    return f"RUNTIME_INTERACTION_PORT_TARGET_REF_INVALID:{target_ref}"
+            payload_from = interaction.get("payloadFrom")
+            if payload_from is not None:
+                if not isinstance(payload_from, dict):
+                    return "RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT"
+                for key, value in payload_from.items():
+                    if not isinstance(value, str):
+                        return f"RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:{key}"
+    return None
+
 
 SCENARIO_UUID = "bad04ed9-7d39-4cfc-a22c-db2684d4cb0a"
 
@@ -1202,7 +1272,7 @@ def main():
             and idem_action_record is not None
             and idem_action_record.get("eventBinding", {}).get("targetRef") == "instance:db_instance_port:instance_authority_key:operation_binding_key"
             and idem_first.get("actionType") == "dispatchInstanceOperation"
-            and idem_first.get("instanceTargetRef") == "instance:db_instance_port:instance_authority_key:operation_binding_key"
+            and idem_first.get("instanceTargetRef") == "instance-port:db_instance_port:instance_authority_key:operation_binding_key"
             and idem_first.get("idempotencyPolicy") == "once_per_mount"
             and idem_first.get("lifecycleDispatchConfirmed") is True
             and idem_first.get("debounceMs") == 250,
@@ -1212,6 +1282,21 @@ def main():
             idem_first
             and "runtimeInteractionId" not in idem_first
             and "runtimeInteractionId" not in json.dumps(doc_idem.get("topologyUiSeedCandidate"), separators=(",", ":"), ensure_ascii=False),
+        )
+        layout_patch_from_candidate = layout_patch_from_seed_runtime_interaction(idem_action_record or {})
+        approved_instance_refs = {"instance-port:db_instance_port:instance_authority_key:operation_binding_key"}
+        boundary_error = validate_runtime_interactions_boundary_equivalent(layout_patch_from_candidate, approved_instance_refs)
+        expect(
+            "99. seed/template runtimeInteractions[] candidate reaches backend ValidateRuntimeInteractions-equivalent targetRef vocabulary before assignment",
+            boundary_error is None
+            and idem_first.get("instanceTargetRef", "").startswith("instance-port:"),
+        )
+        invalid_layout_patch = json.loads(json.dumps(layout_patch_from_candidate))
+        invalid_layout_patch["nodes"][0]["runtimeInteractions"][0]["instanceTargetRef"] = "instance:db_instance_port:instance_authority_key:operation_binding_key"
+        invalid_boundary_error = validate_runtime_interactions_boundary_equivalent(invalid_layout_patch, approved_instance_refs)
+        expect(
+            "100. cross-boundary proof fails closed on eventBinding instance: vocabulary when used as runtimeInteractions[].instanceTargetRef",
+            invalid_boundary_error == "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:instance:db_instance_port:instance_authority_key:operation_binding_key",
         )
 
     print()

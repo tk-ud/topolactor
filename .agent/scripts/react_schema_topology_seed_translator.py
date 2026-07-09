@@ -693,6 +693,21 @@ def runtime_action_type_for_event_binding(event_binding):
     return None
 
 
+def runtime_target_ref_for_event_binding(event_binding, action_type):
+    """Map eventBinding targetRef into backend runtimeInteractions targetRef vocabulary.
+
+    topology_ui_seed eventBinding keeps the seed/import lane vocabulary. The
+    layout_patch_json runtimeInteractions boundary validates dispatchInstanceOperation
+    against instance-port:<portKind>:<instancePortId>:<operationBindingKey>, so
+    seed/template candidates must cross-map before backend validation/assignment.
+    """
+    target_ref = event_binding.get("targetRef") if isinstance(event_binding, dict) else None
+    target_ref = target_ref or ""
+    if action_type == "dispatchInstanceOperation" and target_ref.startswith("instance:"):
+        return "instance-port:" + target_ref[len("instance:"):]
+    return target_ref
+
+
 def build_runtime_interaction_candidate(node):
     """Build a draft runtimeInteractions[] entry from an Action/Step eventBinding.
 
@@ -705,7 +720,7 @@ def build_runtime_interaction_candidate(node):
     action_type = runtime_action_type_for_event_binding(event_binding)
     if not action_type:
         return None
-    target_ref = event_binding.get("targetRef") or node.get("actionRef") or ""
+    target_ref = runtime_target_ref_for_event_binding(event_binding, action_type) or node.get("actionRef") or ""
     candidate = {
         "trigger": event_binding.get("trigger"),
         "actionType": action_type,

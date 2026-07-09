@@ -469,8 +469,11 @@ react_schema_topology_seed_translator_ssot:
         eventBinding remains the lane/target/payload authoring contract. When an
         Action or Workflow Step can become a layout_patch_json runtime interaction,
         the translator/template generator must preserve the same trigger, lane-derived
-        actionType, targetRef, payloadFrom, idempotencyPolicy, lifecycleDispatchConfirmed,
-        and debounceMs in runtimeInteractions[] candidate entries.
+        actionType, backend-validation-compatible runtime targetRef field
+        (for dispatchInstanceOperation this is instanceTargetRef using the
+        instance-port:<portKind>:<instancePortId>:<operationBindingKey> vocabulary),
+        payloadFrom, idempotencyPolicy, lifecycleDispatchConfirmed, and debounceMs in
+        runtimeInteractions[] candidate entries.
       forbidden:
         - runtimeInteractionId_generation_in_translator_template_or_seed_candidate
         - treating_eventBinding_alone_as_the_layout_patch_runtimeInteractions_candidate
@@ -894,7 +897,7 @@ react_schema_topology_seed_translator_ssot:
       - registered_componentKey_or_componentKind (ui_catalog_boundary_contract.frontend_component_catalog)
       - props (react_schema PropBinding / static field values)
       - eventBinding (wiring_lane_contract.event_binding_shape)
-      - runtimeInteractions[] candidate (derived from eventBinding plus idempotency route fields; no runtimeInteractionId)
+      - runtimeInteractions[] candidate (derived from eventBinding plus idempotency route fields, with backend-validation-compatible targetRef vocabulary; no runtimeInteractionId)
       - payloadFrom (wiring_lane_contract lane-validated payloadFrom)
       - design_or_style_refs (ui_catalog_boundary_contract.style_catalog)
       - RuntimeComponentSpec_candidate
