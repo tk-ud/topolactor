@@ -68,7 +68,7 @@ Condition-triggered surfaces from worktype routing (`.agent/routes/worktype-requ
 - Temporary Scenario Contract — [`.agent/protocols/scenario-contract.md`](.agent/protocols/scenario-contract.md) when triggered (e.g. `implementation_change` + persistence/projection changes).
 - Recursive Verification Gate / completion governance — [`.agent/protocols/completion.md`](.agent/protocols/completion.md).
 
-Under tool-first, required protocol text is inlined at `start`; triggered protocol text is inlined with its `trigger_condition` — the agent still decides whether that condition applies before treating it as binding.
+Under tool-first, required protocol obligations are emitted at `start` as normalized structured fields (not full text — see `protocol_obligations[]` above); triggered protocol obligations are emitted the same way, each entry's `route_mode` carrying its `trigger_condition` key — the agent still decides whether that condition applies before treating it as binding.
 
 ## Work Posture
 

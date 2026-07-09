@@ -3,8 +3,10 @@
 # Compact reference for Agent UI tool output. This is rebuilt for tool output
 # and must not indiscriminately dump every legacy prompt/protocol/checklist
 # file. It may, and for `start` does, return the full text of the specific
-# prompt/protocol file(s) a worktype/trigger has already resolved -- that is
-# a targeted read of exactly what applies, not the breadth this guards against.
+# worktype-routed prompt file, and normalized structured obligations
+# (protocol_obligations[], not full text) for the specific required/triggered
+# protocol file(s) a worktype/trigger has already resolved -- that is a
+# targeted read of exactly what applies, not the breadth this guards against.
 
 version: 1
 status: draft_reference
@@ -21,7 +23,8 @@ reference_policy:
     - Emit compact structured output per tool step.
     - Do not emit verbose execution logs.
     - Do not read/return prompt or protocol files outside the current worktype/trigger routing (no indiscriminate all-worktype or all-protocol reads).
-    - Once routing resolves which prompt/protocol file(s) apply, return that file's full content rather than an arbitrary partial excerpt -- a truncated blocking/pass-condition section can look complete while silently omitting the rest.
+    - Once routing resolves which prompt file applies, return that file's full content rather than an arbitrary partial excerpt -- a truncated section can look complete while silently omitting the rest.
+    - Once routing resolves which protocol file(s) apply, return protocol_obligations[] -- a normalized structured extraction of each file's own headings (trigger_condition/judgment_scope/foundation_ssot_read_gate/blocking_conditions/pass_conditions/required_fields/classification_vocab/output_boundary), not that file's full text and not an execution procedure to follow verbatim. A field is null when the file has no matching heading, honestly, not as a truncation. fallback_protocol_ref on every entry still points at the full file for the fallback route or deeper manual review.
     - Prefer fields and selected SSOT sections for anything not yet routing-resolved (e.g. SSOT section listing/selection stays selection-only).
     - Expose this Reference's basis as structured fields (reference_basis), not markdown wording; a UI may render markdown from those fields, but the fields are the authority, not the rendered text.
 

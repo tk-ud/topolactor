@@ -83,7 +83,7 @@ Use `.agent/routes/worktype-required-protocols.yaml` as executable reference for
 
 ## Branch to Prompt
 
-Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, follow `next_step` through `initial_contract` (`worktypes` → `start` → `resolve-ssot` → `sections` → `end`) then, after implementation, `agent-ui-local-test` through `summary` (see `.agent/tools/README.md` and `docs/governance/agent-ui-protocol-ssot.yaml`). `start` inlines routed prompt and required/triggered protocol full text; SSOT sections are read in `resolve-ssot` / `sections`, not in `start` alone.
+Tool-first: when `.agent/tools/agent-ui-initial-contract` is usable, follow `next_step` through `initial_contract` (`worktypes` → `start` → `resolve-ssot` → `sections` → `end`) then, after implementation, `agent-ui-local-test` through `summary` (see `.agent/tools/README.md` and `docs/governance/agent-ui-protocol-ssot.yaml`). `start` inlines the routed prompt's full text (`prompt_content`) and the routed required/triggered protocols as normalized structured fields (`protocol_obligations[]`, not full text); SSOT sections are read in `resolve-ssot` / `sections`, not in `start` alone.
 
 Fallback: after worktype decision, open only matching prompt router:
 

@@ -210,7 +210,7 @@ seed / template generator / credential management screen seed 由来 projection 
 - backend assignment boundary のwiring確認なしに persisted `layout_patch_json` の成立を判断する。
 - PR574 / PR577 の既存 implemented evidence を再実装scopeへ戻す。
 - `agent-ui-initial-contract` を使わず、manual protocol read を tool-first 正規routeとして扱う。
-- UI contract が返した routed prompt / required protocol / triggered protocol full text を使わず、Agent判断で別protocolへ逸脱する。
+- UI contract が返した routed prompt full text / required protocol / triggered protocol の `protocol_obligations[]` を使わず、Agent判断で別protocolへ逸脱する。
 - fallback-only の prompt / protocol / checklist を resolved worktype の正規contractとして扱う。
 - `agent-ui-initial-contract` の scenario contract を作らず実装へ進む。
 - UI contract output を SSOT authority / implemented judgment / proof completion として扱う。

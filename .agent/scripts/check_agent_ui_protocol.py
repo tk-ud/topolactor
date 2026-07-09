@@ -22,6 +22,7 @@ REQUIRED_FILES = [
     ".agent/tools/logs/tool.log",
     ".agent/rules/rule.md",
     ".agent/tools/README.md",
+    "AGENTS.md",
     ".gitignore",
 ]
 
@@ -39,6 +40,11 @@ REQUIRED_TERMS = {
         "Tool-side and governance-side writes",
         "explicit SSOT/task scope",
         "product/runtime/source",
+        "protocol_obligations[]",
+    ],
+    "AGENTS.md": [
+        "protocol_obligations[]",
+        "fallback_protocol_ref",
     ],
     "docs/governance/reference/agent-ui-tool-output-reference.yaml": [
         "authority_split",
@@ -77,12 +83,19 @@ FORBIDDEN_TERMS = {
     ],
     ".agent/rules/rule.md": [
         "Do not use `.agent/tools` for repository mutation; `.agent/tools` is an Agent-facing read-only repo observation surface",
+        "protocol_trigger_hints",
+        "required/triggered protocol full text",
+    ],
+    "AGENTS.md": [
+        "protocol_trigger_hints",
+        "protocol text is inlined",
     ],
     "docs/governance/agent-ui-protocol-ssot.yaml": [
         "protocol_trigger_hints",
     ],
     "docs/governance/reference/agent-ui-tool-output-reference.yaml": [
         "protocol_trigger_hints",
+        "which prompt/protocol file(s) apply, return that file's full content",
     ],
 }
 
