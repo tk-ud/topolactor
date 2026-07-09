@@ -298,6 +298,22 @@ query_equals_zero "column absent: hubs.hub_relations.relation_registry_id" \
 query_equals_one "unique constraint: hub_relations(topology_manifest_id, sequence_position)" \
   "SELECT COUNT(*) FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid JOIN pg_namespace n ON t.relnamespace = n.oid WHERE n.nspname = 'hubs' AND t.relname = 'hub_relations' AND c.contype = 'u' AND pg_get_constraintdef(c.oid) LIKE '%topology_manifest_id%' AND pg_get_constraintdef(c.oid) LIKE '%sequence_position%';"
 
+echo "=== Validating credential-management instance_settings package/layout/wiring/tensor migration ==="
+query_equals_one "topology.ui_component_package contains credential-management instance_settings package" \
+  "SELECT COUNT(*) FROM topology.ui_component_package WHERE package_key = 'auth.external.credential_management.projection.package';"
+query_equals_one "topology.components_layout_design contains credential-management instance_settings layout" \
+  "SELECT COUNT(*) FROM topology.components_layout_design WHERE layout_key = 'auth.external.credential_management.projection.layout';"
+query_equals_one "topology.ui_wiring_registry contains credential-management instance_settings wiring" \
+  "SELECT COUNT(*) FROM topology.ui_wiring_registry WHERE wiring_key = 'auth.external.credential_management.projection.wiring';"
+query_equals_one "topology.ui_topology_tensor contains credential-management instance_settings tensor row" \
+  "SELECT COUNT(*) FROM topology.ui_topology_tensor WHERE route_key = 'admin/credential-management#instance_settings';"
+query_equals_zero "manifest 092 no longer embeds topology_ui_seed_record UI-entity payload directly (top SSOT: manifest.topology is refs/vectors only)" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.manifest_id = '00000000-0000-0000-0000-000000000092' AND e->>'type' = 'topology_ui_seed_record';"
+query_equals_one "manifest 092 carries exactly one refs-only ui_projection entry pointing at package/layout/wiring/tensor rows" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.manifest_id = '00000000-0000-0000-0000-000000000092' AND e->>'type' = 'ui_projection' AND e ? 'packageIds' AND e ? 'layoutId' AND e ? 'wiringId' AND e ? 'tensorId' AND NOT (e ? 'record') AND NOT (e ? 'fields');"
+query_equals_zero "manifest 091 (auth.user.boundary) is untouched by the instance_settings migration" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.manifest_id = '00000000-0000-0000-0000-000000000091' AND e->>'type' = 'topology_ui_seed_record';"
+
 if [ "$FAILURES" -eq 0 ]; then
   echo "PASS check-db-schema.sh assertions=${PASS_COUNT}"
   exit 0

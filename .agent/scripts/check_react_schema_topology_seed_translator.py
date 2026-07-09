@@ -617,6 +617,113 @@ def main():
             ),
         )
 
+        # 36k-36q: storage_adoption_contract.adoption_candidate_separation_contract
+        # -- the actual seed-safe adoption shape built from flat_records above.
+        adoption = (doc_ts or {}).get("adoptionCandidates") or {}
+        expect("36k. adoptionCandidates is populated for the golden fixture", bool(adoption))
+        expect("36l. packageAdoptionCandidates has exactly one entry (one Projection record)", len(adoption.get("packageAdoptionCandidates") or []) == 1)
+        expect("36m. layoutAdoptionCandidates is populated (category/section/form/field tree)", bool(adoption.get("layoutAdoptionCandidates")))
+        expect("36n. wiringAdoptionCandidates preserves all six instance_settings actions", {"json_template_download", "json_import", "validate", "preview", "apply", "approve"}.issubset({w.get("sourceRecordKey") for w in adoption.get("wiringAdoptionCandidates") or []}))
+        tensor_action_keys = set()
+        for tensor in adoption.get("tensorAdoptionCandidates") or []:
+            for node in dig(tensor, "layoutPatchJson", "nodes") or []:
+                for interaction in node.get("runtimeInteractions") or []:
+                    if interaction.get("sourceActionKey"):
+                        tensor_action_keys.add(interaction["sourceActionKey"])
+        expect(
+            "36o. every wiring candidate's action is reachable from a tensorAdoptionCandidates runtimeInteractions[] entry (runtime_interactions_not_persisted_layout_path is clean on the golden fixture)",
+            {"validate", "preview", "apply", "approve"}.issubset(tensor_action_keys),
+        )
+        expect(
+            "36p. tensor runtimeInteractions entries carry idempotency route fields (trigger/actionType/instanceTargetRef/payloadFrom) and never runtimeInteractionId",
+            all(
+                interaction.get("trigger") and interaction.get("actionType") and interaction.get("instanceTargetRef") and "payloadFrom" in interaction and "runtimeInteractionId" not in interaction
+                for tensor in adoption.get("tensorAdoptionCandidates") or []
+                for node in dig(tensor, "layoutPatchJson", "nodes") or []
+                for interaction in node.get("runtimeInteractions") or []
+                if interaction.get("actionType") == "dispatchInstanceOperation"
+            ),
+        )
+        manifest_refs = adoption.get("manifestRefsCandidate") or {}
+        expect(
+            "36q. manifestRefsCandidate carries only ref/vector fields (type/packageIds/layoutId/wiringId/tensorId), never record/fields/actions/categories",
+            manifest_refs.get("type") == "ui_projection"
+            and not ({"record", "fields", "actions", "columns", "sections", "categories"} & manifest_refs.keys())
+            and manifest_refs.get("packageIds") and manifest_refs.get("layoutId") and manifest_refs.get("wiringId") and manifest_refs.get("tensorId"),
+        )
+        expect(
+            "36r. the six new top_ssot_violation rule ids do not fire on the golden fixture (clean positive path)",
+            not (rule_ids(doc_ts) and set(rule_ids(doc_ts)) & {
+                "MANIFEST_TOPOLOGY_CONTAINS_UI_PAYLOAD_MATERIAL", "FLATTENED_SEED_RECORD_USED_AS_MANIFEST_FINAL_SHAPE",
+                "UI_PAYLOAD_NOT_SPLIT_TO_PACKAGE_LAYOUT_DESIGN_WIRING_TENSOR", "RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH",
+                "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH", "CREDENTIAL_SECRET_PROJECTION_DETECTED",
+            }),
+        )
+
+        # 36s-36y: unit-level negative-path proof that validate_adoption_candidates
+        # actually detects each of the six top_ssot_violation_rule_definitions --
+        # these are translator-self-consistency guards a well-formed CLI input
+        # cannot organically trigger (the translator itself never emits a bad
+        # manifestRefsCandidate), so they are exercised by importing the
+        # implementation module directly and feeding it hand-built candidate
+        # bundles, per this file's role as the structured-assertion layer.
+        sys.path.insert(0, str(REPO_ROOT / ".agent" / "scripts"))
+        import react_schema_topology_seed_translator as translator_impl  # noqa: E402
+
+        bad_manifest_refs_payload = translator_impl.validate_adoption_candidates(
+            {"manifestRefsCandidate": {"type": "ui_projection", "packageIds": ["x"], "record": {"key": "leak"}}},
+            [],
+        )
+        expect("36s. manifest_topology_contains_ui_payload_material fires when manifestRefsCandidate carries a `record` key", "MANIFEST_TOPOLOGY_CONTAINS_UI_PAYLOAD_MATERIAL" in [e["ruleId"] for e in bad_manifest_refs_payload])
+
+        bad_manifest_refs_type = translator_impl.validate_adoption_candidates(
+            {"manifestRefsCandidate": {"type": "topology_ui_seed_record", "packageIds": []}},
+            [],
+        )
+        expect("36t. flattened_seed_record_used_as_manifest_final_shape fires when manifestRefsCandidate.type == topology_ui_seed_record", "FLATTENED_SEED_RECORD_USED_AS_MANIFEST_FINAL_SHAPE" in [e["ruleId"] for e in bad_manifest_refs_type])
+
+        unsplit_errors = translator_impl.validate_adoption_candidates(
+            {"packageAdoptionCandidates": [], "layoutAdoptionCandidates": [], "wiringAdoptionCandidates": [], "tensorAdoptionCandidates": []},
+            [{"record": {"recordType": "topology_ui_field", "key": "orphan"}}],
+        )
+        expect("36u. ui_payload_not_split_to_package_layout_design_wiring_tensor fires when flat_records is non-empty but every candidate bucket is empty", "UI_PAYLOAD_NOT_SPLIT_TO_PACKAGE_LAYOUT_DESIGN_WIRING_TENSOR" in [e["ruleId"] for e in unsplit_errors])
+
+        orphan_dispatch_action = {
+            "record": {
+                "recordType": "topology_ui_action", "key": "orphan_action", "sourceReactPath": "$.root.x",
+                "eventBinding": {"wiringLane": "external_instance_wiring", "targetRef": "instance:db_instance_port:a:b"},
+                "runtimeInteractions": [{"actionType": "dispatchInstanceOperation", "sourceActionKey": "orphan_action"}],
+            },
+        }
+        orphan_errors = translator_impl.validate_adoption_candidates({"tensorAdoptionCandidates": []}, [orphan_dispatch_action])
+        orphan_rule_ids = [e["ruleId"] for e in orphan_errors]
+        expect("36v. runtime_interactions_not_persisted_layout_path fires when a dispatch-lane action has no tensorAdoptionCandidates runtimeInteractions[] entry", "RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH" in orphan_rule_ids)
+        expect("36w. idempotency_carrier_missing_for_runtime_dispatch fires when a dispatchInstanceOperation candidate is missing instanceTargetRef/payloadFrom", "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH" in orphan_rule_ids)
+
+        stray_id_action = {
+            "record": {
+                "recordType": "topology_ui_action", "key": "stray_id_action", "sourceReactPath": "$.root.y",
+                "eventBinding": {"wiringLane": "internal_instance_wiring"},
+                "runtimeInteractions": [{"actionType": "localStateMutation", "runtimeInteractionId": "should-not-be-here"}],
+            },
+        }
+        stray_id_errors = translator_impl.validate_adoption_candidates({"tensorAdoptionCandidates": []}, [stray_id_action])
+        expect("36x. idempotency_carrier_missing_for_runtime_dispatch fires when a runtimeInteractions candidate carries runtimeInteractionId (translator must never generate one)", "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH" in [e["ruleId"] for e in stray_id_errors])
+
+        secret_leak_errors = translator_impl.validate_adoption_candidates(
+            {"wiringAdoptionCandidates": [{"wiringKey": "leak", "wiringSchemaJson": {"password_hash": "should-never-appear"}}]},
+            [],
+        )
+        expect("36y. credential_secret_projection_detected fires when an adoption candidate carries a password_hash key", "CREDENTIAL_SECRET_PROJECTION_DETECTED" in [e["ruleId"] for e in secret_leak_errors])
+
+        # forbidden-field guard-list declarations (documentation, not leakage)
+        # must NOT false-positive credential_secret_projection_detected.
+        guard_list_errors = translator_impl.validate_adoption_candidates(
+            {"wiringAdoptionCandidates": [{"wiringKey": "policy", "wiringSchemaJson": {"forbidden_fields": ["secret", "plaintext_secret", "token"]}}]},
+            [],
+        )
+        expect("36z. credential_secret_projection_detected does NOT false-positive on a forbidden_fields guard-list array (values, not a denylisted key)", "CREDENTIAL_SECRET_PROJECTION_DETECTED" not in [e["ruleId"] for e in guard_list_errors])
+
         # 36f-36h: a synthetic oversized single-field candidate must be caught
         # by storage_adoption_contract's budget check at generation time, not
         # discovered later as a real Postgres INSERT failure (the PR #573 gap

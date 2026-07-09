@@ -62,6 +62,20 @@ done
 require_grep "runtimeInteractions" "$SSOT" "persistence authority vocabulary"
 require_grep "ui_builder_preset_ecosystem_ssot_as_owning_ssot_for_this_surface" "$SSOT" "ownership negative boundary"
 
+# lane_storage_boundary (top_ssot_alignment): the five formalized lanes and the
+# manifest.topology refs-only boundary statement.
+require_grep "^  lane_storage_boundary:" "$SSOT" "lane/storage boundary top-SSOT-alignment section"
+for lane in package_internal_api_wiring_lane runtime_interactions_lane external_api_lane external_instance_lane local_ui_state_lane; do
+  require_grep "$lane:" "$SSOT" "lane_storage_boundary lane"
+done
+require_grep "manifest_topology_boundary:" "$SSOT" "manifest.topology refs-only boundary statement"
+require_grep "manifest_topology_array_element_embedding_layout_or_wiring_payload_directly" "$SSOT" "manifest.topology UI-payload-embedding negative boundary"
+# package_internal_api_wiring_lane idempotency applicability must stay an
+# explicit known_gap, not silently asserted resolved.
+if ! grep -Pzo "(?s)package_internal_api_wiring_lane:.{0,600}?idempotency_applicability: known_gap" "$SSOT" >/dev/null 2>&1; then
+  fail "$SSOT package_internal_api_wiring_lane must declare idempotency_applicability: known_gap (not silently assumed included)"
+fi
+
 # Canonical report vocabulary (frontend-ui-audit-bundle-semantic-frame.md).
 require_grep "initial_mount" "$SSOT" "canonical lifecycle trigger"
 for term in "UI監視割当" "UI状態更新" "副作用設定" "内部API" "外部API連携" "外部インスタンス連携"; do
