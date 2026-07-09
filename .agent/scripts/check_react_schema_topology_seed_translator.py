@@ -632,7 +632,21 @@ def main():
             and (adoption["componentGroupBundleAdoptionCandidates"][0].get("componentGroupBundleKey") != (adoption.get("packageAdoptionCandidates") or [{}])[0].get("packageKey")),
         )
         expect("36m. layoutAdoptionCandidates is populated (category/section/form/field tree)", bool(adoption.get("layoutAdoptionCandidates")))
-        expect("36n. wiringAdoptionCandidates preserves all six instance_settings actions", {"json_template_download", "json_import", "validate", "preview", "apply", "approve"}.issubset({w.get("sourceRecordKey") for w in adoption.get("wiringAdoptionCandidates") or []}))
+        layout_records_list = dig(adoption, "layoutAdoptionCandidates") or []
+        layout_tree_records = dig(layout_records_list[0], "layoutSchemaJson", "records") if layout_records_list else []
+        expect(
+            "36m1. layoutAdoptionCandidates' layout tree carries the topology_ui_action records too (PRIMARY storage bucket per primary_and_derived_candidate_relationship, not only wiring/tensor derived candidates)",
+            any(dig(w, "record", "recordType") == "topology_ui_action" for w in layout_tree_records or []),
+        )
+        wiring_candidates_list = adoption.get("wiringAdoptionCandidates") or []
+        wiring_actions = dig(wiring_candidates_list[0], "wiringSchemaJson", "actions") if wiring_candidates_list else []
+        expect(
+            "36n. wiringAdoptionCandidates is ONE aggregate entry per Projection (never one per Action/Step -- cardinality_note) whose wiringSchemaJson.actions[] preserves all six instance_settings actions",
+            len(wiring_candidates_list) == 1
+            and {"json_template_download", "json_import", "validate", "preview", "apply", "approve"}.issubset(
+                {a.get("sourceRecordKey") for a in wiring_actions or []}
+            ),
+        )
         tensor_action_keys = set()
         for tensor in adoption.get("tensorAdoptionCandidates") or []:
             for node in dig(tensor, "layoutPatchJson", "nodes") or []:
@@ -675,13 +689,23 @@ def main():
                 for t in adoption.get("tensorAdoptionCandidates") or []
             ),
         )
+        layout_keys_36q3 = {f"<{c.get('layoutKey')}>" for c in adoption.get("layoutAdoptionCandidates") or []}
+        wiring_keys_36q3 = {f"<{c.get('wiringKey')}>" for c in wiring_candidates_list}
+        tensor_keys_36q3 = {f"<{c.get('tensorKey')}>" for c in adoption.get("tensorAdoptionCandidates") or []}
         expect(
-            "36r. the seven new top_ssot_violation rule ids do not fire on the golden fixture (clean positive path)",
+            "36q3. manifestRefsCandidate's packageIds/layoutId/wiringId/tensorId each resolve to an actually-emitted candidate key in the matching bucket (manifest_refs_candidate_reference_resolution -- refs-only is not by itself proof the refs are wired correctly; PR580 review finding was exactly a wiringId that resolved to nothing)",
+            set(manifest_refs.get("packageIds") or []).issubset(package_keys)
+            and manifest_refs.get("layoutId") in layout_keys_36q3
+            and manifest_refs.get("wiringId") in wiring_keys_36q3
+            and manifest_refs.get("tensorId") in tensor_keys_36q3,
+        )
+        expect(
+            "36r. the eight new top_ssot_violation rule ids do not fire on the golden fixture (clean positive path)",
             not (rule_ids(doc_ts) and set(rule_ids(doc_ts)) & {
                 "MANIFEST_TOPOLOGY_CONTAINS_UI_PAYLOAD_MATERIAL", "FLATTENED_SEED_RECORD_USED_AS_MANIFEST_FINAL_SHAPE",
                 "UI_PAYLOAD_NOT_SPLIT_TO_PACKAGE_LAYOUT_DESIGN_WIRING_TENSOR", "RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH",
                 "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH", "CREDENTIAL_SECRET_PROJECTION_DETECTED",
-                "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH",
+                "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH", "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED",
             }),
         )
 
@@ -808,6 +832,79 @@ def main():
         expect(
             "36z3. package_authority_target_table_mismatch does NOT false-positive when packageIds/packageIdRef are wired to the correct respective buckets",
             "PACKAGE_AUTHORITY_TARGET_TABLE_MISMATCH" not in [e["ruleId"] for e in correctly_wired_errors],
+        )
+
+        # 36z4-36z6: manifest_refs_candidate_reference_resolution -- reproduces the
+        # exact PR580 review finding (an earlier translator version emitted one
+        # wiringAdoptionCandidates entry per Action/Step but a single
+        # aggregate-style wiringId that matched none of them) as a unit-level
+        # negative-path proof, plus a clean-resolution positive-path proof so the
+        # rule cannot false-positive on correctly-wired candidates.
+        unresolved_wiring_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {
+                    "type": "ui_projection",
+                    "packageIds": ["<seed.package>"],
+                    "layoutId": "<seed.layout>",
+                    "wiringId": "<seed.wiring>",
+                    "tensorId": "<seed.tensor>",
+                },
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "layoutAdoptionCandidates": [{"layoutKey": "seed.layout"}],
+                # Old, incorrect per-Action shape: no candidate actually carries the
+                # aggregate key "seed.wiring" the manifestRefsCandidate references.
+                "wiringAdoptionCandidates": [{"wiringKey": "seed.validate.wiring"}, {"wiringKey": "seed.approve.wiring"}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor"}],
+            },
+            [],
+        )
+        expect(
+            "36z4. manifest_refs_candidate_reference_resolution fires when manifestRefsCandidate.wiringId does not match any emitted wiringAdoptionCandidates[].wiringKey (the exact PR580 review finding)",
+            "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED" in [e["ruleId"] for e in unresolved_wiring_errors],
+        )
+
+        unresolved_layout_tensor_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {
+                    "type": "ui_projection",
+                    "packageIds": ["<seed.package>"],
+                    "layoutId": "<seed.wrong_layout>",
+                    "wiringId": "<seed.wiring>",
+                    "tensorId": "<seed.wrong_tensor>",
+                },
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "layoutAdoptionCandidates": [{"layoutKey": "seed.layout"}],
+                "wiringAdoptionCandidates": [{"wiringKey": "seed.wiring"}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor"}],
+            },
+            [],
+        )
+        expect(
+            "36z5. manifest_refs_candidate_reference_resolution fires independently for an unresolved layoutId and an unresolved tensorId in the same candidates bundle (collects every violation, not just the first)",
+            {"$.adoptionCandidates.manifestRefsCandidate.layoutId", "$.adoptionCandidates.manifestRefsCandidate.tensorId"}.issubset(
+                {e["path"] for e in unresolved_layout_tensor_errors if e["ruleId"] == "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED"}
+            ),
+        )
+
+        resolved_refs_errors = translator_impl.validate_adoption_candidates(
+            {
+                "manifestRefsCandidate": {
+                    "type": "ui_projection",
+                    "packageIds": ["<seed.package>"],
+                    "layoutId": "<seed.layout>",
+                    "wiringId": "<seed.wiring>",
+                    "tensorId": "<seed.tensor>",
+                },
+                "packageAdoptionCandidates": [{"packageKey": "seed.package", "layout": []}],
+                "layoutAdoptionCandidates": [{"layoutKey": "seed.layout"}],
+                "wiringAdoptionCandidates": [{"wiringKey": "seed.wiring", "wiringSchemaJson": {"actions": [{"wiringKey": "seed.validate.wiring"}, {"wiringKey": "seed.approve.wiring"}]}}],
+                "tensorAdoptionCandidates": [{"tensorKey": "seed.tensor"}],
+            },
+            [],
+        )
+        expect(
+            "36z6. manifest_refs_candidate_reference_resolution does NOT false-positive when every ref (packageIds/layoutId/wiringId/tensorId) resolves to its matching bucket's actually-emitted key, including the aggregate wiringId shape",
+            "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED" not in [e["ruleId"] for e in resolved_refs_errors],
         )
 
         # 36f-36h: a synthetic oversized single-field candidate must be caught
