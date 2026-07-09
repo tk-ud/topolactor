@@ -256,6 +256,12 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - proof orchestration の総点検は後段 `test-orchestration-review` に分離し、この実装 Bundle の completion 判定へ混ぜない。
 - 語彙修正・label boundary・Step wording は seed conversion 後段 scope とし、この seed 実装 Bundle に混ぜない。
 
+### Implemented history guard
+
+- PR574 / PR577 / PR578 の UI Builder idempotency 系実装は implemented history として扱い、`admin-surface-topology-seed-conversion` の再実装 scope へ戻さない。
+- 実装済み境界: UI Builder `layout_patch:apply` 経路の backend persistence boundary、`AssignRuntimeInteractionIds`、persisted `runtimeInteractionId` forwarding、ProjectionShell / renderEmission / uiEventEffectRunner の projection-time idempotency identity、PR574 backend ledger execution gate。
+- `admin-surface-topology-seed-conversion` は React-like Schema / translator / topology UI seed / seed registration / projection render / backend action wiring を扱う。idempotency authority の再設計・再実装は scope 外であり、必要な場合は regression proof / wiring確認のみ扱う。
+
 ### SubBundle scope
 
 #### `admin-dashboard`
@@ -363,6 +369,8 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - credential management に standalone route / dedicated panel / raw physical table row editor を追加する。
 - 語彙修正を seed conversion 実装前に混ぜる。
 - 実装既存状態を SSOT として扱う。
+- PR574 / PR577 / PR578 の idempotency 系実装を未実装扱いに戻す。
+- proof 更新を idempotency authority 再設計・再実装として読める状態にする。
 
 ---
 
