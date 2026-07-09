@@ -43,6 +43,76 @@ CRUD_PRESET_SEED_SQL_PATH = REPO_ROOT / "db" / "physical_search_crud_aggregate_p
 # contract as the existing generic seed gate.
 REQUIRED_NODE_FIELDS = ["nodeId", "nodeKind", "componentKey", "componentKind", "parentNodeId", "orderIndex"]
 COMPILE_SNAPSHOT_BLOCK_RE = re.compile(r"\$\$([\s\S]*?)\$\$::jsonb")
+BACKEND_INSTANCE_TARGET_REF_RE = re.compile(r"^instance-port:[^:]+:[^:]+:[^:]+$")
+
+
+def layout_patch_from_seed_runtime_interaction(seed_action_record):
+    """Connect a topology seed action record to the backend layout_patch_json shape.
+
+    The proof surface deliberately leaves translator-output-only checks and builds
+    the minimal nodes[].runtimeInteractions[] payload consumed by
+    NpgsqlUiTopologyRepository.ValidateRuntimeInteractions /
+    ApplyConfirmedLayoutPatchAsync before AssignRuntimeInteractionIds.
+    """
+    return {
+        "nodes": [{
+            "nodeId": seed_action_record.get("key") or seed_action_record.get("actionKey") or "seed-action-node",
+            "nodeKind": "catalog_component",
+            "componentKey": "button.primitive",
+            "componentKind": "action/button",
+            "runtimeInteractions": seed_action_record.get("runtimeInteractions") or [],
+        }]
+    }
+
+
+def validate_runtime_interactions_boundary_equivalent(layout_patch_json, approved_instance_target_refs):
+    """Python proof mirror of backend ValidateRuntimeInteractions targetRef boundary.
+
+    This is intentionally small and vocabulary-focused: it catches seed/template
+    candidate targetRef drift before the proof claims ApplyConfirmedLayoutPatchAsync
+    can reach AssignRuntimeInteractionIds.
+    """
+    nodes = layout_patch_json.get("nodes") if isinstance(layout_patch_json, dict) else None
+    if not isinstance(nodes, list):
+        return "LAYOUT_PATCH_NODES_MUST_BE_ARRAY"
+    for source_node in nodes:
+        interactions = source_node.get("runtimeInteractions") if isinstance(source_node, dict) else None
+        if interactions is None:
+            continue
+        if not isinstance(interactions, list):
+            return "RUNTIME_INTERACTIONS_MUST_BE_ARRAY"
+        for interaction in interactions:
+            if not isinstance(interaction, dict):
+                return "RUNTIME_INTERACTION_MUST_BE_OBJECT"
+            trigger = interaction.get("trigger")
+            if not isinstance(trigger, str) or not trigger.strip():
+                return "RUNTIME_INTERACTION_TRIGGER_REQUIRED"
+            action_type = interaction.get("actionType")
+            if not isinstance(action_type, str) or not action_type.strip():
+                return "RUNTIME_INTERACTION_ACTION_TYPE_REQUIRED"
+            if action_type == "dispatchInstanceOperation":
+                target_ref = interaction.get("instanceTargetRef")
+                if not isinstance(target_ref, str) or not target_ref.strip():
+                    return "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_REQUIRED"
+                if not BACKEND_INSTANCE_TARGET_REF_RE.match(target_ref):
+                    return f"RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:{target_ref}"
+                if target_ref not in approved_instance_target_refs:
+                    return f"RUNTIME_INTERACTION_INSTANCE_TARGET_REF_NOT_APPROVED:{target_ref}"
+            elif action_type == "dispatchExternalPort":
+                target_ref = interaction.get("portTargetRef")
+                if not isinstance(target_ref, str) or not target_ref.strip():
+                    return "RUNTIME_INTERACTION_PORT_TARGET_REF_REQUIRED"
+                if not target_ref.startswith("external-port:"):
+                    return f"RUNTIME_INTERACTION_PORT_TARGET_REF_INVALID:{target_ref}"
+            payload_from = interaction.get("payloadFrom")
+            if payload_from is not None:
+                if not isinstance(payload_from, dict):
+                    return "RUNTIME_INTERACTION_PAYLOAD_FROM_MUST_BE_OBJECT"
+                for key, value in payload_from.items():
+                    if not isinstance(value, str):
+                        return f"RUNTIME_INTERACTION_PAYLOAD_FROM_VALUE_MUST_BE_STRING:{key}"
+    return None
+
 
 SCENARIO_UUID = "bad04ed9-7d39-4cfc-a22c-db2684d4cb0a"
 
@@ -990,6 +1060,244 @@ def main():
         else:
             fail("86. no generate.log record available to regenerate")
             fail("86a. no generate.log record available to regenerate")
+
+
+        runtime_id_pattern = re.compile(r'"runtimeInteractionId"\s*:')
+        seed_runtime_id_surfaces = {
+            "credential-management input fixture": FIXTURE.read_text(encoding="utf-8"),
+            "credential-management topology-seed fixture": TOPOLOGY_SEED_FIXTURE.read_text(encoding="utf-8"),
+            "db/seed_empty.sql": SEED_EMPTY_PATH.read_text(encoding="utf-8"),
+        }
+        expect(
+            "87. credential-management fixtures and db/seed_empty.sql do not hardcode runtimeInteractionId (backend persistence boundary owns final assignment)",
+            all(runtime_id_pattern.search(text) is None for text in seed_runtime_id_surfaces.values()),
+        )
+
+        generated_seed_docs = [doc_ts, doc_crud]
+        expect(
+            "88. generate-topology-seed outputs remain draft/intake candidates and do not mint runtimeInteractionId authority",
+            all(
+                d is not None
+                and runtime_id_pattern.search(json.dumps(d, separators=(",", ":"), ensure_ascii=False)) is None
+                and (dig(d, "topologyUiSeedCandidate", "role") == "draft_intake_artifact_not_active_topology"
+                     or dig(d, "topologyUiSeedCandidate", "schema") == "topolactor.topology_ui_seed.v1")
+                for d in generated_seed_docs
+            ),
+        )
+
+        repo_text_targets = [
+            REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_initial_contract.py",
+            REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_local_test.py",
+            REPO_ROOT / ".agent" / "tools" / "README.md",
+            REPO_ROOT / "docs" / "governance" / "reference" / "agent-ui-tool-output-reference.yaml",
+            REPO_ROOT / ".agent" / "prompt" / "implementation-change.md",
+        ]
+        repo_text = "\n".join(path.read_text(encoding="utf-8") for path in repo_text_targets)
+        expect(
+            "89. Agent UI route wording exposes prompt_content/protocol_trigger_hints full text and does not retain protocol-excerpts/manual-protocol as the tool-first route",
+            "protocol excerpts" not in repo_text.lower()
+            and "triggered protocol excerpts" not in repo_text.lower()
+            and "protocol_trigger_hints[].content" in repo_text
+            and "full text" in repo_text.lower(),
+        )
+
+
+        # PR578 scope-authority correction: the todo Bundle body (not the
+        # shortened initial prompt) requires evidence across the listed backend,
+        # frontend forwarding, translator, entry-gate, fixture, seed, and Agent
+        # UI governance surfaces. These static checks deliberately read those
+        # target surfaces so the proof cannot shrink to only the files touched
+        # by the previous PR diff.
+        backend_repo_src = (REPO_ROOT / "backend" / "repository" / "NpgsqlUiTopologyRepository.cs").read_text(encoding="utf-8")
+        apply_idx = backend_repo_src.find("public override async Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync")
+        assign_call_idx = backend_repo_src.find("AssignRuntimeInteractionIds(valid.TensorPatchJson)", apply_idx)
+        persist_idx = backend_repo_src.find("UPDATE topology.ui_topology_tensor SET layout_patch_json=@patch::jsonb", apply_idx)
+        expect(
+            "90. backend persistence wiring calls AssignRuntimeInteractionIds inside ApplyConfirmedLayoutPatchAsync before layout_patch_json persistence",
+            apply_idx >= 0 and assign_call_idx > apply_idx and persist_idx > assign_call_idx,
+        )
+        expect(
+            "91. backend assignment boundary includes HasValidRuntimeInteractionId and invalid-id replacement before persisted layout_patch_json",
+            "private static bool HasValidRuntimeInteractionId" in backend_repo_src
+            and "Guid.TryParse" in backend_repo_src
+            and 'writer.WriteString("runtimeInteractionId", Guid.NewGuid().ToString())' in backend_repo_src,
+        )
+
+        seed_template_persist_bypass = re.search(
+            r"INSERT\s+INTO\s+topology\.ui_topology_tensor\s*\([^)]*layout_patch_json|UPDATE\s+topology\.ui_topology_tensor\s+SET\s+layout_patch_json",
+            backend_repo_src,
+            re.IGNORECASE | re.DOTALL,
+        )
+        expect(
+            "92. NpgsqlUiTopologyRepository has no alternate active layout_patch_json persist path before the assignment boundary check (bypass would be caught here)",
+            seed_template_persist_bypass is not None and seed_template_persist_bypass.start() == persist_idx,
+        )
+
+        render_src = (REPO_ROOT / "frontend" / "runtime" / "renderEmission.ts").read_text(encoding="utf-8")
+        event_builder_idx = render_src.find("function buildExternalPortEventBinding")
+        event_runtime_id_idx = render_src.find("runtimeInteractionId", event_builder_idx)
+        event_forward_idx = render_src.find("runtimeInteractionId,", event_runtime_id_idx)
+        effect_src = (REPO_ROOT / "frontend" / "runtime" / "uiEventEffectRunner.ts").read_text(encoding="utf-8")
+        lifecycle_idx = effect_src.find("const emitLifecycle")
+        lifecycle_forward_idx = effect_src.find("runtimeInteractionId: w.runtimeInteractionId", lifecycle_idx)
+        visual_src = (REPO_ROOT / "frontend" / "runtime" / "visualLayoutUtils.ts").read_text(encoding="utf-8")
+        clone_idx = visual_src.find("export function cloneVisualNode")
+        strip_idx = visual_src.find("runtimeInteractionId: _runtimeInteractionId", clone_idx)
+        shell_src = (REPO_ROOT / "frontend" / "islands" / "ProjectionShell.tsx").read_text(encoding="utf-8")
+        expect(
+            "93. ProjectionShell/renderEmission/uiEventEffectRunner forward persisted runtimeInteractionId through event and lifecycle dispatch lanes",
+            "renderEmission(" in shell_src
+            and "emitLifecycle" in shell_src
+            and event_builder_idx >= 0
+            and event_runtime_id_idx > event_builder_idx
+            and event_forward_idx > event_runtime_id_idx
+            and lifecycle_idx >= 0
+            and lifecycle_forward_idx > lifecycle_idx,
+        )
+        expect(
+            "94. visualLayoutUtils cloneVisualNode strips runtimeInteractionId so duplicated authored interactions receive fresh backend ids",
+            clone_idx >= 0 and strip_idx > clone_idx,
+        )
+
+        translator_src = (REPO_ROOT / ".agent" / "scripts" / "react_schema_topology_seed_translator.py").read_text(encoding="utf-8")
+        entry_gate_src = (REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "schema_seed_translator_entry_gate.py").read_text(encoding="utf-8")
+        expect(
+            "95. translator/entry-gate target functions exist and remain disconnected from db/*.sql/persisted runtimeInteractionId authority",
+            all(name in translator_src for name in (
+                "def convert_node_to_seed_record",
+                "def build_topology_ui_seed_candidate",
+                "def flatten_topology_ui_seed_tree",
+                "def validate_flat_seed_records",
+            ))
+            and "def validate_translator_entry" in entry_gate_src
+            and "Guid.NewGuid" not in translator_src
+            and "uuid4" not in translator_src
+            and "Guid.NewGuid" not in entry_gate_src
+            and "uuid4" not in entry_gate_src,
+        )
+
+        agent_ui_targets = {
+            "initial": REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_initial_contract.py",
+            "local": REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_local_test.py",
+            "common": REPO_ROOT / ".agent" / "scripts" / "agent_tools" / "agent_ui_common.py",
+        }
+        agent_ui_src = {k: v.read_text(encoding="utf-8") for k, v in agent_ui_targets.items()}
+        expect(
+            "96. Agent UI target functions/common helpers preserve tool-first route and authority boundary wording",
+            all(name in agent_ui_src["initial"] for name in ("def _cmd_start", "def _read_full", "def _cmd_resolve_ssot", "def _cmd_sections", "def _cmd_end", "def build_parser"))
+            and all(name in agent_ui_src["local"] for name in ("def _cmd_run_worktype_tests", "def _cmd_read_senario_tmp", "def _cmd_checklist", "def _cmd_checks", "def _cmd_summary", "def _run_check", "def _checklist_items"))
+            and all(name in agent_ui_src["common"] for name in ("def worktypes", "def reject_output_flag", "def parse_senario_tmp"))
+            and "protocol_trigger_hints_note" in agent_ui_src["initial"]
+            and "not SSOT authority" in agent_ui_src["local"]
+            and "proof\ncompletion" in agent_ui_src["local"],
+        )
+
+
+        idempotency_schema = {
+            "schema": "topolactor.react_schema.v1",
+            "presetKey": "auth.external.credential_management.projection",
+            "surface": "auth.external.credential_management.projection",
+            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+            "root": {
+                "kind": "Projection",
+                "key": "idempotency_route_projection",
+                "label": "Idempotency route projection",
+                "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+                "children": [{
+                    "kind": "Category",
+                    "key": "idempotency_category",
+                    "label": "Idempotency category",
+                    "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+                    "children": [{
+                        "kind": "Section",
+                        "key": "idempotency_section",
+                        "label": "Idempotency section",
+                        "sectionKind": "fixed_form_projection",
+                        "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+                        "children": [{
+                            "kind": "Form",
+                            "key": "idempotency_form",
+                            "label": "Idempotency form",
+                            "target": "db_instance_port",
+                            "mode": "edit",
+                            "fields": ["instance_authority_key"],
+                            "authorityMarker": "validation_only",
+                            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"],
+                            "children": [{
+                                "kind": "Field",
+                                "key": "instance_authority_key",
+                                "label": "Instance authority key",
+                                "control": "form_input/form_field",
+                                "required": True,
+                                "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"]
+                            }, {
+                                "kind": "Action",
+                                "key": "validate_with_idempotency",
+                                "label": "Validate with idempotency",
+                                "authorityMarker": "validation_only",
+                                "actionRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                                "eventBinding": {
+                                    "trigger": "initial_mount",
+                                    "wiringLane": "external_instance_wiring",
+                                    "targetRef": "instance:db_instance_port:instance_authority_key:operation_binding_key",
+                                    "authority": "validation_only",
+                                    "payloadFrom": {"instance_authority_key": "node:instance_authority_key.value"}
+                                },
+                                "idempotencyPolicy": "once_per_mount",
+                                "lifecycleDispatchConfirmed": True,
+                                "debounceMs": 250,
+                                "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#runtime_interactions_candidate_contract"]
+                            }]
+                        }]
+                    }]
+                }]
+            }
+        }
+        idempotency_fixture = write_topology_seed_tmp_fixture(json.dumps(idempotency_schema, separators=(",", ":")), tmpdir=tmpdir)
+        proc_idem, doc_idem = run_generate_topology_seed(idempotency_fixture)
+        idem_records = (doc_idem or {}).get("topologyUiSeedFlatRecords") or []
+        idem_action_record = None
+        for wrapper in idem_records:
+            record = wrapper.get("record") if isinstance(wrapper, dict) else None
+            if isinstance(record, dict) and record.get("key") == "validate_with_idempotency":
+                idem_action_record = record
+                break
+        idem_runtime = (idem_action_record or {}).get("runtimeInteractions") or []
+        idem_first = idem_runtime[0] if idem_runtime else {}
+        expect(
+            "97. generate-topology-seed preserves eventBinding-derived runtimeInteractions[] candidate with idempotency route fields",
+            proc_idem.returncode == 0
+            and doc_idem is not None
+            and not rule_ids(doc_idem)
+            and idem_action_record is not None
+            and idem_action_record.get("eventBinding", {}).get("targetRef") == "instance:db_instance_port:instance_authority_key:operation_binding_key"
+            and idem_first.get("actionType") == "dispatchInstanceOperation"
+            and idem_first.get("instanceTargetRef") == "instance-port:db_instance_port:instance_authority_key:operation_binding_key"
+            and idem_first.get("idempotencyPolicy") == "once_per_mount"
+            and idem_first.get("lifecycleDispatchConfirmed") is True
+            and idem_first.get("debounceMs") == 250,
+        )
+        expect(
+            "98. runtimeInteractions[] candidate remains draft/template material and never carries runtimeInteractionId before backend assignment",
+            idem_first
+            and "runtimeInteractionId" not in idem_first
+            and "runtimeInteractionId" not in json.dumps(doc_idem.get("topologyUiSeedCandidate"), separators=(",", ":"), ensure_ascii=False),
+        )
+        layout_patch_from_candidate = layout_patch_from_seed_runtime_interaction(idem_action_record or {})
+        approved_instance_refs = {"instance-port:db_instance_port:instance_authority_key:operation_binding_key"}
+        boundary_error = validate_runtime_interactions_boundary_equivalent(layout_patch_from_candidate, approved_instance_refs)
+        expect(
+            "99. seed/template runtimeInteractions[] candidate reaches backend ValidateRuntimeInteractions-equivalent targetRef vocabulary before assignment",
+            boundary_error is None
+            and idem_first.get("instanceTargetRef", "").startswith("instance-port:"),
+        )
+        invalid_layout_patch = json.loads(json.dumps(layout_patch_from_candidate))
+        invalid_layout_patch["nodes"][0]["runtimeInteractions"][0]["instanceTargetRef"] = "instance:db_instance_port:instance_authority_key:operation_binding_key"
+        invalid_boundary_error = validate_runtime_interactions_boundary_equivalent(invalid_layout_patch, approved_instance_refs)
+        expect(
+            "100. cross-boundary proof fails closed on eventBinding instance: vocabulary when used as runtimeInteractions[].instanceTargetRef",
+            invalid_boundary_error == "RUNTIME_INTERACTION_INSTANCE_TARGET_REF_INVALID:instance:db_instance_port:instance_authority_key:operation_binding_key",
+        )
 
     print()
     if FAILURES:

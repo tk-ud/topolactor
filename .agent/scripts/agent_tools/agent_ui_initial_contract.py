@@ -5,7 +5,7 @@ Implements docs/governance/agent-ui-protocol-ssot.yaml's
 agent_protocols.flow_order.initial_contract as a stateless, multi-invocation
 CLI (mirroring the existing topology-seed-discussion tool's step-by-step
 model): task_name/worktype input -> worktype prompt guidance + required/
-triggered protocol excerpts + workflow procedure order -> target SSOT
+triggered protocol full text + workflow procedure order -> target SSOT
 resolution -> section listing/selection -> senario-tmp.md + tool.log on quit.
 
 `start` absorbs the reads an agent would otherwise have to open

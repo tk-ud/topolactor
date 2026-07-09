@@ -388,8 +388,20 @@ def build_node(kind, attrs, source_refs, known_gaps):
         payload_from_raw = attrs.get("payloadFrom")
         if payload_from_raw:
             event_binding["payloadFrom"] = parse_payload_from(payload_from_raw)
+        output_prop = attrs.get("outputProp")
+        if output_prop:
+            event_binding["outputProp"] = output_prop
         node["eventBinding"] = event_binding
         node["actionRef"] = attrs.get("actionRef", "")
+        if attrs.get("idempotencyPolicy"):
+            node["idempotencyPolicy"] = attrs.get("idempotencyPolicy")
+        if attrs.get("lifecycleDispatchConfirmed") is not None:
+            node["lifecycleDispatchConfirmed"] = str(attrs.get("lifecycleDispatchConfirmed")).lower() == "true"
+        if attrs.get("debounceMs") is not None:
+            try:
+                node["debounceMs"] = int(attrs.get("debounceMs"))
+            except (TypeError, ValueError):
+                node["debounceMs"] = attrs.get("debounceMs")
     if kind == "validation":
         node["rule"] = attrs.get("rule", "")
         node["severity"] = attrs.get("severity", "warning")
@@ -659,6 +671,75 @@ def validate_wiring_node(node, lanes_def, errors, path):
             errors.append(err("PAYLOAD_FROM_SOURCE_NOT_ALLOWED_FOR_LANE", path, "blocking", f"payloadFrom '{field}' source kind '{kind}' is not allowed for lane '{lane_key}'"))
 
 
+
+def runtime_action_type_for_event_binding(event_binding):
+    """Map a seed eventBinding lane into the layout_patch_json runtimeInteractions[]
+    actionType vocabulary without creating a runtimeInteractionId. The backend
+    persistence boundary remains the only assignment authority for that id."""
+    if not isinstance(event_binding, dict):
+        return None
+    lane = event_binding.get("wiringLane")
+    target_ref = event_binding.get("targetRef") or ""
+    if lane == "external_instance_wiring" or target_ref.startswith("instance:"):
+        return "dispatchInstanceOperation"
+    if lane == "external_integration_wiring" or target_ref.startswith("external-port:"):
+        return "dispatchExternalPort"
+    if lane == "internal_instance_wiring":
+        return "localStateMutation"
+    if lane == "route_navigation_wiring":
+        return "routeNavigation"
+    if lane == "contents_api_wiring":
+        return "contentsApiDispatch"
+    return None
+
+
+def runtime_target_ref_for_event_binding(event_binding, action_type):
+    """Map eventBinding targetRef into backend runtimeInteractions targetRef vocabulary.
+
+    topology_ui_seed eventBinding keeps the seed/import lane vocabulary. The
+    layout_patch_json runtimeInteractions boundary validates dispatchInstanceOperation
+    against instance-port:<portKind>:<instancePortId>:<operationBindingKey>, so
+    seed/template candidates must cross-map before backend validation/assignment.
+    """
+    target_ref = event_binding.get("targetRef") if isinstance(event_binding, dict) else None
+    target_ref = target_ref or ""
+    if action_type == "dispatchInstanceOperation" and target_ref.startswith("instance:"):
+        return "instance-port:" + target_ref[len("instance:"):]
+    return target_ref
+
+
+def build_runtime_interaction_candidate(node):
+    """Build a draft runtimeInteractions[] entry from an Action/Step eventBinding.
+
+    The candidate intentionally omits runtimeInteractionId. It carries the
+    idempotency route fields needed by layout_patch_json consumers so a later
+    preview/validate/apply path can persist it through ApplyConfirmedLayoutPatchAsync,
+    where AssignRuntimeInteractionIds owns final id assignment.
+    """
+    event_binding = node.get("eventBinding") or {}
+    action_type = runtime_action_type_for_event_binding(event_binding)
+    if not action_type:
+        return None
+    target_ref = runtime_target_ref_for_event_binding(event_binding, action_type) or node.get("actionRef") or ""
+    candidate = {
+        "trigger": event_binding.get("trigger"),
+        "actionType": action_type,
+        "payloadFrom": event_binding.get("payloadFrom") or {},
+        "sourceActionKey": node.get("key"),
+    }
+    if action_type == "dispatchInstanceOperation":
+        candidate["instanceTargetRef"] = target_ref
+    elif action_type == "dispatchExternalPort":
+        candidate["portTargetRef"] = target_ref
+    else:
+        candidate["targetRef"] = target_ref
+    if event_binding.get("outputProp"):
+        candidate["outputProp"] = event_binding.get("outputProp")
+    for field in ("idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs"):
+        if field in node:
+            candidate[field] = node[field]
+    return candidate
+
 def validate_ui_catalog_node(node, declared_surface, errors, path):
     allowed_kinds = set()
     if declared_surface:
@@ -726,8 +807,8 @@ KIND_SPECIFIC_CONSUMED_KEYS = {
     "Field": {"control", "required"},
     "Table": {"source", "display"},
     "Workflow": {"steps"},
-    "Step": {"eventBinding", "actionRef"},
-    "Action": {"eventBinding", "actionRef"},
+    "Step": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs"},
+    "Action": {"eventBinding", "actionRef", "runtimeInteractions", "idempotencyPolicy", "lifecycleDispatchConfirmed", "debounceMs"},
     "Validation": {"rule", "severity", "appliesTo"},
     "PropBinding": {"targetProp", "source"},
     "PayloadFrom": {"targetField", "source"},
@@ -804,10 +885,16 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["stepKey"] = record["key"]
         record["actionRef"] = node.get("actionRef", "")
         record["eventBinding"] = node.get("eventBinding")
+        runtime_interaction = build_runtime_interaction_candidate(node)
+        if runtime_interaction is not None:
+            record["runtimeInteractions"] = [runtime_interaction]
     elif react_kind == "Action":
         record["actionKey"] = record["key"]
         record["actionRef"] = node.get("actionRef", "")
         record["eventBinding"] = node.get("eventBinding")
+        runtime_interaction = build_runtime_interaction_candidate(node)
+        if runtime_interaction is not None:
+            record["runtimeInteractions"] = [runtime_interaction]
     elif react_kind == "Validation":
         record["validationKey"] = record["key"]
         record["rule"] = node.get("rule", "")
