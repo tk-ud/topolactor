@@ -942,6 +942,10 @@ def new_output_shell():
         # remains debug/review-only and must never be adopted as a single
         # manifest.topology array element (see PR #573's index row size failure).
         "topologyUiSeedFlatRecords": None,
+        # storage_adoption_contract.adoption_candidate_separation_contract: the
+        # actual seed-safe adoption shape, built from topologyUiSeedFlatRecords.
+        # Populated only for generate_topology_ui_seed, same as topologyUiSeedFlatRecords.
+        "adoptionCandidates": None,
         "exchangeReport": {},
         "validationErrors": [],
         "unresolvedGaps": [],
@@ -1112,6 +1116,276 @@ def validate_flat_seed_records(flat_records, budget_bytes=MANIFEST_TOPOLOGY_ARRA
                 f"{size} bytes, exceeding the {budget_bytes}-byte manifest.topology / "
                 f"idx_manifest_topology storage_adoption_contract budget",
             ))
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# storage_adoption_contract.adoption_candidate_separation_contract
+#
+# top_ssot_alignment: flatten_topology_ui_seed_tree/validate_flat_seed_records
+# above produce a review/migration intermediate only (seed_sql_authority:
+# false as of this Bundle). This is the actual seed-safe adoption shape:
+# bucket flat_records by recordType into per-target-table candidates
+# (topology.ui_component_package / components_layout_design /
+# components_style_design / ui_wiring_registry / ui_topology_tensor) plus a
+# refs-only manifestRefsCandidate, so nothing UI-entity-shaped is ever
+# proposed for manifest.topology adoption.
+# ---------------------------------------------------------------------------
+
+def split_flat_records_into_adoption_candidates(flat_records, seed_key):
+    package_candidates = []
+    layout_records = []
+    design_candidates = []
+    wiring_candidates = []
+    tensor_nodes = []
+
+    for wrapper in flat_records:
+        record = wrapper.get("record") or {}
+        record_type = record.get("recordType")
+        key = record.get("key")
+
+        if record_type == "topology_ui_projection":
+            package_candidates.append({
+                "packageKey": f"{seed_key}.package",
+                "packageKind": "fixed_form_projection",
+                "packageSchemaJson": {
+                    "seedKey": seed_key,
+                    "surface": record.get("surface"),
+                    "categoryKeys": record.get("categoryKeys") or [],
+                },
+                "sourceRecordKey": key,
+            })
+        elif record_type == "topology_ui_style_ref":
+            design_candidates.append({
+                "designKey": f"{seed_key}.{key}.design",
+                "designSchemaJson": record,
+                "sourceRecordKey": key,
+            })
+        else:
+            # topology_ui_category / section / form / field / table / workflow /
+            # workflow_step / validation / unresolved -- structural layout tree
+            # content. topology_ui_action / topology_ui_workflow_step also land
+            # here (their eventBinding/label/authorityMarker are layout-tree
+            # content) in addition to contributing a wiring + tensor candidate
+            # below -- they are not mutually exclusive buckets.
+            layout_records.append(wrapper)
+
+        if record_type in ("topology_ui_action", "topology_ui_workflow_step"):
+            event_binding = record.get("eventBinding") or {}
+            wiring_candidates.append({
+                "wiringKey": f"{seed_key}.{key}.wiring",
+                "wiringKind": event_binding.get("wiringLane"),
+                "targetSurface": "manifest",
+                "wiringSchemaJson": {
+                    "eventBinding": event_binding,
+                    "sourceActionKey": key,
+                    "authorityMarker": record.get("authorityMarker"),
+                },
+                "sourceRecordKey": key,
+            })
+            # Reuse the runtimeInteractions candidate convert_node_to_seed_record
+            # already built via build_runtime_interaction_candidate at the
+            # react-schema -> seed conversion step (single source of truth --
+            # never rebuilt here) rather than deriving a second one.
+            interactions = record.get("runtimeInteractions") or []
+            if interactions:
+                tensor_nodes.append({
+                    "nodeId": wrapper.get("parentKey") or key,
+                    "nodeKind": "catalog_component",
+                    "runtimeInteractions": list(interactions),
+                })
+
+    layout_candidates = []
+    if layout_records:
+        layout_candidates.append({
+            "layoutKey": f"{seed_key}.layout",
+            "layoutKind": "fixed_form_projection",
+            "layoutSchemaJson": {"records": layout_records},
+        })
+
+    tensor_candidates = []
+    if tensor_nodes:
+        merged = {}
+        order = []
+        for node in tensor_nodes:
+            nid = node["nodeId"]
+            if nid not in merged:
+                merged[nid] = {"nodeId": nid, "nodeKind": node["nodeKind"], "runtimeInteractions": []}
+                order.append(nid)
+            merged[nid]["runtimeInteractions"].extend(node["runtimeInteractions"])
+        tensor_candidates.append({
+            "tensorKey": f"{seed_key}.tensor",
+            "layoutPatchJson": {"nodes": [merged[nid] for nid in order]},
+        })
+
+    manifest_refs_candidate = None
+    if package_candidates or layout_candidates or wiring_candidates or tensor_candidates:
+        manifest_refs_candidate = {
+            "type": "ui_projection",
+            "packageIds": [f"<{c['packageKey']}>" for c in package_candidates],
+            "layoutId": f"<{layout_candidates[0]['layoutKey']}>" if layout_candidates else None,
+            "wiringId": f"<{seed_key}.wiring>" if wiring_candidates else None,
+            "tensorId": f"<{tensor_candidates[0]['tensorKey']}>" if tensor_candidates else None,
+        }
+
+    return {
+        "packageAdoptionCandidates": package_candidates,
+        "layoutAdoptionCandidates": layout_candidates,
+        "designAdoptionCandidates": design_candidates,
+        "wiringAdoptionCandidates": wiring_candidates,
+        "tensorAdoptionCandidates": tensor_candidates,
+        "manifestRefsCandidate": manifest_refs_candidate,
+    }
+
+
+# storage_adoption_contract.top_ssot_violation_rule_definitions
+# key-based denylist for credential_secret_projection_detected: checked against
+# dict KEYS (an actual leaked field), not against string values inside
+# forbidden-field guard-list arrays (e.g. "forbidden_fields":["secret",...]),
+# so a policy declaration that NAMES prohibited vocabulary as documentation
+# does not itself false-positive as a leak.
+CREDENTIAL_SECRET_KEY_DENYLIST = {
+    "password_hash",
+    "jwt_secret",
+    "refresh_token_plaintext",
+    "plaintext_secret",
+    "connection_string",
+    "endpoint_real_value",
+    "credential_plaintext",
+    "private_key_material",
+    "runtime_only_decrypted_payload",
+    "access_token",
+    "refresh_token",
+    "client_secret",
+    "api_key",
+    "secret",
+}
+
+MANIFEST_TOPOLOGY_UI_PAYLOAD_KEYS = {
+    "record", "fields", "actions", "columns", "sections", "categories",
+    "categoryKeys", "sectionKeys", "fieldKeys", "actionKeys", "columnKeys", "stepKeys",
+}
+
+RUNTIME_DISPATCH_ACTION_TYPES = {"dispatchExternalPort", "dispatchInstanceOperation"}
+RUNTIME_DISPATCH_WIRING_LANES = {"external_integration_wiring", "external_instance_wiring"}
+
+
+def _find_denylisted_keys(value, denylist, acc, path):
+    if isinstance(value, dict):
+        for k, v in value.items():
+            next_path = f"{path}.{k}"
+            if k in denylist:
+                acc.append(next_path)
+            _find_denylisted_keys(v, denylist, acc, next_path)
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            _find_denylisted_keys(v, denylist, acc, f"{path}[{i}]")
+
+
+def validate_adoption_candidates(candidates, flat_records):
+    """storage_adoption_contract.top_ssot_violation_rule_definitions: checks the
+    built adoptionCandidates bundle for all six new rule ids. Collects every
+    violation found -- never returns on the first failure (fail-fast is
+    prohibited for this check)."""
+    errors = []
+
+    manifest_refs = candidates.get("manifestRefsCandidate")
+    if manifest_refs is not None:
+        offending = MANIFEST_TOPOLOGY_UI_PAYLOAD_KEYS.intersection(manifest_refs.keys())
+        if offending:
+            errors.append(err(
+                "MANIFEST_TOPOLOGY_CONTAINS_UI_PAYLOAD_MATERIAL",
+                "$.adoptionCandidates.manifestRefsCandidate",
+                "blocking",
+                f"manifestRefsCandidate carries UI-payload field(s) {sorted(offending)}; manifest.topology must hold refs/vectors only",
+            ))
+        if manifest_refs.get("type") == "topology_ui_seed_record" or manifest_refs.get("record") is not None:
+            errors.append(err(
+                "FLATTENED_SEED_RECORD_USED_AS_MANIFEST_FINAL_SHAPE",
+                "$.adoptionCandidates.manifestRefsCandidate",
+                "blocking",
+                "manifestRefsCandidate must never itself be (or embed) a topology_ui_seed_record wrapper",
+            ))
+
+    if flat_records and not any([
+        candidates.get("packageAdoptionCandidates"),
+        candidates.get("layoutAdoptionCandidates"),
+        candidates.get("wiringAdoptionCandidates"),
+        candidates.get("tensorAdoptionCandidates"),
+    ]):
+        errors.append(err(
+            "UI_PAYLOAD_NOT_SPLIT_TO_PACKAGE_LAYOUT_DESIGN_WIRING_TENSOR",
+            "$.adoptionCandidates",
+            "blocking",
+            "topologyUiSeedFlatRecords is non-empty but no package/layout/wiring/tensor adoption candidate bucket was populated",
+        ))
+
+    tensor_interaction_action_keys = set()
+    for tensor in candidates.get("tensorAdoptionCandidates") or []:
+        for node in dig(tensor, "layoutPatchJson", "nodes") or []:
+            for interaction in node.get("runtimeInteractions") or []:
+                if interaction.get("sourceActionKey"):
+                    tensor_interaction_action_keys.add(interaction["sourceActionKey"])
+
+    for wrapper in flat_records:
+        record = wrapper.get("record") or {}
+        record_type = record.get("recordType")
+        key = record.get("key")
+        path = record.get("sourceReactPath", "$.root")
+        if record_type not in ("topology_ui_action", "topology_ui_workflow_step"):
+            continue
+
+        event_binding = record.get("eventBinding") or {}
+        if event_binding.get("wiringLane") in RUNTIME_DISPATCH_WIRING_LANES and key not in tensor_interaction_action_keys:
+            errors.append(err(
+                "RUNTIME_INTERACTIONS_NOT_PERSISTED_LAYOUT_PATH",
+                path,
+                "blocking",
+                f"Action/Step '{key}' has a {event_binding.get('wiringLane')} eventBinding but no corresponding tensorAdoptionCandidates runtimeInteractions[] entry",
+            ))
+
+        for interaction in record.get("runtimeInteractions") or []:
+            action_type = interaction.get("actionType")
+            if "runtimeInteractionId" in interaction:
+                errors.append(err(
+                    "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH",
+                    path,
+                    "blocking",
+                    f"Action/Step '{key}' runtimeInteractions candidate must never carry runtimeInteractionId (backend-persist-time-only assignment authority)",
+                ))
+            if action_type not in RUNTIME_DISPATCH_ACTION_TYPES:
+                continue
+            missing = []
+            if not interaction.get("trigger"):
+                missing.append("trigger")
+            target_field = "instanceTargetRef" if action_type == "dispatchInstanceOperation" else "portTargetRef"
+            if not interaction.get(target_field):
+                missing.append(target_field)
+            if "payloadFrom" not in interaction:
+                missing.append("payloadFrom")
+            if missing:
+                errors.append(err(
+                    "IDEMPOTENCY_CARRIER_MISSING_FOR_RUNTIME_DISPATCH",
+                    path,
+                    "blocking",
+                    f"Action/Step '{key}' {action_type} runtimeInteractions candidate is missing idempotency route field(s) {missing}",
+                ))
+
+    for bucket_name in (
+        "packageAdoptionCandidates", "layoutAdoptionCandidates", "designAdoptionCandidates",
+        "wiringAdoptionCandidates", "tensorAdoptionCandidates",
+    ):
+        for i, item in enumerate(candidates.get(bucket_name) or []):
+            hits = []
+            _find_denylisted_keys(item, CREDENTIAL_SECRET_KEY_DENYLIST, hits, f"$.adoptionCandidates.{bucket_name}[{i}]")
+            for path in hits:
+                errors.append(err("CREDENTIAL_SECRET_PROJECTION_DETECTED", path, "blocking", f"{bucket_name}[{i}] carries a denylisted credential/secret field"))
+    if manifest_refs is not None:
+        hits = []
+        _find_denylisted_keys(manifest_refs, CREDENTIAL_SECRET_KEY_DENYLIST, hits, "$.adoptionCandidates.manifestRefsCandidate")
+        for path in hits:
+            errors.append(err("CREDENTIAL_SECRET_PROJECTION_DETECTED", path, "blocking", "manifestRefsCandidate carries a denylisted credential/secret field"))
+
     return errors
 
 
@@ -1511,6 +1785,14 @@ def cmd_generate_topology_seed(args):
     output["topologyUiSeedFlatRecords"] = flat_records
     budget_errors = validate_flat_seed_records(flat_records)
     output["validationErrors"].extend(budget_errors)
+
+    # adoption_candidate_separation_contract: the actual seed-safe adoption
+    # shape. Built and validated even when budget_errors is non-empty, so a
+    # caller sees every collected violation from one run (fail-fast is
+    # prohibited for this check) rather than only the byte-budget errors.
+    adoption_candidates = split_flat_records_into_adoption_candidates(flat_records, target_surface)
+    output["adoptionCandidates"] = adoption_candidates
+    output["validationErrors"].extend(validate_adoption_candidates(adoption_candidates, flat_records))
 
     doc = {"schemaId": "topolactor.translator_output.v1", **output}
 
