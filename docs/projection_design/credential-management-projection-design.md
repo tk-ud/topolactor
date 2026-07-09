@@ -124,8 +124,18 @@ per `docs/design/react-schema-topology-seed-translator-ssot.yaml`
   in a plain `jsonb` column with no GIN per-element budget).
 - **design**: not applicable for this surface (no `style_ref` records) — an empty
   `designAdoptionCandidates` bucket is correct, not a gap.
-- **wiring** (`topology.ui_wiring_registry`): one row per Action record's `eventBinding`
-  (`json_template_download`, `json_import`, `validate`, `preview`, `apply`, `approve`).
+- **wiring** (`topology.ui_wiring_registry`): one aggregate row per Projection —
+  `wiring_schema_json.actions[]` carries each Action/Step record's `eventBinding`
+  (`json_template_download`, `json_import`, `validate`, `preview`, `apply`, `approve`) as a
+  separate array entry. **Not** a separate row for each Action record — `manifest.topology
+  [ui_projection].wiringId` and `topology.ui_topology_tensor.wiring_id` are both singular refs
+  (`db/manifest_tables.sql`, `db/ui_topology_tables.sql`), so a Projection's N actions must
+  resolve to exactly one wiring row, never N independent rows. (Corrected after a PR review
+  finding: an earlier translator version emitted one `wiringAdoptionCandidates` entry per
+  Action, whose keys the single `wiringId` ref could never resolve to — see
+  `docs/design/react-schema-topology-seed-translator-ssot.yaml`
+  `adoption_candidate_separation_contract.candidate_buckets.wiringAdoptionCandidates
+  .cardinality_note` and `manifest_refs_candidate_reference_resolution`.)
 - **tensor** (`topology.ui_topology_tensor`): one `layout_patch_json` row whose
   `nodes[].runtimeInteractions[]` carries the same six actions as dispatch candidates
   (`localStateMutation` for the two `internal_instance_wiring` actions,

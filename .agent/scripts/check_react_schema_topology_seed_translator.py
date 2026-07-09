@@ -907,6 +907,21 @@ def main():
             "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED" not in [e["ruleId"] for e in resolved_refs_errors],
         )
 
+        # 36z7: grep guard against the retired "one row per Action record" wiring
+        # cardinality wording re-appearing in docs after the Blocking 2 fix above
+        # (PR580 review follow-up) -- the correct wording is one aggregate row
+        # per Projection with wiringSchemaJson.actions[]/wiring_schema_json.actions[].
+        wiring_cardinality_doc_targets = [
+            REPO_ROOT / "docs" / "projection_design" / "credential-management-projection-design.md",
+            REPO_ROOT / "docs" / "design" / "react-schema-topology-seed-translator-ssot.yaml",
+        ]
+        wiring_cardinality_doc_text = "\n".join(p.read_text(encoding="utf-8") for p in wiring_cardinality_doc_targets)
+        expect(
+            "36z7. no doc reintroduces the retired \"one row per Action record\" wiring cardinality wording (must read one aggregate row per Projection instead)",
+            "one row per Action record" not in wiring_cardinality_doc_text
+            and "one candidate per Action/Step record carrying eventBinding" not in wiring_cardinality_doc_text,
+        )
+
         # 36f-36h: a synthetic oversized single-field candidate must be caught
         # by storage_adoption_contract's budget check at generation time, not
         # discovered later as a real Postgres INSERT failure (the PR #573 gap
