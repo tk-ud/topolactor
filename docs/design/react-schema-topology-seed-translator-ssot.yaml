@@ -1241,6 +1241,32 @@ react_schema_topology_seed_translator_ssot:
       RuntimeComponentSpec candidates are still draft/intake material per
       topology_ui_seed_contract.active_topology_rule; producing a spec candidate does not grant
       execution authority or bypass preview/validate/apply.
+    layout_schema_structural_render_authority_boundary:
+      owner_ref: >-
+        docs/design/runtime-orchestration-ssot.yaml
+        ui_projection_render_reachability_contract.layout_schema_structural_render_contract owns
+        the RUNTIME PROJECTION/RENDER classification (structural_node vs catalog_component vs
+        unresolved_gap, resolution conventions, explicit-failure behavior) once a topology_ui_seed
+        record reaches components_layout_design.layout_schema_json.records[] via
+        layoutAdoptionCandidates. This SSOT owns the SEED EMISSION shape only
+        (react_schema_contract.allowed_node_kinds, topology_ui_seed_contract.record_types,
+        exchange_mapping.schema_to_seed_record_mapping). Neither SSOT restates the other's
+        classification -- this section is a pointer, not a duplicate definition.
+      runtime_projection_semantics_by_record_type: >-
+        Every recordType in storage_adoption_contract.adoption_candidate_separation_contract
+        .candidate_buckets.layoutAdoptionCandidates.source_record_types has a runtime
+        classification in the owner_ref contract above:
+        topology_ui_category/topology_ui_section/topology_ui_form/topology_ui_workflow/
+        topology_ui_validation are structural_node;
+        topology_ui_field/topology_ui_action/topology_ui_table/topology_ui_workflow_step are
+        catalog_component (each with its own resolution convention: control-based for Field,
+        display-based for Table, shared with Action for WorkflowStep); topology_ui_unresolved is
+        unresolved_gap, an explicit render-time error carrying knownGapRefs, never a normal
+        component. None of the ten source_record_types is rejected as an unrecognized recordType
+        at runtime.
+      prohibited:
+        - this_ssot_redefining_or_diverging_from_the_owner_ref_runtime_classification
+        - treating_a_layoutAdoptionCandidates_source_record_type_as_having_no_runtime_projection_semantics
 
   # ===========================================================================
   # 11. declared_seed_surface_catalog

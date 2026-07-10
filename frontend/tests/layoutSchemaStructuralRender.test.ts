@@ -5,9 +5,12 @@
  *
  * Render completion is defined as: renderEmission() on a layout composed from
  * components_layout_design.layout_schema_json.records[] (structural nodes) + resolved
- * catalog leaves (Field/Action, componentId/componentKind from ui_component_registry) +
- * merged tensor runtimeInteractions produces ZERO componentType==="error" specs — not
- * merely "some specs came back" and not "the tensor nodes existed".
+ * catalog leaves (Field/Action/Table/WorkflowStep, componentId/componentKind from
+ * ui_component_registry) + merged tensor runtimeInteractions produces ZERO
+ * componentType==="error" specs — not merely "some specs came back" and not "the tensor nodes
+ * existed". A layout containing an unresolved_gap node (topology_ui_unresolved) is a documented
+ * exception: it always renders as an explicit error carrying its authored knownGapRefs, by
+ * design — render completion must not paper over a real unresolved authoring gap.
  *
  * The first test below is the representative-scenario proof: it reads
  * frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json, a checked-in snapshot of
@@ -161,4 +164,55 @@ Deno.test("renderEmission: a catalog_component leaf missing componentId still fa
   const specs = renderEmission(emission, defaultComponentRegistry);
   assertEquals(specs.length, 1);
   assertEquals(specs[0].componentType, "error");
+});
+
+Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology_ui_workflow_step) composed catalog_component leaf renders exactly like any other resolved catalog_component — not rejected as an unrecognized record type", () => {
+  const emission: Emission = {
+    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutNodes: [
+      {
+        nodeId: "results_table",
+        nodeKind: "catalog_component",
+        recordType: "topology_ui_table",
+        componentId: "00000000-0000-0000-0001-000000000014",
+        componentKind: "display/card_list",
+        orderIndex: 0,
+      },
+      {
+        nodeId: "approval_step",
+        nodeKind: "catalog_component",
+        recordType: "topology_ui_workflow_step",
+        componentId: "00000000-0000-0000-0001-000000000010",
+        componentKind: "action/button",
+        orderIndex: 1,
+      },
+    ],
+  };
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  const errorSpecs = specs.filter((s) => s.componentType === "error");
+  assertEquals(errorSpecs, []);
+  assertEquals(specs.length, 2);
+  assertEquals(specs[0].componentType, "display/card_list");
+  assertEquals(specs[1].componentType, "action/button");
+});
+
+Deno.test("renderEmission: an unresolved_gap node (topology_ui_unresolved) always renders as an explicit error carrying knownGapRefs — never a normal component, never silently dropped", () => {
+  const emission: Emission = {
+    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutNodes: [
+      {
+        nodeId: "unresolved_fragment",
+        nodeKind: "unresolved_gap",
+        recordType: "topology_ui_unresolved",
+        label: "Unresolved fragment",
+        knownGapRefs: ["table_item_click_wiring_not_yet_expressible"],
+        orderIndex: 0,
+      },
+    ],
+  };
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  assertEquals(specs.length, 1);
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(specs[0].def.code, "TOPOLOGY_UI_UNRESOLVED_GAP_REF");
+  assertEquals(specs[0].def.knownGapRefs, ["table_item_click_wiring_not_yet_expressible"]);
 });

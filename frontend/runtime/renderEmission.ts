@@ -70,7 +70,7 @@ export type ComponentSpec = {
   runtimeSpec?: RuntimeComponentSpec;
   /** Node identifier from layout_patch_json — present only when rendered from layoutNodes. */
   nodeId?: string;
-  /** "catalog_component" | "structural_html" | "structural_node" — present only when rendered from layoutNodes. */
+  /** "catalog_component" | "structural_html" | "structural_node" | "unresolved_gap" — present only when rendered from layoutNodes. */
   nodeKind?: string;
   /** HTML element tag for structural_html nodes — present only when nodeKind="structural_html". */
   htmlTag?: string;
@@ -749,6 +749,28 @@ export function renderEmission(
           return {
             componentType: "structural_node",
             def: { recordType: node.recordType },
+            inlineText: node.label,
+            ...layoutFields,
+          };
+        }
+
+        // unresolved_gap nodes (topology_ui_unresolved — a terminal known-gap marker the
+        // translator itself flagged) always render as an explicit error carrying knownGapRefs —
+        // never resolved to a component, never silently dropped or treated as a structural_node.
+        // SSOT: docs/design/runtime-orchestration-ssot.yaml
+        // ui_projection_render_reachability_contract.layout_schema_structural_render_contract
+        // unresolved_gap_resolution.
+        if (node.nodeKind === "unresolved_gap") {
+          return {
+            componentType: "error",
+            def: {
+              error:
+                `TOPOLOGY_UI_UNRESOLVED_GAP_REF: layout node "${
+                  node.nodeId ?? "(unnamed)"
+                }" is an unresolved authoring gap (recordType="${node.recordType}").`,
+              code: "TOPOLOGY_UI_UNRESOLVED_GAP_REF",
+              knownGapRefs: node.knownGapRefs ?? [],
+            },
             inlineText: node.label,
             ...layoutFields,
           };

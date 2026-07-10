@@ -228,7 +228,8 @@ public class StructureMapResolver
             ? JsonSerializer.Deserialize<JsonElement>(row.RuntimeInteractionsJson)
             : null,
         RecordType: row.RecordType,
-        Label: row.Label
+        Label: row.Label,
+        KnownGapRefs: row.KnownGapRefs
     );
 
     /// <summary>

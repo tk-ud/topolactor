@@ -4,13 +4,18 @@ namespace Topolactor.Repository;
 
 /// <summary>
 /// Composes LayoutNodeRecords from components_layout_design.layout_schema_json.records[] —
-/// the structural authority tree (Category/Section/Form/Workflow/Validation/Field/Action) — for
-/// layouts where that tree is populated. Structural record types become "structural_node" leaves
-/// with no componentId/componentKind; Field/Action record types become "catalog_component" leaves
-/// whose componentId/componentKind are resolved from the existing topology.ui_component_registry
-/// preset catalog (db/ui_component_registry_preset_catalog_bootstrap.sql) via the caller's existing
+/// the structural authority tree (Category/Section/Form/Workflow/Validation/Field/Table/Action/
+/// WorkflowStep/Unresolved — the full
+/// react-schema-topology-seed-translator-ssot.yaml layoutAdoptionCandidates.source_record_types
+/// vocabulary) — for layouts where that tree is populated. Structural record types become
+/// "structural_node" leaves with no componentId/componentKind; Field/Table/Action/WorkflowStep
+/// record types become "catalog_component" leaves whose componentId/componentKind are resolved
+/// from the existing topology.ui_component_registry preset catalog
+/// (db/ui_component_registry_preset_catalog_bootstrap.sql) via the caller's existing
 /// LoadComponentIdsByKeysAsync/LoadComponentKindsByIdsAsync batch lookups — no new registry rows or
-/// query shapes.
+/// query shapes; Unresolved records become "unresolved_gap" leaves that never resolve to a
+/// component and always fail explicit at frontend render time, carrying their authored
+/// knownGapRefs.
 ///
 /// Tensor runtimeInteractions merge: authored tensor nodes (layout_patch_json.nodes[]) key their
 /// runtimeInteractions array at the FORM level, with each entry individually tagged by
@@ -27,8 +32,9 @@ namespace Topolactor.Repository;
 public static class LayoutSchemaTensorComposer
 {
     // SSOT: docs/design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract
-    // structural authority contract — Category/Section/Form/Workflow/Validation are structural
-    // nodes; only Field/Action are catalog components.
+    // layout_schema_structural_render_contract — Category/Section/Form/Workflow/Validation are
+    // structural nodes; Field/Action/Table/WorkflowStep are catalog components; Unresolved is
+    // neither (an explicit unresolved_gap render-time failure).
     private static readonly HashSet<string> StructuralRecordTypes = new(StringComparer.Ordinal)
     {
         "topology_ui_category",
@@ -39,6 +45,9 @@ public static class LayoutSchemaTensorComposer
     };
 
     private const string ActionRecordType = "topology_ui_action";
+    private const string TableRecordType = "topology_ui_table";
+    private const string WorkflowStepRecordType = "topology_ui_workflow_step";
+    private const string UnresolvedRecordType = "topology_ui_unresolved";
 
     // Canonical control -> ui_component_registry.component_key convention for Field leaves.
     // Reuses the existing preset catalog rows; does not invent new registry entries.
@@ -51,8 +60,23 @@ public static class LayoutSchemaTensorComposer
             ["form_input/textarea"] = "textarea.alias",
         };
 
-    // Action leaves resolve to the existing generic button primitive — actions differentiate by
-    // runtimeInteractions/eventBinding, not by componentKind.
+    // Canonical display -> ui_component_registry.component_key convention for Table leaves.
+    // Reuses the existing preset catalog rows declared for table-shaped surfaces
+    // (ui-builder-preset-ecosystem-ssot.yaml) — does not invent new registry entries.
+    private static readonly IReadOnlyDictionary<string, string> TableDisplayToComponentKey =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["card_list"] = "card_list.primitive",
+            ["data_grid"] = "data_grid.alias",
+            ["list"] = "list.alias",
+        };
+
+    // Action and WorkflowStep leaves resolve to the existing generic button primitive — both
+    // share the identical required-field shape (actionRef/eventBinding/authorityMarker) and are
+    // differentiated by runtimeInteractions/eventBinding, not by componentKind. See
+    // docs/design/react-schema-topology-seed-translator-ssot.yaml
+    // storage_adoption_contract.adoption_candidate_separation_contract, which already treats the
+    // two identically across wiringAdoptionCandidates/tensorAdoptionCandidates.
     private const string ActionComponentKey = "button.primitive";
 
     public record SchemaRecordRow(
@@ -60,12 +84,20 @@ public static class LayoutSchemaTensorComposer
         string Key,
         string? ParentKey,
         string? Label,
-        string? Control);
+        string? Control,
+        string? Display = null,
+        IReadOnlyList<string>? KnownGapRefs = null);
 
-    // Full recognized recordType vocabulary (structural + catalog) — an entry whose recordType
-    // is outside this set is a malformed/unrecognized shape, never silently skipped.
+    // Full recognized recordType vocabulary (structural + catalog + unresolved-gap) — matches
+    // docs/design/react-schema-topology-seed-translator-ssot.yaml
+    // storage_adoption_contract.adoption_candidate_separation_contract.candidate_buckets
+    // .layoutAdoptionCandidates.source_record_types exactly. An entry whose recordType is outside
+    // this set is a malformed/unrecognized shape, never silently skipped.
     private static readonly HashSet<string> RecognizedRecordTypes =
-        new(StructuralRecordTypes, StringComparer.Ordinal) { "topology_ui_field", ActionRecordType };
+        new(StructuralRecordTypes, StringComparer.Ordinal)
+        {
+            "topology_ui_field", ActionRecordType, TableRecordType, WorkflowStepRecordType, UnresolvedRecordType,
+        };
 
     /// <summary>
     /// Discriminates "no records[] to compose from" (NoRecords — the existing tensor-only path
@@ -148,8 +180,25 @@ public static class LayoutSchemaTensorComposer
                     ? lb.GetString() : null;
                 var control = record.TryGetProperty("control", out var ctl) && ctl.ValueKind == JsonValueKind.String
                     ? ctl.GetString() : null;
+                var display = record.TryGetProperty("display", out var dsp) && dsp.ValueKind == JsonValueKind.String
+                    ? dsp.GetString() : null;
 
-                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control));
+                IReadOnlyList<string>? knownGapRefs = null;
+                if (record.TryGetProperty("knownGapRefs", out var kgr) && kgr.ValueKind == JsonValueKind.Array)
+                {
+                    var refs = new List<string>();
+                    foreach (var refEl in kgr.EnumerateArray())
+                    {
+                        if (refEl.ValueKind == JsonValueKind.String && refEl.GetString() is { } refValue)
+                            refs.Add(refValue);
+                    }
+                    knownGapRefs = refs;
+                }
+                if (recordType == UnresolvedRecordType && (knownGapRefs is null || knownGapRefs.Count == 0))
+                    return new RecordsParseResult.Invalid(
+                        $"records[{index}].record.recordType \"{UnresolvedRecordType}\" is missing a non-empty knownGapRefs array.");
+
+                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs));
                 index++;
             }
             return new RecordsParseResult.Valid(rows);
@@ -159,9 +208,12 @@ public static class LayoutSchemaTensorComposer
     /// <summary>
     /// Returns the distinct ui_component_registry.component_key values a caller must resolve
     /// (via LoadComponentIdsByKeysAsync) to compose the given schema records — Field records
-    /// resolve by their control convention, Action records resolve to the shared button primitive.
-    /// Records with an unrecognized/absent control are omitted (componentId stays null — an
-    /// explicit CATALOG_COMPONENT_KIND_REQUIRED error surfaces at render time, never a silent guess).
+    /// resolve by their control convention, Table records by their display convention, Action/
+    /// WorkflowStep records resolve to the shared button primitive. Structural and Unresolved
+    /// records never need a component_key (Unresolved never resolves to a component at all).
+    /// Records with an unrecognized/absent control or display are omitted (componentId stays
+    /// null — an explicit CATALOG_COMPONENT_KIND_REQUIRED error surfaces at render time, never a
+    /// silent guess).
     /// </summary>
     public static IReadOnlyList<string> RequiredComponentKeys(IReadOnlyList<SchemaRecordRow> schemaRecords)
     {
@@ -169,6 +221,7 @@ public static class LayoutSchemaTensorComposer
         foreach (var row in schemaRecords)
         {
             if (StructuralRecordTypes.Contains(row.RecordType)) continue;
+            if (row.RecordType == UnresolvedRecordType) continue;
             var key = ResolveComponentKey(row);
             if (key is not null) keys.Add(key);
         }
@@ -177,7 +230,14 @@ public static class LayoutSchemaTensorComposer
 
     private static string? ResolveComponentKey(SchemaRecordRow row)
     {
-        if (row.RecordType == ActionRecordType) return ActionComponentKey;
+        if (row.RecordType == ActionRecordType || row.RecordType == WorkflowStepRecordType)
+            return ActionComponentKey;
+        if (row.RecordType == TableRecordType)
+        {
+            return row.Display is not null && TableDisplayToComponentKey.TryGetValue(row.Display, out var tableMapped)
+                ? tableMapped
+                : null;
+        }
         return row.Control is not null && FieldControlToComponentKey.TryGetValue(row.Control, out var mapped)
             ? mapped
             : null;
@@ -239,14 +299,17 @@ public static class LayoutSchemaTensorComposer
     }
 
     /// <summary>
-    /// Composes structural + catalog-component LayoutNodeRecords from the authored schema records
-    /// tree. Structural record types (Category/Section/Form/Workflow/Validation) become
-    /// "structural_node" entries carrying RecordType/Label only — never a componentId/componentKind.
-    /// Field/Action record types become "catalog_component" entries whose componentId/componentKind
-    /// are resolved via the caller-supplied registry lookup dictionaries (see RequiredComponentKeys).
-    /// Each Action/Field leaf's runtimeInteractions are merged from
-    /// interactionsBySourceActionKey (see BuildInteractionsBySourceActionKey) by leaf key ==
-    /// sourceActionKey. Order follows the authored document order (already parent-before-child).
+    /// Composes structural + catalog-component + unresolved-gap LayoutNodeRecords from the
+    /// authored schema records tree. Structural record types (Category/Section/Form/Workflow/
+    /// Validation) become "structural_node" entries carrying RecordType/Label only — never a
+    /// componentId/componentKind. Field/Table/Action/WorkflowStep record types become
+    /// "catalog_component" entries whose componentId/componentKind are resolved via the
+    /// caller-supplied registry lookup dictionaries (see RequiredComponentKeys). Unresolved
+    /// records become "unresolved_gap" entries carrying RecordType/Label/KnownGapRefs — never a
+    /// componentId/componentKind, never merged with runtimeInteractions. Each catalog_component
+    /// leaf's runtimeInteractions are merged from interactionsBySourceActionKey (see
+    /// BuildInteractionsBySourceActionKey) by leaf key == sourceActionKey. Order follows the
+    /// authored document order (already parent-before-child).
     ///
     /// NodeId is normally the record's own authored key; when two records anywhere in the tree
     /// share the same key (an authoring collision — the record tree's key is only guaranteed
@@ -278,10 +341,12 @@ public static class LayoutSchemaTensorComposer
         foreach (var row in schemaRecords)
         {
             var isStructural = StructuralRecordTypes.Contains(row.RecordType);
+            var isUnresolved = row.RecordType == UnresolvedRecordType;
+            var isCatalogLeaf = !isStructural && !isUnresolved;
             string? componentId = null;
             string? componentKind = null;
 
-            if (!isStructural)
+            if (isCatalogLeaf)
             {
                 var componentKey = ResolveComponentKey(row);
                 if (componentKey is not null && componentKeyToId.TryGetValue(componentKey, out var resolvedId))
@@ -291,19 +356,22 @@ public static class LayoutSchemaTensorComposer
                 }
             }
 
-            // Merge target is a leaf (catalog_component) only, keyed by the leaf's own authored
+            // Merge target is a catalog_component leaf only, keyed by the leaf's own authored
             // key (== tensor entry sourceActionKey) — never by NodeId, which may be namespaced.
+            // structural_node and unresolved_gap nodes never receive runtimeInteractions.
             string? runtimeInteractionsJson = null;
-            if (!isStructural)
+            if (isCatalogLeaf)
                 interactionsBySourceActionKey.TryGetValue(row.Key, out runtimeInteractionsJson);
 
             var parentNodeId = row.ParentKey is not null && definedKeys.Contains(row.ParentKey)
                 ? row.ParentKey
                 : null;
 
+            var nodeKind = isUnresolved ? "unresolved_gap" : isStructural ? "structural_node" : "catalog_component";
+
             result.Add(new LayoutNodeRecord(
                 NodeId: ResolveNodeId(row),
-                NodeKind: isStructural ? "structural_node" : "catalog_component",
+                NodeKind: nodeKind,
                 HtmlTag: null,
                 ComponentKey: null,
                 ComponentId: componentId,
@@ -317,8 +385,9 @@ public static class LayoutSchemaTensorComposer
                 LayoutClassRefs: null,
                 ComponentKind: componentKind,
                 RuntimeInteractionsJson: runtimeInteractionsJson,
-                RecordType: isStructural ? row.RecordType : null,
-                Label: isStructural ? row.Label : null
+                RecordType: (isStructural || isUnresolved) ? row.RecordType : null,
+                Label: (isStructural || isUnresolved) ? row.Label : null,
+                KnownGapRefs: isUnresolved ? row.KnownGapRefs : null
             ));
         }
 

@@ -6,15 +6,17 @@ namespace Topolactor.Runtime.Tests;
 /// <summary>
 /// Verifies LayoutSchemaTensorComposer — the layout-schema structural authority composition
 /// path (docs/design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract
-/// structural authority contract):
+/// layout_schema_structural_render_contract):
 /// - components_layout_design.layout_schema_json.records[] is read as the structural authority.
 /// - Category/Section/Form/Workflow/Validation record types become "structural_node" entries
 ///   that NEVER receive a componentId/componentKind.
-/// - Field/Action record types become "catalog_component" entries whose componentId/componentKind
-///   are resolved via the caller-supplied ui_component_registry lookup dictionaries (never
-///   invented, never left as a silent fallback).
+/// - Field/Action/Table/WorkflowStep record types become "catalog_component" entries whose
+///   componentId/componentKind are resolved via the caller-supplied ui_component_registry lookup
+///   dictionaries (never invented, never left as a silent fallback).
+/// - Unresolved record types become "unresolved_gap" entries that always carry their authored
+///   knownGapRefs and never resolve to a componentId/componentKind.
 /// - Tensor nodes' runtimeInteractions (keyed by sourceActionKey per entry, at the FORM level) are
-///   merged onto the matching Action/Field leaf by leaf key == sourceActionKey.
+///   merged onto the matching catalog_component leaf by leaf key == sourceActionKey.
 /// - NodeId collisions (the same authored key reused in two branches — a real authoring
 ///   possibility, since a record's key is only guaranteed unique within its own branch) are
 ///   disambiguated by parent-scoping rather than silently colliding.
@@ -291,5 +293,124 @@ public class LayoutSchemaStructuralCompositionTests
         Assert.Equal(nodeIds.Count, nodeIds.Distinct().Count());
         Assert.Contains("section_a::approval_status", nodeIds);
         Assert.Contains("section_b::approval_status", nodeIds);
+    }
+
+    [Fact]
+    public void ParseRecords_TopologyUiTable_TopologyUiWorkflowStep_AreRecognized_NeverRejectedAsUnknown()
+    {
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","label":"Table One","display":"card_list"}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_workflow_step","key":"step1","label":"Step One"}}
+          ]
+        }
+        """;
+        var result = LayoutSchemaTensorComposer.ParseRecords(json);
+        var valid = Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(result);
+        Assert.Equal(2, valid.Rows.Count);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_TableRecord_ResolvesComponentIdViaDisplayConvention()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","display":"card_list"}}]}
+        """;
+        var records = ParseValidRows(json);
+        var requiredKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(records);
+        Assert.Contains("card_list.primitive", requiredKeys);
+
+        var componentKeyToId = new Dictionary<string, string> { ["card_list.primitive"] = "00000000-0000-0000-0001-000000000014" };
+        var componentIdToKind = new Dictionary<string, string> { ["00000000-0000-0000-0001-000000000014"] = "display/card_list" };
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records, new Dictionary<string, string>(), componentKeyToId, componentIdToKind);
+
+        var table = Assert.Single(composed);
+        Assert.Equal("catalog_component", table.NodeKind);
+        Assert.Equal("00000000-0000-0000-0001-000000000014", table.ComponentId);
+        Assert.Equal("display/card_list", table.ComponentKind);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_TableRecordWithUnresolvableDisplay_LeavesComponentIdNull_NoSilentFallback()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","display":"unknown_display_kind"}}]}
+        """;
+        var records = ParseValidRows(json);
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records, new Dictionary<string, string>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+
+        var table = Assert.Single(composed);
+        Assert.Equal("catalog_component", table.NodeKind);
+        Assert.Null(table.ComponentId);
+        Assert.Null(table.ComponentKind);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_WorkflowStepRecord_ResolvesToSameComponentAsAction()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_workflow_step","key":"step1"}}]}
+        """;
+        var records = ParseValidRows(json);
+        var requiredKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(records);
+        Assert.Contains("button.primitive", requiredKeys);
+
+        var componentKeyToId = new Dictionary<string, string> { ["button.primitive"] = "00000000-0000-0000-0001-000000000010" };
+        var componentIdToKind = new Dictionary<string, string> { ["00000000-0000-0000-0001-000000000010"] = "action/button" };
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records, new Dictionary<string, string>(), componentKeyToId, componentIdToKind);
+
+        var step = Assert.Single(composed);
+        Assert.Equal("catalog_component", step.NodeKind);
+        Assert.Equal("00000000-0000-0000-0001-000000000010", step.ComponentId);
+        Assert.Equal("action/button", step.ComponentKind);
+    }
+
+    [Fact]
+    public void ParseRecords_UnresolvedRecordMissingKnownGapRefs_ReturnsInvalid_NeverSkipped()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","label":"Unresolved"}}]}
+        """;
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ParseRecords_UnresolvedRecordWithEmptyKnownGapRefsArray_ReturnsInvalid_NeverSkipped()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","knownGapRefs":[]}}]}
+        """;
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_UnresolvedRecord_ComposesToUnresolvedGapNodeKind_CarryingKnownGapRefs_NeverAComponent()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","label":"Unresolved Fragment","knownGapRefs":["table_item_click_wiring_not_yet_expressible"]}}]}
+        """;
+        var records = ParseValidRows(json);
+
+        // Unresolved records never require a component_key lookup.
+        Assert.Empty(LayoutSchemaTensorComposer.RequiredComponentKeys(records));
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records, new Dictionary<string, string>(), new Dictionary<string, string>(), new Dictionary<string, string>());
+
+        var unresolved = Assert.Single(composed);
+        Assert.Equal("unresolved_gap", unresolved.NodeKind);
+        Assert.Equal("topology_ui_unresolved", unresolved.RecordType);
+        Assert.Equal("Unresolved Fragment", unresolved.Label);
+        Assert.NotNull(unresolved.KnownGapRefs);
+        Assert.Contains("table_item_click_wiring_not_yet_expressible", unresolved.KnownGapRefs!);
+        Assert.Null(unresolved.ComponentId);
+        Assert.Null(unresolved.ComponentKind);
+        Assert.Null(unresolved.RuntimeInteractionsJson);
     }
 }

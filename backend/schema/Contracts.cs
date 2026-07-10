@@ -61,11 +61,14 @@ public record OperationVector(
 /// A single layout projection node in the Emission, derived from layout_patch_json.nodes[].
 /// Carries the full structural and positional fields authored in the UI builder canvas.
 /// ComponentId comes from nodes[].componentId (not positional structure_maps.component_ids).
-/// NodeKind is "catalog_component" | "structural_html" | "structural_node".
+/// NodeKind is "catalog_component" | "structural_html" | "structural_node" | "unresolved_gap".
 /// structural_html nodes carry HtmlTag; catalog_component nodes carry ComponentKey.
 /// structural_node nodes (Category/Section/Form/Workflow/Validation from
 /// components_layout_design.layout_schema_json.records[] — the structural authority tree)
 /// carry RecordType/Label and never a ComponentId/ComponentKind.
+/// unresolved_gap nodes (topology_ui_unresolved from the same structural authority tree) carry
+/// RecordType/Label/KnownGapRefs and never a ComponentId/ComponentKind — frontend renderEmission()
+/// always projects them as an explicit error, never a resolvable component.
 /// ParentNodeId establishes the DOM nesting tree; OrderIndex drives sibling render order.
 /// X/Y/Width/Height are canvas geometry for DOM style projection.
 /// LayoutClassRefs are SSOT topology-layout-class vocabulary refs for className resolution.
@@ -111,8 +114,10 @@ public record LayoutNode(
     /// Null for "catalog_component"/"structural_html" nodes.
     /// </summary>
     string? RecordType = null,
-    /// <summary>Authored display label for a structural_node. Null for non-structural nodes.</summary>
-    string? Label = null
+    /// <summary>Authored display label for a structural_node or unresolved_gap node. Null otherwise.</summary>
+    string? Label = null,
+    /// <summary>Authored known-gap references for an unresolved_gap node. Null for every other NodeKind.</summary>
+    IReadOnlyList<string>? KnownGapRefs = null
 );
 
 /// <summary>

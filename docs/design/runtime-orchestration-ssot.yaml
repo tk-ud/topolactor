@@ -405,6 +405,19 @@ runtime_orchestration_ssot:
         flat runtimeInteractions carrier). Render completion is defined as zero
         componentType==="error" specs after frontend renderEmission() over the composed
         LayoutNodes -- tensor-node presence alone is not render completion.
+      authority_boundary_with_translator_ssot: >-
+        docs/design/react-schema-topology-seed-translator-ssot.yaml owns the SEED EMISSION shape
+        for these record types (react_schema_contract.allowed_node_kinds,
+        topology_ui_seed_contract.record_types, exchange_mapping.schema_to_seed_record_mapping)
+        -- what fields a record carries and how react_schema authoring produces it. This contract
+        owns the RUNTIME PROJECTION/RENDER shape for the same record types once they reach
+        components_layout_design.layout_schema_json.records[] -- whether a recordType becomes a
+        structural_node, a catalog_component (and by which resolution convention), or an explicit
+        unresolved_gap failure. Neither SSOT restates the other's authority; a record's runtime
+        classification below must cover every recordType the translator's
+        layoutAdoptionCandidates.source_record_types enumerates, and the translator's
+        projection_render_exchange_contract cross-references this section rather than
+        re-deriving the classification.
       structural_record_vocabulary:
         structural_node_record_types:
           - topology_ui_category
@@ -415,20 +428,51 @@ runtime_orchestration_ssot:
         catalog_component_record_types:
           - topology_ui_field
           - topology_ui_action
+          - topology_ui_table
+          - topology_ui_workflow_step
+        unresolved_gap_record_types:
+          - topology_ui_unresolved
         rule: >-
           Category/Section/Form/Workflow/Validation compose into LayoutNode.NodeKind=
           "structural_node" entries -- never a componentId/componentKind, resolved via no
-          registry lookup. Field/Action compose into NodeKind="catalog_component" entries whose
-          componentId/componentKind are resolved from the existing topology.ui_component_registry
-          preset catalog (see field_control_resolution below) -- never invented, never a
-          structural-node-shaped catalog entry.
+          registry lookup. Field/Action/Table/WorkflowStep compose into NodeKind=
+          "catalog_component" entries whose componentId/componentKind are resolved from the
+          existing topology.ui_component_registry preset catalog (see field_control_resolution
+          and table_display_resolution below) -- never invented, never a structural-node-shaped
+          catalog entry. Unresolved (topology_ui_unresolved) is neither: it composes into
+          NodeKind="unresolved_gap" and always renders as an explicit error carrying its
+          knownGapRefs (see unresolved_gap_resolution below) -- it is a terminal known-gap marker,
+          not a resolvable leaf and not a container.
         field_control_resolution: >-
           A Field record's authored control value (e.g. form_input/select) maps to an existing
           ui_component_registry.component_key by fixed convention
-          (LayoutSchemaTensorComposer.FieldControlToComponentKey); an Action record maps to the
-          shared button.primitive/action-button entry. An unresolvable control leaves
-          componentId/componentKind null -> CATALOG_COMPONENT_KIND_REQUIRED at render time, never
-          a silent guess.
+          (LayoutSchemaTensorComposer.FieldControlToComponentKey); an Action or WorkflowStep
+          record maps to the shared button.primitive/action-button entry (WorkflowStep shares
+          Action's exact required-field shape -- actionRef/eventBinding/authorityMarker -- and the
+          translator's own storage_adoption_contract.adoption_candidate_separation_contract
+          already treats the two identically across wiringAdoptionCandidates/
+          tensorAdoptionCandidates; runtime resolution follows the same pairing). An unresolvable
+          control leaves componentId/componentKind null -> CATALOG_COMPONENT_KIND_REQUIRED at
+          render time, never a silent guess.
+        table_display_resolution: >-
+          A Table record's authored display value (e.g. card_list, data_grid, list) maps to an
+          existing ui_component_registry.component_key by fixed convention
+          (LayoutSchemaTensorComposer.TableDisplayToComponentKey), reusing the same registry rows
+          ui-builder-preset-ecosystem-ssot.yaml presets already declare for table-shaped surfaces
+          (card_list.primitive, data_grid.alias, list.alias) -- never a new registry row invented
+          for this contract. An unresolvable display value leaves componentId/componentKind null
+          -> CATALOG_COMPONENT_KIND_REQUIRED at render time, identical treatment to an
+          unresolvable Field control.
+        unresolved_gap_resolution: >-
+          A topology_ui_unresolved record composes into a NodeKind="unresolved_gap" LayoutNode
+          carrying its knownGapRefs. frontend renderEmission() always renders an unresolved_gap
+          node as componentType="error" (code TOPOLOGY_UI_UNRESOLVED_GAP_REF), surfacing knownGapRefs in the
+          error def -- never resolved to a componentId, never silently dropped, never treated as
+          a resolvable catalog_component or a structural_node. A layout containing an
+          unresolved_gap node cannot reach render completion (zero error specs) until the
+          authored gap is actually resolved and the record is replaced -- this is correct
+          behavior, not a defect in this contract: render completion must not paper over a real
+          unresolved authoring gap the translator itself flagged.
         tensor_runtime_interactions_merge: >-
           topology.ui_topology_tensor nodes key their runtimeInteractions array at the FORM
           level; each entry carries its own sourceActionKey identifying the specific Field/Action
@@ -466,10 +510,13 @@ runtime_orchestration_ssot:
           hub-relation target resolution.
       prohibited:
         - structural_node_receiving_a_componentId_or_componentKind
-        - inventing_a_componentId_for_an_unresolvable_control
+        - inventing_a_componentId_for_an_unresolvable_control_or_display_value
         - skipping_invalid_records_entries_to_synthesize_a_partial_tree
         - treating_a_malformed_nonempty_records_shape_as_equivalent_to_absent_records
         - judging_render_completion_by_tensor_node_presence_alone
+        - rejecting_topology_ui_table_or_topology_ui_workflow_step_or_topology_ui_unresolved_as_an_unrecognized_recordType
+        - silently_converting_topology_ui_unresolved_into_a_normal_catalog_component_or_structural_node
+        - inventing_a_new_ui_component_registry_row_for_table_display_resolution_instead_of_reusing_declared_preset_rows
       test_proof_contract:
         note: >-
           A completion proof for this contract must observe the composed LayoutNode[] for a real
@@ -479,6 +526,12 @@ runtime_orchestration_ssot:
           single representative scenario -- a backend-only unresolved-leaf count and a
           separately hand-authored frontend fixture are each necessary but neither is sufficient
           alone.
+        positive_cases:
+          - topology_ui_table_record_resolves_to_a_catalog_component_via_table_display_resolution
+          - topology_ui_workflow_step_record_resolves_to_a_catalog_component_via_the_same_convention_as_topology_ui_action
+        negative_cases:
+          - topology_ui_unresolved_record_composes_to_an_explicit_render_time_error_carrying_knownGapRefs_never_a_normal_component
+          - a_recordType_outside_structural_node_record_types_plus_catalog_component_record_types_plus_unresolved_gap_record_types_is_LAYOUT_SCHEMA_RECORDS_INVALID_not_silently_skipped
 
   runtime_vocabulary_contract:
     authority_boundary:
