@@ -818,16 +818,20 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
     {
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        // target_manifest_id: correlated subquery groups hubs.topology_manifests rows for the
-        // related hub and only returns a row when there is exactly one — HAVING COUNT(*) = 1
-        // yields NULL (no fallback) when zero or multiple manifests are registered for that hub.
+        // target_manifest_id: correlated subquery groups ACTIVE hubs.topology_manifests rows
+        // for the related hub and only returns a row when there is exactly one active manifest
+        // — HAVING COUNT(*) = 1 yields NULL (no fallback) when zero or multiple active
+        // manifests are registered for that hub. status='active' is required in the WHERE
+        // clause: a deprecated/inactive manifest must never be resolved as a navigable target,
+        // and a hub with one active + any number of deprecated manifests must still resolve to
+        // the single active one (not become ambiguous because of deprecated siblings).
         cmd.CommandText =
             "SELECT hr.related_hub_id::text, " +
             "       COALESCE(rr.name, hr.related_hub_id::text), " +
             "       hr.sequence_position, " +
             "       (SELECT MIN(tm2.topology_manifest_id::text) " +
             "        FROM hubs.topology_manifests tm2 " +
-            "        WHERE tm2.hub_id = hr.related_hub_id " +
+            "        WHERE tm2.hub_id = hr.related_hub_id AND tm2.status = 'active' " +
             "        GROUP BY tm2.hub_id " +
             "        HAVING COUNT(*) = 1) AS target_manifest_id " +
             "FROM hubs.hub_relations hr " +

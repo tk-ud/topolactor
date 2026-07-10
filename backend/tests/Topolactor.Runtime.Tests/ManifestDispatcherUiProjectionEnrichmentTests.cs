@@ -125,6 +125,20 @@ public class ManifestDispatcherUiProjectionEnrichmentTests
                 Errors: [new ValidationError("ADMIN_OPERATION_NOT_FOUND", "Unknown admin operation: mutate:write")]));
     }
 
+    private sealed class CompositeErrorAdminRuntime : IDispatchableRuntime
+    {
+        public Task<EndpointResponseDto> ExecuteAsync(
+            EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default) =>
+            Task.FromResult(new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors:
+                [
+                    new ValidationError("ADMIN_OPERATION_NOT_FOUND", "Unknown admin operation: screen_list:search"),
+                    new ValidationError("SOME_OTHER_REAL_FAILURE", "a genuine second failure alongside the routing gap"),
+                ]));
+    }
+
     private sealed class SuccessRuntimeWithLayoutAlreadySet : IDispatchableRuntime
     {
         public Task<EndpointResponseDto> ExecuteAsync(
@@ -234,6 +248,66 @@ public class ManifestDispatcherUiProjectionEnrichmentTests
             IdOrHubId: null, Payload: null, Context: null, TriggerKind: "client", Role: "admin");
 
         var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Null(response.Emission);
+        Assert.False(fakeTopologyRepo.LoadLayoutNodesCalled);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_NonAdminRuntimeDestination_AdminOperationNotFoundOnScreenRead_StaysAFailure()
+    {
+        // Guard must require destination == "admin_runtime" explicitly, not merely infer it
+        // from the error code — a differently-routed manifest returning the same error code
+        // (however unlikely) must never take the structural-success fallback path.
+        var topology = BuildTopology("topology_transform_runtime", includeUiProjection: true);
+        var manifestRepo = new SingleManifestRepository(topology, ManifestId);
+        var fakeTopologyRepo = new FakeTopologyRepository([MakeNode("root")]);
+        var handlers = new Dictionary<string, IDispatchableRuntime>
+        {
+            ["topology_transform_runtime"] = new AdminOperationNotFoundRuntime(),
+        };
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            handlers,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(),
+            manifestRepo,
+            errorAppender: null,
+            topologyRepository: fakeTopologyRepo,
+            hubNavigationResolver: null);
+
+        var response = await dispatcher.DispatchAsync(ScreenReadRequest());
+
+        Assert.False(response.Success);
+        Assert.Null(response.Emission);
+        Assert.False(fakeTopologyRepo.LoadLayoutNodesCalled);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_AdminRuntimeUiProjection_CompositeErrorAlongsideAdminOperationNotFound_StaysAFailure()
+    {
+        // A composite/multi-error failure is a real failure, not a routing gap — must not be
+        // silently downgraded to structural success just because one of the errors happens to
+        // be ADMIN_OPERATION_NOT_FOUND.
+        var topology = BuildTopology("admin_runtime", includeUiProjection: true);
+        var manifestRepo = new SingleManifestRepository(topology, ManifestId);
+        var fakeTopologyRepo = new FakeTopologyRepository([MakeNode("root")]);
+        var handlers = new Dictionary<string, IDispatchableRuntime>
+        {
+            ["admin_runtime"] = new CompositeErrorAdminRuntime(),
+        };
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            handlers,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(),
+            manifestRepo,
+            errorAppender: null,
+            topologyRepository: fakeTopologyRepo,
+            hubNavigationResolver: null);
+
+        var response = await dispatcher.DispatchAsync(ScreenReadRequest());
 
         Assert.False(response.Success);
         Assert.Null(response.Emission);

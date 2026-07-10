@@ -289,13 +289,21 @@ public class ManifestDispatcher
             // manifest is renderable via ui_projection, it just has no admin write/read verb for
             // this axes combination. Synthesize an empty success Emission so the ui_projection
             // enrichment below can still reach LayoutNodes. This does not fabricate business
-            // data — actual row population for this class of manifest remains the separately
-            // tracked instance_settings_admin_authoring_ui_pending gap (see
-            // docs/projection_design/credential-management-projection-design.md known_gap).
+            // data — actual row population for this class of manifest remains a separately
+            // tracked authoring surface (see
+            // docs/projection_design/credential-management-projection-design.md).
+            // Narrow guard (all required, no partial match): destination must literally be
+            // admin_runtime (not inferred from the error alone — a differently-routed manifest
+            // must never take this path); the manifest must declare ui_projection; the axes must
+            // be a recognized screen-read combination; and ADMIN_OPERATION_NOT_FOUND must be the
+            // ONLY error — a composite/multi-error failure is a real failure, not a routing gap,
+            // and must not be silently downgraded to success.
             if (!response.Success &&
+                string.Equals(destination, "admin_runtime", StringComparison.Ordinal) &&
                 HasUiProjectionEntry(manifest.Topology) &&
                 ScreenDataShapeTopologyReader.IsScreenReadAction(vector.Layer, vector.Action) &&
-                response.Errors.Any(e => e.Code == "ADMIN_OPERATION_NOT_FOUND"))
+                response.Errors.Count == 1 &&
+                response.Errors[0].Code == "ADMIN_OPERATION_NOT_FOUND")
             {
                 response = new EndpointResponseDto(
                     Success: true,

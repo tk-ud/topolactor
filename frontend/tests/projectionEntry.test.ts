@@ -296,6 +296,39 @@ Deno.test("resolveHubNavigationLinks: sorts by sequencePosition (manifest-scoped
   assertEquals(links.map((l) => l.label), ["A", "B", "C"]);
 });
 
+Deno.test("hub navigation round-trip: a resolvable link's href feeds back through parseProjectionEntrySelection + resolveProjectionEntryAxes into the SAME target manifest's dispatch axes — navigationSequence connects to the next projection dispatch, not just a rendered label", () => {
+  const targetManifestId = "cccccccc-1111-2222-3333-444444444444";
+  const links = resolveHubNavigationLinks([
+    navItem({ relatedHubId: "hub-target", relatedHubLabel: "Target hub", sequencePosition: 1, targetManifestId }),
+  ]);
+  const link = links[0];
+  assertEquals(link.resolvable, true);
+  if (!link.resolvable) return;
+
+  // link.href is exactly what ProjectionShell renders as <a href={link.href}>; simulate the
+  // browser navigation landing back on the entry mount with that search string.
+  const parsed = parseProjectionEntrySelection(link.href);
+  assertEquals(parsed.ok, true);
+  if (!parsed.ok) return;
+  assertEquals(parsed.selection.manifestId, targetManifestId);
+
+  const axes = resolveProjectionEntryAxes(parsed.selection);
+  assertEquals(
+    axes.payload?.target_ref,
+    `manifest:${targetManifestId}:projection_entry`,
+    "the hub navigation link must resolve to a dispatch targeting the SAME manifest the backend resolved as TargetManifestId — not a different or default entry",
+  );
+});
+
+Deno.test("hub navigation round-trip: an unresolvable link (no targetManifestId) has no href to feed into the next dispatch at all", () => {
+  const links = resolveHubNavigationLinks([
+    navItem({ relatedHubId: "hub-ambiguous", relatedHubLabel: "Ambiguous hub", sequencePosition: 1, targetManifestId: null }),
+  ]);
+  const link = links[0];
+  assertEquals(link.resolvable, false);
+  assertEquals("href" in link, false);
+});
+
 Deno.test("projection entry surface: ProjectionShell reads emission.navigationSequence / emission.manifestId and renders a hub navigation path (not silently ignored)", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/ProjectionShell.tsx", import.meta.url),
