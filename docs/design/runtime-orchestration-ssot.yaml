@@ -456,7 +456,7 @@ runtime_orchestration_ssot:
           layout_schema_json has a "records" key that is present and non-empty but malformed
           (not an array; or contains an entry missing a required recordType/key; or an
           unrecognized recordType) is an explicit LAYOUT_SCHEMA_RECORDS_INVALID failure -- never
-          silently dropped to the tensor-only path and never a partial tree built by skipping the
+          silently dropped to the tensor-only path and never a subset tree built by skipping the
           invalid entries.
         rule: >-
           Absence and invalidity are never conflated. A parser must distinguish "no records[] to
