@@ -257,6 +257,41 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
     }
 
     [Fact]
+    public async Task DispatchAsync_BareDefaultEntry_NoTargetRef_ResolvesManifest0092ViaCanonicalDefaultEntryRelation()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await BuildRealDispatcherAsync(cs);
+
+        // The EXACT axes frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes({})
+        // sends for a bare "/" with no ?route=, no ?manifest=, and therefore no pre-injected
+        // payload.target_ref. This is not the ?manifest=092 explicit-selection path (that is
+        // proven separately above) — this proves the UNSET entry itself reaches manifest 092
+        // via the canonical_default_entry hubs.hub_relations row (seed_empty.sql), the means
+        // described in ContentBundleRepository.ResolveCanonicalDefaultEntryManifestIdAsync.
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: null, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(response.Emission);
+        Assert.Equal(CredentialManagementManifestId.ToString(), response.Emission!.ManifestId);
+        Assert.NotNull(response.Emission.LayoutNodes);
+        Assert.NotEmpty(response.Emission.LayoutNodes!);
+
+        // render completion, not merely reachability: zero unresolved catalog leaves means the
+        // frontend renderEmission() proof (layoutSchemaStructuralRender.test.ts) also holds for
+        // exactly this bare-entry-resolved emission shape.
+        var unresolvedLeaves = response.Emission.LayoutNodes!
+            .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
+            .ToList();
+        Assert.Empty(unresolvedLeaves);
+    }
+
+    [Fact]
     public async Task HubRelations_Manifest092_HasCanonicalSequencePosition1Relation_SeedOnly()
     {
         var cs = GetConnectionString();

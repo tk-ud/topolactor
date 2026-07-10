@@ -8,7 +8,7 @@ namespace Topolactor.Runtime.Tests;
 /// <summary>
 /// In-memory content bundle repository for admin content bundle unit tests.
 /// </summary>
-internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
+internal class InMemoryContentBundleRepository : ContentBundleRepository
 {
     public static readonly Guid FixtureHubId = new("00000000-0000-0000-0000-000000000010");
     public static readonly Guid FixtureRelationId = new("00000000-0000-0000-0000-000000000011");
@@ -29,6 +29,13 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     ];
 
     public InMemoryContentBundleRepository() : base(NullLogger<ContentBundleRepository>.Instance) { }
+
+    /// <summary>Test-settable canonical default entry manifest id. Null (default) mirrors "no row
+    /// carries the canonical_default_entry marker".</summary>
+    public Guid? CanonicalDefaultEntryManifestId { get; set; }
+
+    public override Task<Guid?> ResolveCanonicalDefaultEntryManifestIdAsync(CancellationToken ct = default) =>
+        Task.FromResult(CanonicalDefaultEntryManifestId);
 
     public override Task<IReadOnlyList<ContentBundleListItemDto>> ListContentHubsAsync(CancellationToken ct = default)
     {

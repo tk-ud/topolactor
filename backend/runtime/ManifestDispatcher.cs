@@ -218,6 +218,28 @@ public class ManifestDispatcher
                 layer: request.Layer,
                 action: request.Action,
                 ct: ct);
+
+                // Canonical default entry fallback: a bare/no-selection projection entry (no
+                // route target override, no explicit ?manifest=, no pre-injected
+                // payload.target_ref — frontend/runtime/projectionEntry.ts
+                // resolveProjectionEntryAxes({}) sends exactly this axes combination) has no
+                // seeded dispatcher_mapping of its own. hubs.hub_relations' explicitly marked
+                // canonical_default_entry row (see
+                // ContentBundleRepository.ResolveCanonicalDefaultEntryManifestIdAsync) is the
+                // means for resolving it — distinct from NavigationSequence's outbound links
+                // from an already-resolved manifest. Narrowly scoped to this exact axes
+                // combination only — this is not a general MANIFEST_NOT_FOUND fallback.
+                if (manifest is null &&
+                    _hubNavigationResolver is not null &&
+                    string.Equals(request.Target, "default", StringComparison.Ordinal) &&
+                    string.Equals(request.Layer, "screen_list", StringComparison.Ordinal) &&
+                    string.Equals(request.Action, "Search", StringComparison.Ordinal))
+                {
+                    var canonicalDefaultEntryManifestId =
+                        await _hubNavigationResolver.ResolveCanonicalDefaultEntryManifestIdAsync(ct);
+                    if (canonicalDefaultEntryManifestId.HasValue)
+                        manifest = await _manifestRepository.LoadByIdAsync(canonicalDefaultEntryManifestId.Value, ct);
+                }
             }
 
             // Capability gate: after manifest resolution, enforce any explicit required_role
@@ -358,6 +380,20 @@ public class ManifestDispatcher
                 Success: false,
                 Emission: null,
                 Errors: [new ValidationError("MANIFEST_AMBIGUOUS", ex.Message)]);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("CANONICAL_DEFAULT_ENTRY_AMBIGUOUS", StringComparison.Ordinal))
+        {
+            _logger.LogError(ex, "ManifestDispatcher: ambiguous canonical default entry rejected.");
+            await BackendErrorBoundary.RecordSystemErrorAsync(
+                _errorAppender, _logger, ex,
+                BackendErrorOriginLayer.ManifestDispatcher,
+                "manifest_dispatcher:resolve_canonical_default_entry",
+                new BackendErrorEvidenceHint(ErrorCode: "CANONICAL_DEFAULT_ENTRY_AMBIGUOUS"),
+                ct);
+            return new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors: [new ValidationError("CANONICAL_DEFAULT_ENTRY_AMBIGUOUS", ex.Message)]);
         }
     }
 

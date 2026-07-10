@@ -18,4 +18,14 @@ public class HubNavigationResolver
 
     public Task<IReadOnlyList<HubNavigationSequenceItemDto>> ResolveAsync(Guid topologyManifestId, CancellationToken ct = default) =>
         _contentBundleRepository.LoadHubNavigationSequenceAsync(topologyManifestId, ct);
+
+    /// <summary>
+    /// Resolves the canonical default entry manifest — the means by which a bare/no-selection
+    /// projection entry (no route, no manifest, no target_ref) resolves an initial manifest. See
+    /// ContentBundleRepository.ResolveCanonicalDefaultEntryManifestIdAsync for the marker
+    /// contract. Distinct from ResolveAsync, which resolves outbound navigation links from an
+    /// ALREADY-resolved manifest.
+    /// </summary>
+    public Task<Guid?> ResolveCanonicalDefaultEntryManifestIdAsync(CancellationToken ct = default) =>
+        _contentBundleRepository.ResolveCanonicalDefaultEntryManifestIdAsync(ct);
 }
