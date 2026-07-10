@@ -17,8 +17,10 @@ import {
   confirmProjectionEntryEmission,
   isDefaultProjectionEntry,
   parseProjectionEntrySelection,
+  resolveHubNavigationLinks,
   resolveProjectionEntryAxes,
 } from "../runtime/projectionEntry.ts";
+import type { HubNavigationSequenceItem } from "../api/dispatch.ts";
 
 const MANIFEST_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const PACKAGE_ID = "bbbbbbbb-0000-0000-0000-000000000002";
@@ -238,5 +240,106 @@ Deno.test("projection entry surface: SSE payload forwards manifest_id as identit
   assert(
     src.includes("identityPayload.manifest_id = payload.manifest_id"),
     "manifest_id must be forwarded into the identity payload, not consumed as a routing/target decision",
+  );
+});
+
+// ── credential-management hub relation / navigation bundle: NavigationSequence ─
+// The backend now attaches emission.navigationSequence ("current hub relation" candidates)
+// and emission.manifestId ("current topology phase") for any manifest dispatch, not only
+// topology_transform_runtime. The frontend must monitor and connect these fields through to a
+// render path (not treat backend emission attachment alone as render-reached) — see
+// docs/design/db-schema.yaml manifest_hub_chain / hubs_hub_relations_sequence.
+
+function navItem(
+  partial: Partial<HubNavigationSequenceItem> & { relatedHubId: string },
+): HubNavigationSequenceItem {
+  return {
+    relatedHubLabel: partial.relatedHubId,
+    sequencePosition: 1,
+    ...partial,
+  };
+}
+
+Deno.test("resolveHubNavigationLinks: empty/absent navigationSequence yields no links", () => {
+  assertEquals(resolveHubNavigationLinks(undefined), []);
+  assertEquals(resolveHubNavigationLinks([]), []);
+});
+
+Deno.test("resolveHubNavigationLinks: an item with targetManifestId becomes a resolvable ?manifest= link", () => {
+  const links = resolveHubNavigationLinks([
+    navItem({ relatedHubId: "hub-a", relatedHubLabel: "Hub A", sequencePosition: 1, targetManifestId: MANIFEST_ID }),
+  ]);
+  assertEquals(links.length, 1);
+  const link = links[0];
+  assertEquals(link.resolvable, true);
+  if (link.resolvable) {
+    assertEquals(link.href, `?manifest=${MANIFEST_ID}`);
+    assertEquals(link.label, "Hub A");
+  }
+});
+
+Deno.test("resolveHubNavigationLinks: an item with no targetManifestId (ambiguous or unregistered hub) is explicitly unresolvable, not silently dropped or guessed", () => {
+  const links = resolveHubNavigationLinks([
+    navItem({ relatedHubId: "hub-b", relatedHubLabel: "Hub B", sequencePosition: 2, targetManifestId: null }),
+  ]);
+  assertEquals(links.length, 1);
+  assertEquals(links[0].resolvable, false);
+  assertEquals(links[0].label, "Hub B");
+});
+
+Deno.test("resolveHubNavigationLinks: sorts by sequencePosition (manifest-scoped UI transition order, hubs.hub_relations.sequence_position)", () => {
+  const links = resolveHubNavigationLinks([
+    navItem({ relatedHubId: "hub-c", relatedHubLabel: "C", sequencePosition: 3, targetManifestId: MANIFEST_ID }),
+    navItem({ relatedHubId: "hub-a", relatedHubLabel: "A", sequencePosition: 1, targetManifestId: MANIFEST_ID }),
+    navItem({ relatedHubId: "hub-b", relatedHubLabel: "B", sequencePosition: 2, targetManifestId: MANIFEST_ID }),
+  ]);
+  assertEquals(links.map((l) => l.label), ["A", "B", "C"]);
+});
+
+Deno.test("projection entry surface: ProjectionShell reads emission.navigationSequence / emission.manifestId and renders a hub navigation path (not silently ignored)", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ProjectionShell.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("resolveHubNavigationLinks"),
+    "ProjectionShell must resolve NavigationSequence into navigable links via projectionEntry.ts, not read the raw field ad hoc",
+  );
+  assert(
+    src.includes("emission?.navigationSequence") || src.includes("emission.navigationSequence"),
+    "ProjectionShell must read emission.navigationSequence",
+  );
+  assert(
+    src.includes("emission?.manifestId") || src.includes("emission.manifestId"),
+    "ProjectionShell must surface emission.manifestId (current topology phase identity)",
+  );
+});
+
+Deno.test("projection entry surface: unresolvable hub navigation links are not rendered as clickable navigation", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ProjectionShell.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("data-hub-navigation-unresolvable"),
+    "an unresolvable link (no targetManifestId) must render as a distinguishable non-navigable marker, not a normal link",
+  );
+  assert(
+    src.includes("data-hub-navigation-resolvable"),
+    "a resolvable link must be distinguishable from an unresolvable one",
+  );
+});
+
+Deno.test("credential-management bundle: no dedicated credential route/panel was added (existing topology manifest reuse only)", async () => {
+  const routesDir = new URL("../routes/admin/", import.meta.url);
+  const entries: string[] = [];
+  for await (const entry of Deno.readDir(routesDir)) {
+    entries.push(entry.name);
+  }
+  const forbidden = entries.filter((name) =>
+    /credential/i.test(name)
+  );
+  assertEquals(
+    forbidden,
+    [],
+    `no dedicated credential-management admin route may be added; found: ${forbidden.join(", ")}`,
   );
 });

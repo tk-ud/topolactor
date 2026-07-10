@@ -180,6 +180,21 @@ export type PropBinding = {
   transform?: string;
 };
 
+/**
+ * One entry in the manifest-scoped hub_relations navigation sequence ("current hub relation"
+ * candidates) — hubs.hub_relations owns manifest-scoped hub sequence / UI transition order
+ * (docs/design/db-schema.yaml manifest_hub_chain), not a global hub-to-hub relation graph.
+ * targetManifestId is resolved backend-side only when exactly one active topology_manifest is
+ * registered under relatedHubId (no implicit oldest/first-match fallback) — absent/null means
+ * "not directly callable", never a guessed target.
+ */
+export type HubNavigationSequenceItem = {
+  relatedHubId: string;
+  relatedHubLabel: string;
+  sequencePosition: number;
+  targetManifestId?: string | null;
+};
+
 export type Emission = {
   structureMapId?: string;
   packageId?: string;
@@ -188,6 +203,18 @@ export type Emission = {
   data?: Record<string, unknown>;
   errors?: ValidationError[];
   contextRouteRecommendation?: ContextRouteRecommendation;
+  /**
+   * Manifold-scoped hub_relations navigation candidates for the currently resolved manifest
+   * ("current hub relation" candidates the projection can move to). Absent when the manifest has
+   * no active hub_relations or when NavigationSequence resolution was not applicable.
+   */
+  navigationSequence?: HubNavigationSequenceItem[];
+  /**
+   * Identity of the resolved topology_manifest for this dispatch — "current topology phase".
+   * Set by ManifestDispatcher for any manifest-resolved dispatch. Absent when no manifest was
+   * resolved for this request (e.g. dev bypass path).
+   */
+  manifestId?: string;
   /** Backend-resolved render-only recommendation child island spec. */
   recommendNavigationProjection?: RecommendNavigationProjectionSpec;
   /**

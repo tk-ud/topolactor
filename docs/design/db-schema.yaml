@@ -953,6 +953,17 @@ db_schema:
       note: >-
         Child of hubs.topology_manifests. Not a global hub-to-hub relation graph.
         related_hub_id is the sequenced hub entry. relation_config holds optional sequence metadata.
+      navigation_target_resolution:
+        note: >-
+          Minimal design addendum (credential-management hub relation / navigation bundle).
+          When a caller (e.g. runtime-orchestration-ssot.yaml
+          ui_projection_render_reachability_contract.hub_navigation_resolution) needs a
+          navigable topology_manifest for a hub_relations.related_hub_id, the target is
+          resolved only when exactly one active hubs.topology_manifests row exists for that
+          hub_id — mirroring physical_table_manifest_binding's
+          no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant above. Zero
+          or multiple manifests under the related hub resolve to no target (null), never a
+          guessed/oldest/first row.
 
     sql_attention_targets:
       target_space: hubs

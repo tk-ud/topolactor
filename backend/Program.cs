@@ -340,7 +340,9 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         sp.GetRequiredService<OperationVectorResolver>(),
         sp.GetRequiredService<TargetDispatchOverride>(),
         sp.GetRequiredService<ManifestRepository>(),
-        sp.GetRequiredService<IBackendErrorEvidenceAppender>());
+        sp.GetRequiredService<IBackendErrorEvidenceAppender>(),
+        sp.GetRequiredService<TopologyRepository>(),
+        sp.GetRequiredService<HubNavigationResolver>());
 });
 builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<PackageGeneratorRuntime>();

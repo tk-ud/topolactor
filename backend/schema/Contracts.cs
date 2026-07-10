@@ -174,7 +174,13 @@ public record Emission(
     IReadOnlyList<LayoutNode>? LayoutNodes = null,
     // Frontend-local calculation bindings verbatim from layout_patch_json.calculationBindings[].
     // Null when absent. Never evaluated server-side.
-    JsonElement? CalculationBindings = null
+    JsonElement? CalculationBindings = null,
+    // Identity of the resolved topology_manifest for this dispatch — the "current topology
+    // phase" a frontend nav surface needs to know which manifest is currently loaded when
+    // rendering NavigationSequence. Set by ManifestDispatcher for any manifest-resolved
+    // dispatch, regardless of runtime_destination. Null when no manifest was resolved
+    // (e.g. dev bypass path).
+    string? ManifestId = null
 );
 
 /// <summary>SSOT runtime_jump_event_contract: scope, from, to, planned, reason.

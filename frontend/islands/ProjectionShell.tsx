@@ -37,6 +37,7 @@ import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
 import {
   confirmProjectionEntryEmission,
   parseProjectionEntrySelection,
+  resolveHubNavigationLinks,
   resolveProjectionEntryAxes,
 } from "../runtime/projectionEntry.ts";
 import type { Emission, LayoutNode } from "../api/dispatch.ts";
@@ -493,6 +494,9 @@ export default function ProjectionShell(): JSX.Element {
   }
 
   const recommendProjection = emission?.recommendNavigationProjection;
+  const hubNavigationLinks = resolveHubNavigationLinks(
+    emission?.navigationSequence,
+  );
 
   return (
     <div
@@ -504,6 +508,42 @@ export default function ProjectionShell(): JSX.Element {
         specs={specs}
         layoutId={emission?.layoutId}
       />
+      {hubNavigationLinks.length > 0 && (
+        <nav
+          data-projection-hub-navigation
+          class="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 text-xs"
+        >
+          {hubNavigationLinks.map((link) =>
+            link.resolvable
+              ? (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  class="link"
+                  data-hub-navigation-resolvable
+                >
+                  {link.label}
+                </a>
+              )
+              : (
+                <span
+                  key={`unresolvable-${link.sequencePosition}-${link.label}`}
+                  class="text-gray-400"
+                  title="複数または未登録の画面設定のため直接移動できません"
+                  data-hub-navigation-unresolvable
+                >
+                  {link.label}
+                </span>
+              )
+          )}
+          {emission?.manifestId && (
+            <details class="ml-auto text-gray-400">
+              <summary class="cursor-pointer">技術情報</summary>
+              <code class="font-mono">{emission.manifestId}</code>
+            </details>
+          )}
+        </nav>
+      )}
       {recommendProjection && (
         <RecommendNavigationIsland
           spec={recommendProjection}

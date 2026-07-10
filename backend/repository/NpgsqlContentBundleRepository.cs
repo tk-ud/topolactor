@@ -818,9 +818,21 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
     {
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
+        // target_manifest_id: correlated subquery groups hubs.topology_manifests rows for the
+        // related hub and only returns a row when there is exactly one — HAVING COUNT(*) = 1
+        // yields NULL (no fallback) when zero or multiple manifests are registered for that hub.
         cmd.CommandText =
-            "SELECT hr.related_hub_id::text, hr.related_hub_id::text, hr.sequence_position " +
+            "SELECT hr.related_hub_id::text, " +
+            "       COALESCE(rr.name, hr.related_hub_id::text), " +
+            "       hr.sequence_position, " +
+            "       (SELECT MIN(tm2.topology_manifest_id::text) " +
+            "        FROM hubs.topology_manifests tm2 " +
+            "        WHERE tm2.hub_id = hr.related_hub_id " +
+            "        GROUP BY tm2.hub_id " +
+            "        HAVING COUNT(*) = 1) AS target_manifest_id " +
             "FROM hubs.hub_relations hr " +
+            "LEFT JOIN hubs.hub h ON h.hub_id = hr.related_hub_id " +
+            "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
             "WHERE hr.topology_manifest_id = @mid AND hr.status = 'active' " +
             "ORDER BY hr.sequence_position";
         cmd.Parameters.AddWithValue("mid", topologyManifestId);
@@ -828,7 +840,9 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         var items = new List<HubNavigationSequenceItemDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            items.Add(new HubNavigationSequenceItemDto(reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+            items.Add(new HubNavigationSequenceItemDto(
+                reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3)));
         return items;
     }
 

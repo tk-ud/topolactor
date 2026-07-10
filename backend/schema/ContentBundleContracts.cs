@@ -187,10 +187,19 @@ public record HubNavigationDeprecateRequestDto(
     [property: JsonPropertyName("hubRelationId")] string HubRelationId
 );
 
+/// <summary>
+/// TargetManifestId is the navigable topology_manifest under RelatedHubId, resolved only when
+/// exactly one active hubs.topology_manifests row exists for that hub — no implicit
+/// oldest/first-match fallback (mirrors topology.physical_table_manifest_bindings'
+/// no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant). Null when zero or
+/// multiple manifests are registered under the related hub; callers must treat null as
+/// "not directly callable" rather than guessing a target.
+/// </summary>
 public record HubNavigationSequenceItemDto(
     [property: JsonPropertyName("relatedHubId")] string RelatedHubId,
     [property: JsonPropertyName("relatedHubLabel")] string RelatedHubLabel,
-    [property: JsonPropertyName("sequencePosition")] int SequencePosition
+    [property: JsonPropertyName("sequencePosition")] int SequencePosition,
+    [property: JsonPropertyName("targetManifestId")] string? TargetManifestId = null
 );
 
 public record HubNavigationReorderItemDto(
