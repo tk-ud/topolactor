@@ -9,32 +9,37 @@ namespace Topolactor.Integration.Tests;
 
 /// <summary>
 /// Live-DB E2E proof for the credential-management hub relation / navigation / ui_projection
-/// bundle: dispatch through the REAL ManifestDispatcher.DispatchAsync entry point (not a
-/// hardcoded layoutId constant fed directly into TopologyRepository.LoadLayoutNodesAsync), using
-/// real Npgsql repositories, to prove the full hierarchy resolves against the actual seeded
-/// manifest 092 data:
+/// bundle, per runtime-orchestration-ssot.yaml dispatcher_contract.
+/// ui_projection_render_reachability_contract.test_proof_contract: dispatch through the REAL
+/// ManifestDispatcher.DispatchAsync entry point (not a hardcoded layoutId constant fed directly
+/// into TopologyRepository.LoadLayoutNodesAsync), using real Npgsql repositories, walking the
+/// full relation-vector -> scalar-Emission chain from an explicit
+/// relation_uuid / hub_ids[] / package_ids[] test input:
 ///
-///   backend dispatch (ManifestDispatcher.DispatchAsync)
-///   -> resolved manifest (NpgsqlManifestRepository, target_ref axes)
-///   -> manifest.topology[ui_projection] refs (read from the manifest topology that was just
-///      loaded from the DB, not a test constant)
+///   relation_uuid (hubs.hub_relations.hub_relation_id)
+///   -> source topology_manifest (manifest 092, via hub_relations.topology_manifest_id)
+///   -> hub_ids[] (hubs.hub_relations.related_hub_id, ordered by sequence_position — the
+///      manifest-scoped relation vector / route vector, not a global hub-to-hub graph)
+///   -> package_ids[] (manifest.topology[ui_projection].packageIds, read from the manifest
+///      topology just loaded from the DB, not a test constant)
 ///   -> topology.components_package_design / topology.components_layout_design /
 ///      topology.ui_wiring_registry / topology.ui_topology_tensor
 ///      (TopologyRepository.LoadLayoutNodesAsync)
-///   -> scalar Emission.LayoutId / LayoutNodes / PackageId / ManifestId
-///
-/// and, independently, the manifest-scoped hub_relations sequence:
-///
-///   hubs.hub_relations.sequence_position (NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync)
-///   -> related hub -> hubs.topology_manifests target resolution (exactly-one-ACTIVE-manifest,
-///      fail-close otherwise)
-///   -> scalar Emission.NavigationSequence
+///   -> backend dispatch (ManifestDispatcher.DispatchAsync)
+///   -> scalar Emission.ManifestId / NavigationSequence / PackageId / LayoutId / LayoutNodes,
+///      with NavigationSequence[].RelatedHubId observably corresponding to hub_ids[] and
+///      NavigationSequence[].TargetManifestId resolved via the exactly-one-ACTIVE-manifest rule
 ///
 /// The admin_runtime leg uses a REAL AdminRuntime (minimal constructor, same pattern as
 /// AdminRuntimeDbProjectionScenarioTests.StartAdminDispatchRouteAsync) so the
 /// ADMIN_OPERATION_NOT_FOUND -> structural-render-only-entry fallback in ManifestDispatcher is
 /// exercised against AdminRuntime's actual ExecuteDataAsync switch statement, not a stub that
 /// merely assumes that behavior.
+///
+/// The frontend counterpart of this round-trip (NavigationSequence[].TargetManifestId ->
+/// resolveHubNavigationLinks -> ?manifest=<uuid> -> parseProjectionEntrySelection ->
+/// resolveProjectionEntryAxes -> payload.target_ref) is proven in
+/// frontend/tests/projectionEntry.test.ts ("hub navigation round-trip: ...").
 ///
 /// Skipped (no-op) when TOPOLACTOR_TEST_DB_CONNECTION is not set. Requires
 /// db/seed_empty.sql applied to the target database (manifest 092 + its ui_projection rows).
@@ -84,47 +89,109 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
     }
 
     [Fact]
-    public async Task DispatchAsync_CredentialManagementManifest_E2E_ResolvesUiProjectionRefsToScalarEmission()
+    public async Task DispatchAsync_CredentialManagementManifest_E2E_RelationVectorToScalarEmission()
     {
         var cs = GetConnectionString();
         if (cs is null) return;
 
-        var dispatcher = await BuildRealDispatcherAsync(cs);
+        // Explicit relation-vector test input, per runtime-orchestration-ssot.yaml
+        // dispatcher_contract.ui_projection_render_reachability_contract.test_proof_contract.
+        // test_input_shape: relation_uuid / hub_ids[] / package_ids[].
+        var relationUuid = Guid.NewGuid();
+        var relatedHubId = Guid.NewGuid();
+        var relatedManifestId = Guid.NewGuid();
+        var hubIds = new[] { relatedHubId };
+        var packageIds = new[] { CredentialManagementPackageId };
+        var suffix = Guid.NewGuid().ToString("N")[..8];
 
-        // Same target_ref shape frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes
-        // produces for ?manifest=<uuid> selection, and the same screen_list/Search axes the
-        // default projection entry dispatches — this is the real production entry shape, not a
-        // test-only shortcut.
-        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        async Task ExecAsync(string sql, params (string Name, object Value)[] parms)
         {
-            target_ref = $"manifest:{CredentialManagementManifestId}:projection_entry",
-        });
-        var request = new EndpointRequestDto(
-            "Search", "default", "screen_list", "Search",
-            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            foreach (var (name, value) in parms) cmd.Parameters.AddWithValue(name, value);
+            await cmd.ExecuteNonQueryAsync();
+        }
 
-        var response = await dispatcher.DispatchAsync(request);
+        try
+        {
+            // hub_relation(relation_uuid) whose source topology_manifest is manifest 092, whose
+            // related hub has exactly one active topology_manifest — the relation vector this
+            // proof walks: relation_uuid -> hub_ids[] -> package_ids[] -> scalar Emission.
+            await ExecAsync(
+                "INSERT INTO hubs.hub (hub_id, relation) VALUES (@id, '{}'::jsonb)",
+                ("id", relatedHubId));
+            await ExecAsync(
+                "INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) " +
+                "VALUES (@mid, @hid, @key, 'active')",
+                ("mid", relatedManifestId), ("hid", relatedHubId), ("key", $"live-db-relation-vector-{suffix}"));
+            await ExecAsync(
+                "INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, status) " +
+                "VALUES (@rid, @mid, @hid, 9201, 'active')",
+                ("rid", relationUuid), ("mid", CredentialManagementManifestId), ("hid", relatedHubId));
 
-        Assert.True(response.Success);
-        Assert.NotNull(response.Emission);
-        var emission = response.Emission!;
+            var dispatcher = await BuildRealDispatcherAsync(cs);
 
-        // "current topology phase" identity.
-        Assert.Equal(CredentialManagementManifestId.ToString(), emission.ManifestId);
+            // Same target_ref shape frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes
+            // produces for ?manifest=<uuid> selection, and the same screen_list/Search axes the
+            // default projection entry dispatches — this is the real production entry shape, not
+            // a test-only shortcut.
+            var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{CredentialManagementManifestId}:projection_entry",
+            });
+            var request = new EndpointRequestDto(
+                "Search", "default", "screen_list", "Search",
+                IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
 
-        // ui_projection refs resolved from the manifest topology just loaded from the DB (not a
-        // hardcoded layoutId test constant) -> real topology.ui_topology_tensor /
-        // topology.ui_wiring_registry rows -> real LayoutNodes.
-        Assert.NotNull(emission.LayoutId);
-        Assert.Equal(CredentialManagementPackageId, emission.PackageId);
-        Assert.NotNull(emission.LayoutNodes);
-        Assert.Contains(emission.LayoutNodes!, n => n.NodeId == "instance_settings_import_form");
-        Assert.Contains(emission.LayoutNodes!, n => n.WiringKind == "instance_settings_action_bundle");
+            var response = await dispatcher.DispatchAsync(request);
 
-        // No errors — the ADMIN_OPERATION_NOT_FOUND real-AdminRuntime routing gap for this
-        // screen-read axes combination was converted to a structural success, exactly the
-        // admin_runtime_structural_read_fallback contract in runtime-orchestration-ssot.yaml.
-        Assert.Empty(emission.Errors);
+            Assert.True(response.Success);
+            Assert.NotNull(response.Emission);
+            var emission = response.Emission!;
+
+            // "current topology phase" identity — the topology_manifest relation_uuid's
+            // hub_relation row belongs to.
+            Assert.Equal(CredentialManagementManifestId.ToString(), emission.ManifestId);
+
+            // package_ids[] connects through manifest.topology[ui_projection].packageIds to
+            // topology.components_package_design (the manifest-facing package authority).
+            Assert.NotNull(emission.PackageId);
+            Assert.Contains(emission.PackageId!.Value, packageIds);
+
+            // ui_projection refs resolved from the manifest topology just loaded from the DB (not
+            // a hardcoded layoutId test constant) -> real topology.ui_topology_tensor /
+            // topology.ui_wiring_registry rows -> real LayoutNodes.
+            Assert.NotNull(emission.LayoutId);
+            Assert.NotNull(emission.LayoutNodes);
+            Assert.Contains(emission.LayoutNodes!, n => n.NodeId == "instance_settings_import_form");
+            Assert.Contains(emission.LayoutNodes!, n => n.WiringKind == "instance_settings_action_bundle");
+
+            // hub_ids[] connects through hubs.hub_relations.sequence_position (manifest-scoped
+            // relation vector) to Emission.NavigationSequence, and the related hub's sole active
+            // topology_manifest resolves as TargetManifestId — the same identity the frontend
+            // round-trip (?manifest=<TargetManifestId>) would dispatch next.
+            Assert.NotNull(emission.NavigationSequence);
+            var navItem = Assert.Single(
+                emission.NavigationSequence!, i => hubIds.Select(h => h.ToString()).Contains(i.RelatedHubId));
+            Assert.Equal(relatedHubId.ToString(), navItem.RelatedHubId);
+            Assert.Equal(9201, navItem.SequencePosition);
+            Assert.Equal(relatedManifestId.ToString(), navItem.TargetManifestId);
+
+            // No errors — the ADMIN_OPERATION_NOT_FOUND real-AdminRuntime routing gap for this
+            // screen-read axes combination was converted to a structural success, exactly the
+            // admin_runtime_structural_read_fallback contract in runtime-orchestration-ssot.yaml.
+            Assert.Empty(emission.Errors);
+        }
+        finally
+        {
+            await ExecAsync("DELETE FROM hubs.hub_relations WHERE hub_relation_id = @rid", ("rid", relationUuid));
+            await ExecAsync(
+                "DELETE FROM hubs.topology_manifests WHERE topology_manifest_id = @mid", ("mid", relatedManifestId));
+            await ExecAsync("DELETE FROM hubs.hub WHERE hub_id = @hid", ("hid", relatedHubId));
+        }
     }
 
     [Fact]

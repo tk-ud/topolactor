@@ -289,6 +289,58 @@ runtime_orchestration_ssot:
         Only ADMIN_OPERATION_NOT_FOUND on a screen-read axes combination is eligible for this
         fallback. Any other admin_runtime error (including ADMIN_OPERATION_NOT_FOUND on a
         non-screen-read axes combination) is returned unchanged as a real failure.
+    test_proof_contract:
+      note: >-
+        Minimal design addendum defining what a completion proof for this reachability contract
+        must observe, so a future seed/topology-manifest reachability task is audited by
+        "does a seed UUID resolve all the way to a scalar Emission field" rather than "does a
+        seed/refs-only shape exist". This constrains proof surfaces such as
+        backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+        and their frontend counterpart in frontend/tests/projectionEntry.test.ts. It introduces
+        no new runtime_destination, route, or panel authority — see the
+        ui_projection_render_reachability_contract note above.
+      test_input_shape:
+        relation_uuid: hubs.hub_relations.hub_relation_id under proof
+        hub_ids: >-
+          array of hubs.hub_relations.related_hub_id values reachable from relation_uuid's
+          source topology_manifest, ordered by sequence_position (the manifest-scoped relation
+          vector / route vector — see db-schema.yaml hubs_hub_relations_sequence, not a global
+          hub-to-hub graph)
+        package_ids: >-
+          array of package identifiers a proof expects Emission.PackageId to be a member of,
+          sourced from manifest.topology[ui_projection].packageIds
+      resolution_chain:
+        - hub_relation(relation_uuid) resolves its source topology_manifest via topology_manifest_id
+        - the source topology_manifest resolves hub_ids[] through its active hubs.hub_relations
+            rows ordered by sequence_position
+        - the source topology_manifest resolves package_ids[] through manifest.topology[ui_projection].packageIds
+        - package_ids[] connect to topology.components_package_design (the manifest-facing
+            package authority — db-schema.yaml packages.manifest_reference — not
+            topology.ui_component_package)
+        - manifest.topology[ui_projection].layoutId connects to topology.components_layout_design
+            / topology.ui_wiring_registry / topology.ui_topology_tensor
+        - backend dispatch (ManifestDispatcher.DispatchAsync) resolves the topology_manifest and
+            reaches a scalar Emission — not a repository method called directly with a hardcoded
+            id constant
+        - the scalar Emission carries ManifestId / NavigationSequence / PackageId / LayoutId /
+            LayoutNodes, and NavigationSequence[].RelatedHubId observably corresponds to hub_ids[]
+        - frontend round-trip: NavigationSequence[].TargetManifestId -> resolveHubNavigationLinks
+            -> ?manifest=<uuid> href -> parseProjectionEntrySelection -> resolveProjectionEntryAxes
+            -> payload.target_ref = manifest:<uuid>:projection_entry (the same target manifest,
+            not merely a rendered label)
+      proof_boundary:
+        - a completion proof must dispatch through ManifestDispatcher.DispatchAsync, not call a
+            layout/tensor repository method directly with a hardcoded layoutId/packageId constant
+        - seed / refs-only-shape existence alone is not proof; the refs must be observed
+            resolving into scalar Emission fields
+        - hubs.hub_relations must be observed as a manifest-scoped relation vector (array-verified
+            hub_ids[] ordered by sequence_position), not only as a CRUD/list surface
+        - TargetManifestId must be observed resolving only when exactly one ACTIVE
+            hubs.topology_manifests row exists for a related hub (zero, deprecated-only, or
+            multiple-active must all resolve to no target — never an oldest/first/MIN implicit
+            fallback)
+        - this contract does not authorize a dedicated credential-management route, dedicated
+            panel, or new runtime_destination
 
   runtime_vocabulary_contract:
     authority_boundary:
