@@ -62,56 +62,97 @@ public static class LayoutSchemaTensorComposer
         string? Label,
         string? Control);
 
+    // Full recognized recordType vocabulary (structural + catalog) — an entry whose recordType
+    // is outside this set is a malformed/unrecognized shape, never silently skipped.
+    private static readonly HashSet<string> RecognizedRecordTypes =
+        new(StructuralRecordTypes, StringComparer.Ordinal) { "topology_ui_field", ActionRecordType };
+
     /// <summary>
-    /// Parses layout_schema_json's records[] array (topology_ui_seed_record entries) into
-    /// SchemaRecordRow rows in document order. Returns empty when records[] is absent, empty, or
-    /// the JSON is malformed — callers must treat empty as "no schema-driven composition
-    /// available" and keep the existing tensor-only rendering path, not a parse failure signal.
+    /// Discriminates "no records[] to compose from" (NoRecords — the existing tensor-only path
+    /// applies unchanged) from "records[] exists and is well-formed" (Valid) from "records[]
+    /// exists but is malformed" (Invalid — a real authoring defect that must surface as an
+    /// explicit failure, never be silently dropped to the tensor-only path or partially composed
+    /// by skipping the bad entries). See docs/design/runtime-orchestration-ssot.yaml
+    /// ui_projection_render_reachability_contract.layout_schema_structural_render_contract.
+    /// absent_vs_invalid_records.
     /// </summary>
-    public static IReadOnlyList<SchemaRecordRow> ParseRecords(string? layoutSchemaJson)
+    public abstract record RecordsParseResult
+    {
+        private RecordsParseResult() { }
+        public sealed record NoRecords : RecordsParseResult;
+        public sealed record Valid(IReadOnlyList<SchemaRecordRow> Rows) : RecordsParseResult;
+        public sealed record Invalid(string Reason) : RecordsParseResult;
+    }
+
+    /// <summary>
+    /// Parses layout_schema_json's records[] array (topology_ui_seed_record entries) into a
+    /// RecordsParseResult. NoRecords: layout_schema_json is absent/blank, has no "records" key, or
+    /// "records" is an empty array (the default '{}'::jsonb shape most UI-Builder-authored layouts
+    /// have). Invalid: the top-level JSON fails to parse, "records" exists but is not an array, or
+    /// any entry is malformed (not an object; missing "record"; missing/blank recordType or key;
+    /// or an unrecognized recordType) — the WHOLE records[] is rejected, never a partial tree built
+    /// by skipping the bad entries. Valid: records[] is a non-empty array where every entry is
+    /// well-formed.
+    /// </summary>
+    public static RecordsParseResult ParseRecords(string? layoutSchemaJson)
     {
         if (string.IsNullOrWhiteSpace(layoutSchemaJson))
-            return Array.Empty<SchemaRecordRow>();
+            return new RecordsParseResult.NoRecords();
 
         JsonDocument doc;
         try
         {
             doc = JsonDocument.Parse(layoutSchemaJson);
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            return Array.Empty<SchemaRecordRow>();
+            return new RecordsParseResult.Invalid($"layout_schema_json is not valid JSON: {ex.Message}");
         }
 
         using (doc)
         {
-            if (!doc.RootElement.TryGetProperty("records", out var recordsEl) ||
-                recordsEl.ValueKind != JsonValueKind.Array)
-                return Array.Empty<SchemaRecordRow>();
+            if (!doc.RootElement.TryGetProperty("records", out var recordsEl))
+                return new RecordsParseResult.NoRecords();
+
+            if (recordsEl.ValueKind != JsonValueKind.Array)
+                return new RecordsParseResult.Invalid(
+                    $"layout_schema_json.records is present but is not a JSON array (found {recordsEl.ValueKind}).");
+
+            if (recordsEl.GetArrayLength() == 0)
+                return new RecordsParseResult.NoRecords();
 
             var rows = new List<SchemaRecordRow>();
+            var index = 0;
             foreach (var entry in recordsEl.EnumerateArray())
             {
-                if (entry.ValueKind != JsonValueKind.Object) continue;
+                if (entry.ValueKind != JsonValueKind.Object)
+                    return new RecordsParseResult.Invalid($"records[{index}] is not a JSON object.");
                 if (!entry.TryGetProperty("record", out var record) || record.ValueKind != JsonValueKind.Object)
-                    continue;
+                    return new RecordsParseResult.Invalid($"records[{index}] is missing a \"record\" object.");
 
                 var recordType = record.TryGetProperty("recordType", out var rt) && rt.ValueKind == JsonValueKind.String
                     ? rt.GetString() : null;
                 var key = record.TryGetProperty("key", out var k) && k.ValueKind == JsonValueKind.String
                     ? k.GetString() : null;
-                if (string.IsNullOrWhiteSpace(recordType) || string.IsNullOrWhiteSpace(key)) continue;
+                if (string.IsNullOrWhiteSpace(recordType))
+                    return new RecordsParseResult.Invalid($"records[{index}].record is missing a non-empty recordType.");
+                if (string.IsNullOrWhiteSpace(key))
+                    return new RecordsParseResult.Invalid($"records[{index}].record is missing a non-empty key.");
+                if (!RecognizedRecordTypes.Contains(recordType))
+                    return new RecordsParseResult.Invalid(
+                        $"records[{index}].record.recordType \"{recordType}\" is not a recognized structural/catalog record type.");
 
                 var parentKey = entry.TryGetProperty("parentKey", out var pk) && pk.ValueKind == JsonValueKind.String
                     ? pk.GetString() : null;
                 var label = record.TryGetProperty("label", out var lb) && lb.ValueKind == JsonValueKind.String
                     ? lb.GetString() : null;
-                var control = record.TryGetProperty("control", out var ct) && ct.ValueKind == JsonValueKind.String
-                    ? ct.GetString() : null;
+                var control = record.TryGetProperty("control", out var ctl) && ctl.ValueKind == JsonValueKind.String
+                    ? ctl.GetString() : null;
 
                 rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control));
+                index++;
             }
-            return rows;
+            return new RecordsParseResult.Valid(rows);
         }
     }
 

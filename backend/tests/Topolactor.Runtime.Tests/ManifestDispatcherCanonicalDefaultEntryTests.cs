@@ -26,13 +26,14 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
     ];
 
     /// <summary>Axes resolution always misses (mirrors "no dispatcher_mapping seeded for the bare
-    /// default entry"); LoadByIdAsync resolves only the canonical manifest id.</summary>
-    private sealed class NoAxesMatchManifestRepository(JsonElement[] topology, Guid canonicalManifestId)
+    /// default entry"); LoadByIdAsync resolves only the canonical manifest id, with a
+    /// caller-supplied status (default "active").</summary>
+    private sealed class NoAxesMatchManifestRepository(JsonElement[] topology, Guid canonicalManifestId, string status = "active")
         : ManifestRepository(NullLogger<ManifestRepository>.Instance)
     {
         public override Task<ManifestRecord?> LoadByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult<ManifestRecord?>(id == canonicalManifestId
-                ? new ManifestRecord(canonicalManifestId, null, topology, "active")
+                ? new ManifestRecord(canonicalManifestId, null, topology, status)
                 : null);
 
         public override Task<ManifestRecord?> ResolveActiveManifestAsync(
@@ -122,6 +123,28 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
         Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
         Assert.NotNull(response.Emission);
         Assert.Equal(CanonicalManifestId.ToString(), response.Emission!.ManifestId);
+    }
+
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("deprecated")]
+    public async Task DispatchAsync_BareDefaultEntry_MarkedRelationNamesInactiveManifest_ResolvesToNoManifest_NoStaleProjection(string inactiveStatus)
+    {
+        // The relation row itself is active (marked canonical_default_entry), but the manifest it
+        // names is draft/deprecated — active_status_requirement must fail this closed, never
+        // resolve a stale/inactive projection.
+        var manifestRepo = new NoAxesMatchManifestRepository(BuildTopology(), CanonicalManifestId, status: inactiveStatus);
+        var contentBundleRepo = new InMemoryContentBundleRepository
+        {
+            CanonicalDefaultEntryManifestId = CanonicalManifestId,
+        };
+        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
+        var dispatcher = BuildDispatcher(manifestRepo, hubNavResolver);
+
+        var response = await dispatcher.DispatchAsync(DefaultEntryRequest());
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "MANIFEST_NOT_FOUND");
     }
 
     [Fact]

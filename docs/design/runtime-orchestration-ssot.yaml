@@ -342,6 +342,144 @@ runtime_orchestration_ssot:
         - this contract does not authorize a dedicated credential-management route, dedicated
             panel, or new runtime_destination
 
+    canonical_default_entry_contract:
+      note: >-
+        Minimal design addendum defining the means by which a bare/no-selection projection entry
+        (frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes({}) -- no route, no
+        explicit manifest, no pre-injected payload.target_ref) resolves an initial manifest.
+        Distinct from hub_navigation_resolution above, which resolves OUTBOUND navigation links
+        from an ALREADY-resolved manifest -- this contract is consulted BEFORE any manifest is
+        resolved, as the initial-resolution fallback itself.
+      owner: hubs.hub_relations
+      marker:
+        field: relation_config.transition
+        value: canonical_default_entry
+      singularity: >-
+        Exactly one active hubs.hub_relations row may carry this marker at a time. Zero rows
+        means no canonical default entry is configured. Two or more rows is a configuration
+        error, never a first-match silent pick.
+      resolution_priority: >-
+        Consulted by manifest_dispatcher only as a fallback for the exact axes combination
+        target=default, layer=screen_list, action=Search, and only when both normal
+        manifest_resolution.api (role/target/layer/action) axes matching AND payload.target_ref
+        are absent/unmatched. This is not a general MANIFEST_NOT_FOUND rescue for arbitrary axes,
+        and it never overrides an explicit ?route=/?manifest=/payload.target_ref selection.
+      active_status_requirement: >-
+        Resolves only when BOTH the marked hubs.hub_relations row itself has status=active AND
+        the manifest row it names (via hubs.hub_relations.topology_manifest_id) has status=active.
+        A marked relation naming a draft/deprecated manifest resolves to no manifest (fail-close),
+        never a stale/inactive projection.
+      role_boundary: >-
+        No role-axis filtering is applied to this fallback (mirrors the default/screen_list/Search
+        axes' own public-entry semantics) -- any authenticated session may reach the canonical
+        default entry manifest this way, same as an explicit ?manifest= selection would.
+      failure_semantics:
+        missing: >-
+          No row carries the marker, or the named manifest is not active -> MANIFEST_NOT_FOUND,
+          identical to the pre-existing no-fallback-configured error -- never a guessed manifest.
+        ambiguous: >-
+          More than one active row carries the marker -> CANONICAL_DEFAULT_ENTRY_AMBIGUOUS, an
+          explicit configuration-error response -- never a silent first-match pick.
+      prohibited:
+        - unscoped_sequence_position_1_global_scan
+        - resolving_a_draft_or_deprecated_manifest_as_default_entry
+        - treating_this_marker_as_a_substitute_for_hub_navigation_resolution_navigation_sequence
+        - dedicated_route_panel_or_runtime_destination_for_this_fallback
+      test_proof_contract:
+        note: >-
+          A completion proof for this contract must dispatch the EXACT bare-entry axes
+          combination through ManifestDispatcher.DispatchAsync (never a hardcoded manifest id
+          constant fed directly into a repository method), against canonical (non-demo) seed
+          data, and observe Emission.ManifestId / Emission.LayoutNodes resolving -- not merely
+          that the marker row exists in seed SQL.
+        negative_cases:
+          - draft_or_deprecated_manifest_named_by_the_marked_relation_resolves_to_no_manifest
+          - two_active_rows_carrying_the_marker_resolves_to_canonical_default_entry_ambiguous
+          - no_row_carrying_the_marker_resolves_to_manifest_not_found
+
+    layout_schema_structural_render_contract:
+      note: >-
+        Minimal design addendum defining render-completion semantics for
+        topology.components_layout_design.layout_schema_json.records[] -- the structural
+        authority tree, distinct from topology.ui_topology_tensor.layout_patch_json.nodes[] (the
+        flat runtimeInteractions carrier). Render completion is defined as zero
+        componentType==="error" specs after frontend renderEmission() over the composed
+        LayoutNodes -- tensor-node presence alone is not render completion.
+      structural_record_vocabulary:
+        structural_node_record_types:
+          - topology_ui_category
+          - topology_ui_section
+          - topology_ui_form
+          - topology_ui_workflow
+          - topology_ui_validation
+        catalog_component_record_types:
+          - topology_ui_field
+          - topology_ui_action
+        rule: >-
+          Category/Section/Form/Workflow/Validation compose into LayoutNode.NodeKind=
+          "structural_node" entries -- never a componentId/componentKind, resolved via no
+          registry lookup. Field/Action compose into NodeKind="catalog_component" entries whose
+          componentId/componentKind are resolved from the existing topology.ui_component_registry
+          preset catalog (see field_control_resolution below) -- never invented, never a
+          structural-node-shaped catalog entry.
+        field_control_resolution: >-
+          A Field record's authored control value (e.g. form_input/select) maps to an existing
+          ui_component_registry.component_key by fixed convention
+          (LayoutSchemaTensorComposer.FieldControlToComponentKey); an Action record maps to the
+          shared button.primitive/action-button entry. An unresolvable control leaves
+          componentId/componentKind null -> CATALOG_COMPONENT_KIND_REQUIRED at render time, never
+          a silent guess.
+        tensor_runtime_interactions_merge: >-
+          topology.ui_topology_tensor nodes key their runtimeInteractions array at the FORM
+          level; each entry carries its own sourceActionKey identifying the specific Field/Action
+          leaf it belongs to. Composition groups entries by sourceActionKey and merges each
+          leaf's own matching entries -- never a naive tensor-nodeId==record-key match (the
+          tensor nodeId is the form's key, a structural node, which never receives
+          runtimeInteractions).
+        node_id_collision_handling: >-
+          A record's authored key is only guaranteed unique within its own branch -- the seed
+          schema permits the same key in two branches (a real, observed case: manifest 092's
+          "approval_status" field appears under both user_auth_section and
+          instance_operation_approval_form). Composition namespaces a colliding key as
+          "{parentKey}::{key}" instead of colliding or silently dropping one occurrence.
+        implicit_root_parent_handling: >-
+          A record's authored parentKey referencing the translator's implicit/virtual tree root
+          (never itself a record in records[]) resolves to a null (top-level) ParentNodeId, not a
+          dangling LAYOUT_PATCH_MISSING_PARENT reference.
+      absent_vs_invalid_records:
+        absent_or_empty: >-
+          layout_schema_json has no "records" key, or records is an empty array -> no
+          schema-driven composition available; the existing tensor-only LayoutNode path applies
+          unchanged (the common case for UI-Builder-authored layouts, where componentId/
+          componentKind already live directly on tensor nodes).
+        invalid_nonempty: >-
+          layout_schema_json has a "records" key that is present and non-empty but malformed
+          (not an array; or contains an entry missing a required recordType/key; or an
+          unrecognized recordType) is an explicit LAYOUT_SCHEMA_RECORDS_INVALID failure -- never
+          silently dropped to the tensor-only path and never a partial tree built by skipping the
+          invalid entries.
+        rule: >-
+          Absence and invalidity are never conflated. A parser must distinguish "no records[] to
+          compose from" (fallback is correct) from "records[] exists and is broken" (fallback
+          would hide a real authoring defect) -- the same distinction db-schema.yaml's
+          no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant embodies for
+          hub-relation target resolution.
+      prohibited:
+        - structural_node_receiving_a_componentId_or_componentKind
+        - inventing_a_componentId_for_an_unresolvable_control
+        - skipping_invalid_records_entries_to_synthesize_a_partial_tree
+        - treating_a_malformed_nonempty_records_shape_as_equivalent_to_absent_records
+        - judging_render_completion_by_tensor_node_presence_alone
+      test_proof_contract:
+        note: >-
+          A completion proof for this contract must observe the composed LayoutNode[] for a real
+          representative manifest (manifest 092, resolved through the SAME dispatch path as the
+          canonical_default_entry_contract test above) passed through frontend renderEmission()
+          with defaultComponentRegistry, and assert zero componentType==="error" specs in that
+          single representative scenario -- a backend-only unresolved-leaf count and a
+          separately hand-authored frontend fixture are each necessary but neither is sufficient
+          alone.
+
   runtime_vocabulary_contract:
     authority_boundary:
       yaml_static_vocabulary:

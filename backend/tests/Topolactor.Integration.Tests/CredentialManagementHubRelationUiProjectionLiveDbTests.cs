@@ -289,6 +289,26 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
             .ToList();
         Assert.Empty(unresolvedLeaves);
+
+        // Same representative scenario as the frontend proof: frontend/tests/fixtures/
+        // manifest_0092_bare_entry_layout_nodes.json is a checked-in snapshot of THIS EXACT
+        // dispatch's Emission.LayoutNodes (camelCase-serialized, the same shape the frontend
+        // receives over HTTP — see backend/Program.cs JsonNamingPolicy.CamelCase), consumed by
+        // frontend/tests/layoutSchemaStructuralRender.test.ts through the real renderEmission().
+        // This assertion is the link: if manifest 092's seed data ever changes, this test fails
+        // here rather than the frontend fixture silently going stale against real data.
+        var fixturePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json"));
+        var expectedJson = await File.ReadAllTextAsync(fixturePath);
+        var actualJson = System.Text.Json.JsonSerializer.Serialize(
+            response.Emission.LayoutNodes,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                WriteIndented = true,
+            });
+        Assert.Equal(expectedJson.Trim(), actualJson.Trim());
     }
 
     [Fact]

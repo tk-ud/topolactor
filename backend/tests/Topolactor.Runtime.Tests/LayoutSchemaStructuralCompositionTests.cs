@@ -20,6 +20,9 @@ namespace Topolactor.Runtime.Tests;
 ///   disambiguated by parent-scoping rather than silently colliding.
 /// - A record's parentKey that does not match any record in the tree (the translator's implicit/
 ///   virtual $.root, never itself a record) resolves to a null (root) ParentNodeId.
+/// - Absent/empty records[] (NoRecords) is never conflated with a present-but-malformed
+///   records[] shape (Invalid) — the latter must surface as an explicit failure, never a
+///   silent partial-tree or tensor-only fallback.
 /// </summary>
 public class LayoutSchemaStructuralCompositionTests
 {
@@ -35,25 +38,95 @@ public class LayoutSchemaStructuralCompositionTests
     }
     """;
 
-    [Fact]
-    public void ParseRecords_EmptyOrAbsentRecords_ReturnsEmpty_NoSchemaDrivenComposition()
+    private static IReadOnlyList<LayoutSchemaTensorComposer.SchemaRecordRow> ParseValidRows(string json)
     {
-        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords(null));
-        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords(""));
-        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords("{}"));
-        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords("{\"records\":[]}"));
+        var result = LayoutSchemaTensorComposer.ParseRecords(json);
+        var valid = Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(result);
+        return valid.Rows;
     }
 
     [Fact]
-    public void ParseRecords_MalformedJson_ReturnsEmpty_NotAnException()
+    public void ParseRecords_AbsentOrEmptyRecords_ReturnsNoRecords_NoSchemaDrivenComposition()
     {
-        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords("not json"));
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.NoRecords>(LayoutSchemaTensorComposer.ParseRecords(null));
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.NoRecords>(LayoutSchemaTensorComposer.ParseRecords(""));
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.NoRecords>(LayoutSchemaTensorComposer.ParseRecords("{}"));
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.NoRecords>(LayoutSchemaTensorComposer.ParseRecords("{\"records\":[]}"));
+    }
+
+    [Fact]
+    public void ParseRecords_MalformedTopLevelJson_ReturnsInvalid_NeverTreatedAsAbsent()
+    {
+        var result = LayoutSchemaTensorComposer.ParseRecords("not json");
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(result);
+    }
+
+    [Theory]
+    [InlineData("{\"records\":\"not-an-array\"}")]
+    [InlineData("{\"records\":{}}")]
+    [InlineData("{\"records\":42}")]
+    public void ParseRecords_RecordsKeyPresentButNotAnArray_ReturnsInvalid_NeverTreatedAsAbsent(string json)
+    {
+        var result = LayoutSchemaTensorComposer.ParseRecords(json);
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(result);
+    }
+
+    [Fact]
+    public void ParseRecords_EntryNotAnObject_ReturnsInvalid_NeverSkipped()
+    {
+        const string json = """{"records":["not-an-object"]}""";
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ParseRecords_EntryMissingRecordObject_ReturnsInvalid_NeverSkipped()
+    {
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null}]}""";
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ParseRecords_EntryMissingRecordType_ReturnsInvalid_NeverSkipped()
+    {
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"key":"f1"}}]}""";
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ParseRecords_EntryMissingKey_ReturnsInvalid_NeverSkipped()
+    {
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field"}}]}""";
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ParseRecords_UnrecognizedRecordType_ReturnsInvalid_NeverSkipped()
+    {
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unknown_thing","key":"x"}}]}""";
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ParseRecords_OneInvalidEntryAmongOtherwiseValidEntries_RejectsTheWholeList_NoPartialTree()
+    {
+        // Two well-formed entries plus one malformed entry — the WHOLE list must be rejected,
+        // never a partial tree built by silently dropping just the bad entry.
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat1"}},
+            {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_unknown_thing","key":"bad"}},
+            {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_section","key":"sec1"}}
+          ]
+        }
+        """;
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
     }
 
     [Fact]
     public void ComposeLayoutSchemaWithTensor_CategorySectionFormRecords_EmitStructuralNodes_NotCatalogComponents()
     {
-        var records = LayoutSchemaTensorComposer.ParseRecords(CategoryRecordsJson);
+        var records = ParseValidRows(CategoryRecordsJson);
         var composed = LayoutSchemaTensorComposer.Compose(
             records,
             interactionsBySourceActionKey: new Dictionary<string, string>(),
@@ -84,7 +157,7 @@ public class LayoutSchemaStructuralCompositionTests
     [Fact]
     public void ComposeLayoutSchemaWithTensor_FieldAndActionRecords_ResolveComponentIdAndKind_FromExistingRegistryLookup()
     {
-        var records = LayoutSchemaTensorComposer.ParseRecords(CategoryRecordsJson);
+        var records = ParseValidRows(CategoryRecordsJson);
         var requiredKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(records);
 
         // Field control="form_input/select" -> select.template; Action -> button.primitive.
@@ -127,7 +200,7 @@ public class LayoutSchemaStructuralCompositionTests
         const string json = """
         {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","control":"form_input/unknown_widget"}}]}
         """;
-        var records = LayoutSchemaTensorComposer.ParseRecords(json);
+        var records = ParseValidRows(json);
         var composed = LayoutSchemaTensorComposer.Compose(
             records,
             new Dictionary<string, string>(),
@@ -168,7 +241,7 @@ public class LayoutSchemaStructuralCompositionTests
     [Fact]
     public void ComposeLayoutSchemaWithTensor_TensorRuntimeInteractions_MergeOntoMatchingLeafBySourceActionKey()
     {
-        var records = LayoutSchemaTensorComposer.ParseRecords(CategoryRecordsJson);
+        var records = ParseValidRows(CategoryRecordsJson);
         const string interactionsJson = """[{"trigger":"click","actionType":"dispatchInstanceOperation","sourceActionKey":"action1"}]""";
 
         var composed = LayoutSchemaTensorComposer.Compose(
@@ -207,7 +280,7 @@ public class LayoutSchemaStructuralCompositionTests
           ]
         }
         """;
-        var records = LayoutSchemaTensorComposer.ParseRecords(json);
+        var records = ParseValidRows(json);
         var composed = LayoutSchemaTensorComposer.Compose(
             records,
             new Dictionary<string, string>(),

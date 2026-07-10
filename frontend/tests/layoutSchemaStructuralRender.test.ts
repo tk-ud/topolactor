@@ -1,18 +1,54 @@
 /**
  * layoutSchemaStructuralRender.test.ts — render completion proof for the layout-schema
  * structural authority contract (docs/design/runtime-orchestration-ssot.yaml
- * ui_projection_render_reachability_contract structural authority contract).
+ * ui_projection_render_reachability_contract.layout_schema_structural_render_contract).
  *
  * Render completion is defined as: renderEmission() on a layout composed from
  * components_layout_design.layout_schema_json.records[] (structural nodes) + resolved
  * catalog leaves (Field/Action, componentId/componentKind from ui_component_registry) +
  * merged tensor runtimeInteractions produces ZERO componentType==="error" specs — not
  * merely "some specs came back" and not "the tensor nodes existed".
+ *
+ * The first test below is the representative-scenario proof: it reads
+ * frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json, a checked-in snapshot of
+ * the REAL Emission.LayoutNodes produced by an actual bare-entry dispatch against manifest
+ * 00000000-0000-0000-0000-000000000092 (see the fixture's companion backend assertion in
+ * backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+ * DispatchAsync_BareDefaultEntry_NoTargetRef_ResolvesManifest0092ViaCanonicalDefaultEntryRelation,
+ * which fails if this fixture ever drifts from the real seed data) — not a hand-authored
+ * approximation. The remaining tests are synthetic micro-checks isolating specific behaviors.
  */
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import type { Emission, LayoutNode } from "../api/dispatch.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
+
+Deno.test("renderEmission: manifest 0092's REAL bare-entry-resolved LayoutNodes (checked-in fixture from an actual live dispatch) produce zero componentType==='error' specs", async () => {
+  const fixtureText = await Deno.readTextFile(
+    new URL("./fixtures/manifest_0092_bare_entry_layout_nodes.json", import.meta.url),
+  );
+  const layoutNodes = JSON.parse(fixtureText) as LayoutNode[];
+  assert(layoutNodes.length > 0, "fixture must contain the real composed LayoutNodes");
+
+  const emission: Emission = {
+    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutNodes,
+    packageId: "00000000-0000-0000-0000-0000000cd005",
+    manifestId: "00000000-0000-0000-0000-000000000092",
+  };
+
+  const specs = renderEmission(emission, defaultComponentRegistry);
+
+  const errorSpecs = specs.filter((s) => s.componentType === "error");
+  assertEquals(
+    errorSpecs,
+    [],
+    `render completion requires zero error components for the REAL manifest 0092 bare-entry emission; found: ${
+      JSON.stringify(errorSpecs)
+    }`,
+  );
+  assert(specs.length === layoutNodes.length, "every real LayoutNode must produce a rendered spec");
+});
 
 /**
  * A layout shape representative of the backend's LayoutSchemaTensorComposer output for

@@ -396,6 +396,14 @@ db_schema:
         - name: relation_config
           type: jsonb
           role: optional_sequence_metadata
+          canonical_default_entry_marker: >-
+            relation_config.transition="canonical_default_entry" on an active row is the means by
+            which a bare/no-selection projection entry resolves an initial manifest — see
+            docs/design/runtime-orchestration-ssot.yaml
+            ui_projection_render_reachability_contract.canonical_default_entry_contract for the
+            full owner/singularity/resolution-priority/active-status/failure-semantics contract.
+            Distinct from this table's ordinary sequence_position navigation-link role; at most
+            one active row across the whole table may carry this marker.
         - name: status
           type: enum
           role: active_or_deprecated

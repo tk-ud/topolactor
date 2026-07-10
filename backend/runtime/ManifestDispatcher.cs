@@ -238,7 +238,17 @@ public class ManifestDispatcher
                     var canonicalDefaultEntryManifestId =
                         await _hubNavigationResolver.ResolveCanonicalDefaultEntryManifestIdAsync(ct);
                     if (canonicalDefaultEntryManifestId.HasValue)
-                        manifest = await _manifestRepository.LoadByIdAsync(canonicalDefaultEntryManifestId.Value, ct);
+                    {
+                        var candidate = await _manifestRepository.LoadByIdAsync(canonicalDefaultEntryManifestId.Value, ct);
+                        // active_status_requirement: a marked relation naming a draft/deprecated
+                        // manifest resolves to no manifest (fail-close) — never a stale/inactive
+                        // projection, even though the relation row itself is active.
+                        if (candidate is not null &&
+                            string.Equals(candidate.Status, "active", StringComparison.OrdinalIgnoreCase))
+                        {
+                            manifest = candidate;
+                        }
+                    }
                 }
             }
 
@@ -659,6 +669,17 @@ public class ManifestDispatcher
         try
         {
             records = await _topologyRepository.LoadLayoutNodesAsync(layoutId.Value, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RECORDS_INVALID", StringComparison.Ordinal))
+        {
+            // A present-but-malformed layout_schema_json.records[] is a real authoring defect,
+            // never equivalent to "no records[]" — it must surface as an explicit Emission.Errors
+            // entry, never a silent swallow-and-continue.
+            _logger.LogError(ex,
+                "ManifestDispatcher: layout_schema_json.records[] is malformed for layoutId='{LayoutId}'.",
+                layoutId);
+            var invalidError = new ValidationError("LAYOUT_SCHEMA_RECORDS_INVALID", ex.Message);
+            return emission with { Errors = [.. emission.Errors, invalidError], LayoutId = layoutId.Value.ToString() };
         }
         catch (Exception ex)
         {

@@ -115,6 +115,17 @@ public class StructureMapResolver
                 ];
                 goto buildShape;
             }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RECORDS_INVALID"))
+            {
+                // A present-but-malformed layout_schema_json.records[] is a real authoring
+                // defect, never equivalent to "no records[]" — it must never be silently
+                // dropped to the tensor-only path or partially composed by skipping bad entries.
+                layoutErrors =
+                [
+                    new ValidationError("LAYOUT_SCHEMA_RECORDS_INVALID", ex.Message)
+                ];
+                goto buildShape;
+            }
 
             if (parsedNodes.Count == 0)
             {

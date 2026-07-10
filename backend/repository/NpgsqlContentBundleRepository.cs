@@ -815,10 +815,15 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
 
     /// <summary>
     /// Resolves the topology_manifest_id of the single hub_relations row explicitly marked
-    /// relation_config->>'transition' = 'canonical_default_entry' (status='active') — the means
-    /// for a bare/no-selection projection entry to resolve an initial manifest. LIMIT 2 detects
-    /// ambiguity without a silent "first row wins" ORDER BY: 0 rows -> null (no canonical default
-    /// entry configured); 1 row -> that row's topology_manifest_id; 2+ rows -> explicit failure.
+    /// relation_config->>'transition' = 'canonical_default_entry' (status='active' on the
+    /// relation row) — the means for a bare/no-selection projection entry to resolve an initial
+    /// manifest. This resolves the CANDIDATE manifest id only; the caller (ManifestDispatcher)
+    /// additionally requires the named manifest itself to have status='active' before treating it
+    /// as resolved, per docs/design/runtime-orchestration-ssot.yaml
+    /// ui_projection_render_reachability_contract.canonical_default_entry_contract.
+    /// active_status_requirement — never a stale/inactive projection. LIMIT 2 detects ambiguity
+    /// without a silent "first row wins" ORDER BY: 0 rows -> null (no canonical default entry
+    /// configured); 1 row -> that row's topology_manifest_id; 2+ rows -> explicit failure.
     /// </summary>
     public override async Task<Guid?> ResolveCanonicalDefaultEntryManifestIdAsync(CancellationToken ct = default)
     {

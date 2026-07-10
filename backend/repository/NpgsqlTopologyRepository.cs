@@ -287,8 +287,17 @@ public class NpgsqlTopologyRepository : TopologyRepository
         // directly on tensor nodes); those layouts keep the existing tensor-only path below
         // unchanged. SSOT: docs/design/runtime-orchestration-ssot.yaml
         // ui_projection_render_reachability_contract structural authority contract.
-        var schemaRecords = LayoutSchemaTensorComposer.ParseRecords(layoutSchemaJson);
-        if (schemaRecords.Count > 0)
+        var parseResult = LayoutSchemaTensorComposer.ParseRecords(layoutSchemaJson);
+        if (parseResult is LayoutSchemaTensorComposer.RecordsParseResult.Invalid invalid)
+        {
+            // A present-but-malformed layout_schema_json.records[] is a real authoring defect,
+            // never equivalent to "no records[]" — it must never be silently dropped to the
+            // tensor-only path below, nor partially composed by skipping the bad entries.
+            throw new InvalidOperationException(
+                $"LAYOUT_SCHEMA_RECORDS_INVALID: layout_id '{layoutId}' components_layout_design.layout_schema_json.records[] is malformed: {invalid.Reason}");
+        }
+
+        if (parseResult is LayoutSchemaTensorComposer.RecordsParseResult.Valid { Rows: var schemaRecords })
         {
             // Tensor nodes key their runtimeInteractions array at the FORM level; each entry is
             // individually tagged by sourceActionKey identifying the Action/Field leaf it belongs
