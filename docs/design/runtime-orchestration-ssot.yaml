@@ -280,9 +280,9 @@ runtime_orchestration_ssot:
         manifest_dispatcher treats this combination as a structural render-only entry rather
         than a hard dispatch failure — it synthesizes an empty-success Emission so the
         ui_projection resolution above can still reach LayoutNodes. This does not fabricate
-        business data: row/data population for this class of manifest remains whatever
-        separately-tracked authoring surface the manifest's own known_gap declares (e.g.
-        instance_settings_admin_authoring_ui_pending for
+        business data: row/data population for this class of manifest is owned by whatever
+        separately-tracked authoring surface the manifest's own projection design declares
+        (e.g. instance_settings_admin_authoring_ui_pending for
         auth.external.credential_management.projection — see
         docs/projection_design/credential-management-projection-design.md).
       boundary: >-
