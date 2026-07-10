@@ -22,7 +22,7 @@
  */
 
 import type { UserOperation } from "./resolveOperationVector.ts";
-import type { Emission } from "../api/dispatch.ts";
+import type { Emission, HubNavigationSequenceItem } from "../api/dispatch.ts";
 
 export type ProjectionEntrySelection = {
   /** dispatcher_mapping target axis (routeKey / topologySystemName). */
@@ -111,6 +111,47 @@ export function resolveProjectionEntryAxes(
     };
   }
   return axes;
+}
+
+/**
+ * A navigation sequence item resolved into a clickable entry href, or explicitly marked
+ * unresolvable. "呼べる状態にする" — the projection becomes able to call the target manifest —
+ * means a resolvable item's href drives the existing ?manifest= entry-selection path
+ * (parseProjectionEntrySelection / resolveProjectionEntryAxes) via a normal navigation, matching
+ * the existing route_navigation preset's globalThis.location.href pattern
+ * (admin-console-workflow-ssot.yaml default_wiring_presets.route_navigation.runtime_execution).
+ * No in-place re-dispatch is invented here — navigation reuses the same entry mount path.
+ */
+export type ResolvedHubNavigationLink =
+  | { resolvable: true; href: string; label: string; sequencePosition: number }
+  | { resolvable: false; label: string; sequencePosition: number };
+
+/**
+ * Resolves a manifest's NavigationSequence ("current hub relation" candidates) into navigable
+ * links. targetManifestId is only present when the backend resolved exactly one topology_manifest
+ * for the related hub (docs/design/db-schema.yaml no_implicit_join_nullable_fallback semantics) —
+ * absent/null items are returned as explicitly unresolvable, never guessed or silently dropped.
+ */
+export function resolveHubNavigationLinks(
+  navigationSequence: readonly HubNavigationSequenceItem[] | undefined,
+): ResolvedHubNavigationLink[] {
+  return (navigationSequence ?? [])
+    .slice()
+    .sort((a, b) => a.sequencePosition - b.sequencePosition)
+    .map((item) =>
+      item.targetManifestId
+        ? {
+          resolvable: true,
+          href: `?manifest=${encodeURIComponent(item.targetManifestId)}`,
+          label: item.relatedHubLabel,
+          sequencePosition: item.sequencePosition,
+        }
+        : {
+          resolvable: false,
+          label: item.relatedHubLabel,
+          sequencePosition: item.sequencePosition,
+        }
+    );
 }
 
 export type ProjectionEntryConfirmation =

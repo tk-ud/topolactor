@@ -210,6 +210,7 @@ runtime_orchestration_ssot:
       - runtime_mapping
       - db_notify_projection_mapping
       - ui_projection_mapping
+      - ui_projection
       - topology_function_binding_mapping
       - projection_constructor_mapping
     manifest_resolution:
@@ -224,6 +225,122 @@ runtime_orchestration_ssot:
       - role_behavior_hardcoded_in_dispatcher
       - dispatcher_silent_fallback
       - dispatcher_bypassing_scheduler_alignment
+
+  ui_projection_render_reachability_contract:
+    note: >-
+      Minimal design addendum (credential-management hub relation / navigation / ui_projection
+      bundle) closing a description gap between db-schema.yaml's ui_projection refs-only shape
+      (packages.manifest_reference: manifest.topology[ui_projection].packageIds) and this
+      dispatcher_contract, which did not previously name ui_projection in manifest_authority.
+      Scope is limited to connecting an existing topology manifest's ui_projection /
+      hubs.hub_relations to the projection entry that manifest_dispatcher already resolves — it
+      does not authorize a new dedicated route/panel or a new runtime_destination.
+    disambiguation:
+      ui_projection_mapping: auth_login_form_field_mapping_topology_entry_type_unrelated_to_ui_projection
+      ui_projection: refs_only_packageIds_layoutId_wiringId_tensorId_topology_entry_type_per_db_schema_yaml_packages_manifest_reference
+    ui_projection_resolution:
+      owner: manifest_dispatcher
+      applies_to: any_resolved_manifest_regardless_of_runtime_destination
+      rule: >-
+        After manifest resolution (any axes/target_ref/db_notify path) and before returning the
+        response, manifest_dispatcher resolves manifest.topology[ui_projection].layoutId (when
+        present and Emission.LayoutId is not already set by the structure-map-driven
+        topology_transform_runtime pipeline) into Emission.LayoutId / Emission.LayoutNodes /
+        Emission.PackageId, reusing the same topology.ui_topology_tensor /
+        topology.ui_wiring_registry load and node-validation path as the structure-map pipeline
+        (TopologyRepository.LoadLayoutNodesAsync, StructureMapResolver.ValidateLayoutNodes).
+      fail_close: >-
+        A ui_projection.layoutId that resolves to zero tensor nodes, or fails structural node
+        validation, is an explicit Emission.Errors entry (LAYOUT_NODES_NOT_FOUND or the
+        structure-map validation error code) — never a silent empty render.
+    hub_navigation_resolution:
+      owner: manifest_dispatcher
+      applies_to: any_resolved_manifest_regardless_of_runtime_destination
+      rule: >-
+        manifest_dispatcher attaches the manifest-scoped hubs.hub_relations navigation sequence
+        (Emission.NavigationSequence, "current hub relation" candidates) and the resolved
+        manifest identity (Emission.ManifestId, "current topology phase") for any
+        runtime_destination via HubNavigationResolver, not only topology_transform_runtime
+        (RuntimeExecutor already performed this for its own path prior to this addendum).
+      target_manifest_resolution: >-
+        HubNavigationSequenceItemDto.TargetManifestId is resolved only when exactly one active
+        hubs.topology_manifests row exists for NavigationSequence[].RelatedHubId — no implicit
+        oldest/first-match fallback (mirrors topology.physical_table_manifest_bindings'
+        no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant in
+        db-schema.yaml). Null/absent means the frontend must treat the related hub as not
+        directly callable, never guess a target.
+    admin_runtime_structural_read_fallback:
+      owner: manifest_dispatcher
+      trigger: >-
+        A manifest with a declared ui_projection entry and runtime_destination=admin_runtime
+        receives a screen-read axes combination (layer/action recognized by
+        ScreenDataShapeTopologyReader.IsScreenReadAction) that has no matching admin action
+        registered in AdminRuntime.ExecuteDataAsync (ADMIN_OPERATION_NOT_FOUND).
+      rule: >-
+        manifest_dispatcher treats this combination as a structural render-only entry rather
+        than a hard dispatch failure — it synthesizes an empty-success Emission so the
+        ui_projection resolution above can still reach LayoutNodes. This does not fabricate
+        business data: row/data population for this class of manifest is owned by whatever
+        separately-tracked authoring surface the manifest's own projection design declares
+        (e.g. instance_settings_admin_authoring_ui_pending for
+        auth.external.credential_management.projection — see
+        docs/projection_design/credential-management-projection-design.md).
+      boundary: >-
+        Only ADMIN_OPERATION_NOT_FOUND on a screen-read axes combination is eligible for this
+        fallback. Any other admin_runtime error (including ADMIN_OPERATION_NOT_FOUND on a
+        non-screen-read axes combination) is returned unchanged as a real failure.
+    test_proof_contract:
+      note: >-
+        Minimal design addendum defining what a completion proof for this reachability contract
+        must observe, so a future seed/topology-manifest reachability task is audited by
+        "does a seed UUID resolve all the way to a scalar Emission field" rather than "does a
+        seed/refs-only shape exist". This constrains proof surfaces such as
+        backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+        and their frontend counterpart in frontend/tests/projectionEntry.test.ts. It introduces
+        no new runtime_destination, route, or panel authority — see the
+        ui_projection_render_reachability_contract note above.
+      test_input_shape:
+        relation_uuid: hubs.hub_relations.hub_relation_id under proof
+        hub_ids: >-
+          array of hubs.hub_relations.related_hub_id values reachable from relation_uuid's
+          source topology_manifest, ordered by sequence_position (the manifest-scoped relation
+          vector / route vector — see db-schema.yaml hubs_hub_relations_sequence, not a global
+          hub-to-hub graph)
+        package_ids: >-
+          array of package identifiers a proof expects Emission.PackageId to be a member of,
+          sourced from manifest.topology[ui_projection].packageIds
+      resolution_chain:
+        - hub_relation(relation_uuid) resolves its source topology_manifest via topology_manifest_id
+        - the source topology_manifest resolves hub_ids[] through its active hubs.hub_relations
+            rows ordered by sequence_position
+        - the source topology_manifest resolves package_ids[] through manifest.topology[ui_projection].packageIds
+        - package_ids[] connect to topology.components_package_design (the manifest-facing
+            package authority — db-schema.yaml packages.manifest_reference — not
+            topology.ui_component_package)
+        - manifest.topology[ui_projection].layoutId connects to topology.components_layout_design
+            / topology.ui_wiring_registry / topology.ui_topology_tensor
+        - backend dispatch (ManifestDispatcher.DispatchAsync) resolves the topology_manifest and
+            reaches a scalar Emission — not a repository method called directly with a hardcoded
+            id constant
+        - the scalar Emission carries ManifestId / NavigationSequence / PackageId / LayoutId /
+            LayoutNodes, and NavigationSequence[].RelatedHubId observably corresponds to hub_ids[]
+        - frontend round-trip: NavigationSequence[].TargetManifestId -> resolveHubNavigationLinks
+            -> ?manifest=<uuid> href -> parseProjectionEntrySelection -> resolveProjectionEntryAxes
+            -> payload.target_ref = manifest:<uuid>:projection_entry (the same target manifest,
+            not merely a rendered label)
+      proof_boundary:
+        - a completion proof must dispatch through ManifestDispatcher.DispatchAsync, not call a
+            layout/tensor repository method directly with a hardcoded layoutId/packageId constant
+        - seed / refs-only-shape existence alone is not proof; the refs must be observed
+            resolving into scalar Emission fields
+        - hubs.hub_relations must be observed as a manifest-scoped relation vector (array-verified
+            hub_ids[] ordered by sequence_position), not only as a CRUD/list surface
+        - TargetManifestId must be observed resolving only when exactly one ACTIVE
+            hubs.topology_manifests row exists for a related hub (zero, deprecated-only, or
+            multiple-active must all resolve to no target — never an oldest/first/MIN implicit
+            fallback)
+        - this contract does not authorize a dedicated credential-management route, dedicated
+            panel, or new runtime_destination
 
   runtime_vocabulary_contract:
     authority_boundary:

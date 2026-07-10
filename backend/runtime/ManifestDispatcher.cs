@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Topolactor.Repository;
@@ -42,6 +43,8 @@ public class ManifestDispatcher
     private readonly OperationVectorResolver _operationVectorResolver;
     private readonly TargetDispatchOverride _targetDispatchOverride;
     private readonly IBackendErrorEvidenceAppender? _errorAppender;
+    private readonly TopologyRepository? _topologyRepository;
+    private readonly HubNavigationResolver? _hubNavigationResolver;
 
     public ManifestDispatcher(
         ILogger<ManifestDispatcher> logger,
@@ -49,7 +52,9 @@ public class ManifestDispatcher
         OperationVectorResolver operationVectorResolver,
         TargetDispatchOverride targetDispatchOverride,
         ManifestRepository? manifestRepository = null,
-        IBackendErrorEvidenceAppender? errorAppender = null)
+        IBackendErrorEvidenceAppender? errorAppender = null,
+        TopologyRepository? topologyRepository = null,
+        HubNavigationResolver? hubNavigationResolver = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _runtimeHandlers = runtimeHandlers ?? throw new ArgumentNullException(nameof(runtimeHandlers));
@@ -57,6 +62,8 @@ public class ManifestDispatcher
         _targetDispatchOverride = targetDispatchOverride ?? throw new ArgumentNullException(nameof(targetDispatchOverride));
         _manifestRepository = manifestRepository;
         _errorAppender = errorAppender;
+        _topologyRepository = topologyRepository;
+        _hubNavigationResolver = hubNavigationResolver;
     }
 
     /// <summary>
@@ -274,15 +281,69 @@ public class ManifestDispatcher
             var projectionDefinition = ExtractProjectionConstructorMapping(manifest.Topology);
             var response = await DispatchToHandlerAsync(destination, request, manifest.ManifestId, ct);
 
-            // Inject projection_constructor_mapping from manifest into emission so the frontend
-            // projection runtime can call setProjectionDefinition without frontend topology judgment.
-            if (response.Success && response.Emission is not null && projectionDefinition.HasValue)
+            // Structural read fallback: an admin_runtime-routed manifest with a declared
+            // ui_projection entry (i.e. a render-only fixed_form_projection admin surface, such
+            // as auth.external.credential_management.projection / manifest 092) has no explicit
+            // admin action registered in AdminRuntime.ExecuteDataAsync for a plain screen-read
+            // entry (ADMIN_OPERATION_NOT_FOUND). That is a routing gap, not a real failure: the
+            // manifest is renderable via ui_projection, it just has no admin write/read verb for
+            // this axes combination. Synthesize an empty success Emission so the ui_projection
+            // enrichment below can still reach LayoutNodes. This does not fabricate business
+            // data — actual row population for this class of manifest remains a separately
+            // tracked authoring surface (see
+            // docs/projection_design/credential-management-projection-design.md).
+            // Narrow guard (all required, no partial match): destination must literally be
+            // admin_runtime (not inferred from the error alone — a differently-routed manifest
+            // must never take this path); the manifest must declare ui_projection; the axes must
+            // be a recognized screen-read combination; and ADMIN_OPERATION_NOT_FOUND must be the
+            // ONLY error — a composite/multi-error failure is a real failure, not a routing gap,
+            // and must not be silently downgraded to success.
+            if (!response.Success &&
+                string.Equals(destination, "admin_runtime", StringComparison.Ordinal) &&
+                HasUiProjectionEntry(manifest.Topology) &&
+                ScreenDataShapeTopologyReader.IsScreenReadAction(vector.Layer, vector.Action) &&
+                response.Errors.Count == 1 &&
+                response.Errors[0].Code == "ADMIN_OPERATION_NOT_FOUND")
             {
-                var updatedEmission = response.Emission with { ProjectionDefinition = projectionDefinition };
-                return response with { Emission = updatedEmission };
+                response = new EndpointResponseDto(
+                    Success: true,
+                    Emission: new Emission(
+                        StructureMapId: null,
+                        PackageId: null,
+                        SchemaId: null,
+                        ComponentIds: [],
+                        Data: null,
+                        Errors: []),
+                    Errors: []);
             }
 
-            return response;
+            if (!response.Success || response.Emission is null)
+                return response;
+
+            var emission = response.Emission;
+
+            // Inject projection_constructor_mapping from manifest into emission so the frontend
+            // projection runtime can call setProjectionDefinition without frontend topology judgment.
+            if (projectionDefinition.HasValue)
+                emission = emission with { ProjectionDefinition = projectionDefinition };
+
+            // Resolve manifest.topology[ui_projection] refs into LayoutId/LayoutNodes/PackageId
+            // regardless of runtime_destination — the structure-map-driven pipeline
+            // (topology_transform_runtime) already resolves LayoutId/LayoutNodes through a
+            // separate attractor/structure-map path, so this only fills the gap for
+            // destinations (e.g. admin_runtime) that never resolve ui_projection today.
+            emission = await EnrichWithUiProjectionAsync(emission, manifest.Topology, ct);
+
+            // "current hub relation" / "current topology phase": attach the manifest-scoped
+            // hub_relations navigation sequence and the resolved manifest identity for any
+            // destination, not just topology_transform_runtime (RuntimeExecutor already does
+            // this for its own path; this covers the remaining destinations).
+            emission = await EnrichWithHubNavigationAsync(emission, manifest.ManifestId, ct);
+            if (emission.ManifestId is null)
+                emission = emission with { ManifestId = manifest.ManifestId.ToString() };
+
+            var success = emission.Errors.Count == 0;
+            return response with { Success = success, Emission = emission, Errors = emission.Errors };
         }
         catch (InvalidOperationException ex) when (ex.Message.StartsWith("MANIFEST_AMBIGUOUS", StringComparison.Ordinal))
         {
@@ -490,6 +551,152 @@ public class ManifestDispatcher
             if (definitionEl.ValueKind == JsonValueKind.Object) return definitionEl;
         }
         return null;
+    }
+
+    private static bool HasUiProjectionEntry(IReadOnlyList<JsonElement> topology) =>
+        ExtractUiProjectionRefs(topology).LayoutId is not null;
+
+    /// <summary>
+    /// Extracts packageId/layoutId from the manifest.topology[ui_projection] refs-only entry
+    /// (db-schema.yaml packages/components_package_design.manifest_reference:
+    /// manifest.topology[ui_projection].packageIds). Only the first packageIds entry is used —
+    /// this bundle resolves a single render surface, not multi-package composition.
+    /// </summary>
+    private static (Guid? PackageId, Guid? LayoutId) ExtractUiProjectionRefs(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+            if (!string.Equals(typeEl.GetString(), "ui_projection", StringComparison.OrdinalIgnoreCase)) continue;
+
+            Guid? packageId = null;
+            if (entry.TryGetProperty("packageIds", out var packageIdsEl) && packageIdsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var idEl in packageIdsEl.EnumerateArray())
+                {
+                    if (idEl.ValueKind == JsonValueKind.String && Guid.TryParse(idEl.GetString(), out var parsedPackageId))
+                    {
+                        packageId = parsedPackageId;
+                        break;
+                    }
+                }
+            }
+
+            Guid? layoutId = null;
+            if (entry.TryGetProperty("layoutId", out var layoutIdEl) &&
+                layoutIdEl.ValueKind == JsonValueKind.String &&
+                Guid.TryParse(layoutIdEl.GetString(), out var parsedLayoutId))
+            {
+                layoutId = parsedLayoutId;
+            }
+
+            return (packageId, layoutId);
+        }
+        return (null, null);
+    }
+
+    /// <summary>
+    /// Resolves manifest.topology[ui_projection].layoutId into LayoutId/LayoutNodes/PackageId on
+    /// the emission, reusing the same topology.ui_topology_tensor / topology.ui_wiring_registry
+    /// load path and node validation as StructureMapResolver (TopologyRepository.LoadLayoutNodesAsync,
+    /// StructureMapResolver.ValidateLayoutNodes/ToLayoutNode) — no duplicate implementation.
+    /// No-op when the manifest has no ui_projection entry, when _topologyRepository is not
+    /// injected, or when the emission already carries LayoutId/LayoutNodes from the
+    /// structure-map-driven pipeline (topology_transform_runtime never needs this fallback).
+    /// A resolved-but-empty/invalid layout is an explicit failure (LAYOUT_NODES_NOT_FOUND or the
+    /// structural validation error) appended to Emission.Errors — no silent fallback to flat
+    /// component rendering. Unexpected repository failures (e.g. DB unavailable) are logged and
+    /// treated as non-fatal for this enrichment step, matching the existing hub-navigation
+    /// resolver's non-fatal failure policy.
+    /// </summary>
+    private async Task<Emission> EnrichWithUiProjectionAsync(
+        Emission emission, IReadOnlyList<JsonElement> topology, CancellationToken ct)
+    {
+        if (_topologyRepository is null) return emission;
+        if (emission.LayoutId is not null || emission.LayoutNodes is not null) return emission;
+
+        var (packageId, layoutId) = ExtractUiProjectionRefs(topology);
+        if (layoutId is null) return emission;
+
+        IReadOnlyList<LayoutNodeRecord> records;
+        try
+        {
+            records = await _topologyRepository.LoadLayoutNodesAsync(layoutId.Value, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "ManifestDispatcher: ui_projection layout node resolution failed for layoutId='{LayoutId}'.",
+                layoutId);
+            return emission;
+        }
+
+        if (records.Count == 0)
+        {
+            var notFoundError = new ValidationError(
+                "LAYOUT_NODES_NOT_FOUND",
+                $"ui_projection layoutId '{layoutId}' has no nodes in layout_patch_json. " +
+                "Broken layout configuration — no fallback to flat component rendering.");
+            return emission with { Errors = [.. emission.Errors, notFoundError], LayoutId = layoutId.Value.ToString() };
+        }
+
+        var validationErrors = StructureMapResolver.ValidateLayoutNodes(records);
+        if (validationErrors is not null)
+        {
+            return emission with { Errors = [.. emission.Errors, .. validationErrors], LayoutId = layoutId.Value.ToString() };
+        }
+
+        var layoutNodes = records.Select(StructureMapResolver.ToLayoutNode).ToList();
+
+        JsonElement? calculationBindings = emission.CalculationBindings;
+        var calcJson = await _topologyRepository.LoadLayoutCalcBindingsJsonAsync(layoutId.Value, ct);
+        if (!string.IsNullOrWhiteSpace(calcJson))
+        {
+            try
+            {
+                calculationBindings = JsonSerializer.Deserialize<JsonElement>(calcJson);
+            }
+            catch (JsonException)
+            {
+                // Malformed calculationBindings is non-blocking for this enrichment path — the
+                // primary layout render is unaffected; StructureMapResolver's own path already
+                // surfaces CALC_BINDINGS_JSON_INVALID for the structure-map-driven pipeline.
+            }
+        }
+
+        return emission with
+        {
+            LayoutId = layoutId.Value.ToString(),
+            LayoutNodes = layoutNodes,
+            PackageId = emission.PackageId ?? packageId,
+            CalculationBindings = calculationBindings,
+        };
+    }
+
+    /// <summary>
+    /// Attaches the manifest-scoped hub_relations navigation sequence ("current hub relation"
+    /// candidates) to the emission for any runtime_destination, not only
+    /// topology_transform_runtime — RuntimeExecutor already performs this for its own path
+    /// (non-fatal on failure); this closes the gap for other destinations (e.g. admin_runtime).
+    /// No-op when _hubNavigationResolver is not injected or NavigationSequence is already set.
+    /// </summary>
+    private async Task<Emission> EnrichWithHubNavigationAsync(Emission emission, Guid manifestId, CancellationToken ct)
+    {
+        if (_hubNavigationResolver is null || emission.NavigationSequence is not null) return emission;
+
+        try
+        {
+            var navigationSequence = await _hubNavigationResolver.ResolveAsync(manifestId, ct);
+            return emission with { NavigationSequence = navigationSequence };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "ManifestDispatcher: HubNavigationResolver.ResolveAsync failed for manifest '{ManifestId}'.",
+                manifestId);
+            return emission;
+        }
     }
 
     /// <summary>

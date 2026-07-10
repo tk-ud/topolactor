@@ -136,36 +136,7 @@ public class StructureMapResolver
                 else
                 {
                     // componentId comes from nodes[].componentId — not positional from structure_maps.component_ids.
-                    layoutNodes = parsedNodes.Select(row => new LayoutNode(
-                        NodeId: row.NodeId,
-                        NodeKind: row.NodeKind,
-                        HtmlTag: row.HtmlTag,
-                        ComponentKey: row.ComponentKey,
-                        ComponentId: row.ComponentId,
-                        ParentNodeId: row.ParentNodeId,
-                        SlotKey: row.SlotKey,
-                        OrderIndex: row.OrderIndex,
-                        X: row.X,
-                        Y: row.Y,
-                        Width: row.Width,
-                        Height: row.Height,
-                        LayoutClassRefs: row.LayoutClassRefs,
-                        ComponentKind: row.ComponentKind,
-                        RuntimeDispatchAction: row.RuntimeDispatchAction,
-                        WiringId: row.WiringId,
-                        WiringKey: row.WiringKey,
-                        WiringKind: row.WiringKind,
-                        TargetSurface: row.TargetSurface,
-                        TargetRef: row.TargetRef,
-                        PropsJson: row.PropsJson,
-                        StateJson: row.StateJson,
-                        PropBindings: row.PropBindingsJson != null
-                            ? JsonSerializer.Deserialize<JsonElement>(row.PropBindingsJson)
-                            : null,
-                        RuntimeInteractions: row.RuntimeInteractionsJson != null
-                            ? JsonSerializer.Deserialize<JsonElement>(row.RuntimeInteractionsJson)
-                            : null
-                    )).ToList();
+                    layoutNodes = parsedNodes.Select(ToLayoutNode).ToList();
                 }
             }
 
@@ -211,10 +182,49 @@ public class StructureMapResolver
     }
 
     /// <summary>
+    /// Converts a repository-loaded layout node record to the Emission-facing LayoutNode shape.
+    /// Shared by StructureMapResolver (structure-map-driven layout resolution) and
+    /// ManifestDispatcher (manifest.topology[ui_projection].layoutId-driven resolution) so both
+    /// paths stay identical rather than duplicating the field mapping.
+    /// </summary>
+    internal static LayoutNode ToLayoutNode(LayoutNodeRecord row) => new(
+        NodeId: row.NodeId,
+        NodeKind: row.NodeKind,
+        HtmlTag: row.HtmlTag,
+        ComponentKey: row.ComponentKey,
+        ComponentId: row.ComponentId,
+        ParentNodeId: row.ParentNodeId,
+        SlotKey: row.SlotKey,
+        OrderIndex: row.OrderIndex,
+        X: row.X,
+        Y: row.Y,
+        Width: row.Width,
+        Height: row.Height,
+        LayoutClassRefs: row.LayoutClassRefs,
+        ComponentKind: row.ComponentKind,
+        RuntimeDispatchAction: row.RuntimeDispatchAction,
+        WiringId: row.WiringId,
+        WiringKey: row.WiringKey,
+        WiringKind: row.WiringKind,
+        TargetSurface: row.TargetSurface,
+        TargetRef: row.TargetRef,
+        PropsJson: row.PropsJson,
+        StateJson: row.StateJson,
+        PropBindings: row.PropBindingsJson != null
+            ? JsonSerializer.Deserialize<JsonElement>(row.PropBindingsJson)
+            : null,
+        RuntimeInteractions: row.RuntimeInteractionsJson != null
+            ? JsonSerializer.Deserialize<JsonElement>(row.RuntimeInteractionsJson)
+            : null
+    );
+
+    /// <summary>
     /// Validates the parsed layout nodes. Returns the first validation error found, or null if valid.
     /// Checks: duplicate nodeIds, missing parents, parent cycles, structural_html tag allowlist.
+    /// Internal (not private): reused by ManifestDispatcher's ui_projection.layoutId resolution
+    /// path so both layout-node sources apply the same structural validation.
     /// </summary>
-    private static IReadOnlyList<ValidationError>? ValidateLayoutNodes(IReadOnlyList<LayoutNodeRecord> nodes)
+    internal static IReadOnlyList<ValidationError>? ValidateLayoutNodes(IReadOnlyList<LayoutNodeRecord> nodes)
     {
         var nodeIdSet = new HashSet<string>(StringComparer.Ordinal);
 

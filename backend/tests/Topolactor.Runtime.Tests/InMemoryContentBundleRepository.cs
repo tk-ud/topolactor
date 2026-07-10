@@ -17,6 +17,8 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     public static readonly Guid FixtureTopologyManifestId = new("00000000-0000-0000-0000-000000000044");
     public static readonly Guid FixtureRelatedHubId = new("00000000-0000-0000-0000-00000000001d");
     public static readonly Guid ActiveStateId = new("00000000-0000-0000-0000-000000000001");
+    // Exactly one topology_manifest under FixtureRelatedHubId — target_manifest_id resolution fixture.
+    public static readonly Guid FixtureRelatedHubManifestId = new("00000000-0000-0000-0000-000000000046");
 
     private readonly List<ContentEntityDraftRecord> _drafts = [];
     private readonly List<(Guid EntityId, Guid HubId, string Label, string StateName, IReadOnlyList<Guid> RelationIds, string EntityJsonb)> _entities =
@@ -282,6 +284,15 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
         (FixtureHubRelationId, FixtureTopologyManifestId, FixtureRelatedHubId, 1, "active"),
     ];
 
+    // hub_id -> topology_manifest_id registrations, mirroring hubs.topology_manifests, used to
+    // resolve HubNavigationSequenceItemDto.TargetManifestId the same way the production SQL
+    // resolves it (exactly one manifest for the related hub -> resolved; otherwise -> null).
+    private readonly Dictionary<Guid, Guid> _topologyManifestHubs = new()
+    {
+        [FixtureTopologyManifestId] = FixtureHubId,
+        [FixtureRelatedHubManifestId] = FixtureRelatedHubId,
+    };
+
     public override Task<IReadOnlyList<HubNavigationManifestItemDto>> ListTopologyManifestsAsync(CancellationToken ct = default)
     {
         var count = _hubRelations.Count(hr => hr.TopologyManifestId == FixtureTopologyManifestId && hr.Status == "active");
@@ -388,10 +399,21 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
         var items = _hubRelations
             .Where(hr => hr.Status == "active" && hr.TopologyManifestId == topologyManifestId)
             .OrderBy(hr => hr.SequencePosition)
-            .Select(hr => new HubNavigationSequenceItemDto(
-                hr.RelatedHubId.ToString(),
-                $"Hub {hr.RelatedHubId.ToString()[..8]}…",
-                hr.SequencePosition))
+            .Select(hr =>
+            {
+                var manifestsForHub = _topologyManifestHubs
+                    .Where(kv => kv.Value == hr.RelatedHubId)
+                    .Select(kv => kv.Key)
+                    .ToList();
+                var targetManifestId = manifestsForHub.Count == 1
+                    ? manifestsForHub[0].ToString()
+                    : null;
+                return new HubNavigationSequenceItemDto(
+                    hr.RelatedHubId.ToString(),
+                    $"Hub {hr.RelatedHubId.ToString()[..8]}…",
+                    hr.SequencePosition,
+                    targetManifestId);
+            })
             .ToList();
         return Task.FromResult<IReadOnlyList<HubNavigationSequenceItemDto>>(items);
     }
