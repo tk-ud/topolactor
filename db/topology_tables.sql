@@ -34,6 +34,7 @@
 CREATE TABLE IF NOT EXISTS hubs.hub (
     hub_id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     relation_registry_id  UUID,                          -- which relation definition this hub belongs to
+    entity_id             UUID,                          -- optional converged entity for this hub (topology.entities)
     state_id              UUID,                          -- current state from state_registry
     relation              JSONB       NOT NULL DEFAULT '{}',  -- canonical join definition payload
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -50,6 +51,13 @@ COMMENT ON COLUMN hubs.hub.relation_registry_id IS
     'References relation_registry.relation_registry_id — the relation definition '
     'this hub is anchored to. FK not enforced here; registry is the authority.';
 
+COMMENT ON COLUMN hubs.hub.entity_id IS
+    'Optional pointer to topology.entities.entity_id (docs/framework-core.yaml layers.hub.fields; '
+    'docs/design/db-schema.yaml tables.hubs role fk_entities_nullable). FK not enforced here: '
+    'topology.entities is created after hubs.hub and itself references hubs.hub (hub_id), so a hard '
+    'FK in this direction would be circular. topology.entities remains the existence authority, '
+    'same soft-reference pattern already used for relation_registry_id above.';
+
 COMMENT ON COLUMN hubs.hub.state_id IS
     'References state_registry.state_id — the current operational state of this hub.';
 
@@ -57,6 +65,10 @@ COMMENT ON COLUMN hubs.hub.relation IS
     'Canonical join definition payload for this hub. Shape: '
     '{ "id": "...", "relationKey": "...", "joinType": "inner|left|...", "conditions": [...] }. '
     'This column makes hubs.hub the join definition owner in the topology meaning space.';
+
+CREATE INDEX IF NOT EXISTS idx_hubs_hub_entity_id
+    ON hubs.hub (entity_id)
+    WHERE entity_id IS NOT NULL;
 
 
 -- ---------------------------------------------------------------------------
