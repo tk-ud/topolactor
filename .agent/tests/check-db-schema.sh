@@ -298,6 +298,14 @@ query_equals_zero "column absent: hubs.hub_relations.relation_registry_id" \
 query_equals_one "unique constraint: hub_relations(topology_manifest_id, sequence_position)" \
   "SELECT COUNT(*) FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid JOIN pg_namespace n ON t.relnamespace = n.oid WHERE n.nspname = 'hubs' AND t.relname = 'hub_relations' AND c.contype = 'u' AND pg_get_constraintdef(c.oid) LIKE '%topology_manifest_id%' AND pg_get_constraintdef(c.oid) LIKE '%sequence_position%';"
 
+echo "=== Validating hubs.hub.entity_id (top SSOT contract: docs/framework-core.yaml layers.hub.fields / docs/design/db-schema.yaml tables.hubs role fk_entities_nullable) ==="
+query_equals_one "column exists: hubs.hub.entity_id" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub' AND column_name = 'entity_id';"
+query_equals_one "column type: hubs.hub.entity_id is uuid" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub' AND column_name = 'entity_id' AND data_type = 'uuid';"
+query_equals_one "column nullable: hubs.hub.entity_id (fk_entities_nullable, not a required column)" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub' AND column_name = 'entity_id' AND is_nullable = 'YES';"
+
 echo "=== Validating credential-management instance_settings package/layout/wiring/tensor migration ==="
 # docs/design/db-schema.yaml draws two DISTINCT "package" identities:
 #   - topology.ui_component_package: role component_group_bundle, required only
