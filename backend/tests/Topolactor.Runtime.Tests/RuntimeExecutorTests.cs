@@ -1497,7 +1497,11 @@ public class ManifestDispatcherManifestDrivenTests
     [Fact]
     public async Task ProjectionLaneSeedCollapse_SeedManifestIdentity_ReachesScreenDataDbNotifyAndSse()
     {
-        var seedFile = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../../db/demo_seed.sql"));
+        // Dedicated, canonical-proof-owned fixture (decoupled from db/demo_seed.sql, which is
+        // public scaffold/demo-only data excluded from db/init.sql's canonical bootstrap chain).
+        var seedFile = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../backend/tests/Topolactor.Runtime.Tests/fixtures/projection_lane_seed_fixture.sql"));
         var manifestId = Guid.Parse("00000000-0000-0000-0000-000000000085");
         var seedManifest = LoadSeedManifest(seedFile, manifestId);
         var dispatcherEntry = RequireTopologyEntry(seedManifest.Topology, "dispatcher_mapping", seedFile, manifestId);

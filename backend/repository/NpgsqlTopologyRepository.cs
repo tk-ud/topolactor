@@ -226,6 +226,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         string? wiringKey = null;
         string? targetSurface = null;
         string? targetRef = null;
+        string? layoutSchemaJson = null;
 
         {
             await using var conn = new NpgsqlConnection(_connectionString);
@@ -236,9 +237,11 @@ public class NpgsqlTopologyRepository : TopologyRepository
             // 0 rows → empty (LAYOUT_NODES_NOT_FOUND); 1 row → parse; 2+ rows → explicit error.
             cmd.CommandText =
                 "SELECT t.layout_patch_json::text, w.wiring_kind, " +
-                "       w.wiring_id::text, w.wiring_key, w.target_surface, w.target_ref " +
+                "       w.wiring_id::text, w.wiring_key, w.target_surface, w.target_ref, " +
+                "       cld.layout_schema_json::text " +
                 "FROM topology.ui_topology_tensor t " +
                 "LEFT JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id " +
+                "LEFT JOIN topology.components_layout_design cld ON cld.layout_id = t.layout_id " +
                 "WHERE t.layout_id = @layoutId " +
                 "LIMIT 2";
             cmd.Parameters.AddWithValue("layoutId", layoutId);
@@ -257,6 +260,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     wiringKey = reader.IsDBNull(3) ? null : reader.GetString(3);
                     targetSurface = reader.IsDBNull(4) ? null : reader.GetString(4);
                     targetRef = reader.IsDBNull(5) ? null : reader.GetString(5);
+                    layoutSchemaJson = reader.IsDBNull(6) ? null : reader.GetString(6);
                 }
                 if (rowCount == 2)
                     throw new InvalidOperationException(
@@ -276,6 +280,45 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
         var runtimeDispatchAction = MapWiringKindToDispatchAction(wiringKind);
         var baseNodes = ParseNodesFromLayoutPatchJson(firstJson, layoutId);
+
+        // Structural authority path: components_layout_design.layout_schema_json.records[] — when
+        // populated — is the render-completion source, not the flat tensor nodes[]. Most
+        // UI-Builder-authored layouts have no records[] (componentId/componentKind already sit
+        // directly on tensor nodes); those layouts keep the existing tensor-only path below
+        // unchanged. SSOT: docs/design/runtime-orchestration-ssot.yaml
+        // ui_projection_render_reachability_contract structural authority contract.
+        var schemaRecords = LayoutSchemaTensorComposer.ParseRecords(layoutSchemaJson);
+        if (schemaRecords.Count > 0)
+        {
+            // Tensor nodes key their runtimeInteractions array at the FORM level; each entry is
+            // individually tagged by sourceActionKey identifying the Action/Field leaf it belongs
+            // to — grouping by that key is the correct merge join, not a tensor-nodeId match.
+            var interactionsBySourceActionKey =
+                LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey(baseNodes);
+
+            var requiredComponentKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(schemaRecords);
+            var componentKeyToId = await LoadComponentIdsByKeysAsync(requiredComponentKeys, ct);
+            var componentIdToKind = await LoadComponentKindsByIdsAsync(componentKeyToId.Values.ToList(), ct);
+
+            var composed = LayoutSchemaTensorComposer.Compose(
+                schemaRecords,
+                interactionsBySourceActionKey,
+                componentKeyToId,
+                componentIdToKind);
+
+            return composed.Select(n =>
+                n.NodeKind == "structural_node"
+                    ? n
+                    : n with
+                    {
+                        RuntimeDispatchAction = runtimeDispatchAction,
+                        WiringId = wiringId,
+                        WiringKey = wiringKey,
+                        WiringKind = wiringKind,
+                        TargetSurface = targetSurface,
+                        TargetRef = targetRef,
+                    }).ToList();
+        }
 
         if (baseNodes.Count == 0)
             return baseNodes;

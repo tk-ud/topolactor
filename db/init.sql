@@ -63,8 +63,12 @@
 \echo '[init.sql] applying seed_empty.sql'
 \i /db/seed_empty.sql
 
-\echo '[init.sql] applying demo_seed.sql'
-\i /db/demo_seed.sql
+-- db/demo_seed.sql is intentionally NOT part of the canonical bootstrap chain: it is public
+-- scaffold/demo-only data (see its own header), not canonical business or topology authority.
+-- Apply it manually (`psql -f db/demo_seed.sql`) after this init when demo scaffold data is
+-- wanted locally. Proofs that need a representative seed fixture use a dedicated fixture
+-- (backend/tests/Topolactor.Runtime.Tests/fixtures/, frontend/tests/fixtures/) instead of
+-- depending on this non-canonical file.
 
 \echo '[init.sql] applying external_port_compat_absorption_seed.sql'
 \i /db/external_port_compat_absorption_seed.sql

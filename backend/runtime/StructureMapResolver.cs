@@ -215,7 +215,9 @@ public class StructureMapResolver
             : null,
         RuntimeInteractions: row.RuntimeInteractionsJson != null
             ? JsonSerializer.Deserialize<JsonElement>(row.RuntimeInteractionsJson)
-            : null
+            : null,
+        RecordType: row.RecordType,
+        Label: row.Label
     );
 
     /// <summary>

@@ -46,13 +46,19 @@ db_schema:
       - db/runtime_orchestration_tables.sql
     canonical_bootstrap_files_note: >-
       db/init.sql applies additional canonical files not yet listed above
-      (db/backend_error_evidence_tables.sql, db/demo_seed.sql,
+      (db/backend_error_evidence_tables.sql,
       db/external_port_compat_absorption_seed.sql, db/file_attachment_crud_preset_seed.sql,
       db/file_storage_export_job_preset_seed.sql, db/export_sftp_transfer_preset_seed.sql,
       db/audit_approval_form_preset_seed.sql, db/email_approval_form_preset_seed.sql,
       db/stripe_webhook_intake_preset_seed.sql, db/external_port_result_context_mapping_seed.sql,
       db/backend_error_notify_hook_port_seed.sql); this is a pre-existing list staleness
       outside aggregate_trigger_substrate scope and is not resolved by this change.
+    demo_seed_boundary: >-
+      db/demo_seed.sql is public scaffold/demo-only data (see its own file header) and is
+      deliberately NOT part of db/init.sql's canonical bootstrap chain — it is applied manually
+      when demo scaffold data is wanted locally. Proofs needing a representative seed fixture use
+      a dedicated fixture (backend/tests/Topolactor.Runtime.Tests/fixtures/,
+      frontend/tests/fixtures/) instead of depending on this non-canonical file.
 
   source_files:
     - db/schema.sql

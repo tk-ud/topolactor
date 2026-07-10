@@ -2193,6 +2193,26 @@ ON CONFLICT (physical_table_id, topology_manifest_id) DO UPDATE
         binding_evidence_json = EXCLUDED.binding_evidence_json,
         updated_at         = now();
 
+-- Canonical hub_relations entry for manifest 092 (sequence_position=1). Self-referencing:
+-- topology_manifest_id=092's own topology_manifest, related_hub_id=092's own existing hub
+-- ('...a1', external_port_substrate) — no dedicated hub is introduced. hub '...a1' has exactly
+-- one active hubs.topology_manifests row (092 itself), so TargetManifestId resolves
+-- deterministically (docs/design/db-schema.yaml no_implicit_join_nullable_fallback semantics).
+-- This is the canonical (non-demo) seed closing the prior gap where hubs.hub_relations existed
+-- only in db/demo_seed.sql (and there, only for the unrelated demo manifest).
+INSERT INTO hubs.hub_relations (
+    hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, relation_config, status
+)
+VALUES (
+    '00000000-0000-0000-0000-0000000000b1',
+    '00000000-0000-0000-0000-000000000092',
+    '00000000-0000-0000-0000-0000000000a1',
+    1,
+    '{"transition":"canonical_default_entry"}'::jsonb,
+    'active'
+)
+ON CONFLICT (topology_manifest_id, sequence_position) DO NOTHING;
+
 -- ---------------------------------------------------------------------------
 -- file_storage_bundle physical table catalog.
 -- Registers the domain metadata tables for export_job / file_artifact /

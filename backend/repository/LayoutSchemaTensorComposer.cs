@@ -1,0 +1,286 @@
+using System.Text.Json;
+
+namespace Topolactor.Repository;
+
+/// <summary>
+/// Composes LayoutNodeRecords from components_layout_design.layout_schema_json.records[] —
+/// the structural authority tree (Category/Section/Form/Workflow/Validation/Field/Action) — for
+/// layouts where that tree is populated. Structural record types become "structural_node" leaves
+/// with no componentId/componentKind; Field/Action record types become "catalog_component" leaves
+/// whose componentId/componentKind are resolved from the existing topology.ui_component_registry
+/// preset catalog (db/ui_component_registry_preset_catalog_bootstrap.sql) via the caller's existing
+/// LoadComponentIdsByKeysAsync/LoadComponentKindsByIdsAsync batch lookups — no new registry rows or
+/// query shapes.
+///
+/// Tensor runtimeInteractions merge: authored tensor nodes (layout_patch_json.nodes[]) key their
+/// runtimeInteractions array at the FORM level, with each entry individually tagged by
+/// sourceActionKey identifying which specific Action/Field leaf it belongs to — the merge groups
+/// tensor interaction entries by sourceActionKey (BuildInteractionsBySourceActionKey) and attaches
+/// each leaf's own matching entries by leaf key == sourceActionKey, not by a naive
+/// tensor-nodeId == record-key match (the tensor nodeId is the FORM's key, a structural node, which
+/// never receives runtimeInteractions).
+///
+/// Layouts whose layout_schema_json has no records[] (most UI-Builder-authored layouts, where
+/// componentId/componentKind already live directly on the tensor nodes) are unaffected — callers
+/// must keep the existing tensor-only path when ParseRecords returns empty.
+/// </summary>
+public static class LayoutSchemaTensorComposer
+{
+    // SSOT: docs/design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract
+    // structural authority contract — Category/Section/Form/Workflow/Validation are structural
+    // nodes; only Field/Action are catalog components.
+    private static readonly HashSet<string> StructuralRecordTypes = new(StringComparer.Ordinal)
+    {
+        "topology_ui_category",
+        "topology_ui_section",
+        "topology_ui_form",
+        "topology_ui_workflow",
+        "topology_ui_validation",
+    };
+
+    private const string ActionRecordType = "topology_ui_action";
+
+    // Canonical control -> ui_component_registry.component_key convention for Field leaves.
+    // Reuses the existing preset catalog rows; does not invent new registry entries.
+    private static readonly IReadOnlyDictionary<string, string> FieldControlToComponentKey =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["form_input/select"] = "select.template",
+            ["form_input/form_field"] = "form_field.template",
+            ["form_input/input"] = "input.primitive",
+            ["form_input/textarea"] = "textarea.alias",
+        };
+
+    // Action leaves resolve to the existing generic button primitive — actions differentiate by
+    // runtimeInteractions/eventBinding, not by componentKind.
+    private const string ActionComponentKey = "button.primitive";
+
+    public record SchemaRecordRow(
+        string RecordType,
+        string Key,
+        string? ParentKey,
+        string? Label,
+        string? Control);
+
+    /// <summary>
+    /// Parses layout_schema_json's records[] array (topology_ui_seed_record entries) into
+    /// SchemaRecordRow rows in document order. Returns empty when records[] is absent, empty, or
+    /// the JSON is malformed — callers must treat empty as "no schema-driven composition
+    /// available" and keep the existing tensor-only rendering path, not a parse failure signal.
+    /// </summary>
+    public static IReadOnlyList<SchemaRecordRow> ParseRecords(string? layoutSchemaJson)
+    {
+        if (string.IsNullOrWhiteSpace(layoutSchemaJson))
+            return Array.Empty<SchemaRecordRow>();
+
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(layoutSchemaJson);
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<SchemaRecordRow>();
+        }
+
+        using (doc)
+        {
+            if (!doc.RootElement.TryGetProperty("records", out var recordsEl) ||
+                recordsEl.ValueKind != JsonValueKind.Array)
+                return Array.Empty<SchemaRecordRow>();
+
+            var rows = new List<SchemaRecordRow>();
+            foreach (var entry in recordsEl.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object) continue;
+                if (!entry.TryGetProperty("record", out var record) || record.ValueKind != JsonValueKind.Object)
+                    continue;
+
+                var recordType = record.TryGetProperty("recordType", out var rt) && rt.ValueKind == JsonValueKind.String
+                    ? rt.GetString() : null;
+                var key = record.TryGetProperty("key", out var k) && k.ValueKind == JsonValueKind.String
+                    ? k.GetString() : null;
+                if (string.IsNullOrWhiteSpace(recordType) || string.IsNullOrWhiteSpace(key)) continue;
+
+                var parentKey = entry.TryGetProperty("parentKey", out var pk) && pk.ValueKind == JsonValueKind.String
+                    ? pk.GetString() : null;
+                var label = record.TryGetProperty("label", out var lb) && lb.ValueKind == JsonValueKind.String
+                    ? lb.GetString() : null;
+                var control = record.TryGetProperty("control", out var ct) && ct.ValueKind == JsonValueKind.String
+                    ? ct.GetString() : null;
+
+                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control));
+            }
+            return rows;
+        }
+    }
+
+    /// <summary>
+    /// Returns the distinct ui_component_registry.component_key values a caller must resolve
+    /// (via LoadComponentIdsByKeysAsync) to compose the given schema records — Field records
+    /// resolve by their control convention, Action records resolve to the shared button primitive.
+    /// Records with an unrecognized/absent control are omitted (componentId stays null — an
+    /// explicit CATALOG_COMPONENT_KIND_REQUIRED error surfaces at render time, never a silent guess).
+    /// </summary>
+    public static IReadOnlyList<string> RequiredComponentKeys(IReadOnlyList<SchemaRecordRow> schemaRecords)
+    {
+        var keys = new List<string>();
+        foreach (var row in schemaRecords)
+        {
+            if (StructuralRecordTypes.Contains(row.RecordType)) continue;
+            var key = ResolveComponentKey(row);
+            if (key is not null) keys.Add(key);
+        }
+        return keys.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    private static string? ResolveComponentKey(SchemaRecordRow row)
+    {
+        if (row.RecordType == ActionRecordType) return ActionComponentKey;
+        return row.Control is not null && FieldControlToComponentKey.TryGetValue(row.Control, out var mapped)
+            ? mapped
+            : null;
+    }
+
+    /// <summary>
+    /// Groups tensor nodes' (layout_patch_json.nodes[]) runtimeInteractions entries by their
+    /// sourceActionKey field — each tensor node carries its child Action/Field leaves' entries at
+    /// the FORM level, individually tagged by which leaf they belong to. Entries without a
+    /// sourceActionKey are omitted (nothing to attribute them to — never guessed). Returns a map
+    /// from sourceActionKey to the JSON array text of that key's own entries (usually one).
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> BuildInteractionsBySourceActionKey(
+        IReadOnlyList<LayoutNodeRecord> tensorNodes)
+    {
+        var bySourceActionKey = new Dictionary<string, List<JsonElement>>(StringComparer.Ordinal);
+
+        foreach (var node in tensorNodes)
+        {
+            if (string.IsNullOrWhiteSpace(node.RuntimeInteractionsJson)) continue;
+
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(node.RuntimeInteractionsJson);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            using (doc)
+            {
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) continue;
+
+                foreach (var entry in doc.RootElement.EnumerateArray())
+                {
+                    if (entry.ValueKind != JsonValueKind.Object) continue;
+                    if (!entry.TryGetProperty("sourceActionKey", out var sak) ||
+                        sak.ValueKind != JsonValueKind.String)
+                        continue;
+                    var sourceActionKey = sak.GetString();
+                    if (string.IsNullOrWhiteSpace(sourceActionKey)) continue;
+
+                    if (!bySourceActionKey.TryGetValue(sourceActionKey, out var list))
+                    {
+                        list = new List<JsonElement>();
+                        bySourceActionKey[sourceActionKey] = list;
+                    }
+                    list.Add(entry.Clone());
+                }
+            }
+        }
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (sourceActionKey, entries) in bySourceActionKey)
+            result[sourceActionKey] = JsonSerializer.Serialize(entries);
+        return result;
+    }
+
+    /// <summary>
+    /// Composes structural + catalog-component LayoutNodeRecords from the authored schema records
+    /// tree. Structural record types (Category/Section/Form/Workflow/Validation) become
+    /// "structural_node" entries carrying RecordType/Label only — never a componentId/componentKind.
+    /// Field/Action record types become "catalog_component" entries whose componentId/componentKind
+    /// are resolved via the caller-supplied registry lookup dictionaries (see RequiredComponentKeys).
+    /// Each Action/Field leaf's runtimeInteractions are merged from
+    /// interactionsBySourceActionKey (see BuildInteractionsBySourceActionKey) by leaf key ==
+    /// sourceActionKey. Order follows the authored document order (already parent-before-child).
+    ///
+    /// NodeId is normally the record's own authored key; when two records anywhere in the tree
+    /// share the same key (an authoring collision — the record tree's key is only guaranteed
+    /// unique within its own branch, not globally), each is namespaced as
+    /// "{parentKey}::{key}" instead so the composed list never violates the LAYOUT_PATCH_DUPLICATE_NODE_ID
+    /// invariant StructureMapResolver.ValidateLayoutNodes already enforces. ParentNodeId is nulled
+    /// (root) when a record's authored parentKey does not match any record in this tree — the
+    /// implicit/virtual tree root the translator emits ($.root) is never itself a record.
+    /// </summary>
+    public static IReadOnlyList<LayoutNodeRecord> Compose(
+        IReadOnlyList<SchemaRecordRow> schemaRecords,
+        IReadOnlyDictionary<string, string> interactionsBySourceActionKey,
+        IReadOnlyDictionary<string, string> componentKeyToId,
+        IReadOnlyDictionary<string, string> componentIdToKind)
+    {
+        var definedKeys = new HashSet<string>(schemaRecords.Select(r => r.Key), StringComparer.Ordinal);
+        var duplicateKeys = new HashSet<string>(
+            schemaRecords.GroupBy(r => r.Key, StringComparer.Ordinal)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key),
+            StringComparer.Ordinal);
+
+        string ResolveNodeId(SchemaRecordRow row) =>
+            duplicateKeys.Contains(row.Key) ? $"{row.ParentKey}::{row.Key}" : row.Key;
+
+        var result = new List<LayoutNodeRecord>(schemaRecords.Count);
+        var orderIndex = 0;
+
+        foreach (var row in schemaRecords)
+        {
+            var isStructural = StructuralRecordTypes.Contains(row.RecordType);
+            string? componentId = null;
+            string? componentKind = null;
+
+            if (!isStructural)
+            {
+                var componentKey = ResolveComponentKey(row);
+                if (componentKey is not null && componentKeyToId.TryGetValue(componentKey, out var resolvedId))
+                {
+                    componentId = resolvedId;
+                    componentIdToKind.TryGetValue(resolvedId, out componentKind);
+                }
+            }
+
+            // Merge target is a leaf (catalog_component) only, keyed by the leaf's own authored
+            // key (== tensor entry sourceActionKey) — never by NodeId, which may be namespaced.
+            string? runtimeInteractionsJson = null;
+            if (!isStructural)
+                interactionsBySourceActionKey.TryGetValue(row.Key, out runtimeInteractionsJson);
+
+            var parentNodeId = row.ParentKey is not null && definedKeys.Contains(row.ParentKey)
+                ? row.ParentKey
+                : null;
+
+            result.Add(new LayoutNodeRecord(
+                NodeId: ResolveNodeId(row),
+                NodeKind: isStructural ? "structural_node" : "catalog_component",
+                HtmlTag: null,
+                ComponentKey: null,
+                ComponentId: componentId,
+                ParentNodeId: parentNodeId,
+                SlotKey: null,
+                OrderIndex: orderIndex++,
+                X: 0.0,
+                Y: 0.0,
+                Width: null,
+                Height: null,
+                LayoutClassRefs: null,
+                ComponentKind: componentKind,
+                RuntimeInteractionsJson: runtimeInteractionsJson,
+                RecordType: isStructural ? row.RecordType : null,
+                Label: isStructural ? row.Label : null
+            ));
+        }
+
+        return result;
+    }
+}

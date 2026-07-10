@@ -158,16 +158,30 @@ export type ProjectionEntryConfirmation =
   | { ok: true }
   | { ok: false; error: string };
 
+export type ProjectionEntryConfirmationOptions = {
+  /**
+   * The manifest identity adopted as the current dispatch identity after the
+   * initial dispatch resolved it (see adoptResolvedManifestIdentity) —
+   * independent of whether the URL selection carried an explicit ?manifest=.
+   * When present, a refresh must resolve the SAME manifest; drift is an
+   * explicit error, never a silent re-render under a different manifest.
+   */
+  adoptedManifestId?: string;
+};
+
 /**
- * Confirms a dispatched emission against the explicit selection.
- * Package resolution is backend authority — the frontend only verifies the
- * resolved identity matches an explicitly selected package. Mismatch is an
- * explicit error; rendering a differently-packaged projection silently under an
- * explicit package selection is prohibited.
+ * Confirms a dispatched emission against the explicit selection AND, when
+ * provided, against the manifest identity previously adopted as the current
+ * dispatch identity. Package/manifest resolution is backend authority — the
+ * frontend only verifies the resolved identity matches what was explicitly
+ * selected or previously adopted. Mismatch is an explicit error; rendering a
+ * differently-packaged/differently-manifested projection silently is
+ * prohibited.
  */
 export function confirmProjectionEntryEmission(
   selection: ProjectionEntrySelection,
   emission: Emission,
+  options?: ProjectionEntryConfirmationOptions,
 ): ProjectionEntryConfirmation {
   if (selection.packageId && emission.packageId !== selection.packageId) {
     return {
@@ -177,5 +191,52 @@ export function confirmProjectionEntryEmission(
         `"${emission.packageId ?? "(absent)"}".`,
     };
   }
+  const adoptedManifestId = options?.adoptedManifestId;
+  if (adoptedManifestId && emission.manifestId !== adoptedManifestId) {
+    return {
+      ok: false,
+      error: `PROJECTION_ENTRY_MANIFEST_MISMATCH: adopted manifest ` +
+        `"${adoptedManifestId}" but this dispatch resolved manifest ` +
+        `"${emission.manifestId ?? "(absent)"}".`,
+    };
+  }
   return { ok: true };
+}
+
+/**
+ * Adopts the backend-resolved Emission.ManifestId as the current dispatch
+ * identity for subsequent (e.g. SSE-triggered) refresh dispatches.
+ *
+ * Backend holds no shared "current manifest" state — every dispatch resolves
+ * axes independently (see resolveProjectionEntryAxes). The frontend is
+ * responsible for pinning WHICH manifest a refresh must target once the
+ * initial dispatch has resolved one, so a refresh re-resolves the SAME
+ * manifest rather than merely replaying the same pre-resolution axes (which
+ * only coincidentally re-resolves the same manifest when resolution happens
+ * to be stable).
+ *
+ * - When currentAxes already carries an explicit payload.target_ref (from an
+ *   explicit ?manifest= URL selection), it is left unchanged — adoption must
+ *   never override an explicit user selection.
+ * - Otherwise, when emission.manifestId is present, it is merged in as
+ *   payload.target_ref so refresh axes target that same manifest.
+ * - When emission.manifestId is absent (e.g. dev bypass path), currentAxes is
+ *   returned unchanged — there is nothing to adopt.
+ */
+export function adoptResolvedManifestIdentity(
+  currentAxes: UserOperation,
+  emission: Emission,
+): UserOperation {
+  const existingTargetRef = currentAxes.payload?.target_ref;
+  if (typeof existingTargetRef === "string" && existingTargetRef.length > 0) {
+    return currentAxes;
+  }
+  if (!emission.manifestId) return currentAxes;
+  return {
+    ...currentAxes,
+    payload: {
+      ...(currentAxes.payload ?? {}),
+      target_ref: `manifest:${emission.manifestId}:projection_entry`,
+    },
+  };
 }

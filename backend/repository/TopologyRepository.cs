@@ -286,5 +286,13 @@ public record LayoutNodeRecord(
     string? RuntimeInteractionsJson = null,
     /// <summary>Sizing mode from layout_patch_json: auto | preset | custom.</summary>
     string? WidthMode = null,
-    string? HeightMode = null
+    string? HeightMode = null,
+    /// <summary>
+    /// topology_ui_category/topology_ui_section/topology_ui_form/topology_ui_workflow/topology_ui_validation
+    /// when NodeKind is "structural_node" (sourced from components_layout_design.layout_schema_json.records[]).
+    /// Null for tensor-only "catalog_component"/"structural_html" nodes.
+    /// </summary>
+    string? RecordType = null,
+    /// <summary>Authored display label for a structural_node, from layout_schema_json.records[].record.label.</summary>
+    string? Label = null
 );

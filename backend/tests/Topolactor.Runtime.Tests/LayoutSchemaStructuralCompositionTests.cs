@@ -1,0 +1,222 @@
+using Topolactor.Repository;
+using Xunit;
+
+namespace Topolactor.Runtime.Tests;
+
+/// <summary>
+/// Verifies LayoutSchemaTensorComposer — the layout-schema structural authority composition
+/// path (docs/design/runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract
+/// structural authority contract):
+/// - components_layout_design.layout_schema_json.records[] is read as the structural authority.
+/// - Category/Section/Form/Workflow/Validation record types become "structural_node" entries
+///   that NEVER receive a componentId/componentKind.
+/// - Field/Action record types become "catalog_component" entries whose componentId/componentKind
+///   are resolved via the caller-supplied ui_component_registry lookup dictionaries (never
+///   invented, never left as a silent fallback).
+/// - Tensor nodes' runtimeInteractions (keyed by sourceActionKey per entry, at the FORM level) are
+///   merged onto the matching Action/Field leaf by leaf key == sourceActionKey.
+/// - NodeId collisions (the same authored key reused in two branches — a real authoring
+///   possibility, since a record's key is only guaranteed unique within its own branch) are
+///   disambiguated by parent-scoping rather than silently colliding.
+/// - A record's parentKey that does not match any record in the tree (the translator's implicit/
+///   virtual $.root, never itself a record) resolves to a null (root) ParentNodeId.
+/// </summary>
+public class LayoutSchemaStructuralCompositionTests
+{
+    private const string CategoryRecordsJson = """
+    {
+      "records": [
+        {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"cat1","label":"Category One"}},
+        {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_section","key":"sec1","label":"Section One"}},
+        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_field","key":"field1","label":"Field One","control":"form_input/select"}},
+        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_action","key":"action1","label":"Action One"}},
+        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_validation","key":"val1","label":"Validation One"}}
+      ]
+    }
+    """;
+
+    [Fact]
+    public void ParseRecords_EmptyOrAbsentRecords_ReturnsEmpty_NoSchemaDrivenComposition()
+    {
+        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords(null));
+        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords(""));
+        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords("{}"));
+        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords("{\"records\":[]}"));
+    }
+
+    [Fact]
+    public void ParseRecords_MalformedJson_ReturnsEmpty_NotAnException()
+    {
+        Assert.Empty(LayoutSchemaTensorComposer.ParseRecords("not json"));
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_CategorySectionFormRecords_EmitStructuralNodes_NotCatalogComponents()
+    {
+        var records = LayoutSchemaTensorComposer.ParseRecords(CategoryRecordsJson);
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+
+        var category = Assert.Single(composed, n => n.NodeId == "cat1");
+        Assert.Equal("structural_node", category.NodeKind);
+        Assert.Equal("topology_ui_category", category.RecordType);
+        Assert.Equal("Category One", category.Label);
+        Assert.Null(category.ComponentId);
+        Assert.Null(category.ComponentKind);
+        // parentKey "implicit_virtual_root" matches no record in this tree (the translator's
+        // implicit $.root) — resolves to a null (root) ParentNodeId, never a dangling reference.
+        Assert.Null(category.ParentNodeId);
+
+        var section = Assert.Single(composed, n => n.NodeId == "sec1");
+        Assert.Equal("structural_node", section.NodeKind);
+        Assert.Equal("cat1", section.ParentNodeId);
+        Assert.Null(section.ComponentId);
+
+        var validation = Assert.Single(composed, n => n.NodeId == "val1");
+        Assert.Equal("structural_node", validation.NodeKind);
+        Assert.Equal("topology_ui_validation", validation.RecordType);
+        Assert.Null(validation.ComponentId);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_FieldAndActionRecords_ResolveComponentIdAndKind_FromExistingRegistryLookup()
+    {
+        var records = LayoutSchemaTensorComposer.ParseRecords(CategoryRecordsJson);
+        var requiredKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(records);
+
+        // Field control="form_input/select" -> select.template; Action -> button.primitive.
+        Assert.Contains("select.template", requiredKeys);
+        Assert.Contains("button.primitive", requiredKeys);
+
+        var componentKeyToId = new Dictionary<string, string>
+        {
+            ["select.template"] = "00000000-0000-0000-0001-000000000012",
+            ["button.primitive"] = "00000000-0000-0000-0001-000000000010",
+        };
+        var componentIdToKind = new Dictionary<string, string>
+        {
+            ["00000000-0000-0000-0001-000000000012"] = "form_input/select",
+            ["00000000-0000-0000-0001-000000000010"] = "action/button",
+        };
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId,
+            componentIdToKind);
+
+        var field = Assert.Single(composed, n => n.NodeId == "field1");
+        Assert.Equal("catalog_component", field.NodeKind);
+        Assert.Equal("00000000-0000-0000-0001-000000000012", field.ComponentId);
+        Assert.Equal("form_input/select", field.ComponentKind);
+        Assert.Null(field.RecordType);
+        Assert.Null(field.Label);
+
+        var action = Assert.Single(composed, n => n.NodeId == "action1");
+        Assert.Equal("catalog_component", action.NodeKind);
+        Assert.Equal("00000000-0000-0000-0001-000000000010", action.ComponentId);
+        Assert.Equal("action/button", action.ComponentKind);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_FieldWithUnresolvableControl_LeavesComponentIdNull_NoSilentFallback()
+    {
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","control":"form_input/unknown_widget"}}]}
+        """;
+        var records = LayoutSchemaTensorComposer.ParseRecords(json);
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>());
+
+        var field = Assert.Single(composed);
+        Assert.Equal("catalog_component", field.NodeKind);
+        Assert.Null(field.ComponentId);
+        Assert.Null(field.ComponentKind);
+    }
+
+    [Fact]
+    public void BuildInteractionsBySourceActionKey_GroupsFormLevelTensorEntries_ByLeafSourceActionKey()
+    {
+        // Real seed shape: a single FORM-keyed tensor node carries multiple runtimeInteractions
+        // entries, each tagged with the specific Action/Field leaf key (sourceActionKey) it
+        // belongs to — not one array per leaf.
+        var formNode = new LayoutNodeRecord(
+            NodeId: "some_form", NodeKind: "catalog_component", HtmlTag: null, ComponentKey: null,
+            ComponentId: null, ParentNodeId: null, SlotKey: null, OrderIndex: 0, X: 0, Y: 0,
+            Width: null, Height: null, LayoutClassRefs: null,
+            RuntimeInteractionsJson: """
+            [
+              {"trigger":"click","actionType":"dispatchInstanceOperation","sourceActionKey":"validate"},
+              {"trigger":"click","actionType":"dispatchInstanceOperation","sourceActionKey":"preview"}
+            ]
+            """);
+
+        var grouped = LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey([formNode]);
+
+        Assert.True(grouped.ContainsKey("validate"));
+        Assert.True(grouped.ContainsKey("preview"));
+        Assert.DoesNotContain("some_form", grouped.Keys);
+        Assert.Contains("\"sourceActionKey\":\"validate\"", grouped["validate"]);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_TensorRuntimeInteractions_MergeOntoMatchingLeafBySourceActionKey()
+    {
+        var records = LayoutSchemaTensorComposer.ParseRecords(CategoryRecordsJson);
+        const string interactionsJson = """[{"trigger":"click","actionType":"dispatchInstanceOperation","sourceActionKey":"action1"}]""";
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>
+            {
+                ["action1"] = interactionsJson,
+                // Coincidental key collision with a structural node — must NOT be merged there.
+                ["cat1"] = interactionsJson,
+            },
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+
+        var action = Assert.Single(composed, n => n.NodeId == "action1");
+        Assert.Equal(interactionsJson, action.RuntimeInteractionsJson);
+
+        // A structural node is never a runtimeInteractions merge target even when a tensor entry
+        // coincidentally shares its key — merge only applies to catalog_component leaves.
+        var category = Assert.Single(composed, n => n.NodeId == "cat1");
+        Assert.Null(category.RuntimeInteractionsJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_DuplicateKeyAcrossBranches_NamespacesNodeId_NoDuplicateNodeIdCollision()
+    {
+        // Same authored key ("approval_status") in two different branches — a real seed shape
+        // (manifest 092), not a synthetic edge case. Each occurrence must resolve to a distinct,
+        // deterministic NodeId, never silently collide or silently drop one.
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":"section_a","record":{"recordType":"topology_ui_field","key":"approval_status","label":"A"}},
+            {"type":"topology_ui_seed_record","parentKey":"section_b","record":{"recordType":"topology_ui_field","key":"approval_status","label":"B"}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_section","key":"section_a","label":"Section A"}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_section","key":"section_b","label":"Section B"}}
+          ]
+        }
+        """;
+        var records = LayoutSchemaTensorComposer.ParseRecords(json);
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>());
+
+        var nodeIds = composed.Select(n => n.NodeId).ToList();
+        Assert.Equal(nodeIds.Count, nodeIds.Distinct().Count());
+        Assert.Contains("section_a::approval_status", nodeIds);
+        Assert.Contains("section_b::approval_status", nodeIds);
+    }
+}

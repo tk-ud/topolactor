@@ -148,7 +148,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
 
             var response = await dispatcher.DispatchAsync(request);
 
-            Assert.True(response.Success);
+            Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.NotNull(response.Emission);
             var emission = response.Emission!;
 
@@ -192,6 +192,93 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 "DELETE FROM hubs.topology_manifests WHERE topology_manifest_id = @mid", ("mid", relatedManifestId));
             await ExecAsync("DELETE FROM hubs.hub WHERE hub_id = @hid", ("hid", relatedHubId));
         }
+    }
+
+    [Fact]
+    public async Task DispatchAsync_CredentialManagementManifest_LayoutNodes_IncludeStructuralCategorySectionWrappers_NotOnlyFlatFormNodes()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{CredentialManagementManifestId}:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        var nodes = response.Emission!.LayoutNodes;
+        Assert.NotNull(nodes);
+
+        // Structural authority (components_layout_design.layout_schema_json.records[]) is read —
+        // Category/Section wrapper nodes exist, sourced from the schema tree, not only the four
+        // flat tensor form nodes. Structural nodes never carry a componentId/componentKind.
+        var userAuthCategory = Assert.Single(nodes!, n => n.NodeId == "user_auth");
+        Assert.Equal("structural_node", userAuthCategory.NodeKind);
+        Assert.Equal("topology_ui_category", userAuthCategory.RecordType);
+        Assert.Null(userAuthCategory.ComponentId);
+
+        var instanceSettingsSection = Assert.Single(nodes!, n => n.NodeId == "instance_settings_section");
+        Assert.Equal("structural_node", instanceSettingsSection.NodeKind);
+        Assert.Equal("topology_ui_section", instanceSettingsSection.RecordType);
+        Assert.Null(instanceSettingsSection.ComponentId);
+
+        // Field/Action leaves resolve componentId/componentKind from the existing
+        // ui_component_registry preset catalog — never left silently unresolved. The seed's
+        // "approval_status" field key is reused in two branches (user_auth_section and
+        // instance_operation_approval_form) — an authoring collision the composer disambiguates
+        // via parent-scoped NodeId rather than colliding or silently dropping one.
+        var approvalStatusFields = nodes!.Where(n => n.NodeId.EndsWith("::approval_status")).ToList();
+        Assert.Equal(2, approvalStatusFields.Count);
+        foreach (var approvalStatusField in approvalStatusFields)
+        {
+            Assert.Equal("catalog_component", approvalStatusField.NodeKind);
+            Assert.NotNull(approvalStatusField.ComponentId);
+            Assert.Equal("form_input/select", approvalStatusField.ComponentKind);
+        }
+
+        var validateAction = Assert.Single(nodes!, n => n.NodeId == "validate");
+        Assert.Equal("catalog_component", validateAction.NodeKind);
+        Assert.NotNull(validateAction.ComponentId);
+        Assert.Equal("action/button", validateAction.ComponentKind);
+        // The tensor's own runtimeInteractions for this leaf survive the composition merge.
+        Assert.NotNull(validateAction.RuntimeInteractions);
+
+        // render completion proof: no leaf is left without a componentId (which would otherwise
+        // surface as an explicit CATALOG_COMPONENT_KIND_REQUIRED error component on the frontend).
+        var unresolvedLeaves = nodes!.Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null).ToList();
+        Assert.Empty(unresolvedLeaves);
+    }
+
+    [Fact]
+    public async Task HubRelations_Manifest092_HasCanonicalSequencePosition1Relation_SeedOnly()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT related_hub_id::text, status FROM hubs.hub_relations " +
+            "WHERE topology_manifest_id = @id AND sequence_position = 1";
+        cmd.Parameters.AddWithValue("id", CredentialManagementManifestId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        Assert.True(
+            await reader.ReadAsync(),
+            "manifest 092 must have a canonical (seed_empty.sql) hubs.hub_relations row at sequence_position=1");
+        // Self-referencing: related_hub_id is 092's own existing hub (external_port_substrate,
+        // '...a1') — no dedicated hub was introduced for this relation.
+        Assert.Equal("00000000-0000-0000-0000-0000000000a1", reader.GetString(0));
+        Assert.Equal("active", reader.GetString(1));
     }
 
     [Fact]

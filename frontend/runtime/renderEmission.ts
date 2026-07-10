@@ -70,7 +70,7 @@ export type ComponentSpec = {
   runtimeSpec?: RuntimeComponentSpec;
   /** Node identifier from layout_patch_json — present only when rendered from layoutNodes. */
   nodeId?: string;
-  /** "catalog_component" | "structural_html" — present only when rendered from layoutNodes. */
+  /** "catalog_component" | "structural_html" | "structural_node" — present only when rendered from layoutNodes. */
   nodeKind?: string;
   /** HTML element tag for structural_html nodes — present only when nodeKind="structural_html". */
   htmlTag?: string;
@@ -737,6 +737,19 @@ export function renderEmission(
               code: linkHrefResult.code,
               linkHref: design?.linkHref,
             },
+            ...layoutFields,
+          };
+        }
+
+        // structural_node nodes (Category/Section/Form/Workflow/Validation sourced from
+        // components_layout_design.layout_schema_json.records[] — the structural authority
+        // tree) render as a generic labeled group. No registry lookup, no componentId/
+        // componentKind — backend never assigns one to a structural node.
+        if (node.nodeKind === "structural_node") {
+          return {
+            componentType: "structural_node",
+            def: { recordType: node.recordType },
+            inlineText: node.label,
             ...layoutFields,
           };
         }

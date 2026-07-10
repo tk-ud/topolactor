@@ -61,8 +61,11 @@ public record OperationVector(
 /// A single layout projection node in the Emission, derived from layout_patch_json.nodes[].
 /// Carries the full structural and positional fields authored in the UI builder canvas.
 /// ComponentId comes from nodes[].componentId (not positional structure_maps.component_ids).
-/// NodeKind is "catalog_component" | "structural_html".
+/// NodeKind is "catalog_component" | "structural_html" | "structural_node".
 /// structural_html nodes carry HtmlTag; catalog_component nodes carry ComponentKey.
+/// structural_node nodes (Category/Section/Form/Workflow/Validation from
+/// components_layout_design.layout_schema_json.records[] — the structural authority tree)
+/// carry RecordType/Label and never a ComponentId/ComponentKind.
 /// ParentNodeId establishes the DOM nesting tree; OrderIndex drives sibling render order.
 /// X/Y/Width/Height are canvas geometry for DOM style projection.
 /// LayoutClassRefs are SSOT topology-layout-class vocabulary refs for className resolution.
@@ -100,7 +103,16 @@ public record LayoutNode(
     /// <summary>Array prop bindings authored in UI Builder. Null when not set. Serialized as JSON object in emission. renderEmission resolves from emission.data after propsJson/stateJson.</summary>
     JsonElement? PropBindings = null,
     /// <summary>Canonical runtime UI interactions from layout_patch_json.nodes[].runtimeInteractions. Legacy propsJson.eventWirings is fallback only.</summary>
-    JsonElement? RuntimeInteractions = null
+    JsonElement? RuntimeInteractions = null,
+    /// <summary>
+    /// Structural-node semantic type (topology_ui_category/topology_ui_section/topology_ui_form/
+    /// topology_ui_workflow/topology_ui_validation) when NodeKind is "structural_node" — sourced
+    /// from components_layout_design.layout_schema_json.records[], the structural authority tree.
+    /// Null for "catalog_component"/"structural_html" nodes.
+    /// </summary>
+    string? RecordType = null,
+    /// <summary>Authored display label for a structural_node. Null for non-structural nodes.</summary>
+    string? Label = null
 );
 
 /// <summary>
