@@ -188,12 +188,16 @@ public class LayoutSchemaStructuralCompositionTests
         Assert.Equal("00000000-0000-0000-0001-000000000012", field.ComponentId);
         Assert.Equal("form_input/select", field.ComponentKind);
         Assert.Null(field.RecordType);
-        Assert.Null(field.Label);
+        // A catalog_component leaf's authored label survives composition exactly like a
+        // structural_node's — the frontend needs it for honest production default props, not a
+        // hardcoded placeholder caption or the bare NodeId.
+        Assert.Equal("Field One", field.Label);
 
         var action = Assert.Single(composed, n => n.NodeId == "action1");
         Assert.Equal("catalog_component", action.NodeKind);
         Assert.Equal("00000000-0000-0000-0001-000000000010", action.ComponentId);
         Assert.Equal("action/button", action.ComponentKind);
+        Assert.Equal("Action One", action.Label);
     }
 
     [Fact]
@@ -232,12 +236,36 @@ public class LayoutSchemaStructuralCompositionTests
             ]
             """);
 
-        var grouped = LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey([formNode]);
+        var result = LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey([formNode]);
+        var grouped = Assert.IsType<LayoutSchemaTensorComposer.InteractionsParseResult.Valid>(result).BySourceActionKey;
 
-        Assert.True(grouped.ContainsKey("validate"));
-        Assert.True(grouped.ContainsKey("preview"));
-        Assert.DoesNotContain("some_form", grouped.Keys);
-        Assert.Contains("\"sourceActionKey\":\"validate\"", grouped["validate"]);
+        // Keys are scoped by the owning FORM's own tensor NodeId ("some_form") — never
+        // sourceActionKey alone — so two different Forms authoring the same leaf key can never
+        // cross-contaminate each other's interactions.
+        Assert.True(grouped.ContainsKey("some_form::validate"));
+        Assert.True(grouped.ContainsKey("some_form::preview"));
+        Assert.DoesNotContain("validate", grouped.Keys);
+        Assert.Contains("\"sourceActionKey\":\"validate\"", grouped["some_form::validate"]);
+    }
+
+    [Theory]
+    [InlineData("not-json", "is not valid JSON")]
+    [InlineData("{}", "is not a JSON array")]
+    [InlineData("[\"not-an-object\"]", "is not a JSON object")]
+    [InlineData("[{\"trigger\":\"click\"}]", "is missing a non-empty sourceActionKey")]
+    [InlineData("[{\"trigger\":\"click\",\"sourceActionKey\":\"\"}]", "is missing a non-empty sourceActionKey")]
+    public void BuildInteractionsBySourceActionKey_MalformedRuntimeInteractions_ReturnsInvalid_NeverSilentlySkipped(
+        string runtimeInteractionsJson, string expectedReasonSubstring)
+    {
+        var formNode = new LayoutNodeRecord(
+            NodeId: "some_form", NodeKind: "catalog_component", HtmlTag: null, ComponentKey: null,
+            ComponentId: null, ParentNodeId: null, SlotKey: null, OrderIndex: 0, X: 0, Y: 0,
+            Width: null, Height: null, LayoutClassRefs: null,
+            RuntimeInteractionsJson: runtimeInteractionsJson);
+
+        var result = LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey([formNode]);
+        var invalid = Assert.IsType<LayoutSchemaTensorComposer.InteractionsParseResult.Invalid>(result);
+        Assert.Contains(expectedReasonSubstring, invalid.Reason);
     }
 
     [Fact]
@@ -248,11 +276,13 @@ public class LayoutSchemaStructuralCompositionTests
 
         var composed = LayoutSchemaTensorComposer.Compose(
             records,
+            // Keys are scoped by "{parentKey}::{key}" ("sec1::action1" — action1's owning
+            // Section) — never leaf key alone.
             interactionsBySourceActionKey: new Dictionary<string, string>
             {
-                ["action1"] = interactionsJson,
+                ["sec1::action1"] = interactionsJson,
                 // Coincidental key collision with a structural node — must NOT be merged there.
-                ["cat1"] = interactionsJson,
+                ["cat1::cat1"] = interactionsJson,
             },
             componentKeyToId: new Dictionary<string, string>(),
             componentIdToKind: new Dictionary<string, string>());
@@ -264,6 +294,81 @@ public class LayoutSchemaStructuralCompositionTests
         // coincidentally shares its key — merge only applies to catalog_component leaves.
         var category = Assert.Single(composed, n => n.NodeId == "cat1");
         Assert.Null(category.RuntimeInteractionsJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_DuplicateActionKeyAcrossTwoForms_InteractionsDoNotCrossContaminate()
+    {
+        // Two different Forms both author an Action with the SAME key ("submit") — a real
+        // authoring possibility (Action keys are only guaranteed unique within their own Form).
+        // Each Form's tensor node carries its OWN sourceActionKey-tagged interaction; scoping the
+        // merge by "{parentKey}::{key}" (owning Form) must keep them from mixing.
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_form","key":"form_a","label":"Form A"}},
+            {"type":"topology_ui_seed_record","parentKey":"form_a","record":{"recordType":"topology_ui_action","key":"submit","label":"Submit A"}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_form","key":"form_b","label":"Form B"}},
+            {"type":"topology_ui_seed_record","parentKey":"form_b","record":{"recordType":"topology_ui_action","key":"submit","label":"Submit B"}}
+          ]
+        }
+        """;
+        var records = ParseValidRows(json);
+
+        const string interactionsA = """[{"trigger":"click","actionType":"dispatchInstanceOperation","sourceActionKey":"submit","targetRef":"A"}]""";
+        const string interactionsB = """[{"trigger":"click","actionType":"dispatchInstanceOperation","sourceActionKey":"submit","targetRef":"B"}]""";
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>
+            {
+                ["form_a::submit"] = interactionsA,
+                ["form_b::submit"] = interactionsB,
+            },
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+
+        var submitA = Assert.Single(composed, n => n.NodeId == "form_a::submit");
+        var submitB = Assert.Single(composed, n => n.NodeId == "form_b::submit");
+        Assert.Equal(interactionsA, submitA.RuntimeInteractionsJson);
+        Assert.Equal(interactionsB, submitB.RuntimeInteractionsJson);
+        Assert.NotEqual(submitA.RuntimeInteractionsJson, submitB.RuntimeInteractionsJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_DuplicateContainerKey_ChildAttachesToTheSameInstanceItWasNestedUnder_NotWhicheverDuplicateMatchesByKey()
+    {
+        // Two Sections share the SAME key ("shared_section") under two different Categories —
+        // each with its own distinct child. ParentNodeId resolution must attach each child to
+        // the instance it was actually nested under (by document order), never to whichever
+        // duplicate-keyed Section happens to match by raw key.
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat_a","label":"Category A"}},
+            {"type":"topology_ui_seed_record","parentKey":"cat_a","record":{"recordType":"topology_ui_section","key":"shared_section","label":"Shared Section A"}},
+            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_field","key":"field_a","label":"Field A","control":"form_input/form_field"}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat_b","label":"Category B"}},
+            {"type":"topology_ui_seed_record","parentKey":"cat_b","record":{"recordType":"topology_ui_section","key":"shared_section","label":"Shared Section B"}},
+            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_field","key":"field_b","label":"Field B","control":"form_input/form_field"}}
+          ]
+        }
+        """;
+        var records = ParseValidRows(json);
+        var componentKeyToId = new Dictionary<string, string> { ["form_field.template"] = "00000000-0000-0000-0001-000000000013" };
+        var componentIdToKind = new Dictionary<string, string> { ["00000000-0000-0000-0001-000000000013"] = "form_input/form_field" };
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records, new Dictionary<string, string>(), componentKeyToId, componentIdToKind);
+
+        var sectionA = Assert.Single(composed, n => n.NodeId == "cat_a::shared_section");
+        var sectionB = Assert.Single(composed, n => n.NodeId == "cat_b::shared_section");
+        var fieldA = Assert.Single(composed, n => n.NodeId == "field_a");
+        var fieldB = Assert.Single(composed, n => n.NodeId == "field_b");
+
+        Assert.Equal(sectionA.NodeId, fieldA.ParentNodeId);
+        Assert.Equal(sectionB.NodeId, fieldB.ParentNodeId);
+        Assert.NotEqual(fieldA.ParentNodeId, fieldB.ParentNodeId);
     }
 
     [Fact]

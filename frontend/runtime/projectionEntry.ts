@@ -177,6 +177,14 @@ export type ProjectionEntryConfirmationOptions = {
  * selected or previously adopted. Mismatch is an explicit error; rendering a
  * differently-packaged/differently-manifested projection silently is
  * prohibited.
+ *
+ * Two independent manifest checks apply: an explicit ?manifest= URL selection
+ * is checked on EVERY call (including the very first, initial dispatch —
+ * before any identity has been adopted, since payload.target_ref resolution
+ * is still backend authority and must never be trusted unverified even for
+ * an explicit selection); a previously-adopted identity (bare-entry / route
+ * selection resolved on a prior dispatch, see adoptResolvedManifestIdentity)
+ * is checked in addition, on refresh, when supplied via options.
  */
 export function confirmProjectionEntryEmission(
   selection: ProjectionEntrySelection,
@@ -189,6 +197,14 @@ export function confirmProjectionEntryEmission(
       error: `PROJECTION_ENTRY_PACKAGE_MISMATCH: selected package ` +
         `"${selection.packageId}" but emission resolved package ` +
         `"${emission.packageId ?? "(absent)"}".`,
+    };
+  }
+  if (selection.manifestId && emission.manifestId !== selection.manifestId) {
+    return {
+      ok: false,
+      error: `PROJECTION_ENTRY_MANIFEST_MISMATCH: selected manifest ` +
+        `"${selection.manifestId}" but this dispatch resolved manifest ` +
+        `"${emission.manifestId ?? "(absent)"}".`,
     };
   }
   const adoptedManifestId = options?.adoptedManifestId;

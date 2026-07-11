@@ -294,7 +294,11 @@ public record LayoutNodeRecord(
     /// Null for tensor-only "catalog_component"/"structural_html" nodes.
     /// </summary>
     string? RecordType = null,
-    /// <summary>Authored display label for a structural_node or unresolved_gap, from layout_schema_json.records[].record.label.</summary>
+    /// <summary>
+    /// Authored display label from layout_schema_json.records[].record.label — present for every
+    /// schema-composed node (structural_node, catalog_component, and unresolved_gap alike). Null
+    /// for tensor-only nodes composed outside the layout-schema structural authority path.
+    /// </summary>
     string? Label = null,
     /// <summary>Authored knownGapRefs for an unresolved_gap node (topology_ui_unresolved), from layout_schema_json.records[].record.knownGapRefs. Null for every other NodeKind.</summary>
     IReadOnlyList<string>? KnownGapRefs = null

@@ -681,6 +681,16 @@ public class ManifestDispatcher
             var invalidError = new ValidationError("LAYOUT_SCHEMA_RECORDS_INVALID", ex.Message);
             return emission with { Errors = [.. emission.Errors, invalidError], LayoutId = layoutId.Value.ToString() };
         }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID", StringComparison.Ordinal))
+        {
+            // A malformed/unattributable tensor runtimeInteractions shape is a real authoring
+            // defect — never silently skipped during the schema-authority merge.
+            _logger.LogError(ex,
+                "ManifestDispatcher: tensor runtimeInteractions is malformed for layoutId='{LayoutId}'.",
+                layoutId);
+            var invalidInteractionsError = new ValidationError("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID", ex.Message);
+            return emission with { Errors = [.. emission.Errors, invalidInteractionsError], LayoutId = layoutId.Value.ToString() };
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex,

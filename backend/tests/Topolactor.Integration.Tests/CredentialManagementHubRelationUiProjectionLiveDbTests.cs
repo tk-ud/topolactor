@@ -301,11 +301,17 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             AppContext.BaseDirectory,
             "../../../../../../frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json"));
         var expectedJson = await File.ReadAllTextAsync(fixturePath);
+        // Options must mirror backend/Program.cs's actual wire serialization exactly (including
+        // DefaultIgnoreCondition) — the fixture is a snapshot of what the frontend really
+        // receives over HTTP, not an arbitrary debug dump. A field-shape drift (e.g. a new
+        // LayoutNode field, or a null-handling change) must fail HERE, not silently pass while
+        // the checked-in fixture and the real DTO diverge.
         var actualJson = System.Text.Json.JsonSerializer.Serialize(
             response.Emission.LayoutNodes,
             new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
                 WriteIndented = true,
             });
         Assert.Equal(expectedJson.Trim(), actualJson.Trim());

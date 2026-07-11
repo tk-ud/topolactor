@@ -476,16 +476,61 @@ runtime_orchestration_ssot:
         tensor_runtime_interactions_merge: >-
           topology.ui_topology_tensor nodes key their runtimeInteractions array at the FORM
           level; each entry carries its own sourceActionKey identifying the specific Field/Action
-          leaf it belongs to. Composition groups entries by sourceActionKey and merges each
-          leaf's own matching entries -- never a naive tensor-nodeId==record-key match (the
-          tensor nodeId is the form's key, a structural node, which never receives
-          runtimeInteractions).
+          leaf it belongs to. Composition groups entries by "{formTensorNodeId}::{sourceActionKey}"
+          (never sourceActionKey alone) and merges each leaf's own matching entries by
+          "{parentKey}::{key}" -- never a naive tensor-nodeId==record-key match (the tensor
+          nodeId is the form's key, a structural node, which never receives runtimeInteractions)
+          and never a bare-sourceActionKey match, which would cross-contaminate two different
+          Forms that happen to author the same leaf key (Action/Field keys are only guaranteed
+          unique within their own owning Form, the same way record keys are only guaranteed
+          unique within their own branch -- see node_id_collision_handling). A malformed tensor
+          runtimeInteractions shape (invalid JSON, a non-array value, a non-object entry, or an
+          entry missing a non-empty sourceActionKey) is a real authoring defect ->
+          LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID, never silently skipped
+          (LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey).
+        runtime_interaction_attributability: >-
+          A catalog_component leaf's authored runtimeInteractions may still be well-formed JSON
+          yet carry an actionType outside the recognized runtime taxonomy (dispatchExternalPort,
+          dispatchInstanceOperation, or a classified UI-state-update actionType) -- e.g. a real
+          seed authoring an actionType the frontend event-binding pipeline does not implement.
+          Such an entry resolves to zero recognized event bindings; frontend renderEmission()
+          detects this (authored runtimeInteractions present, zero resulting bindings) and fails
+          explicit as componentType="error" (code RUNTIME_INTERACTION_UNATTRIBUTABLE) at the same
+          layer CATALOG_COMPONENT_KIND_REQUIRED already lives -- never silently rendered as a
+          normal, unbound component that would only fail later, cryptically, deep inside the
+          runtime factory (a RUNTIME_PRIMITIVE_RENDERER_MISSING_EVENT_BINDING crash renderEmission
+          itself never sees). This is an authoring/wiring-completeness gap in the seed content,
+          never a structural-render or projection-identity defect -- a layout containing such a
+          leaf cannot claim render completion for that leaf until the interaction actually gains
+          a recognized runtime handler or is removed, the same posture unresolved_gap already
+          takes.
+        authored_label_and_production_props: >-
+          Every schema record carries an authored label (record_common_required_fields); a
+          catalog_component leaf's LayoutNode.Label carries it through composition exactly like a
+          structural_node's does -- never discarded. Frontend production (non-preview) rendering
+          must build default props from this authored label and never inject the UI-Builder
+          canvas-preview placeholder's inert content (a hardcoded caption, a fabricated sample
+          option list, or action/button's forced disabled:true) -- a schema-composed leaf never
+          carries node-local propsJson/design to override that placeholder, so reusing it
+          unconditionally for production would make every schema-composed action permanently
+          un-clickable in the real DOM.
         node_id_collision_handling: >-
           A record's authored key is only guaranteed unique within its own branch -- the seed
           schema permits the same key in two branches (a real, observed case: manifest 092's
           "approval_status" field appears under both user_auth_section and
           instance_operation_approval_form). Composition namespaces a colliding key as
           "{parentKey}::{key}" instead of colliding or silently dropping one occurrence.
+        parent_scoped_identity_reconstruction: >-
+          A colliding container key (e.g. two Sections both authored as "shared_section" under
+          different Categories) is not merely a NodeId-string concern -- every child nested under
+          EITHER duplicate must still resolve ParentNodeId to the SAME physical instance it was
+          actually nested under, never to whichever duplicate happens to match by raw key.
+          Composition resolves ParentNodeId by walking records in authored document order
+          (already parent-before-child) and tracking each key's MOST RECENTLY composed NodeId so
+          far, rather than a static whole-tree key lookup -- a child's parentKey is matched
+          against this running map, so it attaches to the instance immediately preceding it in
+          document order (the one it was genuinely nested under), not a static, order-independent
+          lookup that cannot distinguish between duplicate instances at all.
         implicit_root_parent_handling: >-
           A record's authored parentKey referencing the translator's implicit/virtual tree root
           (never itself a record in records[]) resolves to a null (top-level) ParentNodeId, not a
@@ -517,21 +562,42 @@ runtime_orchestration_ssot:
         - rejecting_topology_ui_table_or_topology_ui_workflow_step_or_topology_ui_unresolved_as_an_unrecognized_recordType
         - silently_converting_topology_ui_unresolved_into_a_normal_catalog_component_or_structural_node
         - inventing_a_new_ui_component_registry_row_for_table_display_resolution_instead_of_reusing_declared_preset_rows
+        - skipping_a_malformed_tensor_runtimeInteractions_entry_instead_of_LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID
+        - silently_rendering_a_catalog_component_leaf_whose_runtimeInteractions_resolved_to_zero_event_bindings_as_a_normal_component
+        - discarding_a_catalog_component_leafs_authored_label_during_composition_or_production_default_props
+        - reusing_the_ui_builder_canvas_preview_placeholder_for_production_default_props_of_a_schema_composed_leaf
+        - a_schema_composed_action_button_reaching_the_real_dom_with_a_forced_disabled_true_it_never_authored
+        - judging_render_completion_by_renderEmission_error_count_alone_without_connecting_layoutProjectionTree_runtimeComponentFactory_and_the_final_dom
+        - merging_runtimeInteractions_by_bare_sourceActionKey_across_two_different_forms_that_share_a_leaf_key
+        - resolving_a_childs_ParentNodeId_by_a_static_whole_tree_key_lookup_that_cannot_distinguish_between_duplicate_container_instances
       test_proof_contract:
         note: >-
           A completion proof for this contract must observe the composed LayoutNode[] for a real
           representative manifest (manifest 092, resolved through the SAME dispatch path as the
           canonical_default_entry_contract test above) passed through frontend renderEmission()
-          with defaultComponentRegistry, and assert zero componentType==="error" specs in that
-          single representative scenario -- a backend-only unresolved-leaf count and a
-          separately hand-authored frontend fixture are each necessary but neither is sufficient
-          alone.
+          with defaultComponentRegistry, and assert zero UNEXPECTED componentType==="error"
+          specs in that single representative scenario -- a backend-only unresolved-leaf count
+          and a separately hand-authored frontend fixture are each necessary but neither is
+          sufficient alone. The proof must also connect renderEmission() output through
+          LayoutProjectionTree -> runtimeComponentFactory (renderRuntimeComponent) for the
+          well-attributed leaves, not stop at renderEmission()'s own error count -- a leaf whose
+          componentEventBinding resolves but whose factory still requires a binding no seed
+          content ever authored (e.g. a plain, unwired select field) is a documented,
+          out-of-scope business-data/seed-authoring-completeness gap, not a regression of this
+          contract, and is excluded from the representative proof's assertion scope rather than
+          silently absorbed into it.
         positive_cases:
           - topology_ui_table_record_resolves_to_a_catalog_component_via_table_display_resolution
           - topology_ui_workflow_step_record_resolves_to_a_catalog_component_via_the_same_convention_as_topology_ui_action
+          - a_catalog_component_leafs_authored_label_reaches_the_runtime_component_props_in_production_rendering
+          - a_schema_composed_action_button_with_a_recognized_dispatchInstanceOperation_interaction_renders_enabled_disabled_false_through_the_real_runtime_factory
         negative_cases:
           - topology_ui_unresolved_record_composes_to_an_explicit_render_time_error_carrying_knownGapRefs_never_a_normal_component
           - a_recordType_outside_structural_node_record_types_plus_catalog_component_record_types_plus_unresolved_gap_record_types_is_LAYOUT_SCHEMA_RECORDS_INVALID_not_silently_skipped
+          - a_malformed_or_sourceActionKey_missing_tensor_runtimeInteractions_entry_is_LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID_not_silently_skipped
+          - two_different_forms_authoring_the_same_leaf_key_with_different_runtimeInteractions_never_cross_contaminate_each_others_merge
+          - a_duplicate_container_keys_children_attach_to_the_same_instance_they_were_nested_under_not_whichever_duplicate_matches_by_key
+          - a_catalog_component_leaf_whose_authored_runtimeInteractions_resolve_to_zero_event_bindings_is_RUNTIME_INTERACTION_UNATTRIBUTABLE_not_a_silent_pass_through_to_the_factory
 
   runtime_vocabulary_contract:
     authority_boundary:

@@ -205,28 +205,41 @@ public class NpgsqlTopologyRepository : TopologyRepository
     }
 
     /// <summary>
-    /// Loads layout nodes for the given layout_id by parsing layout_patch_json.nodes[]
-    /// from topology.ui_topology_tensor, enriched with componentKind (from ui_component_registry)
-    /// and runtimeDispatchAction (from ui_wiring_registry.wiring_kind via tensor JOIN).
-    /// Reads at most 2 rows to detect selector ambiguity.
-    /// Returns nodes sorted by orderIndex. Returns empty list when no row exists or nodes[] is absent.
+    /// Loads layout nodes for the given layout_id. Two independent sources are consulted:
+    /// components_layout_design.layout_schema_json.records[] (the structural authority — read
+    /// directly by the layout_id primary key, never gated on a tensor row existing) and
+    /// topology.ui_topology_tensor.layout_patch_json.nodes[] (the flat tensor carrier — a
+    /// read-only schema-authored layout with zero tensor rows is a valid, real shape, not a
+    /// broken one). componentKind is enriched from ui_component_registry; runtimeDispatchAction
+    /// from ui_wiring_registry.wiring_kind via tensor JOIN. Tensor reads at most 2 rows to detect
+    /// selector ambiguity. Returns nodes sorted by orderIndex. Returns empty list only when
+    /// NEITHER source has content for layout_id (no schema records[] and no tensor row).
     /// Throws InvalidOperationException("LAYOUT_NODES_AMBIGUOUS_SELECTOR:...") when multiple
-    /// rows exist for the same layout_id — caller must convert to an explicit ValidationError.
-    /// SQL: SELECT t.layout_patch_json::text, w.wiring_kind
-    ///   FROM topology.ui_topology_tensor t
-    ///   LEFT JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id
-    ///   WHERE t.layout_id = @layoutId LIMIT 2
+    /// tensor rows exist for the same layout_id — caller must convert to an explicit ValidationError.
     /// </summary>
     public override async Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
         Guid layoutId, CancellationToken ct = default)
     {
+        string? layoutSchemaJson;
+        {
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
+            await using var cmd = conn.CreateCommand();
+            // layout_id is components_layout_design's primary key — at most one row, no
+            // ambiguity check needed here (unlike the tensor read below).
+            cmd.CommandText =
+                "SELECT layout_schema_json::text FROM topology.components_layout_design WHERE layout_id = @layoutId";
+            cmd.Parameters.AddWithValue("layoutId", layoutId);
+            var scalar = await cmd.ExecuteScalarAsync(ct);
+            layoutSchemaJson = scalar is null or DBNull ? null : (string)scalar;
+        }
+
         string? firstJson = null;
         string? wiringKind = null;
         string? wiringId = null;
         string? wiringKey = null;
         string? targetSurface = null;
         string? targetRef = null;
-        string? layoutSchemaJson = null;
 
         {
             await using var conn = new NpgsqlConnection(_connectionString);
@@ -234,14 +247,13 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
             await using var cmd = conn.CreateCommand();
             // LIMIT 2: detect ambiguity without silent "latest wins" ORDER BY.
-            // 0 rows → empty (LAYOUT_NODES_NOT_FOUND); 1 row → parse; 2+ rows → explicit error.
+            // 0 rows → no tensor carrier for this layout_id (schema records[] may still supply
+            // the layout below); 1 row → parse; 2+ rows → explicit error.
             cmd.CommandText =
                 "SELECT t.layout_patch_json::text, w.wiring_kind, " +
-                "       w.wiring_id::text, w.wiring_key, w.target_surface, w.target_ref, " +
-                "       cld.layout_schema_json::text " +
+                "       w.wiring_id::text, w.wiring_key, w.target_surface, w.target_ref " +
                 "FROM topology.ui_topology_tensor t " +
                 "LEFT JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id " +
-                "LEFT JOIN topology.components_layout_design cld ON cld.layout_id = t.layout_id " +
                 "WHERE t.layout_id = @layoutId " +
                 "LIMIT 2";
             cmd.Parameters.AddWithValue("layoutId", layoutId);
@@ -260,7 +272,6 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     wiringKey = reader.IsDBNull(3) ? null : reader.GetString(3);
                     targetSurface = reader.IsDBNull(4) ? null : reader.GetString(4);
                     targetRef = reader.IsDBNull(5) ? null : reader.GetString(5);
-                    layoutSchemaJson = reader.IsDBNull(6) ? null : reader.GetString(6);
                 }
                 if (rowCount == 2)
                     throw new InvalidOperationException(
@@ -270,29 +281,28 @@ public class NpgsqlTopologyRepository : TopologyRepository
             }
         }
 
-        if (firstJson is null)
-        {
-            _npgsqlLogger.LogDebug(
-                "NpgsqlTopologyRepository.LoadLayoutNodesAsync: no tensor row for layoutId='{LayoutId}'.",
-                layoutId);
-            return Array.Empty<LayoutNodeRecord>();
-        }
-
         var runtimeDispatchAction = MapWiringKindToDispatchAction(wiringKind);
-        var baseNodes = ParseNodesFromLayoutPatchJson(firstJson, layoutId);
+        var baseNodes = firstJson is null
+            ? Array.Empty<LayoutNodeRecord>()
+            : ParseNodesFromLayoutPatchJson(firstJson, layoutId);
 
         // Structural authority path: components_layout_design.layout_schema_json.records[] — when
-        // populated — is the render-completion source, not the flat tensor nodes[]. Most
+        // populated — is the render-completion source, not the flat tensor nodes[]. It is read
+        // independently of whether a tensor row exists at all: a read-only schema-authored layout
+        // with zero tensor rows is a valid shape (interactionsBySourceActionKey is simply empty —
+        // BuildInteractionsBySourceActionKey tolerates an empty tensor node list). Most
         // UI-Builder-authored layouts have no records[] (componentId/componentKind already sit
         // directly on tensor nodes); those layouts keep the existing tensor-only path below
         // unchanged. SSOT: docs/design/runtime-orchestration-ssot.yaml
-        // ui_projection_render_reachability_contract structural authority contract.
+        // ui_projection_render_reachability_contract layout_schema_structural_render_contract.
         var parseResult = LayoutSchemaTensorComposer.ParseRecords(layoutSchemaJson);
         if (parseResult is LayoutSchemaTensorComposer.RecordsParseResult.Invalid invalid)
         {
             // A present-but-malformed layout_schema_json.records[] is a real authoring defect,
             // never equivalent to "no records[]" — it must never be silently dropped to the
-            // tensor-only path below, nor partially composed by skipping the bad entries.
+            // tensor-only path below, nor partially composed by skipping the bad entries. This
+            // check is independent of tensor-row existence — a schema-only layout with malformed
+            // records[] must fail the same way as one that also has a tensor row.
             throw new InvalidOperationException(
                 $"LAYOUT_SCHEMA_RECORDS_INVALID: layout_id '{layoutId}' components_layout_design.layout_schema_json.records[] is malformed: {invalid.Reason}");
         }
@@ -302,8 +312,20 @@ public class NpgsqlTopologyRepository : TopologyRepository
             // Tensor nodes key their runtimeInteractions array at the FORM level; each entry is
             // individually tagged by sourceActionKey identifying the Action/Field leaf it belongs
             // to — grouping by that key is the correct merge join, not a tensor-nodeId match.
+            // baseNodes is empty when no tensor row exists — BuildInteractionsBySourceActionKey
+            // returns an empty Valid map in that case, which is correct: a schema-only layout has
+            // no runtimeInteractions to merge, not a broken one.
+            var interactionsParseResult = LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey(baseNodes);
+            if (interactionsParseResult is LayoutSchemaTensorComposer.InteractionsParseResult.Invalid invalidInteractions)
+            {
+                // A malformed/unattributable tensor runtimeInteractions shape is a real authoring
+                // defect — never silently skipped, never composed as if the interaction simply
+                // didn't exist.
+                throw new InvalidOperationException(
+                    $"LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID: layout_id '{layoutId}' ui_topology_tensor.layout_patch_json runtimeInteractions is malformed: {invalidInteractions.Reason}");
+            }
             var interactionsBySourceActionKey =
-                LayoutSchemaTensorComposer.BuildInteractionsBySourceActionKey(baseNodes);
+                ((LayoutSchemaTensorComposer.InteractionsParseResult.Valid)interactionsParseResult).BySourceActionKey;
 
             var requiredComponentKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(schemaRecords);
             var componentKeyToId = await LoadComponentIdsByKeysAsync(requiredComponentKeys, ct);
@@ -316,7 +338,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
                 componentIdToKind);
 
             return composed.Select(n =>
-                n.NodeKind == "structural_node"
+                n.NodeKind == "structural_node" || n.NodeKind == "unresolved_gap"
                     ? n
                     : n with
                     {
@@ -327,6 +349,15 @@ public class NpgsqlTopologyRepository : TopologyRepository
                         TargetSurface = targetSurface,
                         TargetRef = targetRef,
                     }).ToList();
+        }
+
+        // No schema records[] and no tensor row: neither source has content for this layout_id.
+        if (firstJson is null)
+        {
+            _npgsqlLogger.LogDebug(
+                "NpgsqlTopologyRepository.LoadLayoutNodesAsync: no schema records[] and no tensor row for layoutId='{LayoutId}'.",
+                layoutId);
+            return Array.Empty<LayoutNodeRecord>();
         }
 
         if (baseNodes.Count == 0)

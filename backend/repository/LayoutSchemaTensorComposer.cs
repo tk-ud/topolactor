@@ -244,13 +244,35 @@ public static class LayoutSchemaTensorComposer
     }
 
     /// <summary>
-    /// Groups tensor nodes' (layout_patch_json.nodes[]) runtimeInteractions entries by their
-    /// sourceActionKey field — each tensor node carries its child Action/Field leaves' entries at
-    /// the FORM level, individually tagged by which leaf they belong to. Entries without a
-    /// sourceActionKey are omitted (nothing to attribute them to — never guessed). Returns a map
-    /// from sourceActionKey to the JSON array text of that key's own entries (usually one).
+    /// Discriminates a successfully-grouped interactions map (Valid) from a malformed/
+    /// unattributable tensor runtimeInteractions shape (Invalid — a real authoring defect that
+    /// must surface as an explicit failure, never be silently skipped). See
+    /// docs/design/runtime-orchestration-ssot.yaml
+    /// ui_projection_render_reachability_contract.layout_schema_structural_render_contract
+    /// tensor_runtime_interactions_merge.
     /// </summary>
-    public static IReadOnlyDictionary<string, string> BuildInteractionsBySourceActionKey(
+    public abstract record InteractionsParseResult
+    {
+        private InteractionsParseResult() { }
+        public sealed record Valid(IReadOnlyDictionary<string, string> BySourceActionKey) : InteractionsParseResult;
+        public sealed record Invalid(string Reason) : InteractionsParseResult;
+    }
+
+    /// <summary>
+    /// Groups tensor nodes' (layout_patch_json.nodes[]) runtimeInteractions entries by
+    /// "{formTensorNodeId}::{sourceActionKey}" — each tensor node carries its child Action/Field
+    /// leaves' entries at the FORM level, individually tagged by which leaf they belong to.
+    /// Scoping the map key by the OWNING FORM's own tensor NodeId (not sourceActionKey alone)
+    /// prevents cross-contamination when two different Forms happen to author the same leaf key
+    /// (e.g. two Forms both authoring an Action named "validate") — each Form's entries stay
+    /// attributed only to its own children, never merged across Forms. Malformed JSON, a
+    /// non-array runtimeInteractions value, a non-object entry, or an entry missing a non-empty
+    /// sourceActionKey is a real authoring defect — never silently skipped — and returns Invalid.
+    /// Valid returns a map from "{formTensorNodeId}::{sourceActionKey}" to the JSON array text of
+    /// that key's own entries (usually one) — see Compose's ResolveInteractionsMergeKey for the
+    /// matching leaf-side key construction.
+    /// </summary>
+    public static InteractionsParseResult BuildInteractionsBySourceActionKey(
         IReadOnlyList<LayoutNodeRecord> tensorNodes)
     {
         var bySourceActionKey = new Dictionary<string, List<JsonElement>>(StringComparer.Ordinal);
@@ -264,28 +286,37 @@ public static class LayoutSchemaTensorComposer
             {
                 doc = JsonDocument.Parse(node.RuntimeInteractionsJson);
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
-                continue;
+                return new InteractionsParseResult.Invalid(
+                    $"node '{node.NodeId}' runtimeInteractions is not valid JSON: {ex.Message}");
             }
 
             using (doc)
             {
-                if (doc.RootElement.ValueKind != JsonValueKind.Array) continue;
+                if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                    return new InteractionsParseResult.Invalid(
+                        $"node '{node.NodeId}' runtimeInteractions is present but is not a JSON array (found {doc.RootElement.ValueKind}).");
 
-                foreach (var entry in doc.RootElement.EnumerateArray())
+                var entries = doc.RootElement.EnumerateArray().ToList();
+                for (var index = 0; index < entries.Count; index++)
                 {
-                    if (entry.ValueKind != JsonValueKind.Object) continue;
+                    var entry = entries[index];
+                    if (entry.ValueKind != JsonValueKind.Object)
+                        return new InteractionsParseResult.Invalid(
+                            $"node '{node.NodeId}' runtimeInteractions[{index}] is not a JSON object.");
                     if (!entry.TryGetProperty("sourceActionKey", out var sak) ||
-                        sak.ValueKind != JsonValueKind.String)
-                        continue;
-                    var sourceActionKey = sak.GetString();
-                    if (string.IsNullOrWhiteSpace(sourceActionKey)) continue;
+                        sak.ValueKind != JsonValueKind.String ||
+                        string.IsNullOrWhiteSpace(sak.GetString()))
+                        return new InteractionsParseResult.Invalid(
+                            $"node '{node.NodeId}' runtimeInteractions[{index}] is missing a non-empty sourceActionKey.");
+                    var sourceActionKey = sak.GetString()!;
+                    var scopedKey = $"{node.NodeId}::{sourceActionKey}";
 
-                    if (!bySourceActionKey.TryGetValue(sourceActionKey, out var list))
+                    if (!bySourceActionKey.TryGetValue(scopedKey, out var list))
                     {
                         list = new List<JsonElement>();
-                        bySourceActionKey[sourceActionKey] = list;
+                        bySourceActionKey[scopedKey] = list;
                     }
                     list.Add(entry.Clone());
                 }
@@ -293,9 +324,9 @@ public static class LayoutSchemaTensorComposer
         }
 
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (sourceActionKey, entries) in bySourceActionKey)
-            result[sourceActionKey] = JsonSerializer.Serialize(entries);
-        return result;
+        foreach (var (scopedKey, entries) in bySourceActionKey)
+            result[scopedKey] = JsonSerializer.Serialize(entries);
+        return new InteractionsParseResult.Valid(result);
     }
 
     /// <summary>
@@ -308,16 +339,25 @@ public static class LayoutSchemaTensorComposer
     /// records become "unresolved_gap" entries carrying RecordType/Label/KnownGapRefs — never a
     /// componentId/componentKind, never merged with runtimeInteractions. Each catalog_component
     /// leaf's runtimeInteractions are merged from interactionsBySourceActionKey (see
-    /// BuildInteractionsBySourceActionKey) by leaf key == sourceActionKey. Order follows the
-    /// authored document order (already parent-before-child).
+    /// BuildInteractionsBySourceActionKey) by "{parentKey}::{key}" — scoped to the leaf's OWNING
+    /// FORM, never by leaf key alone, so two different Forms authoring the same leaf key never
+    /// cross-contaminate each other's interactions. Order follows the authored document order
+    /// (already parent-before-child).
     ///
     /// NodeId is normally the record's own authored key; when two records anywhere in the tree
     /// share the same key (an authoring collision — the record tree's key is only guaranteed
     /// unique within its own branch, not globally), each is namespaced as
     /// "{parentKey}::{key}" instead so the composed list never violates the LAYOUT_PATCH_DUPLICATE_NODE_ID
-    /// invariant StructureMapResolver.ValidateLayoutNodes already enforces. ParentNodeId is nulled
-    /// (root) when a record's authored parentKey does not match any record in this tree — the
-    /// implicit/virtual tree root the translator emits ($.root) is never itself a record.
+    /// invariant StructureMapResolver.ValidateLayoutNodes already enforces.
+    ///
+    /// ParentNodeId resolution walks records in authored document order and tracks each key's
+    /// MOST RECENTLY composed NodeId so far — never a static whole-tree key lookup — so a child
+    /// whose parentKey happens to collide with another branch's container (a duplicated
+    /// container key) still attaches to the SAME physical container instance it was actually
+    /// nested under, not to whichever duplicate happens to match by key. ParentNodeId is nulled
+    /// (root) when a record's authored parentKey has not been composed yet at this point in the
+    /// document — the implicit/virtual tree root the translator emits ($.root) is never itself a
+    /// record.
     /// </summary>
     public static IReadOnlyList<LayoutNodeRecord> Compose(
         IReadOnlyList<SchemaRecordRow> schemaRecords,
@@ -325,7 +365,6 @@ public static class LayoutSchemaTensorComposer
         IReadOnlyDictionary<string, string> componentKeyToId,
         IReadOnlyDictionary<string, string> componentIdToKind)
     {
-        var definedKeys = new HashSet<string>(schemaRecords.Select(r => r.Key), StringComparer.Ordinal);
         var duplicateKeys = new HashSet<string>(
             schemaRecords.GroupBy(r => r.Key, StringComparer.Ordinal)
                 .Where(g => g.Count() > 1)
@@ -337,6 +376,11 @@ public static class LayoutSchemaTensorComposer
 
         var result = new List<LayoutNodeRecord>(schemaRecords.Count);
         var orderIndex = 0;
+
+        // Running map: authored key -> the resolved NodeId of the most recently composed record
+        // with that key, in document order (parent-before-child). See ParentNodeId resolution
+        // note above.
+        var lastResolvedNodeIdByKey = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var row in schemaRecords)
         {
@@ -356,21 +400,24 @@ public static class LayoutSchemaTensorComposer
                 }
             }
 
-            // Merge target is a catalog_component leaf only, keyed by the leaf's own authored
-            // key (== tensor entry sourceActionKey) — never by NodeId, which may be namespaced.
-            // structural_node and unresolved_gap nodes never receive runtimeInteractions.
+            // Merge target is a catalog_component leaf only, keyed by "{parentKey}::{key}" —
+            // scoped to the leaf's owning FORM (see BuildInteractionsBySourceActionKey) — never
+            // by leaf key alone. structural_node and unresolved_gap nodes never receive
+            // runtimeInteractions.
             string? runtimeInteractionsJson = null;
             if (isCatalogLeaf)
-                interactionsBySourceActionKey.TryGetValue(row.Key, out runtimeInteractionsJson);
+                interactionsBySourceActionKey.TryGetValue($"{row.ParentKey}::{row.Key}", out runtimeInteractionsJson);
 
-            var parentNodeId = row.ParentKey is not null && definedKeys.Contains(row.ParentKey)
-                ? row.ParentKey
+            var parentNodeId = row.ParentKey is not null && lastResolvedNodeIdByKey.TryGetValue(row.ParentKey, out var resolvedParentId)
+                ? resolvedParentId
                 : null;
 
             var nodeKind = isUnresolved ? "unresolved_gap" : isStructural ? "structural_node" : "catalog_component";
+            var resolvedNodeId = ResolveNodeId(row);
+            lastResolvedNodeIdByKey[row.Key] = resolvedNodeId;
 
             result.Add(new LayoutNodeRecord(
-                NodeId: ResolveNodeId(row),
+                NodeId: resolvedNodeId,
                 NodeKind: nodeKind,
                 HtmlTag: null,
                 ComponentKey: null,
@@ -386,7 +433,11 @@ public static class LayoutSchemaTensorComposer
                 ComponentKind: componentKind,
                 RuntimeInteractionsJson: runtimeInteractionsJson,
                 RecordType: (isStructural || isUnresolved) ? row.RecordType : null,
-                Label: (isStructural || isUnresolved) ? row.Label : null,
+                // Every schema record carries an authored label (record_common_required_fields)
+                // — a catalog_component leaf's own label must survive composition the same way a
+                // structural_node's does, so the frontend can build real production default
+                // props from it instead of a hardcoded placeholder caption or the bare NodeId.
+                Label: row.Label,
                 KnownGapRefs: isUnresolved ? row.KnownGapRefs : null
             ));
         }

@@ -67,6 +67,12 @@ public static class DraftPreviewComposer
                 "LAYOUT_SCHEMA_RECORDS_INVALID",
                 ex.Message), 422);
         }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID", StringComparison.Ordinal))
+        {
+            return (null, new ValidationError(
+                "LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID",
+                ex.Message), 422);
+        }
 
         if (tensorContext is null && tensorRows.Count == 0)
         {

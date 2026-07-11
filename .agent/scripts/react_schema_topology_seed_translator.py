@@ -1161,10 +1161,38 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
     wiring_action_entries = []
     tensor_nodes = []
 
+    # parent_scoped_identity_reconstruction (docs/design/runtime-orchestration-ssot.yaml
+    # ui_projection_render_reachability_contract.layout_schema_structural_render_contract):
+    # a record's authored key is only guaranteed unique within its own branch -- the same
+    # scheme LayoutSchemaTensorComposer.Compose (backend) applies when composing these same
+    # flat records must apply HERE too, so a tensor node grouped by its owning Form's key
+    # never silently merges two DIFFERENT Form instances that happen to share that key.
+    # Duplicate keys are namespaced "{parentKey}::{key}"; a record's resolved identity is
+    # tracked in document order (flatten_topology_ui_seed_tree already emits parent-before-
+    # child) so a child always resolves against the instance immediately preceding it, never
+    # a static, order-independent lookup that cannot distinguish between duplicates.
+    key_counts = {}
+    for wrapper in flat_records:
+        key_counts[(wrapper.get("record") or {}).get("key")] = \
+            key_counts.get((wrapper.get("record") or {}).get("key"), 0) + 1
+    duplicate_keys = {k for k, count in key_counts.items() if count > 1}
+    last_resolved_key_by_raw_key = {}
+
+    def resolve_and_track_identity(wrapper):
+        record = wrapper.get("record") or {}
+        raw_key = record.get("key")
+        resolved_key = f"{wrapper.get('parentKey')}::{raw_key}" if raw_key in duplicate_keys else raw_key
+        last_resolved_key_by_raw_key[raw_key] = resolved_key
+        return resolved_key
+
     for wrapper in flat_records:
         record = wrapper.get("record") or {}
         record_type = record.get("recordType")
         key = record.get("key")
+        # Resolve (and record) THIS record's own disambiguated identity before looking at its
+        # children below, so a child's parentKey lookup below sees the instance it is actually
+        # nested under, in document order.
+        this_resolved_key = resolve_and_track_identity(wrapper)
 
         if record_type == "topology_ui_projection":
             # components_package_design.layout shape: [{componentId?, layoutNodeId?,
@@ -1227,8 +1255,18 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
             # never rebuilt here) rather than deriving a second one.
             interactions = record.get("runtimeInteractions") or []
             if interactions:
+                parent_key = wrapper.get("parentKey")
+                # Resolve against the OWNING Form's disambiguated identity (the running map
+                # built above), never the raw parentKey string alone -- two different Form
+                # instances that happen to share a key must never merge their actions'
+                # runtimeInteractions into the same tensor node.
+                owning_form_key = (
+                    last_resolved_key_by_raw_key.get(parent_key, parent_key)
+                    if parent_key is not None
+                    else this_resolved_key
+                )
                 tensor_nodes.append({
-                    "nodeId": wrapper.get("parentKey") or key,
+                    "nodeId": owning_form_key,
                     "nodeKind": "catalog_component",
                     "runtimeInteractions": list(interactions),
                 })

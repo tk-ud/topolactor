@@ -907,6 +907,56 @@ def main():
             "MANIFEST_REFS_CANDIDATE_REFERENCE_UNRESOLVED" not in [e["ruleId"] for e in resolved_refs_errors],
         )
 
+        # 36z6a-36z6b: parent_scoped_identity_reconstruction (docs/design/
+        # runtime-orchestration-ssot.yaml ui_projection_render_reachability_contract.
+        # layout_schema_structural_render_contract) -- split_flat_records_into_adoption_candidates
+        # must scope tensorAdoptionCandidates node identity by the owning Form's disambiguated
+        # (parentKey-namespaced when duplicated) key, never the raw Form key alone, so two
+        # different Form instances that happen to share an authored key never merge their
+        # actions' runtimeInteractions into the same tensor node.
+        duplicate_form_key_flat_records = [
+            {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "cat_a", "record": {
+                "recordType": "topology_ui_form", "key": "shared_form", "label": "Form A",
+                "target": "t", "mode": "edit", "authorityMarker": "validation_only",
+                "fieldKeys": [], "actionKeys": ["act_a"],
+            }},
+            {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "shared_form", "record": {
+                "recordType": "topology_ui_action", "key": "act_a", "label": "Act A",
+                "actionRef": "instance:a", "authorityMarker": "validation_only",
+                "eventBinding": {"trigger": "click", "wiringLane": "external_instance_wiring", "targetRef": "instance:a"},
+                "runtimeInteractions": [{"trigger": "click", "actionType": "dispatchInstanceOperation", "sourceActionKey": "act_a", "instanceTargetRef": "A"}],
+            }},
+            {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "cat_b", "record": {
+                "recordType": "topology_ui_form", "key": "shared_form", "label": "Form B",
+                "target": "t", "mode": "edit", "authorityMarker": "validation_only",
+                "fieldKeys": [], "actionKeys": ["act_b"],
+            }},
+            {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "shared_form", "record": {
+                "recordType": "topology_ui_action", "key": "act_b", "label": "Act B",
+                "actionRef": "instance:b", "authorityMarker": "validation_only",
+                "eventBinding": {"trigger": "click", "wiringLane": "external_instance_wiring", "targetRef": "instance:b"},
+                "runtimeInteractions": [{"trigger": "click", "actionType": "dispatchInstanceOperation", "sourceActionKey": "act_b", "instanceTargetRef": "B"}],
+            }},
+        ]
+        duplicate_form_key_adoption = translator_impl.split_flat_records_into_adoption_candidates(
+            duplicate_form_key_flat_records, "seed",
+        )
+        duplicate_form_key_tensor_nodes = dig(
+            duplicate_form_key_adoption["tensorAdoptionCandidates"][0], "layoutPatchJson", "nodes",
+        ) or []
+        expect(
+            "36z6a. two Form instances sharing an authored key produce TWO separate tensorAdoptionCandidates nodes, not one merged node",
+            len(duplicate_form_key_tensor_nodes) == 2,
+        )
+        node_a = next((n for n in duplicate_form_key_tensor_nodes if n["nodeId"] == "cat_a::shared_form"), None)
+        node_b = next((n for n in duplicate_form_key_tensor_nodes if n["nodeId"] == "cat_b::shared_form"), None)
+        expect(
+            "36z6b. each duplicate Form's tensor node carries ONLY its own action's runtimeInteractions (no cross-contamination)",
+            node_a is not None and node_b is not None
+            and len(node_a["runtimeInteractions"]) == 1 and node_a["runtimeInteractions"][0]["sourceActionKey"] == "act_a"
+            and len(node_b["runtimeInteractions"]) == 1 and node_b["runtimeInteractions"][0]["sourceActionKey"] == "act_b",
+        )
+
         # 36z7: grep guard against the retired "one row per Action record" wiring
         # cardinality wording re-appearing in docs after the Blocking 2 fix above
         # (PR580 review follow-up) -- the correct wording is one aggregate row

@@ -126,6 +126,16 @@ public class StructureMapResolver
                 ];
                 goto buildShape;
             }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID"))
+            {
+                // A malformed/unattributable tensor runtimeInteractions shape is a real
+                // authoring defect — never silently skipped during the schema-authority merge.
+                layoutErrors =
+                [
+                    new ValidationError("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID", ex.Message)
+                ];
+                goto buildShape;
+            }
 
             if (parsedNodes.Count == 0)
             {

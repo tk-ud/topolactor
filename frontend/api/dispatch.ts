@@ -166,7 +166,11 @@ export type LayoutNode = {
    * "structural_html" nodes.
    */
   recordType?: string;
-  /** Authored display label for a structural_node or unresolved_gap node. Absent otherwise. */
+  /**
+   * Authored display label — present for every schema-composed node (structural_node,
+   * catalog_component, and unresolved_gap alike). Absent for tensor-only nodes composed outside
+   * the layout-schema structural authority path.
+   */
   label?: string;
   /** Authored known-gap references for an unresolved_gap node. Absent for every other nodeKind. */
   knownGapRefs?: string[];

@@ -136,6 +136,35 @@ Deno.test("projectionEntry: no package selection never blocks (backend package r
   assertEquals(confirmation.ok, true);
 });
 
+// ── explicit manifest confirmation (initial dispatch, before any identity is adopted) ───────
+
+Deno.test("projectionEntry: explicit ?manifest= selection mismatch on the INITIAL dispatch is an explicit error, never rendered — backend target_ref resolution is never trusted unverified", () => {
+  const confirmation = confirmProjectionEntryEmission(
+    { manifestId: MANIFEST_ID },
+    { componentIds: [], manifestId: "dddddddd-0000-0000-0000-000000000004" },
+  );
+  assertEquals(confirmation.ok, false);
+  if (!confirmation.ok) {
+    assert(confirmation.error.includes("PROJECTION_ENTRY_MANIFEST_MISMATCH"));
+  }
+});
+
+Deno.test("projectionEntry: matching explicit ?manifest= selection confirms on the initial dispatch, with no adoptedManifestId option needed yet", () => {
+  const confirmation = confirmProjectionEntryEmission(
+    { manifestId: MANIFEST_ID },
+    { componentIds: [], manifestId: MANIFEST_ID },
+  );
+  assertEquals(confirmation.ok, true);
+});
+
+Deno.test("projectionEntry: no explicit manifest selection never blocks on manifestId alone (bare-entry / route selection stays backend authority)", () => {
+  const confirmation = confirmProjectionEntryEmission(
+    {},
+    { componentIds: [], manifestId: MANIFEST_ID },
+  );
+  assertEquals(confirmation.ok, true);
+});
+
 // ── ProjectionShell wiring (source-scan, same style as projectionAuthBoundary) ─
 
 Deno.test("projection entry surface: ProjectionShell resolves initial axes from the entry selection, not a hardcoded default block", async () => {
