@@ -1,0 +1,910 @@
+{
+  "report_meta": {
+    "bundle_id": "admin-surface-topology-seed-conversion",
+    "report_kind": "design_investigation",
+    "worktype": "audit / design_investigation",
+    "purpose": "Re-investigate all open problems in the admin-surface-topology-seed-conversion bundle before any implementation. Separate confirmed_fact / not_found_after_search / inference_requires_proof / owner_decision_required. Do not treat existing implementation, docs/system-roadmap.yaml, or .agent/tasks/todo.md as design authority.",
+    "generated_at_utc": "2026-07-11T12:35:21+00:00",
+    "repository": {
+      "head_commit": "b359cba0a2532ead7edd737eae0b981db35e904e",
+      "head_commit_datetime": "2026-07-11T16:33:26+09:00",
+      "branch": "claude/admin-surface-topology-seed-design-z9xxag",
+      "git_status": "clean (0 files changed, 0 untracked, prior to this report's own write)",
+      "investigation_window_utc": "2026-07-11T12:00:00Z..2026-07-11T12:35:21Z"
+    },
+    "method": [
+      "Read AGENTS.md, .agent/rules/rule.md, .agent/README.md; ran .agent/tools/directory-map and .agent/tools/agent-ui-initial-contract (worktype=audit) tool-first route.",
+      "Read .agent/tasks/todo.md in full (both admin-surface-topology-seed-conversion and its sibling/downstream bundle entries).",
+      "Read in full: docs/design/admin-master-roster-management-ssot.yaml, docs/design/auth-db-session-credential-ssot.yaml, docs/design/enum-dictionary-ssot.yaml, docs/design/scheduler-job-manifest-ssot.yaml, docs/design/team-markdown-dashboard-saved-view-ssot.yaml, docs/design/instance-port-substrate-ssot.yaml, docs/projection_design/credential-management-projection-design.md directly.",
+      "Dispatched 5 parallel read-only research agents (Explore subagent) to read in full and quote verbatim: (1) docs/framework-core.yaml, docs/framework-policy.yaml, docs/design/runtime-orchestration-ssot.yaml, docs/design/pipeline-continuity-ssot.yaml; (2) docs/design/admin-console-workflow-ssot.yaml, docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml; (3) docs/design/react-schema-topology-seed-translator-ssot.yaml, docs/system-roadmap.yaml; (4) db/init.sql canonical bootstrap chain, all db/*.sql for dispatcher_mapping evidence, backend/runtime/AdminRuntime.cs full handler inventory, frontend/routes/admin/* inventory, canonical route registry; (5) frontend dispatch/event-effect chain, outputProp end-to-end usage, SSE broadcast/consumer pairing, admin CRUD refresh mechanism, adminDispatchManifestSeed.test.ts and route-presence test contents.",
+      "Performed direct verification greps/reads myself for: pipeline-continuity-ssot.yaml tests_must_not_redefine_expected_vocabulary exact text and applies_to scope; db/seed_empty.sql canonical_default_entry hub_relations row and manifest 092 runtime_mapping; presence/absence of dispatcher_mapping rows for auth_users, enum_dictionary, team_markdown, scheduler_jobs across db/*.sql; frontend/api/adminApi.ts and frontend/api/teamMarkdownApi.ts dispatch call path (queueAdminClientCommand / callAdminMasterOp); backend/runtime/ManifestDispatcher.cs no-silent-fallback contract.",
+      "No product/runtime/SSOT/TODO/seed/test/workflow file was modified. This JSON file is the only repository change produced by this investigation."
+    ],
+    "classification_vocabulary": [
+      "confirmed_gap",
+      "confirmed_ssot_conflict",
+      "confirmed_proof_drift",
+      "connected_no_gap",
+      "not_found_after_search",
+      "inference_requires_proof",
+      "owner_decision_required",
+      "out_of_bundle"
+    ],
+    "scope_subbundles": ["admin-dashboard", "team-dashboard", "credential-management", "admin-enum", "scheduler-settings"]
+  },
+
+  "issues": [
+    {
+      "id": "issue-01",
+      "source_text": ".agent/tasks/todo.md の受入条件がTODO再編条件であり、SubBundle実装完了条件になっていない。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": ".agent/tasks/todo.md", "section": "Bundle `admin-surface-topology-seed-conversion` > 受入条件", "note": "All 10 acceptance-condition bullets (lines ~348-358) assert that todo.md itself documents the integrated Bundle structure, subBundle list, common process order, and per-subBundle scope text correctly. None assert a runtime/dispatch/DB/DOM fact about any subBundle's implementation."},
+        {"repo_path": ".agent/tasks/todo.md", "section": "same Bundle > 対象関数名", "note": "Lists only 'future ... functions discovered by Agent' placeholders, confirming no implementation-completion functions are yet named."}
+      ],
+      "owning_ssot": [".agent/tasks/todo.md (not a design SSOT; dynamic reference point per AGENTS.md/.agent/rules/rule.md)"],
+      "current_wiring_state": "The Bundle's own 受入条件 is a TODO-reorganization proof set, not an Implemented-judgment proof set. No SSOT defines a substitute completion condition for this specific Bundle either (see issue-41).",
+      "fix_candidates": [
+        "Leave todo.md 受入条件 as TODO-reorg proof (as-is) and define a separate Implemented-judgment proof set in a governance/report surface.",
+        "Extend todo.md 受入条件 itself with implementation-completion bullets per subBundle."
+      ],
+      "recommended_policy": "Do not conflate the two. Keep todo.md's 受入条件 as TODO-reorganization proof (its actual and sufficient purpose), and treat this report's `implemented_judgment_matrix` (below) as the canonical minimal Implemented-judgment proof set for admin-surface-topology-seed-conversion until a future implementation Bundle formalizes it in SSOT/proof-surface form. Per governance NG boundary this report may not itself edit todo.md.",
+      "rejected_candidates": ["Treating todo.md 受入条件 completion as sufficient evidence of subBundle Implemented status (explicitly prohibited by AGENTS.md/.agent/rules/rule.md and by this task's NG boundary)."],
+      "change_order_position": "ssot_ownership",
+      "required_proof": ["A future design_change to todo.md (or a dedicated proof-surface SSOT) that separates 'TODO structure correctness' from 'subBundle Implemented' as two distinct acceptance axes."]
+    },
+    {
+      "id": "issue-02",
+      "source_text": "hardcoded route retirementが、URL削除、route body置換、ProjectionShell化、hub navigation吸収、redirectのどれを意味するか未定義。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml, docs/design/pipeline-continuity-ssot.yaml, docs/framework-core.yaml, docs/framework-policy.yaml", "note": "Grep for 'retire'/'retirement'/'redirect'/'route body'/'absorption' across all four files returned zero matches (search performed by dedicated subagent)."},
+        {"repo_path": "docs/design/admin-console-workflow-ssot.yaml", "section": "removed_legacy_wrapper_routes (lines ~1467-1478)", "note": "The only route-removal concept found: `policy: deleted` for /dev/admin/* debug wrapper routes only, directing implementations to 'converge on one of the canonical admin surfaces.' Does not define retirement semantics for any of the five canonical_routes list entries."},
+        {"repo_path": ".agent/tasks/todo.md", "section": "Bundle admin-surface-topology-seed-conversion > 改善方針", "note": "States route deletion happens 'only after seed conversion and render/action wiring confirmation' (順序 rule) but never defines what 'route deletion' structurally means (URL removal vs. route body replacement vs. ProjectionShell absorption vs. hub-nav absorption vs. redirect)."}
+      ],
+      "owning_ssot": ["No current owner. Nearest candidate owners: docs/design/admin-console-workflow-ssot.yaml (route authority, defers upward), docs/design/runtime-orchestration-ssot.yaml (frontend_routes.admin registry authority)."],
+      "current_wiring_state": "Undefined term used as a load-bearing concept in the Bundle's own name and governance NG boundary ('route absence を proof としない' / 'route削除を先行する' is prohibited) without the term itself being defined anywhere.",
+      "fix_candidates": [
+        "Define retirement as: canonical route URL stays registered, but the route's rendered body becomes a seed-backed ProjectionShell entry (manifest+ui_projection driven) instead of a hand-written island; hardcoded route *file* and *island* are what get deleted, not the URL.",
+        "Define retirement as literal URL deletion with traffic absorbed into hub navigation / a generic admin entry.",
+        "Define retirement as a redirect from the old URL to a canonical seed-backed entry point."
+      ],
+      "recommended_policy": "Candidate 1 (route body replaced by seed-backed ProjectionShell rendering; URL kept) is most consistent with existing SSOT evidence: runtime-orchestration-ssot.yaml's frontend_routes.admin registry already lists /admin, /admin/team-dashboard, /admin/enums, /admin/users as canonical URLs (see issue-04), and admin-console-workflow-ssot.yaml explicitly prohibits 'adding_noncanonical_admin_or_dev_admin_helper_routes' but never prohibits keeping these five URLs. This is a recommendation only, not a resolved SSOT fact — owner must ratify because no SSOT states it explicitly.",
+      "rejected_candidates": ["Silent literal URL deletion without SSOT definition (violates 'route削除を先行する' / 'route absence を proof とする' NG boundary already recorded in todo.md)."],
+      "change_order_position": "route_entry_contract",
+      "required_proof": ["A design_change to admin-console-workflow-ssot.yaml or runtime-orchestration-ssot.yaml that adds an explicit 'route retirement' definition section before any route file is deleted."],
+      "owner_decision_required": {
+        "options": ["URL kept, body replaced by seed/ProjectionShell", "URL deleted, absorbed into hub navigation", "URL deleted, redirected to canonical entry"],
+        "impact": "Determines whether frontend/routes/admin/*.tsx files are ever deleted, and whether existing bookmarked/linked URLs continue to resolve.",
+        "recommendation": "URL kept, body replaced by seed/ProjectionShell (see fix_candidates)."
+      }
+    },
+    {
+      "id": "issue-03",
+      "source_text": "runtime canonical routesと現行route実装の差。特に /admin/scheduler がcanonical route registry外である一方、route実装とroute-presence testが存在する。",
+      "classification": "confirmed_ssot_conflict",
+      "evidence": [
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml", "section": "frontend_routes.admin (lines 96-108)", "note": "Authoritative registry lists exactly: /admin, /admin/manifests, /admin/contents, /admin/ui-builder, /admin/team-dashboard, /admin/enums, /admin/users. /admin/scheduler is absent."},
+        {"repo_path": "frontend/routes/admin/scheduler.tsx", "note": "333-line live route file exists."},
+        {"repo_path": "db/seed_empty.sql", "section": "lines 3025-3074", "note": "Four active manifest rows (...f0..f3) with dispatcher_mapping {role:admin,target:admin,layer:scheduler_jobs,action:list_settings|create|edit|disable}, runtime_mapping admin_runtime — full backend wiring exists for this route's actions."},
+        {"repo_path": "frontend/tests/adminMainFlow.test.ts", "section": "lines 48-60, 73-94", "note": "Test 'Fresh /admin route registry matches runtime-orchestration SSOT exactly' hardcodes an expected array that INCLUDES /admin/scheduler, but never actually parses/reads docs/design/runtime-orchestration-ssot.yaml — it compares two independently hardcoded frontend-side lists (ADMIN_ROUTE_CARDS vs. a literal test array), so it cannot detect this exact drift despite its name claiming to."},
+        {"repo_path": "frontend/content/adminGuides.ts", "section": "lines 200-209", "note": "ADMIN_ROUTE_CARDS entry for /admin/scheduler exists with caution text describing it as a read-only-in-UI screen."}
+      ],
+      "owning_ssot": ["docs/design/runtime-orchestration-ssot.yaml (frontend_routes.admin is the stated canonical authority)"],
+      "current_wiring_state": "confirmed_ssot_conflict: the route is fully implemented, backend-wired, and asserted canonical by a test with a misleading name, but is absent from the one SSOT that both admin-console-workflow-ssot.yaml and admin-uibuilder-ui-structure-wiring-ssot.yaml explicitly defer to as the authoritative registry.",
+      "fix_candidates": [
+        "Add /admin/scheduler to runtime-orchestration-ssot.yaml frontend_routes.admin (ratifies existing implementation).",
+        "Remove/retire frontend/routes/admin/scheduler.tsx and absorb its list/create/edit/disable actions into an existing canonical route (per issue-02's resolution) — treats current implementation as unauthorized drift."
+      ],
+      "recommended_policy": "Ratify by adding /admin/scheduler to the SSOT registry — the route is fully wired end-to-end at the backend/DB layer (dispatcher_mapping for all 4 actions exists, matching the completeness of /admin/enums's enum_dictionary mapping), so treating it as illegitimate would discard working infrastructure. This still requires owner ratification since it is an SSOT edit, out of this report's own change scope.",
+      "rejected_candidates": ["Leaving the SSOT registry silently out of date while route-presence tests assert a false 'matches SSOT' claim (confirmed_proof_drift — see issue-12)."],
+      "change_order_position": "route_entry_contract",
+      "required_proof": ["design_change PR adding /admin/scheduler to runtime-orchestration-ssot.yaml frontend_routes.admin, plus a route-presence test rewritten to parse the YAML directly (see issue-12)."]
+    },
+    {
+      "id": "issue-04",
+      "source_text": "/admin、/admin/team-dashboard、/admin/enums、/admin/usersをcanonical URLとして維持するか、seed-backed route wrapperへ置換するかが未確定。",
+      "classification": "owner_decision_required",
+      "evidence": [
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml", "section": "frontend_routes.admin (lines 96-108)", "note": "All four URLs are listed as canonical routes today; no expiry or wrapper-replacement plan is attached to any of them."},
+        {"repo_path": ".agent/tasks/todo.md", "section": "Bundle admin-surface-topology-seed-conversion, Governance NG boundary", "note": "Prohibits route-per-Bundle organization and prohibits treating route absence as proof, but does not resolve whether the URLs themselves survive seed conversion."}
+      ],
+      "owning_ssot": ["docs/design/runtime-orchestration-ssot.yaml (URL registry authority)", "docs/design/admin-console-workflow-ssot.yaml (route responsibility split, subordinate)"],
+      "current_wiring_state": "Directly downstream of issue-02's undefined 'retirement' term — cannot be resolved independently of it.",
+      "fix_candidates": ["Keep all 4 URLs as canonical, convert only the route body/island rendering mechanism to seed-backed ProjectionShell.", "Replace with a smaller number of generic seed-backed route wrappers and drop the per-surface URLs."],
+      "recommended_policy": "Keep the 4 URLs (consistent with issue-02's recommendation and with runtime-orchestration-ssot.yaml's current registry, which the Bundle's own primary SSOT set does not propose changing). This is a recommendation, not resolved — owner must ratify because no SSOT explicitly commits to URL stability post-conversion.",
+      "rejected_candidates": ["Deciding this unilaterally as an implementation Agent without owner ratification (explicitly prohibited by the task's NG boundary: 'placeholder targetRef...' / '/admin/users統合方針をowner判断なしに決定する' analog applies to route-URL policy generally)."],
+      "change_order_position": "route_entry_contract",
+      "required_proof": ["Owner ratification recorded in runtime-orchestration-ssot.yaml or admin-console-workflow-ssot.yaml before any route file body is rewritten."]
+    },
+    {
+      "id": "issue-05",
+      "source_text": "generic admin catch-all routeが存在するか。個別route削除後にProjectionShellへ自動移行する接続があるか。",
+      "classification": "not_found_after_search",
+      "evidence": [
+        {"repo_path": "frontend/routes/**", "note": "Glob for `frontend/routes/**/*[*]*` (Fresh catch-all/dynamic-segment convention) returned no matches; `find` for `admin/[...slug].tsx` or similar found none. Only frontend/routes/admin/_middleware.ts exists, and it is a session-auth SSR gate (redirects unauthenticated requests to /super_auth, then passes through) — not a route dispatcher or catch-all renderer."},
+        {"repo_path": "frontend/routes/index.tsx, frontend/islands/ProjectionShell.tsx", "note": "Root `/` renders <ProjectionShell/> and resolves bare axes via resolveProjectionEntryAxes({}) — this is the closest thing to a 'generic' entry, but it is the root route, not an admin catch-all, and nothing wires individual /admin/* route deletion to fall through to it."}
+      ],
+      "search_scope": {"searched": "frontend/routes/** (Glob for wildcard/dynamic segments), frontend/routes/admin/_middleware.ts (read in full), frontend/routes/index.tsx, frontend/islands/ProjectionShell.tsx", "search_terms": ["catch-all", "[...slug]", "generic admin", "wildcard", "fallback route"], "confirmed_files_checked": ["frontend/routes/admin/_middleware.ts", "frontend/routes/index.tsx"]},
+      "owning_ssot": ["None found; nearest candidate is docs/design/admin-console-workflow-ssot.yaml route_authority section, which does not define one."],
+      "current_wiring_state": "No generic admin catch-all route exists. No automatic route-to-ProjectionShell migration mechanism exists for deleted routes.",
+      "fix_candidates": ["Do not build a catch-all; keep the 4-5 named URLs per issue-04's recommendation, each individually converted to seed-backed rendering.", "Build a generic /admin/[surface] catch-all route that resolves via manifest axes, and have named routes redirect into it."],
+      "recommended_policy": "Do not build a catch-all as part of this Bundle. It would itself be a new frontend route/API surface, which admin-console-workflow-ssot.yaml's shared_authoring_boundary.prohibited list (adding_noncanonical_admin_or_dev_admin_helper_routes) and this Bundle's own NG boundary (no new standalone routes) both caution against without explicit owner authorization. Named URL + seed-backed body (issue-02/04) does not need a catch-all.",
+      "rejected_candidates": ["Building a catch-all speculatively without owner request — out of scope creep."],
+      "change_order_position": "route_entry_contract",
+      "required_proof": ["N/A unless owner selects the catch-all option; if so, a design_change SSOT section defining it is required before implementation."]
+    },
+    {
+      "id": "issue-06",
+      "source_text": "/admin/usersをcredential-managementへ統合するTODOと、admin-master-roster-management-ssot.yaml、auth-db-session-credential-ssot.yaml、credential-management projection designの所有権衝突。",
+      "classification": "confirmed_ssot_conflict",
+      "evidence": [
+        {"repo_path": ".agent/tasks/todo.md", "section": "Bundle admin-surface-topology-seed-conversion > SubBundle scope > credential-management", "note": "'含めるもの: /admin/users、admin user...' and 受入条件: '/admin/users は credential-management subBundle に含まれている。' and 'credential managementから admin user を分離しない。'"},
+        {"repo_path": "docs/design/admin-master-roster-management-ssot.yaml", "section": "canonical_routes.admin_users (lines 46-56)", "note": "/admin/users is its own canonical route owning full CRUD (create/update/delete/status/suspension) over auth.users via island AdminUsersRoster.tsx, independent of the credential-management manifest."},
+        {"repo_path": "docs/projection_design/credential-management-projection-design.md", "section": "Tab / category structure", "note": "Explicit: '`user_auth` is not the same thing as the standalone `/admin/users` route... `/admin/users` is master-roster CRUD over `auth.users`... The credential-management `user_auth` tab is a readonly relation-boundary join... This bundle does not touch `/admin/users`; route presence/absence of `/admin/users` is not proof of anything in this bundle.'"},
+        {"repo_path": "docs/design/auth-db-session-credential-ssot.yaml (via admin-master-roster-management-ssot.yaml extends)", "note": "auth.users master_roster_ssot_ref points ownership of auth.users CRUD explicitly to admin-master-roster-management-ssot.yaml, not to the credential-management projection."}
+      ],
+      "owning_ssot": ["docs/design/admin-master-roster-management-ssot.yaml (owns /admin/users route + auth.users CRUD)", "docs/projection_design/credential-management-projection-design.md (explicitly disclaims touching /admin/users)", ".agent/tasks/todo.md (asserts /admin/users is now inside credential-management subBundle scope)"],
+      "current_wiring_state": "Three governance-adjacent documents make mutually inconsistent claims about whether /admin/users is inside or outside the credential-management surface. This is a genuine, unresolved ownership conflict, not a naming ambiguity.",
+      "fix_candidates": [
+        "Interpretation A: 'included in credential-management subBundle' means only navigation-level integration (a link/tab from the credential-management screen to /admin/users), not a route/manifest merge — reconciles with the projection-design.md boundary.",
+        "Interpretation B: /admin/users route and AdminUsersRoster.tsx CRUD get physically absorbed into manifest 092's category switcher as a fourth 'admin_user' mode alongside user_auth/external/instance_settings — contradicts projection-design.md's explicit non-touch statement and would require a design_change to admin-master-roster-management-ssot.yaml.",
+        "Interpretation C: todo.md's subBundle-scope wording is over-broad and should be narrowed in a future todo_maintenance pass to match the projection-design.md boundary exactly."
+      ],
+      "recommended_policy": "Interpretation A (navigation-level integration only; /admin/users route, CRUD, and auth.users authority remain fully owned by admin-master-roster-management-ssot.yaml) is most consistent with the two design-authority documents (admin-master-roster-management-ssot.yaml and credential-management-projection-design.md) that directly and explicitly govern this surface; todo.md is explicitly a dynamic, non-authoritative reference per AGENTS.md. However this is exactly the kind of decision the task's NG boundary reserves for the owner ('/admin/users統合方針をowner判断なしに決定する' is prohibited) — recorded here as owner_decision_required, not resolved.",
+      "rejected_candidates": ["Silently merging /admin/users into manifest 092 without a design_change to admin-master-roster-management-ssot.yaml (would contradict two explicit SSOT/design statements)."],
+      "change_order_position": "ssot_ownership",
+      "required_proof": ["Owner decision recorded as a design_change note in either admin-master-roster-management-ssot.yaml or credential-management-projection-design.md, reconciling with todo.md's subBundle scope wording."],
+      "owner_decision_required": {
+        "options": ["Navigation-level integration only (route/CRUD stays with admin-master-roster-management-ssot.yaml)", "Physical merge into manifest 092 credential-management category switcher", "Narrow todo.md wording to match existing projection-design.md boundary"],
+        "impact": "Determines whether AdminUsersRoster.tsx and /admin/users route file are ever touched by this Bundle's credential-management subBundle work.",
+        "recommendation": "Navigation-level integration only."
+      }
+    },
+    {
+      "id": "issue-07",
+      "source_text": "user_auth readonly relation boundaryと、auth.users master-roster CRUDの意味分離。",
+      "classification": "connected_no_gap",
+      "evidence": [
+        {"repo_path": "docs/projection_design/credential-management-projection-design.md", "section": "Tab / category structure", "note": "Explicitly documents user_auth as 'readonly join' via auth.user.boundary (manifest 091, logical table auth.user with columns id/username only) versus /admin/users's full CRUD over auth.users (approve/status/suspension/create/update/delete)."},
+        {"repo_path": "docs/design/auth-db-session-credential-ssot.yaml", "section": "relationship_boundary_manifest (lines 204-214)", "note": "manifest 091 = auth.user.boundary, logical_tables.auth.user columns [id, username] only — confirms the readonly relation-boundary shape referenced by the projection design doc."}
+      ],
+      "owning_ssot": ["docs/design/auth-db-session-credential-ssot.yaml (manifest 091 relationship_boundary_manifest)", "docs/design/admin-master-roster-management-ssot.yaml (auth.users CRUD authority)"],
+      "current_wiring_state": "Already clearly and consistently separated across the two governing documents; no drift found.",
+      "fix_candidates": [],
+      "recommended_policy": "No change needed. This boundary is already correctly defined and must be preserved when resolving issue-06.",
+      "rejected_candidates": [],
+      "change_order_position": "connected_no_gap",
+      "required_proof": ["None required beyond preserving this boundary text unchanged during any issue-06 resolution."]
+    },
+    {
+      "id": "issue-08",
+      "source_text": "auth_users:list/search/get/create/update/delete のAdminRuntime handlerは存在するが、canonical bootstrap内のproduction dispatcher mapping が存在するか未確定。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "backend/runtime/AdminRuntime.cs", "section": "ExecuteDataAsync switch, lines 307-312", "note": "All six auth_users:* cases exist and route to backend/runtime/AdminRuntimeMasterRoster.cs handlers (DataAuthUsersListAsync etc.), which call NpgsqlAuthMasterRepository against auth.users/auth.credentials/auth.grants — fully implemented at the backend/DB layer."},
+        {"repo_path": "db/*.sql (all files under db/, canonical bootstrap chain per db/init.sql)", "note": "Grep for literal string `auth_users` across every file under db/ returned zero matches. No dispatcher_mapping row of the form {role,target,layer:'auth_users',action:...} exists anywhere in the canonical bootstrap chain."},
+        {"repo_path": "db/seed_empty.sql, lines 945-1025 (contrast evidence)", "note": "The sibling family enum_dictionary has a complete 9/9 dispatcher_mapping row set at these lines, proving the seed-authoring pattern for this kind of mapping is well established and was simply never applied to auth_users."},
+        {"repo_path": "frontend/api/adminApi.ts, lines 899-920, 981-1020", "note": "listAuthUsers/getAuthUser/createAuthUser/updateAuthUser/deleteAuthUser all call callAdminMasterOp(\"auth_users\", ...) which calls queueAdminClientCommand({operationType:'admin', target:'admin', layer, action}, token) — i.e. the standard manifest-axes dispatch path, not a bypass endpoint."},
+        {"repo_path": "backend/runtime/ManifestDispatcher.cs, lines 15, 84, 283", "note": "Documented contract: 'No silent fallback: missing manifest -> MANIFEST_NOT_FOUND.'"}
+      ],
+      "owning_ssot": ["docs/design/admin-master-roster-management-ssot.yaml (admin_runtime_actions.auth_users)", "db/seed_empty.sql (dispatcher_mapping seed authority)"],
+      "current_wiring_state": "confirmed_gap: no production dispatcher_mapping row exists for any auth_users:* action anywhere in the canonical bootstrap chain, despite full backend/DB implementation and a frontend call path that requires manifest-axes resolution.",
+      "fix_candidates": ["Add 6 dispatcher_mapping rows (list/search/get/create/update/delete) to db/seed_empty.sql mirroring the enum_dictionary pattern at lines 945-1025.", "Confirm via direct app execution whether /admin/users currently fails at runtime with MANIFEST_NOT_FOUND, before assuming this is purely a latent gap."],
+      "recommended_policy": "Add the missing dispatcher_mapping rows before or as part of this Bundle's credential-management/admin-user work — this is a proof-surface prerequisite (route/entry contract layer), not an implementation detail, per the mandated SSOT->wiring->test/proof->implementation order.",
+      "rejected_candidates": ["Assuming the handler's mere existence in AdminRuntime.cs is sufficient evidence of 'connected' status (explicitly prohibited: 'backend Success=trueだけでaction completionを宣言する' NG boundary analog applies to dispatcher-mapping presence claims generally)."],
+      "change_order_position": "production_mapping",
+      "required_proof": ["A running-instance smoke test (or backend integration test) exercising GET /api/dispatch with axes {role:admin,target:admin,layer:auth_users,action:list} against the canonical seed, asserting either MANIFEST_NOT_FOUND (confirms the gap) or a successful Emission (would falsify this finding and must be reconciled)."],
+      "inference_requires_proof": "That /admin/users is therefore currently non-functional at the dispatch layer in a canonical-bootstrap deployment — logically implied by ManifestDispatcher's documented no-silent-fallback contract plus the confirmed absence of a matching manifest row, but not directly runtime-observed by this investigation."
+    },
+    {
+      "id": "issue-09",
+      "source_text": "team_markdown:* のAdminRuntime handler、repository、tableは存在するが、canonical bootstrap内のproduction dispatcher mapping が存在するか未確定。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "backend/runtime/AdminRuntime.cs, lines 348-349", "note": "Wildcard case `a.StartsWith(\"team_markdown:\")` delegates to ExecuteTeamMarkdownAsync (AdminRuntime.TeamMarkdown.cs:567), which implements template:create/update and saved_view:create/update against topology.team_markdown_template_registry / topology.team_markdown_saved_view / topology.team_markdown_saved_view_event via NpgsqlTeamMarkdownRepository — fully implemented at backend/DB layer."},
+        {"repo_path": "db/*.sql (all files under db/)", "note": "No dispatcher_mapping row for layer:'team_markdown' found anywhere in the canonical bootstrap chain (dedicated search)."},
+        {"repo_path": "frontend/api/teamMarkdownApi.ts, lines 15, 36, 41", "note": "Calls queueAdminClientCommand with layer:'team_markdown' — same manifest-axes dispatch path as auth_users, subject to the same MANIFEST_NOT_FOUND no-silent-fallback contract."},
+        {"repo_path": "docs/system-roadmap.yaml, product.component_markdown_authoring_projection (lines 1182-1225) and product.preset_db_seed_registration (lines 1148-1180)", "note": "Both bundles are marked status:implemented, production_ready:true, describing /admin/team-dashboard CRUD as complete — in apparent tension with the confirmed dispatcher_mapping absence for mutation actions."}
+      ],
+      "owning_ssot": ["docs/design/team-markdown-dashboard-saved-view-ssot.yaml (saved_view_persistence_contract, admin_runtime_actions not explicitly separated from route/read authority)", "db/seed_empty.sql (dispatcher_mapping seed authority)"],
+      "current_wiring_state": "confirmed_gap: same shape as issue-08 — backend/DB layer complete, frontend dispatch path requires manifest-axes resolution, zero matching dispatcher_mapping rows exist anywhere in the canonical bootstrap chain.",
+      "fix_candidates": ["Add dispatcher_mapping rows for the team_markdown:* action set (template create/update, saved_view create/search/get/refresh/clone/rebind/update/archive per team-markdown-dashboard-saved-view-ssot.yaml completion_condition) to db/seed_empty.sql.", "Verify whether /admin/team-dashboard's *read* path uses a different (non-manifest-axes) mechanism that would still function while only mutation actions are broken — this needs direct confirmation."],
+      "recommended_policy": "Same as issue-08: add the missing dispatcher_mapping rows as a proof-surface prerequisite before/at the start of the team-dashboard subBundle's implementation work.",
+      "rejected_candidates": ["Treating docs/system-roadmap.yaml's status:implemented/production_ready:true claim as proof that dispatch-layer wiring is complete — this is exactly the anti-overclaim pattern the audit protocol's classification_vocab warns against; the roadmap claim and the dispatcher_mapping absence are in direct tension and must be reconciled by the owner, not silently trusted."],
+      "change_order_position": "production_mapping",
+      "required_proof": ["A backend integration test or manual smoke test dispatching a team_markdown:template:create-shaped request through /api/dispatch against canonical seed_empty.sql, to directly observe MANIFEST_NOT_FOUND or success."],
+      "roadmap_todo_drift": {
+        "found": true,
+        "detail": "docs/system-roadmap.yaml claims team_markdown surfaces are implemented/production_ready:true; this investigation's direct evidence (zero dispatcher_mapping rows for layer=team_markdown anywhere in db/) contradicts that claim for at least the mutation action set. This is reported as roadmap_todo_drift per audit protocol classification_vocab and is NOT resolved by this report — it requires owner reconciliation (either the roadmap status is wrong, or an alternate dispatch mechanism this investigation did not find covers team_markdown mutations)."
+      }
+    },
+    {
+      "id": "issue-10",
+      "source_text": "scheduler_jobs:list_settings/create/edit/disable のproduction mapping、canonical entry surface、route吸収先の整合。",
+      "classification": "connected_no_gap",
+      "sub_finding_confirmed_ssot_conflict_ref": "issue-03 (route not in canonical registry)",
+      "evidence": [
+        {"repo_path": "db/seed_empty.sql, lines 3025-3074", "note": "All four dispatcher_mapping rows present and active, routing to admin_runtime."},
+        {"repo_path": "backend/runtime/AdminRuntime.SchedulerSettings.cs, lines 25,70,85,107", "note": "All four handlers implemented against NpgsqlSchedulerJobManifestRepository / topology.scheduler_jobs."},
+        {"repo_path": "docs/design/scheduler-job-manifest-ssot.yaml, authoring_surface.operations", "note": "Defines create/edit/disable as the canonical authoring operation set (no delete) — matches backend implementation exactly."}
+      ],
+      "owning_ssot": ["docs/design/scheduler-job-manifest-ssot.yaml (authoring_surface)"],
+      "current_wiring_state": "Production mapping and backend handlers are fully connected for all four actions (list_settings/create/edit/disable). Canonical entry surface (route) exists as frontend/routes/admin/scheduler.tsx but is not yet in the SSOT route registry (see issue-03) — this is the only unresolved piece, not the action wiring itself.",
+      "fix_candidates": ["See issue-03's fix_candidates (route registry ratification)."],
+      "recommended_policy": "No dispatcher/backend-layer change needed. Resolve only the route-registry gap per issue-03.",
+      "rejected_candidates": [],
+      "change_order_position": "connected_no_gap",
+      "required_proof": ["Covered by issue-03's required_proof."]
+    },
+    {
+      "id": "issue-11",
+      "source_text": "adminDispatchManifestSeed.test.ts が「全AdminRuntime axis」を主張しながら、固定配列から auth_users、scheduler_jobs、team_markdown 等を欠落させているproof drift。",
+      "classification": "confirmed_proof_drift",
+      "evidence": [
+        {"repo_path": "frontend/tests/adminDispatchManifestSeed.test.ts, lines 14-102", "note": "REQUIRED_ADMIN_DISPATCH_AXES fixed array (89 entries) does not contain any auth_users:*, scheduler_jobs:*, or team_markdown:* entry, despite AdminRuntime.cs implementing all three families (issues 08-10)."},
+        {"repo_path": "frontend/tests/adminDispatchManifestSeed.test.ts, lines 128-168", "note": "Test parses db/seed_empty.sql dispatcher_mapping rows and asserts every axis in the fixed array is present + routes to admin_runtime — i.e. it validates only what it already hardcoded, so scheduler_jobs (which DOES have mapping) goes unchecked, and auth_users/team_markdown's absence (the actual gap, issue-08/09) goes undetected by this test."}
+      ],
+      "owning_ssot": ["docs/design/pipeline-continuity-ssot.yaml (test_tier_policy, ssot_vocabulary_contract — see issue-13 for exact applicability)"],
+      "current_wiring_state": "The test's self-description implies comprehensive AdminRuntime axis coverage but structurally omits three whole action families, one of which (scheduler_jobs) is actually fully wired and should have been included, and two of which (auth_users, team_markdown) are the exact families with a confirmed production-mapping gap this test could have caught.",
+      "fix_candidates": ["Regenerate REQUIRED_ADMIN_DISPATCH_AXES by reading backend/runtime/AdminRuntime.cs's actual case list (or a shared generated manifest) instead of a hand-maintained literal array.", "Add scheduler_jobs:* to the array now (low-risk, ratifies existing wiring); explicitly leave auth_users:*/team_markdown:* out with a comment referencing issue-08/09 until dispatcher_mapping rows are added, to avoid the test failing for the right reason before the fix lands."],
+      "recommended_policy": "Treat this as a test_tier proof-surface repair to perform as part of (or immediately following) the production-mapping fixes in issue-08/09/03 — not before, since adding scheduler_jobs/auth_users/team_markdown to the array today would either fail (auth_users/team_markdown, correctly) or silently pass without the underlying gap being closed (scheduler_jobs, low risk).",
+      "rejected_candidates": ["Leaving the test's implicit 'comprehensive' framing uncorrected — this is exactly a confirmed_proof_drift the task's NG boundary prohibits treating as sufficient proof."],
+      "change_order_position": "proof_contract",
+      "required_proof": ["Updated test with scheduler_jobs:* included and auth_users:*/team_markdown:* included only after issue-08/09's dispatcher_mapping rows are added."]
+    },
+    {
+      "id": "issue-12",
+      "source_text": "route registry testがSSOTを読まず固定配列をauthorityとしている可能性。",
+      "classification": "confirmed_proof_drift",
+      "evidence": [
+        {"repo_path": "frontend/tests/adminMainFlow.test.ts, lines 73-94", "note": "Test named 'Fresh /admin route registry matches runtime-orchestration SSOT exactly' reads frontend/fresh.gen.ts (the Fresh route manifest) and compares it against a second, independently hardcoded literal array — it never opens or parses docs/design/runtime-orchestration-ssot.yaml. Its hardcoded expected array includes /admin/scheduler, which the actual SSOT (frontend_routes.admin) does not list (issue-03)."},
+        {"repo_path": "frontend/tests/adminMasterRoster.test.ts, lines 1-9 (contrast evidence)", "note": "By contrast, this test imports ADMIN_ROUTE_CARDS directly from frontend/content/adminGuides.ts (the canonical source) rather than hardcoding an independent list — demonstrating the SSOT-reading pattern is available and used elsewhere in the same test suite."}
+      ],
+      "owning_ssot": ["docs/design/pipeline-continuity-ssot.yaml (ssot_vocabulary_contract.rule: pipeline_body_and_contract_tests_must_read_ssot_yaml)"],
+      "current_wiring_state": "Confirmed: the test's name is a direct, literal false claim about its own verification method.",
+      "fix_candidates": ["Rewrite the test to parse docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin directly (e.g. via a shared YAML-reading test helper, consistent with pipeline_body_and_contract_tests_must_read_ssot_yaml) and compare against fresh.gen.ts.", "Rename the test to accurately describe it as comparing two independent hardcoded lists, and add a third, real SSOT-reading assertion alongside it."],
+      "recommended_policy": "Rewrite to read the SSOT YAML directly — this is the corrective pipeline-continuity-ssot.yaml already prescribes (pipeline_body_and_contract_tests_must_read_ssot_yaml), and resolves issue-03's drift detection gap at the same time.",
+      "rejected_candidates": ["Merely renaming the test without adding real SSOT-reading — would remove the false claim but not fix the underlying proof gap."],
+      "change_order_position": "proof_contract",
+      "required_proof": ["Updated test that fails today (before issue-03's registry fix) by directly reading the YAML, then passes once /admin/scheduler is ratified into the registry."]
+    },
+    {
+      "id": "issue-13",
+      "source_text": "pipeline SSOTの tests_must_not_redefine_expected_vocabulary と既存固定配列testの整合。",
+      "classification": "owner_decision_required",
+      "evidence": [
+        {"repo_path": "docs/design/pipeline-continuity-ssot.yaml, lines 25-42", "note": "Exact rule text: `tests_must_not_redefine_expected_vocabulary`, with `applies_to: [component_catalog_classification, db_seed_status_type_kind, event_type, runtime_destination, property_naming, validation_class, pipeline_required_identity, prohibited_boundary_terms]`. This list does NOT explicitly name 'admin dispatch axis catalog' or 'admin route registry' as a scoped vocabulary domain."},
+        {"repo_path": "frontend/tests/adminDispatchManifestSeed.test.ts, frontend/tests/adminMainFlow.test.ts", "note": "Both hold hardcoded arrays that duplicate rather than read canonical sources (issue-11, issue-12) — a pattern that matches the rule's evident intent even though it falls outside the letter of applies_to."}
+      ],
+      "owning_ssot": ["docs/design/pipeline-continuity-ssot.yaml (ssot_vocabulary_contract)"],
+      "current_wiring_state": "Literal applies_to scope does not cover the two proof-drift instances found in issue-11/12, so those two tests are not in strict, literal violation of this specific SSOT rule today — but they are in the same spirit of drift the rule exists to prevent.",
+      "fix_candidates": ["Extend applies_to to explicitly include admin dispatch axis catalogs and admin route registries, closing the literal gap.", "Leave applies_to as-is (scoped to discrete-value vocabularies only) and treat issue-11/12 as a distinct, separately-named 'tests must read canonical route/dispatch source' obligation under pipeline_body_and_contract_tests_must_read_ssot_yaml instead."],
+      "recommended_policy": "Not resolved by this report — recorded as owner_decision_required because it is an SSOT-scope-widening question, not an implementation fact. Recommendation: option 2 (rely on the existing pipeline_body_and_contract_tests_must_read_ssot_yaml rule, which already unambiguously covers issue-11/12 without requiring an applies_to edit) is the lower-risk path, since it needs no SSOT change before test-orchestration-review can act on issue-11/12.",
+      "rejected_candidates": [],
+      "change_order_position": "ssot_ownership",
+      "required_proof": ["Owner ratification of whichever option is chosen, recorded in pipeline-continuity-ssot.yaml if option 1 is selected."],
+      "owner_decision_required": {
+        "options": ["Extend applies_to explicitly", "Rely on existing pipeline_body_and_contract_tests_must_read_ssot_yaml rule without SSOT edit"],
+        "impact": "Determines whether a design_change to pipeline-continuity-ssot.yaml is a prerequisite for closing issue-11/12, or whether test-orchestration-review can proceed directly.",
+        "recommendation": "Rely on existing rule (option 2)."
+      }
+    },
+    {
+      "id": "issue-14",
+      "source_text": "runtime component event pathがdispatch Promise / HTTP responseをfire-and-forgetで破棄している。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "frontend/runtime/runtimeComponentFactory.ts, line 424", "note": "`void enqueueRuntimeComponentCommand(binding.runtimeDispatch);` with comment: '// Fire-and-forget: the FIFO queue in frontendScheduler handles ordering and error propagation.'"},
+        {"repo_path": "frontend/runtime/runtimeComponentFactory.ts, lines 451-465, 489-499", "note": "`void enqueueExternalPortDispatchCommand(...)` and `void enqueueInstanceOperationDispatchCommand(...)` — both explicitly discard the returned Promise<ScheduledCommandResult> via the `void` operator."},
+        {"repo_path": "frontend/runtime/runtimeComponentFactory.ts, line 382 (emitBoundEvent signature)", "note": "Returns only `{ok:true}|{ok:false,error:string}` synchronously — never propagates the dispatch's HTTP response body to any caller."},
+        {"repo_path": "frontend/runtime/frontendScheduler.ts, lines 399-425, 443-472", "note": "The underlying functions DO return a real, resolvable Promise<ScheduledCommandResult> (return queueAdminClientCommand(...)) — the response is producible; it is only discarded at the call site."}
+      ],
+      "owning_ssot": ["docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml (component_runtime_state_effect_boundary — describes the chain up to dispatch but not response consumption; see issue-16's D finding)"],
+      "current_wiring_state": "Confirmed: for dispatchExternalPort and dispatchInstanceOperation event-triggered dispatches, the HTTP response is produced by the backend and resolvable on the frontend, but is unconditionally discarded at the call site via `void`.",
+      "fix_candidates": ["Await the Promise and route its resolved value into the runtime state store (RuntimeLocalStateStore) keyed by outputProp, closing issue-16 at the same time.", "Await the Promise only for error-surfacing (toast/log), without building a full outputProp state-binding path."],
+      "recommended_policy": "Depends on issue-21's response-binding-vs-invalidation policy choice; see issue-21 for the resolved recommendation. This finding on its own establishes the current fire-and-forget state as a confirmed fact requiring a decision, not the decision itself.",
+      "rejected_candidates": ["Treating the FIFO queue's error propagation for *ordering* as equivalent to *response binding* for UI state — these are different concerns; the comment at runtimeComponentFactory.ts:422 only claims the former."],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["Depends on issue-21's resolution; required_proof recorded there."]
+    },
+    {
+      "id": "issue-15",
+      "source_text": "lifecycle dispatch pathもresponseをUI stateへ戻していない。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "frontend/runtime/uiEventEffectRunner.ts, lines 406-506 (emitLifecycle)", "note": "Synchronous function `(trigger) => LifecycleEmitResult`, not async."},
+        {"repo_path": "frontend/runtime/uiEventEffectRunner.ts, lines 454-468, 470-488", "note": "dispatchExternal(...)/dispatchInstance(...) calls are not awaited (the enclosing function is sync so cannot await); return values are unused."},
+        {"repo_path": "frontend/runtime/uiEventEffectRunner.ts, lines 469, 488", "note": "Only `executed.push(fireKey)` is recorded — bookkeeping of which lifecycle trigger fired, not response data."}
+      ],
+      "owning_ssot": ["docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml (runtime_interactions_lane runtime_path, lines 121-124 — ends at frontendScheduler payload.idempotency_key, does not describe response consumption)"],
+      "current_wiring_state": "Confirmed: identical pattern to issue-14 but for the mount/lifecycle-triggered dispatch path, compounded by the enclosing function being synchronous, which structurally prevents awaiting even if desired without a broader refactor.",
+      "fix_candidates": ["Make emitLifecycle (or the specific dispatch branches within it) async and await the response, mirroring whatever fix is chosen for issue-14.", "Leave lifecycle dispatch fire-and-forget by design (its role is to *trigger* an effect on mount/route-enter, not to bind a value), and scope response-binding work to the event-triggered path only."],
+      "recommended_policy": "Defer to issue-21's resolution. If response binding is adopted, this path additionally requires an async refactor of emitLifecycle beyond what issue-14 needs, which should be scoped and estimated separately once issue-21 is decided.",
+      "rejected_candidates": [],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["Depends on issue-21's resolution."]
+    },
+    {
+      "id": "issue-16",
+      "source_text": "outputPropが結果代入先として機能せず、request/result metadataとして運搬されるだけになっていないか。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "frontend/api/dispatch.ts:147, frontend/runtime/runtimeComponentFactory.ts:156,166, frontend/runtime/renderEmission.ts:468-471,517-540", "note": "outputProp exists as an authoring-schema field, parsed from authored wiring and forwarded into the outgoing binding/request payload (`output_prop` key sent to backend)."},
+        {"repo_path": "Full-repo grep for 'outputProp' across frontend/ (35 files)", "note": "No call site found that takes `response.someValue` and assigns it to a location keyed by the authored outputProp string, making it readable by another UI element. Confirmed NOT FOUND by dedicated search."},
+        {"repo_path": "backend/runtime/ExternalPortDispatchRuntime.cs, lines 124,142,145-147", "note": "Backend reads outputProp from the request payload, echoes it back inside the SSE broadcast/HTTP response body — but per issue-14/17, nothing on the frontend reads that response or listens to that SSE event."},
+        {"repo_path": "backend/runtime/InstancePortRuntime.cs", "note": "Zero occurrences of outputProp/OutputProp anywhere — the instance-port response shape does not carry it at all."},
+        {"repo_path": "docs/design/admin-console-workflow-ssot.yaml, layout_node_props_contract.runtimeInteractions.descriptor (line 1124)", "note": "SSOT defines outputProp only as 'optional string — response capture prop name for dispatchExternalPort' plus a non-empty-string validation rule — authoring metadata definition only, no consumer-side spec."}
+      ],
+      "owning_ssot": ["docs/design/admin-console-workflow-ssot.yaml (defines the field, not its consumption)"],
+      "current_wiring_state": "Confirmed: outputProp is authored, forwarded to the backend as request metadata, and (external-port lane only) echoed back into a response/broadcast payload that no frontend code currently reads. It functions today purely as transport metadata, never as an actual result-binding target.",
+      "fix_candidates": ["Implement the missing consumer: on dispatch response, if outputProp is set, write the resolved value into RuntimeLocalStateStore keyed by (nodeId, outputProp) so other bound props can read it — this requires first fixing issue-14 (response must be awaited, not discarded).", "Deprecate outputProp as a forward-looking placeholder field and document it explicitly as 'reserved, not yet wired' in the owning SSOT until a future bundle implements the consumer."],
+      "recommended_policy": "This is the same underlying gap as issue-14/15/21 viewed from the field-contract side. Recommend resolving via issue-21's chosen mechanism; if response-binding is adopted there, outputProp's consumer becomes the natural implementation target. Until then, the SSOT should not describe outputProp as functioning end-to-end.",
+      "rejected_candidates": ["Treating outputProp's mere presence in the authoring schema and request payload as evidence of 'result capture' completion — this is precisely the NG boundary 'outputProp文字列の往復だけをresult binding成立と判断する' this task prohibits."],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["A test asserting that after a dispatchExternalPort/dispatchInstanceOperation completes, a value keyed by the authored outputProp is readable from RuntimeLocalStateStore or an equivalent UI-readable location."]
+    },
+    {
+      "id": "issue-17",
+      "source_text": "external port runtimeが external_port_dispatch SSEをbroadcastする一方、frontend SSE receiverにconsumerが存在するか。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "backend/runtime/ExternalPortDispatchRuntime.cs, lines 145-147", "note": "`_sseBroadcaster?.Broadcast(new SseEvent(\"external_port_dispatch\", JsonSerializer.Serialize(dispatchResult)));` — confirmed broadcast, also verified by backend/tests/Topolactor.Runtime.Tests/ExternalPortDispatchRuntimeTests.cs:216,460."},
+        {"repo_path": "frontend/runtime/sseReceiver.ts, lines 207-247", "note": "Only three event listeners registered: `ping`, `projection`, `sql_attention_draft_candidate`, plus a generic onmessage. No `addEventListener(\"external_port_dispatch\", ...)` anywhere in frontend/ (confirmed by dedicated grep, zero hits outside backend/)."}
+      ],
+      "owning_ssot": ["docs/design/runtime-orchestration-ssot.yaml (notify_listen_contract describes the sse_projection_lane/hook_trigger refresh mechanism but does not name external_port_dispatch as part of it — confirmed NOT FOUND by dedicated search)"],
+      "current_wiring_state": "Confirmed: the broadcast exists and is tested at the backend, but has zero frontend consumers. It is currently a dead broadcast channel from the frontend's perspective.",
+      "fix_candidates": ["Add an `external_port_dispatch` listener in sseReceiver.ts that routes to the same outputProp-consumption mechanism proposed in issue-16, giving external-port dispatch a working SSE-based response path as an alternative to direct response-binding.", "Treat this broadcast as intentionally diagnostic/audit-only (e.g. for a future admin activity feed) and do not wire it into UI state — requires an explicit SSOT statement to that effect, since none exists today."],
+      "recommended_policy": "Do not silently wire this broadcast into UI state without first resolving issue-21 (response-binding vs. invalidation/refetch policy) — adding a consumer here pre-empts that decision. Record as blocked on issue-21.",
+      "rejected_candidates": ["Asserting the broadcast's mere existence satisfies any UI-facing completion condition — explicitly prohibited by the task's NG boundary ('SSE broadcastの存在だけでfrontend consumer接続を宣言する')."],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["Depends on issue-21's resolution."]
+    },
+    {
+      "id": "issue-18",
+      "source_text": "instance port runtimeのresponseが、direct binding、projection SSE、refetchのいずれにも接続されているか。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "backend/runtime/InstancePortRuntime.cs", "note": "No Broadcast/SseEvent call anywhere (zero grep hits) — instance-port dispatch has no SSE broadcast counterpart at all, unlike external-port."},
+        {"repo_path": "frontend/runtime/runtimeComponentFactory.ts:489", "note": "`void enqueueInstanceOperationDispatchCommand({...})` — response discarded (same as issue-14)."},
+        {"repo_path": "Full-repo grep for InstancePort/dispatchInstanceOperation in frontend/", "note": "Every hit is authoring/binding-construction code (renderEmission.ts, uiEventEffectRunner.ts, frontendScheduler.ts, NodeEventAuthoringPanel.tsx, UiBuilderAdmin.tsx) — none is a response consumer."}
+      ],
+      "owning_ssot": ["docs/design/instance-port-substrate-ssot.yaml (design_inspector_event_wiring_contract describes authoring only; runtime_boundary describes the backend lane, not frontend response consumption)"],
+      "current_wiring_state": "Confirmed: instance-port dispatch response is connected to none of direct state binding, SSE, or refetch. This is a stricter gap than issue-17 (external-port at least has a dead SSE channel; instance-port has no channel of any kind).",
+      "fix_candidates": ["Same resolution path as issue-16/21 (direct response-binding via outputProp consumer).", "Add an SSE broadcast to InstancePortRuntime.cs mirroring ExternalPortDispatchRuntime.cs, then wire a frontend consumer (mirrors issue-17's fix)."],
+      "recommended_policy": "Blocked on issue-21's resolution, same as issue-17.",
+      "rejected_candidates": [],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["Depends on issue-21's resolution."]
+    },
+    {
+      "id": "issue-19",
+      "source_text": "admin CRUD mutation後にprojection invalidationを発生させるtrigger、pg_notify、SSE、refetch契約が存在するか。",
+      "classification": "connected_no_gap",
+      "clarification": "Applies specifically to the existing hand-written admin Islands (AdminUsersRoster.tsx, AdminEnumsRoster.tsx), which are the current, working mechanism for this concern — distinct from the dispatchExternalPort/dispatchInstanceOperation runtimeInteractions lane covered by issue-14/16/17/18, which has no such contract.",
+      "evidence": [
+        {"repo_path": "frontend/islands/AdminUsersRoster.tsx, lines 55-60, 88-97, 117-127, 144-146", "note": "loadUsers() performs a full refetch (`const list = await listAuthUsers(query); setUsers(list);`); create/update/delete all `await` the mutation then `await loadUsers()` — explicit full-refetch-on-mutation pattern."},
+        {"repo_path": "frontend/islands/AdminEnumsRoster.tsx, lines 44-48, 81-84, 104-109, 127-130, 147-149, 165-166", "note": "Same full-refetch pattern (`loadGroups()`/`loadDetail()`) for create/update/delete on both groups and items."}
+      ],
+      "owning_ssot": ["No dedicated SSOT names this as a formal contract (confirmed NOT FOUND in admin-console-workflow-ssot.yaml / admin-uibuilder-ui-structure-wiring-ssot.yaml — grep for 'invalidat'/'refetch'/'pg_notify' returned no admin-CRUD-scoped hits), but it is an observed, working, consistent implementation pattern across both existing Islands."],
+      "current_wiring_state": "connected_no_gap for the existing hardcoded Islands: mutation is followed by an explicit, awaited full-list refetch call, which does reflect new state. This is manual-refetch, not SSE/pg_notify/trigger-based invalidation, and is undocumented as a formal SSOT contract (see issue-20/21 for the forward-looking question of whether this pattern must be preserved after seed conversion).",
+      "fix_candidates": [],
+      "recommended_policy": "No fix needed for the current Islands as they stand. The open question is only whether this pattern must be replicated by whatever replaces these Islands post seed-conversion — see issue-20.",
+      "rejected_candidates": [],
+      "change_order_position": "connected_no_gap",
+      "required_proof": []
+    },
+    {
+      "id": "issue-20",
+      "source_text": "既存Islandの mutation → list/get再実行 → local state置換 → render を削除した場合の代替completion contract。",
+      "classification": "owner_decision_required",
+      "evidence": [
+        {"repo_path": "frontend/islands/AdminUsersRoster.tsx, AdminEnumsRoster.tsx", "note": "Confirms the mechanism to be replaced (issue-19)."},
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml, notify_listen_contract (sse_hook_trigger_projection_refresh)", "note": "Defines the alternative mechanism used elsewhere in the system: SSE hook_trigger -> ProjectionShell re-fetches latest emission via queueClientCommand -> renderEmission() produces updated DOM. This is a real, working, generic alternative already present in the codebase for db_notify-driven manifests."}
+      ],
+      "owning_ssot": ["docs/design/runtime-orchestration-ssot.yaml (only SSOT-level candidate mechanism found)"],
+      "current_wiring_state": "No SSOT states what must replace the Island-specific manual-refetch pattern if/when these Islands are converted to seed-backed ProjectionShell rendering. Two real, distinct, already-implemented mechanisms exist in the codebase (Island manual refetch vs. SSE hook_trigger + ProjectionShell refetch), and the Bundle does not pick one.",
+      "fix_candidates": ["Adopt the SSE hook_trigger + ProjectionShell refetch mechanism uniformly, since it is already the canonical mechanism for other seed-backed screens and requires no new invention.", "Keep per-surface manual refetch even after seed conversion, wiring it into whatever replaces the Island's onClick handlers.", "Hybrid: SSE-driven invalidation for read/list views, direct response-binding (issue-21) for single-record mutation feedback."]
+      ,
+      "recommended_policy": "Recommend the SSE hook_trigger + ProjectionShell refetch mechanism as the default target, since it is already implemented, tested, and documented in runtime-orchestration-ssot.yaml, and it generalizes uniformly across all five subBundles rather than requiring bespoke per-Island logic. This is a recommendation only — resolving it is an owner_decision_required because it changes the completion contract for every seed-converted admin surface at once.",
+      "rejected_candidates": ["Inventing a third, novel mechanism without first exhausting the two that already exist in the codebase."],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["A design_change to admin-console-workflow-ssot.yaml or admin-uibuilder-ui-structure-wiring-ssot.yaml formally naming the chosen mechanism as the post-conversion admin-CRUD completion contract."],
+      "owner_decision_required": {
+        "options": ["SSE hook_trigger + ProjectionShell refetch (uniform)", "Per-surface manual refetch preserved", "Hybrid"],
+        "impact": "Determines the shape of every seed-converted admin Island's post-mutation behavior across all 5 subBundles.",
+        "recommendation": "SSE hook_trigger + ProjectionShell refetch (uniform)."
+      }
+    },
+    {
+      "id": "issue-21",
+      "source_text": "response binding方式とauthoritative invalidation/refetch方式のどちらを採用するか。併用する場合の責務分離。",
+      "classification": "owner_decision_required",
+      "evidence": [
+        {"repo_path": "See issue-14/16/17/18 (response-binding side is entirely unimplemented today)", "note": ""},
+        {"repo_path": "See issue-19/20 (refetch/invalidation side is partially implemented today: manual refetch works in existing Islands; SSE hook_trigger works for other seed-backed screens; neither is wired to dispatchExternalPort/dispatchInstanceOperation)", "note": ""}
+      ],
+      "owning_ssot": ["None defines this choice explicitly for the runtimeInteractions dispatch lane (dispatchExternalPort/dispatchInstanceOperation); runtime-orchestration-ssot.yaml only defines invalidation/refetch for the separate sse_projection_lane/hook_trigger path."],
+      "current_wiring_state": "Two live gaps (response-binding entirely missing; invalidation/refetch not connected to the dispatch lane in question) converge on one unresolved architectural choice.",
+      "fix_candidates": [
+        "Response-binding only: implement the outputProp consumer (issue-16) so single dispatch results feed directly into UI state; no invalidation contract needed for this lane.",
+        "Invalidation/refetch only: after a dispatchExternalPort/dispatchInstanceOperation completes, trigger a generic refetch of the current screen's data (via ProjectionShell or an equivalent), ignoring outputProp for state purposes.",
+        "Both, split by responsibility: response-binding for single-value UI feedback (e.g. a status badge keyed by outputProp), refetch/invalidation for list/aggregate views that must reflect the mutation's downstream effect."
+      ],
+      "recommended_policy": "Recommend option 3 (split by responsibility), matching how outputProp is already scoped in admin-console-workflow-ssot.yaml (a single named capture prop, not a list-refresh mechanism) while list/aggregate views already use refetch (issue-19) or SSE (issue-20) elsewhere in the codebase. This is a recommendation only; the task's NG boundary explicitly prohibits an Agent unilaterally declaring 'the' outcome here, so it is recorded as owner_decision_required.",
+      "rejected_candidates": ["Leaving both undefined and unimplemented while claiming the dispatch lane is 'complete' because a Promise exists and a broadcast fires — explicitly prohibited by multiple NG boundary items."],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["A design_change SSOT section (admin-console-workflow-ssot.yaml or admin-uibuilder-ui-structure-wiring-ssot.yaml) naming the chosen split, followed by implementation of issue-14/15/16/17/18's fixes consistent with it."],
+      "owner_decision_required": {
+        "options": ["Response-binding only", "Invalidation/refetch only", "Split by responsibility"],
+        "impact": "Central architectural decision gating issue-14, 15, 16, 17, 18, 20, 22.",
+        "recommendation": "Split by responsibility."
+      }
+    },
+    {
+      "id": "issue-22",
+      "source_text": "mutation失敗、validation failure、network failure、stale response、concurrent refresh時の最終UI state契約。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "docs/design/admin-console-workflow-ssot.yaml, docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml", "note": "Dedicated search (subagent) for 'mutation failure'/'validation failure'/'network failure'/'stale response'/'concurrent refresh'/'concurrent request' returned zero hits in either file. Only narrower, scoped fail-close rules exist (contents-pipeline generic no-silent-fallback; replacement-clone-merge fail_close list; Step-3 unresolved-relation blocking error; runtime_dispatch_idempotency_ledger claimed/already_completed/in_flight outcomes — none is a general admin-CRUD contract)."},
+        {"repo_path": "frontend/islands/AdminUsersRoster.tsx / AdminEnumsRoster.tsx", "note": "Existing Islands `throw` on mutation failure inside callAdminMasterOp (adminApi.ts:911-918), presumably surfaced by a catch block in the Island — this is real, working failure UX for the existing Islands, but not documented as a portable contract."}
+      ],
+      "owning_ssot": ["No current owner for a general admin-CRUD negative-case contract."],
+      "current_wiring_state": "No SSOT-level negative-case contract exists for general admin-CRUD mutation/validation/network/stale/concurrent scenarios. The runtime_dispatch_idempotency_ledger's claimed/already_completed/in_flight outcomes are the closest analog but are scoped to dispatch-retry semantics, not general CRUD UX state.",
+      "fix_candidates": ["Author a new admin-CRUD negative-case contract section in admin-console-workflow-ssot.yaml, generalizing the existing Islands' throw-and-catch pattern plus explicit stale-response and concurrent-refresh handling.", "Defer this to test-orchestration-review as a proof-surface concern once issue-20/21 are resolved, since the final UI state contract depends on which invalidation/binding mechanism is chosen."],
+      "recommended_policy": "Defer formal SSOT authoring until issue-20/21 are resolved (the correct negative-case contract shape depends on whether response-binding or refetch is used), but require it as a precondition for closing test-orchestration-review, not for closing this seed-conversion Bundle itself (per issue-41's implemented_judgment_matrix, negative-case proof is listed as a minimum, not a nice-to-have).",
+      "rejected_candidates": ["Treating the existing Islands' ad hoc throw/catch as a sufficient contract without generalizing it in SSOT form — insufficient for the 4 other subBundles which don't yet have equivalent hand-written failure handling."],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["A design_change SSOT section plus at least one negative-case test per subBundle asserting final UI state on mutation failure, validation failure, and stale/concurrent refresh."]
+    },
+    {
+      "id": "issue-23",
+      "source_text": "admin_runtime_structural_read_fallback により、業務データ未取得でもUI構造だけ成功renderできる境界。",
+      "classification": "connected_no_gap",
+      "evidence": [
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml, dispatcher_contract.admin_runtime_structural_read_fallback, lines 272-291", "note": "Exact, precise definition found: triggers only on ADMIN_OPERATION_NOT_FOUND for a screen-read axes combination recognized by ScreenDataShapeTopologyReader.IsScreenReadAction; synthesizes an empty-success Emission so ui_projection/LayoutNodes still render; explicitly does not fabricate business data, and explicitly does NOT apply to any other admin_runtime error (including ADMIN_OPERATION_NOT_FOUND on a non-screen-read axes combination, which remains a real failure)."}
+      ],
+      "owning_ssot": ["docs/design/runtime-orchestration-ssot.yaml"],
+      "current_wiring_state": "Well-defined and narrowly scoped, exactly matching the credential-management-projection-design.md's reference to it (`instance_settings_admin_authoring_ui_pending` known gap) — this fallback is precisely why manifest 092's instance_settings category can render structurally today even though its admin authoring backend actions do not yet exist.",
+      "fix_candidates": [],
+      "recommended_policy": "No SSOT change needed. Implementation Bundles must respect the exact boundary (screen-read axes + ADMIN_OPERATION_NOT_FOUND only) and must not extend this fallback to cover other error classes or non-screen-read actions when implementing any of the five subBundles.",
+      "rejected_candidates": ["Assuming this fallback generally hides missing dispatcher_mapping gaps (issue-08/09) — it does not: those gaps are ADMIN_OPERATION_NOT_FOUND surfaced from a different failure point (manifest resolution itself failing with MANIFEST_NOT_FOUND before AdminRuntime is ever reached), not the screen-read fallback case."],
+      "change_order_position": "connected_no_gap",
+      "required_proof": ["None required; preserve existing boundary text unchanged."]
+    },
+    {
+      "id": "issue-24",
+      "source_text": "ScreenDataShapeQueryRuntimeまたは相当runtimeが、generic physical row queryを所有しているか、initialDataRows評価に限定されるか。",
+      "classification": "inference_requires_proof",
+      "evidence": [
+        {"repo_path": "docs/framework-core.yaml, docs/framework-policy.yaml, docs/design/runtime-orchestration-ssot.yaml, docs/design/pipeline-continuity-ssot.yaml", "note": "Dedicated search for 'ScreenDataShapeQueryRuntime' and 'initialDataRows' returned zero matches in all four core SSOT files."},
+        {"repo_path": "backend/runtime/ScreenDataShapeQueryRuntime.cs", "note": "The class DOES exist in code (confirmed by a direct grep for files under backend/runtime referencing ManifestDispatcher-adjacent resolution logic), and backend/runtime/ManifestDispatcher.cs's admin_runtime_structural_read_fallback documentation (issue-23) separately references `ScreenDataShapeTopologyReader.IsScreenReadAction` as its classifier — a related but not identical name."}
+      ],
+      "owning_ssot": ["None found; the class exists in code without an SSOT definition of its ownership boundary vs. seed-declared initialDataRows."],
+      "current_wiring_state": "not_found_after_search at the SSOT level (search terms: 'ScreenDataShapeQueryRuntime', 'initialDataRows', checked against all 4 core SSOT files); the class's existence in backend/runtime/ScreenDataShapeQueryRuntime.cs was confirmed directly by this investigation but its full responsibility boundary (does it own ALL generic physical-row reads, or only a subset while other reads go through initialDataRows-style seed evaluation?) was not read in this pass and requires dedicated code reading before implementation.",
+      "fix_candidates": ["Read backend/runtime/ScreenDataShapeQueryRuntime.cs in full during implementation planning to establish its actual responsibility boundary before any subBundle relies on it for physical data reads (issue-25)."],
+      "recommended_policy": "Do not assume either ownership shape (generic owner vs. initialDataRows-limited) without reading the class. Flag as a required pre-implementation read for whichever subBundle first needs a seed-backed physical-data read path (most likely admin-enum or credential-management).",
+      "rejected_candidates": ["Guessing the boundary from the class name alone."],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["A dedicated code-reading pass over backend/runtime/ScreenDataShapeQueryRuntime.cs and its call sites, producing an explicit ownership statement, ideally captured in a design_change to runtime-orchestration-ssot.yaml."]
+    },
+    {
+      "id": "issue-25",
+      "source_text": "seed-backed screenでphysical dataを取得するcanonical read contract。",
+      "classification": "inference_requires_proof",
+      "evidence": [
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml, manifest_contract.storage", "note": "Confirms manifest is DB-stored and 'drives projection and dispatcher_mapping' but does not spell out the generic physical-row-read mechanism for seed-backed (non-admin-CRUD-Island) screens."},
+        {"repo_path": "See issue-24", "note": "Directly blocks this issue — the read contract cannot be fully characterized until ScreenDataShapeQueryRuntime's boundary is established."}
+      ],
+      "owning_ssot": ["Likely docs/design/runtime-orchestration-ssot.yaml or a currently-undiscovered dedicated SSOT; not conclusively identified in this pass."],
+      "current_wiring_state": "Directly dependent on issue-24; cannot be independently resolved.",
+      "fix_candidates": [],
+      "recommended_policy": "Resolve issue-24 first; this issue's answer follows directly from it.",
+      "rejected_candidates": [],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["Same as issue-24."]
+    },
+    {
+      "id": "issue-26",
+      "source_text": "credential-management seedのinstance targetRefがplaceholderのままauthoring validationを通過し、InstancePortDispatchRuntimeのUUID parseで拒否される境界。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "db/seed_empty.sql, line 2013", "note": "Seeded instance_operation_authority_binding row: `\"instanceTargetRef\":\"instance-port:db_instance_port:public-safe-placeholder:approved-operation-placeholder\"` — the instancePortId component ('public-safe-placeholder') is not a UUID."},
+        {"repo_path": "docs/design/instance-port-substrate-ssot.yaml, design_inspector_event_wiring_contract.runtime_interaction_shape", "note": "instanceTargetRef format is defined as `instance-port:<portKind>:<instancePortId>:<operationBindingKey>` — instancePortId is expected to resolve to a real instance-port record identity at execution time, implying UUID-shaped in the executable case."},
+        {"repo_path": "docs/design/react-schema-topology-seed-translator-ssot.yaml, storage_adoption_contract.adoption_candidate_separation_contract", "note": "manifestRefsCandidate ids are explicitly documented as 'placeholders (candidate-local keys) until a reviewer persists the referenced rows and fills in real UUIDs; the translator never invents or assigns UUIDs itself' — but this rule is scoped to package/layout/wiring/tensor ref ids, not explicitly to instanceTargetRef placeholder strings embedded inside a seeded designInspectorEventCandidates/instance_operation_authority_binding row."}
+      ],
+      "owning_ssot": ["docs/design/instance-port-substrate-ssot.yaml (instanceTargetRef format authority)", "docs/design/react-schema-topology-seed-translator-ssot.yaml (placeholder-id lifecycle, scoped differently — see current_wiring_state)"],
+      "current_wiring_state": "confirmed_gap: a placeholder (non-UUID) instanceTargetRef is present in the canonical seed inside manifest 092's designInspectorEventCandidates and instance_operation_authority_binding rows. No SSOT explicitly states whether this placeholder is intentionally non-executing (safe because instance_settings_admin_authoring_ui_pending means no UI can ever trigger it yet) or is an authoring-validation gap that would need a fail-close guard once the authoring UI exists.",
+      "fix_candidates": ["Explicitly document in instance-port-substrate-ssot.yaml that public-safe-placeholder is a reserved non-executing marker value, and require InstancePortDispatchRuntime to reject it early with a named error (e.g. INSTANCE_PORT_TARGET_REF_INVALID) rather than relying on incidental UUID-parse failure.", "Require the seed itself to omit executable-shaped instanceTargetRef values entirely until a real instance-port record exists, replacing the placeholder with an explicitly non-parseable marker (e.g. omitting the field, or using a value that cannot be mistaken for a real ref)."],
+      "recommended_policy": "See issue-27 (same underlying question, generalized) — this is its concrete manifestation in the current canonical seed.",
+      "rejected_candidates": ["Treating the fact that authoring-time validation currently accepts this placeholder as proof that runtime execution would also succeed — explicitly prohibited by the task's NG boundary ('placeholder targetRefがauthoring validationを通ることをruntime execution proofとする')."],
+      "change_order_position": "seed_catalog_contract",
+      "required_proof": ["A test asserting InstancePortDispatchRuntime.ExecuteAsync fails closed (with a named INSTANCE_PORT_* error, not a raw parse exception) when given the current seed's exact placeholder instanceTargetRef value."]
+    },
+    {
+      "id": "issue-27",
+      "source_text": "placeholder targetRefを非実行markerとして維持するか、active projection昇格前に実UUIDへ解決するか。",
+      "classification": "owner_decision_required",
+      "evidence": [
+        {"repo_path": "See issue-26", "note": "Concrete instance of this unresolved policy question."}
+      ],
+      "owning_ssot": ["docs/design/instance-port-substrate-ssot.yaml"],
+      "current_wiring_state": "No SSOT rule resolves this generally.",
+      "fix_candidates": ["Non-executing marker, permanently until admin approves a real instance-port binding (matches instance_settings_admin_authoring_ui_pending's known_gap framing — the whole category is dormant until that future bundle exists).", "Required resolution to a real UUID before the seed row is allowed into an 'active' manifest status at all (stricter; would currently block manifest 092 from being status='active', which it already is)."],
+      "recommended_policy": "Recommend option 1 (non-executing marker, permanently until real admin approval) — option 2 would retroactively invalidate the already-active manifest 092 seed row, which is out of this Bundle's scope to force. This is a recommendation only; explicitly reserved for owner ratification per the task's NG boundary.",
+      "rejected_candidates": [],
+      "change_order_position": "seed_catalog_contract",
+      "required_proof": ["Owner ratification recorded in instance-port-substrate-ssot.yaml, plus the fail-close guard from issue-26's required_proof regardless of which option is chosen."],
+      "owner_decision_required": {
+        "options": ["Non-executing marker, permanent until real approval", "Must resolve to real UUID before active status"],
+        "impact": "Determines whether InstancePortDispatchRuntime needs a dedicated placeholder-rejection guard (option 1) or whether manifest-activation validation needs to reject placeholder refs entirely (option 2, retroactively affecting the existing active manifest 092 seed).",
+        "recommendation": "Non-executing marker, permanent until real approval."
+      }
+    },
+    {
+      "id": "issue-28",
+      "source_text": "instance_settings_admin_authoring_ui_pending として残るJSON download/import/validate/preview/apply/approveの実frontend/backend action。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "docs/system-roadmap.yaml, implementation_registry.product.instance_port_substrate.known_gap_ref (lines 753-755) and public_summary (line 730)", "note": "Explicit: 'The instance_settings JSON template download/import/validate/preview/apply and registered Runtime/DB list/edit admin authoring screen ... remains unimplemented (no frontend route/island and no backend action exist yet); this is a distinct future admin-authoring bundle, not required for Design Inspector operation selection.'"},
+        {"repo_path": "docs/projection_design/credential-management-projection-design.md, Known gaps", "note": "Same known_gap_ref cited directly, confirming this is a deliberately out-of-scope-for-this-Bundle item per the design authority document itself."},
+        {"repo_path": "docs/design/instance-port-substrate-ssot.yaml, completion_gate.required_before_implemented_claim", "note": "Explicitly separates this admin-authoring bundle from the instance_port_substrate's own completion_gate: 'are a distinct future admin-authoring bundle ... and are not required for this completion_gate; do not claim they are implemented until that bundle closes.'"}
+      ],
+      "owning_ssot": ["docs/design/instance-port-substrate-ssot.yaml (explicitly defers this out of its own completion_gate)"],
+      "current_wiring_state": "Confirmed, explicit, and self-consistent across three documents: this admin-authoring UI does not exist and is explicitly scoped to a future bundle distinct from both instance_port_substrate's own completion and (by extension) this Bundle's credential-management subBundle.",
+      "fix_candidates": [],
+      "recommended_policy": "Treat as out_of_bundle for admin-surface-topology-seed-conversion's credential-management subBundle. The subBundle's job is limited to seed-representation migration (already done per credential-management-projection-design.md's 'Seed migration summary') and, per this Bundle's own common process, action-wiring confirmation for whatever IS already dispatchable — not building the JSON download/import/validate/preview/apply/approve UI itself.",
+      "rejected_candidates": ["Silently expanding credential-management subBundle scope to include this UI build-out — would violate the Bundle's own NG boundary against route/dedicated-panel addition without authorization, and duplicate a separately tracked roadmap bundle."],
+      "change_order_position": "blocked_by_cross_bundle_contract",
+      "required_proof": ["None required from this Bundle; required_proof belongs to the future instance_settings_admin_authoring_ui_pending bundle."]
+    },
+    {
+      "id": "issue-29",
+      "source_text": "credential-management seed representation、adoption candidate、active persisted layout、runtimeInteractionId assignment、実行可能targetRefの段階分離。",
+      "classification": "connected_no_gap",
+      "evidence": [
+        {"repo_path": "docs/design/react-schema-topology-seed-translator-ssot.yaml, storage_adoption_contract.allowed_adoption_shapes and adoption_candidate_separation_contract.candidate_buckets", "note": "Clear, explicit 4-stage separation confirmed: (1) nested_topology_ui_seed_candidate (seed representation, local_tmp_review_artifact_only, seed_adoptable:false) -> (2) adoption_candidate_bundle / candidate_buckets (adoption candidate, seed_adoptable:true, ids still placeholder keys) -> (3) layoutAdoptionCandidates -> topology.components_layout_design (active persisted layout) -> (4) runtimeInteractionId assignment explicitly forbidden in the translator (runtime_interactions_candidate_contract.forbidden), deferred to backend AssignRuntimeInteractionIds at ApplyConfirmedLayoutPatchAsync persist time -> (5) executable targetRef (backend-validated vocabulary, e.g. instanceTargetRef, assembled only after admin approval per authority_mapping)."},
+        {"repo_path": "docs/projection_design/credential-management-projection-design.md, 'package / layout / design / wiring / tensor adoption' and 'idempotency carrier' sections", "note": "Confirms the credential-management seed specifically has already gone through stages 1-3 (package/layout/wiring/tensor rows exist in db/seed_empty.sql) and stage 4 is explicitly deferred to the unchanged, pre-existing AssignRuntimeInteractionIds mechanism — not re-implemented by this bundle."}
+      ],
+      "owning_ssot": ["docs/design/react-schema-topology-seed-translator-ssot.yaml"],
+      "current_wiring_state": "This stage separation is already clearly and consistently defined and, per credential-management-projection-design.md, already applied to the current seed. No gap found in the *definition* of the stages; issue-26/27 is the one open question about stage 5 (executable targetRef) specifically for the placeholder value currently seeded.",
+      "fix_candidates": [],
+      "recommended_policy": "No SSOT change needed for the stage definitions themselves. Preserve them; resolve issue-26/27 as the one remaining concrete gap within stage 5.",
+      "rejected_candidates": [],
+      "change_order_position": "connected_no_gap",
+      "required_proof": []
+    },
+    {
+      "id": "issue-30",
+      "source_text": "translatorの declared_seed_surface_catalog が5 SubBundleすべてを受理できるか。credential-management以外のsurface declaration不足。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "docs/design/react-schema-topology-seed-translator-ssot.yaml, declared_seed_surface_catalog.known_declared_surfaces (line 1295)", "note": "Exactly 6 declared surfaces: hub_search.readonly.v1, physical_search_crud_aggregate.v1, physical_details_inline_editor_md_generator.v1, aggregate_dashboard.v1, auth.external.credential_management.projection, ui_component_registry.preset_catalog_bootstrap.v1. Only `auth.external.credential_management.projection` (credential-management subBundle) matches any of the 5 target subBundles. admin-dashboard, team-dashboard, admin-enum, and scheduler-settings have NO corresponding declared_seed_surface_catalog entry."},
+        {"repo_path": "docs/design/react-schema-topology-seed-translator-ssot.yaml, declared_seed_surface_catalog rule (lines 1276-1281)", "note": "'The translator never reads db/*.sql directly; this catalog is the only bridge between existing seed rows and the translator's world.' — i.e. without a declared entry, the translator cannot be used for that surface at all today."}
+      ],
+      "owning_ssot": ["docs/design/react-schema-topology-seed-translator-ssot.yaml"],
+      "current_wiring_state": "confirmed_gap: 4 of 5 subBundles (admin-dashboard, team-dashboard, admin-enum, scheduler-settings) cannot use `.agent/tools/react-schema-topology-seed-translator` today because no declared_seed_surface_catalog entry exists for their existing seed content, which the Bundle's own mandated common process (step 3: 'translator tool で topology UI seed candidate へ変換') requires as a prerequisite for every subBundle.",
+      "fix_candidates": ["Add 4 new declared_seed_surface_catalog entries (one per missing subBundle) before starting each subBundle's translator-conversion step.", "Add them incrementally, one per subBundle, immediately before that subBundle's own conversion work begins (rather than all 4 upfront)."],
+      "recommended_policy": "Add incrementally, per subBundle, immediately before that subBundle's translator step — this matches the Bundle's own common-process ordering (step 1 hardcoded-surface-read, step 2 React-like Schema authoring, step 3 translator conversion) and avoids speculative catalog entries for surfaces whose React-like Schema hasn't been authored yet.",
+      "rejected_candidates": ["Attempting any subBundle's translator-conversion step (common process step 3) before its declared_seed_surface_catalog entry exists — would violate the mandated SSOT->wiring->test/proof->implementation order."],
+      "change_order_position": "seed_catalog_contract",
+      "required_proof": ["A design_change adding the relevant declared_seed_surface_catalog entry, verified by `.agent/tools/react-schema-topology-seed-translator` successfully resolving that surface, before each subBundle's implementation proceeds past step 2 of the common process."]
+    },
+    {
+      "id": "issue-31",
+      "source_text": "admin-dashboardがlanding/navigation/guide/static acceptance informationを混在させており、seed変換対象と後段documentation/wording scopeが分離されているか。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": ".agent/tasks/todo.md, Bundle admin-surface-topology-seed-conversion > SubBundle scope > admin-dashboard", "note": "Scope text: '含めるもの: /admin の landing 表示責務、admin navigation、authoring guide entry、canonical admin route への導線。含めないもの: business projection としての /admin 扱い、route registry authority の新規定義.' — this text does distinguish landing/nav/guide from business-projection, but does not separately address the 'frontend-canonical-surface-structure-label-boundary' (wording/label) Bundle's overlapping territory."},
+        {"repo_path": ".agent/tasks/todo.md, Bundle frontend-canonical-surface-structure-label-boundary", "note": "Explicitly positioned as 'seed conversion 完了後の後段語彙修正 scope', targeting frontend/routes/index.tsx, admin/index.tsx, admin/contents.tsx, admin/ui-builder.tsx, admin/manifests.tsx — i.e. overlapping files with admin-dashboard's landing/navigation surface, but scoped to wording/label only, deferred until after seed conversion."},
+        {"repo_path": "frontend/content/adminGuides.ts (233+ lines, ADMIN_ROUTE_CARDS with 'caution' text fields)", "note": "Confirms static guide/caution text (e.g. the /admin/scheduler 'read-only, edit via direct SQL' caution) currently lives inline in a frontend content file, not in a seed-backed source — this is exactly the landing/guide content admin-dashboard's scope covers, and exactly the kind of content the later wording-boundary Bundle would revisit."}
+      ],
+      "owning_ssot": ["docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml (canonical surface UI structure/wiring, cited by frontend-canonical-surface-structure-label-boundary)"],
+      "current_wiring_state": "The two Bundles' scopes are declared non-overlapping in intent (seed/wiring now, wording/label later) but operate on the same physical files (frontend/routes/admin/index.tsx, frontend/content/adminGuides.ts), so a concrete file-level boundary (which specific strings/props belong to which Bundle) is not yet drawn — this is a real, if narrow, gap.",
+      "fix_candidates": ["Explicitly scope admin-dashboard's seed-conversion work to structural/wiring elements only (route registration, navigation targets, guide-entry linkage) and explicitly exclude editing the caution/description text content itself, deferring text edits to frontend-canonical-surface-structure-label-boundary.", "Merge the two Bundles' admin-dashboard-touching work into one pass, contradicting the explicit todo.md sequencing rule."],
+      "recommended_policy": "Adopt fix_candidate 1 — keep the sequencing rule intact (seed/wiring now, wording later) and draw the line at the field level: admin-dashboard subBundle may change *where* landing/nav/guide content is sourced from (seed vs. hardcoded), but must not change *what the text says*, preserving that for the later wording Bundle.",
+      "rejected_candidates": ["Merging the two Bundles (explicitly prohibited by todo.md's own Bundle sequencing statement)."],
+      "change_order_position": "seed_catalog_contract",
+      "required_proof": ["A subBundle implementation diff for admin-dashboard that changes content *sourcing* (seed-backed vs. hardcoded) without changing any user-visible string content, verifiable by a snapshot/diff test of rendered text before and after."]
+    },
+    {
+      "id": "issue-32",
+      "source_text": "team-dashboard TODO scopeがread projectionへ縮退している一方、owner SSOTがtemplate登録、binding、create、update、archive、refresh、clone、rebindを所有している差。",
+      "classification": "confirmed_ssot_conflict",
+      "evidence": [
+        {"repo_path": ".agent/tasks/todo.md, Bundle admin-surface-topology-seed-conversion > SubBundle scope > team-dashboard", "note": "'含めるもの: saved Markdown view、rendered Markdown、source/binding/completed preset seed summary の projection boundary、md_viewer read projection boundary。含めないもの: Markdown body を runtime SSOT と見なすこと、standalone route authority の追加.' — scope text is read/projection-framed throughout, never mentioning create/update/archive/refresh/clone/rebind as in-scope actions."},
+        {"repo_path": "docs/design/team-markdown-dashboard-saved-view-ssot.yaml, dashboard_surface_contract.actions (lines 175-182) and completion_condition (lines 464-480)", "note": "Owner SSOT's actions list includes open_source_record, edit_saved_view_adjustment, refresh_from_source_record, clone_saved_view_to_another_record, archive_saved_view, copy_markdown, create_follow_up_todo_candidate; completion_condition explicitly requires 'saved_view_create_search_get_refresh_clone_rebind_update_archive_actions_exist' — a full authoring lifecycle, not read-only."}
+      ],
+      "owning_ssot": ["docs/design/team-markdown-dashboard-saved-view-ssot.yaml (explicit, detailed authoring-lifecycle owner)"],
+      "current_wiring_state": "confirmed_ssot_conflict: todo.md's subBundle scope text for team-dashboard is narrower than what the owning SSOT defines as this surface's completion_condition. If read literally, todo.md's admin-surface-topology-seed-conversion Bundle would leave create/update/archive/refresh/clone/rebind out of scope, silently narrowing the owner SSOT's authoring responsibility without an explicit design_change.",
+      "fix_candidates": ["Widen todo.md's team-dashboard subBundle scope text to explicitly include the full action set from team-markdown-dashboard-saved-view-ssot.yaml's completion_condition, consistent with issue-09's confirmed dispatcher_mapping gap for team_markdown:* mutations (meaning this scope IS in fact still open work, not already-complete work being wrongly excluded).", "Keep todo.md's narrower read-projection framing intentionally, treating create/update/archive/refresh/clone/rebind as belonging to a separate, not-yet-named Bundle — requires an explicit statement of which Bundle owns them if not this one."],
+      "recommended_policy": "Recommend widening (fix_candidate 1). This Bundle's own name and stated purpose ('admin hardcoded surface topology seed conversion') plus issue-09's confirmed finding (team_markdown:* mutation actions have zero production dispatcher mapping, i.e. are not yet functionally complete) both indicate the authoring lifecycle is exactly the kind of unfinished, currently-hardcoded-or-broken surface this Bundle exists to convert — narrowing it to read-only would leave a real, owner-SSOT-mandated gap permanently unaddressed with no other Bundle claiming it. This is a recommendation; the scope-narrowing question ultimately requires owner ratification since it changes stated Bundle boundaries.",
+      "rejected_candidates": ["Silently treating today's narrower todo.md wording as authoritative over the owning SSOT's completion_condition — the task's NG boundary explicitly prohibits 'team-dashboardのread projectionだけを実装し、owner SSOTのauthoring責務を消失させる.'"],
+      "change_order_position": "ssot_ownership",
+      "required_proof": ["A todo_maintenance-worktype pass widening the team-dashboard subBundle scope text to match team-markdown-dashboard-saved-view-ssot.yaml's completion_condition (out of this report's own change scope; recorded here as required follow-up)."]
+    },
+    {
+      "id": "issue-33",
+      "source_text": "/admin/team-dashboardをprimary routeとするowner SSOTと、standalone route追加禁止・hardcoded route retirementの意味整合。",
+      "classification": "connected_no_gap",
+      "evidence": [
+        {"repo_path": "docs/design/team-markdown-dashboard-saved-view-ssot.yaml, dashboard_surface_contract.entry_surface", "note": "'preferred: /admin/team-dashboard ... implemented: [/admin/team-dashboard] ... removed: [former_UIBuilder_preset_ecosystem_md_viewer_child_surface (removed 2026-06-09 — responsibility mixing resolved; /admin/team-dashboard is primary route)]' — /admin/team-dashboard is explicitly the SURVIVING, already-canonical route (not a new one being proposed)."},
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml, frontend_routes.admin (lines 96-108)", "note": "/admin/team-dashboard is already listed in the canonical registry — consistent, not a conflict."}
+      ],
+      "owning_ssot": ["docs/design/team-markdown-dashboard-saved-view-ssot.yaml", "docs/design/runtime-orchestration-ssot.yaml"],
+      "current_wiring_state": "No conflict: /admin/team-dashboard is an already-existing canonical route in both the owning feature SSOT and the route registry SSOT; the 'standalone route addition prohibited' rule in this Bundle's NG boundary applies to *new* routes, not to this already-canonical one.",
+      "fix_candidates": [],
+      "recommended_policy": "No change needed. This route survives seed conversion under issue-04's recommended policy (URL kept, body converted).",
+      "rejected_candidates": [],
+      "change_order_position": "connected_no_gap",
+      "required_proof": []
+    },
+    {
+      "id": "issue-34",
+      "source_text": "admin-enumのmanifest mapping、CRUD、mutation後reload、status enum dependency、final DOM/state proof。",
+      "classification": "connected_no_gap",
+      "evidence": [
+        {"repo_path": "db/seed_empty.sql, lines 945-1025", "note": "Full 9/9 dispatcher_mapping rows for enum_dictionary:* (list_groups/get_group/create_group/update_group/delete_group/create_item/update_item/delete_item/set_group_items), all runtime_mapping admin_runtime."},
+        {"repo_path": "backend/runtime/AdminRuntime.cs, lines 298-306", "note": "All 9 handlers implemented."},
+        {"repo_path": "frontend/islands/AdminEnumsRoster.tsx, lines 44-48, 81-84, 104-109, 127-130, 147-149, 165-166", "note": "Full mutation-then-refetch pattern confirmed for create/update/delete on both groups and items (issue-19)."},
+        {"repo_path": "docs/design/admin-master-roster-management-ssot.yaml, user_status_seed", "note": "status enum dependency (user_status group used by auth.users.status) is itself an enum.groups/enum.items record, i.e. dependent on admin-enum's own canonical tables — the dependency direction is enum-owns-vocabulary, auth_users-consumes-it, which is already correctly modeled (no circular/inverted dependency found)."}
+      ],
+      "owning_ssot": ["docs/design/enum-dictionary-ssot.yaml"],
+      "current_wiring_state": "Fully wired end-to-end today: manifest mapping complete, CRUD complete, mutation-then-refetch complete, status enum dependency correctly modeled. The only open items for this subBundle are the cross-cutting ones already tracked elsewhere: declared_seed_surface_catalog entry missing (issue-30), route-retirement definition undefined (issue-02), and final-DOM proof not yet captured as a dedicated test (see required_proof).",
+      "fix_candidates": [],
+      "recommended_policy": "No backend/wiring change needed. Treat admin-enum as the reference implementation pattern other subBundles (especially credential-management's instance_settings authoring and team-dashboard's mutation actions) should be brought up to once their dispatcher_mapping gaps (issue-08/09) are closed.",
+      "rejected_candidates": [],
+      "change_order_position": "connected_no_gap",
+      "required_proof": ["An explicit final-DOM/state assertion test (e.g. asserting the rendered enum list DOM reflects a newly created item after AdminEnumsRoster.tsx's create-then-refetch cycle) if none currently exists — not confirmed present or absent by this investigation and should be checked during test-orchestration-review."]
+    },
+    {
+      "id": "issue-35",
+      "source_text": "scheduler-settingsのlist/create/edit/disable全action、現行UIでeditが欠落していないか、canonical authoring ownerがどこか。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "db/seed_empty.sql, lines 3025-3074", "note": "All 4 actions (list_settings/create/edit/disable) have dispatcher_mapping rows."},
+        {"repo_path": "backend/runtime/AdminRuntime.SchedulerSettings.cs, lines 25,70,85,107", "note": "All 4 handlers implemented (DataListSchedulerJobsSettingsAsync, DataCreateSchedulerJobAsync, DataEditSchedulerJobAsync, DataDisableSchedulerJobAsync)."},
+        {"repo_path": "frontend/content/adminGuides.ts, lines 200-209", "note": "ADMIN_ROUTE_CARDS caution text for /admin/scheduler: '編集不可の read-only 画面。...' (edit not available in UI; edit via direct SQL) — this is a direct, first-party frontend-content admission that the UI does not expose the edit action even though backend/dispatcher wiring for it fully exists."},
+        {"repo_path": "docs/design/scheduler-job-manifest-ssot.yaml, authoring_surface.operations", "note": "Defines create/edit/disable (not delete) as the canonical authoring operation set — edit is explicitly part of the intended authoring surface, not an optional extra."}
+      ],
+      "owning_ssot": ["docs/design/scheduler-job-manifest-ssot.yaml (authoring_surface.owner: admin.contents)"],
+      "current_wiring_state": "confirmed_gap: this is the clearest 'UI input collection' break in the entire investigation — backend action, dispatcher mapping, and DB write path for 'edit' are all fully wired, but the frontend explicitly does not expose an edit control, per its own content file's caution text. list/create/disable are presumed present in the current scheduler.tsx UI (not independently re-verified beyond the route file's existence and size in this pass) but edit is confirmed missing from the UI.",
+      "fix_candidates": ["Add an edit control to frontend/routes/admin/scheduler.tsx (or its supporting island, e.g. a SchedulerJobSettingsPanel) wired to the existing scheduler_jobs:edit action and dispatcher_mapping.", "Keep edit intentionally UI-absent (direct-SQL-only) as a deliberate, documented policy, updating scheduler-job-manifest-ssot.yaml to state so explicitly instead of leaving it as an unexplained frontend caution string."],
+      "recommended_policy": "Recommend fix_candidate 1 (add the UI edit control) — scheduler-job-manifest-ssot.yaml already defines edit as part of the canonical authoring_surface.operations with no caveat, and the backend is already fully built for it; leaving it UI-absent contradicts the SSOT's own stated authoring surface without an explicit SSOT amendment. This is the recommended default, not yet owner-ratified.",
+      "rejected_candidates": ["Treating the frontend's undocumented caution text as sufficient design authority for permanently excluding edit from the UI — should be an explicit SSOT statement if intentional, not an implicit frontend caveat."],
+      "change_order_position": "action_completion_contract",
+      "required_proof": ["A frontend test exercising the edit action end-to-end (UI input -> dispatch -> DB update -> refetch -> DOM reflects new values) once the UI control is added; canonical authoring owner is confirmed as admin.contents/scheduler-job-manifest-ssot.yaml, so no separate ownership ambiguity remains."]
+    },
+    {
+      "id": "issue-36",
+      "source_text": "root / のcanonical default entryがmanifest 092へ解決する現在の構成と、admin role requirement、一般user entryの整合。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": "db/seed_empty.sql, lines 2198-2214", "note": "INSERT INTO hubs.hub_relations (hub_relation_id=...b1, topology_manifest_id=00000000-...-092, related_hub_id=00000000-...-a1, sequence_position=1, relation_config={\"transition\":\"canonical_default_entry\"}, status='active'). Adjacent comment explicitly states: \"hub '...a1' has exactly one active hubs.topology_manifests row (092 itself), so TargetManifestId resolves deterministically... This is the canonical (non-demo) seed closing the prior gap where hubs.hub_relations existed only in db/demo_seed.sql.\""},
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml, dispatcher_contract.canonical_default_entry_contract (lines 345-398)", "note": "Confirms the mechanism: consulted only as a fallback for bare axes {target:default, layer:screen_list, action:Search}; resolves TargetManifestId via the marked hub_relations row's related_hub_id; role_boundary states explicitly: 'No role-axis filtering is applied to this fallback... any authenticated session may reach the canonical default entry manifest this way, same as an explicit ?manifest= selection would.'"},
+        {"repo_path": "db/seed_empty.sql, line 1991", "note": "manifest 092's own runtime_mapping is `{\"type\":\"runtime_mapping\",\"runtime_destination\":\"admin_runtime\"}`."},
+        {"repo_path": "docs/design/auth-db-session-credential-ssot.yaml, dispatch_claim_authority_contract.manifest_capability_requirement", "note": "'When absent, required_role is inferred from runtime_mapping.runtime_destination: runtime_destination=\"admin_runtime\" -> inferred required_role=admin.' No explicit capability_requirement topology entry was observed in the portion of manifest 092's topology array read by this investigation (lines 1985-2014); the array continues beyond what was directly reviewed, so an explicit override was not exhaustively ruled out."}
+      ],
+      "owning_ssot": ["docs/design/runtime-orchestration-ssot.yaml (canonical_default_entry_contract)", "docs/design/auth-db-session-credential-ssot.yaml (capability inference rule)"],
+      "current_wiring_state": "confirmed_gap: root's bare-axes canonical-default-entry fallback is seeded to resolve to manifest 092 (the credential-management/auth-external screen), whose runtime_destination=admin_runtime infers required_role=admin. The canonical_default_entry_contract's own role_boundary states no role-axis filtering applies at the fallback-selection step itself — meaning a general (non-admin) authenticated session reaching root with no other selection would be routed toward an admin-only manifest, whose eventual dispatch would then separately need to enforce AUTH_CAPABILITY_DENIED (not independently confirmed end-to-end by this investigation).",
+      "fix_candidates": ["Point the canonical_default_entry hub_relations marker at a non-admin, general-purpose manifest more suitable as a public/general landing page, reserving manifest 092 for explicit admin navigation only.", "Keep manifest 092 as canonical default entry, but ensure (and test) that the resulting AUTH_CAPABILITY_DENIED fail-close path produces a clean, explicit general-user experience (e.g. redirect to /auth or a neutral landing) rather than a raw error.", "Split default entry by role: general users get a different canonical_default_entry-equivalent target than admin users — requires a new mechanism, since today's marker is singular ('Exactly one active hubs.hub_relations row may carry this marker at a time')."]
+      ,
+      "recommended_policy": "This is a significant, evidence-backed finding directly on point with the issue as posed. Recommend option 2 as the minimum viable fix (verify and, if needed, improve the fail-close UX for non-admin users hitting root) since it requires no re-seeding of the canonical default entry; option 1 is a larger, more disruptive change that should only be pursued if the owner determines manifest 092 was never intended as the general-audience landing page. Not resolved by this report — recorded as owner_decision_required given its cross-cutting, root-experience-defining nature.",
+      "rejected_candidates": ["Leaving this unexamined on the assumption that 'admin-only manifests naturally redirect non-admin users somewhere reasonable' — this assumption is not verified anywhere in the SSOT or code read by this investigation and must not be treated as established fact."],
+      "change_order_position": "route_entry_contract",
+      "required_proof": ["An end-to-end test: unauthenticated or non-admin-authenticated session hits `/` with no query params, and the final observed UI state (not just the backend error code) is captured and asserted as an explicit, intentional experience."],
+      "owner_decision_required": {
+        "options": ["Re-point canonical default entry away from manifest 092", "Verify/improve fail-close UX for non-admin users at manifest 092", "Role-split default entry (new mechanism)"],
+        "impact": "Defines what every general (non-admin) user sees when visiting the site root with no other navigation context.",
+        "recommendation": "Verify/improve fail-close UX for non-admin users at manifest 092 (minimum viable, no re-seed required)."
+      }
+    },
+    {
+      "id": "issue-37",
+      "source_text": "canonical routeを削除してroot/ProjectionShellへ集約する場合のrole/capability/navigation契約。",
+      "classification": "not_found_after_search",
+      "evidence": [
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml, docs/design/admin-console-workflow-ssot.yaml, docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml", "note": "No section in any of these files describes role/capability/navigation contract for a hypothetical scenario where individual admin routes are deleted and consolidated onto root + ProjectionShell axes-based resolution."}
+      ],
+      "search_scope": {"searched": "docs/design/runtime-orchestration-ssot.yaml (dispatcher_contract, frontend_routes, canonical_default_entry_contract sections read in full by subagent and directly by this investigation), docs/design/admin-console-workflow-ssot.yaml route_authority section", "search_terms": ["route consolidation", "route deletion capability", "ProjectionShell aggregation", "role navigation contract"], "confirmed_files_checked": ["docs/design/runtime-orchestration-ssot.yaml", "docs/design/admin-console-workflow-ssot.yaml"]},
+      "owning_ssot": ["None found."],
+      "current_wiring_state": "Not defined anywhere. This report's recommended policy for issue-02/04/05 explicitly does NOT choose route consolidation (recommends keeping named URLs), so this scenario is not currently on this Bundle's critical path — recorded for completeness per the task's exhaustive-coverage instruction, but does not block any subBundle's implementation start given the recommended issue-02/04/05 direction.",
+      "fix_candidates": [],
+      "recommended_policy": "Do not pursue route consolidation as part of this Bundle (consistent with issue-02/04/05's recommendations). If a future Bundle proposes it, that Bundle must first define the role/capability/navigation contract this issue asks about — it does not exist today.",
+      "rejected_candidates": [],
+      "change_order_position": "out_of_bundle",
+      "required_proof": ["N/A for this Bundle; a future design_change would be required only if route consolidation is later proposed."]
+    },
+    {
+      "id": "issue-38",
+      "source_text": "hub relationがmanifest-scoped navigation/default-entry sequenceであり、runtime participant、audience、presentation session authorityではない境界。",
+      "classification": "connected_no_gap",
+      "evidence": [
+        {"repo_path": "docs/framework-core.yaml, topolactor_space_model.hub and layers.hub", "note": "hub defined as 'relation_established_node' / 'abstract_concrete_connection_layer' — a topology/navigation concept, not a session/audience concept."},
+        {"repo_path": "docs/design/runtime-orchestration-ssot.yaml, dispatcher_contract.hub_navigation_resolution and canonical_default_entry_contract", "note": "hub_relations is scoped entirely to manifest-to-manifest navigation sequencing and the singular canonical-default-entry marker — both manifest-scoped concepts."},
+        {"repo_path": "Dedicated search across docs/framework-core.yaml, docs/framework-policy.yaml, docs/design/runtime-orchestration-ssot.yaml, docs/design/pipeline-continuity-ssot.yaml", "note": "Grep for 'participant', 'presenter', 'audience', 'forced projection', 'targeted SSE' (space and underscore variants) returned zero matches in all four files."}
+      ],
+      "owning_ssot": ["docs/design/runtime-orchestration-ssot.yaml"],
+      "current_wiring_state": "Confirmed: hub relation's actual, current scope is exactly and only manifest-scoped navigation/default-entry sequencing. No participant/audience/presentation-session-authority concept exists anywhere in the SSOT today, and this Bundle's own investigation found no code or SSOT text that overreaches this boundary.",
+      "fix_candidates": [],
+      "recommended_policy": "No change needed. This boundary is already correctly narrow and must be preserved — do not let any subBundle's implementation (especially admin-dashboard's navigation work, issue-31) attempt to repurpose hub_relations for anything resembling audience/session/participant semantics.",
+      "rejected_candidates": [],
+      "change_order_position": "connected_no_gap",
+      "required_proof": []
+    },
+    {
+      "id": "issue-39",
+      "source_text": "presenterから参加者への強制投影、participant membership、targeted SSE等を本Bundleへ混在させない境界。必要なら別future Bundle候補として記録する。",
+      "classification": "out_of_bundle",
+      "evidence": [
+        {"repo_path": "Dedicated search across all core SSOT files (see issue-38 evidence)", "note": "No such concept exists anywhere in the currently-read SSOT surface, and no current code/SSOT evidence gathered by this investigation shows this Bundle's scope drifting into it."}
+      ],
+      "owning_ssot": ["None exists; would require a new SSOT if ever pursued."],
+      "current_wiring_state": "No mixing detected. Recorded per the task's explicit instruction to note this as a future-Bundle candidate if it were ever needed, without adding it to the current Bundle's scope.",
+      "fix_candidates": [],
+      "recommended_policy": "Do not introduce this concept into admin-surface-topology-seed-conversion or any of its 5 subBundles. If a future need for presenter->participant forced projection, participant membership, or targeted (per-viewer) SSE arises, it must be scoped as an entirely separate future Bundle with its own SSOT, since hub relation's manifest-scoped navigation boundary (issue-38) is explicitly not designed for it.",
+      "rejected_candidates": ["Retrofitting hub_relations or the existing broadcast-only SSE mechanism (issue-17/18) to carry participant/audience semantics — would violate the confirmed narrow boundary from issue-38."],
+      "change_order_position": "out_of_bundle",
+      "required_proof": ["N/A for this Bundle."]
+    },
+    {
+      "id": "issue-40",
+      "source_text": "roadmap上 product.dynamic_support_nocode_loop がimplementedである一方、今回のadmin hardcoded surface retirement scopeがcompletion conditionへ接続されていない差。",
+      "classification": "confirmed_ssot_conflict",
+      "evidence": [
+        {"repo_path": "docs/system-roadmap.yaml, implementation_registry.product.dynamic_support_nocode_loop (lines 473-502)", "note": "status:implemented, production_ready:false. completion_condition (lines 493-497): runtime_dispatch_loop_is_wired_through_scheduler_dispatcher_runtime_executor / projection_loop_refreshes_backend_emission_without_frontend_topology_judgment / recommend_child_island_and_SQL_attention_feedback_projection_are_wired / admin_csv_json_import_and_admin_authoring_routes_are_available_for_self_hosted_M6_loop. known_gap_ref: only product-nocode-loop-acceptance (manual acceptance pending). No mention of admin-surface-topology-seed-conversion, hardcoded route retirement, or any of the confirmed dispatcher-mapping gaps (issue-08/09) anywhere in this entry."},
+        {"repo_path": ".agent/tasks/todo.md, Bundle admin-surface-topology-seed-conversion header row (Roadmap bundle 索引 table)", "note": "Explicitly attributes admin-surface-topology-seed-conversion's 'Roadmap bundle' column to `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement — but the roadmap entry itself does not reference this Bundle or its retirement scope anywhere in its own text."}
+      ],
+      "owning_ssot": ["docs/system-roadmap.yaml (dynamic reference point, not SSOT per AGENTS.md — but the entry this issue concerns)", ".agent/tasks/todo.md (asserts the roadmap-bundle attribution)"],
+      "current_wiring_state": "confirmed_ssot_conflict: todo.md attributes this Bundle to product.dynamic_support_nocode_loop's roadmap tracking, but that roadmap entry's own completion_condition/known_gap_ref text does not reflect this Bundle's scope or its confirmed open gaps (issue-08/09 dispatcher mapping, issue-30 catalog gaps, etc.) at all. The roadmap's status:implemented for dynamic_support_nocode_loop does not depend on or track this Bundle's completion.",
+      "fix_candidates": ["Add a known_gap_ref entry to product.dynamic_support_nocode_loop (or a sibling roadmap entry) explicitly cross-referencing admin-surface-topology-seed-conversion's open subBundle work.", "Leave the attribution as informal/loose (todo.md's 'Roadmap bundle' column is explicitly a soft cross-reference, not a completion-condition dependency) and accept that this Bundle's completion does not gate or is not gated by dynamic_support_nocode_loop's status."],
+      "recommended_policy": "This is a roadmap-maintenance question outside this report's own change scope (roadmap edits are excluded by the task's NG boundary: 'docs/system-roadmap.yaml を設計正本として扱う' is prohibited as a judgment substitute, and this report may not edit it). Recommend fix_candidate 1 for a future todo_maintenance pass, so that dynamic_support_nocode_loop's status accurately reflects dependency on this Bundle's remaining work, without this report itself resolving or asserting which status is 'correct'.",
+      "rejected_candidates": ["Treating dynamic_support_nocode_loop's status:implemented as evidence that admin-surface-topology-seed-conversion's scope is unnecessary or already done — explicitly prohibited by the task's NG boundary ('現行実装を理由にSSOT衝突を解消済みと判断する')."],
+      "change_order_position": "ssot_ownership",
+      "required_proof": ["A future todo_maintenance-worktype edit to docs/system-roadmap.yaml cross-referencing this Bundle's remaining subBundle work, if fix_candidate 1 is chosen by the owner."]
+    },
+    {
+      "id": "issue-41",
+      "source_text": "test-orchestration-reviewを後段としながら、seed conversion Bundle自身のImplemented判定に必要な最小proofまで後段へ追い出していないか。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": ".agent/tasks/todo.md, Bundle test-orchestration-review > Position", "note": "'`admin-surface-topology-seed-conversion` 完了後の後段 review。実装 Bundle ではなく、動作証明 / test orchestration 点検 scope.'"},
+        {"repo_path": ".agent/tasks/todo.md, Bundle admin-surface-topology-seed-conversion > 受入条件", "note": "As established in issue-01, contains no implementation-completion proof requirements at all — only TODO-structure requirements."},
+        {"repo_path": ".agent/tasks/todo.md, Bundle admin-surface-topology-seed-conversion > 改善方針", "note": "'proof orchestration の総点検は後段 `test-orchestration-review` に分離し、この実装 Bundle の completion 判定へ混ぜない.' This defers *total* proof orchestration review, but does not, on its own text, establish what minimal proof IS required for this Bundle's own Implemented judgment before that later review even begins."}
+      ],
+      "owning_ssot": [".agent/tasks/todo.md (both Bundles)"],
+      "current_wiring_state": "confirmed_gap: no document defines the minimum proof set required to call any of the 5 subBundles 'Implemented' independent of the later test-orchestration-review pass. This creates a real risk (matching the task's own warning) that proof gets pushed entirely into the later review Bundle, leaving this Bundle's completion effectively unfalsifiable in the interim.",
+      "fix_candidates": ["This report supplies the missing minimal proof set directly, in `implemented_judgment_matrix` below, as the interim canonical reference until a future design_change formalizes it in SSOT/proof-surface form.", "Defer entirely to test-orchestration-review and accept that no subBundle can be called Implemented until that later Bundle completes — contradicts the explicit intent of admin-surface-topology-seed-conversion being its own completable unit."],
+      "recommended_policy": "Adopt fix_candidate 1: this report's implemented_judgment_matrix section is the authoritative interim answer, distinguishing 'minimum proof this Bundle must produce to claim Implemented' from 'total proof-orchestration review' (test-orchestration-review's actual job, which is about test *tier*/harness *architecture*, not first-time functional proof).",
+      "rejected_candidates": ["Leaving this gap open into implementation, risking a false Implemented claim based on partial checks (explicitly prohibited by the task's NG boundary)."],
+      "change_order_position": "proof_contract",
+      "required_proof": ["See implemented_judgment_matrix below."]
+    },
+    {
+      "id": "issue-42",
+      "source_text": "TODO内の対象ファイルpath drift。特に frontend/routes/admin/team-dashboard.tsx と実体 frontend/routes/admin/team-dashboard/index.tsx。",
+      "classification": "confirmed_gap",
+      "evidence": [
+        {"repo_path": ".agent/tasks/todo.md, Bundle admin-surface-topology-seed-conversion > 対象ファイル名 (line ~326) and Bundle product-nocode-loop-acceptance > 対象ファイル名 (line ~668)", "note": "Both list `frontend/routes/admin/team-dashboard.tsx` as a target file path."},
+        {"repo_path": "frontend/routes/admin/", "note": "Confirmed via direct file listing: `frontend/routes/admin/team-dashboard.tsx` does NOT exist. `frontend/routes/admin/team-dashboard/index.tsx` (773 lines) DOES exist and is the real file."}
+      ],
+      "owning_ssot": [".agent/tasks/todo.md"],
+      "current_wiring_state": "Confirmed, low-risk, simple path-drift error in two places in todo.md's target-file lists.",
+      "fix_candidates": ["Correct both occurrences to `frontend/routes/admin/team-dashboard/index.tsx` in a future todo_maintenance-worktype pass."],
+      "recommended_policy": "Correct in a dedicated todo_maintenance pass. This report itself must not edit todo.md (out of this task's permitted change scope) — recorded here as required follow-up only.",
+      "rejected_candidates": [],
+      "change_order_position": "out_of_bundle_for_this_report_but_low_risk_todo_maintenance_followup",
+      "required_proof": ["N/A — simple text correction, no functional proof needed beyond confirming the corrected path matches the real file (already confirmed above)."]
+    }
+  ],
+
+  "owner_decisions_summary": [
+    {"issue_ref": "issue-02", "question": "Definition of 'hardcoded route retirement'", "recommendation": "URL kept; route body replaced by seed-backed ProjectionShell rendering"},
+    {"issue_ref": "issue-04", "question": "Keep canonical URLs vs. seed-backed wrapper replacement", "recommendation": "Keep all 4 URLs, convert body only"},
+    {"issue_ref": "issue-06", "question": "/admin/users integration meaning within credential-management", "recommendation": "Navigation-level integration only; route/CRUD authority stays with admin-master-roster-management-ssot.yaml"},
+    {"issue_ref": "issue-13", "question": "Whether pipeline-continuity-ssot.yaml's ssot_vocabulary_contract.applies_to should be extended to admin dispatch axis/route vocab", "recommendation": "Rely on existing pipeline_body_and_contract_tests_must_read_ssot_yaml rule; no SSOT edit needed"},
+    {"issue_ref": "issue-20", "question": "Post-mutation UI refresh mechanism for seed-converted admin surfaces", "recommendation": "SSE hook_trigger + ProjectionShell refetch, uniform across subBundles"},
+    {"issue_ref": "issue-21", "question": "Response-binding vs. invalidation/refetch for dispatchExternalPort/dispatchInstanceOperation", "recommendation": "Split by responsibility: response-binding for single-value UI feedback, refetch/invalidation for list/aggregate views"},
+    {"issue_ref": "issue-27", "question": "Placeholder targetRef as permanent non-executing marker vs. must-resolve-before-active", "recommendation": "Permanent non-executing marker until real admin approval"},
+    {"issue_ref": "issue-32", "question": "Whether team-dashboard subBundle scope should widen to match owner SSOT's full authoring lifecycle", "recommendation": "Widen todo.md scope to include create/update/archive/refresh/clone/rebind"},
+    {"issue_ref": "issue-36", "question": "Root canonical-default-entry resolving to admin-only manifest 092 for general users", "recommendation": "Verify/improve fail-close UX for non-admin users; do not re-seed unless owner decides manifest 092 was never meant as general landing"},
+    {"issue_ref": "issue-40", "question": "Cross-reference between product.dynamic_support_nocode_loop roadmap entry and this Bundle's scope", "recommendation": "Add explicit known_gap_ref cross-reference in a future todo_maintenance/roadmap pass"}
+  ],
+
+  "subbundle_states": [
+    {
+      "subbundle": "admin-dashboard",
+      "state": "design_change_required",
+      "blocking_findings": ["issue-30 (declared_seed_surface_catalog entry missing)", "issue-31 (structural-vs-wording boundary needs explicit line-drawing)", "issue-02/04 (route retirement definition undefined)"],
+      "non_blocking_connected": ["/admin route itself is already canonical per runtime-orchestration-ssot.yaml"],
+      "implementation_start_condition": "issue-02/04 owner decision recorded; declared_seed_surface_catalog entry for admin-dashboard added (issue-30); explicit content-vs-structure boundary drawn per issue-31 recommended policy.",
+      "implemented_judgment_condition": "See implemented_judgment_matrix; this subBundle additionally requires proof that no user-visible text changed as a side effect of the seed-sourcing conversion (issue-31)."
+    },
+    {
+      "subbundle": "team-dashboard",
+      "state": "owner_decision_required",
+      "blocking_findings": ["issue-32 (scope conflict: read-only vs. full authoring lifecycle)", "issue-09 (zero dispatcher_mapping for team_markdown:*, contradicting roadmap implemented/production_ready claim)", "issue-30 (declared_seed_surface_catalog entry missing)", "issue-42 (low-risk path drift)"],
+      "non_blocking_connected": ["/admin/team-dashboard route itself is canonical and stable (issue-33)", "Backend handlers/repository/DB tables for team_markdown:* are fully implemented (issue-09 evidence)"],
+      "implementation_start_condition": "issue-32's scope-widening decision ratified by owner; issue-09's dispatcher_mapping rows added; declared_seed_surface_catalog entry added (issue-30).",
+      "implemented_judgment_condition": "See implemented_judgment_matrix. Must additionally satisfy team-markdown-dashboard-saved-view-ssot.yaml's own completion_condition list once scope is widened per issue-32."
+    },
+    {
+      "subbundle": "credential-management",
+      "state": "owner_decision_required",
+      "blocking_findings": ["issue-06 (/admin/users ownership conflict)", "issue-26/27 (placeholder targetRef policy)", "issue-28 (explicitly out-of-bundle admin-authoring UI, must not be silently pulled in)"],
+      "non_blocking_connected": ["declared_seed_surface_catalog entry already exists (issue-30, the only subBundle with one)", "seed representation / adoption candidate / active persisted layout stage separation already correctly defined and applied (issue-29)", "user_auth readonly-vs-CRUD boundary already correctly separated (issue-07)"],
+      "implementation_start_condition": "issue-06 ownership decision ratified; issue-27 placeholder-targetRef policy ratified and issue-26's fail-close guard test written.",
+      "implemented_judgment_condition": "See implemented_judgment_matrix. Explicitly excludes instance_settings_admin_authoring_ui_pending (issue-28) from this subBundle's own Implemented claim."
+    },
+    {
+      "subbundle": "admin-enum",
+      "state": "design_change_required",
+      "blocking_findings": ["issue-30 (declared_seed_surface_catalog entry missing)", "issue-02 (route retirement definition undefined, blocks the final hardcoded-route-deletion step of the common process only)"],
+      "non_blocking_connected": ["Dispatcher mapping, backend handlers, repository, DB tables, and frontend mutation-refetch cycle are all fully connected today (issue-34) — the strongest-wired subBundle in this investigation."],
+      "implementation_start_condition": "declared_seed_surface_catalog entry added (issue-30); issue-02 route-retirement definition resolved before the final route/island-deletion step specifically (earlier common-process steps can proceed without it).",
+      "implemented_judgment_condition": "See implemented_judgment_matrix; largely already satisfied at the backend/DB/refetch layer per issue-34 — remaining work is seed/translator conversion and the final hardcoded-route-retirement step itself."
+    },
+    {
+      "subbundle": "scheduler-settings",
+      "state": "design_change_required",
+      "blocking_findings": ["issue-03 (/admin/scheduler missing from canonical route registry)", "issue-35 (edit action missing from UI despite full backend/dispatcher wiring)", "issue-30 (declared_seed_surface_catalog entry missing)"],
+      "non_blocking_connected": ["Dispatcher mapping and backend handlers fully connected for all 4 actions (issue-10)"],
+      "implementation_start_condition": "issue-03's route-registry ratification; issue-35's edit-UI gap closed or explicitly ratified as intentional; declared_seed_surface_catalog entry added.",
+      "implemented_judgment_condition": "See implemented_judgment_matrix; must include end-to-end proof for the edit action specifically, since it is the one action confirmed missing from current UI input collection."
+    }
+  ],
+
+  "cross_bundle_findings": {
+    "route_registry_authority": "docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin is confirmed the single authoritative registry; docs/design/admin-console-workflow-ssot.yaml and docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml both explicitly defer to it rather than redefining it. Any registry fix (issue-03) belongs there, not in the two admin-workflow SSOTs.",
+    "dispatcher_mapping_pattern": "enum_dictionary and scheduler_jobs are the reference-quality pattern (full dispatcher_mapping rows in db/seed_empty.sql matching every backend handler). auth_users and team_markdown are confirmed to have zero dispatcher_mapping rows despite complete backend/DB implementation, and both are reached via the same manifest-axes-resolving queueAdminClientCommand/callAdminMasterOp path that requires such a row (ManifestDispatcher has no silent fallback).",
+    "declared_seed_surface_catalog_coverage": "Only 1 of 5 subBundles (credential-management, as auth.external.credential_management.projection) has a declared_seed_surface_catalog entry in docs/design/react-schema-topology-seed-translator-ssot.yaml. This is a structural precondition for every other subBundle's mandated common-process step 3 (translator conversion) and must be added per-subBundle before that step, not assumed to exist.",
+    "action_completion_chain_gap": "For the dispatchExternalPort/dispatchInstanceOperation runtimeInteractions lane specifically (not the older hand-written admin-CRUD-Island lane), the chain breaks at response consumption: dispatch is issued, a real resolvable Promise/HTTP response exists, but it is unconditionally discarded (`void`) at every call site found, both event-triggered (runtimeComponentFactory.ts) and lifecycle-triggered (uiEventEffectRunner.ts). outputProp is round-tripped as request/response metadata only, never consumed into UI-readable state. This is architecturally distinct from the older admin-CRUD-Island lane (AdminUsersRoster.tsx, AdminEnumsRoster.tsx), which already has a working, if undocumented, mutation-then-refetch contract."
+  },
+
+  "implemented_judgment_matrix": {
+    "note": "This is the minimal Implemented-judgment proof set this report establishes as the interim canonical reference for admin-surface-topology-seed-conversion (per issue-41's finding that no such minimal set currently exists in SSOT/TODO). It does not replace test-orchestration-review, which concerns test-tier/harness architecture, not first-proof-of-function.",
+    "required_connections_per_subbundle": [
+      "production_dispatcher_mapping: a real dispatcher_mapping row exists in the canonical bootstrap chain (db/init.sql-included files) for every action the subBundle's UI can trigger, with runtime_destination correctly set. (Confirmed gap today for auth_users/team_markdown; confirmed present for enum_dictionary/scheduler_jobs.)",
+      "manifest_package_layout_wiring_tensor_resolution: the seed-converted screen's manifest.topology ui_projection entry resolves to real, persisted components_package_design / components_layout_design / ui_wiring_registry / ui_topology_tensor rows (per react-schema-topology-seed-translator-ssot.yaml storage_adoption_contract), not a raw topology_ui_seed_record embed.",
+      "zero_error_render: the converted screen renders with no runtime error and no unhandled ADMIN_OPERATION_NOT_FOUND/MANIFEST_NOT_FOUND, distinguishing legitimate admin_runtime_structural_read_fallback usage (issue-23's narrow boundary) from a real dispatch failure.",
+      "initial_data_query: the screen's initial business-data read is traced to an explicit, named mechanism (ScreenDataShapeQueryRuntime or equivalent, per issue-24/25) and is not merely structural-fallback empty success.",
+      "ui_input_collection: every authored action (including 'edit' actions specifically, per issue-35's finding that this is the one action class most likely to be silently missing from the UI) has a real, clickable/fillable UI control wired to it.",
+      "backend_action_dispatch: the UI input triggers a real dispatch call reaching the correct AdminRuntime (or equivalent) handler, verified by request/response evidence, not just code-path existence.",
+      "canonical_db_state_change: the dispatched mutation is verified to change the correct canonical DB table/row, not just return a success flag.",
+      "response_binding_or_projection_invalidation_refetch: per issue-21's resolution, either the response value is bound into UI-readable state (outputProp consumer, issue-16) or an explicit invalidation/refetch mechanism (issue-19/20) reflects the DB change in the rendered UI — 'backend Success=true' alone or 'SSE broadcast exists' alone are explicitly insufficient per this task's NG boundary.",
+      "final_dom_state: the rendered DOM/state after the full round-trip is asserted by a test or direct observation, not inferred from an intermediate step.",
+      "hardcoded_route_island_retirement: performed last, per the Bundle's own mandated common-process ordering, and only after issue-02's retirement-definition is ratified; route absence itself is never accepted as proof of anything else in this list.",
+      "negative_case_fail_close: mutation failure, validation failure, network failure, stale response, and concurrent refresh each produce an explicit, asserted final UI state (per issue-22), not a silent fallback or unhandled exception."
+    ]
+  },
+
+  "fix_order": [
+    {"step": 1, "position": "ssot_ownership", "covers": ["issue-01", "issue-06", "issue-13", "issue-32", "issue-40"], "note": "Resolve ownership/scope conflicts and TODO-vs-Implemented condition separation before any wiring or catalog work."},
+    {"step": 2, "position": "route_entry_contract", "covers": ["issue-02", "issue-03", "issue-04", "issue-05", "issue-36", "issue-37"], "note": "Define route retirement meaning, ratify/repair the canonical route registry (add /admin/scheduler), resolve root/manifest-092 default-entry role conflict, before any route body is rewritten."},
+    {"step": 3, "position": "action_completion_contract", "covers": ["issue-14", "issue-15", "issue-16", "issue-17", "issue-18", "issue-19", "issue-20", "issue-21", "issue-22", "issue-24", "issue-25", "issue-35"], "note": "Resolve response-binding vs. invalidation/refetch policy (issue-21) first within this step, since issue-14/15/16/17/18/20 all depend on it; then close the confirmed scheduler-settings edit-UI gap (issue-35); then define the negative-case contract (issue-22)."},
+    {"step": 4, "position": "seed_catalog_contract", "covers": ["issue-26", "issue-27", "issue-29", "issue-30", "issue-31"], "note": "Add missing declared_seed_surface_catalog entries per subBundle immediately before that subBundle's translator-conversion step; ratify placeholder-targetRef policy before any instance_settings dispatch path is exercised."},
+    {"step": 5, "position": "production_mapping", "covers": ["issue-08", "issue-09", "issue-10"], "note": "Add missing dispatcher_mapping rows for auth_users:* and team_markdown:* (mirroring the enum_dictionary/scheduler_jobs pattern); confirm scheduler_jobs's existing mapping remains correct once its route is registry-ratified (issue-03)."},
+    {"step": 6, "position": "proof_contract", "covers": ["issue-11", "issue-12", "issue-41"], "note": "Repair adminDispatchManifestSeed.test.ts and the route-registry test to read canonical sources instead of hardcoded arrays, only after step 2/5's underlying facts are settled (otherwise the tests would need to be rewritten twice)."},
+    {"step": 7, "position": "implementation_bundle_sequence", "covers": ["admin-enum (lowest remaining risk, already largely wired)", "scheduler-settings", "admin-dashboard", "credential-management", "team-dashboard (highest remaining scope, per issue-32's widening)"], "note": "Suggested implementation order among the 5 subBundles once steps 1-6 are complete for each, ordered by ascending remaining-gap size found in this investigation. Final action of each subBundle's own sequence is hardcoded route/island retirement (issue-02), never first."}
+  ],
+
+  "prerequisites_for_future_implementation_bundle": [
+    "Owner ratification of all 10 items in owner_decisions_summary.",
+    "declared_seed_surface_catalog entries added for admin-dashboard, team-dashboard, admin-enum, scheduler-settings (issue-30).",
+    "dispatcher_mapping rows added for auth_users:* and team_markdown:* (issue-08/09).",
+    "/admin/scheduler added to runtime-orchestration-ssot.yaml frontend_routes.admin, or an equivalent owner-ratified alternative (issue-03).",
+    "This report's implemented_judgment_matrix accepted (with or without amendment) as the interim minimal Implemented-judgment proof set, pending a future formal design_change (issue-41)."
+  ],
+
+  "handoff_to_reviewer": {
+    "summary": "This report is a design-investigation JSON only. No product/runtime/SSOT/TODO/seed/test/workflow file was changed. It resolves the confirmed_gap / confirmed_ssot_conflict / confirmed_proof_drift findings it could resolve from SSOT text alone, and explicitly reserves 10 owner_decision_required questions (owner_decisions_summary) rather than deciding them unilaterally, per the task's NG boundary.",
+    "instructions_for_audit_reviewer": [
+      "Read this entire JSON file and the full diff (this file is the only diff) before rendering any pass/fail/merge judgment — do not stop at the first blocking finding (e.g. issue-06's ownership conflict or issue-36's root-entry finding); all 42 issues were independently investigated and several are mutually dependent (see fix_order) but none should be treated as sufficient on its own to end the audit early.",
+      "Verify this report's own NG-boundary compliance: confirm no file other than .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json was created or modified by this investigation (git status/diff should show exactly one new file).",
+      "Verify the JSON parses as valid UTF-8 JSON with no trailing commas or comments before treating it as complete.",
+      "Treat the 'recommended_policy' fields as this investigation's best-effort recommendation, not as owner-ratified decisions — every field also tagged owner_decision_required must go back to the owner, not be silently implemented.",
+      "The most consequential single finding is issue-36 (root canonical-default-entry resolves to admin-only manifest 092) and the paired issue-08/09 finding (auth_users/team_markdown have zero production dispatcher mapping despite full backend implementation, contradicting docs/system-roadmap.yaml's implemented/production_ready claims for team_markdown specifically) — these are the two findings most likely to affect current production behavior, not just future Bundle design, and should be prioritized for owner attention regardless of when implementation work begins.",
+      "This report intentionally leaves docs/system-roadmap.yaml and .agent/tasks/todo.md unedited even where drift was found (issue-09's roadmap_todo_drift, issue-40, issue-42) — these require separate todo_maintenance/design_change worktype passes, not bundled into this audit deliverable."
+    ]
+  }
+}
