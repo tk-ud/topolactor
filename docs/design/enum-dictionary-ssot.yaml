@@ -91,3 +91,15 @@ enum_dictionary_ssot:
     list_groups: enum_dictionary:list_groups
     get_group: enum_dictionary:get_group
     roster_write_actions_ref: docs/design/admin-master-roster-management-ssot.yaml
+
+  admin_hub_relation_navigation:
+    ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract
+    status: blocked_pending_seed_catalog
+    note: >-
+      admin-surface-topology-seed-conversion Bundle. /admin/enums is not yet reachable via admin
+      hub relation navigation from /admin: hub relation resolution requires a real per-screen
+      ui_projection manifest for enum_dictionary (React-like Schema -> translator -> topology UI
+      seed -> seed registration), which does not exist yet — only per-action dispatcher_mapping
+      manifests exist today (all 9 enum_dictionary:* actions, already production-mapped and
+      unaffected by this Bundle). The route itself is unaffected and is not retired by this
+      precondition; only hub-reachability is deferred.

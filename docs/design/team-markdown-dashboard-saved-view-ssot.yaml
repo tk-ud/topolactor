@@ -443,6 +443,20 @@ team_markdown_dashboard_saved_view_ssot:
     mock_preset_intake_compiler:
       ref: docs/design/mock-preset-intake-compiler-ssot.yaml
       role: adjacent visual preset intake; not the same feature
+    admin_hub_relation_navigation:
+      ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract
+      status: blocked_pending_seed_catalog
+      note: >-
+        admin-surface-topology-seed-conversion Bundle. /admin/team-dashboard is not yet reachable
+        via admin hub relation navigation from /admin: hub relation resolution requires a real
+        per-screen ui_projection manifest (React-like Schema -> translator -> topology UI seed ->
+        seed registration), which this surface does not have yet — only its
+        AdminRuntime/repository/DB layer (team_markdown:* actions, now production-dispatcher-mapped
+        in db/seed_empty.sql) exists today. The route itself is unaffected and is not retired by
+        this precondition; only hub-reachability is deferred. This surface's full authoring
+        lifecycle (template registration, binding, saved view create/update/archive, search/get,
+        refresh, clone, rebind — completion_condition above) remains this SSOT's scope; it is not
+        narrowed to read-only projection by the seed-conversion Bundle.
 
   implementation_scope_notes:
     current: implemented

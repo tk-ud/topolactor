@@ -14,6 +14,78 @@ admin_console_workflow_ssot:
       - /admin/contents
       - /admin/ui-builder
       - /admin/team-dashboard
+      - /admin/credentials
+      - /admin/scheduler
+
+  admin_hub_relation_navigation_contract:
+    status: design_change
+    bundle: admin-surface-topology-seed-conversion
+    note: >-
+      Defines /admin as the admin hub relation navigation entry surface, and the meaning of "admin
+      hub relation" strictly as manifest-scoped outbound navigation (hubs.hub_relations rows owned
+      by an admin landing hub-manifest), per
+      docs/design/runtime-orchestration-ssot.yaml dispatcher_contract.hub_navigation_resolution and
+      canonical_default_entry_contract mechanics — the SAME mechanism manifest 092's own
+      self-referencing hub_relations row already uses, never a new/parallel navigation mechanism.
+    authority_boundary:
+      hub_relation_is: manifest_scoped_outbound_navigation_sequence_only
+      hub_relation_is_not:
+        - global_hub_graph
+        - canonical_data_authority
+        - runtime_participant_authority
+        - presentation_audience_authority
+        - presenter_to_participant_forced_projection_authority
+        - targeted_per_viewer_delivery_authority
+      out_of_bundle_note: >-
+        presentation/participant/forced-projection/targeted-audience-delivery concepts are not
+        defined anywhere in this SSOT family (confirmed by
+        .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json prior audit
+        pass) and are explicitly out of this Bundle's scope; a future dedicated Bundle would need
+        its own SSOT authority if that need ever arises.
+    admin_landing_hub_manifest:
+      manifest_id: "00000000-0000-0000-0000-0000000ad100"
+      hub_id: "00000000-0000-0000-0000-0000000ad101"
+      manifest_key: admin.landing.hub
+      role: hub_relation_navigation_source_only
+      note: >-
+        Carries no ui_projection. /admin's own rendered body remains the existing hardcoded
+        landing/navigation/guide surface (admin-dashboard subBundle scope,
+        page_responsibility.admin_index below) for this Bundle; this manifest exists solely so
+        outbound hubs.hub_relations rows from it are resolvable through
+        HubNavigationResolver / LoadHubNavigationSequenceAsync, never a hand-rolled parallel
+        navigation mechanism.
+    resolution_rule: >-
+      Identical, non-negotiable rule as
+      docs/design/runtime-orchestration-ssot.yaml
+      dispatcher_contract.hub_navigation_resolution.target_manifest_resolution: a related_hub_id
+      resolves to a target manifest only when exactly one active hubs.topology_manifests row
+      exists for it. Zero or multiple active rows resolve to no target (null), never a
+      first-match/oldest/MIN implicit fallback. Source topology_manifest, related hub, and
+      sequence_position must each be explicit; only active relations and active target manifests
+      are reachable.
+    wired_relations:
+      credentials:
+        related_hub_id: "00000000-0000-0000-0000-0000000000a1"
+        sequence_position: 1
+        target_manifest_id: "00000000-0000-0000-0000-000000000092"
+        status: wired
+        proof: >-
+          backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+          AdminLandingHub_HubRelation_ResolvesToCredentialManagementManifest092_SeedOnly
+      enum_dictionary:
+        status: blocked_pending_seed_catalog
+        precondition: requires a real per-screen ui_projection manifest for enum_dictionary (does not exist yet)
+      team_dashboard:
+        status: blocked_pending_seed_catalog
+        precondition: requires a real per-screen ui_projection manifest for team_markdown dashboard (does not exist yet)
+      scheduler_settings:
+        status: blocked_pending_seed_catalog
+        precondition: requires a real per-screen ui_projection manifest for scheduler_jobs (does not exist yet)
+    prohibited:
+      - global_hub_scan_for_target_selection
+      - first_match_oldest_or_MIN_fallback_target_selection
+      - active_navigation_row_whose_target_does_not_resolve_uniquely
+      - treating_hub_relation_as_canonical_data_authority_for_auth_users_enum_team_markdown_or_scheduler_jobs
 
   purpose:
     - keep the admin authoring routes aligned with runtime-orchestration route authority
@@ -1240,10 +1312,51 @@ admin_console_workflow_ssot:
           actions. Text search, show-all, modal create, row-click inline update, confirm delete.
       - route: /admin/users
         label: auth_users_roster
+        status: retiring_pending_proof
+        replacement: /admin/credentials
         island: frontend/islands/AdminUsersRoster.tsx
         note: >
           Pipeline-external master data. User roster and state (approve, status select from user_status
-          seed, suspension window, state_note). last_login_at is readonly projection.
+          seed, suspension window, state_note). last_login_at is readonly projection. Retiring per
+          docs/design/runtime-orchestration-ssot.yaml admin_route_retirement_matrix once
+          /admin/credentials's embedded admin user management projection, mutation completion, and
+          negative-case proof are established (not yet retired by this change — see
+          projection_entry_vs_data_authority_split below).
+      - route: /admin/credentials
+        label: credential_admin_projection
+        status: canonical_projection_entry
+        manifest_id: "00000000-0000-0000-0000-000000000092"
+        island: existing_manifest_092_ProjectionShell_projection
+        note: >
+          Canonical projection entry for credential/admin-user management (owner decision, fixed).
+          Categories: user_auth (readonly join via auth.user.boundary, manifest 091),
+          external (external port credential context), instance_settings (db/runtime instance
+          address + operation binding drafts), and admin_user (embedded admin user management
+          projection, wired to the same auth_users:* AdminRuntime actions AdminUsersRoster.tsx
+          already used — see docs/design/admin-master-roster-management-ssot.yaml
+          projection_entry_vs_data_authority_split). This route does not become a second
+          canonical_data_authority owner for auth.users; see that split below.
+
+    projection_entry_vs_data_authority_split:
+      note: >-
+        admin-surface-topology-seed-conversion owner decision: consolidating the credential/admin-user
+        PROJECTION ENTRY into /admin/credentials must never be read as consolidating auth.users'
+        CANONICAL DATA AUTHORITY there too. These are explicitly separate axes.
+      canonical_projection_entry:
+        route: /admin/credentials
+        manifest_id: "00000000-0000-0000-0000-000000000092"
+        owns: [rendering_surface, category_switcher_ui, form_input_collection, action_button_wiring]
+      canonical_data_authority:
+        owner_ssot: docs/design/admin-master-roster-management-ssot.yaml
+        owns:
+          - auth.users_table_schema_and_business_rules
+          - approve_status_suspension_state_machine
+          - auth_users_crud_repository_AdminRuntimeMasterRoster
+          - login_denial_contract
+          - logs_diff_admin_projection_audit_envelope
+        prohibited:
+          - moving_auth_users_repository_or_business_rules_into_credential_projection_design
+          - treating_projection_entry_consolidation_as_data_authority_consolidation
 
   shared_authoring_boundary:
     contents_pipeline_persistence_model_ref: canonical_sequential_authoring_pipeline.persistence_model
@@ -1263,7 +1376,34 @@ admin_console_workflow_ssot:
   page_responsibility:
     admin_index:
       route: /admin
-      responsibility: canonical admin authoring entry; presents contents pipeline (steps 1→3) → /admin/ui-builder canvas workspace → optional /admin/manifests
+      responsibility: >-
+        canonical admin authoring entry AND admin hub relation navigation source (see
+        admin_hub_relation_navigation_contract above); presents contents pipeline (steps 1→3) →
+        /admin/ui-builder canvas workspace → optional /admin/manifests, plus static
+        landing/navigation/guide content classified separately from projection seed content
+        (frontend-canonical-surface-structure-label-boundary Bundle owns wording; this Bundle owns
+        only where that content is sourced from).
+
+    admin_credentials:
+      route: /admin/credentials
+      manifest_id: "00000000-0000-0000-0000-000000000092"
+      responsibility: >-
+        canonical credential/admin-user management projection entry (owner decision, fixed). Hosts
+        user_auth / external / instance_settings / admin_user categories behind a
+        select/mode/category switcher on the existing manifest-092 ProjectionShell projection. Does
+        not own auth.users canonical data authority — see projection_entry_vs_data_authority_split.
+      domain_ownership:
+        - admin_user category CRUD projection wired to auth_users:* actions
+        - user_auth readonly relation-boundary display (auth.user.boundary, manifest 091)
+        - external port credential context display
+        - instance_settings JSON template / registered instance / operation binding projection
+      explicitly_out_of_scope:
+        - auth.users business rules, login denial contract, repository authority (stays in
+          docs/design/admin-master-roster-management-ssot.yaml)
+        - auth.credentials.password_hash or any secret-bearing field in projection/manifest/UI seed
+        - instance_settings_admin_authoring_ui_pending's full JSON download/import/validate/preview/
+          apply/approve action set (see docs/projection_design/credential-management-projection-design.md
+          Known gaps; tracked as remaining_gap, not silently pulled into this route's initial scope)
 
     admin_contents:
       route: /admin/contents

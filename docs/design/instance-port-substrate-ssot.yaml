@@ -290,6 +290,23 @@ instance_port_substrate_ssot:
       standalone credential plane, dedicated credential route/panel, or UI Builder CRUD product surface.
       The user/auth, external, and instance categories should be switched by select/mode/category while
       preserving the same fixed-form projection structure where possible.
+    canonical_url_amendment:
+      status: design_change
+      bundle: admin-surface-topology-seed-conversion
+      note: >-
+        Owner decision (fixed): this SAME existing manifest-092 projection now has an explicit
+        canonical URL, /admin/credentials (docs/design/admin-console-workflow-ssot.yaml
+        admin_credentials / docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin),
+        instead of being reachable only via ?manifest=092 on an unrelated page. This is NOT the
+        "standalone_credential_management_plane" / "new_dedicated_credential_management_route_or_panel"
+        this rule prohibits — no new manifest, no second credential system, no fragmentation was
+        introduced; the prohibition's intent (never build a second, competing credential surface)
+        is unchanged and still binding. A fourth category, admin_user (embedded admin user
+        management CRUD, reusing the existing auth_users:* AdminRuntime actions), was added to the
+        same select/mode/category switcher alongside user_auth/external/instance_settings — see
+        docs/design/admin-master-roster-management-ssot.yaml
+        projection_entry_vs_data_authority_split for the data-authority boundary this does not
+        cross.
     projection_categories:
       user_auth:
         role: Existing user/auth credential boundary; instance-port must not mix external or instance secrets into auth credentials.

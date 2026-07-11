@@ -79,6 +79,23 @@ scheduler_job_manifest_ssot:
       - active_manifest_or_seed_manifest_is_authority_surface_for_scheduler_execution
       - disabling_a_job_prevents_new_due_selection_without_deleting_run_ledger
 
+  admin_hub_relation_navigation:
+    ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract
+    status: blocked_pending_seed_catalog
+    canonical_route_registry_status: ratified
+    note: >-
+      admin-surface-topology-seed-conversion Bundle. /admin/scheduler is now ratified into
+      docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin (it was previously
+      implemented and fully dispatcher-mapped — list_settings/create/edit/disable all four — but
+      absent from that registry). It is not yet reachable via admin hub relation navigation from
+      /admin: hub relation resolution requires a real per-screen ui_projection manifest for
+      scheduler_jobs, which does not exist yet — only per-action dispatcher_mapping manifests
+      exist today. The edit action (scheduler_jobs:edit) has full backend/dispatcher wiring but is
+      not yet exposed as a UI control on the current frontend/routes/admin/scheduler.tsx surface
+      (see frontend/content/adminGuides.ts ADMIN_ROUTE_CARDS caution text) — closing that UI gap
+      remains open scheduler-settings subBundle work, tracked as remaining_gap in
+      .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json.
+
   scheduler_substrate:
     role: generic_runtime_time_axis_queue_for_job_manifests
     allowed_responsibilities:

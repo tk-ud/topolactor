@@ -45,6 +45,7 @@ admin_master_roster_management_ssot:
         - delete_requires_confirm_dialog
     admin_users:
       path: /admin/users
+      status: retiring_pending_proof
       island: frontend/islands/AdminUsersRoster.tsx
       ux_contract:
         - text_search_at_top
@@ -54,6 +55,20 @@ admin_master_roster_management_ssot:
         - delete_requires_confirm_dialog
         - status_select_from_seed_user_status_group
         - last_login_at_readonly_not_inline_editable
+
+  projection_entry_vs_data_authority_split:
+    note: >-
+      admin-surface-topology-seed-conversion owner decision (fixed): the admin user CRUD
+      PROJECTION ENTRY consolidates into /admin/credentials
+      (docs/design/admin-console-workflow-ssot.yaml admin_credentials /
+      projection_entry_vs_data_authority_split). This SSOT remains the sole canonical_data_authority
+      for auth.users regardless of which route renders it: business rules (login_denial_contract,
+      approve/status/suspension state machine), the auth_users:* AdminRuntime handlers, the
+      NpgsqlAuthMasterRepository / AuthMasterRepository authority, and logs.diff audit envelope
+      ownership are unaffected by the projection route change. /admin/users is retiring only after
+      /admin/credentials's embedded admin_user category CRUD, mutation-then-state-reconciliation,
+      and negative-case proof are established — see
+      docs/design/runtime-orchestration-ssot.yaml admin_route_retirement_matrix.
 
   user_status_seed:
     group_id: "33333333-3333-3333-3333-333333333301"

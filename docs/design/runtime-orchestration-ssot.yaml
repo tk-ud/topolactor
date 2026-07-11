@@ -106,6 +106,63 @@ runtime_orchestration_ssot:
       - /admin/team-dashboard
       - /admin/enums
       - /admin/users
+      - /admin/credentials
+      - /admin/scheduler
+    admin_route_retirement_matrix:
+      note: >-
+        admin-surface-topology-seed-conversion Bundle. Each retiring route is explicitly assigned
+        one of retirement_kind's four values below; retirement never happens implicitly, and route
+        deletion or route absence is never itself completion proof (see
+        docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract for the
+        full negative-proof gate). "canonical" entries above stay listed until their own row here
+        reaches status=retired.
+      retirement_kind:
+        url_deletion: the route file and its URL are removed; no path continues to serve it.
+        redirect: the URL continues to resolve but issues a redirect to the replacement canonical URL.
+        thin_projection_wrapper: the URL and route file remain, but the route body is replaced by a
+          thin wrapper that renders the seed-backed ProjectionShell projection instead of the
+          former hardcoded island.
+        hub_navigation_only: no URL/route change; the route becomes reachable via admin hub
+          relation navigation from /admin in addition to its existing direct URL.
+      routes:
+        - route: /admin/users
+          retirement_kind: redirect
+          replacement: /admin/credentials
+          status: pending
+          precondition: >-
+            /admin/credentials production projection, admin user CRUD action wiring (auth_users:*
+            dispatcher_mapping — closed in db/seed_empty.sql), mutation-then-state-reconciliation,
+            and negative-case proof must all pass before this route redirects. Not retired by this
+            change.
+        - route: /admin/enums
+          retirement_kind: thin_projection_wrapper
+          replacement: same_url_seed_backed
+          status: pending
+          precondition: >-
+            requires a real per-screen ui_projection manifest for enum_dictionary (React-like
+            Schema -> translator -> topology UI seed -> seed registration), which does not exist
+            yet — only per-action dispatcher_mapping-only manifests exist today. Not retired by
+            this change.
+        - route: /admin/team-dashboard
+          retirement_kind: hub_navigation_only
+          replacement: same_url_plus_hub_entry
+          status: pending
+          precondition: >-
+            requires a real per-screen ui_projection manifest for the team markdown dashboard
+            surface (same prerequisite as /admin/enums above). The route itself is not retired;
+            only hub-reachability is added once that manifest exists. Not retired by this change.
+        - route: /admin/scheduler
+          retirement_kind: hub_navigation_only
+          replacement: same_url_plus_hub_entry
+          status: pending
+          precondition: >-
+            same as /admin/team-dashboard above: requires a real per-screen ui_projection manifest
+            for scheduler_jobs, which does not exist yet. Ratified into the canonical registry
+            above (was previously implemented and dispatcher-wired but absent from this list — see
+            .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json issue-03)
+            without waiting on that prerequisite, since ratifying an already-shipped route's
+            registry entry is independent of adding hub navigation to it. Not retired by this
+            change.
 
   trigger_contract:
     kind_enum:
