@@ -504,6 +504,19 @@ runtime_orchestration_ssot:
           leaf cannot claim render completion for that leaf until the interaction actually gains
           a recognized runtime handler or is removed, the same posture unresolved_gap already
           takes.
+        localStateMutation_taxonomy: >-
+          react-schema-topology-seed-translator-ssot.yaml
+          wiring_lane_contract.lanes.internal_instance_wiring already declares localStateMutation
+          as a canonical example (alongside modal_open_close/drawer_open_close/selected_row/
+          tab_state) with targetRef_shape "ui-local:<nodeId>.<stateKey>" and no backend dispatch
+          -- it is a UI-state-update actionType, not an unattributable one. Frontend
+          wiringSettingCategoryOf classifies it as ui_state_update;
+          resolveUiStateUpdateMutation resolves targetNodeId/statePath by parsing this targetRef
+          when no separate targetNodeId/statePath field is present, and writes true (a flag
+          write, the same "set true" semantic as openModal/openDrawer/openDialog -- never an
+          invented business-data value the seed record does not carry). A catalog_component leaf
+          whose runtimeInteractions consist entirely of correctly-shaped localStateMutation
+          entries is therefore attributable and must not hit RUNTIME_INTERACTION_UNATTRIBUTABLE.
         authored_label_and_production_props: >-
           Every schema record carries an authored label (record_common_required_fields); a
           catalog_component leaf's LayoutNode.Label carries it through composition exactly like a

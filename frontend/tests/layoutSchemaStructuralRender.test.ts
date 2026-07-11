@@ -8,17 +8,15 @@
  * catalog leaves (Field/Action/Table/WorkflowStep, componentId/componentKind from
  * ui_component_registry) + merged tensor runtimeInteractions produces ZERO
  * componentType==="error" specs — not merely "some specs came back" and not "the tensor nodes
- * existed". Two documented exceptions exist, both explicit rather than hidden:
+ * existed". One documented exception remains, explicit rather than hidden:
  *   - unresolved_gap nodes (topology_ui_unresolved) always render as an explicit error carrying
  *     their authored knownGapRefs, by design — render completion must not paper over a real
  *     unresolved authoring gap.
- *   - a catalog_component leaf whose authored runtimeInteractions resolve to zero recognized
- *     event bindings (RUNTIME_INTERACTION_UNATTRIBUTABLE — e.g. manifest 092's real
- *     json_template_download/json_import Actions, whose actionType "localStateMutation" has no
- *     implemented runtime handler anywhere in this codebase) is an honest, attributable error at
- *     THIS layer — never a silently-unbound component that only fails later, cryptically, deep
- *     inside the runtime factory. This is an out-of-scope business-data/wiring-completeness gap
- *     in the seed's authoring, not a structural-render or projection-identity defect.
+ * A catalog_component leaf whose authored runtimeInteractions resolve to zero recognized event
+ * bindings still fails explicit as RUNTIME_INTERACTION_UNATTRIBUTABLE (see renderEmission.ts) —
+ * manifest 092's real json_template_download/json_import Actions no longer hit this path: their
+ * actionType "localStateMutation" is now a recognized ui_state_update taxonomy member (SSOT
+ * wiring_lane_contract.lanes.internal_instance_wiring), resolved via its ui-local: targetRef.
  *
  * The first test below is the representative-scenario proof: it reads
  * frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json, a checked-in snapshot of
@@ -54,23 +52,10 @@ Deno.test("renderEmission: manifest 0092's REAL bare-entry-resolved LayoutNodes 
   const specs = renderEmission(emission, defaultComponentRegistry);
 
   const errorSpecs = specs.filter((s) => s.componentType === "error");
-  // The only errors the REAL manifest 092 tree may ever produce are the two known,
-  // attributable RUNTIME_INTERACTION_UNATTRIBUTABLE Actions (json_template_download/json_import
-  // — see module doc comment above). Any OTHER error is a real render-completion regression.
-  const unexpectedErrorSpecs = errorSpecs.filter((s) =>
-    (s.def as Record<string, unknown> | undefined)?.code !== "RUNTIME_INTERACTION_UNATTRIBUTABLE"
-  );
   assertEquals(
-    unexpectedErrorSpecs,
+    errorSpecs,
     [],
-    `render completion requires zero UNEXPECTED error components for the REAL manifest 0092 bare-entry emission; found: ${
-      JSON.stringify(unexpectedErrorSpecs)
-    }`,
-  );
-  assertEquals(
-    errorSpecs.length,
-    2,
-    `expected exactly the two known-gap Actions (json_template_download, json_import) to surface RUNTIME_INTERACTION_UNATTRIBUTABLE; found ${errorSpecs.length} error spec(s): ${
+    `render completion requires zero error components for the REAL manifest 0092 bare-entry emission; found: ${
       JSON.stringify(errorSpecs)
     }`,
   );
@@ -313,38 +298,47 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
     h(LayoutProjectionTree, { specs, layoutId: emission.layoutId }),
   );
 
-  // The four well-attributed Action leaves (dispatchInstanceOperation, click-triggered —
-  // validate/preview/apply/approve) must reach the REAL DOM as their authored label, through the
+  // The five well-attributed Action leaves — dispatchInstanceOperation, click-triggered
+  // (validate/preview/apply/approve) plus localStateMutation, click-triggered
+  // (json_template_download) — must reach the REAL DOM as their authored label, through the
   // REAL runtime factory (buttonFactory), enabled (no disabled attribute) — proving
   // renderEmission()'s "zero error" claim for these leaves actually holds all the way to markup,
   // not just at the spec layer.
-  for (const label of ["Validate", "Preview", "Apply", "Approve"]) {
+  for (const label of ["Validate", "Preview", "Apply", "Approve", "Download JSON template"]) {
     assert(html.includes(`>${label}<`), `expected the real DOM markup to contain the button label "${label}"; html: ${html.slice(0, 2000)}`);
   }
   // action/button never renders a native <button disabled> for these leaves — production
   // rendering must not inject the UI-Builder canvas-preview placeholder's forced disabled:true
   // (see buildProductionCatalogComponentProps in renderEmission.ts).
   assert(
-    !/<button[^>]*\bdisabled\b[^>]*>(?:Validate|Preview|Apply|Approve)</.test(html),
-    "expected validate/preview/apply/approve buttons to render enabled (no disabled attribute) in the real DOM",
+    !/<button[^>]*\bdisabled\b[^>]*>(?:Validate|Preview|Apply|Approve|Download JSON template)</.test(html),
+    "expected validate/preview/apply/approve/json_template_download buttons to render enabled (no disabled attribute) in the real DOM",
   );
 
-  // The real DOM shows MORE error boxes than renderEmission()'s own error-spec count — this is
-  // the exact disconnect this proof exists to surface, not hide: renderEmission() catches 2
-  // (the documented RUNTIME_INTERACTION_UNATTRIBUTABLE json_template_download/json_import
-  // Actions), but LayoutProjectionTree's runtimeComponentFactory pass additionally discovers 4
-  // MORE failures for plain, unwired select fields (approval_status x2, port_kind, callable)
-  // whose factory unconditionally requires a "change" binding no seed content ever authored —
-  // a pre-existing, out-of-scope business-data/seed-authoring-completeness gap (not specific to
-  // schema composition; the same factory contract applies to any select field anywhere), never
-  // silently absorbed or hidden from the real DOM. A backend-only "zero unresolved leaves" count
-  // or renderEmission()'s own error-spec count alone would have missed these 4 entirely.
+  // renderEmission() itself now produces zero error specs for the real manifest 092 tree.
   const errorSpecCount = specs.filter((s) => s.componentType === "error").length;
-  assertEquals(errorSpecCount, 2, "expected exactly the 2 RUNTIME_INTERACTION_UNATTRIBUTABLE Actions at the renderEmission() spec layer");
+  assertEquals(errorSpecCount, 0, "expected zero errors at the renderEmission() spec layer");
+
+  // The real DOM still shows error boxes renderEmission()'s own error-spec count misses — this
+  // is the exact disconnect this proof exists to surface, not hide. LayoutProjectionTree's
+  // runtimeComponentFactory pass discovers 5 failures renderEmission() cannot see:
+  //   - json_import: authored trigger is "change" (a file-input-shaped interaction), but its
+  //     componentKind (action/button, per the uniform Action->button.primitive convention) maps
+  //     to buttonFactory, which unconditionally requires "click" — a componentKind/trigger
+  //     mismatch, not an attribution failure (its localStateMutation interaction IS now
+  //     correctly attributed; requireBinding("click") fails regardless).
+  //   - 4 plain, unwired select fields (approval_status x2, port_kind, callable): selectFactory
+  //     unconditionally requires a "change" binding no seed content ever authored for these
+  //     fields — a pre-existing, out-of-scope business-data/seed-authoring-completeness gap (not
+  //     specific to schema composition; the same factory contract applies to any select field
+  //     anywhere in the application).
+  // Both categories require an explicit design decision (component-kind/trigger redesign for
+  // json_import; read-only-vs-editable field contract for the selects) rather than a unilateral
+  // fix — see the PR report. Never silently absorbed or hidden from the real DOM.
   const errorBoxMatches = html.match(/rounded border border-red-200/g) ?? [];
   assertEquals(
     errorBoxMatches.length,
-    6,
-    "expected 6 total visible error boxes in the real DOM: 2 renderEmission()-level (RUNTIME_INTERACTION_UNATTRIBUTABLE) + 4 additional runtime-factory-level (pre-existing unwired select fields) — every one explicit and visible, none silently dropped from the markup",
+    5,
+    "expected 5 total visible error boxes in the real DOM (json_import componentKind/trigger mismatch + 4 pre-existing unwired select fields) — every one explicit and visible, none silently dropped from the markup",
   );
 });

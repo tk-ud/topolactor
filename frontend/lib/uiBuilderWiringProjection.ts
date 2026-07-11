@@ -31,6 +31,13 @@ export type WiringInteraction = {
   outputProp?: string;
   portTargetRef?: string;
   instanceTargetRef?: string;
+  /**
+   * SSOT wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape
+   * ("ui-local:<nodeId>.<stateKey>") — the UI-local-state target for a
+   * localStateMutation actionType. No backend dispatch; resolved into
+   * targetNodeId/statePath by resolveUiStateUpdateMutation.
+   */
+  targetRef?: string;
   /** SSOT high_frequency_policy: required for backend/external dispatch on high-frequency triggers. */
   debounceMs?: number;
   /** SSOT lifecycle_policy: explicit author confirmation for backend/external dispatch on lifecycle triggers. */
@@ -260,6 +267,11 @@ const UI_STATE_UPDATE_ACTIONS = new Set([
   "toggleDialog",
   "setActiveKey",
   "setState",
+  // SSOT wiring_lane_contract.lanes.internal_instance_wiring.examples: a
+  // UI-local state trigger with no backend dispatch, targeted via targetRef
+  // ("ui-local:<nodeId>.<stateKey>") rather than a separate targetNodeId field
+  // — see resolveUiStateUpdateMutation's targetRef fallback.
+  "localStateMutation",
 ]);
 
 /**

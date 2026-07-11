@@ -134,7 +134,32 @@ const UI_STATE_UPDATE_OPEN_ACTIONS: Record<string, boolean | "toggle"> = {
   openDialog: true,
   closeDialog: false,
   toggleDialog: "toggle",
+  // SSOT wiring_lane_contract.lanes.internal_instance_wiring: a localStateMutation
+  // trigger writes true to its ui-local: target — a flag write, the same "set true"
+  // semantic as open* — never a business-data value the seed record does not carry.
+  localStateMutation: true,
 };
+
+/**
+ * SSOT wiring_lane_contract.lanes.internal_instance_wiring targetRef_shape:
+ * "ui-local:<nodeId>.<stateKey>". Parses the targetRef into the same
+ * {targetNodeId, statePath} shape UI_STATE_UPDATE_ACTIONS entries carry
+ * directly — used as a fallback when an interaction has no separate
+ * targetNodeId/statePath fields (localStateMutation entries only carry
+ * targetRef). Malformed/non-matching targetRef resolves to undefined —
+ * never guessed.
+ */
+const UI_LOCAL_TARGET_REF_RE = /^ui-local:([^.]+)\.(.+)$/;
+
+export function parseUiLocalTargetRef(
+  targetRef: string | undefined,
+): { targetNodeId: string; statePath: string } | undefined {
+  const trimmed = targetRef?.trim();
+  if (!trimmed) return undefined;
+  const match = UI_LOCAL_TARGET_REF_RE.exec(trimmed);
+  if (!match) return undefined;
+  return { targetNodeId: match[1], statePath: match[2] };
+}
 
 export type ResolvedUiStateUpdateMutation = {
   targetNodeId: string;
@@ -148,8 +173,11 @@ export type ResolvedUiStateUpdateMutation = {
  * actionType) into the normalized {targetNodeId, statePath, action, value}
  * mutation shape. Shared by the event-binding builder (renderEmission.ts) and
  * the lifecycle path (executeStateUpdate below) so both derive the identical
- * target/statePath/value for the same authored interaction. Returns null when
- * no targetNodeId is present (nothing to mutate).
+ * target/statePath/value for the same authored interaction. Falls back to
+ * parsing targetRef ("ui-local:<nodeId>.<stateKey>") when no separate
+ * targetNodeId/statePath is present — the shape localStateMutation entries
+ * carry (SSOT wiring_lane_contract.lanes.internal_instance_wiring). Returns
+ * null when neither source yields a targetNodeId (nothing to mutate).
  */
 export function resolveUiStateUpdateMutation(
   w: {
@@ -157,11 +185,13 @@ export function resolveUiStateUpdateMutation(
     targetNodeId?: string;
     statePath?: string;
     value?: unknown;
+    targetRef?: string;
   },
 ): ResolvedUiStateUpdateMutation | null {
-  const targetNodeId = w.targetNodeId?.trim();
+  const fromTargetRef = !w.targetNodeId?.trim() ? parseUiLocalTargetRef(w.targetRef) : undefined;
+  const targetNodeId = w.targetNodeId?.trim() || fromTargetRef?.targetNodeId;
   if (!targetNodeId) return null;
-  const statePath = w.statePath?.trim() ||
+  const statePath = w.statePath?.trim() || fromTargetRef?.statePath ||
     (w.actionType === "setActiveKey" ? "activeKey" : "open");
   const openAction = UI_STATE_UPDATE_OPEN_ACTIONS[w.actionType];
   if (openAction === "toggle") {

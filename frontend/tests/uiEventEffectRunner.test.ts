@@ -19,11 +19,15 @@
 
 import { assert, assertEquals } from "jsr:@std/assert";
 import {
+  applyGuardedLocalStateMutation,
   createProjectionStateDispatcher,
   createRuntimeLocalStateStore,
   createRuntimeStateDispatcher,
   createUiEventEffectRunner,
   type NotifyingRuntimeLocalStateStore,
+  parseUiLocalTargetRef,
+  predeclareProjectionState,
+  resolveUiStateUpdateMutation,
 } from "../runtime/uiEventEffectRunner.ts";
 import { enqueueInstanceOperationDispatchCommand } from "../runtime/frontendScheduler.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
@@ -56,6 +60,101 @@ function modalNodes(): WiringNode[] {
     },
   ];
 }
+
+Deno.test("parseUiLocalTargetRef: parses 'ui-local:<nodeId>.<stateKey>' into {targetNodeId, statePath}", () => {
+  assertEquals(
+    parseUiLocalTargetRef("ui-local:instance_settings_import_form.template_download_trigger"),
+    { targetNodeId: "instance_settings_import_form", statePath: "template_download_trigger" },
+  );
+});
+
+Deno.test("parseUiLocalTargetRef: malformed/non-matching/absent targetRef resolves to undefined — never guessed", () => {
+  assertEquals(parseUiLocalTargetRef(undefined), undefined);
+  assertEquals(parseUiLocalTargetRef(""), undefined);
+  assertEquals(parseUiLocalTargetRef("not-ui-local-shaped"), undefined);
+  assertEquals(parseUiLocalTargetRef("ui-local:missing-dot-separator"), undefined);
+});
+
+Deno.test("resolveUiStateUpdateMutation: localStateMutation resolves targetNodeId/statePath from targetRef (no separate targetNodeId/statePath fields) and writes true — SSOT wiring_lane_contract.lanes.internal_instance_wiring", () => {
+  const resolved = resolveUiStateUpdateMutation({
+    actionType: "localStateMutation",
+    targetRef: "ui-local:instance_settings_import_form.template_download_trigger",
+  });
+  assertEquals(resolved, {
+    targetNodeId: "instance_settings_import_form",
+    statePath: "template_download_trigger",
+    action: "set",
+    value: true,
+  });
+});
+
+Deno.test("resolveUiStateUpdateMutation: an explicit targetNodeId/statePath always wins over targetRef parsing", () => {
+  const resolved = resolveUiStateUpdateMutation({
+    actionType: "localStateMutation",
+    targetNodeId: "explicit-node",
+    statePath: "explicit-path",
+    targetRef: "ui-local:other-node.other-path",
+  });
+  assertEquals(resolved?.targetNodeId, "explicit-node");
+  assertEquals(resolved?.statePath, "explicit-path");
+});
+
+Deno.test("resolveUiStateUpdateMutation: localStateMutation with no targetNodeId and no targetRef resolves to null (nothing to mutate)", () => {
+  assertEquals(resolveUiStateUpdateMutation({ actionType: "localStateMutation" }), null);
+});
+
+Deno.test("localStateMutation end-to-end: predeclare (from targetRef) -> resolve -> guarded write -> real state change — matches manifest 092's json_template_download/json_import shape (target is the OWNING FORM's own node, a sibling of the Action, not the Action itself)", () => {
+  const nodes: WiringNode[] = [
+    {
+      nodeId: "instance_settings_import_form",
+      componentKey: "structural_node",
+      componentKind: undefined,
+    },
+    {
+      nodeId: "json_template_download",
+      componentKey: "action/button",
+      componentKind: "action/button",
+      runtimeInteractions: [
+        {
+          trigger: "click",
+          actionType: "localStateMutation",
+          targetRef: "ui-local:instance_settings_import_form.template_download_trigger",
+        },
+      ],
+    },
+  ];
+  const store = createRuntimeLocalStateStore();
+  const dispatcher = createProjectionStateDispatcher(nodes, store);
+
+  // Predeclared (from the targetRef-resolved identity) before any mutation can run.
+  assert(dispatcher.isDeclared("instance_settings_import_form", "template_download_trigger"));
+  assertEquals(dispatcher.get("instance_settings_import_form", "template_download_trigger"), undefined);
+
+  const interaction = nodes[1].runtimeInteractions![0];
+  const resolved = resolveUiStateUpdateMutation(interaction);
+  assert(resolved, "localStateMutation must resolve via its targetRef");
+  const applyResult = applyGuardedLocalStateMutation(dispatcher, resolved!);
+  assert(applyResult.ok, `expected the guarded write to succeed; got: ${JSON.stringify(applyResult)}`);
+  assertEquals(dispatcher.get("instance_settings_import_form", "template_download_trigger"), true);
+});
+
+Deno.test("predeclareProjectionState: a localStateMutation target that resolves via targetRef to a real node in the list IS predeclared (parity with targetNodeId-based UI状態更新 actions)", () => {
+  const nodes: WiringNode[] = [
+    { nodeId: "owning_form" },
+    {
+      nodeId: "trigger_action",
+      runtimeInteractions: [
+        { trigger: "click", actionType: "localStateMutation", targetRef: "ui-local:owning_form.some_flag" },
+      ],
+    },
+  ];
+  const dispatcher = createRuntimeStateDispatcher(createRuntimeLocalStateStore());
+  const declared = predeclareProjectionState(nodes, dispatcher);
+  assert(
+    declared.some((s) => s.nodeId === "owning_form" && s.stateKey === "some_flag"),
+    `expected owning_form.some_flag to be predeclared; got: ${JSON.stringify(declared)}`,
+  );
+});
 
 Deno.test("runner: UI監視割当 slots are declared at creation, before any mutation/effect", () => {
   const runner = createUiEventEffectRunner({ nodes: modalNodes() });

@@ -418,6 +418,9 @@ function buildLocalUiStateEventBinding(
         ? wiring.statePath
         : undefined,
       value: wiring.value,
+      targetRef: typeof wiring.targetRef === "string"
+        ? wiring.targetRef
+        : undefined,
     });
     if (!resolved) continue;
     const previous =
