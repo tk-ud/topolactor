@@ -3262,89 +3262,26 @@ VALUES
 ON CONFLICT (manifest_id) DO NOTHING;
 
 -- =============================================================================
--- admin-surface-topology-seed-conversion: admin hub relation navigation source.
--- This manifest is the hub-relation SOURCE representing the /admin landing entry
--- surface (frontend/routes/admin/index.tsx). It intentionally carries no
--- ui_projection: /admin's own rendered body remains the existing hardcoded
--- landing/navigation/guide surface for this Bundle (admin-dashboard subBundle
--- scope), per docs/design/admin-console-workflow-ssot.yaml page_responsibility.
--- Its sole job is to be a valid hubs.topology_manifests-projected source row so
--- outbound hubs.hub_relations navigation links to other admin projections are
--- resolvable through the same HubNavigationResolver.ResolveAsync /
--- LoadHubNavigationSequenceAsync mechanism already used for the canonical
--- default entry (manifest 092's self-referencing hub_relations row above),
--- never a hand-rolled parallel navigation mechanism.
--- =============================================================================
-INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
-VALUES (
-    '00000000-0000-0000-0000-0000000ad100',
-    NULL,
-    ARRAY[
-        '{"type":"hub_grouping","manifestKey":"admin.landing.hub","bundle":"admin-surface-topology-seed-conversion"}'::jsonb
-    ]::jsonb[],
-    'active'
-)
-ON CONFLICT (manifest_id) DO NOTHING;
-
--- Dedicated hub for the admin landing hub-relation navigation source (distinct
--- from hub '...a1', which remains the external_port_substrate / credential
--- management hub target used below).
-INSERT INTO hubs.hub (hub_id, relation)
-VALUES ('00000000-0000-0000-0000-0000000ad101', '{"description":"admin_landing_hub","system":true}'::jsonb)
-ON CONFLICT (hub_id) DO NOTHING;
-
--- topology_manifests projection for the admin landing manifest.
--- topology_manifest_id = manifest_id, mirroring the manifest-092 pattern above
--- (per ManifestCanonicalProjection.UpsertTopologyManifestAsync).
-INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
-SELECT
-    m.manifest_id,
-    '00000000-0000-0000-0000-0000000ad101'::uuid,
-    'admin.landing.hub',
-    m.status,
-    to_jsonb(m.topology)
-FROM manifest m
-WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ad100'
-ON CONFLICT (topology_manifest_id) DO UPDATE
-    SET hub_id         = EXCLUDED.hub_id,
-        manifest_key   = EXCLUDED.manifest_key,
-        status         = EXCLUDED.status,
-        topology_jsonb = EXCLUDED.topology_jsonb,
-        updated_at     = now();
-
--- Admin hub navigation: admin landing -> credential-management (manifest 092).
--- related_hub_id reuses the existing hub '...a1', which the manifest-092
--- hub_relations comment above already establishes as having exactly one
--- active hubs.topology_manifests row (092 itself), so TargetManifestId
--- resolves deterministically through the same non-ambiguous, non-fallback
--- LoadHubNavigationSequenceAsync HAVING COUNT(*) = 1 rule. This is the one
--- admin hub relation this Bundle wires end-to-end today because manifest 092
--- is the only admin surface with a real ui_projection; enum/team-dashboard/
--- scheduler-settings each still lack a per-screen manifest (they only have
--- per-action dispatcher_mapping-only manifests, not a ui_projection screen)
--- and therefore have no resolvable target_manifest_id to link yet — adding a
--- hub_relations row for them before that seed-conversion step would either be
--- unresolvable or would need to point at the wrong (non-screen) manifest,
--- both of which docs/design/runtime-orchestration-ssot.yaml
--- canonical_default_entry_contract-style no-implicit-fallback semantics and
--- this Bundle's own NG boundary (no ambiguous/non-unique active navigation)
--- forbid. Tracked as a remaining_gap in
+-- admin-surface-topology-seed-conversion: admin hub relation navigation source
+-- -- INTENTIONALLY NOT ADDED (owner correction, PR #584 review comment).
+-- A prior revision of this file created a manifest/hub/hub_relations row here
+-- solely to give /admin an outbound hub relation to manifest 092. That
+-- manifest carried no ui_projection and represented no pre-existing screen —
+-- its only purpose was to be a hub_relations source, which is exactly the
+-- "empty/fake topology manifest created for hub relation connection purposes"
+-- pattern the owner has explicitly prohibited. /admin (frontend/routes/admin/
+-- index.tsx) has no pre-existing hubs.hub / hubs.topology_manifests row of its
+-- own — HubNavigationResolver.ResolveAsync / LoadHubNavigationSequenceAsync
+-- require an already-resolved topologyManifestId to look up outbound
+-- relations from, and none exists for /admin. Fabricating one is out of
+-- scope. Establishing a real /admin -> credential-management (or any other
+-- subBundle) hub relation requires either a genuine ui_projection-backed
+-- manifest for /admin (topology UI seed conversion — paused pending explicit
+-- owner instruction) or an owner-designated pre-existing alternative source,
+-- neither of which exists today. Recorded as unconnected, with this evidence,
+-- in .agent/tasks/todo.md and
 -- .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json
--- until each subBundle's own topology UI seed conversion gives it a real
--- target manifest.
-INSERT INTO hubs.hub_relations (
-    hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, relation_config, status
-)
-VALUES (
-    '00000000-0000-0000-0000-0000000ad102',
-    '00000000-0000-0000-0000-0000000ad100',
-    '00000000-0000-0000-0000-0000000000a1',
-    1,
-    '{"transition":"admin_hub_navigation","label":"credentials","routeHint":"/admin/credentials"}'::jsonb,
-    'active'
-)
-ON CONFLICT (topology_manifest_id, sequence_position) DO NOTHING;
-
+-- rather than silently re-added.
 -- =============================================================================
 -- Representative existing cron absorption: log retention.
 -- The former RetentionScheduler BackgroundService is absorbed into the scheduler

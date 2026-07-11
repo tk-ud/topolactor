@@ -373,6 +373,26 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - 実装既存状態を SSOT として扱う。
 - PR574 / PR577 / PR578 の idempotency 系実装を未実装扱いに戻す。
 - proof 更新を idempotency authority 再設計・再実装として読める状態にする。
+- **empty/fake topology manifest（ui_projection を持たない manifest/hub）を hub_relations 接続 source を作る目的だけで新規作成する（owner 明示禁止, PR #584 review comment）。**
+
+### Owner補正記録（PR #584 review comment, 2026-07-11, topology UI seed production 停止）
+
+**この節は Bundle の Status を `not_started` から変更しない。** PR #584 で行った作業は topology UI seed conversion の完了ではなく、Agent による暫定実装（provisional implementation）として以下に記録する。
+
+- **問題点:** PR #584 で `/admin/credentials` route・`AdminCredentialsShell` island 等の hardcoded route/island 追加、および auth_users/team_markdown 向け dispatcher_mapping 追加を、この Bundle の「共通工程」（React-like Schema 作成 → translator 変換 → topology UI seed 生成 → seed 登録 → projection render 確認）を経由せずに行った。さらに `/admin` に outbound hub relation を持たせるためだけに、ui_projection を持たない fake manifest/hub（`00000000-0000-0000-0000-0000000ad100` / `ad101` とその `hubs.hub_relations` row `ad102`）を db/seed_empty.sql に追加していた。owner から PR #584 review comment で、後者が「hub relation 接続のためだけの空/fake topology manifest」パターンに該当し明示的に禁止対象であるとの指摘を受けた。
+- **目的:** topology UI seed production を明示的な owner 指示があるまで停止し、PR #584 で追加した hardcoded route/island は削除せず Agent の暫定実装として明記した上で保持し、fabricated hub relation construct のみを撤回する。
+- **改善方針・対応内容:**
+  - `db/seed_empty.sql` から admin landing hub-manifest ブロック（`ad100`/`ad101`/`ad102`）を削除し、理由を説明するコメントに置き換えた。
+  - `backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs` から対応する `AdminLandingHub_HubRelation_ResolvesToCredentialManagementManifest092_SeedOnly` テストを削除し、説明コメントに置き換えた。
+  - `docs/design/admin-console-workflow-ssot.yaml` の `admin_hub_relation_navigation_contract` を修正し、`admin_landing_hub_manifest` サブブロックを削除、`wired_relations.credentials` を `status: wired` から `status: unconnected_no_legitimate_source` に訂正し、`/admin` は既存の hub/manifest を持たないため現時点で hub relation source になり得ないことを明記した。`page_responsibility.admin_index` の記述も同様に訂正した。
+  - `docs/design/runtime-orchestration-ssot.yaml` の `admin_route_retirement_matrix` は全 route が既に `status: pending` かつ正しい precondition を持っており、fabricated relation の成功を前提とする記述はなかったため変更不要と確認した。
+  - `enum-dictionary-ssot.yaml` / `team-markdown-dashboard-saved-view-ssot.yaml` / `scheduler-job-manifest-ssot.yaml` の `admin_hub_relation_navigation` は元々 `status: blocked_pending_seed_catalog`（target 側 manifest 不在が理由）であり、fabrication を主張していなかったため変更不要と確認した。
+  - `frontend/tests/layoutSchemaStructuralRender.test.ts`（PR #583 由来の共通 test 基盤）から、manifest 092 固有の UUID literal（`layoutId`/`packageId` の `...cd002`/`...cd005`）と credential 画面固有の node 名（`instance_settings`/`instance_address_form`/`instance_authority_key`/`validate`/`json_template_download` 等）を汎用プレースホルダー（`sample_category`/`sample_form`/`sample_field`/`sample_action` 等、汎用 UUID `...000101`/`...000102`）に置き換えた。manifest 092 の実 fixture を使う代表 regression proof（1番目・最後のテスト）はそのまま維持した。9 tests すべて pass 確認済み。
+  - `auth_users:*` / `team_markdown:*` の dispatcher_mapping 追加（db/seed_empty.sql）は `AdminRuntime.ExecuteDataAsync` の switch 実装および canonical bootstrap seed と照合済みで、この停止指示の対象外（本 Bundle の実装ではなく、既存 backend 実装に対する欠落 wiring の是正）として維持する。
+- **現在の状態（重要）:**
+  - この Bundle は依然 **`not_started`**（未実装）である。`/admin/credentials` route・`AdminCredentialsShell` island・`AdminUsersRoster` island 等、PR #584 で追加した hardcoded route/island は削除せず保持するが、これは topology UI seed conversion の完了を意味しない。あくまで Agent による暫定実装（provisional implementation）であり、この Bundle が要求する共通工程（React-like Schema → translator → topology UI seed → seed 登録 → projection render/action wiring 確認）を経由していない。
+  - admin hub relation navigation は 4 subBundle（credential-management / admin-enum / team-dashboard / scheduler-settings）すべてで **unconnected**（未接続、fabrication なし、evidence は `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract.wired_relations` を参照）。
+  - **topology UI seed production は owner 指示により停止中。再開には明示的な今後の owner 指示が必要。**
 
 ---
 

@@ -63,6 +63,22 @@
       "additional_ci_parity_verification": "Also discovered and fixed an unrelated structural issue check-design-ssot-progress-terms.sh caught locally before the push (duplicate-key false-positive from using '/admin/xxx:' YAML mapping keys under admin_route_retirement_matrix.routes; the checker's key-regex doesn't recognize keys starting with '/', so it never cleared scope between sibling route blocks) -- restructured routes: from a keyed mapping to a list of {route: ..., ...} objects, matching the SSOT's existing list convention elsewhere. Re-verified check-structure.sh passes.",
       "ci_exact_reproduction": "Rebuilt a Postgres 16 DB using the EXACT SQL file list and order from .github/workflows/backend-tests.yml (18 files, including the modified db/seed_empty.sql), then ran .agent/tests/check-backend-tests.sh with TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 (forcing live-DB tests to execute, not skip) -- PASS (backend_runtime_tests, backend_db_continuity_tests both pass). This is a closer CI match than the earlier full-db/init.sql-chain verification and confirms no regression under the precise file set backend-tests.yml actually applies.",
       "note_on_other_local_check_failures_during_this_verification": "Several other local check-script runs (check-db-schema.sh, check-unified-test-gate.sh) initially showed failures when run against a DB this session had already partially/differently bootstrapped by hand (constraint-already-exists errors from re-running non-idempotent DDL, or missing tables from a curated vs. full file-list mismatch) -- confirmed these were artifacts of manual local DB reuse, not real regressions, by re-running each against a genuinely fresh, correctly-bootstrapped DB (check-db-schema.sh: PASS; and confirmed unified-test-gate.yml's actual CI job runs check-unified-test-gate.sh with NO Postgres service configured at all, so its RUNTIME_INTEGRATION lane's live-DB tests no-op/skip in real CI regardless of local behavior)."
+    },
+    "owner_correction_2026_07_11": {
+      "trigger": "PR #584 review comment from repository owner tk-ud, delivered as a github-webhook-activity PR comment event.",
+      "instruction_summary": "Stop all topology UI seed production work in PR #584. Record current admin routes/Islands (including anything added this session) as Agent's provisional implementation in .agent/tasks/todo.md, explicitly noting: topology UI seed production halted by owner instruction; parent Bundle is NOT Implemented; hardcoded routes/Islands are retained (not deleted); resuming topology UI seed production requires explicit future owner instruction. Use ONLY existing DB schema/SSOT/PR #583's existing common test structure -- no new authority, lane, schema, or runtime semantics. Remaining in-scope work: (a) confirm/connect admin hub relations only where a pre-existing canonical hub/topology_manifest can be verified to already exist (no fabrication); (b) re-examine and determine keep/modify/remove for the admin_landing_hub_manifest construct added in PR #584, using existing SSOT/DB schema as authority rather than treating the prior diff as self-justifying; (c) confirm dispatcher_mapping for auth_users/team_markdown/enum_dictionary/scheduler_jobs against AdminRuntime.ExecuteDataAsync and canonical bootstrap seed (in scope, distinct from the topology-UI-seed stoppage); (d) separate manifest-092-specific literal dependencies from PR #583's common/generic test substrate while keeping manifest 092 as a legitimate representative regression-proof input.",
+      "finding": "The admin_landing_hub_manifest construct added in PR #584 (manifest 00000000-0000-0000-0000-0000000ad100, hub 00000000-0000-0000-0000-0000000ad101, and its hubs.hub_relations row ad102) carried no ui_projection and existed solely to give /admin an outbound hub_relations source. This is exactly the 'empty/fake topology manifest created for hub relation connection purposes' pattern, which the owner has now explicitly prohibited. Verified via docs/design/db-schema.yaml (hubs_space_hierarchy / manifest_hub_chain), backend/repository/NpgsqlContentBundleRepository.cs (LoadHubNavigationSequenceAsync / ResolveCanonicalDefaultEntryManifestIdAsync), and backend/runtime/HubNavigationResolver.cs (ResolveAsync requires an already-resolved topologyManifestId as input -- there is no mechanism to create a relation 'from' an unresolved surface like /admin) that /admin has no pre-existing hubs.hub / hubs.topology_manifests row of its own, so the construct was fabricated rather than connecting to a pre-existing hub/manifest.",
+      "actions_taken": [
+        "Removed the admin_landing_hub_manifest SQL block (manifest ad100, hub ad101, hubs.topology_manifests projection, hubs.hub_relations row ad102) from db/seed_empty.sql; replaced with an explanatory comment recording why it was removed and what a legitimate future path would require.",
+        "Removed the AdminLandingHub_HubRelation_ResolvesToCredentialManagementManifest092_SeedOnly test and its associated static fields from backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs; replaced with an explanatory comment. The file's 6 pre-existing tests (unrelated to this construct) are unchanged and still passing.",
+        "Corrected docs/design/admin-console-workflow-ssot.yaml's admin_hub_relation_navigation_contract: removed the admin_landing_hub_manifest sub-block, changed wired_relations.credentials from status: wired to status: unconnected_no_legitimate_source (with the same reasoning applied to enum_dictionary/team_dashboard/scheduler_settings, all now unconnected_no_legitimate_source since the /admin source side is also missing, not only the target side for the other three), and corrected the top-level note and page_responsibility.admin_index text that had presupposed the admin-landing hub-manifest existed. Added empty_or_fake_topology_manifest_created_solely_as_a_hub_relation_connection_source to the prohibited list.",
+        "Verified docs/design/runtime-orchestration-ssot.yaml's admin_route_retirement_matrix already had all routes at status: pending with correct preconditions and made no claim the fabricated relation had succeeded -- no change needed there.",
+        "Verified enum-dictionary-ssot.yaml / team-markdown-dashboard-saved-view-ssot.yaml / scheduler-job-manifest-ssot.yaml's admin_hub_relation_navigation sections were already status: blocked_pending_seed_catalog with target-side-missing reasoning only (never claimed the source side existed) -- no change needed there.",
+        "Refactored frontend/tests/layoutSchemaStructuralRender.test.ts (PR #583's common test substrate): renamed buildComposedManifest0092LikeLayoutNodes() to buildStructuralCategorySectionFormLayoutNodes(), replaced credential-screen-specific node names (instance_settings/instance_address_form/instance_authority_key/validate/json_template_download) with domain-neutral placeholders (sample_category/sample_form/sample_field/sample_action/sample_unattributable_action), and replaced manifest-092's own layoutId/packageId UUID literals (...cd002/...cd005) with generic placeholder UUIDs (...000101/...000102) in the 6 synthetic/generic tests. The 2 tests using the real checked-in manifest-092 fixture (representative regression proof) were left untouched. All 9 tests in the file verified passing after the refactor (deno test).",
+        "Updated .agent/tasks/todo.md's admin-surface-topology-seed-conversion Bundle entry with an explicit 'Owner補正記録' subsection recording: the Bundle remains not_started (not Implemented); PR #584's hardcoded routes/islands (/admin/credentials, AdminCredentialsShell, etc.) are retained but recorded as Agent's provisional implementation, not seed-conversion completion; all 4 subBundle hub relations are unconnected with no fabrication; topology UI seed production is halted pending explicit future owner instruction; and a new Governance NG boundary line prohibiting fake hub-relation-only manifests.",
+        "The auth_users:*/team_markdown:* dispatcher_mapping additions (db/seed_empty.sql, from the original Phase 2 pass) were re-confirmed against AdminRuntime.ExecuteDataAsync's switch and the canonical bootstrap seed and were kept -- this remains in scope per the owner's instruction (distinct from the topology-UI-seed stoppage) and is a genuine, previously-undetected production gap-closure, not new authority."
+      ],
+      "status_after_correction": "Bundle admin-surface-topology-seed-conversion remains NOT Implemented (not_started per .agent/tasks/todo.md). PR #584's frontend routes/islands are Agent's provisional implementation, explicitly not deleted but explicitly not counted as topology UI seed conversion completion. Topology UI seed production is owner-paused; resuming it requires explicit future owner instruction. All 4 subBundle admin hub relations (credential-management, admin-enum, team-dashboard, scheduler-settings) are unconnected, with evidence recorded rather than fabricated. This JSON report is not SSOT authority; docs/design/admin-console-workflow-ssot.yaml and .agent/tasks/todo.md are the actual authorities for the corrected state."
     }
   },
   "issues": [
@@ -1771,9 +1787,9 @@
       ],
       "implementation_start_condition": "issue-02/04 owner decision recorded; declared_seed_surface_catalog entry for admin-dashboard added (issue-30); explicit content-vs-structure boundary drawn per issue-31 recommended policy.",
       "implemented_judgment_condition": "See implemented_judgment_matrix; this subBundle additionally requires proof that no user-visible text changed as a side effect of the seed-sourcing conversion (issue-31).",
-      "phase2_progress": "Admin hub relation navigation source manifest (ad100) wired and tested; connects to credential-management. Connections to admin-enum/team-dashboard/scheduler-settings blocked_pending_seed_catalog (gap-03).",
+      "phase2_progress": "SUPERSEDED 2026-07-11 (owner correction): the admin hub relation navigation source manifest (ad100) described here as 'wired and tested' was a fabricated construct (empty/fake manifest created solely to host a hub_relations row) and has been removed. /admin has no pre-existing hub/manifest and is NOT currently an admin hub relation navigation source. See report_meta.owner_correction_2026_07_11 and admin_hub_relation_matrix.",
       "blocking_findings_remaining": [
-        "gap-02/gap-03 (seed catalog for the other 3 targets)",
+        "gap-03 (all 4 subBundle hub relations unconnected: /admin has no pre-existing source manifest, and enum/team-dashboard/scheduler additionally lack target manifests)",
         "issue-31 (content/structure boundary line not yet drawn in an implementation diff)"
       ]
     },
@@ -1813,10 +1829,11 @@
       ],
       "implementation_start_condition": "issue-06 ownership decision ratified; issue-27 placeholder-targetRef policy ratified and issue-26's fail-close guard test written.",
       "implemented_judgment_condition": "See implemented_judgment_matrix. Explicitly excludes instance_settings_admin_authoring_ui_pending (issue-28) from this subBundle's own Implemented claim.",
-      "phase2_progress": "Canonical route /admin/credentials implemented and live-tested (route registration verified via test-first sequencing). admin_user category embedded (interim, non-seed-backed, reusing AdminUsersRoster.tsx). Admin hub relation to this subBundle wired and proven via live-DB test. auth_users:* dispatcher_mapping closed. Owner decisions on /admin/users integration and targetRef policy both fixed and encoded in SSOT.",
+      "phase2_progress": "Canonical route /admin/credentials implemented and live-tested (route registration verified via test-first sequencing). admin_user category embedded (interim, non-seed-backed, reusing AdminUsersRoster.tsx). auth_users:* dispatcher_mapping closed. Owner decisions on /admin/users integration and targetRef policy both fixed and encoded in SSOT. SUPERSEDED 2026-07-11 (owner correction): the admin hub relation to this subBundle described here as 'wired and proven' was fabricated (see admin-dashboard subBundle note and report_meta.owner_correction_2026_07_11) and has been removed; this subBundle is reachable only via its existing canonical_default_entry_contract self-relation and direct URL, not via an admin landing hub relation.",
       "blocking_findings_remaining": [
         "gap-01 (true seed-backed admin_user category and response-binding architecture)",
         "gap-05 (placeholder targetRef fail-close guard)",
+        "gap-03 (no admin hub relation to this subBundle; /admin has no source manifest)",
         "/admin/users retirement still pending (redirect not yet live; route still directly accessible)"
       ]
     },
@@ -1977,8 +1994,9 @@
     "This report's implemented_judgment_matrix accepted (with or without amendment) as the interim minimal Implemented-judgment proof set, pending a future formal design_change (issue-41)."
   ],
   "handoff_to_reviewer": {
-    "summary": "This report now covers both phases: Phase 1 design investigation (all 42 issues re-examined, owner decisions fixed) and Phase 2 implementation (SSOT design_change, DB/dispatcher wiring, test/proof fixes, and a scoped frontend implementation of /admin/credentials -- all delivered changes are backed by executed test evidence, not claims). The Bundle is NOT fully Implemented: 8 remaining_gap items and 4 future_bundle_candidates are explicitly recorded, and no hardcoded route was retired (per the NG boundary, retirement requires replacement proof this session did not complete for enum/team-dashboard/scheduler/the full /admin/users migration).",
+    "summary": "This report now covers both phases: Phase 1 design investigation (all 42 issues re-examined, owner decisions fixed) and Phase 2 implementation (SSOT design_change, DB/dispatcher wiring, test/proof fixes, and a scoped frontend implementation of /admin/credentials -- all delivered changes are backed by executed test evidence, not claims). The Bundle is NOT fully Implemented: 8 remaining_gap items and 4 future_bundle_candidates are explicitly recorded, and no hardcoded route was retired (per the NG boundary, retirement requires replacement proof this session did not complete for enum/team-dashboard/scheduler/the full /admin/users migration). OWNER CORRECTION 2026-07-11 (PR #584 review comment): topology UI seed production is now halted pending explicit future owner instruction. The admin_landing_hub_manifest fabricated in the original Phase 2 pass has been removed (it violated the now-explicit prohibition on empty/fake topology manifests created solely as a hub-relation source); all 4 subBundle admin hub relations are recorded as unconnected_no_legitimate_source, not wired. PR #584's hardcoded route/island additions (/admin/credentials, AdminCredentialsShell, etc.) are retained per owner instruction but are recorded as Agent's provisional implementation in .agent/tasks/todo.md, not as Bundle completion. This report itself is not SSOT authority -- docs/design/admin-console-workflow-ssot.yaml and .agent/tasks/todo.md are authoritative for the corrected state.",
     "instructions_for_audit_reviewer": [
+      "Read this report's report_meta.owner_correction_2026_07_11 FIRST -- it supersedes any claim elsewhere in this JSON (including admin_hub_relation_matrix's prior wired_this_session status, now corrected in-place, and subbundle_states' admin-dashboard/credential-management phase2_progress fields, which carry explicit SUPERSEDED notes) that the admin hub relation to credential-management was wired. It was not a legitimate connection and has been removed.",
       "Read the full diff (15 modified + 2 new files) and this entire JSON before rendering any pass/fail/merge judgment -- do not stop at the first blocking finding.",
       "Verify report_meta.phase2_verification_performed claims against the actual test run logs if reproducing locally: dotnet test (both projects) and deno test -A frontend/tests/ with TOPOLACTOR_TEST_DB_CONNECTION pointed at a Postgres 16 instance bootstrapped from db/init.sql.",
       "Confirm no product file was left with a false completion claim: search this JSON's 'issues[].phase2_outcome.status' for anything other than 'resolved'/'resolved_by_owner_decision'/'resolved_formalized' and cross-check against remaining_gap -- every non-resolved issue should have a corresponding remaining_gap entry or an explicit 'unchanged_*' reasoning.",
@@ -2150,33 +2168,29 @@
   },
   "admin_hub_relation_matrix": {
     "admin_landing_hub_manifest": {
-      "manifest_id": "00000000-0000-0000-0000-0000000ad100",
-      "hub_id": "00000000-0000-0000-0000-0000000ad101",
-      "status": "wired_this_session"
+      "status": "removed_2026_07_11_owner_correction",
+      "note": "A prior revision (PR #584) created manifest 00000000-0000-0000-0000-0000000ad100 / hub 00000000-0000-0000-0000-0000000ad101 solely to host an outbound hubs.hub_relations row. This carried no ui_projection and was identified by the owner as the prohibited 'empty/fake topology manifest for hub relation connection purposes' pattern. Removed from db/seed_empty.sql; see report_meta.owner_correction_2026_07_11."
     },
     "relations": [
       {
         "target": "credential-management",
-        "related_hub_id": "00000000-0000-0000-0000-0000000000a1",
-        "target_manifest_id": "00000000-0000-0000-0000-000000000092",
-        "sequence_position": 1,
-        "status": "wired",
-        "proof": "AdminLandingHub_HubRelation_ResolvesToCredentialManagementManifest092_SeedOnly (live-DB test, passing) + direct SQL verification"
+        "status": "unconnected_no_legitimate_source",
+        "precondition": "requires a real ui_projection-backed hubs.topology_manifests row for /admin to act as the hub_relations source; none exists. The candidate target (manifest 092, related_hub_id 00000000-0000-0000-0000-0000000000a1) is itself real and already reachable via canonical_default_entry_contract, but that is a different mechanism from an admin landing hub relation and is not reused here."
       },
       {
         "target": "admin-enum",
-        "status": "blocked_pending_seed_catalog",
-        "precondition": "no per-screen ui_projection manifest exists for enum_dictionary yet"
+        "status": "unconnected_no_legitimate_source",
+        "precondition": "requires both a real /admin source manifest (see credential-management above) and a real per-screen ui_projection manifest for enum_dictionary (neither exists yet)"
       },
       {
         "target": "team-dashboard",
-        "status": "blocked_pending_seed_catalog",
-        "precondition": "no per-screen ui_projection manifest exists for the team markdown dashboard surface yet"
+        "status": "unconnected_no_legitimate_source",
+        "precondition": "requires both a real /admin source manifest (see credential-management above) and a real per-screen ui_projection manifest for the team markdown dashboard surface (neither exists yet)"
       },
       {
         "target": "scheduler-settings",
-        "status": "blocked_pending_seed_catalog",
-        "precondition": "no per-screen ui_projection manifest exists for scheduler_jobs yet"
+        "status": "unconnected_no_legitimate_source",
+        "precondition": "requires both a real /admin source manifest (see credential-management above) and a real per-screen ui_projection manifest for scheduler_jobs (neither exists yet)"
       }
     ]
   },
@@ -2254,7 +2268,7 @@
   },
   "final_proof_result": {
     "pass_or_fail": "pass_for_delivered_scope_partial_for_bundle",
-    "note": "Every change delivered this session is backed by an executed, observed test result (not a claimed one). The Bundle as a whole (5 subBundles fully Implemented) is NOT complete -- see remaining_gap. This is an honest partial per the task's own NG boundary ('partialの場合はold hardcoded routeを削除せず、BundleをImplementedと宣言しない').",
+    "note": "Every change delivered this session is backed by an executed, observed test result (not a claimed one). The Bundle as a whole (5 subBundles fully Implemented) is NOT complete -- see remaining_gap. This is an honest partial per the task's own NG boundary ('partialの場合はold hardcoded routeを削除せず、BundleをImplementedと宣言しない'). OWNER CORRECTION 2026-07-11: the admin hub relation wiring claimed as PASS in this session's original executed_checks (the 'direct SQL mirroring LoadHubNavigationSequenceAsync for the new admin hub relation' check below) was against a since-removed fabricated construct (admin_landing_hub_manifest ad100/ad101/ad102) and must not be read as a currently-valid connection; see report_meta.owner_correction_2026_07_11 and admin_hub_relation_matrix for the corrected, unconnected state. The dispatcher_mapping and test-suite PASS results below remain valid and unaffected.",
     "executed_checks": [
       {
         "check": "db/init.sql full canonical bootstrap chain applied to fresh local Postgres 16",
@@ -2311,7 +2325,8 @@
       "id": "gap-03",
       "ref": "admin_hub_relation_matrix",
       "summary": "Hub relations from the admin landing manifest to enum_dictionary, team_markdown, and scheduler_jobs are not wired (blocked on gap-02: no per-screen ui_projection manifest exists for any of them yet).",
-      "why_deferred": "direct structural dependency on gap-02."
+      "why_deferred": "direct structural dependency on gap-02.",
+      "title": "Hub relations from /admin to ALL FOUR subBundles (credential-management, enum_dictionary, team_markdown, scheduler_jobs) are unconnected -- not just the 3 target-side-missing ones. /admin itself has no pre-existing hubs.hub / hubs.topology_manifests row to act as a hub_relations source. A prior attempt (PR #584) fabricated one (manifest ad100/hub ad101, carrying no ui_projection) solely to host the relation; this was identified as the explicitly-prohibited 'empty/fake topology manifest for hub relation connection purposes' pattern (owner correction, 2026-07-11) and has been removed. A legitimate fix requires either a genuine ui_projection-backed manifest for /admin (topology UI seed conversion for the admin-dashboard subBundle -- halted pending explicit future owner instruction) or an owner-designated pre-existing alternative source. enum_dictionary/team_dashboard/scheduler_jobs additionally still lack any per-screen ui_projection manifest as targets (unchanged from the original gap-03/gap-02)."
     },
     {
       "id": "gap-04",
@@ -2342,6 +2357,10 @@
       "ref": "issue-01/40/42",
       "summary": "docs/system-roadmap.yaml and .agent/tasks/todo.md were not edited (roadmap_todo_drift for team_markdown is now actually RESOLVED in substance by gap-closing issue-09, but the documents themselves are not updated to say so; the file-path drift in issue-42 also remains).",
       "why_deferred": "outside Phase 2's explicit SSOT/wiring/test/implementation change list; recommended as a follow-up todo_maintenance pass."
+    },
+    {
+      "id": "gap-09",
+      "title": "PR #584's frontend deliverables (/admin/credentials route, AdminCredentialsShell island, auth_users/team_markdown dispatcher_mapping) were built directly as hardcoded route/island work rather than through this Bundle's own common process (React-like Schema -> translator -> topology UI seed -> seed registration -> projection render/action wiring confirmation). Per explicit owner instruction (2026-07-11), topology UI seed production is now halted; these deliverables are recorded as Agent's provisional implementation in .agent/tasks/todo.md, retained (not deleted), but do not constitute Bundle completion for any subBundle. Resuming topology UI seed production requires explicit future owner instruction."
     }
   ],
   "future_bundle_candidates": [
@@ -2372,5 +2391,6 @@
       "scope": "Only if ever needed: presenter-to-participant forced projection, participant membership, targeted per-viewer SSE delivery. Confirmed absent from all current SSOTs; would need its own dedicated SSOT authority.",
       "blocks": []
     }
-  ]
+  ],
+  "phase": "phase_2_partial_then_owner_corrected_scope_stop_topology_ui_seed_paused"
 }

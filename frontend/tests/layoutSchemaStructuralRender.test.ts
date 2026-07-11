@@ -18,14 +18,18 @@
  * actionType "localStateMutation" is now a recognized ui_state_update taxonomy member (SSOT
  * wiring_lane_contract.lanes.internal_instance_wiring), resolved via its ui-local: targetRef.
  *
- * The first test below is the representative-scenario proof: it reads
+ * The first and last tests below are the representative-scenario proofs: they read
  * frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json, a checked-in snapshot of
  * the REAL Emission.LayoutNodes produced by an actual bare-entry dispatch against manifest
  * 00000000-0000-0000-0000-000000000092 (see the fixture's companion backend assertion in
  * backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
  * DispatchAsync_BareDefaultEntry_NoTargetRef_ResolvesManifest0092ViaCanonicalDefaultEntryRelation,
  * which fails if this fixture ever drifts from the real seed data) — not a hand-authored
- * approximation. The remaining tests are synthetic micro-checks isolating specific behaviors.
+ * approximation; manifest 092 is kept here as a legitimate representative regression input, not
+ * as this file's sole authority. The remaining tests are synthetic micro-checks isolating
+ * generic renderEmission() contract behaviors and intentionally use domain-neutral node names and
+ * placeholder identifiers unrelated to any specific manifest, so this common test substrate does
+ * not depend on credential-management/manifest-092 specifics.
  */
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { h } from "preact";
@@ -63,56 +67,58 @@ Deno.test("renderEmission: manifest 0092's REAL bare-entry-resolved LayoutNodes 
 });
 
 /**
- * A layout shape representative of the backend's LayoutSchemaTensorComposer output for
- * manifest 00000000-0000-0000-0000-000000000092: structural_node wrappers (Category/Section/
- * Form) carrying no componentId/componentKind, and catalog_component leaves (Field/Action)
- * with componentId/componentKind resolved from the ui_component_registry preset catalog.
+ * A layout shape representative of the backend's LayoutSchemaTensorComposer output in general
+ * (any manifest): structural_node wrappers (Category/Section/Form) carrying no componentId/
+ * componentKind, and catalog_component leaves (Field/Action) with componentId/componentKind
+ * resolved from the ui_component_registry preset catalog. Node names/ids here are domain-neutral
+ * placeholders — not any specific screen's authored content — since this helper backs the common
+ * renderEmission() contract tests, not a manifest-specific regression proof.
  */
-function buildComposedManifest0092LikeLayoutNodes(): LayoutNode[] {
+function buildStructuralCategorySectionFormLayoutNodes(): LayoutNode[] {
   return [
     {
-      nodeId: "instance_settings",
+      nodeId: "sample_category",
       nodeKind: "structural_node",
       recordType: "topology_ui_category",
-      label: "Instance settings",
+      label: "Sample category",
       orderIndex: 0,
     },
     {
-      nodeId: "instance_settings_section",
+      nodeId: "sample_section",
       nodeKind: "structural_node",
       recordType: "topology_ui_section",
-      label: "Instance settings",
-      parentNodeId: "instance_settings",
+      label: "Sample section",
+      parentNodeId: "sample_category",
       orderIndex: 1,
     },
     {
-      nodeId: "instance_address_form",
+      nodeId: "sample_form",
       nodeKind: "structural_node",
       recordType: "topology_ui_form",
-      label: "Instance address",
-      parentNodeId: "instance_settings_section",
+      label: "Sample form",
+      parentNodeId: "sample_section",
       orderIndex: 2,
     },
     {
-      nodeId: "instance_authority_key",
+      nodeId: "sample_field",
       nodeKind: "catalog_component",
       componentId: "00000000-0000-0000-0001-000000000013",
       componentKind: "form_input/form_field",
-      parentNodeId: "instance_address_form",
+      parentNodeId: "sample_form",
       orderIndex: 3,
     },
     {
-      nodeId: "validate",
+      nodeId: "sample_action",
       nodeKind: "catalog_component",
       componentId: "00000000-0000-0000-0001-000000000010",
       componentKind: "action/button",
-      parentNodeId: "instance_address_form",
+      parentNodeId: "sample_form",
       orderIndex: 4,
       runtimeInteractions: [
         {
           trigger: "click",
           actionType: "dispatchInstanceOperation",
-          instanceTargetRef: "instance-port:db_instance_port:instance_authority_key:operation_binding_key",
+          instanceTargetRef: "instance-port:sample_instance_port:sample_field:operation_binding_key",
         },
       ],
     },
@@ -121,9 +127,9 @@ function buildComposedManifest0092LikeLayoutNodes(): LayoutNode[] {
 
 Deno.test("renderEmission: a layout composed from structural_node + resolved catalog_component leaves produces zero componentType==='error' specs", () => {
   const emission: Emission = {
-    layoutId: "00000000-0000-0000-0000-0000000cd002",
-    layoutNodes: buildComposedManifest0092LikeLayoutNodes(),
-    packageId: "00000000-0000-0000-0000-0000000cd005",
+    layoutId: "00000000-0000-0000-0000-000000000101",
+    layoutNodes: buildStructuralCategorySectionFormLayoutNodes(),
+    packageId: "00000000-0000-0000-0000-000000000102",
   };
 
   const specs = renderEmission(emission, defaultComponentRegistry);
@@ -139,8 +145,8 @@ Deno.test("renderEmission: a layout composed from structural_node + resolved cat
 
 Deno.test("renderEmission: structural_node specs carry no componentId/componentKind and render as a distinct componentType from catalog_component", () => {
   const emission: Emission = {
-    layoutId: "00000000-0000-0000-0000-0000000cd002",
-    layoutNodes: buildComposedManifest0092LikeLayoutNodes(),
+    layoutId: "00000000-0000-0000-0000-000000000101",
+    layoutNodes: buildStructuralCategorySectionFormLayoutNodes(),
   };
   const specs = renderEmission(emission, defaultComponentRegistry);
 
@@ -160,7 +166,7 @@ Deno.test("renderEmission: structural_node specs carry no componentId/componentK
 
 Deno.test("renderEmission: a catalog_component leaf missing componentId still fails explicit (CATALOG_COMPONENT_KIND_REQUIRED-class) — structural authority does not silently paper over an unresolved leaf", () => {
   const emission: Emission = {
-    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutId: "00000000-0000-0000-0000-000000000101",
     layoutNodes: [
       {
         nodeId: "unresolvable_field",
@@ -177,10 +183,10 @@ Deno.test("renderEmission: a catalog_component leaf missing componentId still fa
 
 Deno.test("renderEmission: a catalog_component leaf whose authored runtimeInteractions resolve to zero recognized event bindings fails explicit (RUNTIME_INTERACTION_UNATTRIBUTABLE) — never silently rendered as a normal, unbound component that would only crash later inside the runtime factory", () => {
   const emission: Emission = {
-    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutId: "00000000-0000-0000-0000-000000000101",
     layoutNodes: [
       {
-        nodeId: "json_template_download",
+        nodeId: "sample_unattributable_action",
         nodeKind: "catalog_component",
         componentId: "00000000-0000-0000-0001-000000000010",
         componentKind: "action/button",
@@ -205,20 +211,20 @@ Deno.test("renderEmission: a catalog_component leaf whose authored runtimeIntera
 
 Deno.test("renderEmission: a catalog_component leaf whose authored runtimeInteractions DO resolve to a recognized event binding is unaffected by the unattributable check", () => {
   const emission: Emission = {
-    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutId: "00000000-0000-0000-0000-000000000101",
     layoutNodes: [
       {
-        nodeId: "validate",
+        nodeId: "sample_action",
         nodeKind: "catalog_component",
         componentId: "00000000-0000-0000-0001-000000000010",
         componentKind: "action/button",
-        label: "Validate",
+        label: "Sample Action",
         orderIndex: 0,
         runtimeInteractions: [
           {
             trigger: "click",
             actionType: "dispatchInstanceOperation",
-            instanceTargetRef: "instance-port:db_instance_port:instance_authority_key:operation_binding_key",
+            instanceTargetRef: "instance-port:sample_instance_port:sample_field:operation_binding_key",
           },
         ],
       },
@@ -231,7 +237,7 @@ Deno.test("renderEmission: a catalog_component leaf whose authored runtimeIntera
 
 Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology_ui_workflow_step) composed catalog_component leaf renders exactly like any other resolved catalog_component — not rejected as an unrecognized record type", () => {
   const emission: Emission = {
-    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutId: "00000000-0000-0000-0000-000000000101",
     layoutNodes: [
       {
         nodeId: "results_table",
@@ -261,7 +267,7 @@ Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology
 
 Deno.test("renderEmission: an unresolved_gap node (topology_ui_unresolved) always renders as an explicit error carrying knownGapRefs — never a normal component, never silently dropped", () => {
   const emission: Emission = {
-    layoutId: "00000000-0000-0000-0000-0000000cd002",
+    layoutId: "00000000-0000-0000-0000-000000000101",
     layoutNodes: [
       {
         nodeId: "unresolved_fragment",

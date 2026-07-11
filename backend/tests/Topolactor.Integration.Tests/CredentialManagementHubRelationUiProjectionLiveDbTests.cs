@@ -485,52 +485,17 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
 
     private static string? GetConnectionString() => AggregateTriggerRepositoryLiveDbTests.GetConnectionString();
 
-    private static readonly Guid AdminLandingHubManifestId =
-        new("00000000-0000-0000-0000-0000000ad100");
-    private static readonly Guid AdminLandingHubId =
-        new("00000000-0000-0000-0000-0000000ad101");
-    private static readonly Guid CredentialManagementHubId =
-        new("00000000-0000-0000-0000-0000000000a1");
-
-    /// <summary>
-    /// admin-surface-topology-seed-conversion: proves the seed_empty.sql admin hub relation
-    /// (admin landing manifest ad100 -&gt; hub a1 -&gt; manifest 092) resolves end-to-end through the
-    /// REAL LoadHubNavigationSequenceAsync query, mirroring
-    /// HubRelations_Manifest092_HasCanonicalSequencePosition1Relation_SeedOnly's seed-only pattern
-    /// above but for the new admin-hub-navigation source row rather than the self-referencing
-    /// canonical_default_entry row. No fixture/mock: reads the actual seeded rows this Bundle's
-    /// db/seed_empty.sql migration added.
-    /// </summary>
-    [Fact]
-    public async Task AdminLandingHub_HubRelation_ResolvesToCredentialManagementManifest092_SeedOnly()
-    {
-        var cs = GetConnectionString();
-        if (cs is null) return;
-
-        await using var conn = new NpgsqlConnection(cs);
-        await conn.OpenAsync();
-
-        await using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText =
-                "SELECT hub_id::text, manifest_key, status FROM hubs.topology_manifests " +
-                "WHERE topology_manifest_id = @id";
-            cmd.Parameters.AddWithValue("id", AdminLandingHubManifestId);
-            await using var reader = await cmd.ExecuteReaderAsync();
-            Assert.True(await reader.ReadAsync(), "admin landing manifest must be registered in hubs.topology_manifests");
-            Assert.Equal(AdminLandingHubId.ToString(), reader.GetString(0));
-            Assert.Equal("admin.landing.hub", reader.GetString(1));
-            Assert.Equal("active", reader.GetString(2));
-        }
-
-        var repo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
-        var items = await repo.LoadHubNavigationSequenceAsync(AdminLandingHubManifestId);
-
-        var credentialsItem = Assert.Single(items, i => i.RelatedHubId == CredentialManagementHubId.ToString());
-        Assert.Equal(1, credentialsItem.SequencePosition);
-        // Same real, non-ambiguous, non-fallback resolution rule as manifest 092's own
-        // canonical_default_entry relation: hub a1 has exactly one active
-        // hubs.topology_manifests row (092 itself), so this resolves deterministically.
-        Assert.Equal(CredentialManagementManifestId.ToString(), credentialsItem.TargetManifestId);
-    }
+    // admin-surface-topology-seed-conversion: a prior revision of this file added
+    // AdminLandingHub_HubRelation_ResolvesToCredentialManagementManifest092_SeedOnly, which
+    // asserted against a fabricated admin-landing manifest/hub/hub_relation
+    // (00000000-0000-0000-0000-0000000ad100/ad101/ad102) created solely to give /admin an
+    // outbound hub relation. That construct has been removed from db/seed_empty.sql (owner
+    // correction, PR #584 review comment): /admin has no pre-existing hubs.hub /
+    // hubs.topology_manifests row, and creating one only to host a hub_relations row is the
+    // "empty/fake topology manifest for hub relation connection purposes" pattern now explicitly
+    // prohibited. This test is removed with it rather than left asserting against seed rows that
+    // no longer exist. See .agent/tasks/todo.md and
+    // .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json for the
+    // recorded unconnected status and required precondition (a genuine ui_projection-backed
+    // manifest for /admin, or an owner-designated alternative source).
 }
