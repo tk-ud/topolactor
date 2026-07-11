@@ -174,13 +174,6 @@ export type LayoutNode = {
   label?: string;
   /** Authored known-gap references for an unresolved_gap node. Absent for every other nodeKind. */
   knownGapRefs?: string[];
-  /**
-   * field_read_only_authority: true when this catalog_component Field leaf is never referenced
-   * by any sibling Action's payloadFrom "node:<key>.value" within its owning Form — a
-   * translator-derived attribute, never separately authored. Absent/false for every other
-   * nodeKind and for layouts authored before this field existed.
-   */
-  readOnly?: boolean;
   /** Persisted component_style_design snapshot for draft-preview / pre-publish projection. */
   componentDesign?: {
     inlineText?: string;

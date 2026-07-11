@@ -526,33 +526,28 @@ runtime_orchestration_ssot:
           layout_schema_json is actually persisted -- a persisted row can drift from the
           translator-validated shape (hand-edited, corrupted, or authored by a future producer
           that bypasses the translator), and this runtime check is the only thing that would catch
-          it. label and sourceReactPath must be non-empty strings; sourceYamlRefs and
-          knownGapRefs must be present as arrays (an empty list is not itself invalid -- only a
-          missing or wrong-shaped one is). Any violation is LAYOUT_SCHEMA_RECORDS_INVALID for the
-          WHOLE records[] array, the same fail-close posture as a missing recordType/key or an
-          unrecognized recordType -- never a per-record fallback (e.g. falling back to the raw
-          NodeId or an empty string as a substitute label).
-        field_read_only_authority: >-
-          A topology_ui_field's read-only-vs-editable state is never separately authored -- it is
-          derived, per owning Form, from whether any of that Form's OWN Actions reference the
-          field's key via eventBinding.payloadFrom "node:<key>.value" (translator:
-          apply_field_read_only_authority, computed after the full seed record tree is built, over
-          each topology_ui_form's own actions/fields lists). A field some Action actually reads is
-          editable (readOnly:false); every other field -- including one authored directly under a
-          Section with no owning Form at all, which by construction has no Actions to ever flip it
-          -- stays readOnly:true. This is a structural/derived signal, never a business-data
-          authoring decision and never an invented value: a form_input/select LayoutNode's readOnly
-          flows from LayoutSchemaTensorComposer through StructureMapResolver.ToLayoutNode into the
-          wire LayoutNode DTO. Frontend renderEmission's buildProductionCatalogComponentProps sets
-          props.data.readOnly/disabled from it for form_input/select; runtimeComponentFactory's
-          selectFactory renders disabled and skips requireBinding("change") when readOnly is true
-          (the SAME no-binding-required posture formFieldFactory already has for form_input/
-          form_field, which never required a binding at all) -- an authored, SSOT-derived render
-          state, distinct from the prohibited UI-Builder canvas-preview placeholder's unconditional
-          disabled:true. A genuinely editable select (readOnly:false, i.e. referenced by an
-          Action's payloadFrom) with no authored change wiring still fails close via
-          requireBinding -- this contract only closes the read-only case, never weakens the
-          editable case's existing fail-close guarantee.
+          it. label, sourceReactPath, and sourceYamlRefs must be non-empty (the translator's own
+          validate_seed_record_tree SEED_RECORD_EMPTY_SOURCE_YAML_REFS check rejects an empty
+          sourceYamlRefs the same way it rejects a missing one, so the runtime check matches that
+          exactly); knownGapRefs must be present as an array (an empty list is not itself invalid
+          for knownGapRefs -- only a missing or wrong-shaped one is). Any violation is
+          LAYOUT_SCHEMA_RECORDS_INVALID for the WHOLE records[] array, the same fail-close posture
+          as a missing recordType/key or an unrecognized recordType -- never a per-record fallback
+          (e.g. falling back to the raw NodeId or an empty string as a substitute label), and never
+          a NEW required field or failure condition beyond what the translator's own contract
+          already declares.
+        select_field_binding_contract: >-
+          form_input/select projects to the existing ui_component_registry select.template entry
+          (field_control_resolution above) -- never a new component kind, DTO field, or registry
+          row. runtimeComponentFactory's selectFactory requires a validly-shaped authored "change"
+          binding when one is authored (requireBinding, unchanged fail-close for a malformed
+          binding); when NO "change" binding is authored at all, selectFactory renders within the
+          existing runtime adapter contract without requiring one -- the SAME no-binding-required
+          posture formFieldFactory already has for form_input/form_field. This is not a Field-level
+          read-only/editable authority: no new SSOT concept, seed attribute, or DTO field is
+          introduced to distinguish "should be editable but isn't wired" from "genuinely never
+          wired" -- both render the same way, exactly as an unwired form_input/form_field already
+          does.
         action_component_kind_trigger_alignment: >-
           Action/WorkflowStep records resolve uniformly to the button.primitive catalog component
           (field_control_resolution above), and buttonFactory unconditionally requires
@@ -642,9 +637,8 @@ runtime_orchestration_ssot:
         - merging_runtimeInteractions_by_bare_sourceActionKey_across_two_different_forms_that_share_a_leaf_key
         - resolving_a_childs_ParentNodeId_by_a_static_whole_tree_key_lookup_that_cannot_distinguish_between_duplicate_container_instances
         - namespacing_a_duplicated_child_keys_NodeId_or_its_tensor_interaction_merge_key_by_the_raw_authored_parentKey_instead_of_the_resolved_parent_identity
-        - a_runtime_parser_accepting_a_record_missing_label_or_sourceReactPath_or_sourceYamlRefs_or_knownGapRefs_by_falling_back_to_the_raw_key_or_NodeId_or_an_empty_string
-        - authoring_a_readOnly_flag_directly_on_a_seed_record_instead_of_deriving_it_from_the_owning_Forms_own_Actions_payloadFrom_references
-        - relaxing_selectFactorys_requireBinding_for_a_genuinely_editable_readOnly_false_select_that_has_no_authored_change_wiring
+        - a_runtime_parser_accepting_a_record_missing_label_or_sourceReactPath_or_nonempty_sourceYamlRefs_or_knownGapRefs_by_falling_back_to_the_raw_key_or_NodeId_or_an_empty_string
+        - inventing_a_Field_level_read_only_or_editable_authority_seed_attribute_or_DTO_field_to_distinguish_an_unwired_select_from_a_genuinely_never_wired_one
         - normalizing_an_Actions_componentKind_trigger_mismatch_by_broadly_changing_buttonFactorys_trigger_requirement_app_wide_instead_of_correcting_the_source_schema
       test_proof_contract:
         note: >-
@@ -657,16 +651,16 @@ runtime_orchestration_ssot:
           proof must also connect renderEmission() output through LayoutProjectionTree ->
           runtimeComponentFactory (renderRuntimeComponent) for every leaf, all the way to the real
           DOM, and assert zero visible error boxes there too -- not stop at renderEmission()'s own
-          error count. A previously-known gap (a plain select field whose factory requires a
-          binding no seed content authored) is resolved by field_read_only_authority, not carved
-          out of the proof's assertion scope -- a "known gap" label is never a substitute for the
-          representative scenario's literal zero-error count at either layer.
+          error count. A plain select field with no authored "change" binding renders within the
+          existing runtime adapter contract (select_field_binding_contract above) rather than
+          being carved out of the proof's assertion scope -- a "known gap" label is never a
+          substitute for the representative scenario's literal zero-error count at either layer.
         positive_cases:
           - topology_ui_table_record_resolves_to_a_catalog_component_via_table_display_resolution
           - topology_ui_workflow_step_record_resolves_to_a_catalog_component_via_the_same_convention_as_topology_ui_action
           - a_catalog_component_leafs_authored_label_reaches_the_runtime_component_props_in_production_rendering
           - a_schema_composed_action_button_with_a_recognized_dispatchInstanceOperation_interaction_renders_enabled_disabled_false_through_the_real_runtime_factory
-          - a_read_only_select_field_renders_disabled_in_the_real_DOM_without_requiring_a_change_binding
+          - a_select_field_with_no_authored_change_binding_renders_in_the_real_DOM_without_requiring_one_matching_form_input_form_fields_existing_no_binding_required_posture
           - a_duplicate_parent_key_and_a_duplicate_child_key_present_simultaneously_still_resolve_to_distinct_NodeIds_with_correctly_attributed_non_cross_contaminated_runtimeInteractions
         negative_cases:
           - topology_ui_unresolved_record_composes_to_an_explicit_render_time_error_carrying_knownGapRefs_never_a_normal_component

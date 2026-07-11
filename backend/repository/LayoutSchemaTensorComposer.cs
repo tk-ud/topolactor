@@ -86,8 +86,7 @@ public static class LayoutSchemaTensorComposer
         string? Label,
         string? Control,
         string? Display = null,
-        IReadOnlyList<string>? KnownGapRefs = null,
-        bool? ReadOnly = null);
+        IReadOnlyList<string>? KnownGapRefs = null);
 
     // Full recognized recordType vocabulary (structural + catalog + unresolved-gap) — matches
     // docs/design/react-schema-topology-seed-translator-ssot.yaml
@@ -188,16 +187,19 @@ public static class LayoutSchemaTensorComposer
                 // topology_ui_seed_contract.record_common_required_fields, mirrored at runtime so a
                 // persisted layout_schema_json that drifted from the translator-validated shape
                 // still fails close here rather than silently composing with fallback content):
-                // label and sourceReactPath are required non-empty strings; sourceYamlRefs is a
-                // required array (may be empty — an empty list is not itself invalid, only a
-                // missing/wrong-shaped one is).
+                // label and sourceReactPath are required non-empty strings. sourceYamlRefs must be
+                // a non-empty array — the translator's own validate_seed_record_tree
+                // (SEED_RECORD_EMPTY_SOURCE_YAML_REFS) rejects an empty sourceYamlRefs the same
+                // way it rejects a missing one, so the runtime check matches that exactly rather
+                // than being more permissive than the translator it mirrors.
                 if (string.IsNullOrWhiteSpace(label))
                     return new RecordsParseResult.Invalid($"records[{index}].record is missing a non-empty label.");
                 if (!record.TryGetProperty("sourceReactPath", out var srp) || srp.ValueKind != JsonValueKind.String ||
                     string.IsNullOrWhiteSpace(srp.GetString()))
                     return new RecordsParseResult.Invalid($"records[{index}].record is missing a non-empty sourceReactPath.");
-                if (!record.TryGetProperty("sourceYamlRefs", out var syr) || syr.ValueKind != JsonValueKind.Array)
-                    return new RecordsParseResult.Invalid($"records[{index}].record is missing a sourceYamlRefs array.");
+                if (!record.TryGetProperty("sourceYamlRefs", out var syr) || syr.ValueKind != JsonValueKind.Array ||
+                    syr.GetArrayLength() == 0)
+                    return new RecordsParseResult.Invalid($"records[{index}].record is missing a non-empty sourceYamlRefs array.");
 
                 if (!record.TryGetProperty("knownGapRefs", out var kgr) || kgr.ValueKind != JsonValueKind.Array)
                     return new RecordsParseResult.Invalid($"records[{index}].record is missing a knownGapRefs array.");
@@ -211,17 +213,7 @@ public static class LayoutSchemaTensorComposer
                     return new RecordsParseResult.Invalid(
                         $"records[{index}].record.recordType \"{UnresolvedRecordType}\" is missing a non-empty knownGapRefs array.");
 
-                // field_read_only_authority: readOnly is a translator-derived Field attribute
-                // (docs/design/react-schema-topology-seed-translator-ssot.yaml
-                // apply_field_read_only_authority) — null (not applicable) on any pre-existing/
-                // non-Field record shape, so layouts authored before this field existed are
-                // unaffected.
-                bool? readOnly = record.TryGetProperty("readOnly", out var ro) &&
-                    (ro.ValueKind == JsonValueKind.True || ro.ValueKind == JsonValueKind.False)
-                        ? ro.ValueKind == JsonValueKind.True
-                        : null;
-
-                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs, readOnly));
+                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs));
                 index++;
             }
             return new RecordsParseResult.Valid(rows);
@@ -472,8 +464,7 @@ public static class LayoutSchemaTensorComposer
                 // structural_node's does, so the frontend can build real production default
                 // props from it instead of a hardcoded placeholder caption or the bare NodeId.
                 Label: row.Label,
-                KnownGapRefs: isUnresolved ? row.KnownGapRefs : null,
-                ReadOnly: isCatalogLeaf ? row.ReadOnly : null
+                KnownGapRefs: isUnresolved ? row.KnownGapRefs : null
             ));
         }
 

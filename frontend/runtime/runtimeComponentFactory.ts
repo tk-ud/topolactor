@@ -2434,12 +2434,12 @@ function selectFactory(spec: RuntimeComponentSpec): RenderResult {
       !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
-  // field_read_only_authority: a read-only Field (never referenced by any sibling Action's
-  // payloadFrom within its owning Form) never requires a change binding — it renders disabled,
-  // matching formFieldFactory's existing no-binding-required posture for the same authority.
-  // Every other select still fails close per requireBinding, unchanged.
-  const readOnly = data.readOnly === true;
-  if (!readOnly) {
+  // No authored "change" binding at all renders within the existing runtime adapter contract
+  // without requiring one — the same no-binding-required posture formFieldFactory already has
+  // for form_input/form_field. An authored binding that IS present must still be validly shaped
+  // (requireBinding), so a malformed authored binding still fails close, unchanged.
+  const hasChangeBinding = "change" in spec.eventBinding;
+  if (hasChangeBinding) {
     const bindingCheck = requireBinding(spec, "change");
     if (!bindingCheck.ok) return bindingCheck;
   }
@@ -2461,22 +2461,22 @@ function selectFactory(spec: RuntimeComponentSpec): RenderResult {
       options,
       placeholder: data.placeholder as string | undefined,
       label: data.label as string | undefined,
-      disabled: readOnly ? true : (data.disabled as boolean | undefined),
+      disabled: data.disabled as boolean | undefined,
       required: data.required as boolean | undefined,
       error: data.error as string | undefined,
       className: spec.className,
       design: spec.design ?? {},
-      onChange: readOnly ? (() => {}) : (value: string) => {
+      onChange: hasChangeBinding ? (value: string) => {
         const r = emitBoundEvent(spec, "change", { value });
         if (!r.ok) throw new Error(r.error);
-      },
-      onFocus: (!readOnly && spec.eventBinding.focus)
+      } : (() => {}),
+      onFocus: spec.eventBinding.focus
         ? () => {
           const r = emitBoundEvent(spec, "focus", {});
           if (!r.ok) throw new Error(r.error);
         }
         : undefined,
-      onBlur: (!readOnly && spec.eventBinding.blur)
+      onBlur: spec.eventBinding.blur
         ? () => {
           const r = emitBoundEvent(spec, "blur", {});
           if (!r.ok) throw new Error(r.error);

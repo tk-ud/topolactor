@@ -323,9 +323,9 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
   assertEquals(errorSpecCount, 0, "expected zero errors at the renderEmission() spec layer");
 
   // The real DOM ALSO shows zero error boxes — the four plain select fields (approval_status x2,
-  // port_kind, callable) are all field_read_only_authority read-only (never referenced by any
-  // sibling Action's payloadFrom within their owning Form — see readOnly on the fixture nodes),
-  // so selectFactory renders them disabled without requiring a change binding, closing the gap
+  // port_kind, callable) have no authored "change" binding at all, so selectFactory renders them
+  // within the existing runtime adapter contract without requiring one (the SAME no-binding-
+  // required posture formFieldFactory already has for form_input/form_field), closing the gap
   // renderEmission()'s error-spec count alone could not see. Never a substitute proof: this test
   // exists specifically to catch the case where renderEmission() says zero but the real DOM
   // still shows an error box, and it now proves that case does not occur for this scenario.
@@ -336,12 +336,13 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
     "expected zero visible error boxes in the real DOM for the manifest 092 bare-entry representative scenario",
   );
 
-  // The four read-only selects render as real, disabled <select> elements (not error boxes) —
-  // read-only is an authored render state, distinct from a missing-binding failure.
-  const selectMatches = html.match(/<select\b[^>]*disabled\b[^>]*>/g) ?? [];
+  // The four unwired selects render as real <select> elements (not error boxes) — no Field-level
+  // read-only/editable authority is introduced; they render the same way an unwired
+  // form_input/form_field already does.
+  const selectMatches = html.match(/<select\b[^>]*>/g) ?? [];
   assertEquals(
     selectMatches.length,
     4,
-    "expected the 4 read-only select fields (approval_status x2, port_kind, callable) to render as disabled <select> elements in the real DOM",
+    "expected the 4 unwired select fields (approval_status x2, port_kind, callable) to render as <select> elements in the real DOM",
   );
 });

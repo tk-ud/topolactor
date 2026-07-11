@@ -210,25 +210,12 @@ function buildProductionCatalogComponentProps(
       };
     case "form_input/form_field":
       return { data: { label: authoredLabel || componentKey } };
-    case "form_input/select": {
+    case "form_input/select":
       // The option list is business data the schema record does not carry — an honest empty
       // list, never a fabricated sample option, until real option data is wired.
-      // field_read_only_authority: a read-only Field (never referenced by any sibling Action's
-      // payloadFrom within its owning Form) renders disabled and never requires a change
-      // binding — an authored, SSOT-derived state, distinct from the banned UI-Builder preview
-      // placeholder's unconditional disabled:true.
-      const readOnly = node.readOnly === true;
       return {
-        data: {
-          value: "",
-          options: [],
-          label: authoredLabel,
-          placeholder: authoredLabel || "",
-          readOnly,
-          disabled: readOnly,
-        },
+        data: { value: "", options: [], label: authoredLabel, placeholder: authoredLabel || "" },
       };
-    }
     default:
       return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
   }
