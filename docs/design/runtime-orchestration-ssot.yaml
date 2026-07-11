@@ -158,7 +158,8 @@ runtime_orchestration_ssot:
           precondition: >-
             same as /admin/team-dashboard above: requires a real per-screen ui_projection manifest
             for scheduler_jobs, which does not exist yet. Ratified into the canonical registry
-            above (was previously implemented and dispatcher-wired but absent from this list — see
+            above (route file and dispatcher_mapping already existed but the registry entry was
+            absent — see
             .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json issue-03)
             without waiting on that prerequisite, since ratifying an already-shipped route's
             registry entry is independent of adding hub navigation to it. Not retired by this
