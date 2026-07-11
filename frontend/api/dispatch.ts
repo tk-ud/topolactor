@@ -87,9 +87,14 @@ export type RecommendNavigationProjectionSpec = {
 /**
  * A single layout node in the Emission, derived from layout_patch_json.nodes[].
  * Carries the full structural and positional fields authored in the UI builder canvas.
- * nodeKind: "catalog_component" | "structural_html"
+ * nodeKind: "catalog_component" | "structural_html" | "structural_node" | "unresolved_gap"
  * structural_html nodes render as actual HTML elements (htmlTag); catalog_component nodes
- * render via the component registry (componentId).
+ * render via the component registry (componentId). structural_node nodes (Category/Section/
+ * Form/Workflow/Validation sourced from components_layout_design.layout_schema_json.records[] —
+ * the structural authority tree) render as a generic labeled group and never carry a
+ * componentId/componentKind. unresolved_gap nodes (topology_ui_unresolved from the same
+ * structural authority tree) always render as an explicit error carrying knownGapRefs — never a
+ * resolvable component.
  * parentNodeId establishes the DOM nesting tree. orderIndex drives sibling render order.
  * width/height are flow box dimensions (px, %, auto). x/y are legacy and not projected in flow mode.
  * layoutClassRefs are SSOT topology-layout-class vocabulary refs for className resolution.
@@ -154,6 +159,21 @@ export type LayoutNode = {
   }> | null;
   widthMode?: "auto" | "preset" | "custom";
   heightMode?: "auto" | "preset" | "custom";
+  /**
+   * Structural-node semantic type (topology_ui_category/topology_ui_section/topology_ui_form/
+   * topology_ui_workflow/topology_ui_validation) when nodeKind is "structural_node", or
+   * topology_ui_unresolved when nodeKind is "unresolved_gap". Absent for "catalog_component"/
+   * "structural_html" nodes.
+   */
+  recordType?: string;
+  /**
+   * Authored display label — present for every schema-composed node (structural_node,
+   * catalog_component, and unresolved_gap alike). Absent for tensor-only nodes composed outside
+   * the layout-schema structural authority path.
+   */
+  label?: string;
+  /** Authored known-gap references for an unresolved_gap node. Absent for every other nodeKind. */
+  knownGapRefs?: string[];
   /** Persisted component_style_design snapshot for draft-preview / pre-publish projection. */
   componentDesign?: {
     inlineText?: string;

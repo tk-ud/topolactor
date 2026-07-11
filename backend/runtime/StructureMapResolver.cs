@@ -115,6 +115,27 @@ public class StructureMapResolver
                 ];
                 goto buildShape;
             }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RECORDS_INVALID"))
+            {
+                // A present-but-malformed layout_schema_json.records[] is a real authoring
+                // defect, never equivalent to "no records[]" — it must never be silently
+                // dropped to the tensor-only path or partially composed by skipping bad entries.
+                layoutErrors =
+                [
+                    new ValidationError("LAYOUT_SCHEMA_RECORDS_INVALID", ex.Message)
+                ];
+                goto buildShape;
+            }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID"))
+            {
+                // A malformed/unattributable tensor runtimeInteractions shape is a real
+                // authoring defect — never silently skipped during the schema-authority merge.
+                layoutErrors =
+                [
+                    new ValidationError("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID", ex.Message)
+                ];
+                goto buildShape;
+            }
 
             if (parsedNodes.Count == 0)
             {
@@ -215,7 +236,10 @@ public class StructureMapResolver
             : null,
         RuntimeInteractions: row.RuntimeInteractionsJson != null
             ? JsonSerializer.Deserialize<JsonElement>(row.RuntimeInteractionsJson)
-            : null
+            : null,
+        RecordType: row.RecordType,
+        Label: row.Label,
+        KnownGapRefs: row.KnownGapRefs
     );
 
     /// <summary>

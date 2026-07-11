@@ -35,6 +35,7 @@ import {
 } from "../runtime/uiEventEffectRunner.ts";
 import type { WiringNode } from "../lib/uiBuilderWiringProjection.ts";
 import {
+  adoptResolvedManifestIdentity,
   confirmProjectionEntryEmission,
   parseProjectionEntrySelection,
   resolveHubNavigationLinks,
@@ -93,7 +94,16 @@ export default function ProjectionShell(): JSX.Element {
   const sseReceiverRef = useRef<SseReceiver | null>(null);
   // Stores the initial dispatch axes for SSE identity-preserving refresh.
   // SSE triggers must re-dispatch using the same axes as the initial load, not hardcoded defaults.
+  // Updated (via adoptResolvedManifestIdentity, right after the initial dispatch resolves) to pin
+  // payload.target_ref to the backend-resolved Emission.ManifestId when the entry had no explicit
+  // manifest selection — so refresh re-dispatches the SAME manifest, not just the same
+  // pre-resolution axes (which only coincidentally re-resolves the same manifest).
   const initialDispatchAxesRef = useRef<UserOperation | null>(null);
+  // The manifest identity adopted as "current dispatch identity" after the initial dispatch —
+  // backend holds no shared current-manifest state, so the frontend pins this for refresh
+  // confirmation. Set once after the initial dispatch; a refresh resolving a different manifest
+  // is an explicit PROJECTION_ENTRY_MANIFEST_MISMATCH error, never a silent re-render.
+  const adoptedManifestIdRef = useRef<string | undefined>(undefined);
   // Ref-backed projection token for SSE closure access — state updates don't update closed-over values.
   const projectionTokenRef = useRef<string | undefined>(undefined);
   // Runtime state store + effect runner (component_runtime_state_effect_boundary):
@@ -229,6 +239,15 @@ export default function ProjectionShell(): JSX.Element {
         setLoading(false);
         return;
       }
+      // Adopt the backend-resolved manifest identity as the current dispatch identity for
+      // subsequent (SSE-triggered) refreshes — pins payload.target_ref when the entry had no
+      // explicit ?manifest= selection, so refresh re-resolves the SAME manifest rather than
+      // just replaying the same pre-resolution axes.
+      initialDispatchAxesRef.current = adoptResolvedManifestIdentity(
+        initialAxes,
+        nextEmission,
+      );
+      adoptedManifestIdRef.current = nextEmission.manifestId;
       // Guarded dispatcher created (and UI監視割当 / UI状態更新-target slots
       // predeclared) BEFORE the first renderEmission call, so the very first
       // rendered event bindings already write through the guarded, shared
@@ -365,16 +384,18 @@ export default function ProjectionShell(): JSX.Element {
             const updated = result.emission;
             if (!updated) return;
             // refresh_boundary_policy.failure_policy: explicit_error_log_retain_old_dom —
-            // an explicit package selection must still be confirmed after refresh;
-            // on mismatch, log explicitly and retain the prior (already-confirmed) DOM
-            // rather than silently rendering a differently-packaged projection.
+            // an explicit package selection AND the adopted manifest identity must still be
+            // confirmed after refresh; on mismatch, log explicitly and retain the prior
+            // (already-confirmed) DOM rather than silently rendering a differently-packaged or
+            // differently-manifested projection.
             const refreshConfirmation = confirmProjectionEntryEmission(
               entrySelection,
               updated,
+              { adoptedManifestId: adoptedManifestIdRef.current },
             );
             if (!refreshConfirmation.ok) {
               console.error(
-                "[ProjectionShell] PROJECTION_ENTRY_PACKAGE_MISMATCH_ON_REFRESH:",
+                "[ProjectionShell] PROJECTION_ENTRY_MISMATCH_ON_REFRESH:",
                 refreshConfirmation.error,
               );
               return;

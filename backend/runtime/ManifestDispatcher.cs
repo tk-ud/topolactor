@@ -218,6 +218,38 @@ public class ManifestDispatcher
                 layer: request.Layer,
                 action: request.Action,
                 ct: ct);
+
+                // Canonical default entry fallback: a bare/no-selection projection entry (no
+                // route target override, no explicit ?manifest=, no pre-injected
+                // payload.target_ref — frontend/runtime/projectionEntry.ts
+                // resolveProjectionEntryAxes({}) sends exactly this axes combination) has no
+                // seeded dispatcher_mapping of its own. hubs.hub_relations' explicitly marked
+                // canonical_default_entry row (see
+                // ContentBundleRepository.ResolveCanonicalDefaultEntryManifestIdAsync) is the
+                // means for resolving it — distinct from NavigationSequence's outbound links
+                // from an already-resolved manifest. Narrowly scoped to this exact axes
+                // combination only — this is not a general MANIFEST_NOT_FOUND fallback.
+                if (manifest is null &&
+                    _hubNavigationResolver is not null &&
+                    string.Equals(request.Target, "default", StringComparison.Ordinal) &&
+                    string.Equals(request.Layer, "screen_list", StringComparison.Ordinal) &&
+                    string.Equals(request.Action, "Search", StringComparison.Ordinal))
+                {
+                    var canonicalDefaultEntryManifestId =
+                        await _hubNavigationResolver.ResolveCanonicalDefaultEntryManifestIdAsync(ct);
+                    if (canonicalDefaultEntryManifestId.HasValue)
+                    {
+                        var candidate = await _manifestRepository.LoadByIdAsync(canonicalDefaultEntryManifestId.Value, ct);
+                        // active_status_requirement: a marked relation naming a draft/deprecated
+                        // manifest resolves to no manifest (fail-close) — never a stale/inactive
+                        // projection, even though the relation row itself is active.
+                        if (candidate is not null &&
+                            string.Equals(candidate.Status, "active", StringComparison.OrdinalIgnoreCase))
+                        {
+                            manifest = candidate;
+                        }
+                    }
+                }
             }
 
             // Capability gate: after manifest resolution, enforce any explicit required_role
@@ -358,6 +390,20 @@ public class ManifestDispatcher
                 Success: false,
                 Emission: null,
                 Errors: [new ValidationError("MANIFEST_AMBIGUOUS", ex.Message)]);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("CANONICAL_DEFAULT_ENTRY_AMBIGUOUS", StringComparison.Ordinal))
+        {
+            _logger.LogError(ex, "ManifestDispatcher: ambiguous canonical default entry rejected.");
+            await BackendErrorBoundary.RecordSystemErrorAsync(
+                _errorAppender, _logger, ex,
+                BackendErrorOriginLayer.ManifestDispatcher,
+                "manifest_dispatcher:resolve_canonical_default_entry",
+                new BackendErrorEvidenceHint(ErrorCode: "CANONICAL_DEFAULT_ENTRY_AMBIGUOUS"),
+                ct);
+            return new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors: [new ValidationError("CANONICAL_DEFAULT_ENTRY_AMBIGUOUS", ex.Message)]);
         }
     }
 
@@ -623,6 +669,27 @@ public class ManifestDispatcher
         try
         {
             records = await _topologyRepository.LoadLayoutNodesAsync(layoutId.Value, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RECORDS_INVALID", StringComparison.Ordinal))
+        {
+            // A present-but-malformed layout_schema_json.records[] is a real authoring defect,
+            // never equivalent to "no records[]" — it must surface as an explicit Emission.Errors
+            // entry, never a silent swallow-and-continue.
+            _logger.LogError(ex,
+                "ManifestDispatcher: layout_schema_json.records[] is malformed for layoutId='{LayoutId}'.",
+                layoutId);
+            var invalidError = new ValidationError("LAYOUT_SCHEMA_RECORDS_INVALID", ex.Message);
+            return emission with { Errors = [.. emission.Errors, invalidError], LayoutId = layoutId.Value.ToString() };
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID", StringComparison.Ordinal))
+        {
+            // A malformed/unattributable tensor runtimeInteractions shape is a real authoring
+            // defect — never silently skipped during the schema-authority merge.
+            _logger.LogError(ex,
+                "ManifestDispatcher: tensor runtimeInteractions is malformed for layoutId='{LayoutId}'.",
+                layoutId);
+            var invalidInteractionsError = new ValidationError("LAYOUT_SCHEMA_RUNTIME_INTERACTIONS_INVALID", ex.Message);
+            return emission with { Errors = [.. emission.Errors, invalidInteractionsError], LayoutId = layoutId.Value.ToString() };
         }
         catch (Exception ex)
         {

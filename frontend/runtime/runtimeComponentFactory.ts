@@ -2434,8 +2434,15 @@ function selectFactory(spec: RuntimeComponentSpec): RenderResult {
       !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
-  const bindingCheck = requireBinding(spec, "change");
-  if (!bindingCheck.ok) return bindingCheck;
+  // No authored "change" binding at all renders within the existing runtime adapter contract
+  // without requiring one — the same no-binding-required posture formFieldFactory already has
+  // for form_input/form_field. An authored binding that IS present must still be validly shaped
+  // (requireBinding), so a malformed authored binding still fails close, unchanged.
+  const hasChangeBinding = "change" in spec.eventBinding;
+  if (hasChangeBinding) {
+    const bindingCheck = requireBinding(spec, "change");
+    if (!bindingCheck.ok) return bindingCheck;
+  }
   const rawOptions = Array.isArray(data.options) ? data.options : [];
   const options = rawOptions
     .filter((o): o is { label: string; value: string } =>
@@ -2459,10 +2466,10 @@ function selectFactory(spec: RuntimeComponentSpec): RenderResult {
       error: data.error as string | undefined,
       className: spec.className,
       design: spec.design ?? {},
-      onChange: (value: string) => {
+      onChange: hasChangeBinding ? (value: string) => {
         const r = emitBoundEvent(spec, "change", { value });
         if (!r.ok) throw new Error(r.error);
-      },
+      } : (() => {}),
       onFocus: spec.eventBinding.focus
         ? () => {
           const r = emitBoundEvent(spec, "focus", {});

@@ -813,6 +813,43 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         return reader.GetFieldValue<Guid[]>(ordinal);
     }
 
+    /// <summary>
+    /// Resolves the topology_manifest_id of the single hub_relations row explicitly marked
+    /// relation_config->>'transition' = 'canonical_default_entry' (status='active' on the
+    /// relation row) — the means for a bare/no-selection projection entry to resolve an initial
+    /// manifest. This resolves the CANDIDATE manifest id only; the caller (ManifestDispatcher)
+    /// additionally requires the named manifest itself to have status='active' before treating it
+    /// as resolved, per docs/design/runtime-orchestration-ssot.yaml
+    /// ui_projection_render_reachability_contract.canonical_default_entry_contract.
+    /// active_status_requirement — never a stale/inactive projection. LIMIT 2 detects ambiguity
+    /// without a silent "first row wins" ORDER BY: 0 rows -> null (no canonical default entry
+    /// configured); 1 row -> that row's topology_manifest_id; 2+ rows -> explicit failure.
+    /// </summary>
+    public override async Task<Guid?> ResolveCanonicalDefaultEntryManifestIdAsync(CancellationToken ct = default)
+    {
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT topology_manifest_id FROM hubs.hub_relations " +
+            "WHERE status = 'active' AND relation_config->>'transition' = 'canonical_default_entry' " +
+            "LIMIT 2";
+
+        var results = new List<Guid>();
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+                results.Add(reader.GetGuid(0));
+        }
+
+        if (results.Count == 0) return null;
+        if (results.Count > 1)
+            throw new InvalidOperationException(
+                "CANONICAL_DEFAULT_ENTRY_AMBIGUOUS: multiple hubs.hub_relations rows are marked " +
+                "relation_config.transition='canonical_default_entry'. Ambiguity is prohibited; " +
+                "exactly one row may carry this marker.");
+        return results[0];
+    }
+
     public override async Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(
         Guid topologyManifestId, CancellationToken ct = default)
     {

@@ -13,7 +13,11 @@ import { SCREEN_OPERATION_OPTIONS } from "../runtime/screenAuthoringIntent.ts";
 type TopologyEntry = Record<string, unknown> & { type?: string };
 type SeedManifest = { seedFile: string; manifestId: string; topology: TopologyEntry[] };
 
-const seedFiles = ["db/seed_empty.sql", "db/demo_seed.sql"];
+// db/demo_seed.sql is public scaffold/demo-only data, intentionally excluded from db/init.sql's
+// canonical bootstrap chain (see docs/design/db-schema.yaml bootstrap_policy.demo_seed_boundary).
+// The projection_seed_collapse representative fixture (manifest 00000000-0000-0000-0000-000000000085)
+// lives in a dedicated, canonical-proof-owned fixture file instead, decoupled from that non-canonical file.
+const seedFiles = ["db/seed_empty.sql", "frontend/tests/fixtures/projection_lane_seed_fixture.sql"];
 const explicitLiteralFixture = { seedLabel: "explicit-literal-fixture-not-seed-derived" };
 
 function readSeed(path: string): string {
@@ -165,7 +169,7 @@ Deno.test("projection lane seed contract: screen_data_shape.tableRef has physica
 
 Deno.test("projection lane collapse: backend SSE identity re-read reaches frontend projectionRuntime and user-facing render", async () => {
   const seed = targetSeedManifests().find((m) => m.manifestId === "00000000-0000-0000-0000-000000000085");
-  assertExists(seed, "lane=projection_seed_collapse seed=db/demo_seed.sql manifest=00000000-0000-0000-0000-000000000085 missing seed manifest");
+  assertExists(seed, "lane=projection_seed_collapse seed=frontend/tests/fixtures/projection_lane_seed_fixture.sql manifest=00000000-0000-0000-0000-000000000085 missing seed manifest");
   const data = seedData(seed);
   const definition = projectionDefinition(seed);
   const backendEmission: Emission = {

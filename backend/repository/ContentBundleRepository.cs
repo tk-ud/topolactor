@@ -89,4 +89,20 @@ public abstract class ContentBundleRepository
     public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> DeprecateHubRelationAsync(Guid hubRelationId, CancellationToken ct = default);
     public abstract Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(Guid topologyManifestId, CancellationToken ct = default);
     public abstract Task<(HubNavigationReorderResponseDto Response, ValidationError? Error)> ReorderHubRelationsAsync(Guid topologyManifestId, IReadOnlyList<(Guid HubRelationId, int NewSequencePosition)> items, CancellationToken ct = default);
+
+    /// <summary>
+    /// Resolves the topology_manifest_id owning the single hub_relations row explicitly marked
+    /// as the canonical default entry (relation_config.transition == "canonical_default_entry",
+    /// status='active') — the means by which a bare/no-selection projection entry (no route, no
+    /// manifest, no target_ref) resolves an initial manifest, distinct from
+    /// LoadHubNavigationSequenceAsync's outbound "current hub relation" navigation links from an
+    /// ALREADY-resolved manifest. This is deliberately NOT "any hub_relations row at
+    /// sequence_position=1" (that would be an unscoped/ambiguous global index — many manifests
+    /// have their own position-1 outbound relation) — only the explicitly marked row qualifies.
+    /// Returns null when no row carries the marker (no canonical default entry configured — the
+    /// caller must not guess or fall back to an arbitrary manifest). Throws
+    /// InvalidOperationException("CANONICAL_DEFAULT_ENTRY_AMBIGUOUS: ...") when more than one row
+    /// carries the marker — ambiguity is a configuration error, never silently resolved.
+    /// </summary>
+    public abstract Task<Guid?> ResolveCanonicalDefaultEntryManifestIdAsync(CancellationToken ct = default);
 }

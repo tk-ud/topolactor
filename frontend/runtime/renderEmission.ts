@@ -70,7 +70,7 @@ export type ComponentSpec = {
   runtimeSpec?: RuntimeComponentSpec;
   /** Node identifier from layout_patch_json — present only when rendered from layoutNodes. */
   nodeId?: string;
-  /** "catalog_component" | "structural_html" — present only when rendered from layoutNodes. */
+  /** "catalog_component" | "structural_html" | "structural_node" | "unresolved_gap" — present only when rendered from layoutNodes. */
   nodeKind?: string;
   /** HTML element tag for structural_html nodes — present only when nodeKind="structural_html". */
   htmlTag?: string;
@@ -187,20 +187,61 @@ export function buildRuntimeDispatchSpec(
 }
 
 /**
- * Builds minimum renderable props for a catalog_component node.
- * Delegates to canvas preview placeholders when componentKind is known (no fake "input" labels).
+ * Builds honest production default props for a catalog_component leaf from its authored schema
+ * label (layout_schema_json.records[].record.label — see LayoutSchemaTensorComposer.Compose)
+ * — never the UI-Builder canvas-preview placeholder's inert content (a hardcoded caption, a
+ * fabricated sample option list, or a forced disabled:true). A schema-composed leaf never
+ * carries node-local propsJson/design to override these, so buildLayoutPreviewPlaceholderProps'
+ * disabled:true for action/button would otherwise reach the real production DOM unconditionally.
+ * Component kinds not modeled explicitly here fall back to the existing placeholder behavior
+ * unchanged (their production content is expected to arrive via node-local propsJson/design, as
+ * before — this function only closes the gap for schema-composed leaves that never get one).
+ */
+function buildProductionCatalogComponentProps(
+  node: EmissionLayoutNode,
+  componentKind: string,
+  componentKey: string,
+): Record<string, unknown> {
+  const authoredLabel = node.label?.trim();
+  switch (componentKind) {
+    case "action/button":
+      return {
+        data: { label: authoredLabel || componentKey, variant: "primary", disabled: false },
+      };
+    case "form_input/form_field":
+      return { data: { label: authoredLabel || componentKey } };
+    case "form_input/select":
+      // The option list is business data the schema record does not carry — an honest empty
+      // list, never a fabricated sample option, until real option data is wired.
+      return {
+        data: { value: "", options: [], label: authoredLabel, placeholder: authoredLabel || "" },
+      };
+    default:
+      return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
+  }
+}
+
+/**
+ * Builds minimum renderable props for a catalog_component node. previewMode uses the UI-Builder
+ * canvas-preview placeholder (intentionally inert — disabled actions, sample content — for
+ * unset/unauthored canvas nodes); non-preview (production) rendering never injects that inert
+ * state — see buildProductionCatalogComponentProps.
  */
 function buildDefaultCatalogComponentProps(
   node: EmissionLayoutNode,
+  previewMode: boolean,
 ): Record<string, unknown> {
   const componentKey = (node.componentKey && node.componentKey.trim())
     ? node.componentKey.trim()
     : (node.nodeId ?? "Component");
   const componentKind = node.componentKind?.trim();
-  if (componentKind) {
+  if (!componentKind) {
+    return { data: { label: node.label?.trim() || componentKey } };
+  }
+  if (previewMode) {
     return buildLayoutPreviewPlaceholderProps(componentKind, componentKey);
   }
-  return { data: { label: componentKey } };
+  return buildProductionCatalogComponentProps(node, componentKind, componentKey);
 }
 
 /**
@@ -377,6 +418,9 @@ function buildLocalUiStateEventBinding(
         ? wiring.statePath
         : undefined,
       value: wiring.value,
+      targetRef: typeof wiring.targetRef === "string"
+        ? wiring.targetRef
+        : undefined,
     });
     if (!resolved) continue;
     const previous =
@@ -741,6 +785,41 @@ export function renderEmission(
           };
         }
 
+        // structural_node nodes (Category/Section/Form/Workflow/Validation sourced from
+        // components_layout_design.layout_schema_json.records[] — the structural authority
+        // tree) render as a generic labeled group. No registry lookup, no componentId/
+        // componentKind — backend never assigns one to a structural node.
+        if (node.nodeKind === "structural_node") {
+          return {
+            componentType: "structural_node",
+            def: { recordType: node.recordType },
+            inlineText: node.label,
+            ...layoutFields,
+          };
+        }
+
+        // unresolved_gap nodes (topology_ui_unresolved — a terminal known-gap marker the
+        // translator itself flagged) always render as an explicit error carrying knownGapRefs —
+        // never resolved to a component, never silently dropped or treated as a structural_node.
+        // SSOT: docs/design/runtime-orchestration-ssot.yaml
+        // ui_projection_render_reachability_contract.layout_schema_structural_render_contract
+        // unresolved_gap_resolution.
+        if (node.nodeKind === "unresolved_gap") {
+          return {
+            componentType: "error",
+            def: {
+              error:
+                `TOPOLOGY_UI_UNRESOLVED_GAP_REF: layout node "${
+                  node.nodeId ?? "(unnamed)"
+                }" is an unresolved authoring gap (recordType="${node.recordType}").`,
+              code: "TOPOLOGY_UI_UNRESOLVED_GAP_REF",
+              knownGapRefs: node.knownGapRefs ?? [],
+            },
+            inlineText: node.label,
+            ...layoutFields,
+          };
+        }
+
         // structural_html nodes render as actual HTML elements — no registry lookup.
         if (node.nodeKind === "structural_html") {
           return {
@@ -789,7 +868,7 @@ export function renderEmission(
         const nodeWiringKind = node.wiringKind ?? "";
 
         ensureRuntimeComponentRegistryInitialized();
-        const defaultProps = buildDefaultCatalogComponentProps(node);
+        const defaultProps = buildDefaultCatalogComponentProps(node, previewMode);
         const mergedProps = mergeNodeLocalProps(
           defaultProps,
           node.propsJson,
@@ -846,6 +925,36 @@ export function renderEmission(
           componentEventBinding[trigger] = {
             ...existing,
             ...(localBinding as Record<string, unknown>),
+          };
+        }
+
+        // An authored runtimeInteraction whose actionType is outside the recognized taxonomy
+        // (wiringSettingCategoryOf / dispatchExternalPort / dispatchInstanceOperation) resolves
+        // to zero event bindings here — never silently rendered as a normal, unbound component
+        // that later fails cryptically deep inside the runtime factory
+        // (RUNTIME_PRIMITIVE_RENDERER_MISSING_EVENT_BINDING). Fail explicit at the same layer
+        // CATALOG_COMPONENT_KIND_REQUIRED already lives, so renderEmission()'s error count
+        // actually reflects what the real factory/DOM will do with this leaf.
+        if (
+          !previewMode &&
+          Array.isArray(node.runtimeInteractions) &&
+          node.runtimeInteractions.length > 0 &&
+          Object.keys(componentEventBinding).length === 0
+        ) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: {
+              error:
+                `RUNTIME_INTERACTION_UNATTRIBUTABLE: catalog_component node "${
+                  node.nodeId ?? node.slotKey ?? "(unnamed)"
+                }" has ${node.runtimeInteractions.length} authored runtimeInteractions entr${
+                  node.runtimeInteractions.length === 1 ? "y" : "ies"
+                } but none resolved to a recognized event binding (actionType outside the classified taxonomy).`,
+              code: "RUNTIME_INTERACTION_UNATTRIBUTABLE",
+              componentId: node.componentId,
+            },
+            ...layoutFields,
           };
         }
         let finalProps = propsWithDesign;

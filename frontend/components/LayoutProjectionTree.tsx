@@ -80,6 +80,21 @@ function ProjectionTreeNode({
     );
   }
 
+  if (spec.componentType === "structural_node") {
+    const recordType = typeof spec.def?.recordType === "string" ? spec.def.recordType : undefined;
+    return (
+      <div
+        {...commonProps}
+        data-structural-node-record-type={recordType}
+      >
+        {spec.inlineText && (
+          <p class="structural-node-label font-medium">{spec.inlineText}</p>
+        )}
+        {childElements}
+      </div>
+    );
+  }
+
   if (spec.nodeKind === "structural_html" && spec.htmlTag) {
     const text = spec.inlineText?.trim();
     const authoredHref = typeof spec.def?.linkHref === "string" ? spec.def.linkHref : undefined;

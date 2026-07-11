@@ -148,7 +148,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
 
             var response = await dispatcher.DispatchAsync(request);
 
-            Assert.True(response.Success);
+            Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.NotNull(response.Emission);
             var emission = response.Emission!;
 
@@ -192,6 +192,154 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 "DELETE FROM hubs.topology_manifests WHERE topology_manifest_id = @mid", ("mid", relatedManifestId));
             await ExecAsync("DELETE FROM hubs.hub WHERE hub_id = @hid", ("hid", relatedHubId));
         }
+    }
+
+    [Fact]
+    public async Task DispatchAsync_CredentialManagementManifest_LayoutNodes_IncludeStructuralCategorySectionWrappers_NotOnlyFlatFormNodes()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await BuildRealDispatcherAsync(cs);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{CredentialManagementManifestId}:projection_entry",
+        });
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: payload, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        var nodes = response.Emission!.LayoutNodes;
+        Assert.NotNull(nodes);
+
+        // Structural authority (components_layout_design.layout_schema_json.records[]) is read —
+        // Category/Section wrapper nodes exist, sourced from the schema tree, not only the four
+        // flat tensor form nodes. Structural nodes never carry a componentId/componentKind.
+        var userAuthCategory = Assert.Single(nodes!, n => n.NodeId == "user_auth");
+        Assert.Equal("structural_node", userAuthCategory.NodeKind);
+        Assert.Equal("topology_ui_category", userAuthCategory.RecordType);
+        Assert.Null(userAuthCategory.ComponentId);
+
+        var instanceSettingsSection = Assert.Single(nodes!, n => n.NodeId == "instance_settings_section");
+        Assert.Equal("structural_node", instanceSettingsSection.NodeKind);
+        Assert.Equal("topology_ui_section", instanceSettingsSection.RecordType);
+        Assert.Null(instanceSettingsSection.ComponentId);
+
+        // Field/Action leaves resolve componentId/componentKind from the existing
+        // ui_component_registry preset catalog — never left silently unresolved. The seed's
+        // "approval_status" field key is reused in two branches (user_auth_section and
+        // instance_operation_approval_form) — an authoring collision the composer disambiguates
+        // via parent-scoped NodeId rather than colliding or silently dropping one.
+        var approvalStatusFields = nodes!.Where(n => n.NodeId.EndsWith("::approval_status")).ToList();
+        Assert.Equal(2, approvalStatusFields.Count);
+        foreach (var approvalStatusField in approvalStatusFields)
+        {
+            Assert.Equal("catalog_component", approvalStatusField.NodeKind);
+            Assert.NotNull(approvalStatusField.ComponentId);
+            Assert.Equal("form_input/select", approvalStatusField.ComponentKind);
+        }
+
+        var validateAction = Assert.Single(nodes!, n => n.NodeId == "validate");
+        Assert.Equal("catalog_component", validateAction.NodeKind);
+        Assert.NotNull(validateAction.ComponentId);
+        Assert.Equal("action/button", validateAction.ComponentKind);
+        // The tensor's own runtimeInteractions for this leaf survive the composition merge.
+        Assert.NotNull(validateAction.RuntimeInteractions);
+
+        // render completion proof: no leaf is left without a componentId (which would otherwise
+        // surface as an explicit CATALOG_COMPONENT_KIND_REQUIRED error component on the frontend).
+        var unresolvedLeaves = nodes!.Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null).ToList();
+        Assert.Empty(unresolvedLeaves);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_BareDefaultEntry_NoTargetRef_ResolvesManifest0092ViaCanonicalDefaultEntryRelation()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await BuildRealDispatcherAsync(cs);
+
+        // The EXACT axes frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes({})
+        // sends for a bare "/" with no ?route=, no ?manifest=, and therefore no pre-injected
+        // payload.target_ref. This is not the ?manifest=092 explicit-selection path (that is
+        // proven separately above) — this proves the UNSET entry itself reaches manifest 092
+        // via the canonical_default_entry hubs.hub_relations row (seed_empty.sql), the means
+        // described in ContentBundleRepository.ResolveCanonicalDefaultEntryManifestIdAsync.
+        var request = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: null, Context: null, TriggerKind: "client", Role: "admin");
+
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success, string.Join(";", response.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(response.Emission);
+        Assert.Equal(CredentialManagementManifestId.ToString(), response.Emission!.ManifestId);
+        Assert.NotNull(response.Emission.LayoutNodes);
+        Assert.NotEmpty(response.Emission.LayoutNodes!);
+
+        // render completion, not merely reachability: zero unresolved catalog leaves means the
+        // frontend renderEmission() proof (layoutSchemaStructuralRender.test.ts) also holds for
+        // exactly this bare-entry-resolved emission shape.
+        var unresolvedLeaves = response.Emission.LayoutNodes!
+            .Where(n => n.NodeKind == "catalog_component" && n.ComponentId is null)
+            .ToList();
+        Assert.Empty(unresolvedLeaves);
+
+        // Same representative scenario as the frontend proof: frontend/tests/fixtures/
+        // manifest_0092_bare_entry_layout_nodes.json is a checked-in snapshot of THIS EXACT
+        // dispatch's Emission.LayoutNodes (camelCase-serialized, the same shape the frontend
+        // receives over HTTP — see backend/Program.cs JsonNamingPolicy.CamelCase), consumed by
+        // frontend/tests/layoutSchemaStructuralRender.test.ts through the real renderEmission().
+        // This assertion is the link: if manifest 092's seed data ever changes, this test fails
+        // here rather than the frontend fixture silently going stale against real data.
+        var fixturePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json"));
+        var expectedJson = await File.ReadAllTextAsync(fixturePath);
+        // Options must mirror backend/Program.cs's actual wire serialization exactly (including
+        // DefaultIgnoreCondition) — the fixture is a snapshot of what the frontend really
+        // receives over HTTP, not an arbitrary debug dump. A field-shape drift (e.g. a new
+        // LayoutNode field, or a null-handling change) must fail HERE, not silently pass while
+        // the checked-in fixture and the real DTO diverge.
+        var actualJson = System.Text.Json.JsonSerializer.Serialize(
+            response.Emission.LayoutNodes,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                WriteIndented = true,
+            });
+        Assert.Equal(expectedJson.Trim(), actualJson.Trim());
+    }
+
+    [Fact]
+    public async Task HubRelations_Manifest092_HasCanonicalSequencePosition1Relation_SeedOnly()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT related_hub_id::text, status FROM hubs.hub_relations " +
+            "WHERE topology_manifest_id = @id AND sequence_position = 1";
+        cmd.Parameters.AddWithValue("id", CredentialManagementManifestId);
+        await using var reader = await cmd.ExecuteReaderAsync();
+
+        Assert.True(
+            await reader.ReadAsync(),
+            "manifest 092 must have a canonical (seed_empty.sql) hubs.hub_relations row at sequence_position=1");
+        // Self-referencing: related_hub_id is 092's own existing hub (external_port_substrate,
+        // '...a1') — no dedicated hub was introduced for this relation.
+        Assert.Equal("00000000-0000-0000-0000-0000000000a1", reader.GetString(0));
+        Assert.Equal("active", reader.GetString(1));
     }
 
     [Fact]

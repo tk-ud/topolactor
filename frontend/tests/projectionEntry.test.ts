@@ -14,13 +14,14 @@ import {
   assertEquals,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
+  adoptResolvedManifestIdentity,
   confirmProjectionEntryEmission,
   isDefaultProjectionEntry,
   parseProjectionEntrySelection,
   resolveHubNavigationLinks,
   resolveProjectionEntryAxes,
 } from "../runtime/projectionEntry.ts";
-import type { HubNavigationSequenceItem } from "../api/dispatch.ts";
+import type { Emission, HubNavigationSequenceItem } from "../api/dispatch.ts";
 
 const MANIFEST_ID = "aaaaaaaa-0000-0000-0000-000000000001";
 const PACKAGE_ID = "bbbbbbbb-0000-0000-0000-000000000002";
@@ -135,6 +136,35 @@ Deno.test("projectionEntry: no package selection never blocks (backend package r
   assertEquals(confirmation.ok, true);
 });
 
+// ── explicit manifest confirmation (initial dispatch, before any identity is adopted) ───────
+
+Deno.test("projectionEntry: explicit ?manifest= selection mismatch on the INITIAL dispatch is an explicit error, never rendered — backend target_ref resolution is never trusted unverified", () => {
+  const confirmation = confirmProjectionEntryEmission(
+    { manifestId: MANIFEST_ID },
+    { componentIds: [], manifestId: "dddddddd-0000-0000-0000-000000000004" },
+  );
+  assertEquals(confirmation.ok, false);
+  if (!confirmation.ok) {
+    assert(confirmation.error.includes("PROJECTION_ENTRY_MANIFEST_MISMATCH"));
+  }
+});
+
+Deno.test("projectionEntry: matching explicit ?manifest= selection confirms on the initial dispatch, with no adoptedManifestId option needed yet", () => {
+  const confirmation = confirmProjectionEntryEmission(
+    { manifestId: MANIFEST_ID },
+    { componentIds: [], manifestId: MANIFEST_ID },
+  );
+  assertEquals(confirmation.ok, true);
+});
+
+Deno.test("projectionEntry: no explicit manifest selection never blocks on manifestId alone (bare-entry / route selection stays backend authority)", () => {
+  const confirmation = confirmProjectionEntryEmission(
+    {},
+    { componentIds: [], manifestId: MANIFEST_ID },
+  );
+  assertEquals(confirmation.ok, true);
+});
+
 // ── ProjectionShell wiring (source-scan, same style as projectionAuthBoundary) ─
 
 Deno.test("projection entry surface: ProjectionShell resolves initial axes from the entry selection, not a hardcoded default block", async () => {
@@ -228,8 +258,12 @@ Deno.test("projection entry surface: ProjectionShell re-confirms package selecti
     "confirmProjectionEntryEmission must be called for both the initial dispatch and the SSE refresh emission",
   );
   assert(
-    src.includes("PROJECTION_ENTRY_PACKAGE_MISMATCH_ON_REFRESH"),
-    "a refresh-time package mismatch must be logged explicitly (explicit_error_log_retain_old_dom)",
+    src.includes("PROJECTION_ENTRY_MISMATCH_ON_REFRESH"),
+    "a refresh-time package OR adopted-manifest-identity mismatch must be logged explicitly (explicit_error_log_retain_old_dom)",
+  );
+  assert(
+    src.includes("adoptedManifestId"),
+    "the refresh confirmation must also check the adopted manifest identity (adoptResolvedManifestIdentity), not only packageId",
   );
 });
 
@@ -359,6 +393,70 @@ Deno.test("projection entry surface: unresolvable hub navigation links are not r
     src.includes("data-hub-navigation-resolvable"),
     "a resolvable link must be distinguishable from an unresolvable one",
   );
+});
+
+// ── adoptResolvedManifestIdentity (frontend current dispatch identity) ─────
+
+Deno.test("adoptResolvedManifestIdentity: bare entry with no explicit manifest pins refresh axes to Emission.ManifestId — replaying default axes verbatim is not identity sync", () => {
+  const initialAxes = resolveProjectionEntryAxes({});
+  assertEquals(initialAxes.payload, undefined);
+
+  const emission: Emission = { manifestId: MANIFEST_ID };
+  const adopted = adoptResolvedManifestIdentity(initialAxes, emission);
+
+  assertEquals(
+    adopted.payload?.target_ref,
+    `manifest:${MANIFEST_ID}:projection_entry`,
+    "a bare entry's refresh axes must be pinned to the manifest the initial dispatch actually resolved",
+  );
+  assertEquals(adopted.target, initialAxes.target, "target/layer/action axes are unchanged by adoption");
+});
+
+Deno.test("adoptResolvedManifestIdentity: explicit ?manifest= selection is left unchanged — adoption must not override an explicit user selection", () => {
+  const selection = parseProjectionEntrySelection(`?manifest=${MANIFEST_ID}`);
+  assert(selection.ok);
+  const initialAxes = resolveProjectionEntryAxes(selection.selection);
+
+  const otherManifestId = "cccccccc-0000-0000-0000-000000000003";
+  const emission: Emission = { manifestId: otherManifestId };
+  const adopted = adoptResolvedManifestIdentity(initialAxes, emission);
+
+  assertEquals(
+    adopted.payload?.target_ref,
+    `manifest:${MANIFEST_ID}:projection_entry`,
+    "an explicit ?manifest= selection must survive adoption unchanged, even if the resolved emission carries a different manifestId",
+  );
+});
+
+Deno.test("adoptResolvedManifestIdentity: absent Emission.ManifestId (e.g. dev bypass path) leaves axes unchanged — nothing to adopt", () => {
+  const initialAxes = resolveProjectionEntryAxes({});
+  const emission: Emission = {};
+  const adopted = adoptResolvedManifestIdentity(initialAxes, emission);
+  assertEquals(adopted, initialAxes);
+});
+
+Deno.test("confirmProjectionEntryEmission: refresh after bare entry must confirm the SAME manifestId as the initial dispatch, not only packageId", () => {
+  const initialEmission: Emission = { manifestId: MANIFEST_ID };
+  const okResult = confirmProjectionEntryEmission(
+    {},
+    initialEmission,
+    { adoptedManifestId: MANIFEST_ID },
+  );
+  assert(okResult.ok, "refresh resolving the SAME adopted manifest must be confirmed ok");
+
+  const driftedEmission: Emission = { manifestId: "dddddddd-0000-0000-0000-000000000004" };
+  const mismatchResult = confirmProjectionEntryEmission(
+    {},
+    driftedEmission,
+    { adoptedManifestId: MANIFEST_ID },
+  );
+  assert(
+    !mismatchResult.ok,
+    "refresh resolving a DIFFERENT manifest than the one adopted after initial dispatch must be an explicit error, never silently rendered",
+  );
+  if (!mismatchResult.ok) {
+    assert(mismatchResult.error.startsWith("PROJECTION_ENTRY_MANIFEST_MISMATCH"));
+  }
 });
 
 Deno.test("credential-management bundle: no dedicated credential route/panel was added (existing topology manifest reuse only)", async () => {
