@@ -239,7 +239,8 @@ public class StructureMapResolver
             : null,
         RecordType: row.RecordType,
         Label: row.Label,
-        KnownGapRefs: row.KnownGapRefs
+        KnownGapRefs: row.KnownGapRefs,
+        ReadOnly: row.ReadOnly
     );
 
     /// <summary>

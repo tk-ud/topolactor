@@ -298,47 +298,50 @@ Deno.test("DOM-connected proof: manifest 0092's REAL bare-entry-resolved LayoutN
     h(LayoutProjectionTree, { specs, layoutId: emission.layoutId }),
   );
 
-  // The five well-attributed Action leaves — dispatchInstanceOperation, click-triggered
+  // The six well-attributed Action leaves — dispatchInstanceOperation, click-triggered
   // (validate/preview/apply/approve) plus localStateMutation, click-triggered
-  // (json_template_download) — must reach the REAL DOM as their authored label, through the
-  // REAL runtime factory (buttonFactory), enabled (no disabled attribute) — proving
+  // (json_template_download, json_import) — must reach the REAL DOM as their authored label,
+  // through the REAL runtime factory (buttonFactory), enabled (no disabled attribute) — proving
   // renderEmission()'s "zero error" claim for these leaves actually holds all the way to markup,
-  // not just at the spec layer.
-  for (const label of ["Validate", "Preview", "Apply", "Approve", "Download JSON template"]) {
+  // not just at the spec layer. json_import's authored trigger is "click" (its actionRef targets
+  // a dedicated ui-local trigger key, template_import_trigger — mirroring its sibling
+  // json_template_download — never the template_file field's own change event), matching
+  // buttonFactory's requireBinding("click") exactly; no componentKind/trigger mismatch.
+  for (const label of ["Validate", "Preview", "Apply", "Approve", "Download JSON template", "Import JSON template"]) {
     assert(html.includes(`>${label}<`), `expected the real DOM markup to contain the button label "${label}"; html: ${html.slice(0, 2000)}`);
   }
   // action/button never renders a native <button disabled> for these leaves — production
   // rendering must not inject the UI-Builder canvas-preview placeholder's forced disabled:true
   // (see buildProductionCatalogComponentProps in renderEmission.ts).
   assert(
-    !/<button[^>]*\bdisabled\b[^>]*>(?:Validate|Preview|Apply|Approve|Download JSON template)</.test(html),
-    "expected validate/preview/apply/approve/json_template_download buttons to render enabled (no disabled attribute) in the real DOM",
+    !/<button[^>]*\bdisabled\b[^>]*>(?:Validate|Preview|Apply|Approve|Download JSON template|Import JSON template)</.test(html),
+    "expected validate/preview/apply/approve/json_template_download/json_import buttons to render enabled (no disabled attribute) in the real DOM",
   );
 
-  // renderEmission() itself now produces zero error specs for the real manifest 092 tree.
+  // renderEmission() itself produces zero error specs for the real manifest 092 tree.
   const errorSpecCount = specs.filter((s) => s.componentType === "error").length;
   assertEquals(errorSpecCount, 0, "expected zero errors at the renderEmission() spec layer");
 
-  // The real DOM still shows error boxes renderEmission()'s own error-spec count misses — this
-  // is the exact disconnect this proof exists to surface, not hide. LayoutProjectionTree's
-  // runtimeComponentFactory pass discovers 5 failures renderEmission() cannot see:
-  //   - json_import: authored trigger is "change" (a file-input-shaped interaction), but its
-  //     componentKind (action/button, per the uniform Action->button.primitive convention) maps
-  //     to buttonFactory, which unconditionally requires "click" — a componentKind/trigger
-  //     mismatch, not an attribution failure (its localStateMutation interaction IS now
-  //     correctly attributed; requireBinding("click") fails regardless).
-  //   - 4 plain, unwired select fields (approval_status x2, port_kind, callable): selectFactory
-  //     unconditionally requires a "change" binding no seed content ever authored for these
-  //     fields — a pre-existing, out-of-scope business-data/seed-authoring-completeness gap (not
-  //     specific to schema composition; the same factory contract applies to any select field
-  //     anywhere in the application).
-  // Both categories require an explicit design decision (component-kind/trigger redesign for
-  // json_import; read-only-vs-editable field contract for the selects) rather than a unilateral
-  // fix — see the PR report. Never silently absorbed or hidden from the real DOM.
+  // The real DOM ALSO shows zero error boxes — the four plain select fields (approval_status x2,
+  // port_kind, callable) are all field_read_only_authority read-only (never referenced by any
+  // sibling Action's payloadFrom within their owning Form — see readOnly on the fixture nodes),
+  // so selectFactory renders them disabled without requiring a change binding, closing the gap
+  // renderEmission()'s error-spec count alone could not see. Never a substitute proof: this test
+  // exists specifically to catch the case where renderEmission() says zero but the real DOM
+  // still shows an error box, and it now proves that case does not occur for this scenario.
   const errorBoxMatches = html.match(/rounded border border-red-200/g) ?? [];
   assertEquals(
     errorBoxMatches.length,
-    5,
-    "expected 5 total visible error boxes in the real DOM (json_import componentKind/trigger mismatch + 4 pre-existing unwired select fields) — every one explicit and visible, none silently dropped from the markup",
+    0,
+    "expected zero visible error boxes in the real DOM for the manifest 092 bare-entry representative scenario",
+  );
+
+  // The four read-only selects render as real, disabled <select> elements (not error boxes) —
+  // read-only is an authored render state, distinct from a missing-binding failure.
+  const selectMatches = html.match(/<select\b[^>]*disabled\b[^>]*>/g) ?? [];
+  assertEquals(
+    selectMatches.length,
+    4,
+    "expected the 4 read-only select fields (approval_status x2, port_kind, callable) to render as disabled <select> elements in the real DOM",
   );
 });

@@ -121,7 +121,16 @@ public record LayoutNode(
     /// </summary>
     string? Label = null,
     /// <summary>Authored known-gap references for an unresolved_gap node. Null for every other NodeKind.</summary>
-    IReadOnlyList<string>? KnownGapRefs = null
+    IReadOnlyList<string>? KnownGapRefs = null,
+    /// <summary>
+    /// field_read_only_authority: true when this catalog_component Field leaf is never referenced
+    /// by any sibling Action's payloadFrom "node:&lt;key&gt;.value" within its owning Form — a
+    /// translator-derived attribute, never separately authored in the seed. renderEmission uses
+    /// this to render form_input/select read-only (disabled, no change binding required) instead
+    /// of failing RUNTIME_PRIMITIVE_RENDERER_MISSING_EVENT_BINDING. Null for every other NodeKind
+    /// and for a topology_ui_field leaf composed from a layout authored before this field existed.
+    /// </summary>
+    bool? ReadOnly = null
 );
 
 /// <summary>

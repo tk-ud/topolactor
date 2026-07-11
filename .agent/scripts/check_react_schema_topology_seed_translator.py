@@ -957,6 +957,55 @@ def main():
             and len(node_b["runtimeInteractions"]) == 1 and node_b["runtimeInteractions"][0]["sourceActionKey"] == "act_b",
         )
 
+        # 36z6c: parent_scoped_identity_reconstruction, COMBINED case -- both the owning Form's
+        # key AND the Action's own key are duplicated across branches at the same time (the case
+        # neither 36z6a/36z6b alone covers, since there the Action keys act_a/act_b are distinct).
+        # resolve_and_track_identity must namespace the duplicated Action key by the Form's
+        # RESOLVED identity, never the raw parentKey string alone -- a raw-parentKey namespace
+        # would collide to the SAME "{sharedFormKey}::{sharedActionKey}" string in both branches.
+        duplicate_parent_and_child_flat_records = [
+            {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "cat_a", "record": {
+                "recordType": "topology_ui_form", "key": "shared_form", "label": "Form A",
+                "target": "t", "mode": "edit", "authorityMarker": "validation_only",
+                "fieldKeys": [], "actionKeys": ["shared_action"],
+            }},
+            {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "shared_form", "record": {
+                "recordType": "topology_ui_action", "key": "shared_action", "label": "Act A",
+                "actionRef": "instance:a", "authorityMarker": "validation_only",
+                "eventBinding": {"trigger": "click", "wiringLane": "external_instance_wiring", "targetRef": "instance:a"},
+                "runtimeInteractions": [{"trigger": "click", "actionType": "dispatchInstanceOperation", "sourceActionKey": "shared_action", "instanceTargetRef": "A"}],
+            }},
+            {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "cat_b", "record": {
+                "recordType": "topology_ui_form", "key": "shared_form", "label": "Form B",
+                "target": "t", "mode": "edit", "authorityMarker": "validation_only",
+                "fieldKeys": [], "actionKeys": ["shared_action"],
+            }},
+            {"type": "topology_ui_seed_record", "seedKey": "seed", "parentKey": "shared_form", "record": {
+                "recordType": "topology_ui_action", "key": "shared_action", "label": "Act B",
+                "actionRef": "instance:b", "authorityMarker": "validation_only",
+                "eventBinding": {"trigger": "click", "wiringLane": "external_instance_wiring", "targetRef": "instance:b"},
+                "runtimeInteractions": [{"trigger": "click", "actionType": "dispatchInstanceOperation", "sourceActionKey": "shared_action", "instanceTargetRef": "B"}],
+            }},
+        ]
+        duplicate_parent_and_child_adoption = translator_impl.split_flat_records_into_adoption_candidates(
+            duplicate_parent_and_child_flat_records, "seed",
+        )
+        duplicate_parent_and_child_tensor_nodes = dig(
+            duplicate_parent_and_child_adoption["tensorAdoptionCandidates"][0], "layoutPatchJson", "nodes",
+        ) or []
+        expect(
+            "36z6c. duplicate parent (Form) key AND duplicate child (Action) key simultaneously still produce TWO separate tensorAdoptionCandidates nodes, not one merged node",
+            len(duplicate_parent_and_child_tensor_nodes) == 2,
+        )
+        combined_node_a = next((n for n in duplicate_parent_and_child_tensor_nodes if n["nodeId"] == "cat_a::shared_form"), None)
+        combined_node_b = next((n for n in duplicate_parent_and_child_tensor_nodes if n["nodeId"] == "cat_b::shared_form"), None)
+        expect(
+            "36z6d. each duplicate Form's tensor node carries ONLY its own duplicate-keyed action's runtimeInteractions (no cross-contamination) even when the action key is also duplicated",
+            combined_node_a is not None and combined_node_b is not None
+            and len(combined_node_a["runtimeInteractions"]) == 1 and combined_node_a["runtimeInteractions"][0]["instanceTargetRef"] == "A"
+            and len(combined_node_b["runtimeInteractions"]) == 1 and combined_node_b["runtimeInteractions"][0]["instanceTargetRef"] == "B",
+        )
+
         # 36z7: grep guard against the retired "one row per Action record" wiring
         # cardinality wording re-appearing in docs after the Blocking 2 fix above
         # (PR580 review follow-up) -- the correct wording is one aggregate row

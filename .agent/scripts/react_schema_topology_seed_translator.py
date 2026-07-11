@@ -873,6 +873,12 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
         record["control"] = node.get("control", "")
         record["required"] = bool(node.get("required", False))
         record["validationRefs"] = [c["key"] for c in converted_children if c["recordType"] == "topology_ui_validation"]
+        # field_read_only_authority default: readOnly starts true for every Field and is
+        # flipped to false only by apply_field_read_only_authority below, for a Field
+        # referenced by a sibling Action's payloadFrom within the SAME owning Form. A Field
+        # authored directly under a Section (no owning Form at all) has no Actions to flip
+        # it, so it stays readOnly:true -- never separately authored, always derived.
+        record["readOnly"] = True
     elif react_kind == "Table":
         record["tableKey"] = record["key"]
         record["source"] = node.get("source", "")
@@ -923,6 +929,41 @@ def convert_node_to_seed_record(node, schema_to_seed_map, target_surface, loss_e
             })
 
     return record
+
+
+FIELD_READ_ONLY_PAYLOAD_FROM_RE = re.compile(r"^node:([^.]+)\.value$")
+
+
+def apply_field_read_only_authority(record):
+    """field_read_only_authority (docs/design/runtime-orchestration-ssot.yaml
+    layout_schema_structural_render_contract.field_read_only_authority): a Field's
+    readOnly-ness is never separately authored. It is derived, per owning Form, from
+    whether any of that Form's OWN Actions reference the field's key via
+    eventBinding.payloadFrom "node:<key>.value" -- a field some Action actually reads is
+    editable (readOnly:false); every other Field (including one authored directly under a
+    Section with no owning Form, which has no Actions to ever flip it) keeps the
+    readOnly:true default convert_node_to_seed_record assigned. Scoped to the SAME Form
+    only, so two different Forms that happen to reuse a field key never cross-flip each
+    other's copy."""
+    if not isinstance(record, dict):
+        return
+    if record.get("recordType") == "topology_ui_form":
+        referenced_keys = set()
+        for action in record.get("actions") or []:
+            payload_from = (action.get("eventBinding") or {}).get("payloadFrom") or {}
+            if not isinstance(payload_from, dict):
+                continue
+            for source in payload_from.values():
+                if not isinstance(source, str):
+                    continue
+                m = FIELD_READ_ONLY_PAYLOAD_FROM_RE.match(source)
+                if m:
+                    referenced_keys.add(m.group(1))
+        for field in record.get("fields") or []:
+            field["readOnly"] = field.get("key") not in referenced_keys
+    for list_field in SEED_RECORD_CHILD_LIST_FIELDS:
+        for child in record.get(list_field) or []:
+            apply_field_read_only_authority(child)
 
 
 # ---------------------------------------------------------------------------
@@ -1181,7 +1222,16 @@ def split_flat_records_into_adoption_candidates(flat_records, seed_key):
     def resolve_and_track_identity(wrapper):
         record = wrapper.get("record") or {}
         raw_key = record.get("key")
-        resolved_key = f"{wrapper.get('parentKey')}::{raw_key}" if raw_key in duplicate_keys else raw_key
+        raw_parent_key = wrapper.get("parentKey")
+        # Namespace by the parent's OWN resolved identity (already tracked, since document order
+        # is parent-before-child), never the raw parentKey string alone -- a duplicated child key
+        # under a duplicated parent key would otherwise namespace to the SAME
+        # "{rawParentKey}::{key}" string in every branch (e.g. two Sections both keyed
+        # "shared_section" each having their own Field keyed "shared_field" would both resolve to
+        # "shared_section::shared_field"), silently colliding instead of staying attached to the
+        # actual instance each was nested under.
+        resolved_parent_key = last_resolved_key_by_raw_key.get(raw_parent_key, raw_parent_key)
+        resolved_key = f"{resolved_parent_key}::{raw_key}" if raw_key in duplicate_keys else raw_key
         last_resolved_key_by_raw_key[raw_key] = resolved_key
         return resolved_key
 
@@ -1917,6 +1967,8 @@ def cmd_generate_topology_seed(args):
     for entry in loss_entries:
         if entry["severity"] == "blocking":
             output["validationErrors"].append(err("REACT_NODE_KIND_UNMAPPED", entry["sourceReactPath"], "blocking", entry["reason"]))
+    if root_record is not None:
+        apply_field_read_only_authority(root_record)
 
     # Post-conversion check: every emitted seed record, recursively, against
     # topology_ui_seed_contract.record_common_required_fields and its own

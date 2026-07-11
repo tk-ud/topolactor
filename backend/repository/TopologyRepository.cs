@@ -301,5 +301,13 @@ public record LayoutNodeRecord(
     /// </summary>
     string? Label = null,
     /// <summary>Authored knownGapRefs for an unresolved_gap node (topology_ui_unresolved), from layout_schema_json.records[].record.knownGapRefs. Null for every other NodeKind.</summary>
-    IReadOnlyList<string>? KnownGapRefs = null
+    IReadOnlyList<string>? KnownGapRefs = null,
+    /// <summary>
+    /// field_read_only_authority (docs/design/runtime-orchestration-ssot.yaml
+    /// layout_schema_structural_render_contract): true when this catalog_component Field leaf is
+    /// never referenced by any sibling Action's payloadFrom "node:&lt;key&gt;.value" within its
+    /// owning Form — a translator-derived attribute, never separately authored. Null for every
+    /// other NodeKind and for a pre-existing layout authored before this field existed.
+    /// </summary>
+    bool? ReadOnly = null
 );

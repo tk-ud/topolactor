@@ -2434,8 +2434,15 @@ function selectFactory(spec: RuntimeComponentSpec): RenderResult {
       !Array.isArray(props.data))
     ? props.data as Record<string, unknown>
     : props;
-  const bindingCheck = requireBinding(spec, "change");
-  if (!bindingCheck.ok) return bindingCheck;
+  // field_read_only_authority: a read-only Field (never referenced by any sibling Action's
+  // payloadFrom within its owning Form) never requires a change binding — it renders disabled,
+  // matching formFieldFactory's existing no-binding-required posture for the same authority.
+  // Every other select still fails close per requireBinding, unchanged.
+  const readOnly = data.readOnly === true;
+  if (!readOnly) {
+    const bindingCheck = requireBinding(spec, "change");
+    if (!bindingCheck.ok) return bindingCheck;
+  }
   const rawOptions = Array.isArray(data.options) ? data.options : [];
   const options = rawOptions
     .filter((o): o is { label: string; value: string } =>
@@ -2454,22 +2461,22 @@ function selectFactory(spec: RuntimeComponentSpec): RenderResult {
       options,
       placeholder: data.placeholder as string | undefined,
       label: data.label as string | undefined,
-      disabled: data.disabled as boolean | undefined,
+      disabled: readOnly ? true : (data.disabled as boolean | undefined),
       required: data.required as boolean | undefined,
       error: data.error as string | undefined,
       className: spec.className,
       design: spec.design ?? {},
-      onChange: (value: string) => {
+      onChange: readOnly ? (() => {}) : (value: string) => {
         const r = emitBoundEvent(spec, "change", { value });
         if (!r.ok) throw new Error(r.error);
       },
-      onFocus: spec.eventBinding.focus
+      onFocus: (!readOnly && spec.eventBinding.focus)
         ? () => {
           const r = emitBoundEvent(spec, "focus", {});
           if (!r.ok) throw new Error(r.error);
         }
         : undefined,
-      onBlur: spec.eventBinding.blur
+      onBlur: (!readOnly && spec.eventBinding.blur)
         ? () => {
           const r = emitBoundEvent(spec, "blur", {});
           if (!r.ok) throw new Error(r.error);

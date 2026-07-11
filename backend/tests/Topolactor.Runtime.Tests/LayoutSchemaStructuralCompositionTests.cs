@@ -31,11 +31,11 @@ public class LayoutSchemaStructuralCompositionTests
     private const string CategoryRecordsJson = """
     {
       "records": [
-        {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"cat1","label":"Category One"}},
-        {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_section","key":"sec1","label":"Section One"}},
-        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_field","key":"field1","label":"Field One","control":"form_input/select"}},
-        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_action","key":"action1","label":"Action One"}},
-        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_validation","key":"val1","label":"Validation One"}}
+        {"type":"topology_ui_seed_record","parentKey":"implicit_virtual_root","record":{"recordType":"topology_ui_category","key":"cat1","label":"Category One","sourceReactPath":"$.test.cat1","sourceYamlRefs":[],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_section","key":"sec1","label":"Section One","sourceReactPath":"$.test.sec1","sourceYamlRefs":[],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_field","key":"field1","label":"Field One","control":"form_input/select","sourceReactPath":"$.test.field1","sourceYamlRefs":[],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_action","key":"action1","label":"Action One","sourceReactPath":"$.test.action1","sourceYamlRefs":[],"knownGapRefs":[]}},
+        {"type":"topology_ui_seed_record","parentKey":"sec1","record":{"recordType":"topology_ui_validation","key":"val1","label":"Validation One","sourceReactPath":"$.test.val1","sourceYamlRefs":[],"knownGapRefs":[]}}
       ]
     }
     """;
@@ -90,22 +90,70 @@ public class LayoutSchemaStructuralCompositionTests
     [Fact]
     public void ParseRecords_EntryMissingRecordType_ReturnsInvalid_NeverSkipped()
     {
-        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"key":"f1"}}]}""";
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"key":"f1","label":"f1","sourceReactPath":"$.test.f1","sourceYamlRefs":[],"knownGapRefs":[]}}]}""";
         Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
     }
 
     [Fact]
     public void ParseRecords_EntryMissingKey_ReturnsInvalid_NeverSkipped()
     {
-        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field"}}]}""";
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","label":"unknown_key","sourceReactPath":"$.test.unknown_key","sourceYamlRefs":[],"knownGapRefs":[]}}]}""";
         Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
     }
 
     [Fact]
     public void ParseRecords_UnrecognizedRecordType_ReturnsInvalid_NeverSkipped()
     {
-        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unknown_thing","key":"x"}}]}""";
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unknown_thing","key":"x","label":"x","sourceReactPath":"$.test.x","sourceYamlRefs":[],"knownGapRefs":[]}}]}""";
         Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    // record_common_required_fields (docs/design/react-schema-topology-seed-translator-ssot.yaml
+    // topology_ui_seed_contract.record_common_required_fields): the runtime parser validates the
+    // SAME common fields the translator itself requires at generation time, so a persisted
+    // layout_schema_json that drifted from that shape (hand-edited, corrupted, or authored by a
+    // future producer that skips the translator) still fails close here instead of silently
+    // composing with a null/fallback label, node id, or path. label and sourceReactPath must be
+    // non-empty strings; sourceYamlRefs and knownGapRefs must be present as arrays (may be empty).
+    [Theory]
+    [InlineData("""{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","sourceReactPath":"$.test.f1","sourceYamlRefs":[],"knownGapRefs":[]}}]}""")]
+    [InlineData("""{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","label":"","sourceReactPath":"$.test.f1","sourceYamlRefs":[],"knownGapRefs":[]}}]}""")]
+    public void ParseRecords_MissingOrEmptyLabel_ReturnsInvalid_NeverFallsBackToKeyOrNodeId(string json)
+    {
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Theory]
+    [InlineData("""{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","label":"F1","sourceYamlRefs":[],"knownGapRefs":[]}}]}""")]
+    [InlineData("""{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","label":"F1","sourceReactPath":"","sourceYamlRefs":[],"knownGapRefs":[]}}]}""")]
+    public void ParseRecords_MissingOrEmptySourceReactPath_ReturnsInvalid(string json)
+    {
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Theory]
+    [InlineData("""{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","label":"F1","sourceReactPath":"$.test.f1","knownGapRefs":[]}}]}""")]
+    [InlineData("""{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","label":"F1","sourceReactPath":"$.test.f1","sourceYamlRefs":"not-an-array","knownGapRefs":[]}}]}""")]
+    public void ParseRecords_MissingOrWrongShapedSourceYamlRefs_ReturnsInvalid(string json)
+    {
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ParseRecords_MissingKnownGapRefs_ReturnsInvalid_EvenForNonUnresolvedRecordType()
+    {
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","label":"F1","sourceReactPath":"$.test.f1","sourceYamlRefs":[]}}]}""";
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
+    }
+
+    [Fact]
+    public void ParseRecords_AllCommonRequiredFieldsPresent_EmptyListsAllowed_ReturnsValid()
+    {
+        // An empty sourceYamlRefs/knownGapRefs list is not itself invalid — only a missing or
+        // wrong-shaped one is (record_common_required_fields.empty_list_is_not_missing).
+        const string json = """{"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","label":"F1","sourceReactPath":"$.test.f1","sourceYamlRefs":[],"knownGapRefs":[]}}]}""";
+        var result = LayoutSchemaTensorComposer.ParseRecords(json);
+        Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Valid>(result);
     }
 
     [Fact]
@@ -116,9 +164,9 @@ public class LayoutSchemaStructuralCompositionTests
         const string json = """
         {
           "records": [
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat1"}},
-            {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_unknown_thing","key":"bad"}},
-            {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_section","key":"sec1"}}
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat1","label":"cat1","sourceReactPath":"$.test.cat1","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_unknown_thing","key":"bad","label":"bad","sourceReactPath":"$.test.bad","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"cat1","record":{"recordType":"topology_ui_section","key":"sec1","label":"sec1","sourceReactPath":"$.test.sec1","sourceYamlRefs":[],"knownGapRefs":[]}}
           ]
         }
         """;
@@ -204,7 +252,7 @@ public class LayoutSchemaStructuralCompositionTests
     public void ComposeLayoutSchemaWithTensor_FieldWithUnresolvableControl_LeavesComponentIdNull_NoSilentFallback()
     {
         const string json = """
-        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","control":"form_input/unknown_widget"}}]}
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"f1","control":"form_input/unknown_widget","label":"f1","sourceReactPath":"$.test.f1","sourceYamlRefs":[],"knownGapRefs":[]}}]}
         """;
         var records = ParseValidRows(json);
         var composed = LayoutSchemaTensorComposer.Compose(
@@ -306,10 +354,10 @@ public class LayoutSchemaStructuralCompositionTests
         const string json = """
         {
           "records": [
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_form","key":"form_a","label":"Form A"}},
-            {"type":"topology_ui_seed_record","parentKey":"form_a","record":{"recordType":"topology_ui_action","key":"submit","label":"Submit A"}},
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_form","key":"form_b","label":"Form B"}},
-            {"type":"topology_ui_seed_record","parentKey":"form_b","record":{"recordType":"topology_ui_action","key":"submit","label":"Submit B"}}
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_form","key":"form_a","label":"Form A","sourceReactPath":"$.test.form_a","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"form_a","record":{"recordType":"topology_ui_action","key":"submit","label":"Submit A","sourceReactPath":"$.test.submit","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_form","key":"form_b","label":"Form B","sourceReactPath":"$.test.form_b","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"form_b","record":{"recordType":"topology_ui_action","key":"submit","label":"Submit B","sourceReactPath":"$.test.submit","sourceYamlRefs":[],"knownGapRefs":[]}}
           ]
         }
         """;
@@ -345,12 +393,12 @@ public class LayoutSchemaStructuralCompositionTests
         const string json = """
         {
           "records": [
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat_a","label":"Category A"}},
-            {"type":"topology_ui_seed_record","parentKey":"cat_a","record":{"recordType":"topology_ui_section","key":"shared_section","label":"Shared Section A"}},
-            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_field","key":"field_a","label":"Field A","control":"form_input/form_field"}},
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat_b","label":"Category B"}},
-            {"type":"topology_ui_seed_record","parentKey":"cat_b","record":{"recordType":"topology_ui_section","key":"shared_section","label":"Shared Section B"}},
-            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_field","key":"field_b","label":"Field B","control":"form_input/form_field"}}
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat_a","label":"Category A","sourceReactPath":"$.test.cat_a","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"cat_a","record":{"recordType":"topology_ui_section","key":"shared_section","label":"Shared Section A","sourceReactPath":"$.test.shared_section","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_field","key":"field_a","label":"Field A","control":"form_input/form_field","sourceReactPath":"$.test.field_a","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat_b","label":"Category B","sourceReactPath":"$.test.cat_b","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"cat_b","record":{"recordType":"topology_ui_section","key":"shared_section","label":"Shared Section B","sourceReactPath":"$.test.shared_section","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_field","key":"field_b","label":"Field B","control":"form_input/form_field","sourceReactPath":"$.test.field_b","sourceYamlRefs":[],"knownGapRefs":[]}}
           ]
         }
         """;
@@ -377,13 +425,16 @@ public class LayoutSchemaStructuralCompositionTests
         // Same authored key ("approval_status") in two different branches — a real seed shape
         // (manifest 092), not a synthetic edge case. Each occurrence must resolve to a distinct,
         // deterministic NodeId, never silently collide or silently drop one.
+        // Parent-before-child document order, matching the real translator's
+        // flatten_topology_ui_seed_tree contract (parent-scoped identity reconstruction depends
+        // on this order — see ParentNodeId resolution above).
         const string json = """
         {
           "records": [
-            {"type":"topology_ui_seed_record","parentKey":"section_a","record":{"recordType":"topology_ui_field","key":"approval_status","label":"A"}},
-            {"type":"topology_ui_seed_record","parentKey":"section_b","record":{"recordType":"topology_ui_field","key":"approval_status","label":"B"}},
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_section","key":"section_a","label":"Section A"}},
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_section","key":"section_b","label":"Section B"}}
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_section","key":"section_a","label":"Section A","sourceReactPath":"$.test.section_a","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"section_a","record":{"recordType":"topology_ui_field","key":"approval_status","label":"A","sourceReactPath":"$.test.approval_status","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_section","key":"section_b","label":"Section B","sourceReactPath":"$.test.section_b","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"section_b","record":{"recordType":"topology_ui_field","key":"approval_status","label":"B","sourceReactPath":"$.test.approval_status","sourceYamlRefs":[],"knownGapRefs":[]}}
           ]
         }
         """;
@@ -401,13 +452,78 @@ public class LayoutSchemaStructuralCompositionTests
     }
 
     [Fact]
+    public void ComposeLayoutSchemaWithTensor_DuplicateParentKeyAndDuplicateChildKeySimultaneously_ResolvedIdentityStaysConsistent_NoNodeIdCollision_NoCrossContamination()
+    {
+        // Both the CONTAINER key ("shared_section") and the LEAF key ("shared_field"/
+        // "shared_action") are duplicated across two branches at the same time — the combined
+        // case neither ComposeLayoutSchemaWithTensor_DuplicateContainerKey_... (duplicate parent,
+        // distinct children) nor ComposeLayoutSchemaWithTensor_DuplicateKeyAcrossBranches_...
+        // (distinct parents, duplicate child) covers alone. The resolved parent identity used for
+        // a child's NodeId must be the SAME resolved identity used for that child's tensor
+        // interaction merge key, and neither may cross into the other branch.
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat_a","label":"Category A","sourceReactPath":"$.test.cat_a","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"cat_a","record":{"recordType":"topology_ui_section","key":"shared_section","label":"Shared Section A","sourceReactPath":"$.test.shared_section","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_field","key":"shared_field","label":"Field A","control":"form_input/form_field","sourceReactPath":"$.test.shared_field","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_action","key":"shared_action","label":"Action A","sourceReactPath":"$.test.shared_action","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_category","key":"cat_b","label":"Category B","sourceReactPath":"$.test.cat_b","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"cat_b","record":{"recordType":"topology_ui_section","key":"shared_section","label":"Shared Section B","sourceReactPath":"$.test.shared_section","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_field","key":"shared_field","label":"Field B","control":"form_input/form_field","sourceReactPath":"$.test.shared_field","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":"shared_section","record":{"recordType":"topology_ui_action","key":"shared_action","label":"Action B","sourceReactPath":"$.test.shared_action","sourceYamlRefs":[],"knownGapRefs":[]}}
+          ]
+        }
+        """;
+        var records = ParseValidRows(json);
+        const string interactionsA = """[{"trigger":"click","actionType":"dispatchInstanceOperation","sourceActionKey":"shared_action"}]""";
+        const string interactionsB = """[{"trigger":"click","actionType":"dispatchInstanceOperation","sourceActionKey":"shared_action"}]""";
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>
+            {
+                ["cat_a::shared_section::shared_action"] = interactionsA,
+                ["cat_b::shared_section::shared_action"] = interactionsB,
+            },
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+
+        // No duplicate NodeId anywhere in the composed tree.
+        var nodeIds = composed.Select(n => n.NodeId).ToList();
+        Assert.Equal(nodeIds.Count, nodeIds.Distinct().Count());
+
+        var sectionA = Assert.Single(composed, n => n.NodeId == "cat_a::shared_section");
+        var sectionB = Assert.Single(composed, n => n.NodeId == "cat_b::shared_section");
+        var fieldA = Assert.Single(composed, n => n.NodeId == "cat_a::shared_section::shared_field");
+        var fieldB = Assert.Single(composed, n => n.NodeId == "cat_b::shared_section::shared_field");
+        var actionA = Assert.Single(composed, n => n.NodeId == "cat_a::shared_section::shared_action");
+        var actionB = Assert.Single(composed, n => n.NodeId == "cat_b::shared_section::shared_action");
+
+        // Each child attaches to the SAME resolved parent identity it was actually nested under.
+        Assert.Equal(sectionA.NodeId, fieldA.ParentNodeId);
+        Assert.Equal(sectionA.NodeId, actionA.ParentNodeId);
+        Assert.Equal(sectionB.NodeId, fieldB.ParentNodeId);
+        Assert.Equal(sectionB.NodeId, actionB.ParentNodeId);
+        Assert.NotEqual(fieldA.ParentNodeId, fieldB.ParentNodeId);
+        Assert.NotEqual(actionA.ParentNodeId, actionB.ParentNodeId);
+
+        // Each duplicate Action's runtimeInteractions come from its OWN branch's merge key —
+        // never cross-contaminated with the other branch's entry for the same leaf key.
+        Assert.NotNull(actionA.RuntimeInteractionsJson);
+        Assert.NotNull(actionB.RuntimeInteractionsJson);
+        Assert.Contains("\"sourceActionKey\":\"shared_action\"", actionA.RuntimeInteractionsJson);
+        Assert.Contains("\"sourceActionKey\":\"shared_action\"", actionB.RuntimeInteractionsJson);
+    }
+
+    [Fact]
     public void ParseRecords_TopologyUiTable_TopologyUiWorkflowStep_AreRecognized_NeverRejectedAsUnknown()
     {
         const string json = """
         {
           "records": [
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","label":"Table One","display":"card_list"}},
-            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_workflow_step","key":"step1","label":"Step One"}}
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","label":"Table One","display":"card_list","sourceReactPath":"$.test.tbl1","sourceYamlRefs":[],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_workflow_step","key":"step1","label":"Step One","sourceReactPath":"$.test.step1","sourceYamlRefs":[],"knownGapRefs":[]}}
           ]
         }
         """;
@@ -420,7 +536,7 @@ public class LayoutSchemaStructuralCompositionTests
     public void ComposeLayoutSchemaWithTensor_TableRecord_ResolvesComponentIdViaDisplayConvention()
     {
         const string json = """
-        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","display":"card_list"}}]}
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","display":"card_list","label":"tbl1","sourceReactPath":"$.test.tbl1","sourceYamlRefs":[],"knownGapRefs":[]}}]}
         """;
         var records = ParseValidRows(json);
         var requiredKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(records);
@@ -442,7 +558,7 @@ public class LayoutSchemaStructuralCompositionTests
     public void ComposeLayoutSchemaWithTensor_TableRecordWithUnresolvableDisplay_LeavesComponentIdNull_NoSilentFallback()
     {
         const string json = """
-        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","display":"unknown_display_kind"}}]}
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"tbl1","display":"unknown_display_kind","label":"tbl1","sourceReactPath":"$.test.tbl1","sourceYamlRefs":[],"knownGapRefs":[]}}]}
         """;
         var records = ParseValidRows(json);
         var composed = LayoutSchemaTensorComposer.Compose(
@@ -458,7 +574,7 @@ public class LayoutSchemaStructuralCompositionTests
     public void ComposeLayoutSchemaWithTensor_WorkflowStepRecord_ResolvesToSameComponentAsAction()
     {
         const string json = """
-        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_workflow_step","key":"step1"}}]}
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_workflow_step","key":"step1","label":"step1","sourceReactPath":"$.test.step1","sourceYamlRefs":[],"knownGapRefs":[]}}]}
         """;
         var records = ParseValidRows(json);
         var requiredKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(records);
@@ -480,7 +596,7 @@ public class LayoutSchemaStructuralCompositionTests
     public void ParseRecords_UnresolvedRecordMissingKnownGapRefs_ReturnsInvalid_NeverSkipped()
     {
         const string json = """
-        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","label":"Unresolved"}}]}
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","label":"Unresolved","sourceReactPath":"$.test.u1","sourceYamlRefs":[],"knownGapRefs":[]}}]}
         """;
         Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
     }
@@ -489,7 +605,7 @@ public class LayoutSchemaStructuralCompositionTests
     public void ParseRecords_UnresolvedRecordWithEmptyKnownGapRefsArray_ReturnsInvalid_NeverSkipped()
     {
         const string json = """
-        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","knownGapRefs":[]}}]}
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","knownGapRefs":[],"label":"u1","sourceReactPath":"$.test.u1","sourceYamlRefs":[]}}]}
         """;
         Assert.IsType<LayoutSchemaTensorComposer.RecordsParseResult.Invalid>(LayoutSchemaTensorComposer.ParseRecords(json));
     }
@@ -498,7 +614,7 @@ public class LayoutSchemaStructuralCompositionTests
     public void ComposeLayoutSchemaWithTensor_UnresolvedRecord_ComposesToUnresolvedGapNodeKind_CarryingKnownGapRefs_NeverAComponent()
     {
         const string json = """
-        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","label":"Unresolved Fragment","knownGapRefs":["table_item_click_wiring_not_yet_expressible"]}}]}
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"u1","label":"Unresolved Fragment","knownGapRefs":["table_item_click_wiring_not_yet_expressible"],"sourceReactPath":"$.test.u1","sourceYamlRefs":[]}}]}
         """;
         var records = ParseValidRows(json);
 

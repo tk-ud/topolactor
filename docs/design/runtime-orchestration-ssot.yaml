@@ -517,6 +517,53 @@ runtime_orchestration_ssot:
           invented business-data value the seed record does not carry). A catalog_component leaf
           whose runtimeInteractions consist entirely of correctly-shaped localStateMutation
           entries is therefore attributable and must not hit RUNTIME_INTERACTION_UNATTRIBUTABLE.
+        runtime_record_common_required_fields_validation: >-
+          react-schema-topology-seed-translator-ssot.yaml topology_ui_seed_contract.
+          record_common_required_fields (recordType, key, label, sourceYamlRefs, sourceReactPath,
+          knownGapRefs) is validated at GENERATION time by the translator
+          (validate_seed_record_tree); the runtime parser (LayoutSchemaTensorComposer.ParseRecords)
+          validates the SAME common fields a second time, at READ time, over whatever
+          layout_schema_json is actually persisted -- a persisted row can drift from the
+          translator-validated shape (hand-edited, corrupted, or authored by a future producer
+          that bypasses the translator), and this runtime check is the only thing that would catch
+          it. label and sourceReactPath must be non-empty strings; sourceYamlRefs and
+          knownGapRefs must be present as arrays (an empty list is not itself invalid -- only a
+          missing or wrong-shaped one is). Any violation is LAYOUT_SCHEMA_RECORDS_INVALID for the
+          WHOLE records[] array, the same fail-close posture as a missing recordType/key or an
+          unrecognized recordType -- never a per-record fallback (e.g. falling back to the raw
+          NodeId or an empty string as a substitute label).
+        field_read_only_authority: >-
+          A topology_ui_field's read-only-vs-editable state is never separately authored -- it is
+          derived, per owning Form, from whether any of that Form's OWN Actions reference the
+          field's key via eventBinding.payloadFrom "node:<key>.value" (translator:
+          apply_field_read_only_authority, computed after the full seed record tree is built, over
+          each topology_ui_form's own actions/fields lists). A field some Action actually reads is
+          editable (readOnly:false); every other field -- including one authored directly under a
+          Section with no owning Form at all, which by construction has no Actions to ever flip it
+          -- stays readOnly:true. This is a structural/derived signal, never a business-data
+          authoring decision and never an invented value: a form_input/select LayoutNode's readOnly
+          flows from LayoutSchemaTensorComposer through StructureMapResolver.ToLayoutNode into the
+          wire LayoutNode DTO. Frontend renderEmission's buildProductionCatalogComponentProps sets
+          props.data.readOnly/disabled from it for form_input/select; runtimeComponentFactory's
+          selectFactory renders disabled and skips requireBinding("change") when readOnly is true
+          (the SAME no-binding-required posture formFieldFactory already has for form_input/
+          form_field, which never required a binding at all) -- an authored, SSOT-derived render
+          state, distinct from the prohibited UI-Builder canvas-preview placeholder's unconditional
+          disabled:true. A genuinely editable select (readOnly:false, i.e. referenced by an
+          Action's payloadFrom) with no authored change wiring still fails close via
+          requireBinding -- this contract only closes the read-only case, never weakens the
+          editable case's existing fail-close guarantee.
+        action_component_kind_trigger_alignment: >-
+          Action/WorkflowStep records resolve uniformly to the button.primitive catalog component
+          (field_control_resolution above), and buttonFactory unconditionally requires
+          a "click" trigger -- so an authored Action whose real UI behavior is not a click (e.g. a
+          file-input-shaped "change" trigger) is a genuine componentKind/trigger authoring mismatch
+          in the SOURCE schema, not a runtime factory defect. The fix belongs in the source schema
+          (correcting the authored trigger/actionRef to a real click-triggered button, mirroring a
+          sibling Action's convention in the same Form), regenerated through the real
+          generate-react-schema -> generate-topology-seed pipeline -- never a broad,
+          app-wide relaxation of buttonFactory's trigger requirement, and never a new bespoke
+          component/factory/registry-row invented to route around a single Action's authoring gap.
         authored_label_and_production_props: >-
           Every schema record carries an authored label (record_common_required_fields); a
           catalog_component leaf's LayoutNode.Label carries it through composition exactly like a
@@ -543,7 +590,18 @@ runtime_orchestration_ssot:
           far, rather than a static whole-tree key lookup -- a child's parentKey is matched
           against this running map, so it attaches to the instance immediately preceding it in
           document order (the one it was genuinely nested under), not a static, order-independent
-          lookup that cannot distinguish between duplicate instances at all.
+          lookup that cannot distinguish between duplicate instances at all. This resolved parent
+          identity (never the raw authored parentKey string) is also what a duplicated CHILD key's
+          OWN NodeId is namespaced by, and what the tensor runtimeInteractions merge key is scoped
+          by -- otherwise, when the PARENT key is ALSO duplicated across the same branches (e.g.
+          two Forms both keyed "shared_form", each with its own Action keyed "shared_action"), a
+          namespace built from the raw parentKey string alone collides to the identical
+          "{rawParentKey}::{key}" string in every branch, silently merging two genuinely distinct
+          instances. The translator's own parallel duplicate-key namespacing
+          (split_flat_records_into_adoption_candidates.resolve_and_track_identity) uses the SAME
+          resolved-parent-identity rule, so a duplicate parent key and a duplicate child key
+          present at the same time still resolve consistently across the translator, the runtime
+          composer, and the tensor interaction merge.
         implicit_root_parent_handling: >-
           A record's authored parentKey referencing the translator's implicit/virtual tree root
           (never itself a record in records[]) resolves to a null (top-level) ParentNodeId, not a
@@ -583,27 +641,33 @@ runtime_orchestration_ssot:
         - judging_render_completion_by_renderEmission_error_count_alone_without_connecting_layoutProjectionTree_runtimeComponentFactory_and_the_final_dom
         - merging_runtimeInteractions_by_bare_sourceActionKey_across_two_different_forms_that_share_a_leaf_key
         - resolving_a_childs_ParentNodeId_by_a_static_whole_tree_key_lookup_that_cannot_distinguish_between_duplicate_container_instances
+        - namespacing_a_duplicated_child_keys_NodeId_or_its_tensor_interaction_merge_key_by_the_raw_authored_parentKey_instead_of_the_resolved_parent_identity
+        - a_runtime_parser_accepting_a_record_missing_label_or_sourceReactPath_or_sourceYamlRefs_or_knownGapRefs_by_falling_back_to_the_raw_key_or_NodeId_or_an_empty_string
+        - authoring_a_readOnly_flag_directly_on_a_seed_record_instead_of_deriving_it_from_the_owning_Forms_own_Actions_payloadFrom_references
+        - relaxing_selectFactorys_requireBinding_for_a_genuinely_editable_readOnly_false_select_that_has_no_authored_change_wiring
+        - normalizing_an_Actions_componentKind_trigger_mismatch_by_broadly_changing_buttonFactorys_trigger_requirement_app_wide_instead_of_correcting_the_source_schema
       test_proof_contract:
         note: >-
           A completion proof for this contract must observe the composed LayoutNode[] for a real
           representative manifest (manifest 092, resolved through the SAME dispatch path as the
           canonical_default_entry_contract test above) passed through frontend renderEmission()
-          with defaultComponentRegistry, and assert zero UNEXPECTED componentType==="error"
-          specs in that single representative scenario -- a backend-only unresolved-leaf count
-          and a separately hand-authored frontend fixture are each necessary but neither is
-          sufficient alone. The proof must also connect renderEmission() output through
-          LayoutProjectionTree -> runtimeComponentFactory (renderRuntimeComponent) for the
-          well-attributed leaves, not stop at renderEmission()'s own error count -- a leaf whose
-          componentEventBinding resolves but whose factory still requires a binding no seed
-          content ever authored (e.g. a plain, unwired select field) is a documented,
-          out-of-scope business-data/seed-authoring-completeness gap, not a regression of this
-          contract, and is excluded from the representative proof's assertion scope rather than
-          silently absorbed into it.
+          with defaultComponentRegistry, and assert zero componentType==="error" specs in that
+          single representative scenario -- a backend-only unresolved-leaf count and a separately
+          hand-authored frontend fixture are each necessary but neither is sufficient alone. The
+          proof must also connect renderEmission() output through LayoutProjectionTree ->
+          runtimeComponentFactory (renderRuntimeComponent) for every leaf, all the way to the real
+          DOM, and assert zero visible error boxes there too -- not stop at renderEmission()'s own
+          error count. A previously-known gap (a plain select field whose factory requires a
+          binding no seed content authored) is resolved by field_read_only_authority, not carved
+          out of the proof's assertion scope -- a "known gap" label is never a substitute for the
+          representative scenario's literal zero-error count at either layer.
         positive_cases:
           - topology_ui_table_record_resolves_to_a_catalog_component_via_table_display_resolution
           - topology_ui_workflow_step_record_resolves_to_a_catalog_component_via_the_same_convention_as_topology_ui_action
           - a_catalog_component_leafs_authored_label_reaches_the_runtime_component_props_in_production_rendering
           - a_schema_composed_action_button_with_a_recognized_dispatchInstanceOperation_interaction_renders_enabled_disabled_false_through_the_real_runtime_factory
+          - a_read_only_select_field_renders_disabled_in_the_real_DOM_without_requiring_a_change_binding
+          - a_duplicate_parent_key_and_a_duplicate_child_key_present_simultaneously_still_resolve_to_distinct_NodeIds_with_correctly_attributed_non_cross_contaminated_runtimeInteractions
         negative_cases:
           - topology_ui_unresolved_record_composes_to_an_explicit_render_time_error_carrying_knownGapRefs_never_a_normal_component
           - a_recordType_outside_structural_node_record_types_plus_catalog_component_record_types_plus_unresolved_gap_record_types_is_LAYOUT_SCHEMA_RECORDS_INVALID_not_silently_skipped
@@ -611,6 +675,7 @@ runtime_orchestration_ssot:
           - two_different_forms_authoring_the_same_leaf_key_with_different_runtimeInteractions_never_cross_contaminate_each_others_merge
           - a_duplicate_container_keys_children_attach_to_the_same_instance_they_were_nested_under_not_whichever_duplicate_matches_by_key
           - a_catalog_component_leaf_whose_authored_runtimeInteractions_resolve_to_zero_event_bindings_is_RUNTIME_INTERACTION_UNATTRIBUTABLE_not_a_silent_pass_through_to_the_factory
+          - a_record_missing_label_or_sourceReactPath_or_sourceYamlRefs_or_knownGapRefs_is_LAYOUT_SCHEMA_RECORDS_INVALID_not_silently_accepted_with_a_fallback_value
 
   runtime_vocabulary_contract:
     authority_boundary:

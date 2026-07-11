@@ -86,7 +86,8 @@ public static class LayoutSchemaTensorComposer
         string? Label,
         string? Control,
         string? Display = null,
-        IReadOnlyList<string>? KnownGapRefs = null);
+        IReadOnlyList<string>? KnownGapRefs = null,
+        bool? ReadOnly = null);
 
     // Full recognized recordType vocabulary (structural + catalog + unresolved-gap) — matches
     // docs/design/react-schema-topology-seed-translator-ssot.yaml
@@ -183,22 +184,44 @@ public static class LayoutSchemaTensorComposer
                 var display = record.TryGetProperty("display", out var dsp) && dsp.ValueKind == JsonValueKind.String
                     ? dsp.GetString() : null;
 
-                IReadOnlyList<string>? knownGapRefs = null;
-                if (record.TryGetProperty("knownGapRefs", out var kgr) && kgr.ValueKind == JsonValueKind.Array)
+                // record_common_required_fields (docs/design/react-schema-topology-seed-translator-ssot.yaml
+                // topology_ui_seed_contract.record_common_required_fields, mirrored at runtime so a
+                // persisted layout_schema_json that drifted from the translator-validated shape
+                // still fails close here rather than silently composing with fallback content):
+                // label and sourceReactPath are required non-empty strings; sourceYamlRefs is a
+                // required array (may be empty — an empty list is not itself invalid, only a
+                // missing/wrong-shaped one is).
+                if (string.IsNullOrWhiteSpace(label))
+                    return new RecordsParseResult.Invalid($"records[{index}].record is missing a non-empty label.");
+                if (!record.TryGetProperty("sourceReactPath", out var srp) || srp.ValueKind != JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(srp.GetString()))
+                    return new RecordsParseResult.Invalid($"records[{index}].record is missing a non-empty sourceReactPath.");
+                if (!record.TryGetProperty("sourceYamlRefs", out var syr) || syr.ValueKind != JsonValueKind.Array)
+                    return new RecordsParseResult.Invalid($"records[{index}].record is missing a sourceYamlRefs array.");
+
+                if (!record.TryGetProperty("knownGapRefs", out var kgr) || kgr.ValueKind != JsonValueKind.Array)
+                    return new RecordsParseResult.Invalid($"records[{index}].record is missing a knownGapRefs array.");
+                var knownGapRefs = new List<string>();
+                foreach (var refEl in kgr.EnumerateArray())
                 {
-                    var refs = new List<string>();
-                    foreach (var refEl in kgr.EnumerateArray())
-                    {
-                        if (refEl.ValueKind == JsonValueKind.String && refEl.GetString() is { } refValue)
-                            refs.Add(refValue);
-                    }
-                    knownGapRefs = refs;
+                    if (refEl.ValueKind == JsonValueKind.String && refEl.GetString() is { } refValue)
+                        knownGapRefs.Add(refValue);
                 }
                 if (recordType == UnresolvedRecordType && (knownGapRefs is null || knownGapRefs.Count == 0))
                     return new RecordsParseResult.Invalid(
                         $"records[{index}].record.recordType \"{UnresolvedRecordType}\" is missing a non-empty knownGapRefs array.");
 
-                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs));
+                // field_read_only_authority: readOnly is a translator-derived Field attribute
+                // (docs/design/react-schema-topology-seed-translator-ssot.yaml
+                // apply_field_read_only_authority) — null (not applicable) on any pre-existing/
+                // non-Field record shape, so layouts authored before this field existed are
+                // unaffected.
+                bool? readOnly = record.TryGetProperty("readOnly", out var ro) &&
+                    (ro.ValueKind == JsonValueKind.True || ro.ValueKind == JsonValueKind.False)
+                        ? ro.ValueKind == JsonValueKind.True
+                        : null;
+
+                rows.Add(new SchemaRecordRow(recordType!, key!, parentKey, label, control, display, knownGapRefs, readOnly));
                 index++;
             }
             return new RecordsParseResult.Valid(rows);
@@ -371,8 +394,14 @@ public static class LayoutSchemaTensorComposer
                 .Select(g => g.Key),
             StringComparer.Ordinal);
 
-        string ResolveNodeId(SchemaRecordRow row) =>
-            duplicateKeys.Contains(row.Key) ? $"{row.ParentKey}::{row.Key}" : row.Key;
+        // Namespaces a duplicated key by the child's RESOLVED parent identity (never the raw
+        // authored parentKey) — a duplicated child key under a duplicated PARENT key would
+        // otherwise namespace to the SAME "{rawParentKey}::{key}" string in every branch (e.g.
+        // two Forms both keyed "shared_section" each having their own Field keyed "shared_field"
+        // would both resolve to "shared_section::shared_field"), silently colliding instead of
+        // staying attached to the actual instance each was nested under.
+        string ResolveNodeId(SchemaRecordRow row, string? resolvedParentNodeId) =>
+            duplicateKeys.Contains(row.Key) ? $"{resolvedParentNodeId}::{row.Key}" : row.Key;
 
         var result = new List<LayoutNodeRecord>(schemaRecords.Count);
         var orderIndex = 0;
@@ -400,20 +429,25 @@ public static class LayoutSchemaTensorComposer
                 }
             }
 
-            // Merge target is a catalog_component leaf only, keyed by "{parentKey}::{key}" —
-            // scoped to the leaf's owning FORM (see BuildInteractionsBySourceActionKey) — never
-            // by leaf key alone. structural_node and unresolved_gap nodes never receive
-            // runtimeInteractions.
-            string? runtimeInteractionsJson = null;
-            if (isCatalogLeaf)
-                interactionsBySourceActionKey.TryGetValue($"{row.ParentKey}::{row.Key}", out runtimeInteractionsJson);
-
             var parentNodeId = row.ParentKey is not null && lastResolvedNodeIdByKey.TryGetValue(row.ParentKey, out var resolvedParentId)
                 ? resolvedParentId
                 : null;
 
+            // Merge target is a catalog_component leaf only, keyed by "{resolvedParentNodeId}::{key}"
+            // — scoped to the leaf's owning FORM's RESOLVED identity (see
+            // BuildInteractionsBySourceActionKey, whose tensor-side key uses the same resolved
+            // owning_form_key the translator emits) — never the leaf's raw authored parentKey
+            // alone. A raw-parentKey key would collide when the OWNING FORM's key is itself
+            // duplicated across branches (e.g. two Forms both keyed "shared_section", each with
+            // its own Action keyed "shared_action") — using the resolved parent identity keeps
+            // each duplicate branch's interactions attributed only to its own leaf. structural_node
+            // and unresolved_gap nodes never receive runtimeInteractions.
+            string? runtimeInteractionsJson = null;
+            if (isCatalogLeaf)
+                interactionsBySourceActionKey.TryGetValue($"{parentNodeId}::{row.Key}", out runtimeInteractionsJson);
+
             var nodeKind = isUnresolved ? "unresolved_gap" : isStructural ? "structural_node" : "catalog_component";
-            var resolvedNodeId = ResolveNodeId(row);
+            var resolvedNodeId = ResolveNodeId(row, parentNodeId);
             lastResolvedNodeIdByKey[row.Key] = resolvedNodeId;
 
             result.Add(new LayoutNodeRecord(
@@ -438,7 +472,8 @@ public static class LayoutSchemaTensorComposer
                 // structural_node's does, so the frontend can build real production default
                 // props from it instead of a hardcoded placeholder caption or the bare NodeId.
                 Label: row.Label,
-                KnownGapRefs: isUnresolved ? row.KnownGapRefs : null
+                KnownGapRefs: isUnresolved ? row.KnownGapRefs : null,
+                ReadOnly: isCatalogLeaf ? row.ReadOnly : null
             ));
         }
 

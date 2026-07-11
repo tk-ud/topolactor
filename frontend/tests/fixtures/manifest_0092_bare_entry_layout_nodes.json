@@ -32,7 +32,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Approval status"
+    "label": "Approval status",
+    "readOnly": true
   },
   {
     "nodeId": "external",
@@ -67,7 +68,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Credential reference key"
+    "label": "Credential reference key",
+    "readOnly": true
   },
   {
     "nodeId": "instance_settings",
@@ -112,7 +114,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Template file"
+    "label": "Template file",
+    "readOnly": false
   },
   {
     "nodeId": "json_template_download",
@@ -157,8 +160,8 @@
     "targetRef": "auth.external.credential_management.projection",
     "runtimeInteractions": [
       {
-        "trigger": "change",
-        "targetRef": "ui-local:instance_settings_import_form.template_file",
+        "trigger": "click",
+        "targetRef": "ui-local:instance_settings_import_form.template_import_trigger",
         "actionType": "localStateMutation",
         "payloadFrom": {
           "template_file": "node:template_file.value"
@@ -192,7 +195,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Instance authority key"
+    "label": "Instance authority key",
+    "readOnly": false
   },
   {
     "nodeId": "instance_display_name",
@@ -208,7 +212,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Instance display name"
+    "label": "Instance display name",
+    "readOnly": true
   },
   {
     "nodeId": "port_kind",
@@ -224,7 +229,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Port kind"
+    "label": "Port kind",
+    "readOnly": true
   },
   {
     "nodeId": "provider_kind",
@@ -240,7 +246,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Provider kind"
+    "label": "Provider kind",
+    "readOnly": true
   },
   {
     "nodeId": "required_by_bundle",
@@ -256,7 +263,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Required by bundle"
+    "label": "Required by bundle",
+    "readOnly": true
   },
   {
     "nodeId": "address_ref",
@@ -272,7 +280,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Address reference"
+    "label": "Address reference",
+    "readOnly": true
   },
   {
     "nodeId": "connection_policy_key",
@@ -288,7 +297,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Connection policy key"
+    "label": "Connection policy key",
+    "readOnly": true
   },
   {
     "nodeId": "validate",
@@ -342,7 +352,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Operation binding key"
+    "label": "Operation binding key",
+    "readOnly": false
   },
   {
     "nodeId": "display_label",
@@ -358,7 +369,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Display label"
+    "label": "Display label",
+    "readOnly": true
   },
   {
     "nodeId": "operation_protocol",
@@ -374,7 +386,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Operation protocol"
+    "label": "Operation protocol",
+    "readOnly": true
   },
   {
     "nodeId": "input_schema_key",
@@ -390,7 +403,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Input schema key"
+    "label": "Input schema key",
+    "readOnly": true
   },
   {
     "nodeId": "output_shape_key",
@@ -406,7 +420,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Output shape key"
+    "label": "Output shape key",
+    "readOnly": true
   },
   {
     "nodeId": "sanitize_policy_key",
@@ -422,7 +437,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Sanitize policy key"
+    "label": "Sanitize policy key",
+    "readOnly": true
   },
   {
     "nodeId": "callable",
@@ -438,7 +454,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Callable"
+    "label": "Callable",
+    "readOnly": true
   },
   {
     "nodeId": "preview",
@@ -492,7 +509,8 @@
     "wiringKind": "instance_settings_action_bundle",
     "targetSurface": "manifest",
     "targetRef": "auth.external.credential_management.projection",
-    "label": "Approval status"
+    "label": "Approval status",
+    "readOnly": true
   },
   {
     "nodeId": "apply",
