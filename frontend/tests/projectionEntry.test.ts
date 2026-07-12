@@ -512,28 +512,18 @@ Deno.test("confirmProjectionEntryEmission: refresh after bare entry must confirm
   }
 });
 
-/**
- * admin-surface-topology-seed-conversion owner decision (fixed) amended
- * docs/design/instance-port-substrate-ssot.yaml existing_credential_management_projection_extension
- * canonical_url_amendment: the existing manifest-092 projection now has an explicit canonical URL,
- * /admin/credentials, instead of being reachable only via ?manifest=092 on an unrelated page. This
- * is not a NEW/second credential system (still the same single manifest-092 projection — no new
- * manifest, no fragmentation) — the underlying prohibition (never build a competing/standalone
- * credential plane) remains enforced by asserting the route directory contains no OTHER
- * credential-named entry besides this one canonical route.
- */
-Deno.test("credential-management bundle: exactly one canonical credential route exists (no standalone/competing credential plane)", async () => {
+Deno.test("credential-management bundle: no dedicated credential route/panel was added (existing topology manifest reuse only)", async () => {
   const routesDir = new URL("../routes/admin/", import.meta.url);
   const entries: string[] = [];
   for await (const entry of Deno.readDir(routesDir)) {
     entries.push(entry.name);
   }
-  const credentialNamed = entries.filter((name) => /credential/i.test(name));
+  const forbidden = entries.filter((name) => /credential/i.test(name));
   assertEquals(
-    credentialNamed,
-    ["credentials"],
-    `expected exactly the canonical /admin/credentials route directory and no other credential-named entry; found: ${
-      credentialNamed.join(", ")
+    forbidden,
+    [],
+    `no dedicated credential-management admin route may be added; found: ${
+      forbidden.join(", ")
     }`,
   );
 });

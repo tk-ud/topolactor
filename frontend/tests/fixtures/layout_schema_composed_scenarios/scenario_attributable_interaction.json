@@ -1,0 +1,20 @@
+[
+  {
+    "nodeId": "sample_action",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "runtimeInteractions": [
+      {
+        "trigger": "click",
+        "actionType": "dispatchInstanceOperation",
+        "instanceTargetRef": "instance-port:sample_instance_port:sample_field:operation_binding_key",
+        "sourceActionKey": "sample_action"
+      }
+    ],
+    "label": "Sample action"
+  }
+]

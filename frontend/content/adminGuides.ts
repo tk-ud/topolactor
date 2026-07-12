@@ -187,23 +187,10 @@ export const ADMIN_ROUTE_CARDS: {
     ],
   },
   {
-    href: "/admin/credentials",
-    label: "認証情報 / ユーザー管理",
-    purpose:
-      "ユーザー認証・外部連携・接続設定・管理ユーザーをカテゴリ切替で確認する",
-    relation: "認証情報管理画面",
-    howToSummary: [
-      "カテゴリ切替で確認対象を選択",
-      "管理ユーザーのカテゴリでユーザーCRUDを実行",
-      "ユーザー認証のカテゴリは参照専用（編集不可）",
-    ],
-  },
-  {
     href: "/admin/users",
     label: UX_USER_ROSTER,
     purpose: "ユーザー名簿と承認・状態・停止期間の管理",
     relation: "master-roster",
-    caution: "/admin/credentials への統合準備中（証明完了まで維持）",
     howToSummary: [
       "status は seed 済み enum から select",
       "最終ログインは参照のみ",

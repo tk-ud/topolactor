@@ -18,18 +18,29 @@
  * actionType "localStateMutation" is now a recognized ui_state_update taxonomy member (SSOT
  * wiring_lane_contract.lanes.internal_instance_wiring), resolved via its ui-local: targetRef.
  *
- * The first and last tests below are the representative-scenario proofs: they read
- * frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json, a checked-in snapshot of
- * the REAL Emission.LayoutNodes produced by an actual bare-entry dispatch against manifest
- * 00000000-0000-0000-0000-000000000092 (see the fixture's companion backend assertion in
- * backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
- * DispatchAsync_BareDefaultEntry_NoTargetRef_ResolvesManifest0092ViaCanonicalDefaultEntryRelation,
- * which fails if this fixture ever drifts from the real seed data) — not a hand-authored
- * approximation; manifest 092 is kept here as a legitimate representative regression input, not
- * as this file's sole authority. The remaining tests are synthetic micro-checks isolating
- * generic renderEmission() contract behaviors and intentionally use domain-neutral node names and
- * placeholder identifiers unrelated to any specific manifest, so this common test substrate does
- * not depend on credential-management/manifest-092 specifics.
+ * Input boundary: EVERY LayoutNode[] this file dispatches through renderEmission() is real
+ * LayoutSchemaTensorComposer output, never a hand-authored LayoutNode literal invented to satisfy
+ * renderEmission()'s own expectations by construction. Two different sources of real composer
+ * output back this file:
+ *   - The first and last tests read frontend/tests/fixtures/manifest_0092_bare_entry_layout_nodes.json,
+ *     a checked-in snapshot of the REAL Emission.LayoutNodes produced by an actual bare-entry
+ *     dispatch against manifest 00000000-0000-0000-0000-000000000092 (see the fixture's companion
+ *     backend assertion in backend/tests/Topolactor.Integration.Tests/
+ *     CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+ *     DispatchAsync_BareDefaultEntry_NoTargetRef_ResolvesManifest0092ViaCanonicalDefaultEntryRelation,
+ *     which fails if this fixture ever drifts from the real seed data) — manifest 092 is kept here
+ *     as a legitimate representative regression input, not as this file's sole authority.
+ *   - The remaining (generic/common) tests read fixtures under
+ *     frontend/tests/fixtures/layout_schema_composed_scenarios/ — each one is the REAL, byte-exact
+ *     output of LayoutSchemaTensorComposer.Compose() + StructureMapResolver.ToLayoutNode() for a
+ *     small seed-shaped records[] scenario (domain-neutral node names, no manifest-092/credential
+ *     specifics), proven by a companion backend test in backend/tests/Topolactor.Runtime.Tests/
+ *     LayoutSchemaStructuralCompositionTests.cs (ComposeAndMapToLayoutNode_*_MatchesCheckedInFrontendFixture)
+ *     that asserts the SAME byte-exact equality from the backend side — a future composer change
+ *     that alters any of these scenarios breaks that backend test too, not just this file. This is
+ *     NOT db/seed_empty.sql content and adds no manifest/route/UI — it is a test-only, non-seed
+ *     literal records[] JSON scenario, the exact same pattern the rest of
+ *     LayoutSchemaStructuralCompositionTests.cs already uses for its own C#-side assertions.
  */
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { h } from "preact";
@@ -38,6 +49,13 @@ import type { Emission, LayoutNode } from "../api/dispatch.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { LayoutProjectionTree } from "../components/LayoutProjectionTree.tsx";
+
+async function loadComposedScenario(fileName: string): Promise<LayoutNode[]> {
+  const text = await Deno.readTextFile(
+    new URL(`./fixtures/layout_schema_composed_scenarios/${fileName}`, import.meta.url),
+  );
+  return JSON.parse(text) as LayoutNode[];
+}
 
 Deno.test("renderEmission: manifest 0092's REAL bare-entry-resolved LayoutNodes (checked-in fixture from an actual live dispatch) produce zero componentType==='error' specs", async () => {
   const fixtureText = await Deno.readTextFile(
@@ -66,69 +84,11 @@ Deno.test("renderEmission: manifest 0092's REAL bare-entry-resolved LayoutNodes 
   assert(specs.length === layoutNodes.length, "every real LayoutNode must produce a rendered spec");
 });
 
-/**
- * A layout shape representative of the backend's LayoutSchemaTensorComposer output in general
- * (any manifest): structural_node wrappers (Category/Section/Form) carrying no componentId/
- * componentKind, and catalog_component leaves (Field/Action) with componentId/componentKind
- * resolved from the ui_component_registry preset catalog. Node names/ids here are domain-neutral
- * placeholders — not any specific screen's authored content — since this helper backs the common
- * renderEmission() contract tests, not a manifest-specific regression proof.
- */
-function buildStructuralCategorySectionFormLayoutNodes(): LayoutNode[] {
-  return [
-    {
-      nodeId: "sample_category",
-      nodeKind: "structural_node",
-      recordType: "topology_ui_category",
-      label: "Sample category",
-      orderIndex: 0,
-    },
-    {
-      nodeId: "sample_section",
-      nodeKind: "structural_node",
-      recordType: "topology_ui_section",
-      label: "Sample section",
-      parentNodeId: "sample_category",
-      orderIndex: 1,
-    },
-    {
-      nodeId: "sample_form",
-      nodeKind: "structural_node",
-      recordType: "topology_ui_form",
-      label: "Sample form",
-      parentNodeId: "sample_section",
-      orderIndex: 2,
-    },
-    {
-      nodeId: "sample_field",
-      nodeKind: "catalog_component",
-      componentId: "00000000-0000-0000-0001-000000000013",
-      componentKind: "form_input/form_field",
-      parentNodeId: "sample_form",
-      orderIndex: 3,
-    },
-    {
-      nodeId: "sample_action",
-      nodeKind: "catalog_component",
-      componentId: "00000000-0000-0000-0001-000000000010",
-      componentKind: "action/button",
-      parentNodeId: "sample_form",
-      orderIndex: 4,
-      runtimeInteractions: [
-        {
-          trigger: "click",
-          actionType: "dispatchInstanceOperation",
-          instanceTargetRef: "instance-port:sample_instance_port:sample_field:operation_binding_key",
-        },
-      ],
-    },
-  ];
-}
-
-Deno.test("renderEmission: a layout composed from structural_node + resolved catalog_component leaves produces zero componentType==='error' specs", () => {
+Deno.test("renderEmission: a real LayoutSchemaTensorComposer-composed layout (structural_node category/section/form + resolved catalog_component field/action leaves) produces zero componentType==='error' specs", async () => {
+  const layoutNodes = await loadComposedScenario("scenario_structural_catalog_mix.json");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-000000000101",
-    layoutNodes: buildStructuralCategorySectionFormLayoutNodes(),
+    layoutNodes,
     packageId: "00000000-0000-0000-0000-000000000102",
   };
 
@@ -143,10 +103,11 @@ Deno.test("renderEmission: a layout composed from structural_node + resolved cat
   assert(specs.length > 0, "composed layout must still produce specs to render");
 });
 
-Deno.test("renderEmission: structural_node specs carry no componentId/componentKind and render as a distinct componentType from catalog_component", () => {
+Deno.test("renderEmission: structural_node specs carry no componentId/componentKind and render as a distinct componentType from catalog_component", async () => {
+  const layoutNodes = await loadComposedScenario("scenario_structural_catalog_mix.json");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-000000000101",
-    layoutNodes: buildStructuralCategorySectionFormLayoutNodes(),
+    layoutNodes,
   };
   const specs = renderEmission(emission, defaultComponentRegistry);
 
@@ -164,44 +125,25 @@ Deno.test("renderEmission: structural_node specs carry no componentId/componentK
   }
 });
 
-Deno.test("renderEmission: a catalog_component leaf missing componentId still fails explicit (CATALOG_COMPONENT_KIND_REQUIRED-class) — structural authority does not silently paper over an unresolved leaf", () => {
+Deno.test("renderEmission: a catalog_component leaf missing componentId (real LayoutSchemaTensorComposer output for an unresolvable field control) still fails explicit (CATALOG_COMPONENT_KIND_REQUIRED-class) — structural authority does not silently paper over an unresolved leaf", async () => {
+  const layoutNodes = await loadComposedScenario("scenario_unresolvable_componentid.json");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-000000000101",
-    layoutNodes: [
-      {
-        nodeId: "unresolvable_field",
-        nodeKind: "catalog_component",
-        // componentId intentionally absent (e.g. control had no registry mapping).
-        orderIndex: 0,
-      },
-    ],
+    layoutNodes,
   };
   const specs = renderEmission(emission, defaultComponentRegistry);
   assertEquals(specs.length, 1);
   assertEquals(specs[0].componentType, "error");
 });
 
-Deno.test("renderEmission: a catalog_component leaf whose authored runtimeInteractions resolve to zero recognized event bindings fails explicit (RUNTIME_INTERACTION_UNATTRIBUTABLE) — never silently rendered as a normal, unbound component that would only crash later inside the runtime factory", () => {
+Deno.test("renderEmission: a catalog_component leaf whose composer-merged runtimeInteractions resolve to zero recognized event bindings fails explicit (RUNTIME_INTERACTION_UNATTRIBUTABLE) — never silently rendered as a normal, unbound component that would only crash later inside the runtime factory", async () => {
+  // actionType "localStateMutation" (no target) is outside wiringSettingCategoryOf's recognized
+  // taxonomy (ui_state_update / dispatchExternalPort / dispatchInstanceOperation) — no event
+  // binding builder attributes this entry to any trigger.
+  const layoutNodes = await loadComposedScenario("scenario_unattributable_interaction.json");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-000000000101",
-    layoutNodes: [
-      {
-        nodeId: "sample_unattributable_action",
-        nodeKind: "catalog_component",
-        componentId: "00000000-0000-0000-0001-000000000010",
-        componentKind: "action/button",
-        orderIndex: 0,
-        // actionType "localStateMutation" is outside wiringSettingCategoryOf's recognized
-        // taxonomy (ui_state_update / dispatchExternalPort / dispatchInstanceOperation) — no
-        // event binding builder attributes this entry to any trigger.
-        runtimeInteractions: [
-          {
-            trigger: "click",
-            actionType: "localStateMutation",
-          },
-        ],
-      },
-    ],
+    layoutNodes,
   };
   const specs = renderEmission(emission, defaultComponentRegistry);
   assertEquals(specs.length, 1);
@@ -209,53 +151,22 @@ Deno.test("renderEmission: a catalog_component leaf whose authored runtimeIntera
   assertEquals(specs[0].def.code, "RUNTIME_INTERACTION_UNATTRIBUTABLE");
 });
 
-Deno.test("renderEmission: a catalog_component leaf whose authored runtimeInteractions DO resolve to a recognized event binding is unaffected by the unattributable check", () => {
+Deno.test("renderEmission: a catalog_component leaf whose composer-merged runtimeInteractions DO resolve to a recognized event binding is unaffected by the unattributable check", async () => {
+  const layoutNodes = await loadComposedScenario("scenario_attributable_interaction.json");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-000000000101",
-    layoutNodes: [
-      {
-        nodeId: "sample_action",
-        nodeKind: "catalog_component",
-        componentId: "00000000-0000-0000-0001-000000000010",
-        componentKind: "action/button",
-        label: "Sample Action",
-        orderIndex: 0,
-        runtimeInteractions: [
-          {
-            trigger: "click",
-            actionType: "dispatchInstanceOperation",
-            instanceTargetRef: "instance-port:sample_instance_port:sample_field:operation_binding_key",
-          },
-        ],
-      },
-    ],
+    layoutNodes,
   };
   const specs = renderEmission(emission, defaultComponentRegistry);
   assertEquals(specs.length, 1);
   assertEquals(specs[0].componentType, "action/button");
 });
 
-Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology_ui_workflow_step) composed catalog_component leaf renders exactly like any other resolved catalog_component — not rejected as an unrecognized record type", () => {
+Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology_ui_workflow_step) composed catalog_component leaf renders exactly like any other resolved catalog_component — not rejected as an unrecognized record type", async () => {
+  const layoutNodes = await loadComposedScenario("scenario_table_workflow_step.json");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-000000000101",
-    layoutNodes: [
-      {
-        nodeId: "results_table",
-        nodeKind: "catalog_component",
-        recordType: "topology_ui_table",
-        componentId: "00000000-0000-0000-0001-000000000014",
-        componentKind: "display/card_list",
-        orderIndex: 0,
-      },
-      {
-        nodeId: "approval_step",
-        nodeKind: "catalog_component",
-        recordType: "topology_ui_workflow_step",
-        componentId: "00000000-0000-0000-0001-000000000010",
-        componentKind: "action/button",
-        orderIndex: 1,
-      },
-    ],
+    layoutNodes,
   };
   const specs = renderEmission(emission, defaultComponentRegistry);
   const errorSpecs = specs.filter((s) => s.componentType === "error");
@@ -265,19 +176,11 @@ Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology
   assertEquals(specs[1].componentType, "action/button");
 });
 
-Deno.test("renderEmission: an unresolved_gap node (topology_ui_unresolved) always renders as an explicit error carrying knownGapRefs — never a normal component, never silently dropped", () => {
+Deno.test("renderEmission: an unresolved_gap node (topology_ui_unresolved) always renders as an explicit error carrying knownGapRefs — never a normal component, never silently dropped", async () => {
+  const layoutNodes = await loadComposedScenario("scenario_unresolved_gap.json");
   const emission: Emission = {
     layoutId: "00000000-0000-0000-0000-000000000101",
-    layoutNodes: [
-      {
-        nodeId: "unresolved_fragment",
-        nodeKind: "unresolved_gap",
-        recordType: "topology_ui_unresolved",
-        label: "Unresolved fragment",
-        knownGapRefs: ["table_item_click_wiring_not_yet_expressible"],
-        orderIndex: 0,
-      },
-    ],
+    layoutNodes,
   };
   const specs = renderEmission(emission, defaultComponentRegistry);
   assertEquals(specs.length, 1);

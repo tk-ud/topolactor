@@ -53,7 +53,6 @@ Deno.test("ADMIN_ROUTE_CARDS contain canonical admin routes only", () => {
       "/admin/ui-builder",
       "/admin/manifests",
       "/admin/enums",
-      "/admin/credentials",
       "/admin/users",
       "/admin/scheduler",
     ],

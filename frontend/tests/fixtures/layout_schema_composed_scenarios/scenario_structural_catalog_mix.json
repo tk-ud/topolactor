@@ -1,0 +1,53 @@
+[
+  {
+    "nodeId": "cat1",
+    "nodeKind": "structural_node",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_category",
+    "label": "Category One"
+  },
+  {
+    "nodeId": "sec1",
+    "nodeKind": "structural_node",
+    "parentNodeId": "cat1",
+    "orderIndex": 1,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "Section One"
+  },
+  {
+    "nodeId": "field1",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000012",
+    "parentNodeId": "sec1",
+    "orderIndex": 2,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/select",
+    "label": "Field One"
+  },
+  {
+    "nodeId": "action1",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "sec1",
+    "orderIndex": 3,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "label": "Action One"
+  },
+  {
+    "nodeId": "val1",
+    "nodeKind": "structural_node",
+    "parentNodeId": "sec1",
+    "orderIndex": 4,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_validation",
+    "label": "Validation One"
+  }
+]

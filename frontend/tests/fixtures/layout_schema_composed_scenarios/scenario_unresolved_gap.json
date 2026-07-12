@@ -1,0 +1,14 @@
+[
+  {
+    "nodeId": "unresolved_fragment",
+    "nodeKind": "unresolved_gap",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_unresolved",
+    "label": "Unresolved fragment",
+    "knownGapRefs": [
+      "table_item_click_wiring_not_yet_expressible"
+    ]
+  }
+]

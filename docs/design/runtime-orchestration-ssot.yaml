@@ -106,7 +106,6 @@ runtime_orchestration_ssot:
       - /admin/team-dashboard
       - /admin/enums
       - /admin/users
-      - /admin/credentials
       - /admin/scheduler
     admin_route_retirement_matrix:
       note: >-
@@ -125,15 +124,6 @@ runtime_orchestration_ssot:
         hub_navigation_only: no URL/route change; the route becomes reachable via admin hub
           relation navigation from /admin in addition to its existing direct URL.
       routes:
-        - route: /admin/users
-          retirement_kind: redirect
-          replacement: /admin/credentials
-          status: pending
-          precondition: >-
-            /admin/credentials production projection, admin user CRUD action wiring (auth_users:*
-            dispatcher_mapping — closed in db/seed_empty.sql), mutation-then-state-reconciliation,
-            and negative-case proof must all pass before this route redirects. Not retired by this
-            change.
         - route: /admin/enums
           retirement_kind: thin_projection_wrapper
           replacement: same_url_seed_backed

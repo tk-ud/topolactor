@@ -40,35 +40,23 @@ from, instead of re-deriving it from seed SQL diffs.
 ## Tab / category structure
 
 One screen (`auth.external.credential_management.projection`, manifest
-`00000000-0000-0000-0000-000000000092`), canonical route **`/admin/credentials`** (owner decision,
-fixed by `admin-surface-topology-seed-conversion` — supersedes this document's earlier "not a
-canonical route" framing), four modes switched by select/mode/category — **not** four separate
-routes:
+`00000000-0000-0000-0000-000000000092`), three modes switched by select/mode/category —
+**not** three separate routes:
 
 | Category key | Role | Backing |
 |---|---|---|
 | `user_auth` | Existing user/auth credential boundary (readonly join) | `auth.user.boundary` (manifest `091`) |
 | `external` | External port credential context | `topology.external_access_ports` / `external_response_ports` / `external_hook_ports` |
 | `instance_settings` | DB/runtime instance address + operation binding drafts | `topology.db_instance_port` / `runtime_instance_port` / `instance_connection_policy` / `instance_operation_authority_binding` |
-| `admin_user` | Admin user management CRUD projection (embedded, owner decision) | `auth.users` via the existing `auth_users:*` `AdminRuntime` actions (`AdminRuntimeMasterRoster.cs` / `NpgsqlAuthMasterRepository`) |
 
-`user_auth` is **not** the same thing as the `admin_user` category, and neither becomes a second
-canonical **data authority** for `auth.users`:
-
-- `user_auth` remains a **readonly** relation-boundary join through `auth.user.boundary` (manifest
-  `091`) — display only, no CRUD, no write path.
-- `admin_user` is the **embedded projection entry** for the CRUD `AdminUsersRoster.tsx` previously
-  rendered standalone at `/admin/users` — it reuses the same `auth_users:*` `AdminRuntime` actions
-  and the same `admin-master-roster-management-ssot.yaml` business rules (approve/status/suspension,
-  login denial contract). Moving the projection entry here does **not** move `auth.users`'
-  canonical data authority, which stays fully owned by
-  `docs/design/admin-master-roster-management-ssot.yaml` and its repository/`AdminRuntime` layer —
-  see that SSOT's `projection_entry_vs_data_authority_split`.
-- `/admin/users` is **retiring** (not yet retired) into `/admin/credentials` per
-  `docs/design/runtime-orchestration-ssot.yaml` `admin_route_retirement_matrix`, once this screen's
-  `admin_user` category, its action wiring, mutation-then-state-reconciliation, and negative-case
-  proof are established. Route presence/absence of `/admin/users` alone is still not proof of
-  anything in this bundle — the retirement precondition list in that matrix is the actual gate.
+`user_auth` is **not** the same thing as the standalone `/admin/users` route
+(`admin-master-roster-management-ssot.yaml`, `frontend/routes/admin/users.tsx`,
+`AdminUsersRoster.tsx`). `/admin/users` is master-roster CRUD over `auth.users`
+(approve/status/suspension). The credential-management `user_auth` tab is a **readonly**
+relation-boundary join through `auth.user.boundary` (manifest `091`) — it must not become a
+second CRUD surface over `auth.users`, and `/admin/users` must not be collapsed into or
+replaced by this screen. This bundle does not touch `/admin/users`; route presence/absence
+of `/admin/users` is not proof of anything in this bundle.
 
 ## manifest 091 / manifest 092 / structure_maps 091 / structure_maps 092 authority boundary
 
