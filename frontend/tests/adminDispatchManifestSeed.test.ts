@@ -14,10 +14,8 @@ import {
  *
  * admin-surface-topology-seed-conversion (Phase 2 proof-drift fix): the previous version of this
  * test hand-maintained REQUIRED_ADMIN_DISPATCH_AXES and never included auth_users, team_markdown,
- * or scheduler_jobs at all — a confirmed_proof_drift
- * (.agent/reports/admin-surface-topology-seed-conversion-design-resolution.json issue-11) that let
- * this test claim "every AdminRuntime admin axis" while structurally excluding three whole
- * families. This version:
+ * or scheduler_jobs at all — a confirmed proof drift that let this test claim "every AdminRuntime
+ * admin axis" while structurally excluding three whole families. This version:
  *   1. Keeps the previously-tracked baseline array unchanged (BASELINE_TRACKED_AXES) so existing
  *      regression coverage is not weakened.
  *   2. Adds scheduler_jobs's 4 actions explicitly (already fully seed-mapped; closing this

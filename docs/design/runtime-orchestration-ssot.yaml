@@ -121,8 +121,12 @@ runtime_orchestration_ssot:
         thin_projection_wrapper: the URL and route file remain, but the route body is replaced by a
           thin wrapper that renders the seed-backed ProjectionShell projection instead of the
           former hardcoded island.
-        hub_navigation_only: no URL/route change; the route becomes reachable via admin hub
-          relation navigation from /admin in addition to its existing direct URL.
+        hub_navigation_only: no URL/route change; the route's target manifest becomes reachable via
+          an admin-authored hubs.hub_relations outbound navigation entry (authored through the
+          existing /admin/manifests surface — see docs/design/admin-console-workflow-ssot.yaml
+          admin_hub_relation_navigation_contract.authoring; the relation source is whichever
+          manifest an admin selects there, never required to be /admin's own landing page) in
+          addition to the route's existing direct URL.
       routes:
         - route: /admin/enums
           retirement_kind: thin_projection_wrapper
@@ -149,11 +153,9 @@ runtime_orchestration_ssot:
             same as /admin/team-dashboard above: requires a real per-screen ui_projection manifest
             for scheduler_jobs, which does not exist yet. Ratified into the canonical registry
             above (route file and dispatcher_mapping already existed but the registry entry was
-            absent — see
-            .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json issue-03)
-            without waiting on that prerequisite, since ratifying an already-shipped route's
-            registry entry is independent of adding hub navigation to it. Not retired by this
-            change.
+            absent) without waiting on that prerequisite, since ratifying an already-shipped
+            route's registry entry is independent of adding hub navigation to it. Not retired by
+            this change.
 
   trigger_contract:
     kind_enum:

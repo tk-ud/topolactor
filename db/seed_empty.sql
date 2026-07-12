@@ -3263,25 +3263,31 @@ ON CONFLICT (manifest_id) DO NOTHING;
 
 -- =============================================================================
 -- admin-surface-topology-seed-conversion: admin hub relation navigation source
--- -- INTENTIONALLY NOT ADDED (owner correction, PR #584 review comment).
--- A prior revision of this file created a manifest/hub/hub_relations row here
--- solely to give /admin an outbound hub relation to manifest 092. That
--- manifest carried no ui_projection and represented no pre-existing screen —
--- its only purpose was to be a hub_relations source, which is exactly the
--- "empty/fake topology manifest created for hub relation connection purposes"
--- pattern the owner has explicitly prohibited. /admin (frontend/routes/admin/
--- index.tsx) has no pre-existing hubs.hub / hubs.topology_manifests row of its
--- own — HubNavigationResolver.ResolveAsync / LoadHubNavigationSequenceAsync
--- require an already-resolved topologyManifestId to look up outbound
--- relations from, and none exists for /admin. Fabricating one is out of
--- scope. Establishing a real /admin -> credential-management (or any other
--- subBundle) hub relation requires either a genuine ui_projection-backed
--- manifest for /admin (topology UI seed conversion — paused pending explicit
--- owner instruction) or an owner-designated pre-existing alternative source,
--- neither of which exists today. Recorded as unconnected, with this evidence,
--- in .agent/tasks/todo.md and
--- .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json
--- rather than silently re-added.
+-- -- A FABRICATED "/admin landing" MANIFEST IS INTENTIONALLY NOT ADDED HERE
+-- (owner correction, PR #584 review comments) -- and was never structurally
+-- necessary in the first place. A prior revision of this file created a
+-- manifest/hub/hub_relations row here solely to give /admin its own outbound
+-- hub relation to manifest 092. That manifest carried no ui_projection and
+-- represented no pre-existing screen -- its only purpose was to be a
+-- hub_relations source, which is exactly the "empty/fake topology manifest
+-- created for hub relation connection purposes" pattern the owner has
+-- explicitly prohibited.
+--
+-- The real hub relation authoring mechanism does not require /admin to have
+-- its own manifest at all: /admin/manifests (frontend/routes/admin/manifests.tsx
+-- -> ManifestsAdmin.tsx + HubNavigationAdmin.tsx islands, already implemented,
+-- not built by this Bundle) lets an admin pick ANY EXISTING topology_manifest_id
+-- as the relation source, via the hub_navigation:create/update/deprecate/reorder
+-- dispatch actions (all already seeded active below, and proven end-to-end
+-- against a real database in
+-- backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+-- DispatchAsync_HubNavigationCreate_RealAuthoringPath_...). This seed file
+-- intentionally does not insert a concrete hubs.hub_relations row here --
+-- authoring a specific relation (e.g. connecting some existing manifest to
+-- credential-management's hub) is an ordinary admin/runtime action performed
+-- through that existing surface, not seed content this file should carry. See
+-- docs/design/admin-console-workflow-ssot.yaml
+-- admin_hub_relation_navigation_contract for the full authoring contract.
 -- =============================================================================
 -- Representative existing cron absorption: log retention.
 -- The former RetentionScheduler BackgroundService is absorbed into the scheduler

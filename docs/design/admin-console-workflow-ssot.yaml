@@ -17,28 +17,58 @@ admin_console_workflow_ssot:
       - /admin/scheduler
 
   admin_hub_relation_navigation_contract:
-    status: design_change_paused_unconnected
+    status: design_change
     bundle: admin-surface-topology-seed-conversion
     note: >-
-      Defines the meaning of "admin hub relation" strictly as manifest-scoped outbound navigation
-      (hubs.hub_relations rows owned by a real, ui_projection-backed topology manifest), per
-      docs/design/runtime-orchestration-ssot.yaml dispatcher_contract.hub_navigation_resolution and
-      canonical_default_entry_contract mechanics — the SAME mechanism manifest 092's own
-      self-referencing hub_relations row already uses, never a new/parallel navigation mechanism.
-      /admin (frontend/routes/admin/index.tsx) has no pre-existing hubs.hub / hubs.topology_manifests
-      row of its own, so it cannot currently be a hub_relations source: HubNavigationResolver.
-      ResolveAsync / LoadHubNavigationSequenceAsync both require an already-resolved
-      topologyManifestId to look up outbound relations from. A prior revision of this Bundle
-      (PR #584) created a manifest/hub carrying no ui_projection
-      (00000000-0000-0000-0000-0000000ad100 / ad101) solely to give /admin a hub_relations source;
-      that is exactly the "empty/fake topology manifest created for hub relation connection
-      purposes" pattern, which is explicitly prohibited (owner correction, PR #584 review comment).
-      That construct has been removed from db/seed_empty.sql and its now-inapplicable test removed
-      from CredentialManagementHubRelationUiProjectionLiveDbTests.cs. Establishing a real
-      admin_hub_relation_navigation_contract requires either a genuine ui_projection-backed manifest
-      for /admin (topology UI seed conversion for the admin-dashboard subBundle — halted pending
-      explicit future owner instruction) or an owner-designated pre-existing alternative source,
-      neither of which exists today.
+      Defines "admin hub relation" as manifest-scoped outbound navigation (hubs.hub_relations rows),
+      per docs/design/runtime-orchestration-ssot.yaml dispatcher_contract.hub_navigation_resolution —
+      the SAME mechanism manifest 092's own self-referencing hub_relations row already uses, never a
+      new/parallel navigation mechanism. The RELATION SOURCE is whichever EXISTING topology_manifest
+      an admin selects via the already-implemented /admin/manifests authoring surface (see
+      `authoring` below) — it is never required to be /admin's own landing page specifically, and
+      /admin having no hubs.hub / hubs.topology_manifests row of its own is not a blocker for this
+      mechanism. A prior revision of this Bundle (PR #584) fabricated a manifest/hub carrying no
+      ui_projection (00000000-0000-0000-0000-0000000ad100 / ad101) solely to give /admin its own
+      hub_relations source — that "empty/fake topology manifest created for hub relation connection
+      purposes" pattern is explicitly prohibited (owner correction, PR #584 review comments) and has
+      been removed from db/seed_empty.sql; it was never structurally necessary in the first place.
+      canonical_default_entry_contract (manifest 092's own self-referencing relation, resolving a
+      bare/no-selection projection entry) is a SEPARATE mechanism and must never be conflated with an
+      ordinary outbound hub navigation relation authored through this contract.
+    authoring:
+      surface: >-
+        /admin/manifests (existing, already-implemented — not built by this Bundle):
+        frontend/routes/admin/manifests.tsx renders ManifestsAdmin.tsx (lists every existing
+        hubs.topology_manifests row) alongside HubNavigationAdmin.tsx (lets the admin pick any of
+        those topology_manifest_id values as the relation source and author/edit/reorder/deprecate
+        its outbound hub_relations).
+      dispatch_actions:
+        - hub_navigation:list_manifests
+        - hub_navigation:get_hub_relations
+        - hub_navigation:create
+        - hub_navigation:update
+        - hub_navigation:deprecate
+        - hub_navigation:reorder
+      dispatcher_mapping_status: >-
+        All six axes already have active production dispatcher_mapping rows in db/seed_empty.sql
+        (unlike auth_users/team_markdown before this Bundle's fix) — no wiring gap here.
+      repository: >-
+        NpgsqlContentBundleRepository (CreateHubRelationAsync / UpdateHubRelationAsync /
+        DeprecateHubRelationAsync / ReorderHubRelationsAsync / ListHubRelationsByManifestAsync /
+        ListTopologyManifestsAsync), invoked from backend/runtime/AdminRuntime.cs's
+        HubNavigationCreateAsync/UpdateAsync/DeprecateAsync/ReorderAsync/GetHubRelationsAsync
+        handlers via the hub_navigation:* dispatch axes above.
+      end_to_end_proof: >-
+        backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+        DispatchAsync_HubNavigationCreate_RealAuthoringPath_SourceManifestDispatchReflectsRelationInNavigationSequence_AndFailClosesOnZeroActiveTarget
+        proves, against a real database and the real ManifestDispatcher (not a raw SQL insert
+        standing in for authoring): hub_navigation:create dispatch -> real
+        NpgsqlContentBundleRepository persistence -> readback -> re-dispatching the source manifest
+        reflects the relation in Emission.NavigationSequence -> deprecating the sole active target
+        manifest fail-closes TargetManifestId to null. Direct-SQL-insert tests elsewhere in that
+        file (e.g. DispatchAsync_CredentialManagementManifest_E2E_RelationVectorToScalarEmission)
+        remain valid regression proof for the read/NavigationSequence-population half only — they
+        are not a substitute for this authoring-path proof.
     authority_boundary:
       hub_relation_is: manifest_scoped_outbound_navigation_sequence_only
       hub_relation_is_not:
@@ -50,10 +80,8 @@ admin_console_workflow_ssot:
         - targeted_per_viewer_delivery_authority
       out_of_bundle_note: >-
         presentation/participant/forced-projection/targeted-audience-delivery concepts are not
-        defined anywhere in this SSOT family (confirmed by
-        .agent/reports/admin-surface-topology-seed-conversion-design-resolution.json prior audit
-        pass) and are explicitly out of this Bundle's scope; a future dedicated Bundle would need
-        its own SSOT authority if that need ever arises.
+        defined anywhere in this SSOT family and are explicitly out of this Bundle's scope; a future
+        dedicated Bundle would need its own SSOT authority if that need ever arises.
     resolution_rule: >-
       Identical, non-negotiable rule as
       docs/design/runtime-orchestration-ssot.yaml
@@ -63,30 +91,37 @@ admin_console_workflow_ssot:
       first-match/oldest/MIN implicit fallback. Source topology_manifest, related hub, and
       sequence_position must each be explicit; only active relations and active target manifests
       are reachable.
-    wired_relations:
-      credentials:
-        status: unconnected_no_legitimate_source
-        precondition: >-
-          requires a real ui_projection-backed hubs.topology_manifests row for /admin to act as the
-          hub_relations source; none exists. The candidate target (manifest 092,
-          related_hub_id 00000000-0000-0000-0000-0000000000a1) is itself real and already reachable
-          via canonical_default_entry_contract, but that is a different mechanism from an admin
-          landing hub relation and is not reused here.
-      enum_dictionary:
-        status: unconnected_no_legitimate_source
-        precondition: requires both a real /admin source manifest (see credentials) and a real per-screen ui_projection manifest for enum_dictionary (neither exists yet)
-      team_dashboard:
-        status: unconnected_no_legitimate_source
-        precondition: requires both a real /admin source manifest (see credentials) and a real per-screen ui_projection manifest for team_markdown dashboard (neither exists yet)
-      scheduler_settings:
-        status: unconnected_no_legitimate_source
-        precondition: requires both a real /admin source manifest (see credentials) and a real per-screen ui_projection manifest for scheduler_jobs (neither exists yet)
+    connection_state_authority: >-
+      Whether any specific hubs.hub_relations row currently exists between two manifests is
+      runtime/admin data, observed via /admin/manifests (HubNavigationAdmin.tsx) or a direct
+      hubs.hub_relations query — never duplicated here as a fixed per-subBundle "wired"/"unconnected"
+      SSOT status ledger. This document defines the authoring contract, schema, and resolution
+      semantics; it does not track live connection state.
+    subbundle_target_readiness:
+      note: >-
+        The only structural readiness gate this Bundle tracks per subBundle is whether that
+        subBundle has a TARGET manifest worth navigating to at all — never whether a relation has
+        actually been authored (that is ordinary admin/runtime data, per connection_state_authority
+        above).
+      credential-management: >-
+        manifest 092 already exists with a real ui_projection — no target-side readiness blocker.
+      enum_dictionary: >-
+        blocked — no per-screen ui_projection manifest exists yet for enum_dictionary (only
+        per-action dispatcher_mapping-only manifests); topology UI seed production for this
+        subBundle is owner-paused pending explicit future owner instruction.
+      team_dashboard: >-
+        blocked — same as enum_dictionary above, for the team markdown dashboard surface.
+      scheduler_settings: >-
+        blocked — same as enum_dictionary above, for scheduler_jobs.
     prohibited:
       - global_hub_scan_for_target_selection
       - first_match_oldest_or_MIN_fallback_target_selection
       - active_navigation_row_whose_target_does_not_resolve_uniquely
       - treating_hub_relation_as_canonical_data_authority_for_auth_users_enum_team_markdown_or_scheduler_jobs
       - empty_or_fake_topology_manifest_created_solely_as_a_hub_relation_connection_source
+      - duplicating_live_hubs_hub_relations_connection_state_as_a_fixed_SSOT_status_ledger
+      - requiring_admin_own_landing_page_to_be_a_hub_relation_source
+      - direct_sql_relation_insert_treated_as_authoring_completion_proof
 
   purpose:
     - keep the admin authoring routes aligned with runtime-orchestration route authority
@@ -1341,9 +1376,10 @@ admin_console_workflow_ssot:
         /admin/ui-builder canvas workspace → optional /admin/manifests, plus static
         landing/navigation/guide content classified separately from projection seed content
         (frontend-canonical-surface-structure-label-boundary Bundle owns wording; this Bundle owns
-        only where that content is sourced from). NOT currently an admin hub relation navigation
-        source (see admin_hub_relation_navigation_contract above: no pre-existing hubs.hub /
-        hubs.topology_manifests row exists for /admin; unconnected, not fabricated).
+        only where that content is sourced from). /admin itself is not, and does not need to be, a
+        hub relation navigation source — that role belongs to whichever manifest is selected via
+        /admin/manifests (see admin_hub_relation_navigation_contract.authoring above); /admin has no
+        hubs.hub / hubs.topology_manifests row of its own, and none is fabricated to give it one.
 
     admin_contents:
       route: /admin/contents
