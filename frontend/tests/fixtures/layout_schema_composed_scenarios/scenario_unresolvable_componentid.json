@@ -1,0 +1,10 @@
+[
+  {
+    "nodeId": "unresolvable_field",
+    "nodeKind": "catalog_component",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "label": "Unresolvable field"
+  }
+]

@@ -647,4 +647,180 @@ public class LayoutSchemaStructuralCompositionTests
         Assert.Null(unresolved.ComponentKind);
         Assert.Null(unresolved.RuntimeInteractionsJson);
     }
+    // ------------------------------------------------------------------------------------------
+    // Checked-in LayoutNode[] fixture proofs for frontend/tests/layoutSchemaStructuralRender.test.ts
+    // ------------------------------------------------------------------------------------------
+    // The frontend common/generic renderEmission() contract tests previously hand-typed their
+    // LayoutNode[] input directly (a hand-authored Emission-facing literal that happened to satisfy
+    // renderEmission's own expectations by construction, never independently verified against real
+    // LayoutSchemaTensorComposer.Compose() output). These test methods close that gap: each one
+    // parses seed-shaped records[] JSON (the exact wire shape LayoutSchemaTensorComposer.ParseRecords
+    // consumes — the same non-seed literal-JSON pattern the rest of this file already uses, NOT a
+    // db/seed_empty.sql row; no manifest/route/UI is added by this), runs it through the REAL
+    // LayoutSchemaTensorComposer.Compose() + StructureMapResolver.ToLayoutNode() + the exact
+    // camelCase/WhenWritingNull JSON options backend/Program.cs serializes Emission over HTTP with,
+    // and asserts the result is byte-exact against a checked-in fixture under
+    // frontend/tests/fixtures/layout_schema_composed_scenarios/ — the same "checked-in fixture with a
+    // byte-exact companion backend proof" discipline manifest 092's own fixture uses (see
+    // CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+    // DispatchAsync_BareDefaultEntry_NoTargetRef_ResolvesManifest0092ViaCanonicalDefaultEntryRelation),
+    // just applied to small synthetic scenarios instead of a live-DB-dispatched real manifest. A
+    // future composer change that alters any of these scenarios' output breaks this test, not just
+    // the frontend one — closing the "hand-authored LayoutNode[] -> renderEmission only" gap the
+    // common test substrate previously had.
+    private static readonly System.Text.Json.JsonSerializerOptions EmissionLayoutNodeJsonOptions = new()
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = true,
+    };
+
+    private static string FixturePath(string fileName) => Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory,
+        "../../../../../../frontend/tests/fixtures/layout_schema_composed_scenarios",
+        fileName));
+
+    private static async Task AssertComposedLayoutNodesMatchFixtureAsync(
+        string fixtureFileName,
+        IReadOnlyList<LayoutSchemaTensorComposer.SchemaRecordRow> records,
+        IReadOnlyDictionary<string, string> interactionsBySourceActionKey,
+        IReadOnlyDictionary<string, string> componentKeyToId,
+        IReadOnlyDictionary<string, string> componentIdToKind)
+    {
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records, interactionsBySourceActionKey, componentKeyToId, componentIdToKind);
+        var layoutNodes = composed.Select(Topolactor.Runtime.StructureMapResolver.ToLayoutNode).ToList();
+        var actualJson = System.Text.Json.JsonSerializer.Serialize(layoutNodes, EmissionLayoutNodeJsonOptions);
+        var expectedJson = await File.ReadAllTextAsync(FixturePath(fixtureFileName));
+        Assert.Equal(expectedJson.Trim(), actualJson.Trim());
+    }
+
+    [Fact]
+    public async Task ComposeAndMapToLayoutNode_StructuralCategorySectionFormFieldAction_MatchesCheckedInFrontendFixture()
+    {
+        // Same records[] scenario as ComposeLayoutSchemaWithTensor_CategorySectionFormRecords_...
+        // and ComposeLayoutSchemaWithTensor_FieldAndActionRecords_... above, mapped to the
+        // Emission-facing LayoutNode shape.
+        await AssertComposedLayoutNodesMatchFixtureAsync(
+            "scenario_structural_catalog_mix.json",
+            ParseValidRows(CategoryRecordsJson),
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId: new Dictionary<string, string>
+            {
+                ["select.template"] = "00000000-0000-0000-0001-000000000012",
+                ["button.primitive"] = "00000000-0000-0000-0001-000000000010",
+            },
+            componentIdToKind: new Dictionary<string, string>
+            {
+                ["00000000-0000-0000-0001-000000000012"] = "form_input/select",
+                ["00000000-0000-0000-0001-000000000010"] = "action/button",
+            });
+    }
+
+    [Fact]
+    public async Task ComposeAndMapToLayoutNode_FieldWithUnresolvableControl_MatchesCheckedInFrontendFixture()
+    {
+        // Same scenario as ComposeLayoutSchemaWithTensor_FieldWithUnresolvableControl_... above —
+        // componentId stays null, no silent fallback.
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_field","key":"unresolvable_field","control":"form_input/unknown_widget","label":"Unresolvable field","sourceReactPath":"$.test.unresolvable_field","sourceYamlRefs":["ref"],"knownGapRefs":[]}}]}
+        """;
+        await AssertComposedLayoutNodesMatchFixtureAsync(
+            "scenario_unresolvable_componentid.json",
+            ParseValidRows(json),
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+    }
+
+    [Fact]
+    public async Task ComposeAndMapToLayoutNode_ActionWithUnattributableRuntimeInteraction_MatchesCheckedInFrontendFixture()
+    {
+        // actionType "localStateMutation" carries no target (portTargetRef/instanceTargetRef/
+        // targetNodeId) — renderEmission.ts's event binding builder cannot attribute this to any
+        // recognized trigger, so it must fail explicit as RUNTIME_INTERACTION_UNATTRIBUTABLE. This
+        // proves that failure mode against REAL composer-merged runtimeInteractions, not a
+        // hand-typed LayoutNode.runtimeInteractions literal.
+        const string recordsJson = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_action","key":"sample_unattributable_action","label":"Sample unattributable action","sourceReactPath":"$.test.sample_unattributable_action","sourceYamlRefs":["ref"],"knownGapRefs":[]}}]}
+        """;
+        const string interactionsJson = """[{"trigger":"click","actionType":"localStateMutation","sourceActionKey":"sample_unattributable_action"}]""";
+        await AssertComposedLayoutNodesMatchFixtureAsync(
+            "scenario_unattributable_interaction.json",
+            ParseValidRows(recordsJson),
+            // Top-level record (no parentKey) -> resolved parentNodeId is null -> merge key is
+            // "::{key}" (see LayoutSchemaTensorComposer.Compose's ResolveInteractionsMergeKey note).
+            interactionsBySourceActionKey: new Dictionary<string, string>
+            {
+                ["::sample_unattributable_action"] = interactionsJson,
+            },
+            componentKeyToId: new Dictionary<string, string> { ["button.primitive"] = "00000000-0000-0000-0001-000000000010" },
+            componentIdToKind: new Dictionary<string, string> { ["00000000-0000-0000-0001-000000000010"] = "action/button" });
+    }
+
+    [Fact]
+    public async Task ComposeAndMapToLayoutNode_ActionWithAttributableRuntimeInteraction_MatchesCheckedInFrontendFixture()
+    {
+        // actionType "dispatchInstanceOperation" with an instanceTargetRef IS a recognized,
+        // attributable event binding — the counterpart proof to the unattributable scenario above,
+        // again against real composer-merged runtimeInteractions.
+        const string recordsJson = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_action","key":"sample_action","label":"Sample action","sourceReactPath":"$.test.sample_action","sourceYamlRefs":["ref"],"knownGapRefs":[]}}]}
+        """;
+        const string interactionsJson = """[{"trigger":"click","actionType":"dispatchInstanceOperation","instanceTargetRef":"instance-port:sample_instance_port:sample_field:operation_binding_key","sourceActionKey":"sample_action"}]""";
+        await AssertComposedLayoutNodesMatchFixtureAsync(
+            "scenario_attributable_interaction.json",
+            ParseValidRows(recordsJson),
+            interactionsBySourceActionKey: new Dictionary<string, string>
+            {
+                ["::sample_action"] = interactionsJson,
+            },
+            componentKeyToId: new Dictionary<string, string> { ["button.primitive"] = "00000000-0000-0000-0001-000000000010" },
+            componentIdToKind: new Dictionary<string, string> { ["00000000-0000-0000-0001-000000000010"] = "action/button" });
+    }
+
+    [Fact]
+    public async Task ComposeAndMapToLayoutNode_TableAndWorkflowStep_MatchesCheckedInFrontendFixture()
+    {
+        // Combines the same records[] scenarios as
+        // ComposeLayoutSchemaWithTensor_TableRecord_ResolvesComponentIdViaDisplayConvention and
+        // ComposeLayoutSchemaWithTensor_WorkflowStepRecord_ResolvesToSameComponentAsAction above.
+        const string json = """
+        {
+          "records": [
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_table","key":"results_table","display":"card_list","label":"Results table","sourceReactPath":"$.test.results_table","sourceYamlRefs":["ref"],"knownGapRefs":[]}},
+            {"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_workflow_step","key":"approval_step","label":"Approval step","sourceReactPath":"$.test.approval_step","sourceYamlRefs":["ref"],"knownGapRefs":[]}}
+          ]
+        }
+        """;
+        await AssertComposedLayoutNodesMatchFixtureAsync(
+            "scenario_table_workflow_step.json",
+            ParseValidRows(json),
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId: new Dictionary<string, string>
+            {
+                ["card_list.primitive"] = "00000000-0000-0000-0001-000000000014",
+                ["button.primitive"] = "00000000-0000-0000-0001-000000000010",
+            },
+            componentIdToKind: new Dictionary<string, string>
+            {
+                ["00000000-0000-0000-0001-000000000014"] = "display/card_list",
+                ["00000000-0000-0000-0001-000000000010"] = "action/button",
+            });
+    }
+
+    [Fact]
+    public async Task ComposeAndMapToLayoutNode_UnresolvedGap_MatchesCheckedInFrontendFixture()
+    {
+        // Same scenario as ComposeLayoutSchemaWithTensor_UnresolvedRecord_... above.
+        const string json = """
+        {"records":[{"type":"topology_ui_seed_record","parentKey":null,"record":{"recordType":"topology_ui_unresolved","key":"unresolved_fragment","label":"Unresolved fragment","knownGapRefs":["table_item_click_wiring_not_yet_expressible"],"sourceReactPath":"$.test.unresolved_fragment","sourceYamlRefs":["ref"]}}]}
+        """;
+        await AssertComposedLayoutNodesMatchFixtureAsync(
+            "scenario_unresolved_gap.json",
+            ParseValidRows(json),
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+    }
 }

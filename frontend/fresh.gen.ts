@@ -23,7 +23,6 @@ import * as $api_component_events_append from "./routes/api/component-events/app
 import * as $api_dispatch from "./routes/api/dispatch.ts";
 import * as $api_draft_preview_layouts from "./routes/api/draft-preview/layouts.ts";
 import * as $api_draft_preview_preview from "./routes/api/draft-preview/preview.ts";
-import * as $api_sql_attention_topology_projection from "./routes/api/sql-attention/topology-projection.ts";
 import * as $api_sse from "./routes/api/sse.ts";
 import * as $api_super_auth_login from "./routes/api/super_auth/login.ts";
 import * as $api_super_auth_refresh from "./routes/api/super_auth/refresh.ts";
@@ -78,8 +77,6 @@ const manifest = {
     "./routes/api/dispatch.ts": $api_dispatch,
     "./routes/api/draft-preview/layouts.ts": $api_draft_preview_layouts,
     "./routes/api/draft-preview/preview.ts": $api_draft_preview_preview,
-    "./routes/api/sql-attention/topology-projection.ts":
-      $api_sql_attention_topology_projection,
     "./routes/api/sse.ts": $api_sse,
     "./routes/api/super_auth/login.ts": $api_super_auth_login,
     "./routes/api/super_auth/refresh.ts": $api_super_auth_refresh,

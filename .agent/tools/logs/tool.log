@@ -30,3 +30,5 @@
 2026-07-10T21:45:42Z beef91b6-bc4b-4812-953d-02fe2caf818f canonical-default-entry-active-status-and-invalid-records-fix implementation_change
 2026-07-10T22:05:25Z c1c076c6-e22f-40e8-9437-6619d8d21c2b layout-schema-record-vocabulary-runtime-alignment design_change
 2026-07-11T00:50:42Z 3cc98eeb-d1aa-41ed-8186-006af5bc6167 render-completion-identity-factory-dom-bundle-closure design_change
+2026-07-11T12:44:24Z e43864b0-8eb8-4927-bd0f-c137e6a14e09 admin-surface-topology-seed-conversion-design-resolution audit
+2026-07-11T13:28:20Z a8d3e975-d23a-4a05-8a05-3278d75c7f25 admin-surface-topology-seed-conversion-phase2-implementation implementation_change

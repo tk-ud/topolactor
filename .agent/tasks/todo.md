@@ -373,6 +373,95 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - 実装既存状態を SSOT として扱う。
 - PR574 / PR577 / PR578 の idempotency 系実装を未実装扱いに戻す。
 - proof 更新を idempotency authority 再設計・再実装として読める状態にする。
+- **empty/fake topology manifest（ui_projection を持たない manifest/hub）を hub_relations 接続 source を作る目的だけで新規作成する（owner 明示禁止, PR #584 review comment）。**
+
+### 現在の状態（正本、2026-07-12b 時点）
+
+以下がこの Bundle の現在の状態の正本である。下の各「記録」節（2026-07-11 / 2026-07-12 / 2026-07-12b）は対応履歴（監査証跡）として保持するが、判断の正本ではない。特に 2026-07-11 節は判断の前提が誤っていたため **INVALIDATED** としている（詳細は当該節を参照）。
+
+- Bundle status: **`not_started`**（未実装）。
+- credential-management subBundle には現在 **一切の専用 route/island が存在しない**。既存の `/admin/users`（auth_users CRUD、未変更）と manifest 092 の既存 `?manifest=`/`canonical_default_entry` アクセス（user_auth/external/instance_settings、未変更）のみが到達経路。
+- admin hub relation navigation: source は `/admin` 自身である必要はなく、既存の `/admin/manifests` authoring surface（`ManifestsAdmin.tsx` + `HubNavigationAdmin.tsx`、`hub_navigation:*` dispatch action、すべて既存実装・production dispatcher_mapping 済み）から任意の既存 manifest を source として選択できる。
+  - credential-management: ターゲット側（manifest 092）に blocker はない。実際に relation が authoring されているかどうかは runtime data であり、この todo は追跡しない。
+  - enum_dictionary / team_dashboard / scheduler_settings: ターゲット側の per-screen `ui_projection` manifest が存在しないことのみが blocker。
+- **topology UI seed production は owner 指示により停止中。再開には明示的な今後の owner 指示が必要。**
+- fake manifest（`ad100`/`ad101`/`ad102`）撤回、`/admin/credentials`・`AdminCredentialsShell` 撤去、`auth_users:*`/`team_markdown:*` dispatcher_mapping 追加、generic `LayoutSchemaTensorComposer` → `LayoutNode[]` fixture proof、`hub_navigation:create` end-to-end proof はすべて維持済み。
+
+### [INVALIDATED — DO_NOT_USE — superseded_by_2026_07_12b] Owner補正記録（PR #584 review comment, 2026-07-11, topology UI seed production 停止）
+
+**INVALIDATED: この節の「現在の状態」の判断（admin hub relation navigation が4 subBundle すべて unconnected というくだり）は、「hub relation の source は `/admin` 自身でなければならない」という誤った前提に基づいており、2026-07-12b 節で訂正済み。正本は上の「現在の状態（正本）」を参照すること。** 以下は対応履歴としてのみ保持する。
+
+**この節は Bundle の Status を `not_started` から変更しない。** PR #584 で行った作業は topology UI seed conversion の完了ではなく、Agent による暫定実装（provisional implementation）として以下に記録する。
+
+- **問題点:** PR #584 で `/admin/credentials` route・`AdminCredentialsShell` island 等の hardcoded route/island 追加、および auth_users/team_markdown 向け dispatcher_mapping 追加を、この Bundle の「共通工程」（React-like Schema 作成 → translator 変換 → topology UI seed 生成 → seed 登録 → projection render 確認）を経由せずに行った。さらに `/admin` に outbound hub relation を持たせるためだけに、ui_projection を持たない fake manifest/hub（`00000000-0000-0000-0000-0000000ad100` / `ad101` とその `hubs.hub_relations` row `ad102`）を db/seed_empty.sql に追加していた。owner から PR #584 review comment で、後者が「hub relation 接続のためだけの空/fake topology manifest」パターンに該当し明示的に禁止対象であるとの指摘を受けた。
+- **目的:** topology UI seed production を明示的な owner 指示があるまで停止し、PR #584 で追加した hardcoded route/island は削除せず Agent の暫定実装として明記した上で保持し、fabricated hub relation construct のみを撤回する。
+- **改善方針・対応内容:**
+  - `db/seed_empty.sql` から admin landing hub-manifest ブロック（`ad100`/`ad101`/`ad102`）を削除し、理由を説明するコメントに置き換えた。
+  - `backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs` から対応する `AdminLandingHub_HubRelation_ResolvesToCredentialManagementManifest092_SeedOnly` テストを削除し、説明コメントに置き換えた。
+  - `docs/design/admin-console-workflow-ssot.yaml` の `admin_hub_relation_navigation_contract` を修正し、`admin_landing_hub_manifest` サブブロックを削除、`wired_relations.credentials` を `status: wired` から `status: unconnected_no_legitimate_source` に訂正し、`/admin` は既存の hub/manifest を持たないため現時点で hub relation source になり得ないことを明記した。`page_responsibility.admin_index` の記述も同様に訂正した。
+  - `docs/design/runtime-orchestration-ssot.yaml` の `admin_route_retirement_matrix` は全 route が既に `status: pending` かつ正しい precondition を持っており、fabricated relation の成功を前提とする記述はなかったため変更不要と確認した。
+  - `enum-dictionary-ssot.yaml` / `team-markdown-dashboard-saved-view-ssot.yaml` / `scheduler-job-manifest-ssot.yaml` の `admin_hub_relation_navigation` は元々 `status: blocked_pending_seed_catalog`（target 側 manifest 不在が理由）であり、fabrication を主張していなかったため変更不要と確認した。
+  - `frontend/tests/layoutSchemaStructuralRender.test.ts`（PR #583 由来の共通 test 基盤）から、manifest 092 固有の UUID literal（`layoutId`/`packageId` の `...cd002`/`...cd005`）と credential 画面固有の node 名（`instance_settings`/`instance_address_form`/`instance_authority_key`/`validate`/`json_template_download` 等）を汎用プレースホルダー（`sample_category`/`sample_form`/`sample_field`/`sample_action` 等、汎用 UUID `...000101`/`...000102`）に置き換えた。manifest 092 の実 fixture を使う代表 regression proof（1番目・最後のテスト）はそのまま維持した。9 tests すべて pass 確認済み。
+  - `auth_users:*` / `team_markdown:*` の dispatcher_mapping 追加（db/seed_empty.sql）は `AdminRuntime.ExecuteDataAsync` の switch 実装および canonical bootstrap seed と照合済みで、この停止指示の対象外（本 Bundle の実装ではなく、既存 backend 実装に対する欠落 wiring の是正）として維持する。
+- **現在の状態（INVALIDATED — 使用しないこと。正本は本 Bundle 冒頭の「現在の状態（正本）」節を参照）:**
+  - ~~admin hub relation navigation は 4 subBundle（credential-management / admin-enum / team-dashboard / scheduler-settings）すべてで unconnected（未接続、fabrication なし）~~ — 誤り。「source は `/admin` 自身でなければならない」という前提が誤りだった（2026-07-12b 節参照）。
+  - topology UI seed production は owner 指示により停止中という点のみ、現在も正しい。
+
+### Gate0 remediation記録（PR #584 review comment, 2026-07-12）
+
+**この節は Bundle の Status を `not_started` から変更しない。** 2026-07-11 の Owner補正記録で「削除せず保持する」としていた `/admin/credentials` route・`AdminCredentialsShell` island は、この Gate0 remediation により **完全に削除された**（暫定実装としての保持ではなく、撤去）。上記 2026-07-11 節の「現在の状態」の一部はこの節により訂正される。
+
+- **問題点:** CI は green だったが、Gate0 監査により、この Bundle 自身の共通工程（React-like Schema → translator → topology UI seed → seed 登録 → projection render 確認）を経由せずに追加した hardcoded route/Island（`/admin/credentials`・`AdminCredentialsShell`）を「暫定実装」として保持し続けることが blocking と判定された。加えて、それを canonical projection entry・manifest 092 の4カテゴリ・`/admin/users` retiring 予定として記述する SSOT 文言、および PR #583 由来の共通 test 基盤（`layoutSchemaStructuralRender.test.ts`）が seed / `LayoutSchemaTensorComposer` / `Emission.LayoutNodes` の入力境界を実際には経由せず、hand-authored `LayoutNode[]` literal のみを入力にしていた点も blocking と判定された。
+- **目的:** fake manifest 撤回・dispatcher_mapping 追加・proof drift 修正・todo.md owner-pause 記録は維持したまま、architecture substrate 不整合（hardcoded UI・未実装前提の SSOT 記述・非 seed-grounded 共通 test）のみを是正する。
+- **改善方針・対応内容:**
+  - `frontend/routes/admin/credentials/index.tsx` と `frontend/islands/AdminCredentialsShell.tsx` を完全に削除（`git rm`。暫定実装マーカーとしての保持ではない）。`frontend/fresh.gen.ts` を再生成しルート登録を除去。
+  - `frontend/content/adminGuides.ts` から `/admin/credentials` カードと `/admin/users` の「統合準備中」caution を削除し、元の状態に復元。
+  - `frontend/tests/projectionEntry.test.ts` の credential route test を「credential 名を含む route ディレクトリが0件であること」を検証する元の形に復元。`frontend/tests/adminMainFlow.test.ts` の `ADMIN_ROUTE_CARDS` リストから `/admin/credentials` を削除。
+  - `docs/design/admin-console-workflow-ssot.yaml` から `/admin/credentials` の `canonical_routes` エントリ、`master_roster_routes` の `/admin/credentials` ブロック（`status: canonical_projection_entry`、manifest 092 の4カテゴリ記述）、`projection_entry_vs_data_authority_split` サブセクション、`page_responsibility.admin_credentials` ブロックを削除。`/admin/users` を `status: retiring_pending_proof` から通常の canonical route に復元。
+  - `docs/design/admin-master-roster-management-ssot.yaml`・`docs/design/instance-port-substrate-ssot.yaml`・`docs/projection_design/credential-management-projection-design.md` から同様に `/admin/credentials` 前提の記述（`retiring_pending_proof`・`canonical_url_amendment`・admin_user 4カテゴリ目・「`/admin/users` は retiring」）を削除し、元の3カテゴリ・「この bundle は `/admin/users` に触れない」という記述へ復元。
+  - `docs/design/runtime-orchestration-ssot.yaml` の `frontend_routes.admin` から `/admin/credentials` を削除し、`admin_route_retirement_matrix.routes` から `/admin/users → /admin/credentials` の redirect row を削除。`/admin/enums`・`/admin/team-dashboard`・`/admin/scheduler` の row は `/admin/credentials` に依存しない独立した記述であることを確認し維持。`/admin/scheduler` の registry ratification（route file・dispatcher_mapping は既存、registry entry のみ欠落していた是正）も独立して正当であることを再確認し維持。
+  - `frontend/tests/layoutSchemaStructuralRender.test.ts` の共通/generic test 6件を、hand-typed `LayoutNode[]` literal から、実際の `LayoutSchemaTensorComposer` 出力に基づく checked-in fixture（`frontend/tests/fixtures/layout_schema_composed_scenarios/`）読み込みへ差し替えた。これらの fixture は `backend/tests/Topolactor.Runtime.Tests/LayoutSchemaStructuralCompositionTests.cs` に追加した新規テスト（`ComposeAndMapToLayoutNode_*_MatchesCheckedInFrontendFixture`、6件）が、seed 形状の `records[]` literal JSON（db/seed_empty.sql への追加ではなく、同ファイル既存の non-seed literal-JSON test パターンを再利用）を実際に `LayoutSchemaTensorComposer.Compose()` + `StructureMapResolver.ToLayoutNode()` に通した結果と byte-exact 一致することを証明している（manifest 092 の実 fixture と同じ「checked-in fixture + byte-exact companion backend proof」の規律）。manifest 092 の実 fixture を使う代表 regression proof（先頭・末尾の2テスト）は変更なし。
+  - `.agent/reports/admin-surface-topology-seed-conversion-design-resolution.json` を現在状態へ正規化: `phase` を訂正、`report_meta.gate0_remediation_2026_07_12` を追加、撤回前の `phase2_verification_performed`/`phase2_ci_failure_fix` を `superseded_history` へ隔離、`implementation_changes`（`/admin/credentials` 関連）を空にし旧内容を `implementation_changes_SUPERSEDED_2026_07_12` へ隔離、`route_retirement_matrix` から `/admin/users` row を削除、関連 `issues[]`（issue-04/06/12/14/19/36）・`subbundle_states`（credential-management）・`remaining_gap`（gap-10 追加）・`final_proof_result`・`handoff_to_reviewer` を訂正。
+  - `auth_users:*`/`team_markdown:*` dispatcher_mapping、fake manifest 撤回、proof drift 修正（`adminDispatchManifestSeed.test.ts`・`adminMainFlow.test.ts` の SSOT 読み込み修正）は変更なく維持。
+- **現在の状態（重要）:**
+  - この Bundle は依然 **`not_started`**（未実装）である。credential-management subBundle には現在 **一切の専用 route/island が存在しない**（2026-07-11 時点の「暫定実装として保持」からさらに後退し、完全撤去された）。既存の `/admin/users`（auth_users CRUD、未変更）と manifest 092 の既存 `?manifest=`/`canonical_default_entry` アクセス（user_auth/external/instance_settings、未変更）のみが到達経路である。
+  - topology UI seed production は引き続き owner 指示により停止中。再開には明示的な今後の owner 指示が必要。将来 `/admin/credentials` を実装する場合は、この Bundle 自身の共通工程（React-like Schema → translator → topology UI seed → seed 登録 → projection render/action wiring 確認）を経由しなければならない。
+
+### Hub relation語彙訂正記録（PR #584 review comment, 2026-07-12b）
+
+**この節は Bundle の Status を `not_started` から変更しない。** 2026-07-11 節の「admin hub relation navigation は4 subBundle すべて unconnected（`/admin` に既存 manifest がないため）」という記述は、前提自体が誤りだったと訂正する。
+
+- **問題点:** 「hub relation の source は `/admin` 自身でなければならない」という前提が誤りだった。実際には `/admin/manifests`（`frontend/routes/admin/manifests.tsx` → `ManifestsAdmin.tsx` island が既存の `hubs.topology_manifests` 一覧を表示し、`HubNavigationAdmin.tsx` island が選択された任意の既存 manifest に対して `hub_navigation:create`/`update`/`deprecate`/`reorder` を実行する）という、この Bundle が作るのではなく既に実装済みの authoring surface が存在し、`hub_navigation:*` の6軸すべてが `db/seed_empty.sql` に production dispatcher_mapping 済みである。「`/admin` 自身に manifest がないので hub relation source を作れない」という 2026-07-11 節の判断は、この既存 authoring surface を見落としたまま「/admin 自身が source であるべき」という誤った前提で導かれたものであり、fake manifest 撤回の判断自体（ad100/ad101/ad102 の撤去）は正しいが、その後の「4 subBundle すべて unconnected（fabrication なし）」という記述は、SSOT に runtime DB の接続状態（`wired`/`unconnected`）を固定語彙として複製していた点も含めて不正確だった。
+- **目的:** hub relation authoring・DB保存・`ManifestDispatcher` projection を既存実装として扱い、SSOT から「fake `/admin` source 不存在」を未達理由として除去し、SSOT が runtime DB 接続状態を固定台帳として複製しないようにする。
+- **改善方針・対応内容:**
+  - `docs/design/admin-console-workflow-ssot.yaml` の `admin_hub_relation_navigation_contract` を修正: `wired_relations`（4 subBundle 分の `status: unconnected_no_legitimate_source` 固定台帳）を削除し、代わりに `authoring`（`/admin/manifests` 経由の既存 authoring surface・6つの `hub_navigation:*` dispatch action・repository method・end-to-end proof への参照）、`connection_state_authority`（接続状態は runtime/admin data であり SSOT が複製しないことの明記）、`subbundle_target_readiness`（credential-management はターゲット側 blocker なし、enum/team-dashboard/scheduler-settings はターゲット側 `ui_projection` manifest 不在のみが blocker）を追加。`prohibited` に `duplicating_live_hubs_hub_relations_connection_state_as_a_fixed_SSOT_status_ledger` と `requiring_admin_own_landing_page_to_be_a_hub_relation_source` を追加。`page_responsibility.admin_index` の記述も同様に訂正。
+  - `docs/design/runtime-orchestration-ssot.yaml` の `admin_route_retirement_matrix.retirement_kind.hub_navigation_only` の定義を「`/admin` からの hub relation navigation」固定表現から、「`/admin/manifests` で authoring された、manifest-scoped outbound navigation」という正確な表現へ訂正。
+  - `docs/design/enum-dictionary-ssot.yaml`・`docs/design/team-markdown-dashboard-saved-view-ssot.yaml`・`docs/design/scheduler-job-manifest-ssot.yaml` の `admin_hub_relation_navigation` ノートから「`/admin` からの hub relation navigation」固定表現を除去し、「authoring 自体は既存 `/admin/manifests` 経由で可能であり、blocker はターゲット側 `ui_projection` manifest 不在のみ」という正確な表現へ訂正。
+  - `db/seed_empty.sql` の fake manifest 撤回コメントを訂正: 「`/admin` に既存 manifest がないため撤回」という説明から、「`/admin/manifests` 経由で任意の既存 manifest を source にできるため、そもそも `/admin` 専用の manifest は不要だった」という正確な説明へ書き換え。具体的な relation row は本 seed ファイルへ追加しない（authoring は runtime/admin action であり seed content ではない）。
+  - `backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs` に新規テスト `DispatchAsync_HubNavigationCreate_RealAuthoringPath_SourceManifestDispatchReflectsRelationInNavigationSequence_AndFailClosesOnZeroActiveTarget` を追加: 実 `ManifestDispatcher` 経由で `hub_navigation:create` を dispatch → 実 `NpgsqlContentBundleRepository` で永続化 → readback → source manifest 再 dispatch で `Emission.NavigationSequence` に反映されることを確認 → target manifest を deprecated にして zero-active-target の fail-close（`TargetManifestId: null`）を確認、という一連を1シナリオで証明。既存の direct-SQL-insert テスト（`DispatchAsync_CredentialManagementManifest_E2E_RelationVectorToScalarEmission`）は read/NavigationSequence 側の regression proof として維持するが、authoring completion proof の代替とはしない。
+  - fake manifest 撤回・`/admin/credentials` 撤去・`auth_users:*`/`team_markdown:*` dispatcher mapping・generic `LayoutSchemaTensorComposer` → `LayoutNode[]` fixture proof・topology UI seed production 停止は変更なく維持。
+- **現在の状態（重要）:**
+  - credential-management: manifest 092 は既に `ui_projection` を持つ実在の manifest であり、hub relation の **ターゲット側に blocker はない**。`/admin/manifests` 経由で任意の既存 manifest から credential-management のハブへ実際に relation を張ることは、既存の authoring 機構だけで今すぐ可能である（ただし本 remediation はそれを実行しない — 「具体的な relation row を追加しない」という owner 指示のスコープ外）。現時点でそのような relation が実際に張られているかどうかは runtime data であり、SSOT はそれを記録しない。
+  - enum_dictionary / team_dashboard / scheduler_settings: **ターゲット側**（各画面固有の `ui_projection` manifest）が存在しないことのみが blocker。authoring 機構自体の gap ではない。topology UI seed production が owner 指示により再開されない限り解消しない。
+  - topology UI seed production は引き続き owner 指示により停止中。再開には明示的な今後の owner 指示が必要。
+
+### 旧 `.agent/reports/admin-surface-topology-seed-conversion-design-resolution.json` からの移管内容（削除前、2026-07-12b）
+
+owner 指示により、一時監査 report である上記 JSON ファイルは本節への必要内容の移管後、PR closure 前に削除した。以下は削除された report の追跡先として todo へ移管した内容であり、**SSOT authority ではない**（`gap-01` などの ID は削除済み report 内での参照 ID）。
+
+- **response-binding architecture 未実装**（旧 gap-01）: `dispatchExternalPort`/`dispatchInstanceOperation` の runtimeInteractions レーンに対する response-binding / invalidation アーキテクチャが未実装。`admin_runtime`（auth_users/team_markdown/scheduler_jobs/enum_dictionary）CRUD を真に seed-backed category として authoring するには、`AdminRuntime` の `layer:action` axis を直接 dispatch できる新しい runtimeInteractions actionType も必要。cross-cutting・high-blast-radius につき、owner_decision_required のアーキテクチャ選択が前提。
+- **declared_seed_surface_catalog 未整備**（旧 gap-02）: admin-dashboard / team-dashboard / admin-enum / scheduler-settings 向けの catalog entry が未追加。各 surface ごとに React-like Schema 作成 + translator 実行が必要。
+- **hub relation ターゲット不在**（旧 gap-03、上の「Hub relation語彙訂正記録」で正確な理由に訂正済み）: enum_dictionary/team_dashboard/scheduler_jobs 向けの `ui_projection` manifest が未作成。
+- **`scheduler_jobs:edit` の UI 未実装**（旧 gap-04）: backend/dispatcher は完全に wiring 済みだが、`frontend/routes/admin/scheduler.tsx` に UI control がない。
+- **instance_settings placeholder targetRef 未解決**（旧 gap-05）: manifest 092 の `instance_settings` category にある seeded placeholder `instanceTargetRef` が実 UUID に未解決。`InstancePortDispatchRuntime` に明示的な fail-close guard もない。実在する登録済み instance-port record が存在しないため（`instance_settings_admin_authoring_ui_pending` は明示的にこの Bundle の scope 外）。
+- **root `/` の非 admin ユーザー向け fail-close 未検証**（旧 gap-06）: root `/` の `canonical_default_entry` は認証済みセッションであれば誰でも admin-only な manifest 092 へ解決される。owner_decision_required。
+- **manifest clone-authoring / admin_csv_json_import ファミリーの dispatcher_mapping gap**（旧 gap-07）: `admin_csv_json_import:list_snapshot_records`、`manifest:create_clone_new_topology_draft_from_active`、`manifest:create_clone_replacement_draft_from_active`、`manifest:create_new_topology_draft`、`manifest:list_aggregate_trigger_processing_functions`、`manifest:list_screen_read_query_wiring`、`manifest:load_clone_source_evidence`、`manifest:merge_clone_replacement_draft_to_active`、`manifest:validate_clone_replacement_draft`、`physical_record:list_history` の約10件。この Bundle の5 subBundle scope 外（別の admin-authoring pipeline）だが、発見時に記録。
+- **roadmap/todo drift**（旧 gap-08）: `docs/system-roadmap.yaml` 側の team_markdown roadmap drift は実質解消済み（`team_markdown:*` dispatcher_mapping closure により）だが、roadmap 側の記述自体は未更新。file-path drift も残る。
+- **将来候補 Bundle**（旧 future_bundle_candidates）:
+  - `admin-runtime-dispatch-response-binding`: response-binding/invalidation アーキテクチャの設計・実装（上記 response-binding gap を解消）。
+  - `admin-surface-seed-catalog-conversion`: admin-dashboard / admin-enum / team-dashboard / scheduler-settings 向けの React-like Schema 作成・translator 実行・topology UI seed 登録。
+  - `instance-settings-admin-authoring-ui`: `docs/system-roadmap.yaml` の `instance_settings_admin_authoring_ui_pending` として既に追跡済み。JSON template download/import/validate/preview/apply/approve の UI・backend action。
+  - `presentation-participant-audience-authority`: 必要になった場合のみ。presenter-to-participant forced projection、participant membership、targeted per-viewer SSE delivery。現状すべての SSOT に不在確認済み。専用 SSOT authority が必要。
 
 ---
 

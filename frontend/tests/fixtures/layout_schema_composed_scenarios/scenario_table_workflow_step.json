@@ -1,0 +1,22 @@
+[
+  {
+    "nodeId": "results_table",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000014",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "componentKind": "display/card_list",
+    "label": "Results table"
+  },
+  {
+    "nodeId": "approval_step",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "orderIndex": 1,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "label": "Approval step"
+  }
+]

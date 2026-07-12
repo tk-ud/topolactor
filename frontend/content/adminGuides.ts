@@ -4,12 +4,12 @@ import {
   UX_CONTENTS,
   UX_CONTENTS_PAGE,
   UX_DATA_SHAPE,
+  UX_ENUM_ROSTER,
   UX_HUB_MANIFESTS,
   UX_HUB_MANIFESTS_PAGE,
-  UX_ENUM_ROSTER,
-  UX_USER_ROSTER,
   UX_RUNTIME_CHECK,
   UX_UI_BUILDER,
+  UX_USER_ROSTER,
 } from "./adminUxTerms.ts";
 
 export type AdminGuide = {
@@ -200,19 +200,22 @@ export const ADMIN_ROUTE_CARDS: {
   {
     href: "/admin/scheduler",
     label: "スケジューラー Job 設定",
-    purpose: "スケジューラー Job の read-only 設定確認画面（Job 一覧・ポリシー・権限スコープ確認）",
+    purpose:
+      "スケジューラー Job の read-only 設定確認画面（Job 一覧・ポリシー・権限スコープ確認）",
     relation: "scheduler-job-substrate（read-only）",
     howToSummary: [
       "Job 一覧で job_key・ポリシー・active 状態を確認",
       "credentialRequirementRef / externalPortRef は参照キーのみ表示（認証情報の平文は出ない）",
     ],
-    caution: "編集不可の read-only 画面。seed / DB 変更は直接 SQL で行ってください。",
+    caution:
+      "編集不可の read-only 画面。seed / DB 変更は直接 SQL で行ってください。",
   },
 ];
 
 export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {
   title: "ナビ順序設定",
-  purpose: `${UX_HUB_MANIFESTS_PAGE} 内で、作成済みページの遷移順序を設定します。`,
+  purpose:
+    `${UX_HUB_MANIFESTS_PAGE} 内で、作成済みページの遷移順序を設定します。`,
   prerequisites: [
     "/super_auth で管理ログイン済みであること",
     "先にページを作成していること",

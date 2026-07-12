@@ -3074,6 +3074,221 @@ VALUES
 ON CONFLICT (manifest_id) DO NOTHING;
 
 -- =============================================================================
+-- admin-surface-topology-seed-conversion: production dispatcher_mapping closure
+-- for auth_users:* (AdminRuntimeMasterRoster.cs / NpgsqlAuthMasterRepository.cs)
+-- and team_markdown:* (AdminRuntime.TeamMarkdown.cs / NpgsqlTeamMarkdownRepository.cs).
+-- Both handler families were fully implemented at the backend/DB layer already;
+-- this closes the previously-confirmed gap where ManifestDispatcher.ResolveActiveManifestAsync
+-- had no matching manifest row for these axes and would return MANIFEST_NOT_FOUND
+-- (no silent fallback) before AdminRuntime.ExecuteDataAsync was ever reached.
+-- =============================================================================
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES
+    (
+        '00000000-0000-0000-0000-0000000ad001',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"auth_users","action":"list"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000ad002',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"auth_users","action":"search"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000ad003',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"auth_users","action":"get"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000ad004',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"auth_users","action":"create"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000ad005',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"auth_users","action":"update"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000ad006',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"auth_users","action":"delete"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    )
+ON CONFLICT (manifest_id) DO NOTHING;
+
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES
+    (
+        '00000000-0000-0000-0000-0000000e5001',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"template:create"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e5002',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"template:list"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e5003',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"template:get"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e5004',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"template:update"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e5005',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"template:archive"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e5006',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"saved_view:create"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e5007',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"saved_view:search"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e5008',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"saved_view:get"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e5009',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"saved_view:refresh"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e500a',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"saved_view:clone"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e500b',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"saved_view:rebind"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e500c',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"saved_view:update"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000e500d',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"team_markdown","action":"saved_view:archive"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    )
+ON CONFLICT (manifest_id) DO NOTHING;
+
+-- =============================================================================
+-- admin-surface-topology-seed-conversion: admin hub relation navigation source
+-- -- A FABRICATED "/admin landing" MANIFEST IS INTENTIONALLY NOT ADDED HERE
+-- (owner correction, PR #584 review comments) -- and was never structurally
+-- necessary in the first place. A prior revision of this file created a
+-- manifest/hub/hub_relations row here solely to give /admin its own outbound
+-- hub relation to manifest 092. That manifest carried no ui_projection and
+-- represented no pre-existing screen -- its only purpose was to be a
+-- hub_relations source, which is exactly the "empty/fake topology manifest
+-- created for hub relation connection purposes" pattern the owner has
+-- explicitly prohibited.
+--
+-- The real hub relation authoring mechanism does not require /admin to have
+-- its own manifest at all: /admin/manifests (frontend/routes/admin/manifests.tsx
+-- -> ManifestsAdmin.tsx + HubNavigationAdmin.tsx islands, already implemented,
+-- not built by this Bundle) lets an admin pick ANY EXISTING topology_manifest_id
+-- as the relation source, via the hub_navigation:create/update/deprecate/reorder
+-- dispatch actions (all already seeded active below, and proven end-to-end
+-- against a real database in
+-- backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
+-- DispatchAsync_HubNavigationCreate_RealAuthoringPath_...). This seed file
+-- intentionally does not insert a concrete hubs.hub_relations row here --
+-- authoring a specific relation (e.g. connecting some existing manifest to
+-- credential-management's hub) is an ordinary admin/runtime action performed
+-- through that existing surface, not seed content this file should carry. See
+-- docs/design/admin-console-workflow-ssot.yaml
+-- admin_hub_relation_navigation_contract for the full authoring contract.
+-- =============================================================================
 -- Representative existing cron absorption: log retention.
 -- The former RetentionScheduler BackgroundService is absorbed into the scheduler
 -- job manifest substrate. The retention domain body stays in LogRetentionRuntime

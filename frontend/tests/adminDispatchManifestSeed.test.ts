@@ -1,4 +1,7 @@
-import { assert } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assert,
+  assertEquals,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 
 /**
  * Admin POST /api/dispatch → backend /dispatch resolves manifests from DB seed.
@@ -8,10 +11,28 @@ import { assert } from "https://deno.land/std@0.208.0/assert/mod.ts";
  * admin-target operations so CI catches seed drift before live dispatch fails.
  *
  * Authority: docs/design/runtime-orchestration-ssot.yaml (manifest_resolution.api.key)
+ *
+ * admin-surface-topology-seed-conversion (Phase 2 proof-drift fix): the previous version of this
+ * test hand-maintained REQUIRED_ADMIN_DISPATCH_AXES and never included auth_users, team_markdown,
+ * or scheduler_jobs at all — a confirmed proof drift that let this test claim "every AdminRuntime
+ * admin axis" while structurally excluding three whole families. This version:
+ *   1. Keeps the previously-tracked baseline array unchanged (BASELINE_TRACKED_AXES) so existing
+ *      regression coverage is not weakened.
+ *   2. Adds scheduler_jobs's 4 actions explicitly (already fully seed-mapped; closing this
+ *      Bundle's tracked gap for that family).
+ *   3. DERIVES the auth_users and team_markdown axis sets from AdminRuntime.cs /
+ *      AdminRuntime.TeamMarkdown.cs's own switch cases (the historically-confirmed-drifted
+ *      families) rather than hand-copying them, so a future case added to either switch is
+ *      automatically required here without this file being hand-edited again.
+ * Deriving ALL ~100 AdminRuntime axes from source and requiring every one to have a seed mapping
+ * was tried and rejected for this test: it surfaces ~10 pre-existing, out-of-Bundle-scope gaps in
+ * the manifest clone-authoring / admin_csv_json_import families (recorded as a new finding in the
+ * design-resolution report's remaining_gap, not fixed by this Bundle) that would otherwise fail
+ * CI for surfaces this Bundle did not audit or touch.
  */
 
-/** layer:action keys implemented in AdminRuntime for target=admin. */
-const REQUIRED_ADMIN_DISPATCH_AXES: string[] = [
+/** layer:action keys implemented in AdminRuntime for target=admin (pre-existing, unchanged). */
+const BASELINE_TRACKED_AXES: string[] = [
   "context_token_registry:list",
   "context_token_registry:create",
   "context_token_registry:deprecate",
@@ -101,6 +122,82 @@ const REQUIRED_ADMIN_DISPATCH_AXES: string[] = [
   "enum_dictionary:set_group_items",
 ];
 
+/** admin-surface-topology-seed-conversion issue-10: scheduler-settings subBundle, already fully seed-mapped. */
+const SCHEDULER_JOBS_AXES: string[] = [
+  "scheduler_jobs:list_settings",
+  "scheduler_jobs:create",
+  "scheduler_jobs:edit",
+  "scheduler_jobs:disable",
+];
+
+/** `"layer:action" =>` (or `"sub:action" =>` inside the nested team_markdown switch). */
+const SWITCH_CASE_RE = /"([a-zA-Z0-9_]+:[a-zA-Z0-9_:]+)"\s*=>/g;
+
+function extractSwitchCaseKeys(source: string): string[] {
+  const keys: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = SWITCH_CASE_RE.exec(source)) !== null) {
+    keys.push(m[1]);
+  }
+  return keys;
+}
+
+/**
+ * Derives auth_users:* and team_markdown:* axes straight from AdminRuntime.cs /
+ * AdminRuntime.TeamMarkdown.cs — the two families historically confirmed drifted (issue-08 /
+ * issue-09 / issue-11) — instead of hand-copying them into a literal array a future case addition
+ * could silently outrun.
+ */
+async function deriveHistoricallyDriftedAxes(): Promise<string[]> {
+  const adminRuntimeSrc = await Deno.readTextFile(
+    new URL("../../backend/runtime/AdminRuntime.cs", import.meta.url),
+  );
+  const teamMarkdownSrc = await Deno.readTextFile(
+    new URL(
+      "../../backend/runtime/AdminRuntime.TeamMarkdown.cs",
+      import.meta.url,
+    ),
+  );
+
+  const directKeys = extractSwitchCaseKeys(adminRuntimeSrc);
+  const authUsersKeys = directKeys.filter((k) => k.startsWith("auth_users:"));
+
+  // AdminRuntime.TeamMarkdown.cs's nested `action switch` only has the sub-action half
+  // ("template:create", "saved_view:archive", ...); AdminRuntime.cs's wildcard case strips the
+  // "team_markdown:" prefix before re-dispatching here, so the full production axis is that
+  // prefix plus this sub-action key.
+  const teamMarkdownSubKeys = extractSwitchCaseKeys(teamMarkdownSrc);
+  const teamMarkdownKeys = teamMarkdownSubKeys.map((k) => `team_markdown:${k}`);
+
+  assert(
+    authUsersKeys.length > 0,
+    "expected to derive at least one auth_users:* axis from AdminRuntime.cs",
+  );
+  assert(
+    teamMarkdownKeys.length > 0,
+    "expected to derive at least one team_markdown:* axis from AdminRuntime.TeamMarkdown.cs",
+  );
+
+  return [...authUsersKeys, ...teamMarkdownKeys];
+}
+
+async function requiredAdminDispatchAxes(): Promise<string[]> {
+  const derived = await deriveHistoricallyDriftedAxes();
+  return [
+    ...new Set([...BASELINE_TRACKED_AXES, ...SCHEDULER_JOBS_AXES, ...derived]),
+  ].sort();
+}
+
+/**
+ * `"layer:action"` -> `[layer, action]`, splitting on the FIRST colon only. team_markdown axes
+ * carry a colon inside the action half itself (e.g. "team_markdown:template:create"), so a naive
+ * `axis.split(":")` destructure would silently drop everything after the second colon.
+ */
+function splitAxis(axis: string): [string, string] {
+  const idx = axis.indexOf(":");
+  return [axis.slice(0, idx), axis.slice(idx + 1)];
+}
+
 function extractAdminDispatcherMappings(seedSql: string): Set<string> {
   const found = new Set<string>();
   const re =
@@ -126,15 +223,34 @@ function manifestBlocksRouteToAdminRuntime(
 }
 
 Deno.test(
-  "adminDispatchManifestSeed: seed_empty.sql defines dispatcher_mapping for every AdminRuntime admin axis",
+  "adminDispatchManifestSeed: tracked axis set covers auth_users, team_markdown, scheduler_jobs, enum_dictionary",
+  async () => {
+    const axes = await requiredAdminDispatchAxes();
+    for (
+      const family of [
+        "auth_users",
+        "team_markdown",
+        "scheduler_jobs",
+        "enum_dictionary",
+      ]
+    ) {
+      assert(
+        axes.some((a) => splitAxis(a)[0] === family),
+        `tracked admin dispatch axis set unexpectedly has no "${family}:*" entry`,
+      );
+    }
+  },
+);
+
+Deno.test(
+  "adminDispatchManifestSeed: seed_empty.sql defines dispatcher_mapping for every tracked admin axis",
   async () => {
     const seedSql = await Deno.readTextFile(
       new URL("../../db/seed_empty.sql", import.meta.url),
     );
+    const requiredAxes = await requiredAdminDispatchAxes();
     const seeded = extractAdminDispatcherMappings(seedSql);
-    const missing = REQUIRED_ADMIN_DISPATCH_AXES.filter((axis) =>
-      !seeded.has(axis)
-    );
+    const missing = requiredAxes.filter((axis) => !seeded.has(axis));
     assert(
       missing.length === 0,
       `seed_empty.sql missing admin dispatcher_mapping for: ${
@@ -146,14 +262,15 @@ Deno.test(
 );
 
 Deno.test(
-  "adminDispatchManifestSeed: each admin axis maps to admin_runtime in seed topology block",
+  "adminDispatchManifestSeed: each tracked admin axis maps to admin_runtime in seed topology block",
   async () => {
     const seedSql = await Deno.readTextFile(
       new URL("../../db/seed_empty.sql", import.meta.url),
     );
+    const requiredAxes = await requiredAdminDispatchAxes();
     const missingRuntime: string[] = [];
-    for (const axis of REQUIRED_ADMIN_DISPATCH_AXES) {
-      const [layer, action] = axis.split(":");
+    for (const axis of requiredAxes) {
+      const [layer, action] = splitAxis(axis);
       if (!manifestBlocksRouteToAdminRuntime(seedSql, layer, action)) {
         missingRuntime.push(axis);
       }
@@ -163,6 +280,22 @@ Deno.test(
       `seed_empty.sql missing runtime_mapping admin_runtime near: ${
         missingRuntime.join(", ")
       }`,
+    );
+  },
+);
+
+Deno.test(
+  "adminDispatchManifestSeed: derived historically-drifted axis sets are non-empty and de-duplicated",
+  async () => {
+    const derived = await deriveHistoricallyDriftedAxes();
+    assert(
+      derived.length >= 19,
+      `expected >=19 derived auth_users+team_markdown axes, got ${derived.length}`,
+    );
+    assertEquals(
+      new Set(derived).size,
+      derived.length,
+      "derived axis set must not contain duplicates",
     );
   },
 );

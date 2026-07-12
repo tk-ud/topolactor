@@ -60,19 +60,23 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         var topoVector = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, ctxRepo);
         var registrar = new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, topoRepo, topoVector);
         var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
+        var manifestRepo = new NpgsqlManifestRepository(NullLogger<NpgsqlManifestRepository>.Instance, cs);
+        var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
+        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
         var adminRuntime = new AdminRuntime(
             NullLogger<AdminRuntime>.Instance,
             ctxRepo,
             registrar,
             pkg,
             uiRepo,
-            topologyRepository: topoRepo);
+            topologyRepository: topoRepo,
+            // Real hub_navigation:* authoring path (frontend/islands/HubNavigationAdmin.tsx ->
+            // hub_navigation:create/update/deprecate/reorder) needs this repository wired, not
+            // just the read-only HubNavigationResolver above.
+            contentBundleRepository: contentBundleRepo);
         var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
 
         var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);
-        var manifestRepo = new NpgsqlManifestRepository(NullLogger<NpgsqlManifestRepository>.Instance, cs);
-        var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
-        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
 
         return await Task.FromResult(new ManifestDispatcher(
             NullLogger<ManifestDispatcher>.Instance,
@@ -191,6 +195,156 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             await ExecAsync(
                 "DELETE FROM hubs.topology_manifests WHERE topology_manifest_id = @mid", ("mid", relatedManifestId));
             await ExecAsync("DELETE FROM hubs.hub WHERE hub_id = @hid", ("hid", relatedHubId));
+        }
+    }
+
+    [Fact]
+    public async Task DispatchAsync_HubNavigationCreate_RealAuthoringPath_SourceManifestDispatchReflectsRelationInNavigationSequence_AndFailClosesOnZeroActiveTarget()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        // Proves the REAL admin authoring path end to end — the exact axes
+        // frontend/api/adminApi.ts createHubRelation() sends via frontend/islands/
+        // HubNavigationAdmin.tsx (role=admin target=admin layer=hub_navigation action=create,
+        // already seeded and active in db/seed_empty.sql), through the real ManifestDispatcher ->
+        // AdminRuntime.HubNavigationCreateAsync -> NpgsqlContentBundleRepository.
+        // CreateHubRelationAsync — never a raw SQL insert standing in for the authoring path
+        // itself. The SOURCE manifest here is an ordinary, already-existing topology_manifest —
+        // representative of any manifest an admin could select via /admin/manifests
+        // (ManifestsAdmin.tsx's manifest list + HubNavigationAdmin.tsx's selector). It has no
+        // relation whatsoever to /admin's own landing page — nothing about a "/admin landing
+        // manifest" is required anywhere in this path (see CreateHubRelationAsync, which only
+        // validates the given topologyManifestId/relatedHubId exist and are not a self-loop).
+        var sourceHubId = Guid.NewGuid();
+        var sourceManifestId = Guid.NewGuid();
+        var targetHubId = Guid.NewGuid();
+        var targetManifestId = Guid.NewGuid();
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        async Task ExecAsync(string sql, params (string Name, object Value)[] parms)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            foreach (var (name, value) in parms) cmd.Parameters.AddWithValue(name, value);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        Guid? createdHubRelationId = null;
+        try
+        {
+            await ExecAsync("INSERT INTO hubs.hub (hub_id, relation) VALUES (@id, '{}'::jsonb)", ("id", sourceHubId));
+            await ExecAsync(
+                "INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) VALUES (@mid, @hid, @key, 'active')",
+                ("mid", sourceManifestId), ("hid", sourceHubId), ("key", $"live-db-hub-nav-create-source-{suffix}"));
+            // The RUNTIME manifest registry row (`manifest` table) is a separate concept from
+            // hubs.topology_manifests (the hub-facing navigation registry) — dispatching the
+            // source manifest by target_ref resolves against THIS table
+            // (ManifestRepository.LoadByIdAsync), not hubs.topology_manifests. A minimal
+            // runtime_mapping entry (no dispatcher_mapping, no ui_projection — this is
+            // deliberately NOT topology UI seed content) is all that's required to route the
+            // dispatch to admin_runtime.
+            await ExecAsync(
+                "INSERT INTO manifest (manifest_id, relation_registry_id, topology, status) VALUES " +
+                "(@mid, NULL, ARRAY['{\"type\":\"runtime_mapping\",\"runtime_destination\":\"admin_runtime\"}'::jsonb], 'active')",
+                ("mid", sourceManifestId));
+            await ExecAsync("INSERT INTO hubs.hub (hub_id, relation) VALUES (@id, '{}'::jsonb)", ("id", targetHubId));
+            await ExecAsync(
+                "INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) VALUES (@mid, @hid, @key, 'active')",
+                ("mid", targetManifestId), ("hid", targetHubId), ("key", $"live-db-hub-nav-create-target-{suffix}"));
+
+            var dispatcher = await BuildRealDispatcherAsync(cs);
+
+            // STEP 1: author the relation via the REAL hub_navigation:create dispatch action.
+            var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                topologyManifestId = sourceManifestId.ToString(),
+                relatedHubId = targetHubId.ToString(),
+                sequencePosition = 1,
+            });
+            var createRequest = new EndpointRequestDto(
+                OperationType: "HubNavigationAdminScenario",
+                Target: "admin",
+                Layer: "hub_navigation",
+                Action: "create",
+                IdOrHubId: null, Payload: createPayload, Context: null, TriggerKind: "client", Role: "admin");
+            var createResponse = await dispatcher.DispatchAsync(createRequest);
+
+            Assert.True(
+                createResponse.Success,
+                string.Join(";", createResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+
+            // STEP 2: readback through the repository read path — the created row is really
+            // persisted, not merely echoed in the create response.
+            var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
+            var relations = await contentBundleRepo.ListHubRelationsByManifestAsync(sourceManifestId);
+            var created = Assert.Single(relations, r => r.RelatedHubId == targetHubId.ToString());
+            createdHubRelationId = Guid.Parse(created.HubRelationId);
+            Assert.Equal(1, created.SequencePosition);
+            Assert.Equal("active", created.Status);
+
+            // STEP 3: dispatch the SOURCE manifest via target_ref (the same manifest:<uuid>:<key>
+            // shape frontend/runtime/projectionEntry.ts produces for an explicit ?manifest=
+            // selection), routed to a REAL registered admin_runtime action
+            // (hub_navigation:get_hub_relations, not the ui_projection structural-render
+            // fallback — this source manifest deliberately has no ui_projection, since building
+            // one would be topology UI seed content this remediation must not add), and confirm
+            // Emission.NavigationSequence reflects the relation just authored through the real
+            // create action, with the target resolving via the exactly-one-active-manifest rule.
+            // EnrichWithHubNavigationAsync runs for ANY successful admin_runtime response
+            // (ManifestDispatcher.cs), not only ui_projection-backed manifests.
+            var sourcePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+            {
+                target_ref = $"manifest:{sourceManifestId}:hub_relations_read",
+                topologyManifestId = sourceManifestId.ToString(),
+            });
+            var sourceRequest = new EndpointRequestDto(
+                OperationType: "HubNavigationAdminScenario",
+                Target: "admin",
+                Layer: "hub_navigation",
+                Action: "get_hub_relations",
+                IdOrHubId: null, Payload: sourcePayload, Context: null, TriggerKind: "client", Role: "admin");
+            var sourceResponse = await dispatcher.DispatchAsync(sourceRequest);
+
+            Assert.True(
+                sourceResponse.Success,
+                string.Join(";", sourceResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+            Assert.NotNull(sourceResponse.Emission);
+            Assert.NotNull(sourceResponse.Emission!.NavigationSequence);
+            var navItem = Assert.Single(
+                sourceResponse.Emission.NavigationSequence!, i => i.RelatedHubId == targetHubId.ToString());
+            Assert.Equal(1, navItem.SequencePosition);
+            Assert.Equal(targetManifestId.ToString(), navItem.TargetManifestId);
+
+            // STEP 4: fail-close — deprecate the sole active target manifest and re-dispatch the
+            // same source manifest. Zero active target manifests under the related hub must
+            // resolve to null, never a stale/fallback value (mirrors the
+            // no_implicit_join_nullable_fallback_or_oldest_manifest_fallback invariant already
+            // covered for the repository method directly in
+            // LoadHubNavigationSequenceAsync_TargetManifestId_ResolvesOnlyExactlyOneActiveManifestPerHub —
+            // this proves the SAME fail-close through the full dispatch path instead).
+            await ExecAsync(
+                "UPDATE hubs.topology_manifests SET status = 'deprecated' WHERE topology_manifest_id = @mid",
+                ("mid", targetManifestId));
+            var afterDeprecateResponse = await dispatcher.DispatchAsync(sourceRequest);
+            Assert.True(afterDeprecateResponse.Success);
+            var navItemAfterDeprecate = Assert.Single(
+                afterDeprecateResponse.Emission!.NavigationSequence!, i => i.RelatedHubId == targetHubId.ToString());
+            Assert.Null(navItemAfterDeprecate.TargetManifestId);
+        }
+        finally
+        {
+            if (createdHubRelationId is not null)
+                await ExecAsync("DELETE FROM hubs.hub_relations WHERE hub_relation_id = @rid", ("rid", createdHubRelationId.Value));
+            await ExecAsync("DELETE FROM manifest WHERE manifest_id = @mid", ("mid", sourceManifestId));
+            await ExecAsync(
+                "DELETE FROM hubs.topology_manifests WHERE topology_manifest_id IN (@m1, @m2)",
+                ("m1", sourceManifestId), ("m2", targetManifestId));
+            await ExecAsync(
+                "DELETE FROM hubs.hub WHERE hub_id IN (@h1, @h2)", ("h1", sourceHubId), ("h2", targetHubId));
         }
     }
 
@@ -484,4 +638,18 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
     }
 
     private static string? GetConnectionString() => AggregateTriggerRepositoryLiveDbTests.GetConnectionString();
+
+    // admin-surface-topology-seed-conversion: a prior revision of this file added
+    // AdminLandingHub_HubRelation_ResolvesToCredentialManagementManifest092_SeedOnly, which
+    // asserted against a fabricated admin-landing manifest/hub/hub_relation
+    // (00000000-0000-0000-0000-0000000ad100/ad101/ad102) created solely to give /admin its own
+    // outbound hub relation. That construct has been removed from db/seed_empty.sql (owner
+    // correction, PR #584 review comments): creating a manifest/hub only to host a hub_relations
+    // row is the "empty/fake topology manifest for hub relation connection purposes" pattern now
+    // explicitly prohibited. This test is removed with it rather than left asserting against seed
+    // rows that no longer exist. It was never structurally necessary in the first place: the real
+    // hub relation source is whichever EXISTING topology_manifest an admin selects via
+    // /admin/manifests (see DispatchAsync_HubNavigationCreate_RealAuthoringPath_... above and
+    // docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.authoring),
+    // never required to be /admin's own landing page.
 }

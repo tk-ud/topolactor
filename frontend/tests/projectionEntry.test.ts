@@ -76,7 +76,10 @@ Deno.test("projectionEntry: route selection resolves to that target axis — NOT
   assertEquals(axes.target, "orders.list");
   assertEquals(axes.layer, "screen_list");
   assertEquals(axes.action, "Search");
-  assert(axes.target !== "default", "route-selected entry must not dispatch the default target");
+  assert(
+    axes.target !== "default",
+    "route-selected entry must not dispatch the default target",
+  );
 });
 
 Deno.test("projectionEntry: manifest selection resolves to payload.target_ref (backend manifest resolution authority)", () => {
@@ -237,7 +240,10 @@ Deno.test("projection entry surface: package confirmation applies to a refreshed
     componentIds: [],
     packageId: "dddddddd-0000-0000-0000-000000000004",
   };
-  assertEquals(confirmProjectionEntryEmission(selection, initialEmission).ok, true);
+  assertEquals(
+    confirmProjectionEntryEmission(selection, initialEmission).ok,
+    true,
+  );
   const refreshResult = confirmProjectionEntryEmission(
     selection,
     refreshedMismatchEmission,
@@ -301,7 +307,12 @@ Deno.test("resolveHubNavigationLinks: empty/absent navigationSequence yields no 
 
 Deno.test("resolveHubNavigationLinks: an item with targetManifestId becomes a resolvable ?manifest= link", () => {
   const links = resolveHubNavigationLinks([
-    navItem({ relatedHubId: "hub-a", relatedHubLabel: "Hub A", sequencePosition: 1, targetManifestId: MANIFEST_ID }),
+    navItem({
+      relatedHubId: "hub-a",
+      relatedHubLabel: "Hub A",
+      sequencePosition: 1,
+      targetManifestId: MANIFEST_ID,
+    }),
   ]);
   assertEquals(links.length, 1);
   const link = links[0];
@@ -314,7 +325,12 @@ Deno.test("resolveHubNavigationLinks: an item with targetManifestId becomes a re
 
 Deno.test("resolveHubNavigationLinks: an item with no targetManifestId (ambiguous or unregistered hub) is explicitly unresolvable, not silently dropped or guessed", () => {
   const links = resolveHubNavigationLinks([
-    navItem({ relatedHubId: "hub-b", relatedHubLabel: "Hub B", sequencePosition: 2, targetManifestId: null }),
+    navItem({
+      relatedHubId: "hub-b",
+      relatedHubLabel: "Hub B",
+      sequencePosition: 2,
+      targetManifestId: null,
+    }),
   ]);
   assertEquals(links.length, 1);
   assertEquals(links[0].resolvable, false);
@@ -323,9 +339,24 @@ Deno.test("resolveHubNavigationLinks: an item with no targetManifestId (ambiguou
 
 Deno.test("resolveHubNavigationLinks: sorts by sequencePosition (manifest-scoped UI transition order, hubs.hub_relations.sequence_position)", () => {
   const links = resolveHubNavigationLinks([
-    navItem({ relatedHubId: "hub-c", relatedHubLabel: "C", sequencePosition: 3, targetManifestId: MANIFEST_ID }),
-    navItem({ relatedHubId: "hub-a", relatedHubLabel: "A", sequencePosition: 1, targetManifestId: MANIFEST_ID }),
-    navItem({ relatedHubId: "hub-b", relatedHubLabel: "B", sequencePosition: 2, targetManifestId: MANIFEST_ID }),
+    navItem({
+      relatedHubId: "hub-c",
+      relatedHubLabel: "C",
+      sequencePosition: 3,
+      targetManifestId: MANIFEST_ID,
+    }),
+    navItem({
+      relatedHubId: "hub-a",
+      relatedHubLabel: "A",
+      sequencePosition: 1,
+      targetManifestId: MANIFEST_ID,
+    }),
+    navItem({
+      relatedHubId: "hub-b",
+      relatedHubLabel: "B",
+      sequencePosition: 2,
+      targetManifestId: MANIFEST_ID,
+    }),
   ]);
   assertEquals(links.map((l) => l.label), ["A", "B", "C"]);
 });
@@ -333,7 +364,12 @@ Deno.test("resolveHubNavigationLinks: sorts by sequencePosition (manifest-scoped
 Deno.test("hub navigation round-trip: a resolvable link's href feeds back through parseProjectionEntrySelection + resolveProjectionEntryAxes into the SAME target manifest's dispatch axes — navigationSequence connects to the next projection dispatch, not just a rendered label", () => {
   const targetManifestId = "cccccccc-1111-2222-3333-444444444444";
   const links = resolveHubNavigationLinks([
-    navItem({ relatedHubId: "hub-target", relatedHubLabel: "Target hub", sequencePosition: 1, targetManifestId }),
+    navItem({
+      relatedHubId: "hub-target",
+      relatedHubLabel: "Target hub",
+      sequencePosition: 1,
+      targetManifestId,
+    }),
   ]);
   const link = links[0];
   assertEquals(link.resolvable, true);
@@ -356,7 +392,12 @@ Deno.test("hub navigation round-trip: a resolvable link's href feeds back throug
 
 Deno.test("hub navigation round-trip: an unresolvable link (no targetManifestId) has no href to feed into the next dispatch at all", () => {
   const links = resolveHubNavigationLinks([
-    navItem({ relatedHubId: "hub-ambiguous", relatedHubLabel: "Ambiguous hub", sequencePosition: 1, targetManifestId: null }),
+    navItem({
+      relatedHubId: "hub-ambiguous",
+      relatedHubLabel: "Ambiguous hub",
+      sequencePosition: 1,
+      targetManifestId: null,
+    }),
   ]);
   const link = links[0];
   assertEquals(link.resolvable, false);
@@ -372,7 +413,8 @@ Deno.test("projection entry surface: ProjectionShell reads emission.navigationSe
     "ProjectionShell must resolve NavigationSequence into navigable links via projectionEntry.ts, not read the raw field ad hoc",
   );
   assert(
-    src.includes("emission?.navigationSequence") || src.includes("emission.navigationSequence"),
+    src.includes("emission?.navigationSequence") ||
+      src.includes("emission.navigationSequence"),
     "ProjectionShell must read emission.navigationSequence",
   );
   assert(
@@ -409,7 +451,11 @@ Deno.test("adoptResolvedManifestIdentity: bare entry with no explicit manifest p
     `manifest:${MANIFEST_ID}:projection_entry`,
     "a bare entry's refresh axes must be pinned to the manifest the initial dispatch actually resolved",
   );
-  assertEquals(adopted.target, initialAxes.target, "target/layer/action axes are unchanged by adoption");
+  assertEquals(
+    adopted.target,
+    initialAxes.target,
+    "target/layer/action axes are unchanged by adoption",
+  );
 });
 
 Deno.test("adoptResolvedManifestIdentity: explicit ?manifest= selection is left unchanged — adoption must not override an explicit user selection", () => {
@@ -442,9 +488,14 @@ Deno.test("confirmProjectionEntryEmission: refresh after bare entry must confirm
     initialEmission,
     { adoptedManifestId: MANIFEST_ID },
   );
-  assert(okResult.ok, "refresh resolving the SAME adopted manifest must be confirmed ok");
+  assert(
+    okResult.ok,
+    "refresh resolving the SAME adopted manifest must be confirmed ok",
+  );
 
-  const driftedEmission: Emission = { manifestId: "dddddddd-0000-0000-0000-000000000004" };
+  const driftedEmission: Emission = {
+    manifestId: "dddddddd-0000-0000-0000-000000000004",
+  };
   const mismatchResult = confirmProjectionEntryEmission(
     {},
     driftedEmission,
@@ -455,7 +506,9 @@ Deno.test("confirmProjectionEntryEmission: refresh after bare entry must confirm
     "refresh resolving a DIFFERENT manifest than the one adopted after initial dispatch must be an explicit error, never silently rendered",
   );
   if (!mismatchResult.ok) {
-    assert(mismatchResult.error.startsWith("PROJECTION_ENTRY_MANIFEST_MISMATCH"));
+    assert(
+      mismatchResult.error.startsWith("PROJECTION_ENTRY_MANIFEST_MISMATCH"),
+    );
   }
 });
 
@@ -465,12 +518,12 @@ Deno.test("credential-management bundle: no dedicated credential route/panel was
   for await (const entry of Deno.readDir(routesDir)) {
     entries.push(entry.name);
   }
-  const forbidden = entries.filter((name) =>
-    /credential/i.test(name)
-  );
+  const forbidden = entries.filter((name) => /credential/i.test(name));
   assertEquals(
     forbidden,
     [],
-    `no dedicated credential-management admin route may be added; found: ${forbidden.join(", ")}`,
+    `no dedicated credential-management admin route may be added; found: ${
+      forbidden.join(", ")
+    }`,
   );
 });
