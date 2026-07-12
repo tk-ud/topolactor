@@ -375,7 +375,21 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - proof 更新を idempotency authority 再設計・再実装として読める状態にする。
 - **empty/fake topology manifest（ui_projection を持たない manifest/hub）を hub_relations 接続 source を作る目的だけで新規作成する（owner 明示禁止, PR #584 review comment）。**
 
-### Owner補正記録（PR #584 review comment, 2026-07-11, topology UI seed production 停止）
+### 現在の状態（正本、2026-07-12b 時点）
+
+以下がこの Bundle の現在の状態の正本である。下の各「記録」節（2026-07-11 / 2026-07-12 / 2026-07-12b）は対応履歴（監査証跡）として保持するが、判断の正本ではない。特に 2026-07-11 節は判断の前提が誤っていたため **INVALIDATED** としている（詳細は当該節を参照）。
+
+- Bundle status: **`not_started`**（未実装）。
+- credential-management subBundle には現在 **一切の専用 route/island が存在しない**。既存の `/admin/users`（auth_users CRUD、未変更）と manifest 092 の既存 `?manifest=`/`canonical_default_entry` アクセス（user_auth/external/instance_settings、未変更）のみが到達経路。
+- admin hub relation navigation: source は `/admin` 自身である必要はなく、既存の `/admin/manifests` authoring surface（`ManifestsAdmin.tsx` + `HubNavigationAdmin.tsx`、`hub_navigation:*` dispatch action、すべて既存実装・production dispatcher_mapping 済み）から任意の既存 manifest を source として選択できる。
+  - credential-management: ターゲット側（manifest 092）に blocker はない。実際に relation が authoring されているかどうかは runtime data であり、この todo は追跡しない。
+  - enum_dictionary / team_dashboard / scheduler_settings: ターゲット側の per-screen `ui_projection` manifest が存在しないことのみが blocker。
+- **topology UI seed production は owner 指示により停止中。再開には明示的な今後の owner 指示が必要。**
+- fake manifest（`ad100`/`ad101`/`ad102`）撤回、`/admin/credentials`・`AdminCredentialsShell` 撤去、`auth_users:*`/`team_markdown:*` dispatcher_mapping 追加、generic `LayoutSchemaTensorComposer` → `LayoutNode[]` fixture proof、`hub_navigation:create` end-to-end proof はすべて維持済み。
+
+### [INVALIDATED — DO_NOT_USE — superseded_by_2026_07_12b] Owner補正記録（PR #584 review comment, 2026-07-11, topology UI seed production 停止）
+
+**INVALIDATED: この節の「現在の状態」の判断（admin hub relation navigation が4 subBundle すべて unconnected というくだり）は、「hub relation の source は `/admin` 自身でなければならない」という誤った前提に基づいており、2026-07-12b 節で訂正済み。正本は上の「現在の状態（正本）」を参照すること。** 以下は対応履歴としてのみ保持する。
 
 **この節は Bundle の Status を `not_started` から変更しない。** PR #584 で行った作業は topology UI seed conversion の完了ではなく、Agent による暫定実装（provisional implementation）として以下に記録する。
 
@@ -389,9 +403,9 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
   - `enum-dictionary-ssot.yaml` / `team-markdown-dashboard-saved-view-ssot.yaml` / `scheduler-job-manifest-ssot.yaml` の `admin_hub_relation_navigation` は元々 `status: blocked_pending_seed_catalog`（target 側 manifest 不在が理由）であり、fabrication を主張していなかったため変更不要と確認した。
   - `frontend/tests/layoutSchemaStructuralRender.test.ts`（PR #583 由来の共通 test 基盤）から、manifest 092 固有の UUID literal（`layoutId`/`packageId` の `...cd002`/`...cd005`）と credential 画面固有の node 名（`instance_settings`/`instance_address_form`/`instance_authority_key`/`validate`/`json_template_download` 等）を汎用プレースホルダー（`sample_category`/`sample_form`/`sample_field`/`sample_action` 等、汎用 UUID `...000101`/`...000102`）に置き換えた。manifest 092 の実 fixture を使う代表 regression proof（1番目・最後のテスト）はそのまま維持した。9 tests すべて pass 確認済み。
   - `auth_users:*` / `team_markdown:*` の dispatcher_mapping 追加（db/seed_empty.sql）は `AdminRuntime.ExecuteDataAsync` の switch 実装および canonical bootstrap seed と照合済みで、この停止指示の対象外（本 Bundle の実装ではなく、既存 backend 実装に対する欠落 wiring の是正）として維持する。
-- **現在の状態（重要、2026-07-12 Gate0 remediation により更新 — 下の節を参照）:**
-  - admin hub relation navigation は 4 subBundle（credential-management / admin-enum / team-dashboard / scheduler-settings）すべてで **unconnected**（未接続、fabrication なし、evidence は `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract.wired_relations` を参照）。
-  - **topology UI seed production は owner 指示により停止中。再開には明示的な今後の owner 指示が必要。**
+- **現在の状態（INVALIDATED — 使用しないこと。正本は本 Bundle 冒頭の「現在の状態（正本）」節を参照）:**
+  - ~~admin hub relation navigation は 4 subBundle（credential-management / admin-enum / team-dashboard / scheduler-settings）すべてで unconnected（未接続、fabrication なし）~~ — 誤り。「source は `/admin` 自身でなければならない」という前提が誤りだった（2026-07-12b 節参照）。
+  - topology UI seed production は owner 指示により停止中という点のみ、現在も正しい。
 
 ### Gate0 remediation記録（PR #584 review comment, 2026-07-12）
 
@@ -433,7 +447,7 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 
 ### 旧 `.agent/reports/admin-surface-topology-seed-conversion-design-resolution.json` からの移管内容（削除前、2026-07-12b）
 
-owner 指示により、一時監査 report である上記 JSON ファイルは本節への必要内容の移管後、PR closure 前に削除する。この Bundle が完了していない残作業として、以下を記録する（`gap-01` などの ID は削除される report 内での参照 ID、今後は本節を正本とする）。
+owner 指示により、一時監査 report である上記 JSON ファイルは本節への必要内容の移管後、PR closure 前に削除した。以下は削除された report の追跡先として todo へ移管した内容であり、**SSOT authority ではない**（`gap-01` などの ID は削除済み report 内での参照 ID）。
 
 - **response-binding architecture 未実装**（旧 gap-01）: `dispatchExternalPort`/`dispatchInstanceOperation` の runtimeInteractions レーンに対する response-binding / invalidation アーキテクチャが未実装。`admin_runtime`（auth_users/team_markdown/scheduler_jobs/enum_dictionary）CRUD を真に seed-backed category として authoring するには、`AdminRuntime` の `layer:action` axis を直接 dispatch できる新しい runtimeInteractions actionType も必要。cross-cutting・high-blast-radius につき、owner_decision_required のアーキテクチャ選択が前提。
 - **declared_seed_surface_catalog 未整備**（旧 gap-02）: admin-dashboard / team-dashboard / admin-enum / scheduler-settings 向けの catalog entry が未追加。各 surface ごとに React-like Schema 作成 + translator 実行が必要。
