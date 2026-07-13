@@ -114,8 +114,8 @@ admin_normal_surface_projection_seed_ssot:
       rule: Secret-bearing values, hashes, encrypted payloads, tokens, refresh payloads, endpoints requiring secrecy, and decrypted credential material must never appear in lists, search results, detail projections, mutation previews, diffs, or topology seed examples.
     no_silent_fallback:
       rule: No first-match fallback, oldest-row fallback, route fallback, implicit dashboard choice, or default target manifest selection is allowed.
-    users_credentials_separation:
-      rule: credentials surface owns credential lifecycle intent; users surface owns user status projection and must not include create/delete/credential editing.
+    account_lifecycle_and_status_projection_split:
+      rule: credentials.users and users(status) target the same auth.users identity. credentials.users owns composite account lifecycle intent through the existing auth_users authority, while users(status) is a narrower status-management projection and must not become a second user lifecycle or credential plane.
   topology_seed_schema_contract:
     minimum_required_fields:
       topology_manifest_identity:
@@ -159,6 +159,9 @@ admin_normal_surface_projection_seed_ssot:
           - frontend/components/catalog.ts
       md_translation_authoring_surface.authoring:
         role: Existing Markdown translation/authoring surface for binding Markdown source fields and authoring seed intent.
+        runtime_binding_mode: runtime_adapter_required_before_seed_generation
+        runtime_connected_status: false_in_current_catalog_physical_evidence
+        seed_rule: Topology seed must not treat this component key as a directly runtimeConnected component. A seed may target it only through an explicit runtime adapter that mounts the existing component with the props/events declared in normal.dashboard.inputer_runtime_adapter_contract, or through an existing route composition that already owns the component lifecycle.
         catalog_refs:
           - docs/design/ui-ux-primitive-catalog-ssot.yaml
           - frontend/components/catalog.ts
@@ -191,12 +194,24 @@ admin_normal_surface_projection_seed_ssot:
       surfaces:
         credentials:
           categories:
-            user_credential:
-              data_authority_ref: auth.credentials
-              existing_schema_fields_allowed_for_projection: [credential_id, user_id, created_at]
+            users:
+              category_role: composite_account_lifecycle_for_same_auth_user
+              data_authority_ref:
+                - auth.users
+                - auth.credentials
+              existing_schema_fields_allowed_for_projection:
+                auth.users: [user_id, username, active, approve, status, suspended_from, suspended_until, state_note, created_at, updated_at]
+                auth.credentials: [credential_id, user_id, created_at]
               forbidden_projection_fields: [password_hash, token_hash, refresh_token, plaintext_secret, secret_value]
-              operations: [create, read, update, delete, search]
-              mutation_boundary: create/update/delete are credential lifecycle intents only; secret updates must be explicit replace or rotate actions and must not expose the existing secret.
+              operations: [create_account_with_initial_credential, read, search, update_account_metadata, replace_password, rotate_password, delete_account_with_credentials]
+              transaction_contract:
+                create_account_with_initial_credential: auth.users insert and auth.credentials insert are one account lifecycle transaction; no user row without required initial credential may be projected as created by this surface.
+                delete_account_with_credentials: account deletion must preserve auth.users -> auth.credentials consistency through the existing FK/cascade or an equivalent backend transaction; no orphan credential lifecycle is defined here.
+                password_replace_rotate: update credential secret material by explicit replace/rotate intent only; old or new secret material is never projected, previewed, searched, or diffed.
+              admin_users_authority_relationship:
+                existing_authority_ref: docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions.auth_users
+                relationship: continuation_refinement_not_duplicate_authority
+                rule: /admin/users remains the existing account CRUD authority surface for auth_users:* actions. credentials.users is the topology seed projection design for that same account lifecycle capability; it must bind to the same authority and must not introduce a parallel account CRUD authority.
             external_api_credential:
               data_authority_ref:
                 - topology.external_credential_vault
@@ -214,15 +229,16 @@ admin_normal_surface_projection_seed_ssot:
               operations: [create, read, update, delete, search]
               mutation_boundary: instance credential settings may be selected/updated only through existing credential-management projection extension; no new credential table or plane is defined here.
           projection_responsibility:
-            - credential_record_inventory_without_secrets
+            - account_and_credential_record_inventory_without_secrets
             - category_filter_and_search_without_secret_material
-            - explicit_replace_or_rotate_intent_collection
-            - diff_log_of_metadata_and_secret_lifecycle_event_without_secret_value
+            - composite_account_create_delete_transaction_intent
+            - explicit_password_replace_or_rotate_intent_collection
+            - diff_log_of_account_metadata_and_secret_lifecycle_event_without_secret_value
           capability_requirements:
             read: required
-            search: required
-            filter: [category, provider_kind, required_by_bundle, active, expires_at]
-            mutation: [create_metadata, replace_secret, rotate_secret, deactivate_or_delete_reference]
+            search: [auth.users.username, auth.users.status, auth.users.state_note, topology.external_credential_vault.provider_kind, topology.external_credential_vault.required_by_bundle, topology.external_credential_vault.reference_key]
+            filter: [category, auth.users.active, auth.users.approve, auth.users.status, provider_kind, required_by_bundle, active, expires_at]
+            mutation: [create_account_with_initial_credential, update_account_metadata, replace_password, rotate_password, delete_account_with_credentials, external_credential_metadata_update, deactivate_or_delete_reference]
           seed_contract:
             component_tree:
               - node_key: credential_search
@@ -230,7 +246,7 @@ admin_normal_surface_projection_seed_ssot:
                 responsibility: query non-secret metadata only
               - node_key: credential_category_filter
                 component_key: select.template
-                responsibility: filter user_credential external_api_credential external_instance_credential
+                responsibility: filter users external_api_credential external_instance_credential
               - node_key: credential_result_list
                 component_key: table.primitive
                 responsibility: list allowed metadata fields only
@@ -239,12 +255,15 @@ admin_normal_surface_projection_seed_ssot:
                 responsibility: collect metadata plus write-only secret input for replace/rotate
               - node_key: credential_confirm_button
                 component_key: button.primitive
-                responsibility: explicit create/replace/rotate/delete confirmation
-            mutation_confirmation_contract: [preview_without_secret, validate_policy, explicit_confirm, write, diff_log_without_secret]
+                responsibility: explicit account create/update/password replace/rotate/delete or external credential confirmation
+            mutation_confirmation_contract: [preview_account_or_credential_delta_without_secret, validate_policy_and_transaction_boundary, explicit_confirm, write, diff_log_without_secret]
             loading_empty_error_projection: [loading_credentials, empty_credentials, credential_error_fail_close]
         users:
           primary_projection: user_status
           data_authority_ref: auth.users
+          same_user_authority_as_credentials_users: true
+          account_lifecycle_authority_ref: surface_axes.admin.surfaces.credentials.categories.users
+          authority_relationship: status_projection_only_not_parallel_account_lifecycle
           operations: [search, status_filter, update]
           excluded_operations: [create, delete, credential_edit]
           projection_responsibility:
@@ -286,8 +305,8 @@ admin_normal_surface_projection_seed_ssot:
           authority_boundary: This surface must not redefine enum vocabulary authority; vocabulary meaning and group membership authority remain enum dictionary SSOT and enum schema.
           capability_requirements:
             read: required
-            search: [items_name, groups_group_name, index_num]
-            filter: [group, membership]
+            search: [enum.items.name, enum.items.index_num, enum.groups.group_name, enum.groups.index_num, enum.group_items.position]
+            filter: [enum.groups.group_name, enum.groups.index_num, enum.group_items.position]
             mutation: [create_item, update_item, delete_item, create_group, update_group, delete_group, update_group_members]
           seed_contract:
             component_tree:
@@ -325,14 +344,15 @@ admin_normal_surface_projection_seed_ssot:
           hub_relation_navigation_binding:
             relation_source: hubs.hub_relations joined through hubs.topology_manifests by explicit topology_manifest_id
             selected_link_payload_required: [hub_relation_id, topology_manifest_id, related_hub_id]
-            target_manifest_resolution: resolve exactly one active target manifest for related_hub_id and selected surface context
-            fail_close_conditions:
+            canonical_resolution_rule_ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.resolution_rule
+            target_manifest_resolution: related_hub_id resolves only when exactly one active hubs.topology_manifests row exists for that hub; zero or multiple active rows fail-close to no target.
+            runtime_fail_close_negative_cases:
               - missing_hub_relation
               - deprecated_hub_relation
-              - missing_target_manifest
-              - multiple_target_manifests
+              - zero_active_target_manifest_for_related_hub_id
+              - multiple_active_target_manifests_for_related_hub_id
               - target_manifest_deprecated
-              - implicit_first_match_required
+              - first_match_oldest_or_implicit_surface_fallback_required
           seed_contract:
             component_tree:
               - node_key: hub_relation_search
@@ -365,18 +385,26 @@ admin_normal_surface_projection_seed_ssot:
               projection_fields: [saved_view_id, title, rendered_markdown, card_metadata_json, status, updated_at]
               forbidden_authority: [mutation_write, topology_promotion, schema_generation, markdown_as_runtime_ssot]
             inputer:
-              role: update_intent_surface
+              role: admin_capability_gated_update_intent_surface_inside_normal_dashboard
               component_keys:
                 - md_translation_authoring_surface.authoring
-                - textarea.template
               owns_mutation_intent: true
+              surface_membership_axis: normal
+              admin_capability_gate_applies_to: [preview, validate, explicit_confirm, write, diff_log]
+              admin_capability_gate_does_not_apply_to: [viewer_read_projection]
               persistence_authority_ref: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+              runtime_reachability: runtime_adapter_required_before_seed_generation
           operations: [read, search, filter, preview, validate, explicit_confirm, write, diff_log]
+          operation_capability_boundary:
+            read_search_filter: normal_projection_read_capability
+            preview_validate_write_diff: admin_capability_required_via_manifest_event_and_backend_emission_boundary
+            rule: admin capability gate attaches only to inputer mutation events and backend emissions, never to md_viewer.projection read rendering or to the normal projection axis itself.
           projection_responsibility:
             - show_team_markdown_saved_view_with_read_only_viewer
             - collect_markdown_update_intent_in_authoring_input_surface
             - keep_viewer_and_inputer_responsibilities_separate_inside_same_dashboard
             - persist_updates through team Markdown backend/runtime flow, not frontend local state only
+            - gate_inputer_preview_validate_write_diff_by_admin_capability_without_reclassifying_normal_axis_as_auth_role
           capability_requirements:
             read: [saved_view, template, event_log_projection]
             search: [title, rendered_markdown, search_index_text, tags_from_card_metadata]
@@ -405,49 +433,79 @@ admin_normal_surface_projection_seed_ssot:
                 responsibility: read projection only
               - node_key: markdown_authoring_input
                 component_key: md_translation_authoring_surface.authoring
-                responsibility: update intent authoring and binding selection
-              - node_key: markdown_body_textarea
-                component_key: textarea.template
-                responsibility: editable Markdown body/input area inside authoring flow when needed
+                binding_mode: runtime_adapter_required_before_seed_generation
+                responsibility: admin-capability-gated update intent authoring and binding selection; not directly runtimeConnected in current catalog evidence
               - node_key: markdown_confirm_button
                 component_key: button.primitive
             prop_bindings:
               - node_key: markdown_viewer
-                props: [savedView, renderedMarkdown, cardMetadata, status]
-                source_ref: topology.team_markdown_saved_view
+                component_key: md_viewer.projection
+                props: [savedView, seedValid, seedError, onClose, onRefresh, onEditAdjustment, onArchive, onClone, onRebind, onOpenSourceRecord, onCreateTodoCandidate, disabledActionReasons]
+                source_ref: frontend/components/MdViewer.tsx MdViewerProps physical evidence; savedView maps to team_markdown SavedViewDetail from topology.team_markdown_saved_view
               - node_key: markdown_authoring_input
-                props: [templateRef, bindingJson, draftMarkdown, validationResult]
-                source_ref: team_markdown_mutation_intent
+                component_key: md_translation_authoring_surface.authoring
+                props: [onSaved, onCancel, placement]
+                source_ref: frontend/components/MdTranslationAuthoringSeedSurface.tsx MdTranslationAuthoringSeedSurfaceProps physical evidence
             event_bindings:
-              - event_key: preview_markdown_update
+              - event_key: viewer_close
+                source_node: markdown_viewer
+                event_kind: onClose
+                capability: normal_projection_read_ui_event
+              - event_key: viewer_mutation_callbacks_disabled_in_normal_projection
+                source_node: markdown_viewer
+                event_kind: onRefresh/onEditAdjustment/onArchive/onClone/onRebind/onCreateTodoCandidate omitted_or_disabled
+                capability: none_for_viewer_read_projection
+                rule: normal dashboard viewer binding must not require admin capability; mutation callbacks are not supplied by the normal read projection binding and must be handled only by the inputer/admin-gated adapter flow.
+              - event_key: authoring_saved
                 source_node: markdown_authoring_input
-                event_kind: preview
-              - event_key: validate_markdown_update
+                event_kind: onSaved(savedViewId)
+                capability: admin_required
+                backend_boundary: createSavedView team_markdown API through existing route composition or required runtime adapter
+              - event_key: authoring_cancel
                 source_node: markdown_authoring_input
-                event_kind: validate
-              - event_key: confirm_markdown_update
-                source_node: markdown_confirm_button
-                event_kind: explicit_confirm
-              - event_key: write_markdown_update
-                source_node: markdown_authoring_input
-                event_kind: write_after_confirm
+                event_kind: onCancel
+                capability: normal_projection_ui_cancel
             backend_emission_bindings:
+              - emission_key: markdown_preview_validated
+                required_capability: admin
+                expected_response_projection: sanitized_preview_validation_result
+                error_projection: validation_error_without_secret
               - emission_key: markdown_update_written
+                required_capability: admin
                 expected_response_projection: sanitized_saved_view_and_diff_log
                 error_projection: validation_or_write_error_without_secret
+            inputer_runtime_adapter_contract:
+              adapter_requirement: required_before_topology_seed_generation
+              component_runtime_connected_evidence: md_translation_authoring_surface.authoring runtimeConnected=false in frontend/components/catalog.ts physical evidence
+              adapter_mounts_component: md_translation_authoring_surface.authoring
+              actual_component_props: [onSaved, onCancel, placement]
+              actual_component_events: [onSaved(savedViewId), onCancel]
+              adapter_owned_events: [preview, validate, explicit_confirm, write, diff_log]
+              admin_capability_gate: required_for_adapter_owned_events_and_onSaved_write_completion
+              route_composition_alternative: existing team Markdown dashboard route composition may be referenced only if it already supplies equivalent props/events and backend emission boundaries; otherwise seed generation is blocked.
+              prohibited:
+                - direct_seed_runtime_component_binding_while_runtimeConnected_false
+                - frontend_display_only_admin_gate
+                - invented_component_props_or_events
             loading_empty_error_projection: [loading_markdown_dashboard, empty_markdown_dashboard, markdown_update_error]
   design_blocking:
-    - id: admin_dashboard_target_manifest_uniqueness
-      blocking_condition: Existing hub relation schema provides relation rows and manifest grouping, but a later seed must define explicit target manifest resolution criteria for each related_hub_id/surface context before dashboard navigation can be generated.
-      required_resolution_before_seed: Define deterministic active target manifest binding in topology seed/manifest contract; no first-match fallback.
+    - id: target_surface_manifest_readiness
+      blocking_condition: Canonical hub relation target resolution already exists; the unresolved design blocker is only whether the target surface has a produced active ui_projection target manifest and whether the navigation binding row has been inserted by the existing /admin/manifests authority.
+      required_resolution_before_seed: Produce or identify the active target manifest for each target surface and insert explicit binding data through the canonical authority; do not redesign hub relation resolution.
     - id: external_instance_projection_columns
       blocking_condition: External instance credential category depends on instance-port substrate authority; if a concrete existing physical table/column set is not present for required instance settings, the seed task must stop and reference the instance-port SSOT instead of inventing fields.
       required_resolution_before_seed: Cross-check instance-port physical schema and approved candidate source at seed implementation time.
+    - id: normal_dashboard_authoring_runtime_adapter
+      blocking_condition: md_translation_authoring_surface.authoring is physical evidence with runtimeConnected=false in the current catalog; a topology seed cannot use it as a direct runtime component until an explicit runtime adapter or existing route composition binding is selected.
+      required_resolution_before_seed: Define the adapter/route-composition binding with props [onSaved, onCancel, placement] and admin-gated preview/validate/write/diff event emissions before generating seed.
     - id: normal_dashboard_write_operation_binding
       blocking_condition: This SSOT defines mutation flow shape, but backend emission operation keys must be selected from team Markdown authority during later seed work.
-      required_resolution_before_seed: Bind preview/validate/write/diff operations to existing team Markdown runtime actions or declare a design conflict.
+      required_resolution_before_seed: Bind preview/validate/write/diff operations to existing team Markdown runtime actions or declare a design conflict before seed generation.
+    - id: credentials_users_account_transaction_binding
+      blocking_condition: credentials.users requires auth.users + auth.credentials account lifecycle transactions; seed implementation must bind to the existing auth_users authority rather than creating a second account CRUD authority.
+      required_resolution_before_seed: Bind create/delete/password replace/rotate to existing auth_users/account transaction authority and prove auth.users/auth.credentials consistency before seed generation.
   seed_implementation_start_conditions:
     - This SSOT is reachable from .agent/docs/ssot-map.yaml and .agent/docs/design-ssot-index.md.
     - Design proof for required vocabulary, boundaries, and referenced catalog/schema surfaces passes.
     - Later seed task reads all authority references listed in foundation_inputs and authority.references.
-    - All design_blocking entries are either resolved in a later design change or explicitly carried as fail-close seed blockers.
+    - All design_blocking entries are resolved before seed generation; unresolved design blockers must not be carried into runtime as fail-close negative cases.
