@@ -10,6 +10,45 @@ notes:
   - For worktype `audit`, read top-level semantic baseline SSOT first (docs/framework-core.yaml, docs/framework-policy.yaml, docs/design/runtime-orchestration-ssot.yaml, docs/design/pipeline-continuity-ssot.yaml) before using this map for surface-specific discovery.
 
 mapping:
+
+  - work_type: admin_normal_surface_projection_seed_design
+    change_surfaces:
+      - admin normal projection seed SSOT
+      - admin credentials projection surface
+      - admin users status projection surface
+      - admin enum projection surface
+      - admin dashboard hub relation navigation trigger
+      - normal dashboard markdown viewer authoring projection
+      - topology UI seed schema contract
+    required_docs:
+      - docs/design/admin-normal-surface-projection-seed-ssot.yaml
+    supporting_docs:
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/ui-builder-preset-ecosystem-ssot.yaml
+      - docs/design/auth-db-session-credential-ssot.yaml
+      - docs/design/admin-master-roster-management-ssot.yaml
+      - docs/design/enum-dictionary-ssot.yaml
+      - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+      - docs/design/react-schema-topology-seed-translator-ssot.yaml
+      - docs/design/external-port-substrate-ssot.yaml
+      - docs/design/instance-port-substrate-ssot.yaml
+      - db/auth_tables.sql
+      - db/enum_tables.sql
+      - db/team_markdown_tables.sql
+      - db/topology_tables.sql
+      - db/physical_search_crud_aggregate_preset_seed.sql
+      - frontend/components/catalog.ts
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
   - work_type: repository_overview
     change_surfaces:
       - repository-level orientation

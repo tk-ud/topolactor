@@ -215,3 +215,20 @@ Runtime 層には混入させません。
 
 詳細: `.agent/reports/context-route-recommendation-v1.md` の
 「business-specific naming の排除」セクションを参照。
+
+### Admin / Normal Surface Projection Seed SSOT
+
+| 種別 | パス |
+|---|---|
+| 仕様 YAML | `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
+
+**概要**: `admin` / `normal` を認証ロールではなく投影 surface axis として扱い、admin 側 `credentials` / `users` / `enum` / `dashboard` と normal 側 `dashboard` の topology UI seed 設計を所有する SSOT。`credentials.users` は同一 `auth.users` と `auth.credentials` に対する composite account lifecycle projection、`users(status)` は同一 `auth.users` に対する status-only projection として分離し、credential secret 非投影、hub relation link による fail-close 投影変更 trigger、既存 Markdown viewer / authoring component binding を正本化する。
+
+**参照すべき場面**:
+- admin / normal hub 軸に属する投影 surface の topology seed を設計・生成するとき
+- credentials / users / enum / dashboard surface の read/search/filter/mutation capability を確認するとき
+- hub relation navigation trigger の target manifest fail-close 契約を確認するとき
+- normal dashboard Markdown viewer/input authoring の責務分離と preview → validate → explicit confirm → write → diff log flow を確認するとき
+
+**関連 proof**:
+- `.agent/tests/check-admin-normal-surface-projection-seed-ssot.sh`
