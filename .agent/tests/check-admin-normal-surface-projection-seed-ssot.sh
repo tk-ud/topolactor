@@ -22,6 +22,19 @@ contains_fixed(){
 }
 require_term(){ local file="$1" term="$2"; if contains_fixed "$file" "$term"; then pass "${file#$REPO_ROOT/} contains $term"; else fail "${file#$REPO_ROOT/} missing $term"; fi; }
 require_absent(){ local file="$1" term="$2"; if contains_fixed "$file" "$term"; then fail "${file#$REPO_ROOT/} must not contain $term"; else pass "${file#$REPO_ROOT/} excludes $term"; fi; }
+
+require_block_term(){
+  local file="$1" start="$2" end="$3" required="$4"
+  if awk -v start="$start" -v end="$end" '
+    index($0,start){flag=1}
+    flag{print}
+    flag && index($0,end){exit}
+  ' "$file" | grep -qF -- "$required"; then
+    pass "${file#$REPO_ROOT/} block $start..$end contains $required"
+  else
+    fail "${file#$REPO_ROOT/} block $start..$end missing $required"
+  fi
+}
 require_block_absent(){
   local file="$1" start="$2" end="$3" forbidden="$4"
   if awk -v start="$start" -v end="$end" '
@@ -107,6 +120,16 @@ done
 require_term "$SSOT" "physical_seed_reference_only_not_design_authority"
 require_term "$SSOT" "frontend/components/catalog.ts is implementation evidence only and must not be promoted to SSOT authority owner"
 require_block_absent "$SSOT" "ui_primitive_catalog_authority:" "physical_evidence_refs:" "frontend/components/catalog.ts"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields, capability_requirement"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "capability_requirement_contract:"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "schema_mapping: operation_bindings[*].capability_requirement.required_role"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "conditional_required_for: mutation_operation_bindings"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "topology_entry_type: capability_requirement"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "required_role: admin"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "viewer_read_search_filter_contract:"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "required_role: none"
+require_block_absent "$SSOT" "viewer_read_search_filter_contract:" "prohibited_substitutes:" "required_role: admin"
+
 for term in \
   "source_snapshot_json" \
   "visual_tree_json" \

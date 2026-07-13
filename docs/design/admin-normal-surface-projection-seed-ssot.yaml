@@ -139,7 +139,24 @@ admin_normal_surface_projection_seed_ssot:
       surface_key:
         rule: Must equal one of the surface keys declared under surface_axes.
       operation_bindings:
-        required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields
+        required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields, capability_requirement
+        capability_requirement_contract:
+          schema_mapping: operation_bindings[*].capability_requirement.required_role
+          conditional_required_for: mutation_operation_bindings
+          required_shape:
+            topology_entry_type: capability_requirement
+            required_role: role_value_from_existing_topology_capability_requirement_contract
+          inputer_mutation_contract:
+            applies_to_surface: normal.dashboard.inputer
+            applies_to_operations: [preview, validate, explicit_confirm, write, diff_log]
+            topology_entry_type: capability_requirement
+            required_role: admin
+          viewer_read_search_filter_contract:
+            applies_to_surface: normal.dashboard.viewer
+            applies_to_operations: [read, search, filter]
+            required_role: none
+            rule: Viewer read/search/filter operation bindings must not receive required_role=admin; absence of admin role gate is part of the operation binding schema contract, not only component event text.
+          prohibited_substitutes: [capability_kind_as_role_gate_replacement, required_capability]
       component_bindings:
         required_shape: list of node_key, component_key, component_role, catalog_authority_ref, responsibility_boundary
       prop_bindings:
