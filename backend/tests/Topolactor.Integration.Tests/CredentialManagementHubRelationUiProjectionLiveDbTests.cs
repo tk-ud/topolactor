@@ -52,45 +52,12 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
     private static readonly Guid CredentialManagementPackageId =
         new("00000000-0000-0000-0000-0000000cd005");
 
-    private static async Task<ManifestDispatcher> BuildRealDispatcherAsync(string cs)
-    {
-        var uiRepo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, cs);
-        var topoRepo = new NpgsqlTopologyRepository(NullLogger<NpgsqlTopologyRepository>.Instance, cs);
-        var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, cs);
-        var topoVector = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, ctxRepo);
-        var registrar = new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, topoRepo, topoVector);
-        var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
-        var manifestRepo = new NpgsqlManifestRepository(NullLogger<NpgsqlManifestRepository>.Instance, cs);
-        var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, cs);
-        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
-        var adminRuntime = new AdminRuntime(
-            NullLogger<AdminRuntime>.Instance,
-            ctxRepo,
-            registrar,
-            pkg,
-            uiRepo,
-            topologyRepository: topoRepo,
-            // Real hub_navigation:* authoring path (frontend/islands/HubNavigationAdmin.tsx ->
-            // hub_navigation:create/update/deprecate/reorder) needs this repository wired, not
-            // just the read-only HubNavigationResolver above.
-            contentBundleRepository: contentBundleRepo);
-        var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
-
-        var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);
-
-        return await Task.FromResult(new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            new Dictionary<string, IDispatchableRuntime>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["admin_runtime"] = adminAdapter,
-            },
-            new OperationVectorResolver(),
-            targetOverride,
-            manifestRepo,
-            errorAppender: null,
-            topologyRepository: topoRepo,
-            hubNavigationResolver: hubNavResolver));
-    }
+    // Dispatcher construction and the relation-vector -> NavigationSequence resolution
+    // assertion are manifest-agnostic and shared via HubRelationUiProjectionResolutionChainProof
+    // (runtime-orchestration-ssot.yaml test_proof_contract.test_input_shape) — not duplicated
+    // here, so a future target manifest's own live-DB proof (e.g. enum-dictionary /
+    // team-dashboard / scheduler-settings, once each has seed content) can reuse the same
+    // resolution-chain assertion instead of re-deriving it against a new manifest constant.
 
     [Fact]
     public async Task DispatchAsync_CredentialManagementManifest_E2E_RelationVectorToScalarEmission()
@@ -104,7 +71,6 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         var relationUuid = Guid.NewGuid();
         var relatedHubId = Guid.NewGuid();
         var relatedManifestId = Guid.NewGuid();
-        var hubIds = new[] { relatedHubId };
         var packageIds = new[] { CredentialManagementPackageId };
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -136,7 +102,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 "VALUES (@rid, @mid, @hid, 9201, 'active')",
                 ("rid", relationUuid), ("mid", CredentialManagementManifestId), ("hid", relatedHubId));
 
-            var dispatcher = await BuildRealDispatcherAsync(cs);
+            var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
             // Same target_ref shape frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes
             // produces for ?manifest=<uuid> selection, and the same screen_list/Search axes the
@@ -156,12 +122,10 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             Assert.NotNull(response.Emission);
             var emission = response.Emission!;
 
-            // "current topology phase" identity — the topology_manifest relation_uuid's
-            // hub_relation row belongs to.
-            Assert.Equal(CredentialManagementManifestId.ToString(), emission.ManifestId);
-
             // package_ids[] connects through manifest.topology[ui_projection].packageIds to
             // topology.components_package_design (the manifest-facing package authority).
+            // Content-specific to credential-management/092 — not part of the generic
+            // relation-vector resolution chain asserted below.
             Assert.NotNull(emission.PackageId);
             Assert.Contains(emission.PackageId!.Value, packageIds);
 
@@ -173,16 +137,16 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
             Assert.Contains(emission.LayoutNodes!, n => n.NodeId == "instance_settings_import_form");
             Assert.Contains(emission.LayoutNodes!, n => n.WiringKind == "instance_settings_action_bundle");
 
-            // hub_ids[] connects through hubs.hub_relations.sequence_position (manifest-scoped
-            // relation vector) to Emission.NavigationSequence, and the related hub's sole active
-            // topology_manifest resolves as TargetManifestId — the same identity the frontend
-            // round-trip (?manifest=<TargetManifestId>) would dispatch next.
-            Assert.NotNull(emission.NavigationSequence);
-            var navItem = Assert.Single(
-                emission.NavigationSequence!, i => hubIds.Select(h => h.ToString()).Contains(i.RelatedHubId));
-            Assert.Equal(relatedHubId.ToString(), navItem.RelatedHubId);
-            Assert.Equal(9201, navItem.SequencePosition);
-            Assert.Equal(relatedManifestId.ToString(), navItem.TargetManifestId);
+            // "current topology phase" identity, and hub_ids[] (manifest-scoped relation vector,
+            // hubs.hub_relations.sequence_position) resolving through to Emission.NavigationSequence
+            // with the related hub's sole active topology_manifest as TargetManifestId — the same
+            // identity the frontend round-trip (?manifest=<TargetManifestId>) would dispatch next.
+            // Generic resolution-chain assertion, shared with any other source manifest's own
+            // live-DB proof — see HubRelationUiProjectionResolutionChainProof.
+            HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector(
+                emission,
+                CredentialManagementManifestId,
+                [new HubRelationUiProjectionResolutionChainProof.ExpectedHubVectorEntry(relatedHubId, 9201, relatedManifestId)]);
 
             // No errors — the ADMIN_OPERATION_NOT_FOUND real-AdminRuntime routing gap for this
             // screen-read axes combination was converted to a structural success, exactly the
@@ -256,7 +220,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 "INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status) VALUES (@mid, @hid, @key, 'active')",
                 ("mid", targetManifestId), ("hid", targetHubId), ("key", $"live-db-hub-nav-create-target-{suffix}"));
 
-            var dispatcher = await BuildRealDispatcherAsync(cs);
+            var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
             // STEP 1: author the relation via the REAL hub_navigation:create dispatch action.
             var createPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -313,11 +277,13 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 sourceResponse.Success,
                 string.Join(";", sourceResponse.Errors.Select(e => e.Code + ":" + e.Message)));
             Assert.NotNull(sourceResponse.Emission);
-            Assert.NotNull(sourceResponse.Emission!.NavigationSequence);
-            var navItem = Assert.Single(
-                sourceResponse.Emission.NavigationSequence!, i => i.RelatedHubId == targetHubId.ToString());
-            Assert.Equal(1, navItem.SequencePosition);
-            Assert.Equal(targetManifestId.ToString(), navItem.TargetManifestId);
+            // Generic resolution-chain assertion — this source manifest is a synthetic,
+            // non-credential-management manifest, so this call already proves the shared helper
+            // is not accidentally coupled to manifest 092.
+            HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector(
+                sourceResponse.Emission!,
+                sourceManifestId,
+                [new HubRelationUiProjectionResolutionChainProof.ExpectedHubVectorEntry(targetHubId, 1, targetManifestId)]);
 
             // STEP 4: fail-close — deprecate the sole active target manifest and re-dispatch the
             // same source manifest. Zero active target manifests under the related hub must
@@ -331,9 +297,10 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
                 ("mid", targetManifestId));
             var afterDeprecateResponse = await dispatcher.DispatchAsync(sourceRequest);
             Assert.True(afterDeprecateResponse.Success);
-            var navItemAfterDeprecate = Assert.Single(
-                afterDeprecateResponse.Emission!.NavigationSequence!, i => i.RelatedHubId == targetHubId.ToString());
-            Assert.Null(navItemAfterDeprecate.TargetManifestId);
+            HubRelationUiProjectionResolutionChainProof.AssertNavigationSequenceResolvesHubVector(
+                afterDeprecateResponse.Emission!,
+                sourceManifestId,
+                [new HubRelationUiProjectionResolutionChainProof.ExpectedHubVectorEntry(targetHubId, 1, null)]);
         }
         finally
         {
@@ -354,7 +321,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         var cs = GetConnectionString();
         if (cs is null) return;
 
-        var dispatcher = await BuildRealDispatcherAsync(cs);
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
         var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
         {
             target_ref = $"manifest:{CredentialManagementManifestId}:projection_entry",
@@ -416,7 +383,7 @@ public class CredentialManagementHubRelationUiProjectionLiveDbTests
         var cs = GetConnectionString();
         if (cs is null) return;
 
-        var dispatcher = await BuildRealDispatcherAsync(cs);
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
 
         // The EXACT axes frontend/runtime/projectionEntry.ts resolveProjectionEntryAxes({})
         // sends for a bare "/" with no ?route=, no ?manifest=, and therefore no pre-injected

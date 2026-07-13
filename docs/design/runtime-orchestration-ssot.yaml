@@ -348,7 +348,19 @@ runtime_orchestration_ssot:
         backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs
         and their frontend counterpart in frontend/tests/projectionEntry.test.ts. It introduces
         no new runtime_destination, route, or panel authority — see the
-        ui_projection_render_reachability_contract note above.
+        ui_projection_render_reachability_contract note above. The relation_uuid / hub_ids[] /
+        NavigationSequence resolution assertion below (test_input_shape / resolution_chain) is
+        expressed as a manifest-identity-agnostic shared helper,
+        backend/tests/Topolactor.Integration.Tests/HubRelationUiProjectionResolutionChainProof.cs
+        (BuildRealDispatcherAsync / AssertNavigationSequenceResolvesHubVector) — not duplicated
+        per source manifest. CredentialManagementHubRelationUiProjectionLiveDbTests.cs is its
+        current caller for credential-management/manifest 092 (plus one fully synthetic,
+        non-092 source manifest exercised in the hub_navigation:create authoring-path test); a
+        future target manifest's own live-DB proof (e.g. for enum-dictionary / team-dashboard /
+        scheduler-settings, once each has its own ui_projection seed content) reuses the same
+        helper rather than re-deriving this resolution-chain assertion against a new manifest
+        constant. Content-specific assertions (e.g. credential-management's own LayoutNodes
+        shape) remain out of the shared helper's scope and stay in that manifest's own test.
       test_input_shape:
         relation_uuid: hubs.hub_relations.hub_relation_id under proof
         hub_ids: >-
