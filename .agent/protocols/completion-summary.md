@@ -13,6 +13,19 @@ Read this protocol when composing:
 - completion report output body
 - existing PR update follow-up PR comment body
 
+## foundation_ssot_read_gate
+
+Before judging or extending an existing PR's diff, read foundation SSOT in this order when the residual/follow-up scope touches projection, dispatch, runtime lanes, DB-driven UI, pipeline identity, or completion judgment:
+
+1. `docs/framework-core.yaml`
+2. `docs/framework-policy.yaml`
+3. `docs/design/runtime-orchestration-ssot.yaml`
+4. `docs/design/pipeline-continuity-ssot.yaml`
+5. target-specific SSOT / DB / implementation files
+6. `docs/design/db-schema.yaml` -- additionally mandatory whenever the follow-up work touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets; table authority/role/`manifest_reference` must be cross-checked against this SSOT, not assumed from a refs-only `manifest.topology` shape alone.
+
+Skip is allowed only for typo/format-only/unrelated text cleanup, or a follow-up that is purely CI/PR-mechanics (e.g. rebase, comment posting) with no diff-side change, with explicit `not_required` reason.
+
 ## PR body separation
 
 - final completion summary must use this template.

@@ -13,10 +13,11 @@ Read this protocol only when classifying remaining work for `.agent/tasks/todo.m
 When TODO/roadmap classification touches projection/runtime lanes/API/SSE/event-log/DB-driven UI topology or implemented/partial `completion_condition` judgment, read foundation SSOT in this order before target-specific artifacts:
 
 1. `docs/framework-core.yaml`
-2. `docs/design/runtime-orchestration-ssot.yaml`
-3. `docs/design/pipeline-continuity-ssot.yaml`
-4. target SSOT / DB / implementation surfaces
-5. `docs/design/db-schema.yaml` -- additionally mandatory whenever the classified work touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets; table authority/role/`manifest_reference` must be cross-checked against this SSOT, not assumed from a refs-only `manifest.topology` shape alone.
+2. `docs/framework-policy.yaml`
+3. `docs/design/runtime-orchestration-ssot.yaml`
+4. `docs/design/pipeline-continuity-ssot.yaml`
+5. target SSOT / DB / implementation surfaces
+6. `docs/design/db-schema.yaml` -- additionally mandatory whenever the classified work touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets; table authority/role/`manifest_reference` must be cross-checked against this SSOT, not assumed from a refs-only `manifest.topology` shape alone.
 
 Skip is allowed only for typo/format-only/unrelated text cleanup with explicit `not_required` reason.
 

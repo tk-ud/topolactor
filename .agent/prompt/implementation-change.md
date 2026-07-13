@@ -14,8 +14,10 @@ When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → 
 - .agent/protocols/implementation-change.md
 - foundation SSOT read gate judgment (when applicable):
   1. docs/framework-core.yaml
-  2. docs/design/runtime-orchestration-ssot.yaml
-  3. docs/design/pipeline-continuity-ssot.yaml
+  2. docs/framework-policy.yaml
+  3. docs/design/runtime-orchestration-ssot.yaml
+  4. docs/design/pipeline-continuity-ssot.yaml
+  5. docs/design/db-schema.yaml -- additionally mandatory when the change touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets (see `.agent/protocols/implementation-change.md` `foundation_ssot_read_gate`)
 
 ## optional_reads
 - .agent/docs/required-paths.yaml only when touching `.agent/tests/check-structure.sh`, required paths, required terms, or check-structure expectation vocabulary
@@ -107,8 +109,10 @@ legacy_minimum_shape: scope, implementation delta, protocol decisions, todo_gran
 
 ## foundation_ssot_read_judgment
 - framework_core_read: yes/no/not_required
+- framework_policy_read: yes/no/not_required
 - runtime_orchestration_read: yes/no/not_required
 - pipeline_continuity_read: yes/no/not_required
+- db_schema_read: yes/no/not_required
 - reason_if_not_required:
 - target_ssot_read_after_foundation:
 

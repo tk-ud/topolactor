@@ -13,10 +13,11 @@ Implementation coherence and trigger-based protocol application.
 Before judging or changing runtime/frontend/backend/db behavior, apply foundation SSOT read in this order when work touches projection, dispatch, runtime lanes, DB-driven UI, pipeline identity, or completion judgment:
 
 1. `docs/framework-core.yaml`
-2. `docs/design/runtime-orchestration-ssot.yaml`
-3. `docs/design/pipeline-continuity-ssot.yaml`
-4. target-specific SSOT / DB / implementation files
-5. `docs/design/db-schema.yaml` -- mandatory in addition to the above whenever work touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets. `db/*.sql` is the canonical DDL/seed surface, but table authority, table role, and `manifest_reference` meaning must be cross-checked against this SSOT; a refs-only `manifest.topology` shape alone is not proof that the refs point at the DB-design-authoritative table.
+2. `docs/framework-policy.yaml`
+3. `docs/design/runtime-orchestration-ssot.yaml`
+4. `docs/design/pipeline-continuity-ssot.yaml`
+5. target-specific SSOT / DB / implementation files
+6. `docs/design/db-schema.yaml` -- mandatory in addition to the above whenever work touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets. `db/*.sql` is the canonical DDL/seed surface, but table authority, table role, and `manifest_reference` meaning must be cross-checked against this SSOT; a refs-only `manifest.topology` shape alone is not proof that the refs point at the DB-design-authoritative table.
 
 Do not treat this as always-read for unrelated typo/format-only edits. When skipped, record explicit `not_required` reason.
 

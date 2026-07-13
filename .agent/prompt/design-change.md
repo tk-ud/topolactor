@@ -13,6 +13,12 @@ When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → 
 - docs/governance/agent-governance-routing-ssot.md
 - .agent/docs/ssot-map.yaml for SSOT impact-surface selection
 - .agent/protocols/design-change.md
+- foundation SSOT read gate judgment (when applicable):
+  1. docs/framework-core.yaml
+  2. docs/framework-policy.yaml
+  3. docs/design/runtime-orchestration-ssot.yaml
+  4. docs/design/pipeline-continuity-ssot.yaml
+  5. docs/design/db-schema.yaml -- additionally mandatory when the SSOT change touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets (see `.agent/protocols/design-change.md` `foundation_ssot_read_gate`)
 
 ## optional_reads
 - .agent/docs/required-paths.yaml when changing `.agent` structure, required paths, or required content terms
@@ -27,8 +33,10 @@ changed contracts, impact map, foundation_ssot_read_judgment, required check sco
 
 ## foundation_ssot_read_judgment
 - framework_core_read: yes/no/not_required
+- framework_policy_read: yes/no/not_required
 - runtime_orchestration_read: yes/no/not_required
 - pipeline_continuity_read: yes/no/not_required
+- db_schema_read: yes/no/not_required
 - reason_if_not_required:
 - target_ssot_read_after_foundation:
 

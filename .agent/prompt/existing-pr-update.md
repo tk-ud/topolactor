@@ -22,8 +22,10 @@ When `.agent/tools/agent-ui-initial-contract` is usable, follow `worktypes` → 
 - .agent/protocols/completion-summary.md
 - foundation SSOT read gate judgment (when applicable):
   1. docs/framework-core.yaml
-  2. docs/design/runtime-orchestration-ssot.yaml
-  3. docs/design/pipeline-continuity-ssot.yaml
+  2. docs/framework-policy.yaml
+  3. docs/design/runtime-orchestration-ssot.yaml
+  4. docs/design/pipeline-continuity-ssot.yaml
+  5. docs/design/db-schema.yaml -- additionally mandatory when the follow-up diff touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets (see `.agent/protocols/completion-summary.md` `foundation_ssot_read_gate`)
 
 ## optional_reads
 - .agent/docs/ssot-map.yaml when touched surface exists and relevant SSOT/protocol selection is needed
@@ -91,8 +93,10 @@ follow-up delta, foundation_ssot_read_judgment, checks, output sink state
 
 ## foundation_ssot_read_judgment
 - framework_core_read: yes/no/not_required
+- framework_policy_read: yes/no/not_required
 - runtime_orchestration_read: yes/no/not_required
 - pipeline_continuity_read: yes/no/not_required
+- db_schema_read: yes/no/not_required
 - reason_if_not_required:
 - target_ssot_read_after_foundation:
 
