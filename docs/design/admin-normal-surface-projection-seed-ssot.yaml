@@ -1,0 +1,453 @@
+admin_normal_surface_projection_seed_ssot:
+  name: admin_normal_surface_projection_seed
+  version: 0.1.0
+  status: owning_ssot_design_contract
+  canonical_path: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+  purpose:
+    - Own the projection-side topology UI seed design for the admin and normal hub surface axes.
+    - Define surface membership, projection responsibilities, capability requirements, component bindings, and hub-relation navigation triggers before seed/runtime implementation.
+    - Provide enough topology seed contract detail for a later React-like Schema/topology seed task to create manifests without using existing implementation as design authority.
+  scope:
+    in_scope:
+      - admin_normal_projection_axis_design
+      - surface_membership_and_projection_responsibility
+      - read_search_filter_mutation_capability_contract
+      - topology_ui_seed_schema_contract
+      - component_catalog_binding_contract
+      - hub_relation_navigation_trigger_contract
+      - design_blocking_and_seed_start_conditions
+    out_of_scope:
+      - db_schema_change
+      - db_seed_sql_generation_or_update
+      - backend_runtime_implementation
+      - frontend_route_or_component_implementation
+      - topology_seed_generation
+      - auth_role_or_rbac_policy_redefinition
+      - enum_vocabulary_redefinition
+  foundation_inputs:
+    framework:
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+    design_authority_inputs:
+      - docs/design/db-schema.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/auth-db-session-credential-ssot.yaml
+      - docs/design/admin-master-roster-management-ssot.yaml
+      - docs/design/enum-dictionary-ssot.yaml
+      - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+      - docs/design/react-schema-topology-seed-translator-ssot.yaml
+      - docs/design/external-port-substrate-ssot.yaml
+      - docs/design/instance-port-substrate-ssot.yaml
+    physical_schema_and_catalog_inputs:
+      - db/auth_tables.sql
+      - db/enum_tables.sql
+      - db/team_markdown_tables.sql
+      - db/topology_tables.sql
+      - frontend/components/catalog.ts
+  authority:
+    owns:
+      - hub_surface_axis_admin_normal
+      - surface_membership_for_admin_and_normal_axes
+      - projection_responsibility_per_surface
+      - projection_side_capability_requirements_per_surface
+      - topology_ui_seed_schema_contract_for_these_surfaces
+      - component_catalog_binding_requirements_for_these_surfaces
+      - hub_relation_link_projection_change_trigger_contract
+    references:
+      runtime_dispatch_authority:
+        owner: docs/design/runtime-orchestration-ssot.yaml
+        rule: This SSOT names operation binding intent only; dispatcher axes, scheduler path, runtime destination, manifest dispatch, and fail-close runtime behavior remain runtime orchestration authority.
+      db_schema_authority:
+        owner:
+          - docs/design/db-schema.yaml
+          - db/auth_tables.sql
+          - db/enum_tables.sql
+          - db/team_markdown_tables.sql
+          - db/topology_tables.sql
+        rule: This SSOT may bind only to existing tables/columns; missing values become design_blocking and must not be invented as columns or JSON keys.
+      auth_credential_authority:
+        owner: docs/design/auth-db-session-credential-ssot.yaml
+        rule: User login credentials live under auth.credentials; password_hash and refresh/session/token secrets are never projected.
+      external_api_credential_authority:
+        owner: docs/design/external-port-substrate-ssot.yaml
+        rule: External API credentials bind to topology.external_credential_vault plus external port records by reference_key; plaintext or decrypted payload is runtime-only and never a projection field.
+      external_instance_credential_authority:
+        owner: docs/design/instance-port-substrate-ssot.yaml
+        rule: Instance credential-backed operations must use the existing credential management projection extension and runtime-only credential resolution; this SSOT does not create a new credential plane.
+      enum_dictionary_authority:
+        owner: docs/design/enum-dictionary-ssot.yaml
+        rule: Enum vocabulary and group membership are owned by enum dictionary surfaces; this SSOT only describes projection seed bindings for enum CRUD/search.
+      team_markdown_persistence_authority:
+        owner: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+        rule: Markdown templates, saved views, rendered_markdown, completed_preset_seed_json, events, refresh/rebind semantics, and persistence semantics remain owned there.
+      ui_primitive_catalog_authority:
+        owner:
+          - docs/design/ui-ux-primitive-catalog-ssot.yaml
+          - frontend/components/catalog.ts
+        rule: Component keys and primitive availability are referenced, not invented; existing registered components must be reused.
+      hub_relation_resolution_authority:
+        owner:
+          - docs/design/admin-console-workflow-ssot.yaml
+          - db/topology_tables.sql
+        rule: hubs.hub_relations is a manifest-scoped navigation sequence surface, not RBAC, authentication, credential, audience, or canonical data authority.
+    does_not_own:
+      - auth_role_taxonomy_or_rbac_decision
+      - credential_secret_storage_or_secret_materialization
+      - canonical_table_column_or_schema_definition
+      - enum_item_or_group_vocabulary_definition
+      - team_markdown_saved_view_persistence_rules
+      - runtime_dispatcher_resolution_algorithm
+      - frontend_component_source_implementation
+      - backend_action_body_or_repository_implementation
+      - seed_sql_identity_values
+  global_invariants:
+    projection_axis_is_not_auth_role:
+      rule: admin and normal are projection surface axes only; they must not be converted into auth role, RBAC, audience, credential, or authorization authority.
+    hub_relation_is_navigation_trigger_only:
+      rule: Hub relation links may trigger projection target changes; they do not authorize access, certify canonical data, choose an audience, or grant credential authority.
+    fail_close_manifest_resolution:
+      rule: A hub relation link selection must resolve exactly one active target manifest by explicit binding. Missing, multiple, deprecated, or ambiguous target manifests are blocking fail-close conditions.
+    secret_projection_denied:
+      rule: Secret-bearing values, hashes, encrypted payloads, tokens, refresh payloads, endpoints requiring secrecy, and decrypted credential material must never appear in lists, search results, detail projections, mutation previews, diffs, or topology seed examples.
+    no_silent_fallback:
+      rule: No first-match fallback, oldest-row fallback, route fallback, implicit dashboard choice, or default target manifest selection is allowed.
+    users_credentials_separation:
+      rule: credentials surface owns credential lifecycle intent; users surface owns user status projection and must not include create/delete/credential editing.
+  topology_seed_schema_contract:
+    minimum_required_fields:
+      topology_manifest_identity:
+        required_keys: [manifest_key, manifest_label, manifest_version, declared_by_ssot, lifecycle_status]
+        rule: Identity must be deterministic in later seed work, but this SSOT does not allocate UUIDs or SQL rows.
+      projection_axis:
+        allowed_values: [admin, normal]
+        rule: Axis classifies projection surfaces only and has no RBAC meaning.
+      surface_key:
+        rule: Must equal one of the surface keys declared under surface_axes.
+      operation_bindings:
+        required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields
+      component_bindings:
+        required_shape: list of node_key, component_key, component_role, catalog_authority_ref, responsibility_boundary
+      prop_bindings:
+        required_shape: list of node_key, prop_name, source, source_ref, required, secret_denied
+      event_bindings:
+        required_shape: list of event_key, source_node, event_kind, operation_key_or_navigation_key, payload_contract, fail_close_conditions
+      backend_emission_bindings:
+        required_shape: list of emission_key, runtime_route_intent, expected_response_projection, error_projection, diff_log_requirement
+      search_filter_input_contract:
+        required_shape: list of input_key, component_key, target_fields_or_authority_ref, debounce_policy, empty_query_policy, secret_denied
+      mutation_confirmation_contract:
+        required_shape: preview, validate, explicit_confirm, write, diff_log, cancel
+      state_projection_contract:
+        required_states: [loading, empty, error]
+      hub_relation_navigation_binding:
+        required_shape: list of source_surface, relation_source, selected_link_payload, target_manifest_resolution, fail_close_conditions
+    prohibited_seed_content:
+      - executable_code_examples
+      - completed_seed_sql
+      - invented_db_columns_or_json_keys
+      - plaintext_secret_or_hash_examples
+      - runtime_dispatcher_algorithm_redefinition
+  component_catalog_binding:
+    required_existing_components:
+      md_viewer.projection:
+        role: Markdown read projection candidate.
+        catalog_refs:
+          - docs/design/ui-ux-primitive-catalog-ssot.yaml
+          - frontend/components/catalog.ts
+      md_translation_authoring_surface.authoring:
+        role: Existing Markdown translation/authoring surface for binding Markdown source fields and authoring seed intent.
+        catalog_refs:
+          - docs/design/ui-ux-primitive-catalog-ssot.yaml
+          - frontend/components/catalog.ts
+      textarea.template:
+        role: Text/Markdown input body primitive when an authoring surface needs an editable text area.
+        catalog_refs:
+          - frontend/components/catalog.ts
+      search_input.alias:
+        role: Search input primitive for searchable surfaces.
+        catalog_refs:
+          - frontend/components/catalog.ts
+      form_field.template:
+        role: Generic labeled form field wrapper.
+        catalog_refs:
+          - frontend/components/catalog.ts
+      select.template:
+        role: Filter/select primitive for enum/status/category filters.
+        catalog_refs:
+          - frontend/components/catalog.ts
+      button.primitive:
+        role: Explicit action/confirmation trigger primitive.
+        catalog_refs:
+          - docs/design/ui-ux-primitive-catalog-ssot.yaml
+          - frontend/components/catalog.ts
+    rule: A later seed task must fail-close if any referenced component key is absent from both catalog authorities or if a new component is proposed for a surface expressible by these existing components.
+  surface_axes:
+    admin:
+      axis_kind: projection_surface_axis
+      not_role_or_rbac: true
+      surfaces:
+        credentials:
+          categories:
+            user_credential:
+              data_authority_ref: auth.credentials
+              existing_schema_fields_allowed_for_projection: [credential_id, user_id, created_at]
+              forbidden_projection_fields: [password_hash, token_hash, refresh_token, plaintext_secret, secret_value]
+              operations: [create, read, update, delete, search]
+              mutation_boundary: create/update/delete are credential lifecycle intents only; secret updates must be explicit replace or rotate actions and must not expose the existing secret.
+            external_api_credential:
+              data_authority_ref:
+                - topology.external_credential_vault
+                - topology.external_access_ports
+                - topology.external_response_ports
+                - topology.external_hook_ports
+              existing_schema_fields_allowed_for_projection: [credential_vault_id, provider_kind, required_by_bundle, token_kind, expires_at, refresh_before_seconds, version, active, reference_key, created_at, updated_at]
+              forbidden_projection_fields: [token_hash, encrypted_payload, encryption_key_reference, plaintext_secret, decrypted_payload, token_response]
+              operations: [create, read, update, delete, search]
+              mutation_boundary: replace or rotate by reference_key and provider/bundle metadata; decrypted material is runtime-only.
+            external_instance_credential:
+              data_authority_ref: docs/design/instance-port-substrate-ssot.yaml existing_credential_management_projection_extension
+              existing_schema_fields_allowed_for_projection: [reference_key, provider_kind, required_by_bundle, active, expires_at, version]
+              forbidden_projection_fields: [token_hash, encrypted_payload, encryption_key_reference, plaintext_secret, decrypted_payload, connection_secret]
+              operations: [create, read, update, delete, search]
+              mutation_boundary: instance credential settings may be selected/updated only through existing credential-management projection extension; no new credential table or plane is defined here.
+          projection_responsibility:
+            - credential_record_inventory_without_secrets
+            - category_filter_and_search_without_secret_material
+            - explicit_replace_or_rotate_intent_collection
+            - diff_log_of_metadata_and_secret_lifecycle_event_without_secret_value
+          capability_requirements:
+            read: required
+            search: required
+            filter: [category, provider_kind, required_by_bundle, active, expires_at]
+            mutation: [create_metadata, replace_secret, rotate_secret, deactivate_or_delete_reference]
+          seed_contract:
+            component_tree:
+              - node_key: credential_search
+                component_key: search_input.alias
+                responsibility: query non-secret metadata only
+              - node_key: credential_category_filter
+                component_key: select.template
+                responsibility: filter user_credential external_api_credential external_instance_credential
+              - node_key: credential_result_list
+                component_key: table.primitive
+                responsibility: list allowed metadata fields only
+              - node_key: credential_form
+                component_key: form_field.template
+                responsibility: collect metadata plus write-only secret input for replace/rotate
+              - node_key: credential_confirm_button
+                component_key: button.primitive
+                responsibility: explicit create/replace/rotate/delete confirmation
+            mutation_confirmation_contract: [preview_without_secret, validate_policy, explicit_confirm, write, diff_log_without_secret]
+            loading_empty_error_projection: [loading_credentials, empty_credentials, credential_error_fail_close]
+        users:
+          primary_projection: user_status
+          data_authority_ref: auth.users
+          operations: [search, status_filter, update]
+          excluded_operations: [create, delete, credential_edit]
+          projection_responsibility:
+            - searchable_user_status_roster
+            - status_active_approve_suspension_state_note_projection
+            - user_status_update_intent
+          allowed_fields: [user_id, username, active, approve, status, suspended_from, suspended_until, state_note, created_at, updated_at]
+          forbidden_fields: [password_hash, token_hash, credential_id, refresh_token]
+          capability_requirements:
+            read: required
+            search: [username, status, state_note]
+            filter: [active, approve, status, suspension_window]
+            mutation: [update_status_only]
+          seed_contract:
+            component_tree:
+              - node_key: users_search
+                component_key: search_input.alias
+              - node_key: users_status_filter
+                component_key: select.template
+              - node_key: users_result_list
+                component_key: table.primitive
+              - node_key: users_status_form
+                component_key: form_field.template
+              - node_key: users_confirm_button
+                component_key: button.primitive
+            mutation_confirmation_contract: [preview_status_delta, validate_allowed_status, explicit_confirm, write, diff_log]
+            loading_empty_error_projection: [loading_users, empty_users, users_error_fail_close]
+        enum:
+          data_authority_ref: docs/design/enum-dictionary-ssot.yaml
+          physical_schema_ref:
+            - enum.items
+            - enum.groups
+            - enum.group_items
+          operations: [create, read, update, delete, search]
+          projection_responsibility:
+            - enum_group_and_item_management_projection
+            - enum_search_projection
+            - enum_group_membership_edit_intent
+          authority_boundary: This surface must not redefine enum vocabulary authority; vocabulary meaning and group membership authority remain enum dictionary SSOT and enum schema.
+          capability_requirements:
+            read: required
+            search: [items_name, groups_group_name, index_num]
+            filter: [group, membership]
+            mutation: [create_item, update_item, delete_item, create_group, update_group, delete_group, update_group_members]
+          seed_contract:
+            component_tree:
+              - node_key: enum_search
+                component_key: search_input.alias
+              - node_key: enum_group_filter
+                component_key: select.template
+              - node_key: enum_table
+                component_key: table.primitive
+              - node_key: enum_form
+                component_key: form_field.template
+              - node_key: enum_confirm_button
+                component_key: button.primitive
+            mutation_confirmation_contract: [preview_dictionary_delta, validate_against_enum_authority, explicit_confirm, write, diff_log]
+            loading_empty_error_projection: [loading_enum, empty_enum, enum_error_fail_close]
+        dashboard:
+          data_authority_ref: hubs.hub_relations
+          operations: [read, search, filter, navigate]
+          projection_responsibility:
+            - display_manifest_scoped_hub_relation_links
+            - use_selected_link_as_projection_change_trigger
+            - project_current_resolution_state_and_fail_close_errors
+          not_authority_for:
+            - rbac
+            - authentication
+            - canonical_data
+            - credential
+            - audience
+          capability_requirements:
+            read: required
+            search: [relation_label_or_manifest_metadata_when_available]
+            filter: [status, source_manifest, sequence_position]
+            mutation: none_in_this_surface
+            navigation: required
+          hub_relation_navigation_binding:
+            relation_source: hubs.hub_relations joined through hubs.topology_manifests by explicit topology_manifest_id
+            selected_link_payload_required: [hub_relation_id, topology_manifest_id, related_hub_id]
+            target_manifest_resolution: resolve exactly one active target manifest for related_hub_id and selected surface context
+            fail_close_conditions:
+              - missing_hub_relation
+              - deprecated_hub_relation
+              - missing_target_manifest
+              - multiple_target_manifests
+              - target_manifest_deprecated
+              - implicit_first_match_required
+          seed_contract:
+            component_tree:
+              - node_key: hub_relation_search
+                component_key: search_input.alias
+              - node_key: hub_relation_link_list
+                component_key: table.primitive
+              - node_key: target_projection_shell
+                component_key: panel.alias
+            event_bindings:
+              - event_key: select_hub_relation_link
+                event_kind: select
+                trigger: projection_change
+                fail_close_on_ambiguous_target: true
+            loading_empty_error_projection: [loading_links, empty_links, target_manifest_resolution_error]
+    normal:
+      axis_kind: projection_surface_axis
+      not_role_or_rbac: true
+      surfaces:
+        dashboard:
+          data_authority_ref:
+            - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+            - topology.team_markdown_template_registry
+            - topology.team_markdown_saved_view
+            - topology.team_markdown_saved_view_event
+          responsibilities:
+            viewer:
+              role: read_projection
+              component_key: md_viewer.projection
+              owns_mutation: false
+              projection_fields: [saved_view_id, title, rendered_markdown, card_metadata_json, status, updated_at]
+              forbidden_authority: [mutation_write, topology_promotion, schema_generation, markdown_as_runtime_ssot]
+            inputer:
+              role: update_intent_surface
+              component_keys:
+                - md_translation_authoring_surface.authoring
+                - textarea.template
+              owns_mutation_intent: true
+              persistence_authority_ref: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+          operations: [read, search, filter, preview, validate, explicit_confirm, write, diff_log]
+          projection_responsibility:
+            - show_team_markdown_saved_view_with_read_only_viewer
+            - collect_markdown_update_intent_in_authoring_input_surface
+            - keep_viewer_and_inputer_responsibilities_separate_inside_same_dashboard
+            - persist_updates through team Markdown backend/runtime flow, not frontend local state only
+          capability_requirements:
+            read: [saved_view, template, event_log_projection]
+            search: [title, rendered_markdown, search_index_text, tags_from_card_metadata]
+            filter: [status, template_id, source_table_ref, updated_at]
+            mutation: [markdown_update_intent]
+          mutation_flow:
+            required_order: [preview, validate, explicit_confirm, write, diff_log]
+            preview: render proposed Markdown/result without changing saved view
+            validate: check completed_preset_seed_json, binding_json, status, markdown safety, and authority references against team Markdown SSOT
+            explicit_confirm: human confirmation after validation result and diff preview
+            write: backend/runtime persistence to topology.team_markdown_saved_view and append event to topology.team_markdown_saved_view_event
+            diff_log: append/render diff log without treating Markdown as runtime SSOT
+            prohibited:
+              - frontend_local_state_only_update
+              - viewer_component_mutation_authority
+              - parsing_markdown_body_as_seed_authority
+              - silent_write_without_preview_validate_confirm
+          seed_contract:
+            component_tree:
+              - node_key: markdown_saved_view_search
+                component_key: search_input.alias
+              - node_key: markdown_status_filter
+                component_key: select.template
+              - node_key: markdown_viewer
+                component_key: md_viewer.projection
+                responsibility: read projection only
+              - node_key: markdown_authoring_input
+                component_key: md_translation_authoring_surface.authoring
+                responsibility: update intent authoring and binding selection
+              - node_key: markdown_body_textarea
+                component_key: textarea.template
+                responsibility: editable Markdown body/input area inside authoring flow when needed
+              - node_key: markdown_confirm_button
+                component_key: button.primitive
+            prop_bindings:
+              - node_key: markdown_viewer
+                props: [savedView, renderedMarkdown, cardMetadata, status]
+                source_ref: topology.team_markdown_saved_view
+              - node_key: markdown_authoring_input
+                props: [templateRef, bindingJson, draftMarkdown, validationResult]
+                source_ref: team_markdown_mutation_intent
+            event_bindings:
+              - event_key: preview_markdown_update
+                source_node: markdown_authoring_input
+                event_kind: preview
+              - event_key: validate_markdown_update
+                source_node: markdown_authoring_input
+                event_kind: validate
+              - event_key: confirm_markdown_update
+                source_node: markdown_confirm_button
+                event_kind: explicit_confirm
+              - event_key: write_markdown_update
+                source_node: markdown_authoring_input
+                event_kind: write_after_confirm
+            backend_emission_bindings:
+              - emission_key: markdown_update_written
+                expected_response_projection: sanitized_saved_view_and_diff_log
+                error_projection: validation_or_write_error_without_secret
+            loading_empty_error_projection: [loading_markdown_dashboard, empty_markdown_dashboard, markdown_update_error]
+  design_blocking:
+    - id: admin_dashboard_target_manifest_uniqueness
+      blocking_condition: Existing hub relation schema provides relation rows and manifest grouping, but a later seed must define explicit target manifest resolution criteria for each related_hub_id/surface context before dashboard navigation can be generated.
+      required_resolution_before_seed: Define deterministic active target manifest binding in topology seed/manifest contract; no first-match fallback.
+    - id: external_instance_projection_columns
+      blocking_condition: External instance credential category depends on instance-port substrate authority; if a concrete existing physical table/column set is not present for required instance settings, the seed task must stop and reference the instance-port SSOT instead of inventing fields.
+      required_resolution_before_seed: Cross-check instance-port physical schema and approved candidate source at seed implementation time.
+    - id: normal_dashboard_write_operation_binding
+      blocking_condition: This SSOT defines mutation flow shape, but backend emission operation keys must be selected from team Markdown authority during later seed work.
+      required_resolution_before_seed: Bind preview/validate/write/diff operations to existing team Markdown runtime actions or declare a design conflict.
+  seed_implementation_start_conditions:
+    - This SSOT is reachable from .agent/docs/ssot-map.yaml and .agent/docs/design-ssot-index.md.
+    - Design proof for required vocabulary, boundaries, and referenced catalog/schema surfaces passes.
+    - Later seed task reads all authority references listed in foundation_inputs and authority.references.
+    - All design_blocking entries are either resolved in a later design change or explicitly carried as fail-close seed blockers.

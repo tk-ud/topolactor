@@ -365,6 +365,8 @@ run_subcheck ".agent/tests/check-topology-layout-class-ssot.sh"
 
 run_subcheck ".agent/tests/check-admin-uibuilder-wiring.sh"
 
+run_subcheck ".agent/tests/check-admin-normal-surface-projection-seed-ssot.sh"
+
 check_checklist_template_clean "$REPO_ROOT/.agent/checklists/policy-judgment.md"
 check_checklist_template_clean "$REPO_ROOT/.agent/checklists/boundary-identity.md"
 
