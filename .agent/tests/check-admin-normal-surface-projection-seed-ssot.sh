@@ -7,6 +7,7 @@ INDEX="$REPO_ROOT/.agent/docs/design-ssot-index.md"
 CATALOG="$REPO_ROOT/frontend/components/catalog.ts"
 MD_VIEWER="$REPO_ROOT/frontend/components/MdViewer.tsx"
 MD_AUTHORING="$REPO_ROOT/frontend/components/MdTranslationAuthoringSeedSurface.tsx"
+CRUD_PRESET="$REPO_ROOT/db/physical_search_crud_aggregate_preset_seed.sql"
 FAILURES=0
 pass(){ echo "OK  : $1"; }
 fail(){ echo "FAIL: $1" >&2; FAILURES=$((FAILURES+1)); }
@@ -21,9 +22,26 @@ contains_fixed(){
 }
 require_term(){ local file="$1" term="$2"; if contains_fixed "$file" "$term"; then pass "${file#$REPO_ROOT/} contains $term"; else fail "${file#$REPO_ROOT/} missing $term"; fi; }
 require_absent(){ local file="$1" term="$2"; if contains_fixed "$file" "$term"; then fail "${file#$REPO_ROOT/} must not contain $term"; else pass "${file#$REPO_ROOT/} excludes $term"; fi; }
+require_block_absent(){
+  local file="$1" start="$2" end="$3" forbidden="$4"
+  if awk -v start="$start" -v end="$end" '
+    index($0,start){flag=1}
+    flag{print}
+    flag && index($0,end){exit}
+  ' "$file" | grep -qF -- "$forbidden"; then
+    fail "${file#$REPO_ROOT/} block $start..$end must not contain $forbidden"
+  else
+    pass "${file#$REPO_ROOT/} block $start..$end excludes $forbidden"
+  fi
+}
 require_file "$SSOT"
+require_file "$CRUD_PRESET"
 require_term "$MAP" "docs/design/admin-normal-surface-projection-seed-ssot.yaml"
+require_term "$MAP" "docs/design/component-catalog-classification-ssot.yaml"
+require_term "$MAP" "db/physical_search_crud_aggregate_preset_seed.sql"
 require_term "$INDEX" "docs/design/admin-normal-surface-projection-seed-ssot.yaml"
+require_term "$INDEX" 'credentials.users` は同一 `auth.users` と `auth.credentials` に対する composite account lifecycle projection'
+require_term "$INDEX" 'users(status)` は同一 `auth.users` に対する status-only projection'
 for term in \
   "hub_surface_axis_admin_normal" \
   "admin:" \
@@ -52,7 +70,13 @@ for term in \
   "continuation_refinement_not_duplicate_authority" \
   "runtime_adapter_required_before_seed_generation" \
   "runtimeConnected=false" \
-  "admin_capability_gate_applies_to: [preview, validate, explicit_confirm, write, diff_log]" \
+  "canonical_role_gate_binding:" \
+  "topology_entry_type: capability_requirement" \
+  "field: required_role" \
+  "value: admin" \
+  "seed_schema_mapping: operation_bindings[*].capability_requirement.required_role" \
+  "capability_requirement.required_role=admin" \
+  "viewer_read_projection_required_role: none" \
   "viewer_mutation_callbacks_disabled_in_normal_projection" \
   "inputer_runtime_adapter_contract:" \
   "actual_component_props: [onSaved, onCancel, placement]" \
@@ -69,13 +93,59 @@ for term in \
   "db/team_markdown_tables.sql" \
   "db/topology_tables.sql" \
   "frontend/components/catalog.ts" \
+  "docs/design/component-catalog-classification-ssot.yaml" \
+  "docs/design/ui-builder-preset-ecosystem-ssot.yaml" \
   "docs/design/auth-db-session-credential-ssot.yaml" \
   "docs/design/enum-dictionary-ssot.yaml" \
   "docs/design/team-markdown-dashboard-saved-view-ssot.yaml" \
   "docs/design/ui-ux-primitive-catalog-ssot.yaml" \
   "docs/design/admin-master-roster-management-ssot.yaml" \
-  "docs/design/admin-console-workflow-ssot.yaml"; do
+  "docs/design/admin-console-workflow-ssot.yaml" \
+  "db/physical_search_crud_aggregate_preset_seed.sql"; do
   require_term "$SSOT" "$term"
+done
+require_term "$SSOT" "physical_seed_reference_only_not_design_authority"
+require_term "$SSOT" "frontend/components/catalog.ts is implementation evidence only and must not be promoted to SSOT authority owner"
+require_block_absent "$SSOT" "ui_primitive_catalog_authority:" "physical_evidence_refs:" "frontend/components/catalog.ts"
+for term in \
+  "source_snapshot_json" \
+  "visual_tree_json" \
+  "mock_preset_object_mapping" \
+  "mock_preset_wiring_candidate" \
+  "mock_preset_compile_snapshot" \
+  "requires_event_binding" \
+  "wiring_kind" \
+  "target_surface" \
+  "target_ref" \
+  "payloadFrom" \
+  "payloadResolverRef" \
+  "propBindings" \
+  "unresolved_knownGapRef" \
+  "tmp_canvas_draft_human_adjustment_preview_validate_apply_boundary" \
+  "content_bundle_operation_refs_must_not_be_copied" \
+  "target_authority: auth_users:* account lifecycle authority" \
+  "target_authority: auth_users:* status operation boundary" \
+  "target_authority: enum_dictionary:* authority" \
+  "target_authority: team Markdown authority"; do
+  require_term "$SSOT" "$term"
+done
+for term in \
+  "source_snapshot_json" \
+  "visual_tree_json" \
+  "mock_preset_object_mapping" \
+  "mock_preset_wiring_candidate" \
+  "mock_preset_compile_snapshot" \
+  "requires_event_binding" \
+  "wiring_kind" \
+  "target_surface" \
+  "target_ref" \
+  "payloadFrom" \
+  "payloadResolverRef" \
+  "propBindings" \
+  "knownGapRef" \
+  "activeTopologyWrite" \
+  "requiresHumanAdjustmentBeforeApply"; do
+  require_term "$CRUD_PRESET" "$term"
 done
 for key in \
   "md_viewer.projection" \
@@ -129,6 +199,7 @@ require_absent "$SSOT" "groups_group_name"
 require_absent "$SSOT" "All design_blocking entries are either resolved"
 require_absent "$SSOT" "credentials surface owns credential lifecycle intent"
 require_absent "$SSOT" "target_manifest_resolution: resolve exactly one active target manifest for related_hub_id and selected surface context"
+require_absent "$SSOT" "required_capability: admin"
 if [ "$FAILURES" -eq 0 ]; then
   echo "PASS admin-normal surface projection seed SSOT proof"
   exit 0

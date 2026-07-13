@@ -34,6 +34,8 @@ admin_normal_surface_projection_seed_ssot:
       - docs/design/db-schema.yaml
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/ui-builder-preset-ecosystem-ssot.yaml
       - docs/design/auth-db-session-credential-ssot.yaml
       - docs/design/admin-master-roster-management-ssot.yaml
       - docs/design/enum-dictionary-ssot.yaml
@@ -47,6 +49,8 @@ admin_normal_surface_projection_seed_ssot:
       - db/team_markdown_tables.sql
       - db/topology_tables.sql
       - frontend/components/catalog.ts
+    physical_seed_reference_inputs:
+      - db/physical_search_crud_aggregate_preset_seed.sql
   authority:
     owns:
       - hub_surface_axis_admin_normal
@@ -85,9 +89,17 @@ admin_normal_surface_projection_seed_ssot:
         rule: Markdown templates, saved views, rendered_markdown, completed_preset_seed_json, events, refresh/rebind semantics, and persistence semantics remain owned there.
       ui_primitive_catalog_authority:
         owner:
+          - docs/design/component-catalog-classification-ssot.yaml
           - docs/design/ui-ux-primitive-catalog-ssot.yaml
+        physical_evidence_refs:
           - frontend/components/catalog.ts
-        rule: Component keys and primitive availability are referenced, not invented; existing registered components must be reused.
+        rule: Component classification, primitive vocabulary, and catalog binding policy are owned by the two catalog SSOTs. frontend/components/catalog.ts is implementation evidence only and must not be promoted to SSOT authority owner.
+      ui_builder_preset_authority:
+        owner: docs/design/ui-builder-preset-ecosystem-ssot.yaml
+        physical_seed_reference:
+          file: db/physical_search_crud_aggregate_preset_seed.sql
+          role: physical_seed_reference_only_not_design_authority
+        rule: The CRUD preset SQL may be used to prevent reinvention of generic composition and wiring shapes, but UUIDs, rows, layout coordinates, labels, and content_bundle:* operation refs are not design authority for this SSOT.
       hub_relation_resolution_authority:
         owner:
           - docs/design/admin-console-workflow-ssot.yaml
@@ -151,42 +163,40 @@ admin_normal_surface_projection_seed_ssot:
       - plaintext_secret_or_hash_examples
       - runtime_dispatcher_algorithm_redefinition
   component_catalog_binding:
+    design_authority_refs:
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+    physical_evidence_refs:
+      - frontend/components/catalog.ts
     required_existing_components:
       md_viewer.projection:
         role: Markdown read projection candidate.
-        catalog_refs:
+        catalog_authority_refs:
+          - docs/design/component-catalog-classification-ssot.yaml
           - docs/design/ui-ux-primitive-catalog-ssot.yaml
+        physical_evidence_refs:
           - frontend/components/catalog.ts
       md_translation_authoring_surface.authoring:
         role: Existing Markdown translation/authoring surface for binding Markdown source fields and authoring seed intent.
         runtime_binding_mode: runtime_adapter_required_before_seed_generation
         runtime_connected_status: false_in_current_catalog_physical_evidence
         seed_rule: Topology seed must not treat this component key as a directly runtimeConnected component. A seed may target it only through an explicit runtime adapter that mounts the existing component with the props/events declared in normal.dashboard.inputer_runtime_adapter_contract, or through an existing route composition that already owns the component lifecycle.
-        catalog_refs:
+        catalog_authority_refs:
+          - docs/design/component-catalog-classification-ssot.yaml
           - docs/design/ui-ux-primitive-catalog-ssot.yaml
+        physical_evidence_refs:
           - frontend/components/catalog.ts
       textarea.template:
         role: Text/Markdown input body primitive when an authoring surface needs an editable text area.
-        catalog_refs:
-          - frontend/components/catalog.ts
       search_input.alias:
         role: Search input primitive for searchable surfaces.
-        catalog_refs:
-          - frontend/components/catalog.ts
       form_field.template:
         role: Generic labeled form field wrapper.
-        catalog_refs:
-          - frontend/components/catalog.ts
       select.template:
         role: Filter/select primitive for enum/status/category filters.
-        catalog_refs:
-          - frontend/components/catalog.ts
       button.primitive:
         role: Explicit action/confirmation trigger primitive.
-        catalog_refs:
-          - docs/design/ui-ux-primitive-catalog-ssot.yaml
-          - frontend/components/catalog.ts
-    rule: A later seed task must fail-close if any referenced component key is absent from both catalog authorities or if a new component is proposed for a surface expressible by these existing components.
+    rule: A later seed task must fail-close if any referenced component key is absent from the design catalog authority plus physical evidence cross-check, or if a new component is proposed for a surface expressible by these existing components.
   surface_axes:
     admin:
       axis_kind: projection_surface_axis
@@ -392,13 +402,21 @@ admin_normal_surface_projection_seed_ssot:
               surface_membership_axis: normal
               admin_capability_gate_applies_to: [preview, validate, explicit_confirm, write, diff_log]
               admin_capability_gate_does_not_apply_to: [viewer_read_projection]
+              canonical_role_gate_binding:
+                topology_entry_type: capability_requirement
+                field: required_role
+                value: admin
+                seed_schema_mapping: operation_bindings[*].capability_requirement.required_role
+                applies_to_operations: [preview, validate, explicit_confirm, write, diff_log]
+                does_not_apply_to_operations: [read, search, filter, viewer_close]
+                rule: This is the existing Topology capability_requirement.required_role contract, not a new required_capability/authz model and not frontend display gating.
               persistence_authority_ref: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
               runtime_reachability: runtime_adapter_required_before_seed_generation
           operations: [read, search, filter, preview, validate, explicit_confirm, write, diff_log]
           operation_capability_boundary:
-            read_search_filter: normal_projection_read_capability
-            preview_validate_write_diff: admin_capability_required_via_manifest_event_and_backend_emission_boundary
-            rule: admin capability gate attaches only to inputer mutation events and backend emissions, never to md_viewer.projection read rendering or to the normal projection axis itself.
+            read_search_filter: normal_projection_read_capability_without_required_role_admin
+            preview_validate_write_diff: topology_capability_requirement_required_role_admin_via_manifest_event_and_backend_emission_boundary
+            rule: capability_requirement.required_role=admin attaches only to inputer mutation operations and backend emissions, never to md_viewer.projection read rendering or to the normal projection axis itself.
           projection_responsibility:
             - show_team_markdown_saved_view_with_read_only_viewer
             - collect_markdown_update_intent_in_authoring_input_surface
@@ -451,6 +469,7 @@ admin_normal_surface_projection_seed_ssot:
                 source_node: markdown_viewer
                 event_kind: onClose
                 capability: normal_projection_read_ui_event
+                viewer_read_projection_required_role: none
               - event_key: viewer_mutation_callbacks_disabled_in_normal_projection
                 source_node: markdown_viewer
                 event_kind: onRefresh/onEditAdjustment/onArchive/onClone/onRebind/onCreateTodoCandidate omitted_or_disabled
@@ -459,7 +478,9 @@ admin_normal_surface_projection_seed_ssot:
               - event_key: authoring_saved
                 source_node: markdown_authoring_input
                 event_kind: onSaved(savedViewId)
-                capability: admin_required
+                capability_requirement:
+                  topology_entry_type: capability_requirement
+                  required_role: admin
                 backend_boundary: createSavedView team_markdown API through existing route composition or required runtime adapter
               - event_key: authoring_cancel
                 source_node: markdown_authoring_input
@@ -467,11 +488,15 @@ admin_normal_surface_projection_seed_ssot:
                 capability: normal_projection_ui_cancel
             backend_emission_bindings:
               - emission_key: markdown_preview_validated
-                required_capability: admin
+                capability_requirement:
+                  topology_entry_type: capability_requirement
+                  required_role: admin
                 expected_response_projection: sanitized_preview_validation_result
                 error_projection: validation_error_without_secret
               - emission_key: markdown_update_written
-                required_capability: admin
+                capability_requirement:
+                  topology_entry_type: capability_requirement
+                  required_role: admin
                 expected_response_projection: sanitized_saved_view_and_diff_log
                 error_projection: validation_or_write_error_without_secret
             inputer_runtime_adapter_contract:
@@ -481,13 +506,64 @@ admin_normal_surface_projection_seed_ssot:
               actual_component_props: [onSaved, onCancel, placement]
               actual_component_events: [onSaved(savedViewId), onCancel]
               adapter_owned_events: [preview, validate, explicit_confirm, write, diff_log]
-              admin_capability_gate: required_for_adapter_owned_events_and_onSaved_write_completion
+              canonical_role_gate_binding: capability_requirement.required_role=admin required_for_adapter_owned_events_and_onSaved_write_completion
               route_composition_alternative: existing team Markdown dashboard route composition may be referenced only if it already supplies equivalent props/events and backend emission boundaries; otherwise seed generation is blocked.
               prohibited:
                 - direct_seed_runtime_component_binding_while_runtimeConnected_false
                 - frontend_display_only_admin_gate
                 - invented_component_props_or_events
             loading_empty_error_projection: [loading_markdown_dashboard, empty_markdown_dashboard, markdown_update_error]
+  crud_preset_physical_reference_assessment:
+    physical_reference_file: db/physical_search_crud_aggregate_preset_seed.sql
+    physical_reference_role: physical_seed_reference_only_not_design_authority
+    design_authority_refs:
+      - docs/design/ui-builder-preset-ecosystem-ssot.yaml
+    inspected_structures:
+      - source_snapshot_json
+      - visual_tree_json
+      - mock_preset_object_mapping
+      - mock_preset_wiring_candidate
+      - mock_preset_compile_snapshot
+      - component_tree
+      - propBindings
+      - event_action_wiring
+      - payloadFrom
+      - payloadResolverRef
+      - requires_event_binding
+      - wiring_kind
+      - target_surface
+      - target_ref
+      - unresolved_knownGapRef
+      - tmp_canvas_draft_human_adjustment_preview_validate_apply_boundary
+    reusable_generic_shape:
+      component_composition: search_input, filter select, result projection, form fields, confirm dialog, action buttons, detail/debug projection shape may be reused when the target surface authority supplies operation bindings.
+      wiring_shape: requires_event_binding, wiring_kind, target_surface, target_ref, payloadFrom, payloadResolverRef, and propBindings are reusable as generic wiring vocabulary; no dedicated payload resolver or event pipeline is introduced here.
+      draft_boundary: activeTopology=false, selected_route_package_tmp_canvas_draft, requiresHumanAdjustmentBeforeApply, preview, validate, and apply boundary are reusable as draft-candidate governance shape, not as active topology seed output.
+    not_reused_as_authority:
+      - SQL UUIDs or row identities
+      - preset labels and layout coordinates
+      - current seed row status
+      - content_bundle_operation_refs_must_not_be_copied
+      - content_bundle:* target_ref values
+    surface_operation_mapping:
+      credentials.users:
+        reusable_shape: search/filter/result/form/confirm/action composition plus payloadFrom and payloadResolverRef wiring shape.
+        target_authority: auth_users:* account lifecycle authority from docs/design/admin-master-roster-management-ssot.yaml
+        operation_mapping: create/search/read/update/delete/password replace/rotate map to auth_users:* account lifecycle and auth.credentials transaction boundaries, never to content_bundle:* refs.
+      users(status):
+        reusable_shape: search input, status filter, result projection, confirm action shape.
+        target_authority: auth_users:* status operation boundary over the same auth.users identity.
+        operation_mapping: search/filter/status update only; no second account lifecycle and no credential CRUD.
+      enum:
+        reusable_shape: search/filter/result/form/confirm composition.
+        target_authority: enum_dictionary:* authority from docs/design/enum-dictionary-ssot.yaml
+        operation_mapping: enum item/group create/read/update/delete/search over existing enum columns, never content_bundle:* refs.
+      normal.dashboard:
+        reusable_shape: preview/validate/apply boundary and payloadFrom/payloadResolverRef event-binding shape may be reused.
+        target_authority: team Markdown authority from docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+        operation_mapping: viewer read remains ungated normal projection; inputer preview/validate/write/diff maps to team Markdown operations plus capability_requirement.required_role=admin.
+    insufficiency_rule: If a target surface cannot be expressed with the existing generic CRUD preset shape and the authority-specific operation refs above, the seed task must report the missing substrate for owner decision instead of inventing a new component, action wiring, payload resolver, runtime lane, or route.
+
   design_blocking:
     - id: target_surface_manifest_readiness
       blocking_condition: Canonical hub relation target resolution already exists; the unresolved design blocker is only whether the target surface has a produced active ui_projection target manifest and whether the navigation binding row has been inserted by the existing /admin/manifests authority.

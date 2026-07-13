@@ -222,7 +222,7 @@ Runtime 層には混入させません。
 |---|---|
 | 仕様 YAML | `docs/design/admin-normal-surface-projection-seed-ssot.yaml` |
 
-**概要**: `admin` / `normal` を認証ロールではなく投影 surface axis として扱い、admin 側 `credentials` / `users` / `enum` / `dashboard` と normal 側 `dashboard` の topology UI seed 設計を所有する SSOT。credential secret 非投影、users status と credential 管理の分離、hub relation link による fail-close 投影変更 trigger、既存 Markdown viewer / authoring component binding を正本化する。
+**概要**: `admin` / `normal` を認証ロールではなく投影 surface axis として扱い、admin 側 `credentials` / `users` / `enum` / `dashboard` と normal 側 `dashboard` の topology UI seed 設計を所有する SSOT。`credentials.users` は同一 `auth.users` と `auth.credentials` に対する composite account lifecycle projection、`users(status)` は同一 `auth.users` に対する status-only projection として分離し、credential secret 非投影、hub relation link による fail-close 投影変更 trigger、既存 Markdown viewer / authoring component binding を正本化する。
 
 **参照すべき場面**:
 - admin / normal hub 軸に属する投影 surface の topology seed を設計・生成するとき

@@ -30,6 +30,8 @@ mapping:
       - docs/design/db-schema.yaml
       - docs/design/admin-console-workflow-ssot.yaml
       - docs/design/ui-ux-primitive-catalog-ssot.yaml
+      - docs/design/component-catalog-classification-ssot.yaml
+      - docs/design/ui-builder-preset-ecosystem-ssot.yaml
       - docs/design/auth-db-session-credential-ssot.yaml
       - docs/design/admin-master-roster-management-ssot.yaml
       - docs/design/enum-dictionary-ssot.yaml
@@ -41,6 +43,7 @@ mapping:
       - db/enum_tables.sql
       - db/team_markdown_tables.sql
       - db/topology_tables.sql
+      - db/physical_search_crud_aggregate_preset_seed.sql
       - frontend/components/catalog.ts
     protocols:
       - .agent/protocols/design-change.md
