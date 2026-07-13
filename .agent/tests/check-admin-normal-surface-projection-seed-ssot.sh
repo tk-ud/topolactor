@@ -9,8 +9,16 @@ FAILURES=0
 pass(){ echo "OK  : $1"; }
 fail(){ echo "FAIL: $1" >&2; FAILURES=$((FAILURES+1)); }
 require_file(){ [ -f "$1" ] && pass "file exists: ${1#$REPO_ROOT/}" || fail "missing file: ${1#$REPO_ROOT/}"; }
-require_term(){ local file="$1" term="$2"; if rg -q --fixed-strings -- "$term" "$file"; then pass "${file#$REPO_ROOT/} contains $term"; else fail "${file#$REPO_ROOT/} missing $term"; fi; }
-require_absent(){ local file="$1" term="$2"; if rg -q --fixed-strings -- "$term" "$file"; then fail "${file#$REPO_ROOT/} must not contain $term"; else pass "${file#$REPO_ROOT/} excludes $term"; fi; }
+contains_fixed(){
+  local file="$1" term="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -q --fixed-strings -- "$term" "$file"
+  else
+    grep -qF -- "$term" "$file"
+  fi
+}
+require_term(){ local file="$1" term="$2"; if contains_fixed "$file" "$term"; then pass "${file#$REPO_ROOT/} contains $term"; else fail "${file#$REPO_ROOT/} missing $term"; fi; }
+require_absent(){ local file="$1" term="$2"; if contains_fixed "$file" "$term"; then fail "${file#$REPO_ROOT/} must not contain $term"; else pass "${file#$REPO_ROOT/} excludes $term"; fi; }
 require_file "$SSOT"
 require_term "$MAP" "docs/design/admin-normal-surface-projection-seed-ssot.yaml"
 require_term "$INDEX" "docs/design/admin-normal-surface-projection-seed-ssot.yaml"
