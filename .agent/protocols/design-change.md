@@ -14,6 +14,8 @@ Before judging or changing an SSOT surface, read top SSOT first:
 
 1. `docs/framework-core.yaml`
 2. `docs/framework-policy.yaml`
+3. `docs/design/runtime-orchestration-ssot.yaml`
+4. `docs/design/pipeline-continuity-ssot.yaml`
 
 Additionally, `docs/design/db-schema.yaml` is mandatory (not optional target-specific reading) whenever the SSOT change touches DB / manifest / seed SQL / UI topology / package / layout / design / wiring / tensor persistence or translator adoption targets. `db/*.sql` is the canonical DDL/seed surface, but table authority, table role, and `manifest_reference` meaning must be cross-checked against this SSOT before the design change is judged correct.
 
