@@ -89,7 +89,6 @@ for term in \
   "value: admin" \
   "seed_schema_mapping: operation_bindings[*].capability_requirement.required_role" \
   "capability_requirement.required_role=admin" \
-  "viewer_read_projection_required_role: none" \
   "viewer_mutation_callbacks_disabled_in_normal_projection" \
   "inputer_runtime_adapter_contract:" \
   "actual_component_props: [onSaved, onCancel, placement]" \
@@ -120,14 +119,25 @@ done
 require_term "$SSOT" "physical_seed_reference_only_not_design_authority"
 require_term "$SSOT" "frontend/components/catalog.ts is implementation evidence only and must not be promoted to SSOT authority owner"
 require_block_absent "$SSOT" "ui_primitive_catalog_authority:" "physical_evidence_refs:" "frontend/components/catalog.ts"
-require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields, capability_requirement"
-require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "capability_requirement_contract:"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields"
+require_block_absent "$SSOT" "operation_bindings:" "component_bindings:" "required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields, capability_requirement"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "optional_fields:"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "capability_requirement:"
 require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "schema_mapping: operation_bindings[*].capability_requirement.required_role"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "canonical_auth_semantics_ref: docs/design/auth-db-session-credential-ssot.yaml manifest_capability_requirement"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "If explicit required_role exists, JWT role must match it"
+require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "If explicit capability_requirement is omitted and runtime destination does not infer a role requirement"
 require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "conditional_required_for: mutation_operation_bindings"
 require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "topology_entry_type: capability_requirement"
 require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "required_role: admin"
+require_block_term "$SSOT" "inputer_mutation_contract:" "viewer_read_search_filter_contract:" "topology_entry_type: capability_requirement"
+require_block_term "$SSOT" "inputer_mutation_contract:" "viewer_read_search_filter_contract:" "required_role: admin"
 require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "viewer_read_search_filter_contract:"
-require_block_term "$SSOT" "operation_bindings:" "component_bindings:" "required_role: none"
+require_block_term "$SSOT" "viewer_read_search_filter_contract:" "prohibited_substitutes:" "capability_requirement: omitted"
+require_block_term "$SSOT" "viewer_read_search_filter_contract:" "prohibited_substitutes:" "required_role_field: omitted"
+require_block_term "$SSOT" "viewer_read_search_filter_contract:" "prohibited_substitutes:" "explicit_admin_role_gate: absent"
+require_block_term "$SSOT" "viewer_read_search_filter_contract:" "prohibited_substitutes:" "inferred_admin_requirement: absent"
+require_block_absent "$SSOT" "viewer_read_search_filter_contract:" "prohibited_substitutes:" "required_role: none"
 require_block_absent "$SSOT" "viewer_read_search_filter_contract:" "prohibited_substitutes:" "required_role: admin"
 
 for term in \
@@ -223,6 +233,8 @@ require_absent "$SSOT" "All design_blocking entries are either resolved"
 require_absent "$SSOT" "credentials surface owns credential lifecycle intent"
 require_absent "$SSOT" "target_manifest_resolution: resolve exactly one active target manifest for related_hub_id and selected surface context"
 require_absent "$SSOT" "required_capability: admin"
+require_absent "$SSOT" "required_role: none"
+require_absent "$SSOT" "viewer_read_projection_required_role: none"
 if [ "$FAILURES" -eq 0 ]; then
   echo "PASS admin-normal surface projection seed SSOT proof"
   exit 0

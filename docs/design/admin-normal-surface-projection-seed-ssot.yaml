@@ -139,13 +139,15 @@ admin_normal_surface_projection_seed_ssot:
       surface_key:
         rule: Must equal one of the surface keys declared under surface_axes.
       operation_bindings:
-        required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields, capability_requirement
+        required_shape: list of operation_key, capability_kind, authority_ref, backend_emission_ref, confirmation_required, forbidden_projection_fields
+        optional_fields:
+          capability_requirement:
+            shape: topology_entry_type, required_role
+            schema_mapping: operation_bindings[*].capability_requirement.required_role
+            canonical_auth_semantics_ref: docs/design/auth-db-session-credential-ssot.yaml manifest_capability_requirement
+            rule: If explicit required_role exists, JWT role must match it. If explicit capability_requirement is omitted and runtime destination does not infer a role requirement, the operation is open to any authenticated role.
         capability_requirement_contract:
-          schema_mapping: operation_bindings[*].capability_requirement.required_role
           conditional_required_for: mutation_operation_bindings
-          required_shape:
-            topology_entry_type: capability_requirement
-            required_role: role_value_from_existing_topology_capability_requirement_contract
           inputer_mutation_contract:
             applies_to_surface: normal.dashboard.inputer
             applies_to_operations: [preview, validate, explicit_confirm, write, diff_log]
@@ -154,9 +156,13 @@ admin_normal_surface_projection_seed_ssot:
           viewer_read_search_filter_contract:
             applies_to_surface: normal.dashboard.viewer
             applies_to_operations: [read, search, filter]
-            required_role: none
-            rule: Viewer read/search/filter operation bindings must not receive required_role=admin; absence of admin role gate is part of the operation binding schema contract, not only component event text.
-          prohibited_substitutes: [capability_kind_as_role_gate_replacement, required_capability]
+            capability_requirement: omitted
+            required_role_field: omitted
+            explicit_admin_role_gate: absent
+            inferred_admin_requirement: absent
+            runtime_binding_requirement: Must use a runtime binding that neither declares explicit capability_requirement.required_role nor infers admin from runtime_destination.
+            rule: Viewer read/search/filter operation bindings must generate no required_role field, no required_role none sentinel, and no admin role gate.
+          prohibited_substitutes: [capability_kind_as_role_gate_replacement, required_capability, required_role_none_sentinel]
       component_bindings:
         required_shape: list of node_key, component_key, component_role, catalog_authority_ref, responsibility_boundary
       prop_bindings:
@@ -486,7 +492,6 @@ admin_normal_surface_projection_seed_ssot:
                 source_node: markdown_viewer
                 event_kind: onClose
                 capability: normal_projection_read_ui_event
-                viewer_read_projection_required_role: none
               - event_key: viewer_mutation_callbacks_disabled_in_normal_projection
                 source_node: markdown_viewer
                 event_kind: onRefresh/onEditAdjustment/onArchive/onClone/onRebind/onCreateTodoCandidate omitted_or_disabled
