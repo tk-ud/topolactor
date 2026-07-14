@@ -84,6 +84,23 @@ public abstract class TeamMarkdownRepository
         => Task.FromResult<(bool, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
 
 
+    // ─── saved view update with durable diff evidence ────────────────────────
+    // Combines the mutation and its diff-evidence event append into one transaction (unlike
+    // UpdateSavedViewAsync + a separate best-effort AppendEventAsync call). This is the write step
+    // of the preview -> validate -> explicit_confirm -> write -> diff_log authoring workflow: the
+    // event row this produces is the completion proof, not a best-effort side effect.
+
+    public virtual Task<(bool Updated, string? ErrorCode, string? Message, string? EventId)>
+        UpdateSavedViewWithDiffEvidenceAsync(Guid savedViewId, string? title, string? renderedMarkdown,
+            System.Text.Json.JsonElement? userAdjustmentPatchJson,
+            System.Text.Json.JsonElement? completedPresetSeedJson,
+            string? searchIndexText,
+            System.Text.Json.JsonElement? cardMetadataJson,
+            System.Text.Json.JsonElement? bindingJson,
+            string actor,
+            CancellationToken ct = default)
+        => Task.FromResult<(bool, string?, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured", null));
+
     // ─── saved view clone ────────────────────────────────────────────────────
 
     public virtual Task<(string? SavedViewId, string? ErrorCode, string? Message)>

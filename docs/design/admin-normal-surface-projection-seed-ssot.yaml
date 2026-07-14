@@ -236,11 +236,19 @@ admin_normal_surface_projection_seed_ssot:
                 auth.users: [user_id, username, active, approve, status, suspended_from, suspended_until, state_note, created_at, updated_at]
                 auth.credentials: [credential_id, user_id, created_at]
               forbidden_projection_fields: [password_hash, token_hash, refresh_token, plaintext_secret, secret_value]
-              operations: [create_account_with_initial_credential, read, search, update_account_metadata, replace_password, rotate_password, delete_account_with_credentials]
+              operations: [create_account_with_initial_credential, read, search, update_account_metadata, update_role, revoke_credential, revoke_sessions, delete_account_with_credentials]
+              operations_correction_2026_07_14: >
+                replace_password/rotate_password were retired from this operations list — see design_blocking.credentials_users_account_transaction_binding resolution_record.
+                Admin never sets, replaces, rotates, or reads another account's password value; revoke_credential (kill-switch: deletes the credential row and revokes all sessions,
+                backend/service/AuthService.cs AdminRevokeCredentialAsync) is the only admin-driven credential mutation. Self password change is a separate,
+                self-service-only surface (POST /auth/me/password) not reachable from this admin surface. update_role and revoke_sessions were added as concrete,
+                implemented operations (role via auth_users:update roleName field over auth.grants; revoke_sessions via POST /admin/auth/users/{userId}/sessions/revoke).
               transaction_contract:
                 create_account_with_initial_credential: auth.users insert and auth.credentials insert are one account lifecycle transaction; no user row without required initial credential may be projected as created by this surface.
                 delete_account_with_credentials: account deletion must preserve auth.users -> auth.credentials consistency through the existing FK/cascade or an equivalent backend transaction; no orphan credential lifecycle is defined here.
-                password_replace_rotate: update credential secret material by explicit replace/rotate intent only; old or new secret material is never projected, previewed, searched, or diffed.
+                revoke_credential: deletes the auth.credentials row and revokes every active session for the account in one transaction, with non-secret evidence appended in the same transaction; never accepts or stores a replacement password value.
+                revoke_sessions: revokes one (by sessionId) or all active auth.sessions rows for the account in one transaction, with non-secret evidence appended in the same transaction.
+                update_role: grants or revokes the admin/system auth.grants row for the account (auth_users:update roleName field); never affects auth.credentials.
               admin_users_authority_relationship:
                 existing_authority_ref: docs/design/admin-master-roster-management-ssot.yaml admin_runtime_actions.auth_users
                 relationship: continuation_refinement_not_duplicate_authority
@@ -271,7 +279,7 @@ admin_normal_surface_projection_seed_ssot:
             read: required
             search: [auth.users.username, auth.users.status, auth.users.state_note, topology.external_credential_vault.provider_kind, topology.external_credential_vault.required_by_bundle, topology.external_credential_vault.reference_key]
             filter: [category, auth.users.active, auth.users.approve, auth.users.status, provider_kind, required_by_bundle, active, expires_at]
-            mutation: [create_account_with_initial_credential, update_account_metadata, replace_password, rotate_password, delete_account_with_credentials, external_credential_metadata_update, deactivate_or_delete_reference]
+            mutation: [create_account_with_initial_credential, update_account_metadata, update_role, revoke_credential, revoke_sessions, delete_account_with_credentials, external_credential_metadata_update, deactivate_or_delete_reference]
           seed_contract:
             component_tree:
               - node_key: credential_search
@@ -522,19 +530,62 @@ admin_normal_surface_projection_seed_ssot:
                 expected_response_projection: sanitized_saved_view_and_diff_log
                 error_projection: validation_or_write_error_without_secret
             inputer_runtime_adapter_contract:
+              status: resolved_via_existing_route_composition
+              resolution_record: role-based-surface-impl bundle (2026-07-14) — owner instruction explicitly selected the route_composition_alternative below over a generic runtime-factory adapter; this closes design_blocking.normal_dashboard_authoring_runtime_adapter.
               adapter_requirement: required_before_topology_seed_generation
-              component_runtime_connected_evidence: md_translation_authoring_surface.authoring runtimeConnected=false in frontend/components/catalog.ts physical evidence
+              component_runtime_connected_evidence: md_translation_authoring_surface.authoring runtimeConnected=false in frontend/components/catalog.ts physical evidence -- this repo's SsotWiringAuditComponentRegistrationTests treats runtimeConnected as factory-registration-specific (componentKind must appear in RUNTIME_COMPONENT_FACTORIES), so route-composition reachability (real, see resolution below) is recorded in catalog notes rather than by flipping this field; updating that test to recognize route-composition as an alternative satisfying condition remains a small follow-up.
               adapter_mounts_component: md_translation_authoring_surface.authoring
               actual_component_props: [onSaved, onCancel, placement]
               actual_component_events: [onSaved(savedViewId), onCancel]
               adapter_owned_events: [preview, validate, explicit_confirm, write, diff_log]
               canonical_role_gate_binding: capability_requirement.required_role=admin required_for_adapter_owned_events_and_onSaved_write_completion
-              route_composition_alternative: existing team Markdown dashboard route composition may be referenced only if it already supplies equivalent props/events and backend emission boundaries; otherwise seed generation is blocked.
+              route_composition_alternative: "REALIZED: /dashboard/team (frontend/routes/dashboard/team.tsx) via frontend/islands/TeamDashboardRoleSurface.tsx, which mounts TeamMarkdownViewer (frontend/islands/TeamMarkdownDashboard.tsx, all authenticated sessions) and additionally mounts TeamMarkdownAuthoring (same file) only for admin-role sessions (display-only client gate). preview/validate/explicit_confirm/write/diff_log are implemented by frontend/components/SavedViewAdjustmentAuthoringPanel.tsx against team_markdown:saved_view:update with a dryRun payload flag for preview/validate and a confirmed payload flag required for write; backend re-validates unconditionally on every call and persists write+diff-evidence atomically (backend/repository/NpgsqlTeamMarkdownRepository.cs UpdateSavedViewWithDiffEvidenceAsync). Backend-side admin authority is independently re-checked in backend/runtime/AdminRuntime.TeamMarkdown.cs ExecuteTeamMarkdownAsync via OperationVector.AuthenticatedRole (JWT-verified, not client-supplied), not inferred from this route composition alone."
               prohibited:
                 - direct_seed_runtime_component_binding_while_runtimeConnected_false
                 - frontend_display_only_admin_gate
                 - invented_component_props_or_events
             loading_empty_error_projection: [loading_markdown_dashboard, empty_markdown_dashboard, markdown_update_error]
+          viewer_runtime_reachability:
+            status: resolved_via_existing_route_composition
+            resolution_record: role-based-surface-impl bundle (2026-07-14) — TeamMarkdownViewer (frontend/islands/TeamMarkdownDashboard.tsx) reads through new plain-JWT viewer endpoints (GET /team-markdown/templates, /team-markdown/saved-views, /team-markdown/saved-views/{id} — backend/Program.cs, backed directly by the existing TeamMarkdownRepository read methods) rather than the admin_runtime dispatch lane, because that lane's manifest-level capability_requirement inference (runtime_destination=admin_runtime) applies uniformly per action and cannot be split read-vs-write without a seed change; this keeps the write-side gate intact while giving Normal role read/search/filter access with no admin capability requirement, satisfying viewer_read_search_filter_contract below.
+        personal_page:
+          status: new_surface_added_role_based_surface_impl_bundle_2026_07_14
+          resolution_record: >
+            Added per explicit task instruction (this Bundle's scope required a Personal Page in the same PR, not a follow-up).
+            No prior design authority existed for this surface anywhere in docs/ (confirmed absent from admin-normal-surface-projection-seed-ssot.yaml,
+            auth-db-session-credential-ssot.yaml, and docs/system-roadmap.yaml before this bundle). Modeled directly on the normal.dashboard
+            authority-split pattern (viewer-only, no admin capability requirement) rather than inventing a new authority shape.
+          data_authority_ref:
+            - auth.users
+            - auth.sessions
+          responsibilities:
+            self_viewer:
+              role: read_projection
+              component_key: personal_page.projection
+              owns_mutation: false
+              projection_fields: [username, role, realm, active, approve, status, sessions]
+              forbidden_authority: [other_account_read, other_account_mutation, password_hash_projection]
+            self_credential_operator:
+              role: self_only_credential_and_session_mutation_intent_surface
+              component_key: personal_page.projection
+              owns_mutation_intent: true
+              target_account_resolution: server_side_from_validated_jwt_subject_only
+              rule: No request body, query parameter, or route parameter on any operation in this responsibility ever carries a userId/username naming a different account; backend/endpoint self routes resolve the target exclusively from JwtGuard-validated claims.
+          operations: [read_self, change_own_password, list_own_sessions, revoke_own_session, revoke_other_sessions]
+          operation_capability_boundary:
+            rule: No operation in this surface carries or requires capability_requirement.required_role=admin — every operation is self-scoped by JWT-subject identity, not by a role gate. This is a different boundary mechanism than normal.dashboard's admin-capability-gated inputer; personal_page's mutation authority boundary is "same account as caller," not "admin role."
+          mutation_flow:
+            change_own_password:
+              required_order: [current_password_verification, password_policy_check, write, session_revocation, evidence]
+              write: "backend/repository/NpgsqlAuthRepository.cs ChangeOwnPasswordAsync — one transaction: re-verifies currentPassword against the stored hash, updates auth.credentials.password_hash, revokes every active auth.sessions row for the account, and appends non-secret evidence into logs.diff, all atomically."
+              prohibited: [admin_settable_target_account, password_value_in_evidence, frontend_local_state_only_change]
+            revoke_own_session_and_revoke_other_sessions:
+              write: "backend/repository/NpgsqlAuthRepository.cs RevokeOwnedSessionAsync / RevokeSessionsForUserAsync — ownership-checked (session must belong to the caller's own userId) or scoped to the caller's own userId; non-secret evidence appended in the same transaction."
+          seed_contract:
+            status: not_produced_this_bundle
+            rule: Same topology_seed_schema_contract.minimum_required_fields as other surfaces in this SSOT applies when seed work resumes; this surface currently exists only as application-layer route composition (frontend/routes/account/index.tsx -> AuthenticatedGate -> frontend/islands/PersonalPage.tsx), matching the same route_composition_alternative pattern used for normal.dashboard.inputer above.
+          runtime_reachability: existing_route_composition
+          component_catalog_ref: personal_page.projection (frontend/components/catalog.ts)
   crud_preset_physical_reference_assessment:
     physical_reference_file: db/physical_search_crud_aggregate_preset_seed.sql
     physical_reference_role: physical_seed_reference_only_not_design_authority
@@ -594,14 +645,24 @@ admin_normal_surface_projection_seed_ssot:
       blocking_condition: External instance credential category depends on instance-port substrate authority; if a concrete existing physical table/column set is not present for required instance settings, the seed task must stop and reference the instance-port SSOT instead of inventing fields.
       required_resolution_before_seed: Cross-check instance-port physical schema and approved candidate source at seed implementation time.
     - id: normal_dashboard_authoring_runtime_adapter
+      status: resolved
+      resolution_record: role-based-surface-impl bundle (2026-07-14) — resolved via normal.dashboard.responsibilities.inputer.inputer_runtime_adapter_contract (route_composition_alternative REALIZED). No seed rows were added; this resolves the design blocker only, not the separately-tracked topology UI seed production pause.
       blocking_condition: md_translation_authoring_surface.authoring is physical evidence with runtimeConnected=false in the current catalog; a topology seed cannot use it as a direct runtime component until an explicit runtime adapter or existing route composition binding is selected.
       required_resolution_before_seed: Define the adapter/route-composition binding with props [onSaved, onCancel, placement] and admin-gated preview/validate/write/diff event emissions before generating seed.
     - id: normal_dashboard_write_operation_binding
+      status: resolved
+      resolution_record: role-based-surface-impl bundle (2026-07-14) — bound to team_markdown:saved_view:update (existing, already-dispatcher-mapped action per PR584) with a payload.dryRun flag for preview/validate (non-mutating) and payload.confirmed flag required for write; no new dispatch action / no new dispatcher_mapping row was added, so no seed dependency was introduced. See backend/runtime/AdminRuntime.TeamMarkdown.cs DataTeamMarkdownSavedViewUpdateAsync.
       blocking_condition: This SSOT defines mutation flow shape, but backend emission operation keys must be selected from team Markdown authority during later seed work.
       required_resolution_before_seed: Bind preview/validate/write/diff operations to existing team Markdown runtime actions or declare a design conflict before seed generation.
     - id: credentials_users_account_transaction_binding
+      status: partially_resolved
+      resolution_record: >
+        role-based-surface-impl bundle (2026-07-14) — owner instruction (this task's explicit NG axis: "adminによる他人のpassword変更UIを除外する", "adminが他人のpasswordを指定できないこと") overrides this SSOT's prior admin-surface replace_password/rotate_password operation intent below (admin.surfaces.credentials.categories.users.operations). Corrected split:
+        (1) self password change is implemented as a NEW self-service surface, not an admin.surfaces.credentials operation — see auth-db-session-credential-ssot.yaml companion note and backend/service/AuthService.cs ChangeOwnPasswordAsync / POST /auth/me/password. Target account is resolved only from the validated JWT subject; no admin surface, no userId parameter.
+        (2) admin-driven password replace/rotate (admin sets a value for another account) remains explicitly NOT implemented and is now a permanent NG, not a pending gap — admin.surfaces.credentials.categories.users.operations replace_password/rotate_password are retired below in favor of an admin credential REVOKE (kill-switch, backend/service/AuthService.cs AdminRevokeCredentialAsync / POST /admin/auth/users/{userId}/credential/revoke) that never accepts or stores a replacement password value.
+        create_account_with_initial_credential and delete_account_with_credentials remain resolved_existing_substrate (unchanged, auth_users:create / auth_users:delete).
       blocking_condition: credentials.users requires auth.users + auth.credentials account lifecycle transactions; seed implementation must bind to the existing auth_users authority rather than creating a second account CRUD authority.
-      required_resolution_before_seed: Bind create/delete/password replace/rotate to existing auth_users/account transaction authority and prove auth.users/auth.credentials consistency before seed generation.
+      required_resolution_before_seed: Bind create/delete/credential-revoke to existing auth_users/account transaction authority (done) and prove auth.users/auth.credentials consistency before seed generation (remaining — next PR's seed/render/action proof scope).
   seed_implementation_start_conditions:
     - This SSOT is reachable from .agent/docs/ssot-map.yaml and .agent/docs/design-ssot-index.md.
     - Design proof for required vocabulary, boundaries, and referenced catalog/schema surfaces passes.

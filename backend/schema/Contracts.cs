@@ -54,7 +54,12 @@ public record OperationVector(
     int? ContextPrevEnumIndex = null,
     int? ContextNextEnumIndex = null,
     // trigger_kind from SSOT minimal_event_shape: cron | hook | client
-    string? TriggerKind = null
+    string? TriggerKind = null,
+    // Server-verified JWT identity, sourced only from DispatchAuthContext's reserved context keys
+    // (authenticated_user_id / authenticated_roles). Never sourced from client-supplied context —
+    // this is the non-spoofable audit-actor / self-operation-subject identity.
+    string? AuthenticatedUserId = null,
+    string? AuthenticatedRole = null
 );
 
 /// <summary>

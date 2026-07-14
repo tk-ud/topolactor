@@ -1,21 +1,16 @@
-import { JSX } from "preact";
-import AdminAuthGate from "../../../islands/AdminAuthGate.tsx";
-import TeamMarkdownDashboard from "../../../islands/TeamMarkdownDashboard.tsx";
+import { Handlers } from "$fresh/server.ts";
 
 /**
- * /admin/team-dashboard — routable Team Markdown Dashboard placement.
- * Projection-only surface for saved Markdown views; all data access goes through
- * TeamMarkdownDashboard -> teamMarkdownApi -> AdminRuntime team_markdown actions.
+ * /admin/team-dashboard — legacy compat redirect to the canonical authenticated route
+ * /dashboard/team (see routes/dashboard/team.tsx). Kept as a redirect rather than deleted per
+ * the repo's route-retirement rule (render/action proof and seed conversion must land before a
+ * route is actually retired); retire this file only after that proof lands in a follow-up PR.
  */
-export default function AdminTeamDashboardRoute(): JSX.Element {
-  return (
-    <AdminAuthGate>
-      <main class="page-main-wide">
-        <p class="mb-1">
-          <a href="/admin" class="link">← 管理インデックスへ戻る</a>
-        </p>
-        <TeamMarkdownDashboard placement="admin_route" />
-      </main>
-    </AdminAuthGate>
-  );
-}
+export const handler: Handlers = {
+  GET(req) {
+    const url = new URL(req.url);
+    const target = new URL("/dashboard/team", url.origin);
+    target.search = url.search;
+    return new Response(null, { status: 302, headers: { Location: target.toString() } });
+  },
+};

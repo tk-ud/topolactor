@@ -46,6 +46,61 @@ public static class AuthCookieNames
     public const string RefreshToken = "topolactor_refresh_token";
 }
 
+// ─── Self-service credential/session lifecycle (auth_runtime, not manifest-dispatched) ─────────
+// Target account for every DTO in this section is always resolved server-side from the validated
+// JWT subject — none of these DTOs carry a userId/username field, by design, so a caller can never
+// name a different account to act on.
+
+/// <summary>GET /auth/me — current authenticated account, sourced from validated JWT + auth.users.</summary>
+public record CurrentAccountResponseDto(
+    bool Success,
+    string? Username,
+    string? Role,
+    string? Realm,
+    bool? Active,
+    bool? Approve,
+    string? Status,
+    IReadOnlyList<ValidationError> Errors);
+
+/// <summary>POST /auth/me/password — self-service password change. No userId field: target is always the JWT subject.</summary>
+public record ChangeOwnPasswordRequestDto(string? CurrentPassword, string? NewPassword);
+
+public record ChangeOwnPasswordResponseDto(
+    bool Success, int SessionsRevoked, IReadOnlyList<ValidationError> Errors);
+
+public record SessionSummaryDto(
+    [property: JsonPropertyName("sessionId")] Guid SessionId,
+    [property: JsonPropertyName("realm")] string Realm,
+    [property: JsonPropertyName("audience")] string Audience,
+    [property: JsonPropertyName("expiresAt")] DateTimeOffset ExpiresAt,
+    [property: JsonPropertyName("createdAt")] DateTimeOffset CreatedAt,
+    [property: JsonPropertyName("isCurrent")] bool IsCurrent);
+
+public record ListSessionsResponseDto(
+    bool Success, IReadOnlyList<SessionSummaryDto>? Sessions, IReadOnlyList<ValidationError> Errors);
+
+/// <summary>POST /auth/me/sessions/revoke — revoke one of the caller's own sessions by id.</summary>
+public record RevokeOwnSessionRequestDto(string? SessionId);
+
+public record RevokeOwnSessionResponseDto(bool Success, IReadOnlyList<ValidationError> Errors);
+
+public record RevokeOtherSessionsResponseDto(
+    bool Success, int SessionsRevoked, IReadOnlyList<ValidationError> Errors);
+
+// ─── Admin-driven credential/session operations (thin HTTP boundary, admin JWT required) ───────
+// Admin can act on any userId (route parameter), but never supplies or reads a password value —
+// these operations only revoke; they never set/replace another user's password.
+
+public record AdminRevokeSessionsRequestDto(string? SessionId);
+
+public record AdminRevokeSessionsResponseDto(
+    bool Success, int SessionsRevoked, IReadOnlyList<ValidationError> Errors);
+
+public record AdminRevokeCredentialResponseDto(bool Success, IReadOnlyList<ValidationError> Errors);
+
+public record AdminListSessionsResponseDto(
+    bool Success, IReadOnlyList<SessionSummaryDto>? Sessions, IReadOnlyList<ValidationError> Errors);
+
 public static class AuthManifestIds
 {
     public static readonly Guid UserLoginManifestId =

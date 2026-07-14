@@ -53,6 +53,14 @@ export type MdViewerProps = {
   ) => void;
   onCreateTodoCandidate?: (savedViewId: string) => void;
   disabledActionReasons?: MdViewerDisabledActionReasons;
+  /**
+   * Default true (preserves existing admin-route/UI-Builder-child-surface behavior). When false,
+   * every mutation-capable action (edit adjustment, refresh, clone, rebind, archive, create-todo)
+   * is not rendered at all — not merely disabled — so a Normal-role viewer never sees authoring
+   * controls it has no backend authority to use. Read-only actions (open source record, copy
+   * Markdown) remain available regardless.
+   */
+  authoringEnabled?: boolean;
 };
 
 // ─── seed summary ─────────────────────────────────────────────────────────────
@@ -164,6 +172,7 @@ function ActionToolbar({
   onCopyMarkdown,
   copyStatus,
   disabledActionReasons = {},
+  authoringEnabled = true,
 }: {
   savedView: SavedViewDetail;
   seedValid: boolean;
@@ -177,6 +186,7 @@ function ActionToolbar({
   onCopyMarkdown: () => void;
   copyStatus: "idle" | "copied" | "error";
   disabledActionReasons?: MdViewerDisabledActionReasons;
+  authoringEnabled?: boolean;
 }) {
   const seedInvalidReason = !seedValid
     ? "Seed invalid — action disabled"
@@ -209,46 +219,54 @@ function ActionToolbar({
       >
         Open source record
       </button>
-      <button
-        type="button"
-        class="md-viewer-action-btn"
-        disabled={!onEditAdjustment || Boolean(editDisabledReason)}
-        onClick={() => onEditAdjustment?.(savedView.savedViewId)}
-        aria-label="Edit saved view adjustment"
-        title={editDisabledReason ?? "Edit saved view adjustment candidate"}
-      >
-        Edit adjustment
-      </button>
-      <button
-        type="button"
-        class="md-viewer-action-btn"
-        disabled={!onRefresh || Boolean(refreshDisabledReason)}
-        onClick={() => onRefresh?.(savedView.savedViewId)}
-        aria-label="Refresh from source record"
-        title={refreshDisabledReason ?? "Refresh from source record"}
-      >
-        Refresh
-      </button>
-      <button
-        type="button"
-        class="md-viewer-action-btn"
-        disabled={!onClone || Boolean(cloneDisabledReason)}
-        onClick={() => onClone?.(savedView.savedViewId)}
-        aria-label="Clone saved view to another record"
-        title={cloneDisabledReason ?? "Clone to another record"}
-      >
-        Clone
-      </button>
-      <button
-        type="button"
-        class="md-viewer-action-btn"
-        disabled={!onRebind || Boolean(rebindDisabledReason)}
-        onClick={() => onRebind?.(savedView.savedViewId)}
-        aria-label="Rebind saved view to another source"
-        title={rebindDisabledReason ?? "Rebind saved view to another source"}
-      >
-        Rebind
-      </button>
+      {authoringEnabled && (
+        <button
+          type="button"
+          class="md-viewer-action-btn"
+          disabled={!onEditAdjustment || Boolean(editDisabledReason)}
+          onClick={() => onEditAdjustment?.(savedView.savedViewId)}
+          aria-label="Edit saved view adjustment"
+          title={editDisabledReason ?? "Edit saved view adjustment candidate"}
+        >
+          Edit adjustment
+        </button>
+      )}
+      {authoringEnabled && (
+        <button
+          type="button"
+          class="md-viewer-action-btn"
+          disabled={!onRefresh || Boolean(refreshDisabledReason)}
+          onClick={() => onRefresh?.(savedView.savedViewId)}
+          aria-label="Refresh from source record"
+          title={refreshDisabledReason ?? "Refresh from source record"}
+        >
+          Refresh
+        </button>
+      )}
+      {authoringEnabled && (
+        <button
+          type="button"
+          class="md-viewer-action-btn"
+          disabled={!onClone || Boolean(cloneDisabledReason)}
+          onClick={() => onClone?.(savedView.savedViewId)}
+          aria-label="Clone saved view to another record"
+          title={cloneDisabledReason ?? "Clone to another record"}
+        >
+          Clone
+        </button>
+      )}
+      {authoringEnabled && (
+        <button
+          type="button"
+          class="md-viewer-action-btn"
+          disabled={!onRebind || Boolean(rebindDisabledReason)}
+          onClick={() => onRebind?.(savedView.savedViewId)}
+          aria-label="Rebind saved view to another source"
+          title={rebindDisabledReason ?? "Rebind saved view to another source"}
+        >
+          Rebind
+        </button>
+      )}
       <button
         type="button"
         class="md-viewer-action-btn"
@@ -262,18 +280,20 @@ function ActionToolbar({
           ? "Copy failed"
           : "Copy Markdown"}
       </button>
-      <button
-        type="button"
-        class="md-viewer-action-btn"
-        disabled={!onCreateTodoCandidate || Boolean(createTodoDisabledReason)}
-        onClick={() => onCreateTodoCandidate?.(savedView.savedViewId)}
-        aria-label="Create follow-up todo candidate"
-        title={createTodoDisabledReason ??
-          "Create local follow-up todo candidate"}
-      >
-        Create todo
-      </button>
-      {onArchive && savedView.status !== "archived" && (
+      {authoringEnabled && (
+        <button
+          type="button"
+          class="md-viewer-action-btn"
+          disabled={!onCreateTodoCandidate || Boolean(createTodoDisabledReason)}
+          onClick={() => onCreateTodoCandidate?.(savedView.savedViewId)}
+          aria-label="Create follow-up todo candidate"
+          title={createTodoDisabledReason ??
+            "Create local follow-up todo candidate"}
+        >
+          Create todo
+        </button>
+      )}
+      {authoringEnabled && onArchive && savedView.status !== "archived" && (
         <button
           type="button"
           class="md-viewer-action-btn md-viewer-action-destructive"
@@ -315,6 +335,7 @@ export function MdViewer({
   onOpenSourceRecord,
   onCreateTodoCandidate,
   disabledActionReasons,
+  authoringEnabled = true,
 }: MdViewerProps) {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
     "idle",
@@ -384,6 +405,7 @@ export function MdViewer({
         onCopyMarkdown={handleCopyMarkdown}
         copyStatus={copyStatus}
         disabledActionReasons={disabledActionReasons}
+        authoringEnabled={authoringEnabled}
       />
 
       <div class="md-viewer-body">

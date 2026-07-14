@@ -152,6 +152,30 @@ export function buildAuthRedirectResponse(
   return new Response(null, { status: 302, headers });
 }
 
+/** Redirect target for authenticated (not admin-only) surfaces — /auth is the single login entry
+ *  for both realms (loginProjection issues an admin JWT when grants exist, a user JWT otherwise). */
+export function buildAuthPageRedirectUrl(req: Request): string {
+  const requestUrl = new URL(req.url);
+  const redirectPath = `${requestUrl.pathname}${requestUrl.search}`;
+  const authUrl = new URL("/auth", requestUrl.origin);
+  if (redirectPath.startsWith("/") && !redirectPath.startsWith("//")) {
+    authUrl.searchParams.set("redirect", redirectPath);
+  }
+  return authUrl.toString();
+}
+
+/** 302 redirect to /auth; optional session cookie clear. Used by authenticated (non-admin-only) gates. */
+export function buildAuthPageRedirectResponse(
+  req: Request,
+  options?: { clearSession?: boolean },
+): Response {
+  const headers = new Headers({ Location: buildAuthPageRedirectUrl(req) });
+  if (options?.clearSession) {
+    headers.append("Set-Cookie", sessionTokenClearCookieHeader());
+  }
+  return new Response(null, { status: 302, headers });
+}
+
 /**
  * Sync carriers, probe backend session, clear storage when invalid or unverifiable.
  * Use before treating the user as logged in on /auth or inside AdminAuthGate.

@@ -12,6 +12,7 @@
 | `seed-template-runtime-interaction-assignment` | Seed/template projection runtimeInteractionId assignment path | implemented | 1 | `product.dynamic_support_nocode_loop` / seed-template projection adoption carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `admin-surface-topology-seed-conversion` | Admin hardcoded surface topology seed conversion | not_started | 5 subBundle | `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement | `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml` |
+| `role-based-surface-separation` | Team Dashboard role split, Personal Page, self credential lifecycle, admin credential/scheduler UI, catalog adapters | in_progress | 1 | (new) role-based surface separation | `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/team-markdown-dashboard-saved-view-ssot.yaml` |
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
@@ -494,7 +495,7 @@ owner 指示により、一時監査 report である上記 JSON ファイルは
 - **response-binding architecture 未実装**（旧 gap-01）: `dispatchExternalPort`/`dispatchInstanceOperation` の runtimeInteractions レーンに対する response-binding / invalidation アーキテクチャが未実装。`admin_runtime`（auth_users/team_markdown/scheduler_jobs/enum_dictionary）CRUD を真に seed-backed category として authoring するには、`AdminRuntime` の `layer:action` axis を直接 dispatch できる新しい runtimeInteractions actionType も必要。cross-cutting・high-blast-radius につき、owner_decision_required のアーキテクチャ選択が前提。
 - **declared_seed_surface_catalog 未整備**（旧 gap-02）: admin-dashboard / team-dashboard / admin-enum / scheduler-settings 向けの catalog entry が未追加。各 surface ごとに React-like Schema 作成 + translator 実行が必要。
 - **hub relation ターゲット不在**（旧 gap-03、上の「Hub relation語彙訂正記録」で正確な理由に訂正済み）: enum_dictionary/team_dashboard/scheduler_jobs 向けの `ui_projection` manifest が未作成。
-- **`scheduler_jobs:edit` の UI 未実装**（旧 gap-04）: backend/dispatcher は完全に wiring 済みだが、`frontend/routes/admin/scheduler.tsx` に UI control がない。
+- **`scheduler_jobs:edit` の UI 未実装**（旧 gap-04、**role-based-surface-impl bundle (2026-07-14) で解消**）: `frontend/islands/SchedulerJobSettingsPanel.tsx` に inactive job 向け Edit フォーム（`onStartEdit`/`onCancelEdit`、既存 `editSchedulerJob` API を呼び出し）を追加。詳細は `## Bundle role-based-surface-separation` 参照。
 - **instance_settings placeholder targetRef 未解決**（旧 gap-05）: manifest 092 の `instance_settings` category にある seeded placeholder `instanceTargetRef` が実 UUID に未解決。`InstancePortDispatchRuntime` に明示的な fail-close guard もない。実在する登録済み instance-port record が存在しないため（`instance_settings_admin_authoring_ui_pending` は明示的にこの Bundle の scope 外）。
 - **root `/` の非 admin ユーザー向け fail-close 未検証**（旧 gap-06）: root `/` の `canonical_default_entry` は認証済みセッションであれば誰でも admin-only な manifest 092 へ解決される。owner_decision_required。
 - **manifest clone-authoring / admin_csv_json_import ファミリーの dispatcher_mapping gap**（旧 gap-07）: `admin_csv_json_import:list_snapshot_records`、`manifest:create_clone_new_topology_draft_from_active`、`manifest:create_clone_replacement_draft_from_active`、`manifest:create_new_topology_draft`、`manifest:list_aggregate_trigger_processing_functions`、`manifest:list_screen_read_query_wiring`、`manifest:load_clone_source_evidence`、`manifest:merge_clone_replacement_draft_to_active`、`manifest:validate_clone_replacement_draft`、`physical_record:list_history` の約10件。この Bundle の5 subBundle scope 外（別の admin-authoring pipeline）だが、発見時に記録。
@@ -504,6 +505,99 @@ owner 指示により、一時監査 report である上記 JSON ファイルは
   - `admin-surface-seed-catalog-conversion`: admin-dashboard / admin-enum / team-dashboard / scheduler-settings 向けの React-like Schema 作成・translator 実行・topology UI seed 登録。
   - `instance-settings-admin-authoring-ui`: `docs/system-roadmap.yaml` の `instance_settings_admin_authoring_ui_pending` として既に追跡済み。JSON template download/import/validate/preview/apply/approve の UI・backend action。
   - `presentation-participant-audience-authority`: 必要になった場合のみ。presenter-to-participant forced projection、participant membership、targeted per-viewer SSE delivery。現状すべての SSOT に不在確認済み。専用 SSOT authority が必要。
+
+---
+
+## Bundle `role-based-surface-separation`
+
+**Status:** `in_progress`（frontend component / backend operation / route / adapter / catalog / SSOT sync 完了。production seed 登録・render proof・action proof・legacy route retirement は次PR。）
+**Primary SSOT:** `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`, `docs/design/component-catalog-classification-ssot.yaml`
+**関連 Bundle:** `admin-surface-topology-seed-conversion`（この Bundle は seed conversion Bundle **ではない** — team-dashboard/credential-management の design_blocking を一部解消するが、topology UI seed 生成・登録は行わない。seed conversion Bundle 自体の Status/SubBundle scope は変更しない）
+
+### 問題点
+
+PR574/577/578/584/587/588 の続きとして、role別（Normal / admin）surface separation の component・runtime・backend実装が未着手だった。Team Dashboard は `/admin/team-dashboard` 配下で admin 専用のまま、Personal Page は存在せず、self password change / session revoke operation は backend に一切存在せず、admin credential management には role 表示・session revoke・credential revoke がなく、scheduler edit backend は実装済みだが UI がなく、これら component は component catalog 上で runtime 未接続だった。加えて `OperationVectorResolver` が JWT 検証済み subject を `OperationVector` へ伝搬しておらず、admin 監査 actor (`ResolveAuditActor`) がクライアント供給の `ContextUserId` を信頼する spoofable な状態だった。
+
+### 目的
+
+既存 JWT / role / repository / operation を再利用しながら、Team Dashboard の viewer(Normal+admin) / authoring(admin) 分離、Personal Page、self credential lifecycle、admin credential management 補完、scheduler edit UI、component catalog/adapter 接続を同一PRで実装し、次PRが production seed 登録・render proof・action proof・legacy route retirement だけに集中できる状態にする。topology UI seed 生成・登録（`admin-surface-topology-seed-conversion` Bundle の scope）は今回行わない。
+
+### 改善方針
+
+- 新規 backend operation は既存 auth_runtime（login/refresh/logout と同じ thin HTTP boundary パターン、manifest dispatch を経由しない）に統一し、topology seed / dispatcher_mapping への依存を作らない。
+- Team Dashboard の viewer read（search/get）は新設の JWT-only read endpoint（`GET /team-markdown/*`）経由とし、admin_runtime dispatch lane（manifest capability_requirement 推論が action 単位ではなく manifest 単位で admin 一律適用される）はこれまで通り admin-only mutation にのみ使う。
+- `OperationVector` に `AuthenticatedUserId`/`AuthenticatedRole`（JWT 検証済み、client 供給不可）を追加し、`AdminRuntimeMasterRoster.ResolveAuditActor` と `AdminRuntime.TeamMarkdown.ExecuteTeamMarkdownAsync` の admin-role 明示チェックに使う。
+- Team Markdown の write（`saved_view:update`）に `dryRun`（非破壊 preview/validate）と `confirmed`（明示確認必須）payload flag を追加し、write と diff evidence（`team_markdown_saved_view_event` insert）を1トランザクションにまとめる（`UpdateSavedViewWithDiffEvidenceAsync`）。
+- component catalog は「runtime factory 登録」だけでなく `admin-normal-surface-projection-seed-ssot.yaml` が既に認めている `existing_route_composition`（route composition による adapter）も正当な `runtimeConnected: true` 経路として扱う。
+
+### 対応資料
+
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`（personal_page surface 追加、inputer_runtime_adapter_contract 解決、design_blocking 更新、credentials.users.operations 訂正）
+- `docs/design/auth-db-session-credential-ssot.yaml`（self_credential_and_session_lifecycle 節追加）
+- `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`（実装は既存 mutation_flow 契約に準拠、SSOT 本文は無改変）
+- `docs/design/component-catalog-classification-ssot.yaml`（vocabulary 変更なし、既存語彙のみ使用）
+
+### 対象ファイル名（backend）
+
+- `backend/schema/Contracts.cs`（`OperationVector.AuthenticatedUserId`/`AuthenticatedRole`）
+- `backend/runtime/OperationVectorResolver.cs`（JWT 検証済み context key の読取）
+- `backend/runtime/AdminRuntimeMasterRoster.cs`（`ResolveAuditActor`、role field 読み書き、role validation）
+- `backend/repository/AuthMasterRepository.cs` / `backend/repository/NpgsqlAuthMasterRepository.cs`（`role` 列、`UpdateUserAsync(roleName:)`）
+- `backend/schema/AuthMasterContracts.cs`（`AuthUserRosterDto.Role`、`AuthUsersUpdateRequestDto.RoleName`）
+- `backend/repository/AuthRepository.cs` / `backend/repository/NpgsqlAuthRepository.cs`（`ChangeOwnPasswordAsync`, `ListActiveSessionsByUserAsync`, `RevokeOwnedSessionAsync`, `RevokeSessionsForUserAsync`, `FindActiveSessionIdByRefreshTokenHashAsync`, `RevokeCredentialAsync`）
+- `backend/service/AuthService.cs`（self/admin credential・session operation family）
+- `backend/runtime/AuthRuntime.cs` / `backend/endpoint/AuthEndpoint.cs`（thin wrapper 追加）
+- `backend/schema/AuthContracts.cs`（self/admin credential DTO 追加）
+- `backend/Program.cs`（`/auth/me*`, `/admin/auth/users/{userId}/*`, `/team-markdown/*` route 追加）
+- `backend/repository/TeamMarkdownRepository.cs` / `backend/repository/NpgsqlTeamMarkdownRepository.cs`（`UpdateSavedViewWithDiffEvidenceAsync`）
+- `backend/runtime/AdminRuntime.TeamMarkdown.cs`（dryRun/confirmed、admin-role 明示チェック）
+
+### 対象ファイル名（frontend）
+
+- `frontend/lib/backendProxy.ts`, `frontend/routes/api/auth/me*.ts`, `frontend/routes/api/admin/auth/users/[userId]/**`, `frontend/routes/api/team-markdown/**`（thin proxy）
+- `frontend/api/authApi.ts`（self credential client）, `frontend/api/adminApi.ts`（role field、admin session/credential revoke client）, `frontend/api/teamMarkdownApi.ts`（viewer read client、preview/write split）
+- `frontend/lib/authenticatedGate.ts`, `frontend/lib/demoSession.ts`, `frontend/lib/demoSessionValidate.ts`（authenticated(not admin-only) gate）
+- `frontend/hooks/useCurrentSession.ts`, `frontend/islands/AuthenticatedGate.tsx`
+- `frontend/routes/dashboard/_middleware.ts`, `frontend/routes/dashboard/index.tsx`, `frontend/routes/dashboard/team.tsx`, `frontend/routes/account/_middleware.ts`, `frontend/routes/account/index.tsx`
+- `frontend/routes/admin/team-dashboard/index.tsx`（`/dashboard/team` への 302 redirect へ変更、削除はしていない）
+- `frontend/islands/NormalDashboardHome.tsx`, `frontend/islands/PersonalPage.tsx`, `frontend/islands/TeamDashboardRoleSurface.tsx`
+- `frontend/islands/TeamMarkdownDashboard.tsx`（`TeamMarkdownViewer`/`TeamMarkdownAuthoring` export 追加、default export は無変更）
+- `frontend/components/MdViewer.tsx`（`authoringEnabled` prop）, `frontend/components/SavedViewAdjustmentAuthoringPanel.tsx`（新規）
+- `frontend/islands/AdminUsersRoster.tsx`（role 表示/変更、session/credential revoke UI）
+- `frontend/islands/SchedulerJobSettingsPanel.tsx`（Edit UI）
+- `frontend/components/catalog.ts`（新規/更新 catalog entry 9件）
+
+### 対象関数名
+
+`ChangeOwnPasswordAsync` (Service/Repository 両方), `AdminRevokeCredentialAsync`, `AdminRevokeSessionsAsync`, `AdminListSessionsAsync`, `GetCurrentAccountAsync`, `ListOwnSessionsAsync`, `RevokeOwnSessionAsync`, `RevokeOtherSessionsAsync`, `UpdateSavedViewWithDiffEvidenceAsync`, `DataTeamMarkdownSavedViewUpdateAsync`, `ExecuteTeamMarkdownAsync`, `ResolveAuditActor`, `UpdateUserAsync`(roleName overload), `previewSavedViewUpdate`, `writeSavedViewUpdate`, `viewerSearchSavedViews`, `viewerGetSavedView`, `useCurrentSession`, `authenticatedGateHandler`, `onStartEdit`/`onCancelEdit`(SchedulerJobSettingsPanel)。
+
+### production seed 対象（次PR、今回は未登録）
+
+- team-dashboard / admin-enum / scheduler-settings 向けの `ui_projection` topology manifest（`admin-surface-topology-seed-conversion` Bundle の既存 blocker、変更なし）。
+- `TeamMarkdownAuthoring` / `saved_view_adjustment_authoring.authoring` / `personal_page.projection` / `normal_dashboard_home.projection` を `RUNTIME_COMPONENT_FACTORIES` へ正式登録するかどうかの owner 判断（現状は `existing_route_composition` 経路のみ、`frontend/components/catalog.ts` 記載）。
+- 新規 admin credential 操作（`revoke_sessions`/`revoke_credential`)を admin_runtime dispatch action として bundle したい場合の `dispatcher_mapping` seed row（今回は `/admin/auth/users/{userId}/*` の thin HTTP boundary で実装したため不要だが、将来 dispatch 統合する場合は新規 seed row が要る）。
+
+### test 対象（次PR、または未実施分。詳細は「実装後監査」参照）
+
+- backend: `ChangeOwnPasswordAsync`（self-only、他人 user id 拒否、session revoke 件数、secret 非projection）、`AdminRevokeCredentialAsync`（password 値を一切扱わないことの検証）、`ExecuteTeamMarkdownAsync` の admin-role 明示チェック（Normal JWT 拒否）、`UpdateSavedViewWithDiffEvidenceAsync`（transaction 原子性、diff evidence 存在）の xunit test。
+- frontend: role matrix render test（Normal JWT で authoring 非表示、admin JWT で表示）、`AuthenticatedGate`/`AdminAuthGate` の未ログイン redirect test、component catalog static contract test（新規9 entry の `componentKey`/`sourcePath` 実在確認）。
+- 本 Bundle 内で実装した範囲は「実装後監査」節に実施結果を記録。
+
+### route retirement 条件（次PR）
+
+`frontend/routes/admin/team-dashboard/index.tsx` の 302 redirect は、`/dashboard/team` の render proof + action proof（Normal viewer / admin authoring 双方の実動作確認）が次PRで完了するまで削除しない。削除は `admin-surface-topology-seed-conversion` Bundle の「hardcoded route 削除は seed conversion + render/action wiring 確認の後にのみ行う」原則に従う。
+
+### 副次発見（今回のscope外、記録のみ）
+
+- `frontend/components/MdTranslationAuthoringSeedSurface.tsx`（32KB、`MdTranslationAuthoringSeedSurfaceProps`/`MdTranslationAuthoringSeedSurface` を export）が存在するが、リポジトリ全体で `import`/`from` 参照が一件も無い dead code。実際に使われているのは `frontend/islands/TeamMarkdownDashboard.tsx` 内の同名ローカル関数（別実装、重複）。`.agent/tests/check-admin-normal-surface-projection-seed-ssot.sh` はこの未使用ファイルの中身をハードコードで検証しており、削除すると proof が壊れる。今回はこのファイルへ触れていない（scope外）が、次回 team-dashboard 関連作業時に、どちらを正本にするか（重複統合 or dead code 削除 + proof script 更新）の判断が必要。
+
+### Governance NG boundary
+
+- `admin-surface-topology-seed-conversion` Bundle の Status / SubBundle scope / design_blocking 以外の記述は変更しない（このBundleは別Bundle）。
+- topology UI seed 行・dispatcher_mapping 行・hub_relation 行を追加しない（`db/seed_empty.sql` 等の topology seed content は無変更）。
+- fake/empty manifest を hub_relation source 目的で作らない（PR584 で一度発生し reverted 済みの anti-pattern、再発させていないことを確認済み）。
+- admin による他人の password 値の指定・変更・閲覧を実装しない（確認済み: `AdminRevokeCredentialAsync` は credential 行を削除するのみで新しい password を一切受け取らない）。
+- self credential operation の request body に任意 user id を含めない（確認済み: `/auth/me/*` は全て JWT subject から target を解決）。
 
 ---
 

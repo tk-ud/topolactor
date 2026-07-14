@@ -220,7 +220,7 @@ public class TeamMarkdownSavedViewTests
         var payload = BuildCreatePayload("# actual", BuildValidSeed("sha256:not-the-actual-hash"));
 
         var (data, error) = await runtime.ExecuteDataAsync(
-            new OperationVector("admin", "team_markdown", "saved_view:create", null, "admin", payload, null), default);
+            new OperationVector("admin", "team_markdown", "saved_view:create", null, "admin", payload, null, AuthenticatedRole: "admin"), default);
 
         Assert.Null(data);
         Assert.NotNull(error);
@@ -237,7 +237,7 @@ public class TeamMarkdownSavedViewTests
         var payload = JsonSerializer.SerializeToElement(new { renderedMarkdown = "# changed" });
 
         var (data, error) = await runtime.ExecuteDataAsync(
-            new OperationVector("admin", "team_markdown", "saved_view:update", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId)), default);
+            new OperationVector("admin", "team_markdown", "saved_view:update", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId), AuthenticatedRole: "admin"), default);
 
         Assert.Null(data);
         Assert.NotNull(error);
@@ -258,7 +258,7 @@ public class TeamMarkdownSavedViewTests
         });
 
         var (data, error) = await runtime.ExecuteDataAsync(
-            new OperationVector("admin", "team_markdown", "saved_view:update", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId)), default);
+            new OperationVector("admin", "team_markdown", "saved_view:update", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId), AuthenticatedRole: "admin"), default);
 
         Assert.Null(data);
         Assert.NotNull(error);
@@ -280,7 +280,7 @@ public class TeamMarkdownSavedViewTests
         });
 
         var (data, error) = await runtime.ExecuteDataAsync(
-            new OperationVector("admin", "team_markdown", "saved_view:refresh", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId)), default);
+            new OperationVector("admin", "team_markdown", "saved_view:refresh", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId), AuthenticatedRole: "admin"), default);
 
         Assert.Null(data);
         Assert.NotNull(error);
@@ -311,7 +311,7 @@ public class TeamMarkdownSavedViewTests
         });
 
         var (data, error) = await runtime.ExecuteDataAsync(
-            new OperationVector("admin", "team_markdown", "saved_view:rebind", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId)), default);
+            new OperationVector("admin", "team_markdown", "saved_view:rebind", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId), AuthenticatedRole: "admin"), default);
 
         Assert.Null(error);
         Assert.True(data.HasValue);
@@ -342,7 +342,7 @@ public class TeamMarkdownSavedViewTests
                 completedPresetSeedJson = BuildValidSeedForMarkdown("# x")
             });
             var (data, error) = await runtime.ExecuteDataAsync(
-                new OperationVector("admin", "team_markdown", action, null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId)), default);
+                new OperationVector("admin", "team_markdown", action, null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId), AuthenticatedRole: "admin"), default);
 
             Assert.Null(data);
             Assert.NotNull(error);
@@ -366,7 +366,7 @@ public class TeamMarkdownSavedViewTests
         });
 
         var (data, error) = await runtime.ExecuteDataAsync(
-            new OperationVector("admin", "team_markdown", "saved_view:refresh", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId)), default);
+            new OperationVector("admin", "team_markdown", "saved_view:refresh", null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId), AuthenticatedRole: "admin"), default);
 
         Assert.Null(error);
         Assert.True(data.HasValue);

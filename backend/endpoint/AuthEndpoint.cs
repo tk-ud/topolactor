@@ -41,4 +41,39 @@ public class AuthEndpoint
 
     public Task<LoginManifestResponseDto> LoadUserLoginManifestAsync(CancellationToken ct = default) =>
         _authRuntime.LoadUserLoginManifestAsync(ct);
+
+    // ─── Self-service credential/session lifecycle ───────────────────────────────────────────
+
+    public Task<CurrentAccountResponseDto> GetCurrentAccountAsync(
+        string jwtSubject, string jwtRole, string jwtRealm, CancellationToken ct = default) =>
+        _authRuntime.GetCurrentAccountAsync(jwtSubject, jwtRole, jwtRealm, ct);
+
+    public Task<ChangeOwnPasswordResponseDto> ChangeOwnPasswordAsync(
+        string jwtSubject, ChangeOwnPasswordRequestDto? request, CancellationToken ct = default) =>
+        _authRuntime.ChangeOwnPasswordAsync(jwtSubject, request, ct);
+
+    public Task<ListSessionsResponseDto> ListOwnSessionsAsync(
+        string jwtSubject, string? refreshTokenPlain, CancellationToken ct = default) =>
+        _authRuntime.ListOwnSessionsAsync(jwtSubject, refreshTokenPlain, ct);
+
+    public Task<RevokeOwnSessionResponseDto> RevokeOwnSessionAsync(
+        string jwtSubject, RevokeOwnSessionRequestDto? request, CancellationToken ct = default) =>
+        _authRuntime.RevokeOwnSessionAsync(jwtSubject, request, ct);
+
+    public Task<RevokeOtherSessionsResponseDto> RevokeOtherSessionsAsync(
+        string jwtSubject, string? refreshTokenPlain, CancellationToken ct = default) =>
+        _authRuntime.RevokeOtherSessionsAsync(jwtSubject, refreshTokenPlain, ct);
+
+    // ─── Admin-driven credential/session operations ──────────────────────────────────────────
+
+    public Task<AdminListSessionsResponseDto> AdminListSessionsAsync(Guid userId, CancellationToken ct = default) =>
+        _authRuntime.AdminListSessionsAsync(userId, ct);
+
+    public Task<AdminRevokeSessionsResponseDto> AdminRevokeSessionsAsync(
+        Guid userId, AdminRevokeSessionsRequestDto? request, string actorUsername, CancellationToken ct = default) =>
+        _authRuntime.AdminRevokeSessionsAsync(userId, request, actorUsername, ct);
+
+    public Task<AdminRevokeCredentialResponseDto> AdminRevokeCredentialAsync(
+        Guid userId, string actorUsername, CancellationToken ct = default) =>
+        _authRuntime.AdminRevokeCredentialAsync(userId, actorUsername, ct);
 }

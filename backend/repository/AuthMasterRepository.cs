@@ -37,7 +37,8 @@ public abstract class AuthMasterRepository
         bool clearSuspendedFrom,
         bool clearSuspendedUntil,
         string? stateNote,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? roleName = null);
 
     public abstract Task<bool> DeleteUserAsync(Guid userId, CancellationToken ct = default);
 

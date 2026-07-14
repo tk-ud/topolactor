@@ -1077,6 +1077,7 @@ system_roadmap_ssot:
         - abstract_function_step_chain_scheduler_dispatch_implemented
         - external_service_reference_boundary_connected
         - representative_existing_cron_absorption_implemented_log_retention
+        - scheduler_job_edit_ui_added_role_based_surface_impl_bundle_2026_07_14
       known_gap_ref:
         - scheduler_job_run_steps_per_step_ledger_not_yet_populated_optional_surface
         - admin_edit_limited_to_inactive_manifests_active_edit_requires_disable_first

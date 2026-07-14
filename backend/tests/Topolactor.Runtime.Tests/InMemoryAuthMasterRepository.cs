@@ -73,7 +73,8 @@ public sealed class InMemoryAuthMasterRepository : AuthMasterRepository
         bool clearSuspendedFrom,
         bool clearSuspendedUntil,
         string? stateNote,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? roleName = null)
     {
         if (!_users.TryGetValue(userId, out var existing)) return Task.FromResult<AuthUserRosterDto?>(null);
         var updated = existing with
@@ -86,6 +87,7 @@ public sealed class InMemoryAuthMasterRepository : AuthMasterRepository
             SuspendedUntil = clearSuspendedUntil ? null : suspendedUntil ?? existing.SuspendedUntil,
             StateNote = stateNote ?? existing.StateNote,
             UpdatedAt = DateTimeOffset.UtcNow,
+            Role = roleName ?? existing.Role,
         };
         _users[userId] = updated;
         return Task.FromResult<AuthUserRosterDto?>(updated);

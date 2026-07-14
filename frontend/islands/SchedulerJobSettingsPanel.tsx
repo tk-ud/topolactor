@@ -4,6 +4,7 @@ import { JSX } from "preact";
 import {
   createSchedulerJob,
   disableSchedulerJob,
+  editSchedulerJob,
   fetchSchedulerJobManifests,
   type SchedulerJobManifestItem,
   type SchedulerJobStepInput,
@@ -104,6 +105,7 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
 
   function reload() {
     setLoading(true);
@@ -150,7 +152,7 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
         setBusy(false);
         return;
       }
-      const result = await createSchedulerJob({
+      const input = {
         jobKey: draft.jobKey,
         triggerKind: draft.triggerKind,
         schedulePolicyKind: draft.schedulePolicyKind,
@@ -177,15 +179,50 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
         retryPolicy,
         projectionPolicy,
         steps,
-      });
-      setNotice(`Created scheduler job ${result.jobKey ?? draft.jobKey}.`);
+      };
+      const result = editingJobId
+        ? await editSchedulerJob(editingJobId, input)
+        : await createSchedulerJob(input);
+      setNotice(
+        editingJobId
+          ? `Updated scheduler job ${result.jobKey ?? draft.jobKey}.`
+          : `Created scheduler job ${result.jobKey ?? draft.jobKey}.`,
+      );
       setDraft(EMPTY_DRAFT);
+      setEditingJobId(null);
       reload();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  function onStartEdit(job: SchedulerJobManifestItem) {
+    setEditingJobId(job.schedulerJobId);
+    setNotice(null);
+    setError(null);
+    setDraft({
+      ...EMPTY_DRAFT,
+      jobKey: job.jobKey,
+      triggerKind: job.triggerKind,
+      schedulePolicyKind: job.schedulePolicyKind,
+      cronExpression: job.cronExpression ?? "",
+      scheduleIntervalSeconds: job.scheduleIntervalSeconds != null ? String(job.scheduleIntervalSeconds) : "",
+      manualRunAllowed: job.manualRunAllowed,
+      active: job.active,
+      authorityScope: job.authorityScope,
+      maxBatchSize: String(job.maxBatchSize),
+      leaseSeconds: String(job.leaseSeconds),
+      credentialRequirementRef: job.credentialRequirementRef ?? "",
+      externalPortRef: job.externalPortRef ?? "",
+    });
+    globalThis.scrollTo?.({ top: document.body.scrollHeight, behavior: "smooth" });
+  }
+
+  function onCancelEdit() {
+    setEditingJobId(null);
+    setDraft(EMPTY_DRAFT);
   }
 
   async function onDisable(schedulerJobId: string) {
@@ -292,6 +329,11 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
                         Disable
                       </button>
                     )}
+                    {!job.active && (
+                      <button type="button" disabled={busy} onClick={() => onStartEdit(job)}>
+                        Edit
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -299,7 +341,13 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
           </table>
         )}
 
-      <h3>Create scheduler job manifest</h3>
+      <h3>{editingJobId ? `Edit scheduler job manifest (${editingJobId})` : "Create scheduler job manifest"}</h3>
+      {editingJobId && (
+        <p class="scheduler-notice">
+          Editing an inactive job requires re-specifying input/output/step fields — they are not
+          returned by the settings list (credential-adjacent fields are read-redacted).
+        </p>
+      )}
       <form class="scheduler-create-form" onSubmit={onCreate}>
         <fieldset>
           <legend>Header</legend>
@@ -404,7 +452,8 @@ export default function SchedulerJobSettingsPanel(): JSX.Element {
           <button type="button" onClick={addStep}>Add step</button>
         </fieldset>
 
-        <button type="submit" disabled={busy}>Create</button>
+        <button type="submit" disabled={busy}>{editingJobId ? "Save edit" : "Create"}</button>
+        {editingJobId && <button type="button" onClick={onCancelEdit} disabled={busy}>Cancel edit</button>}
       </form>
     </div>
   );

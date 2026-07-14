@@ -2,12 +2,16 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
+  adminListUserSessions,
+  adminRevokeUserCredential,
+  adminRevokeUserSessions,
   createAuthUser,
   deleteAuthUser,
   getEnumDictionaryGroup,
   listAuthUsers,
   updateAuthUser,
   USER_STATUS_ENUM_GROUP_ID,
+  type AdminSessionSummary,
   type AuthUserRoster,
   type EnumDictionaryItem,
 } from "../api/adminApi.ts";
@@ -40,6 +44,8 @@ export default function AdminUsersRoster(): JSX.Element {
   const [errors, setErrors] = useState<PanelError[]>([]);
   const [loading, setLoading] = useState(false);
   const [backendUnavailable, setBackendUnavailable] = useState(false);
+  const [sessions, setSessions] = useState<AdminSessionSummary[]>([]);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const { confirm, ConfirmDialogHost } = useConfirm();
 
   const filtered = useMemo(() => {
@@ -69,6 +75,13 @@ export default function AdminUsersRoster(): JSX.Element {
   useEffect(() => {
     if (selected) setDraft({ ...selected });
     else setDraft({});
+    setSessions([]);
+    setSessionNotice(null);
+    if (selected) {
+      adminListUserSessions(selected.userId).then((res) => {
+        if (res.success) setSessions(res.sessions ?? []);
+      }).catch(() => {});
+    }
   }, [selectedId, users]);
 
   const handleShowAll = async () => {
@@ -123,6 +136,7 @@ export default function AdminUsersRoster(): JSX.Element {
             suspendedFrom: draft.suspendedFrom || null,
             suspendedUntil: draft.suspendedUntil || null,
             stateNote: draft.stateNote ?? null,
+            roleName: draft.role === "admin" ? "admin" : "user",
           });
           await loadUsers();
         } catch (e) {
@@ -148,6 +162,71 @@ export default function AdminUsersRoster(): JSX.Element {
       setErrors([{ message: String(e) }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const reloadSessions = async () => {
+    if (!selectedId) return;
+    const res = await adminListUserSessions(selectedId);
+    if (res.success) setSessions(res.sessions ?? []);
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    if (!selectedId) return;
+    setSessionNotice(null);
+    try {
+      const res = await adminRevokeUserSessions(selectedId, sessionId);
+      if (!res.success) {
+        setErrors([{ message: res.errors?.[0]?.message ?? "セッション無効化に失敗しました" }]);
+        return;
+      }
+      setSessionNotice(`セッション ${sessionId} を無効化しました。`);
+      await reloadSessions();
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
+    }
+  };
+
+  const handleRevokeAllSessions = async () => {
+    if (!selectedId) return;
+    if (!(await confirm("このユーザーの全セッションを無効化します。よろしいですか？", { variant: "danger" }))) {
+      return;
+    }
+    setSessionNotice(null);
+    try {
+      const res = await adminRevokeUserSessions(selectedId);
+      if (!res.success) {
+        setErrors([{ message: res.errors?.[0]?.message ?? "セッション無効化に失敗しました" }]);
+        return;
+      }
+      setSessionNotice(`全セッション（${res.sessionsRevoked ?? 0}件）を無効化しました。`);
+      await reloadSessions();
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
+    }
+  };
+
+  const handleRevokeCredential = async () => {
+    if (!selectedId) return;
+    if (
+      !(await confirm(
+        "このユーザーの認証情報を無効化します（パスワード無効化・全セッション無効化）。新しいパスワードはこの画面から設定できません。よろしいですか？",
+        { variant: "danger" },
+      ))
+    ) {
+      return;
+    }
+    setSessionNotice(null);
+    try {
+      const res = await adminRevokeUserCredential(selectedId);
+      if (!res.success) {
+        setErrors([{ message: res.errors?.[0]?.message ?? "認証情報の無効化に失敗しました" }]);
+        return;
+      }
+      setSessionNotice("認証情報を無効化しました。このアカウントはログインできなくなりました。");
+      await reloadSessions();
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
     }
   };
 
@@ -181,6 +260,7 @@ export default function AdminUsersRoster(): JSX.Element {
           <thead>
             <tr class="border-b text-left text-gray-500">
               <th class="px-2 py-1">ユーザー名</th>
+              <th class="px-2 py-1">role</th>
               <th class="px-2 py-1">承認</th>
               <th class="px-2 py-1">状態</th>
               <th class="px-2 py-1">最終ログイン</th>
@@ -194,6 +274,7 @@ export default function AdminUsersRoster(): JSX.Element {
                 onClick={() => setSelectedId(u.userId)}
               >
                 <td class="px-2 py-1">{u.username}</td>
+                <td class="px-2 py-1"><code class="rounded bg-gray-100 px-1">{u.role}</code></td>
                 <td class="px-2 py-1">{u.approve ? "はい" : "いいえ"}</td>
                 <td class="px-2 py-1">{u.status ?? "—"}</td>
                 <td class="px-2 py-1 font-mono text-gray-600">
@@ -211,6 +292,12 @@ export default function AdminUsersRoster(): JSX.Element {
           <label class="block text-xs font-medium">ユーザー名</label>
           <input class="input-base max-w-md w-full" value={draft.username ?? ""}
             onInput={(e) => setDraft({ ...draft, username: (e.target as HTMLInputElement).value })} />
+          <label class="block text-xs font-medium">role</label>
+          <select class="input-base max-w-md w-full" value={draft.role ?? "user"}
+            onChange={(e) => setDraft({ ...draft, role: (e.target as HTMLSelectElement).value })}>
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </select>
           <label class="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={draft.approve ?? false}
               onChange={(e) => setDraft({ ...draft, approve: (e.target as HTMLInputElement).checked })} />
@@ -258,6 +345,33 @@ export default function AdminUsersRoster(): JSX.Element {
           <div class="flex gap-2">
             <button type="button" class="btn-primary text-sm" disabled={loading} onClick={handleSave}>保存</button>
             <button type="button" class="btn-danger text-sm" disabled={loading} onClick={handleDelete}>削除</button>
+          </div>
+
+          <div class="mt-3 border-t border-blue-200 pt-3">
+            <h3 class="text-sm font-semibold text-blue-900">セッション / 認証情報</h3>
+            <p class="mt-1 text-xs text-gray-600">
+              このユーザーのパスワード値をここから指定・変更することはできません。無効化のみ行えます。
+            </p>
+            <div class="mt-2 flex gap-2">
+              <button type="button" class="btn-secondary text-sm" onClick={handleRevokeAllSessions}>
+                全セッションを無効化
+              </button>
+              <button type="button" class="btn-danger text-sm" onClick={handleRevokeCredential}>
+                認証情報を無効化（ログイン不可にする）
+              </button>
+            </div>
+            {sessionNotice && <p class="mt-2 text-xs text-green-700">{sessionNotice}</p>}
+            <ul class="mt-2 space-y-1">
+              {sessions.map((s) => (
+                <li key={s.sessionId} class="flex items-center justify-between gap-2 text-xs">
+                  <span>{s.realm} / {s.audience} — 期限: {s.expiresAt}</span>
+                  <button type="button" class="btn-secondary text-xs" onClick={() => handleRevokeSession(s.sessionId)}>
+                    無効化
+                  </button>
+                </li>
+              ))}
+              {sessions.length === 0 && <li class="text-xs text-gray-500">有効なセッションはありません。</li>}
+            </ul>
           </div>
         </section>
       )}
