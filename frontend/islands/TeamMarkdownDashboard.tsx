@@ -44,6 +44,7 @@ import {
 } from "../api/teamMarkdownApi.ts";
 import { MdViewer } from "../components/MdViewer.tsx";
 import { SavedViewAdjustmentAuthoringPanel } from "../components/SavedViewAdjustmentAuthoringPanel.tsx";
+import { SavedViewOperationPanel, type SavedViewOperationMode } from "../components/SavedViewOperationPanel.tsx";
 
 // ─── search card component ────────────────────────────────────────────────────
 
@@ -868,6 +869,7 @@ export function TeamMarkdownAuthoring({ defaultStatus = "active" }: { defaultSta
     { detail: SavedViewDetail; seedValid: boolean; seedError?: string } | null
   >(null);
   const [editing, setEditing] = useState(false);
+  const [pendingOperation, setPendingOperation] = useState<SavedViewOperationMode | null>(null);
   const [expandLoading, setExpandLoading] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
@@ -913,10 +915,6 @@ export function TeamMarkdownAuthoring({ defaultStatus = "active" }: { defaultSta
     }
   };
 
-  const stubNotice = (label: string) => {
-    setActionNotice(`${label} backend action is registered, but requires explicit payload before dispatch. ${EXPLICIT_PAYLOAD_REQUIRED_REASON}`);
-  };
-
   return (
     <div class="md-dashboard" aria-label="Team Dashboard authoring" data-placement="normal_dashboard_authoring">
       <header class="md-dashboard-header">
@@ -954,7 +952,7 @@ export function TeamMarkdownAuthoring({ defaultStatus = "active" }: { defaultSta
         ))}
       </section>
 
-      {expandedView && !editing && (
+      {expandedView && !editing && !pendingOperation && (
         <div class="md-dashboard-drawer-overlay" role="dialog" aria-modal="true">
           <MdViewer
             savedView={expandedView.detail}
@@ -963,9 +961,9 @@ export function TeamMarkdownAuthoring({ defaultStatus = "active" }: { defaultSta
             onClose={() => setExpandedView(null)}
             onArchive={handleArchive}
             onEditAdjustment={() => setEditing(true)}
-            onRefresh={() => stubNotice("Refresh")}
-            onClone={() => stubNotice("Clone")}
-            onRebind={() => stubNotice("Rebind")}
+            onRefresh={() => setPendingOperation("refresh")}
+            onClone={() => setPendingOperation("clone")}
+            onRebind={() => setPendingOperation("rebind")}
             authoringEnabled
           />
         </div>
@@ -977,6 +975,35 @@ export function TeamMarkdownAuthoring({ defaultStatus = "active" }: { defaultSta
             savedView={expandedView.detail}
             onCancel={() => setEditing(false)}
             onWritten={() => { setEditing(false); void doSearch(query); }}
+          />
+        </div>
+      )}
+
+      {expandedView && pendingOperation && (
+        <div class="md-dashboard-drawer-overlay" role="dialog" aria-modal="true">
+          <SavedViewOperationPanel
+            mode={pendingOperation}
+            savedView={expandedView.detail}
+            onCancel={() => setPendingOperation(null)}
+            onWritten={async () => {
+              const writtenSavedViewId = expandedView.detail.savedViewId;
+              setPendingOperation(null);
+              await doSearch(query);
+              // Refresh/rebind mutate the same saved view in place; refetch it so the drawer
+              // (if reopened) and any still-visible summary reflect the post-write state rather
+              // than the stale pre-write detail. Clone creates a new saved view — closing the
+              // drawer here (rather than refetching the OLD one) is correct: nothing to refetch it into.
+              if (pendingOperation !== "clone") {
+                try {
+                  const result = await getSavedView(writtenSavedViewId);
+                  setExpandedView({ detail: result.savedView, seedValid: result.seedValid, seedError: result.seedError });
+                } catch {
+                  setExpandedView(null);
+                }
+              } else {
+                setExpandedView(null);
+              }
+            }}
           />
         </div>
       )}

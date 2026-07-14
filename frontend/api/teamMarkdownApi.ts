@@ -623,6 +623,24 @@ export async function refreshSavedView(
   }) as Promise<{ ok: boolean; savedViewId: string }>;
 }
 
+/**
+ * Seed-driven refresh: re-renders from the current template + a freshly-supplied source record,
+ * re-deriving completedPresetSeedJson server-side (AdminRuntime.TeamMarkdown's
+ * templateMarkdown+sourceRecordJson branch) rather than requiring the caller to pre-render.
+ */
+export async function refreshSavedViewFromSource(
+  savedViewId: string,
+  templateMarkdown: string,
+  sourceRecordJson: Record<string, unknown>,
+  searchIndexText?: string,
+  cardMetadataJson?: Record<string, unknown>,
+): Promise<{ ok: boolean; savedViewId: string }> {
+  return dispatchTeamMarkdown("saved_view:refresh", {
+    idOrHubId: savedViewId,
+    payload: { templateMarkdown, sourceRecordJson, searchIndexText, cardMetadataJson },
+  }) as Promise<{ ok: boolean; savedViewId: string }>;
+}
+
 export type SavedViewUpdateInput = {
   title?: string;
   renderedMarkdown?: string;
