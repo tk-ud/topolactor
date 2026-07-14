@@ -89,4 +89,47 @@ internal sealed class FakeAuthRepository : AuthRepository
     public override Task InsertLoginEventAsync(
         Guid? userId, string realm, bool success, string? failureCode, CancellationToken ct = default) =>
         Task.CompletedTask;
+
+    private readonly Dictionary<Guid, bool> _sessionRevoked = new();
+
+    public override Task<ChangeOwnPasswordResult> ChangeOwnPasswordAsync(
+        Guid userId, string currentPasswordPlain, string newPasswordHash, string actorUsername,
+        CancellationToken ct = default)
+    {
+        var entry = _users.FirstOrDefault(kv => kv.Value.UserId == userId);
+        if (entry.Key is null)
+            return Task.FromResult(new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.CredentialNotFound, 0));
+        if (!BCrypt.Net.BCrypt.Verify(currentPasswordPlain, entry.Value.PasswordHash))
+            return Task.FromResult(new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.CurrentPasswordInvalid, 0));
+        _users[entry.Key] = entry.Value with { PasswordHash = newPasswordHash };
+        return Task.FromResult(new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.Success, 0));
+    }
+
+    public override Task<IReadOnlyList<AuthSessionRecord>> ListActiveSessionsByUserAsync(
+        Guid userId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<AuthSessionRecord>>(Array.Empty<AuthSessionRecord>());
+
+    public override Task<bool> RevokeOwnedSessionAsync(
+        Guid userId, Guid sessionId, string actorUsername, CancellationToken ct = default)
+    {
+        _sessionRevoked[sessionId] = true;
+        return Task.FromResult(true);
+    }
+
+    public override Task<int> RevokeSessionsForUserAsync(
+        Guid userId, Guid? exceptSessionId, string actorUsername, CancellationToken ct = default) =>
+        Task.FromResult(0);
+
+    public override Task<Guid?> FindActiveSessionIdByRefreshTokenHashAsync(
+        string tokenHash, CancellationToken ct = default) =>
+        Task.FromResult(_refresh.TryGetValue(tokenHash, out var r) ? (Guid?)r.RefreshTokenId : null);
+
+    public override Task<bool> RevokeCredentialAsync(
+        Guid userId, string actorUsername, CancellationToken ct = default)
+    {
+        var entry = _users.FirstOrDefault(kv => kv.Value.UserId == userId);
+        if (entry.Key is null) return Task.FromResult(false);
+        _users.Remove(entry.Key);
+        return Task.FromResult(true);
+    }
 }
