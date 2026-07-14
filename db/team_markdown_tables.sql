@@ -76,6 +76,10 @@ CREATE TABLE IF NOT EXISTS topology.team_markdown_saved_view (
 -- topology.team_markdown_saved_view_event
 -- Append-only saved view activity log.
 -- event_kind: create | update | refresh | archive | click_expand | copy | todo_candidate | clone | rebind
+--           | update_confirmed_write | refresh_confirmed_write | clone_confirmed_write | rebind_confirmed_write
+-- The *_confirmed_write kinds are the atomic mutation+evidence completion proof for the
+-- preview -> validate -> explicit_confirm -> write -> event_log workflow (see
+-- UpdateSavedViewWithDiffEvidenceAsync / UpdateSavedViewWithEventEvidenceAsync / CloneSavedViewWithEvidenceAsync).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS topology.team_markdown_saved_view_event (
     event_id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -85,7 +89,10 @@ CREATE TABLE IF NOT EXISTS topology.team_markdown_saved_view_event (
     event_payload_json  JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_team_markdown_saved_view_event_kind
-        CHECK (event_kind IN ('create', 'update', 'refresh', 'archive', 'click_expand', 'copy', 'todo_candidate', 'clone', 'rebind'))
+        CHECK (event_kind IN (
+            'create', 'update', 'refresh', 'archive', 'click_expand', 'copy', 'todo_candidate', 'clone', 'rebind',
+            'update_confirmed_write', 'refresh_confirmed_write', 'clone_confirmed_write', 'rebind_confirmed_write'
+        ))
 );
 
 -- ---------------------------------------------------------------------------

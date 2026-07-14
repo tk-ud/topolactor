@@ -183,19 +183,36 @@ public sealed class InMemoryAuthRepository : AuthRepository
         return Task.FromResult(true);
     }
 
-    public override Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default)
+    public override Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default) =>
+        Task.FromResult(IsSessionAndOwnerActive(sessionId, out _, out _));
+
+    public override Task<bool> IsSessionIdentityActiveAsync(
+        Guid sessionId, string username, string realm, string audience, CancellationToken ct = default)
     {
-        if (!_sessions.TryGetValue(sessionId, out var session)) return Task.FromResult(false);
-        if (session.Revoked || session.ExpiresAt <= DateTimeOffset.UtcNow) return Task.FromResult(false);
-        if (!_users.TryGetValue(session.UserId, out var user)) return Task.FromResult(false);
-        if (!user.Active || !user.Approve) return Task.FromResult(false);
-        if (string.Equals(user.Status, "suspended", StringComparison.OrdinalIgnoreCase)) return Task.FromResult(false);
-        if (user.SuspendedFrom.HasValue)
+        if (!IsSessionAndOwnerActive(sessionId, out var session, out var user)) return Task.FromResult(false);
+        if (!string.Equals(user!.Username, username, StringComparison.Ordinal)) return Task.FromResult(false);
+        if (!string.Equals(session!.Realm, realm, StringComparison.Ordinal)) return Task.FromResult(false);
+        if (!string.Equals(session.Audience, audience, StringComparison.Ordinal)) return Task.FromResult(false);
+        return Task.FromResult(true);
+    }
+
+    private bool IsSessionAndOwnerActive(Guid sessionId, out InMemorySession? session, out AuthUserRecord? user)
+    {
+        session = null;
+        user = null;
+        if (!_sessions.TryGetValue(sessionId, out var s)) return false;
+        if (s.Revoked || s.ExpiresAt <= DateTimeOffset.UtcNow) return false;
+        if (!_users.TryGetValue(s.UserId, out var u)) return false;
+        if (!u.Active || !u.Approve) return false;
+        if (string.Equals(u.Status, "suspended", StringComparison.OrdinalIgnoreCase)) return false;
+        if (u.SuspendedFrom.HasValue)
         {
             var now = DateTimeOffset.UtcNow;
-            if (user.SuspendedFrom.Value <= now && (user.SuspendedUntil is null || now <= user.SuspendedUntil.Value))
-                return Task.FromResult(false);
+            if (u.SuspendedFrom.Value <= now && (u.SuspendedUntil is null || now <= u.SuspendedUntil.Value))
+                return false;
         }
-        return Task.FromResult(true);
+        session = s;
+        user = u;
+        return true;
     }
 }

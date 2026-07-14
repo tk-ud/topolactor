@@ -353,17 +353,22 @@ public partial class AdminRuntime
         if (bindingValidationError is not null)
             return (null, bindingValidationError);
 
-        var (updated, errorCode, message) = await _teamMarkdownRepository.UpdateSavedViewAsync(
-            savedViewId, null, refreshedMarkdown, existing.UserAdjustmentPatchJson, updatedSeed, searchIndex, cardMeta, null, ct);
+        // Refresh writes are gated by the same explicit payload.confirmed=true requirement
+        // saved_view:update enforces — full validation always runs first (above), but a direct
+        // dispatch that bypasses the frontend's confirm dialog must still be rejected here.
+        var confirmed = p.TryGetProperty("confirmed", out var cfEl) && cfEl.ValueKind == JsonValueKind.True;
+        if (!confirmed)
+            return (null, new ValidationError("WRITE_CONFIRMATION_REQUIRED",
+                "Refresh requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var actor = vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind ?? "unknown";
+        var (updated, errorCode, message, eventId) = await _teamMarkdownRepository.UpdateSavedViewWithEventEvidenceAsync(
+            savedViewId, "refresh_confirmed_write", null, refreshedMarkdown, existing.UserAdjustmentPatchJson, updatedSeed, searchIndex, cardMeta, null, actor, ct);
         if (errorCode is not null)
             return (null, new ValidationError(errorCode, message ?? errorCode));
 
-        // Event append is best-effort.
-        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "refresh", null,
-            JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
-
         _logger.LogInformation("AdminRuntime.TeamMarkdown.SavedViewRefresh: savedViewId={SavedViewId}", savedViewId);
-        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString() }), null);
+        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString(), eventId }), null);
     }
 
     // ─── saved view clone ────────────────────────────────────────────────────
@@ -410,14 +415,18 @@ public partial class AdminRuntime
         var title = p.TryGetProperty("title", out var titleEl) ? titleEl.GetString() ?? existing.Title : existing.Title;
         var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() ?? "" : string.Join(" ", title, targetTable, targetRecord, render.RenderedMarkdown);
         var cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? cm : existing.CardMetadataJson;
+
+        var confirmed = p.TryGetProperty("confirmed", out var cfEl) && cfEl.ValueKind == JsonValueKind.True;
+        if (!confirmed)
+            return (null, new ValidationError("WRITE_CONFIRMATION_REQUIRED",
+                "Clone requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var actor = vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind ?? "unknown";
         var request = new TeamMarkdownSavedViewCreateRequest(existing.TemplateId, title, targetTable!, targetRecord!,
             existing.BindingJson, completedSeed, render.RenderedMarkdown, existing.UserAdjustmentPatchJson, searchIndex, cardMeta);
-        var (newId, createError, createMsg) = await _teamMarkdownRepository.CloneSavedViewAsync(request, ct);
+        var (newId, createError, createMsg, eventId) = await _teamMarkdownRepository.CloneSavedViewWithEvidenceAsync(request, sourceSavedViewId, actor, ct);
         if (createError is not null) return (null, new ValidationError(createError, createMsg ?? createError));
-        if (Guid.TryParse(newId, out var newGuid))
-            _ = await _teamMarkdownRepository.AppendEventAsync(newGuid, "clone", null,
-                JsonSerializer.SerializeToElement(new { sourceSavedViewId = sourceSavedViewId.ToString(), savedViewId = newId }), ct);
-        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = newId, sourceSavedViewId = sourceSavedViewId.ToString() }), null);
+        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = newId, sourceSavedViewId = sourceSavedViewId.ToString(), eventId }), null);
     }
 
     // ─── saved view rebind ───────────────────────────────────────────────────
@@ -462,12 +471,17 @@ public partial class AdminRuntime
 
         var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() ?? existing.SearchIndexText : existing.SearchIndexText;
         var cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? (JsonElement?)cm : null;
-        var (updated, updateError, updateMsg) = await _teamMarkdownRepository.UpdateSavedViewAsync(savedViewId,
-            null, render.RenderedMarkdown, existing.UserAdjustmentPatchJson, completedSeed, searchIndex, cardMeta, bindingJson, ct);
+
+        var confirmed = p.TryGetProperty("confirmed", out var cfEl) && cfEl.ValueKind == JsonValueKind.True;
+        if (!confirmed)
+            return (null, new ValidationError("WRITE_CONFIRMATION_REQUIRED",
+                "Rebind requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var actor = vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind ?? "unknown";
+        var (updated, updateError, updateMsg, eventId) = await _teamMarkdownRepository.UpdateSavedViewWithEventEvidenceAsync(savedViewId,
+            "rebind_confirmed_write", null, render.RenderedMarkdown, existing.UserAdjustmentPatchJson, completedSeed, searchIndex, cardMeta, bindingJson, actor, ct);
         if (updateError is not null) return (null, new ValidationError(updateError, updateMsg ?? updateError));
-        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "rebind", null,
-            JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
-        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString(), updated }), null);
+        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString(), updated, eventId }), null);
     }
 
     // ─── saved view update ───────────────────────────────────────────────────

@@ -288,6 +288,64 @@ public class TeamMarkdownSavedViewTests
         Assert.Equal("# existing", repo.Detail!.RenderedMarkdown);
     }
 
+    [Theory]
+    [InlineData("saved_view:refresh")]
+    [InlineData("saved_view:clone")]
+    [InlineData("saved_view:rebind")]
+    public async Task AdminRuntimeRefreshCloneRebind_RejectsWriteWithoutExplicitConfirmed(string action)
+    {
+        // Refresh/Clone/Rebind must require the same explicit payload.confirmed=true gate
+        // saved_view:update already enforces — a fully valid, otherwise-writable payload must still
+        // be rejected when confirmed is absent, so a direct dispatch (bypassing any frontend confirm
+        // dialog) can never write.
+        var binding = JsonSerializer.SerializeToElement(new
+        {
+            title = new { source_kind = "physical_table_column", field_ref = "title" },
+            body = new { source_kind = "physical_table_jsonb_path", field_ref = "json.summary" },
+            note = new { source_kind = "explicit_optional_empty", field_ref = "" }
+        });
+        var existing = BuildSavedViewDetail(
+            renderedMarkdown: "# existing", seed: BuildValidSeedForMarkdown("# existing", bindingJson: binding));
+        var repo = new StubTeamMarkdownRepo(existing);
+        var runtime = CreateRuntime(repo);
+
+        object payloadObj = action switch
+        {
+            "saved_view:clone" => new
+            {
+                templateMarkdown = "# {{title}}\n{{body}}\n{{note}}",
+                sourceRecordJson = new { title = "New Title", json = new { summary = "New Body" } },
+                targetSourceTableRef = "topology.other",
+                targetSourceRecordRef = "record-2",
+                searchIndexText = "new title",
+            },
+            "saved_view:rebind" => new
+            {
+                templateMarkdown = "# {{title}}\n{{body}}\n{{note}}",
+                sourceRecordJson = new { title = "New Title", json = new { summary = "New Body" } },
+                bindingJson = binding,
+                completedPresetSeedJson = BuildValidSeedForMarkdown("# placeholder", bindingJson: binding),
+                searchIndexText = "new title",
+            },
+            _ => new
+            {
+                templateMarkdown = "# {{title}}\n{{body}}\n{{note}}",
+                sourceRecordJson = new { title = "New Title", json = new { summary = "New Body" } },
+                searchIndexText = "new title",
+            },
+        };
+        // confirmed intentionally omitted from every branch above.
+        var payload = JsonSerializer.SerializeToElement(payloadObj);
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "team_markdown", action, null, "admin", payload, null, IdOrHubId: Guid.Parse(existing.SavedViewId), AuthenticatedRole: "admin"), default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("WRITE_CONFIRMATION_REQUIRED", error!.Code);
+        Assert.Equal("# existing", repo.Detail!.RenderedMarkdown);
+    }
+
     [Fact]
     public async Task AdminRuntimeRebind_UpdatesDbBindingJsonAndSeedBindingTogether()
     {
@@ -307,7 +365,8 @@ public class TeamMarkdownSavedViewTests
             completedPresetSeedJson = proposedSeed,
             templateMarkdown = "# {{title}}\n{{body}}\n{{note}}",
             sourceRecordJson = new { newTitle = "New", json = new { newSummary = "Bound" } },
-            searchIndexText = "new bound"
+            searchIndexText = "new bound",
+            confirmed = true
         });
 
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -362,7 +421,8 @@ public class TeamMarkdownSavedViewTests
         {
             templateMarkdown = "# {{title}}\n{{body}}\n{{note}}",
             sourceRecordJson = new { title = "New", json = new { summary = "Body" } },
-            searchIndexText = "new body"
+            searchIndexText = "new body",
+            confirmed = true
         });
 
         var (data, error) = await runtime.ExecuteDataAsync(
@@ -635,6 +695,222 @@ public class TeamMarkdownSavedViewTests
         }
     }
 
+    [Fact]
+    public async Task UpdateSavedViewWithEventEvidenceAsync_CommitsMutationAndEventRowInOneTransaction()
+    {
+        // Real-PostgreSQL proof (not a repository mock) that the refresh/rebind mutation and its
+        // confirmed-write event-evidence row land in the same transaction: fetches both the updated
+        // saved_view row and its event row directly via SQL after the call returns, proving both are
+        // actually durable in the same database state, not just that the C# method returned success.
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var repo = new NpgsqlTeamMarkdownRepository(
+            NullLogger<NpgsqlTeamMarkdownRepository>.Instance, cs);
+
+        var (templateId, _, _) = await repo.CreateTemplateAsync(new TeamMarkdownTemplateCreateRequest(
+            $"test_tpl_evidence_{suffix}", "Evidence Test Template", "# {{record.summary}}", JsonSerializer.SerializeToElement(new { })));
+
+        var (savedViewId, _, _) = await repo.CreateSavedViewAsync(new TeamMarkdownSavedViewCreateRequest(
+            TemplateId: templateId!,
+            Title: "Evidence Test View",
+            SourceTableRef: "topology.physical_tables",
+            SourceRecordRef: "record_search",
+            BindingJson: JsonSerializer.SerializeToElement(new { }),
+            CompletedPresetSeedJson: BuildValidSeed(),
+            RenderedMarkdown: $"# Before {suffix}",
+            UserAdjustmentPatchJson: JsonSerializer.SerializeToElement(new { }),
+            SearchIndexText: "before",
+            CardMetadataJson: JsonSerializer.SerializeToElement(new { excerpt = "before" })
+        ));
+
+        try
+        {
+            var refreshedMarkdown = $"# After {suffix}";
+            var (updated, errorCode, message, eventId) = await repo.UpdateSavedViewWithEventEvidenceAsync(
+                Guid.Parse(savedViewId!), "refresh_confirmed_write",
+                title: null, renderedMarkdown: refreshedMarkdown,
+                userAdjustmentPatchJson: null,
+                completedPresetSeedJson: BuildValidSeed("after_hash_" + suffix),
+                searchIndexText: "after", cardMetadataJson: null, bindingJson: null,
+                actor: "livedb_test_actor");
+
+            Assert.Null(errorCode);
+            Assert.True(updated);
+            Assert.NotNull(eventId);
+
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+
+            await using (var svCmd = conn.CreateCommand())
+            {
+                svCmd.CommandText = "SELECT rendered_markdown FROM topology.team_markdown_saved_view WHERE saved_view_id = @id";
+                svCmd.Parameters.AddWithValue("id", Guid.Parse(savedViewId!));
+                var storedMarkdown = (string?)await svCmd.ExecuteScalarAsync();
+                Assert.Equal(refreshedMarkdown, storedMarkdown);
+            }
+
+            await using (var evtCmd = conn.CreateCommand())
+            {
+                evtCmd.CommandText =
+                    "SELECT event_kind, event_payload_json->>'actor' FROM topology.team_markdown_saved_view_event " +
+                    "WHERE event_id = @event_id AND saved_view_id = @saved_view_id";
+                evtCmd.Parameters.AddWithValue("event_id", Guid.Parse(eventId!));
+                evtCmd.Parameters.AddWithValue("saved_view_id", Guid.Parse(savedViewId!));
+                await using var reader = await evtCmd.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync(), "event row must exist in the same database as the mutation");
+                Assert.Equal("refresh_confirmed_write", reader.GetString(0));
+                Assert.Equal("livedb_test_actor", reader.GetString(1));
+            }
+        }
+        finally
+        {
+            await CleanupSavedViewAsync(cs, Guid.Parse(savedViewId!));
+            await CleanupTemplateAsync(cs, Guid.Parse(templateId!));
+        }
+    }
+
+    [Fact]
+    public async Task CloneSavedViewWithEvidenceAsync_CommitsNewRowAndEventRowInOneTransaction()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var repo = new NpgsqlTeamMarkdownRepository(
+            NullLogger<NpgsqlTeamMarkdownRepository>.Instance, cs);
+
+        var (templateId, _, _) = await repo.CreateTemplateAsync(new TeamMarkdownTemplateCreateRequest(
+            $"test_tpl_clone_evidence_{suffix}", "Clone Evidence Template", "# {{record.summary}}", JsonSerializer.SerializeToElement(new { })));
+
+        var (sourceSavedViewId, _, _) = await repo.CreateSavedViewAsync(new TeamMarkdownSavedViewCreateRequest(
+            TemplateId: templateId!,
+            Title: "Clone Source View",
+            SourceTableRef: "topology.physical_tables",
+            SourceRecordRef: "record_search",
+            BindingJson: JsonSerializer.SerializeToElement(new { }),
+            CompletedPresetSeedJson: BuildValidSeed(),
+            RenderedMarkdown: $"# Source {suffix}",
+            UserAdjustmentPatchJson: JsonSerializer.SerializeToElement(new { }),
+            SearchIndexText: "source",
+            CardMetadataJson: JsonSerializer.SerializeToElement(new { excerpt = "source" })
+        ));
+
+        Guid? clonedSavedViewId = null;
+        try
+        {
+            var cloneRequest = new TeamMarkdownSavedViewCreateRequest(
+                TemplateId: templateId!,
+                Title: "Cloned View",
+                SourceTableRef: "topology.other_table",
+                SourceRecordRef: "record_clone_target",
+                BindingJson: JsonSerializer.SerializeToElement(new { }),
+                CompletedPresetSeedJson: BuildValidSeed("clone_hash_" + suffix),
+                RenderedMarkdown: $"# Cloned {suffix}",
+                UserAdjustmentPatchJson: JsonSerializer.SerializeToElement(new { }),
+                SearchIndexText: "cloned",
+                CardMetadataJson: JsonSerializer.SerializeToElement(new { excerpt = "cloned" })
+            );
+
+            var (newSavedViewId, errorCode, message, eventId) = await repo.CloneSavedViewWithEvidenceAsync(
+                cloneRequest, Guid.Parse(sourceSavedViewId!), "livedb_clone_actor");
+
+            Assert.Null(errorCode);
+            Assert.NotNull(newSavedViewId);
+            Assert.NotNull(eventId);
+            clonedSavedViewId = Guid.Parse(newSavedViewId!);
+
+            await using var conn = new NpgsqlConnection(cs);
+            await conn.OpenAsync();
+
+            await using (var svCmd = conn.CreateCommand())
+            {
+                svCmd.CommandText = "SELECT rendered_markdown FROM topology.team_markdown_saved_view WHERE saved_view_id = @id";
+                svCmd.Parameters.AddWithValue("id", clonedSavedViewId.Value);
+                var storedMarkdown = (string?)await svCmd.ExecuteScalarAsync();
+                Assert.Equal($"# Cloned {suffix}", storedMarkdown);
+            }
+
+            await using (var evtCmd = conn.CreateCommand())
+            {
+                evtCmd.CommandText =
+                    "SELECT event_kind, event_payload_json->>'sourceSavedViewId' FROM topology.team_markdown_saved_view_event " +
+                    "WHERE event_id = @event_id AND saved_view_id = @saved_view_id";
+                evtCmd.Parameters.AddWithValue("event_id", Guid.Parse(eventId!));
+                evtCmd.Parameters.AddWithValue("saved_view_id", clonedSavedViewId.Value);
+                await using var reader = await evtCmd.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync(), "event row must exist in the same database as the new saved view row");
+                Assert.Equal("clone_confirmed_write", reader.GetString(0));
+                Assert.Equal(sourceSavedViewId, reader.GetString(1));
+            }
+        }
+        finally
+        {
+            if (clonedSavedViewId.HasValue)
+                await CleanupSavedViewAsync(cs, clonedSavedViewId.Value);
+            await CleanupSavedViewAsync(cs, Guid.Parse(sourceSavedViewId!));
+            await CleanupTemplateAsync(cs, Guid.Parse(templateId!));
+        }
+    }
+
+    [Fact]
+    public async Task UpdateSavedViewWithEventEvidenceAsync_EventEvidenceInsertFailure_RollsBackMutation()
+    {
+        // Fault injection via a real Postgres CHECK constraint violation (an event_kind outside
+        // ck_team_markdown_saved_view_event_kind's allow-list) proves the mutation UPDATE is rolled
+        // back, not committed, when the event-evidence INSERT fails — the mutation is never a
+        // best-effort side effect that survives evidence-append failure.
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var repo = new NpgsqlTeamMarkdownRepository(
+            NullLogger<NpgsqlTeamMarkdownRepository>.Instance, cs);
+
+        var (templateId, _, _) = await repo.CreateTemplateAsync(new TeamMarkdownTemplateCreateRequest(
+            $"test_tpl_rollback_{suffix}", "Rollback Test Template", "# {{record.summary}}", JsonSerializer.SerializeToElement(new { })));
+
+        var originalMarkdown = $"# Original {suffix}";
+        var (savedViewId, _, _) = await repo.CreateSavedViewAsync(new TeamMarkdownSavedViewCreateRequest(
+            TemplateId: templateId!,
+            Title: "Rollback Test View",
+            SourceTableRef: "topology.physical_tables",
+            SourceRecordRef: "record_search",
+            BindingJson: JsonSerializer.SerializeToElement(new { }),
+            CompletedPresetSeedJson: BuildValidSeed(),
+            RenderedMarkdown: originalMarkdown,
+            UserAdjustmentPatchJson: JsonSerializer.SerializeToElement(new { }),
+            SearchIndexText: "original",
+            CardMetadataJson: JsonSerializer.SerializeToElement(new { excerpt = "original" })
+        ));
+
+        try
+        {
+            var (updated, errorCode, message, eventId) = await repo.UpdateSavedViewWithEventEvidenceAsync(
+                Guid.Parse(savedViewId!), "not_a_real_event_kind",
+                title: null, renderedMarkdown: $"# Should Not Persist {suffix}",
+                userAdjustmentPatchJson: null,
+                completedPresetSeedJson: BuildValidSeed("rollback_hash_" + suffix),
+                searchIndexText: "should_not_persist", cardMetadataJson: null, bindingJson: null,
+                actor: "livedb_rollback_actor");
+
+            Assert.False(updated);
+            Assert.NotNull(errorCode);
+            Assert.Null(eventId);
+
+            var (fetched, fetchErr, _) = await repo.GetSavedViewAsync(Guid.Parse(savedViewId!));
+            Assert.Null(fetchErr);
+            Assert.NotNull(fetched);
+            Assert.Equal(originalMarkdown, fetched!.RenderedMarkdown);
+        }
+        finally
+        {
+            await CleanupSavedViewAsync(cs, Guid.Parse(savedViewId!));
+            await CleanupTemplateAsync(cs, Guid.Parse(templateId!));
+        }
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     private static AdminRuntime CreateRuntime(TeamMarkdownRepository repo)
@@ -891,6 +1167,36 @@ public class TeamMarkdownSavedViewTests
         public override Task<string?> AppendEventAsync(Guid savedViewId, string eventKind, Guid? actorId,
             JsonElement eventPayloadJson, CancellationToken ct = default)
             => Task.FromResult<string?>(Guid.NewGuid().ToString());
+
+        public override async Task<(bool Updated, string? ErrorCode, string? Message, string? EventId)> UpdateSavedViewWithEventEvidenceAsync(
+            Guid savedViewId,
+            string eventKind,
+            string? title,
+            string? renderedMarkdown,
+            JsonElement? userAdjustmentPatchJson,
+            JsonElement? completedPresetSeedJson,
+            string? searchIndexText,
+            JsonElement? cardMetadataJson,
+            JsonElement? bindingJson,
+            string actor,
+            CancellationToken ct = default)
+        {
+            var (updated, errorCode, message) = await UpdateSavedViewAsync(
+                savedViewId, title, renderedMarkdown, userAdjustmentPatchJson, completedPresetSeedJson,
+                searchIndexText, cardMetadataJson, bindingJson, ct);
+            if (!updated) return (false, errorCode, message, null);
+            var eventId = Guid.NewGuid().ToString();
+            return (true, null, null, eventId);
+        }
+
+        public override async Task<(string? SavedViewId, string? ErrorCode, string? Message, string? EventId)> CloneSavedViewWithEvidenceAsync(
+            TeamMarkdownSavedViewCreateRequest request, Guid sourceSavedViewId, string actor, CancellationToken ct = default)
+        {
+            var (id, errorCode, message) = await CreateSavedViewAsync(request, ct);
+            if (id is null) return (null, errorCode, message, null);
+            var eventId = Guid.NewGuid().ToString();
+            return (id, null, null, eventId);
+        }
     }
 
     private class StubUiRepoForTeamMarkdown()

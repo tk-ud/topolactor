@@ -283,7 +283,7 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<IAbstractFunctionManifestRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
-    new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>()));
+    new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>(), sp.GetRequiredService<ManifestRepository>()));
 builder.Services.AddSingleton<OutputLaneRouter>(sp =>
     new OutputLaneRouter(
         sp.GetRequiredService<ILogger<OutputLaneRouter>>(),
@@ -983,8 +983,11 @@ app.MapGet("/hub-navigation/relations", async (
     if (authErrors.Count > 0)
         return Results.Json(new HubRelationNavigationLinksResponseDto(false, [], authErrors), statusCode: 401);
 
-    var links = await hubNavigationResolver.ResolveFallbackNavigationLinksAsync(ct);
-    return Results.Json(new HubRelationNavigationLinksResponseDto(true, links));
+    var requestedSurface = ctx.Request.Query.TryGetValue("surface", out var surfaceVal) ? surfaceVal.ToString() : null;
+    var callerRole = jwtGuard.TryGetRole(token);
+    var links = await hubNavigationResolver.ResolveFallbackNavigationLinksAsync(callerRole, ct);
+    var fallbackReason = "canonical_default_entry_manifest_outbound_relations";
+    return Results.Json(new HubRelationNavigationLinksResponseDto(true, links, null, requestedSurface, fallbackReason));
 });
 
 // ─── Draft Preview surface endpoints (/draft-preview/*) ──────────────────────

@@ -350,7 +350,7 @@ public class ManifestDispatcherUiProjectionEnrichmentTests
         var fixtureManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId;
         var topology = BuildTopology("admin_runtime", includeUiProjection: false);
         var manifestRepo = new SingleManifestRepository(topology, fixtureManifestId);
-        var hubNavResolver = new HubNavigationResolver(new InMemoryContentBundleRepository());
+        var hubNavResolver = new HubNavigationResolver(new InMemoryContentBundleRepository(), manifestRepo);
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
             ["admin_runtime"] = new SuccessRuntimeWithLayoutAlreadySet(),

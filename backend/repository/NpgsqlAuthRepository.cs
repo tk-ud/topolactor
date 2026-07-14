@@ -516,4 +516,39 @@ public class NpgsqlAuthRepository : AuthRepository
         cmd.Parameters.AddWithValue("id", sessionId);
         return (bool)(await cmd.ExecuteScalarAsync(ct))!;
     }
+
+    public override async Task<bool> IsSessionIdentityActiveAsync(
+        Guid sessionId, string username, string realm, string audience, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM auth.sessions s
+                JOIN auth.users u ON u.user_id = s.user_id
+                WHERE s.session_id = @id
+                  AND s.revoked_at IS NULL
+                  AND s.expires_at > now()
+                  AND u.active = true
+                  AND u.approve = true
+                  AND COALESCE(u.status, '') <> 'suspended'
+                  AND NOT (
+                      u.suspended_from IS NOT NULL
+                      AND u.suspended_from <= now()
+                      AND (u.suspended_until IS NULL OR now() <= u.suspended_until)
+                  )
+                  AND u.username = @username
+                  AND s.realm = @realm
+                  AND s.audience = @audience
+            )
+            """;
+        cmd.Parameters.AddWithValue("id", sessionId);
+        cmd.Parameters.AddWithValue("username", username);
+        cmd.Parameters.AddWithValue("realm", realm);
+        cmd.Parameters.AddWithValue("audience", audience);
+        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+    }
 }

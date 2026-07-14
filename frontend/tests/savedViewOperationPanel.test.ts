@@ -119,6 +119,7 @@ Deno.test("SavedViewOperationPanel refresh: preview shows non-mutating payload, 
     assertEquals(body.action, "saved_view:refresh");
     assertEquals(body.idOrHubId, "00000000-0000-0000-0000-0000000000aa");
     assertEquals((body.payload as { sourceRecordJson: Record<string, unknown> }).sourceRecordJson, { field_one: "value-1" });
+    assertEquals(body.payload.confirmed, true, "write dispatch reached only via explicit confirm must send confirmed:true");
   } finally {
     render(null, container);
     cleanup();
@@ -183,6 +184,7 @@ Deno.test("SavedViewOperationPanel clone: real input collection + confirm dispat
     assertEquals(body.idOrHubId, "00000000-0000-0000-0000-0000000000aa");
     assertEquals(body.payload.targetSourceTableRef, "topology.target_table");
     assertEquals(body.payload.targetSourceRecordRef, "target-record-1");
+    assertEquals(body.payload.confirmed, true, "write dispatch reached only via explicit confirm must send confirmed:true");
   } finally {
     render(null, container);
     cleanup();
@@ -223,6 +225,48 @@ Deno.test("SavedViewOperationPanel rebind: real input collection + confirm dispa
     assertEquals((body.payload as { bindingJson: Record<string, unknown> }).bindingJson, {
       placeholder_bindings: [{ placeholder_key: "x", required: true }],
     });
+    assertEquals(body.payload.confirmed, true, "write dispatch reached only via explicit confirm must send confirmed:true");
+  } finally {
+    render(null, container);
+    cleanup();
+    globalThis.fetch = originalFetch;
+    __testOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("SavedViewOperationPanel refresh: editing a field after preview invalidates the stale confirm step — Confirm is disabled until re-previewed", async () => {
+  __testOnly.resetCommandQueue();
+  const capturedBodies: unknown[] = [];
+  globalThis.fetch = captureDispatchFetch(capturedBodies);
+  const { container, cleanup } = setupDom();
+  try {
+    render(
+      h(SavedViewOperationPanel, { mode: "refresh", savedView: buildSavedView(), onWritten: () => {}, onCancel: () => {} }),
+      container,
+    );
+    await flushUpdates();
+
+    await clickButtonByText(container, "Preview");
+    const confirmButtonAfterPreview = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Confirm refresh")
+    ) as HTMLButtonElement;
+    assert(!confirmButtonAfterPreview.disabled, "Confirm must be enabled immediately after a preview");
+
+    // Edit a field after preview, without re-previewing — the prior preview's payload must no
+    // longer be reusable to reach a write.
+    const textareas = Array.from(container.querySelectorAll("textarea")) as HTMLTextAreaElement[];
+    const searchIndexInputs = Array.from(container.querySelectorAll("input")) as HTMLInputElement[];
+    const searchIndexInput = searchIndexInputs[searchIndexInputs.length - 1];
+    searchIndexInput.value = "changed-after-preview";
+    searchIndexInput.dispatchEvent(new (globalThis as unknown as { Event: typeof Event }).Event("input", { bubbles: true }));
+    await flushUpdates();
+
+    const confirmButtonAfterEdit = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Confirm refresh")
+    ) as HTMLButtonElement;
+    assert(confirmButtonAfterEdit.disabled, "editing a field after preview must invalidate the stale confirm step");
+    assertEquals(capturedBodies.length, 0, "no write may occur without a fresh preview after the payload changed");
+    void textareas;
   } finally {
     render(null, container);
     cleanup();

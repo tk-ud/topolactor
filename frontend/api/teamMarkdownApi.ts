@@ -605,6 +605,13 @@ export async function getSavedView(savedViewId: string): Promise<{
   }>;
 }
 
+/**
+ * Refresh/Clone/Rebind write calls must only ever be invoked after an explicit user confirmation
+ * step (ApplyConfirmDialog) — see SavedViewOperationPanel.tsx, the only caller. confirmed:true is
+ * sent unconditionally here, not because the frontend display implies confirmation, but because
+ * the backend independently re-checks payload.confirmed=true and rejects any write missing it
+ * regardless of what this function sends — the frontend gate is defense-in-depth, not authority.
+ */
 export async function refreshSavedView(
   savedViewId: string,
   refreshedRenderedMarkdown: string,
@@ -619,6 +626,7 @@ export async function refreshSavedView(
       updatedCompletedPresetSeedJson,
       searchIndexText,
       cardMetadataJson,
+      confirmed: true,
     },
   }) as Promise<{ ok: boolean; savedViewId: string }>;
 }
@@ -637,7 +645,7 @@ export async function refreshSavedViewFromSource(
 ): Promise<{ ok: boolean; savedViewId: string }> {
   return dispatchTeamMarkdown("saved_view:refresh", {
     idOrHubId: savedViewId,
-    payload: { templateMarkdown, sourceRecordJson, searchIndexText, cardMetadataJson },
+    payload: { templateMarkdown, sourceRecordJson, searchIndexText, cardMetadataJson, confirmed: true },
   }) as Promise<{ ok: boolean; savedViewId: string }>;
 }
 
@@ -713,7 +721,7 @@ export async function cloneSavedView(
 ): Promise<{ ok: boolean; savedViewId: string; sourceSavedViewId: string }> {
   return dispatchTeamMarkdown("saved_view:clone", {
     idOrHubId: savedViewId,
-    payload: params,
+    payload: { ...params, confirmed: true },
   }) as Promise<{ ok: boolean; savedViewId: string; sourceSavedViewId: string }>;
 }
 
@@ -730,6 +738,6 @@ export async function rebindSavedView(
 ): Promise<{ ok: boolean; savedViewId: string }> {
   return dispatchTeamMarkdown("saved_view:rebind", {
     idOrHubId: savedViewId,
-    payload: params,
+    payload: { ...params, confirmed: true },
   }) as Promise<{ ok: boolean; savedViewId: string }>;
 }

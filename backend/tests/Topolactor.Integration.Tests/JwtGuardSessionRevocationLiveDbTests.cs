@@ -83,17 +83,116 @@ public class JwtGuardSessionRevocationLiveDbTests
         using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
         await EnsureRolesSeededAsync(cs);
 
-        var userId = await CreateUserAsync(cs, "livedb_guard_active_" + Guid.NewGuid().ToString("N")[..8]);
+        var username = "livedb_guard_active_" + Guid.NewGuid().ToString("N")[..8];
+        var userId = await CreateUserAsync(cs, username);
         try
         {
             var authRepo = new NpgsqlAuthRepository(cs);
             var sessionId = await authRepo.CreateSessionAsync(userId, "user", "user_app", DateTimeOffset.UtcNow.AddDays(1));
-            var token = new JwtTokenIssuer().IssueAccessToken("livedb_guard_active", AuthRealm.User, sessionId);
+            var token = new JwtTokenIssuer().IssueAccessToken(username, AuthRealm.User, sessionId);
 
             var guard = new JwtGuard();
             var errors = await guard.ValidateActiveSessionAsync(token, authRepo);
 
             Assert.Empty(errors);
+        }
+        finally
+        {
+            await CleanupUserAsync(cs, userId);
+        }
+    }
+
+    [Fact]
+    public async Task ActiveSession_TokenWithMismatchedSubject_IsRejectedByGuard()
+    {
+        // A signed token whose sid points to a real, active session — but whose sub claims a
+        // DIFFERENT real user than the session's actual owner — must be rejected. Session-active
+        // alone is not sufficient: JwtGuard must cross-check the JWT's sub/realm/aud against the
+        // canonical session/user identity the sid points to, never trust sub/realm/aud from the
+        // token body without that DB-side cross-check.
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
+        await EnsureRolesSeededAsync(cs);
+
+        var ownerSuffix = Guid.NewGuid().ToString("N")[..8];
+        var ownerUsername = "livedb_guard_subowner_" + ownerSuffix;
+        var otherUsername = "livedb_guard_subother_" + ownerSuffix;
+        var ownerUserId = await CreateUserAsync(cs, ownerUsername);
+        var otherUserId = await CreateUserAsync(cs, otherUsername);
+        try
+        {
+            var authRepo = new NpgsqlAuthRepository(cs);
+            var sessionId = await authRepo.CreateSessionAsync(ownerUserId, "user", "user_app", DateTimeOffset.UtcNow.AddDays(1));
+            // Forged: sid belongs to ownerUserId's session, but sub names otherUsername.
+            var forgedToken = new JwtTokenIssuer().IssueAccessToken(otherUsername, AuthRealm.User, sessionId);
+
+            var guard = new JwtGuard();
+            var errors = await guard.ValidateActiveSessionAsync(forgedToken, authRepo);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, e => e.Code is "AUTH_SESSION_IDENTITY_MISMATCH" or "AUTH_SESSION_REVOKED");
+        }
+        finally
+        {
+            await CleanupUserAsync(cs, ownerUserId);
+            await CleanupUserAsync(cs, otherUserId);
+        }
+    }
+
+    [Fact]
+    public async Task ActiveSession_TokenWithMismatchedRealm_IsRejectedByGuard()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
+        await EnsureRolesSeededAsync(cs);
+
+        var username = "livedb_guard_realmmismatch_" + Guid.NewGuid().ToString("N")[..8];
+        var userId = await CreateUserAsync(cs, username);
+        try
+        {
+            var authRepo = new NpgsqlAuthRepository(cs);
+            // Session recorded with realm="user", but the forged token claims realm="admin/system".
+            var sessionId = await authRepo.CreateSessionAsync(userId, "user", "user_app", DateTimeOffset.UtcNow.AddDays(1));
+            var forgedToken = new JwtTokenIssuer().IssueAccessToken(username, AuthRealm.Admin, sessionId);
+
+            var guard = new JwtGuard();
+            var errors = await guard.ValidateActiveSessionAsync(forgedToken, authRepo);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, e => e.Code is "AUTH_SESSION_IDENTITY_MISMATCH" or "AUTH_SESSION_REVOKED");
+        }
+        finally
+        {
+            await CleanupUserAsync(cs, userId);
+        }
+    }
+
+    [Fact]
+    public async Task ActiveSession_TokenWithMismatchedAudience_IsRejectedByGuard()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
+        await EnsureRolesSeededAsync(cs);
+
+        var username = "livedb_guard_audmismatch_" + Guid.NewGuid().ToString("N")[..8];
+        var userId = await CreateUserAsync(cs, username);
+        try
+        {
+            var authRepo = new NpgsqlAuthRepository(cs);
+            var sessionId = await authRepo.CreateSessionAsync(userId, "user", "user_app", DateTimeOffset.UtcNow.AddDays(1));
+            // Same realm, forged audience only (a hand-built AuthRealmContext, not one of the two
+            // canonical AuthRealm.User/Admin contexts, isolates the audience mismatch specifically).
+            var forgedRealmContext = new AuthRealmContext("user", "admin_console", "user");
+            var forgedToken = new JwtTokenIssuer().IssueAccessToken(username, forgedRealmContext, sessionId);
+
+            var guard = new JwtGuard();
+            var errors = await guard.ValidateActiveSessionAsync(forgedToken, authRepo);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, e => e.Code is "AUTH_SESSION_IDENTITY_MISMATCH" or "AUTH_SESSION_REVOKED");
         }
         finally
         {
@@ -109,12 +208,13 @@ public class JwtGuardSessionRevocationLiveDbTests
         using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
         await EnsureRolesSeededAsync(cs);
 
-        var userId = await CreateUserAsync(cs, "livedb_guard_revoked_" + Guid.NewGuid().ToString("N")[..8]);
+        var username = "livedb_guard_revoked_" + Guid.NewGuid().ToString("N")[..8];
+        var userId = await CreateUserAsync(cs, username);
         try
         {
             var authRepo = new NpgsqlAuthRepository(cs);
             var sessionId = await authRepo.CreateSessionAsync(userId, "user", "user_app", DateTimeOffset.UtcNow.AddDays(1));
-            var token = new JwtTokenIssuer().IssueAccessToken("livedb_guard_revoked", AuthRealm.User, sessionId);
+            var token = new JwtTokenIssuer().IssueAccessToken(username, AuthRealm.User, sessionId);
 
             var guard = new JwtGuard();
             // Signature + exp alone would pass — prove that first, to isolate that the rejection
@@ -125,7 +225,7 @@ public class JwtGuardSessionRevocationLiveDbTests
 
             var errors = await guard.ValidateActiveSessionAsync(token, authRepo);
 
-            Assert.Contains(errors, e => e.Code == "AUTH_SESSION_REVOKED");
+            Assert.Contains(errors, e => e.Code == "AUTH_SESSION_IDENTITY_MISMATCH");
         }
         finally
         {
@@ -141,7 +241,8 @@ public class JwtGuardSessionRevocationLiveDbTests
         using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
         await EnsureRolesSeededAsync(cs);
 
-        var userId = await CreateUserAsync(cs, "livedb_guard_pwchange_" + Guid.NewGuid().ToString("N")[..8]);
+        var username = "livedb_guard_pwchange_" + Guid.NewGuid().ToString("N")[..8];
+        var userId = await CreateUserAsync(cs, username);
         try
         {
             var authRepo = new NpgsqlAuthRepository(cs);
@@ -157,7 +258,7 @@ public class JwtGuardSessionRevocationLiveDbTests
             }
 
             var sessionId = await authRepo.CreateSessionAsync(userId, "user", "user_app", DateTimeOffset.UtcNow.AddDays(1));
-            var token = new JwtTokenIssuer().IssueAccessToken("livedb_guard_pwchange", AuthRealm.User, sessionId);
+            var token = new JwtTokenIssuer().IssueAccessToken(username, AuthRealm.User, sessionId);
 
             var guard = new JwtGuard();
             Assert.Empty(await guard.ValidateActiveSessionAsync(token, authRepo));
@@ -169,7 +270,7 @@ public class JwtGuardSessionRevocationLiveDbTests
             // No new token was issued, no refresh happened — this is the SAME already-issued access
             // JWT from before the password change, now hitting the Guard on its "next request".
             var errorsAfterPasswordChange = await guard.ValidateActiveSessionAsync(token, authRepo);
-            Assert.Contains(errorsAfterPasswordChange, e => e.Code == "AUTH_SESSION_REVOKED");
+            Assert.Contains(errorsAfterPasswordChange, e => e.Code == "AUTH_SESSION_IDENTITY_MISMATCH");
         }
         finally
         {
@@ -214,5 +315,6 @@ public class JwtGuardSessionRevocationLiveDbTests
         public override Task<Guid?> FindActiveSessionIdByRefreshTokenHashAsync(string tokenHash, CancellationToken ct = default) => throw new InvalidOperationException();
         public override Task<bool> RevokeCredentialAsync(Guid userId, string actorUsername, CancellationToken ct = default) => throw new InvalidOperationException();
         public override Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default) => throw new InvalidOperationException();
+        public override Task<bool> IsSessionIdentityActiveAsync(Guid sessionId, string username, string realm, string audience, CancellationToken ct = default) => throw new InvalidOperationException();
     }
 }

@@ -227,5 +227,7 @@ public record HubNavigationReorderResponseDto(
 public record HubRelationNavigationLinksResponseDto(
     [property: JsonPropertyName("success")] bool Success,
     [property: JsonPropertyName("links")] IReadOnlyList<HubNavigationSequenceItemDto> Links,
-    [property: JsonPropertyName("errors")] IReadOnlyList<ValidationError>? Errors = null
+    [property: JsonPropertyName("errors")] IReadOnlyList<ValidationError>? Errors = null,
+    [property: JsonPropertyName("requestedSurface")] string? RequestedSurface = null,
+    [property: JsonPropertyName("fallbackReason")] string? FallbackReason = null
 );

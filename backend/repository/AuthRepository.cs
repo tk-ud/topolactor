@@ -132,4 +132,16 @@ public abstract class AuthRepository
     /// without waiting for token expiry or a refresh.
     /// </summary>
     public abstract Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Full identity-aware session check: everything IsSessionActiveAsync checks, PLUS that the
+    /// session's owning account's username matches <paramref name="username"/> and the session's
+    /// own realm/audience match <paramref name="realm"/>/<paramref name="audience"/>. This is what
+    /// JwtGuard calls — session-active alone is not sufficient, because a signed JWT's sub/realm/aud
+    /// claims must never be trusted without verifying them against the canonical session/user
+    /// identity the token's sid actually points to. username/realm/audience here are the JWT's own
+    /// claims (untrusted input); this call is what makes them trustworthy or not.
+    /// </summary>
+    public abstract Task<bool> IsSessionIdentityActiveAsync(
+        Guid sessionId, string username, string realm, string audience, CancellationToken ct = default);
 }

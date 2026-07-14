@@ -119,10 +119,13 @@ public class JwtGuard
 
     /// <summary>
     /// Full access-JWT validation boundary: signature + exp (via Validate) plus a DB-side check,
-    /// through the token's sid claim, that the backing auth.sessions row is still active and the
-    /// owning account is still active/approved/not-suspended. Signature+exp alone is NOT sufficient
+    /// through the token's sid claim, that the backing auth.sessions row is still active, the
+    /// owning account is still active/approved/not-suspended, AND that the token's own sub/realm/aud
+    /// claims match the canonical session/user identity the sid points to. Session-active alone is
+    /// NOT sufficient: a signed token's sub/realm/aud must never be trusted without this cross-check
     /// — a session revoked (password change, session revoke, credential revoke) or an account
-    /// deactivated after the token was issued must be rejected here, not only on refresh.
+    /// deactivated after the token was issued must be rejected here, not only on refresh, and a
+    /// forged/mismatched sub/realm/aud on an otherwise-active session must be rejected too.
     /// Every endpoint that authenticates a caller must call this (or
     /// ValidateForContextActiveSessionAsync) instead of the signature/exp-only Validate/ValidateForContext.
     /// </summary>
@@ -131,10 +134,10 @@ public class JwtGuard
     {
         var errors = Validate(token);
         if (errors.Count > 0) return errors;
-        return await CheckSessionActiveAsync(token, authRepository, ct);
+        return await CheckSessionIdentityActiveAsync(token, authRepository, ct);
     }
 
-    /// <summary>Combines ValidateForContext (realm/audience/role) with the DB-side session-active check.</summary>
+    /// <summary>Combines ValidateForContext (realm/audience/role) with the DB-side session-identity check.</summary>
     public async Task<IReadOnlyList<ValidationError>> ValidateForContextActiveSessionAsync(
         string? token,
         string expectedRealm,
@@ -145,20 +148,29 @@ public class JwtGuard
     {
         var errors = ValidateForContext(token, expectedRealm, expectedAudience, expectedRole);
         if (errors.Count > 0) return errors;
-        return await CheckSessionActiveAsync(token, authRepository, ct);
+        return await CheckSessionIdentityActiveAsync(token, authRepository, ct);
     }
 
-    private async Task<IReadOnlyList<ValidationError>> CheckSessionActiveAsync(
+    private async Task<IReadOnlyList<ValidationError>> CheckSessionIdentityActiveAsync(
         string? token, AuthRepository authRepository, CancellationToken ct)
     {
         var sessionId = TryGetSessionId(token);
         if (sessionId is null)
             return [new ValidationError("AUTH_TOKEN_SID_MISSING", "Token is missing required sid claim.")];
 
-        var active = await authRepository.IsSessionActiveAsync(sessionId.Value, ct);
+        // sub/realm/aud come from the token body — untrusted until cross-checked against the
+        // canonical session/user row sid points to. A token with a valid signature can still claim
+        // any sub/realm/aud; only this DB-side comparison makes them trustworthy.
+        var subject = TryGetSubject(token);
+        var realm = TryGetRealm(token);
+        var audience = TryGetAudience(token);
+        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(realm) || string.IsNullOrWhiteSpace(audience))
+            return [new ValidationError("AUTH_TOKEN_CLAIMS_MISSING", "Token is missing required sub/realm/aud claims.")];
+
+        var active = await authRepository.IsSessionIdentityActiveAsync(sessionId.Value, subject, realm, audience, ct);
         if (!active)
-            return [new ValidationError("AUTH_SESSION_REVOKED",
-                "Session has been revoked, or the account is no longer active.")];
+            return [new ValidationError("AUTH_SESSION_IDENTITY_MISMATCH",
+                "Session is not active, or the token's sub/realm/aud do not match the session/account it names.")];
 
         return [];
     }

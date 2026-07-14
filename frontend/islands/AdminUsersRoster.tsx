@@ -18,7 +18,7 @@ import {
 import { Modal } from "../components/Modal.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
-import { runAdminSubmit } from "../lib/adminSubmitUx.ts";
+import { adminSubmitConfirm } from "../lib/adminSubmitUx.ts";
 
 type PanelError = { code?: string; message: string };
 
@@ -90,62 +90,50 @@ export default function AdminUsersRoster(): JSX.Element {
   };
 
   const handleCreate = async () => {
-    await runAdminSubmit({
-      confirm,
-      confirmKind: "create",
-      label: "ユーザー",
-      run: async () => {
-        setLoading(true);
-        setErrors([]);
-        try {
-          await createAuthUser({
-            username: newUsername.trim(),
-            password: newPassword,
-            approve: newApprove,
-            status: newStatus,
-          });
-          setModalOpen(false);
-          setNewUsername("");
-          setNewPassword("");
-          await loadUsers();
-        } catch (e) {
-          setErrors([{ message: String(e) }]);
-        } finally {
-          setLoading(false);
-        }
-      },
-    });
+    if (!(await adminSubmitConfirm(confirm, "create"))) return;
+    setLoading(true);
+    setErrors([]);
+    try {
+      await createAuthUser({
+        username: newUsername.trim(),
+        password: newPassword,
+        approve: newApprove,
+        status: newStatus,
+      });
+      setModalOpen(false);
+      setNewUsername("");
+      setNewPassword("");
+      await loadUsers();
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSave = async () => {
     if (!selectedId || !draft.userId) return;
-    await runAdminSubmit({
-      confirm,
-      confirmKind: "update",
-      label: "ユーザー",
-      run: async () => {
-        setLoading(true);
-        setErrors([]);
-        try {
-          await updateAuthUser({
-            userId: selectedId,
-            username: draft.username,
-            active: draft.active,
-            approve: draft.approve,
-            status: draft.status ?? undefined,
-            suspendedFrom: draft.suspendedFrom || null,
-            suspendedUntil: draft.suspendedUntil || null,
-            stateNote: draft.stateNote ?? null,
-            roleName: draft.role === "admin" ? "admin" : "user",
-          });
-          await loadUsers();
-        } catch (e) {
-          setErrors([{ message: String(e) }]);
-        } finally {
-          setLoading(false);
-        }
-      },
-    });
+    if (!(await adminSubmitConfirm(confirm, "update"))) return;
+    setLoading(true);
+    setErrors([]);
+    try {
+      await updateAuthUser({
+        userId: selectedId,
+        username: draft.username,
+        active: draft.active,
+        approve: draft.approve,
+        status: draft.status ?? undefined,
+        suspendedFrom: draft.suspendedFrom || null,
+        suspendedUntil: draft.suspendedUntil || null,
+        stateNote: draft.stateNote ?? null,
+        roleName: draft.role === "admin" ? "admin" : "user",
+      });
+      await loadUsers();
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async () => {

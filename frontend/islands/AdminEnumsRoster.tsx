@@ -16,7 +16,7 @@ import {
 import { Modal } from "../components/Modal.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
-import { runAdminSubmit } from "../lib/adminSubmitUx.ts";
+import { adminSubmitConfirm } from "../lib/adminSubmitUx.ts";
 
 type PanelError = { code?: string; message: string };
 
@@ -70,50 +70,38 @@ export default function AdminEnumsRoster(): JSX.Element {
   };
 
   const handleCreateGroup = async () => {
-    await runAdminSubmit({
-      confirm,
-      confirmKind: "create",
-      label: "enum グループ",
-      run: async () => {
-        setLoading(true);
-        setErrors([]);
-        try {
-          await createEnumDictionaryGroup(newGroupName.trim());
-          setModalOpen(false);
-          setNewGroupName("");
-          await loadGroups();
-        } catch (e) {
-          setErrors([{ message: String(e) }]);
-        } finally {
-          setLoading(false);
-        }
-      },
-    });
+    if (!(await adminSubmitConfirm(confirm, "create"))) return;
+    setLoading(true);
+    setErrors([]);
+    try {
+      await createEnumDictionaryGroup(newGroupName.trim());
+      setModalOpen(false);
+      setNewGroupName("");
+      await loadGroups();
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveGroup = async () => {
     if (!selectedId) return;
-    await runAdminSubmit({
-      confirm,
-      confirmKind: "update",
-      label: "enum グループ",
-      run: async () => {
-        setLoading(true);
-        setErrors([]);
-        try {
-          await updateEnumDictionaryGroup(selectedId, draftName.trim());
-          const nums = draftIndexNums.split(",").map((s) => parseInt(s.trim(), 10))
-            .filter((n) => !Number.isNaN(n));
-          await setEnumDictionaryGroupItems(selectedId, nums);
-          await loadGroups();
-          await loadDetail(selectedId);
-        } catch (e) {
-          setErrors([{ message: String(e) }]);
-        } finally {
-          setLoading(false);
-        }
-      },
-    });
+    if (!(await adminSubmitConfirm(confirm, "update"))) return;
+    setLoading(true);
+    setErrors([]);
+    try {
+      await updateEnumDictionaryGroup(selectedId, draftName.trim());
+      const nums = draftIndexNums.split(",").map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !Number.isNaN(n));
+      await setEnumDictionaryGroupItems(selectedId, nums);
+      await loadGroups();
+      await loadDetail(selectedId);
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteGroup = async () => {
@@ -137,23 +125,17 @@ export default function AdminEnumsRoster(): JSX.Element {
 
   const handleAddItem = async () => {
     if (!newItemName.trim()) return;
-    await runAdminSubmit({
-      confirm,
-      confirmKind: "create",
-      label: "enum 項目",
-      run: async () => {
-        setLoading(true);
-        try {
-          await createEnumDictionaryItem(newItemName.trim());
-          setNewItemName("");
-          if (selectedId) await loadDetail(selectedId);
-        } catch (e) {
-          setErrors([{ message: String(e) }]);
-        } finally {
-          setLoading(false);
-        }
-      },
-    });
+    if (!(await adminSubmitConfirm(confirm, "create"))) return;
+    setLoading(true);
+    try {
+      await createEnumDictionaryItem(newItemName.trim());
+      setNewItemName("");
+      if (selectedId) await loadDetail(selectedId);
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteItem = async (indexNum: number) => {

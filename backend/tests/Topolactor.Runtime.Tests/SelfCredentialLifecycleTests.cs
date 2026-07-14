@@ -238,6 +238,9 @@ public class TeamMarkdownAdminRoleGateTests
     [InlineData("saved_view:update")]
     [InlineData("saved_view:create")]
     [InlineData("saved_view:archive")]
+    [InlineData("saved_view:refresh")]
+    [InlineData("saved_view:clone")]
+    [InlineData("saved_view:rebind")]
     [InlineData("template:create")]
     public async Task NormalRoleJwt_MutationAction_RejectedWithAuthCapabilityDenied(string action)
     {
@@ -245,6 +248,28 @@ public class TeamMarkdownAdminRoleGateTests
         var vector = new OperationVector(
             "admin", "team_markdown", action, null, "user",
             JsonSerializer.SerializeToElement(new { }), null,
+            AuthenticatedRole: "user", AuthenticatedUserId: "normal_user");
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector, default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("AUTH_CAPABILITY_DENIED", error!.Code);
+    }
+
+    [Theory]
+    [InlineData("saved_view:refresh")]
+    [InlineData("saved_view:clone")]
+    [InlineData("saved_view:rebind")]
+    public async Task NormalRoleJwt_RefreshCloneRebind_RejectedEvenWithConfirmedTrue(string action)
+    {
+        // The admin-role gate must reject Refresh/Clone/Rebind before the confirmed=true write gate
+        // is ever reached — a Normal-role caller cannot bypass authority by supplying a fully
+        // "confirmed" payload; the role check runs first regardless.
+        var runtime = CreateRuntime();
+        var vector = new OperationVector(
+            "admin", "team_markdown", action, null, "user",
+            JsonSerializer.SerializeToElement(new { confirmed = true }), null,
             AuthenticatedRole: "user", AuthenticatedUserId: "normal_user");
 
         var (data, error) = await runtime.ExecuteDataAsync(vector, default);

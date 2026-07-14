@@ -790,6 +790,27 @@ public class ManifestDispatcher
         IReadOnlyList<JsonElement> topology,
         string? requestRole)
     {
+        var requiredRole = ResolveRequiredRole(topology);
+        if (requiredRole is null) return null;
+
+        if (!string.Equals(requestRole, requiredRole, StringComparison.Ordinal))
+            return new ValidationError(
+                "AUTH_CAPABILITY_DENIED",
+                $"This operation requires role='{requiredRole}'. Token role='{requestRole ?? "(missing)"}' is insufficient.");
+
+        return null; // requirement satisfied
+    }
+
+    /// <summary>
+    /// Resolves the required_role a manifest's topology demands, from an explicit
+    /// capability_requirement entry (highest priority) or inferred from
+    /// runtime_mapping.runtime_destination=admin_runtime. Returns null when no requirement can be
+    /// determined. Shared by ValidateCapabilityRequirement (mutation/dispatch authority) and
+    /// HubNavigationResolver (read-only relation fallback role filtering) so both reuse the exact
+    /// same manifest capability authority instead of maintaining parallel role-resolution logic.
+    /// </summary>
+    internal static string? ResolveRequiredRole(IReadOnlyList<JsonElement> topology)
+    {
         string? explicitRequired = null;
         string? inferredRequired = null;
 
@@ -821,15 +842,7 @@ public class ManifestDispatcher
             }
         }
 
-        var requiredRole = explicitRequired ?? inferredRequired;
-        if (requiredRole is null) return null;
-
-        if (!string.Equals(requestRole, requiredRole, StringComparison.Ordinal))
-            return new ValidationError(
-                "AUTH_CAPABILITY_DENIED",
-                $"This operation requires role='{requiredRole}'. Token role='{requestRole ?? "(missing)"}' is insufficient.");
-
-        return null; // requirement satisfied
+        return explicitRequired ?? inferredRequired;
     }
 
     /// <summary>

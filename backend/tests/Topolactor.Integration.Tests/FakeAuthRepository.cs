@@ -49,13 +49,13 @@ internal sealed class FakeAuthRepository : AuthRepository
         return Task.FromResult(entry.Key is null ? null : entry.Value.Role);
     }
 
-    private readonly Dictionary<Guid, (Guid UserId, DateTimeOffset ExpiresAt)> _liveSessions = new();
+    private readonly Dictionary<Guid, (Guid UserId, string Realm, string Audience, DateTimeOffset ExpiresAt)> _liveSessions = new();
 
     public override Task<Guid> CreateSessionAsync(
         Guid userId, string realm, string audience, DateTimeOffset expiresAt, CancellationToken ct = default)
     {
         var sessionId = Guid.NewGuid();
-        _liveSessions[sessionId] = (userId, expiresAt);
+        _liveSessions[sessionId] = (userId, realm, audience, expiresAt);
         return Task.FromResult(sessionId);
     }
 
@@ -167,5 +167,18 @@ internal sealed class FakeAuthRepository : AuthRepository
                 return Task.FromResult(false);
         }
         return Task.FromResult(true);
+    }
+
+    public override async Task<bool> IsSessionIdentityActiveAsync(
+        Guid sessionId, string username, string realm, string audience, CancellationToken ct = default)
+    {
+        if (!await IsSessionActiveAsync(sessionId, ct)) return false;
+        var session = _liveSessions[sessionId];
+        if (!string.Equals(session.Realm, realm, StringComparison.Ordinal)) return false;
+        if (!string.Equals(session.Audience, audience, StringComparison.Ordinal)) return false;
+
+        var entry = _users.FirstOrDefault(kv => kv.Value.UserId == session.UserId);
+        if (entry.Key is null) return false;
+        return string.Equals(entry.Key, username, StringComparison.Ordinal);
     }
 }

@@ -115,7 +115,7 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
         {
             CanonicalDefaultEntryManifestId = CanonicalManifestId,
         };
-        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
+        var hubNavResolver = new HubNavigationResolver(contentBundleRepo, manifestRepo);
         var dispatcher = BuildDispatcher(manifestRepo, hubNavResolver);
 
         var response = await dispatcher.DispatchAsync(DefaultEntryRequest());
@@ -138,7 +138,7 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
         {
             CanonicalDefaultEntryManifestId = CanonicalManifestId,
         };
-        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
+        var hubNavResolver = new HubNavigationResolver(contentBundleRepo, manifestRepo);
         var dispatcher = BuildDispatcher(manifestRepo, hubNavResolver);
 
         var response = await dispatcher.DispatchAsync(DefaultEntryRequest());
@@ -152,7 +152,7 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
     {
         var manifestRepo = new NoAxesMatchManifestRepository(BuildTopology(), CanonicalManifestId);
         // CanonicalDefaultEntryManifestId left null — no marked row exists.
-        var hubNavResolver = new HubNavigationResolver(new InMemoryContentBundleRepository());
+        var hubNavResolver = new HubNavigationResolver(new InMemoryContentBundleRepository(), manifestRepo);
         var dispatcher = BuildDispatcher(manifestRepo, hubNavResolver);
 
         var response = await dispatcher.DispatchAsync(DefaultEntryRequest());
@@ -172,7 +172,7 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
         {
             CanonicalDefaultEntryManifestId = CanonicalManifestId,
         };
-        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
+        var hubNavResolver = new HubNavigationResolver(contentBundleRepo, manifestRepo);
         var dispatcher = BuildDispatcher(manifestRepo, hubNavResolver);
 
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null, "client", "admin");
@@ -196,7 +196,7 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
         {
             CanonicalDefaultEntryManifestId = CanonicalManifestId,
         };
-        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
+        var hubNavResolver = new HubNavigationResolver(contentBundleRepo, manifestRepo);
         var dispatcher = BuildDispatcher(manifestRepo, hubNavResolver);
 
         var payload = JsonSerializer.SerializeToElement(new { target_ref = $"manifest:{otherManifestId}:projection_entry" });
@@ -222,7 +222,7 @@ public class ManifestDispatcherCanonicalDefaultEntryTests
     public async Task DispatchAsync_BareDefaultEntry_AmbiguousCanonicalDefaultEntry_ReturnsExplicitError_NoSilentPick()
     {
         var manifestRepo = new NoAxesMatchManifestRepository(BuildTopology(), CanonicalManifestId);
-        var hubNavResolver = new HubNavigationResolver(new AmbiguousCanonicalDefaultEntryContentBundleRepository());
+        var hubNavResolver = new HubNavigationResolver(new AmbiguousCanonicalDefaultEntryContentBundleRepository(), manifestRepo);
         var dispatcher = BuildDispatcher(manifestRepo, hubNavResolver);
 
         var response = await dispatcher.DispatchAsync(DefaultEntryRequest());

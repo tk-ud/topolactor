@@ -300,6 +300,15 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
         [FixtureRelatedHubManifestId] = FixtureRelatedHubId,
     };
 
+    /// <summary>Test-only fixture extension: adds an active hub_relations row without disturbing
+    /// the default single-relation fixture other tests depend on.</summary>
+    public void AddHubRelation(Guid hubRelationId, Guid topologyManifestId, Guid relatedHubId, int sequencePosition, string status = "active") =>
+        _hubRelations.Add((hubRelationId, topologyManifestId, relatedHubId, sequencePosition, status));
+
+    /// <summary>Test-only fixture extension: registers the single active topology_manifest for a hub.</summary>
+    public void AddTopologyManifestHub(Guid topologyManifestId, Guid hubId) =>
+        _topologyManifestHubs[topologyManifestId] = hubId;
+
     public override Task<IReadOnlyList<HubNavigationManifestItemDto>> ListTopologyManifestsAsync(CancellationToken ct = default)
     {
         var count = _hubRelations.Count(hr => hr.TopologyManifestId == FixtureTopologyManifestId && hr.Status == "active");
