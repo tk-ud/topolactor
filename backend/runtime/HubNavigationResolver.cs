@@ -40,16 +40,25 @@ public class HubNavigationResolver
     /// RuntimeExecutor's manifest-scoped NavigationSequence enrichment already makes, just without
     /// requiring an already-resolved manifestId from a prior dispatch. Returns an explicit empty
     /// list (never an error, never a fabricated placeholder) when no canonical default entry is
-    /// configured or it has no active outbound relations.
+    /// configured, its source manifest is not active, or it has no active outbound relations.
+    ///
+    /// active_status_requirement (source): the canonical default entry relation row being active
+    /// does not mean its named source manifest is — reuses the exact same
+    /// active_status_requirement ManifestDispatcher.DispatchAsync already applies to this identical
+    /// ResolveCanonicalDefaultEntryManifestIdAsync + LoadByIdAsync pair for its own canonical
+    /// default entry resolution (see the case-insensitive Status=="active" check there); a
+    /// draft/deprecated source manifest fails closed to an empty list here too, not a stale
+    /// projection.
     ///
     /// Subject/role isolation: every candidate link's TargetManifestId is resolved against the
     /// existing manifest capability_requirement/required_role authority
     /// (ManifestDispatcher.ResolveRequiredRole) — the same authority that already gates every
     /// admin_runtime manifest dispatch. A link is excluded (not returned to callerRole) when its
     /// target manifest requires a role callerRole does not hold, and excluded entirely when it has
-    /// no resolvable TargetManifestId (not navigable) OR when TargetManifestId names a manifest row
-    /// that does not actually exist (LoadByIdAsync returns null) — a dangling relation is not
-    /// treated as "no capability requirement = visible to everyone"; it must fail closed exactly
+    /// no resolvable TargetManifestId (not navigable), when TargetManifestId names a manifest row
+    /// that does not actually exist (LoadByIdAsync returns null), or when the target manifest exists
+    /// but is not active_status_requirement (draft/deprecated) — a dangling or inactive relation is
+    /// not treated as "no capability requirement = visible to everyone"; it must fail closed exactly
     /// like a relation with no TargetManifestId at all. This is deliberately NOT a uniform
     /// return-everything-to-every-authenticated-subject projection: the canonical default manifest's
     /// outbound relations are per-target-role filtered, reusing existing capability authority rather
@@ -60,6 +69,10 @@ public class HubNavigationResolver
     {
         var manifestId = await ResolveCanonicalDefaultEntryManifestIdAsync(ct);
         if (manifestId is null) return [];
+
+        var sourceManifest = await _manifestRepository.LoadByIdAsync(manifestId.Value, ct);
+        if (sourceManifest is null || !string.Equals(sourceManifest.Status, "active", StringComparison.OrdinalIgnoreCase))
+            return []; // active_status_requirement: a draft/deprecated source manifest fails closed, not a stale projection
 
         var candidates = await ResolveAsync(manifestId.Value, ct);
         if (candidates.Count == 0) return [];
@@ -73,6 +86,9 @@ public class HubNavigationResolver
             var targetManifest = await _manifestRepository.LoadByIdAsync(targetManifestId, ct);
             if (targetManifest is null)
                 continue; // TargetManifestId names a row that does not exist — fail closed, not "no requirement"
+
+            if (!string.Equals(targetManifest.Status, "active", StringComparison.OrdinalIgnoreCase))
+                continue; // active_status_requirement: draft/deprecated target manifests are not navigable
 
             var requiredRole = ManifestDispatcher.ResolveRequiredRole(targetManifest.Topology);
             if (requiredRole is not null && !string.Equals(requiredRole, callerRole, StringComparison.Ordinal))

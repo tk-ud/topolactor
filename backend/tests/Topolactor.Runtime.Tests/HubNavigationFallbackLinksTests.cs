@@ -147,6 +147,95 @@ public class HubNavigationFallbackLinksTests
         Assert.Empty(links);
     }
 
+    // ─── relation lifecycle: source/target manifest active-status fail-close ─────────────────────
+    // Reuses the exact active_status_requirement ManifestDispatcher.DispatchAsync already applies
+    // to canonical default entry resolution (Status=="active" case-insensitive check) — not a new
+    // manifest lifecycle authority. An active hub_relation/canonical_default_entry marker row does
+    // not mean the manifest it names is itself active.
+
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("deprecated")]
+    public async Task CanonicalDefaultEntrySourceManifest_NotActive_ReturnsExplicitEmptyList_NeverStaleProjection(string sourceStatus)
+    {
+        var repo = new InMemoryContentBundleRepository
+        {
+            CanonicalDefaultEntryManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId,
+        };
+        var manifestRepo = new RoleGatedFakeManifestRepository();
+        manifestRepo.SetStatus(InMemoryContentBundleRepository.FixtureTopologyManifestId, sourceStatus);
+        var resolver = new HubNavigationResolver(repo, manifestRepo);
+
+        var links = await resolver.ResolveFallbackNavigationLinksAsync("admin");
+
+        Assert.Empty(links);
+    }
+
+    [Fact]
+    public async Task CanonicalDefaultEntrySourceManifest_RowDoesNotExist_ReturnsExplicitEmptyList()
+    {
+        // The canonical_default_entry relation marker points at a manifest id, but no such row
+        // exists in ManifestRepository — fail closed exactly like a draft/deprecated source, never
+        // proceed to fetch the relation sequence for a manifest that cannot even be loaded.
+        var repo = new InMemoryContentBundleRepository
+        {
+            CanonicalDefaultEntryManifestId = InMemoryContentBundleRepository.FixtureTopologyManifestId,
+        };
+        var manifestRepo = new RoleGatedFakeManifestRepository();
+        manifestRepo.SetMissing(InMemoryContentBundleRepository.FixtureTopologyManifestId);
+        var resolver = new HubNavigationResolver(repo, manifestRepo);
+
+        var links = await resolver.ResolveFallbackNavigationLinksAsync("admin");
+
+        Assert.Empty(links);
+    }
+
+    [Theory]
+    [InlineData("draft")]
+    [InlineData("deprecated")]
+    public async Task TargetManifest_NotActive_IsExcluded_NotNavigable(string targetStatus)
+    {
+        var repo = new InMemoryContentBundleRepository();
+        var manifestId = Guid.NewGuid();
+        var relatedHubId = Guid.NewGuid();
+        var targetManifestId = Guid.NewGuid();
+        repo.CanonicalDefaultEntryManifestId = manifestId;
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, relatedHubId, 1);
+        repo.AddTopologyManifestHub(targetManifestId, relatedHubId);
+
+        var manifestRepo = new RoleGatedFakeManifestRepository();
+        manifestRepo.SetStatus(targetManifestId, targetStatus);
+        var resolver = new HubNavigationResolver(repo, manifestRepo);
+
+        var links = await resolver.ResolveFallbackNavigationLinksAsync("admin");
+
+        Assert.Empty(links);
+    }
+
+    [Fact]
+    public async Task ActiveSourceAndActiveTarget_PositiveControl_LinkIsReturned()
+    {
+        // Positive control for the active-status fail-close tests above: with the source manifest
+        // and the target manifest both explicitly marked active, the link is returned as before.
+        var repo = new InMemoryContentBundleRepository();
+        var manifestId = Guid.NewGuid();
+        var relatedHubId = Guid.NewGuid();
+        var targetManifestId = Guid.NewGuid();
+        repo.CanonicalDefaultEntryManifestId = manifestId;
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, relatedHubId, 1);
+        repo.AddTopologyManifestHub(targetManifestId, relatedHubId);
+
+        var manifestRepo = new RoleGatedFakeManifestRepository();
+        manifestRepo.SetStatus(manifestId, "active");
+        manifestRepo.SetStatus(targetManifestId, "active");
+        var resolver = new HubNavigationResolver(repo, manifestRepo);
+
+        var links = await resolver.ResolveFallbackNavigationLinksAsync("admin");
+
+        var link = Assert.Single(links);
+        Assert.Equal(relatedHubId.ToString(), link.RelatedHubId);
+    }
+
     /// <summary>Test-only ManifestRepository double resolving required_role from a per-manifest
     /// capability_requirement map, mirroring the real capability_requirement topology entry shape
     /// ManifestDispatcher.ValidateCapabilityRequirement reads.</summary>
@@ -154,6 +243,7 @@ public class HubNavigationFallbackLinksTests
     {
         private readonly Dictionary<Guid, string?> _requiredRoleByManifestId = new();
         private readonly HashSet<Guid> _missingManifestIds = new();
+        private readonly Dictionary<Guid, string> _statusByManifestId = new();
 
         public RoleGatedFakeManifestRepository() : base(NullLogger<ManifestRepository>.Instance) { }
 
@@ -164,6 +254,10 @@ public class HubNavigationFallbackLinksTests
         /// simulating a TargetManifestId that names a row which does not actually exist.</summary>
         public void SetMissing(Guid manifestId) => _missingManifestIds.Add(manifestId);
 
+        /// <summary>Overrides the status LoadByIdAsync reports for manifestId (default "active"
+        /// when never set) — used to simulate draft/deprecated source/target manifests.</summary>
+        public void SetStatus(Guid manifestId, string status) => _statusByManifestId[manifestId] = status;
+
         public override Task<ManifestRecord?> LoadByIdAsync(Guid id, CancellationToken ct = default)
         {
             if (_missingManifestIds.Contains(id)) return Task.FromResult<ManifestRecord?>(null);
@@ -171,7 +265,8 @@ public class HubNavigationFallbackLinksTests
             IReadOnlyList<JsonElement> topology = requiredRole is null
                 ? []
                 : [JsonSerializer.SerializeToElement(new { type = "capability_requirement", required_role = requiredRole })];
-            return Task.FromResult<ManifestRecord?>(new ManifestRecord(id, null, topology, "active"));
+            var status = _statusByManifestId.TryGetValue(id, out var s) ? s : "active";
+            return Task.FromResult<ManifestRecord?>(new ManifestRecord(id, null, topology, status));
         }
 
         public override Task<ManifestRecord?> ResolveActiveManifestAsync(

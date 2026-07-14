@@ -228,7 +228,7 @@ require_term "$MD_VIEWER" "onRefresh?: (savedViewId: string) => void"
 # Real mounted authoring component chain (frontend/components/MdTranslationAuthoringSeedSurface.tsx
 # is unused dead code and is deliberately NOT validated here as if it were the real adapter — see
 # admin-normal-surface-projection-seed-ssot.yaml normal.dashboard...prop_bindings markdown_authoring_input
-# status:superseded_by_realized_route_composition_2026_07_14_round_4 for why).
+# status:resolved_via_realized_route_composition_2026_07_14_round_4 for why).
 require_term "$TEAM_MARKDOWN_DASHBOARD" "export function TeamMarkdownAuthoring"
 require_term "$SAVED_VIEW_OPERATION_PANEL" "mode: SavedViewOperationMode"
 require_term "$SAVED_VIEW_OPERATION_PANEL" "onWritten: () => void"
@@ -236,6 +236,17 @@ require_term "$SAVED_VIEW_OPERATION_PANEL" "onCancel: () => void"
 require_term "$SAVED_VIEW_ADJUSTMENT_PANEL" "onWritten: () => void"
 require_term "$SAVED_VIEW_ADJUSTMENT_PANEL" "onCancel: () => void"
 require_absent "$SSOT" "actual_component_props: [onSaved, onCancel, placement]"
+# round 5: the round-4 fix left machine-readable stale props/events fields present (only annotated
+# with a status: superseded note) — these must not reappear anywhere in the active seed_contract.
+require_absent "$SSOT" "props: [onSaved, onCancel, placement]"
+require_absent "$SSOT" "event_kind: onSaved(savedViewId)"
+require_absent "$SSOT" "onSaved_write_completion"
+# round 5: admin credential authority must stay unified (role update / credential revoke / session
+# revoke on the admin side, self password change only on the self-service side) — these active
+# contract fields must never reassert admin-driven password replace/rotate as a mapped operation.
+require_absent "$SSOT" "explicit_password_replace_or_rotate_intent_collection"
+require_absent "$SSOT" "password replace/rotate map to auth_users:*"
+require_absent "$SSOT" "responsibility: explicit account create/update/password replace/rotate/delete"
 require_term "$CATALOG" 'componentKey: "md_translation_authoring_surface.authoring"'
 require_term "$CATALOG" "runtimeConnected: false"
 require_absent "$SSOT" "password_hash:"
