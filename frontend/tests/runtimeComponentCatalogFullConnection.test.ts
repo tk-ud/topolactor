@@ -14,7 +14,7 @@ import {
   assertExists,
   assert,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
+import { COMPONENT_CATALOG_ENTRIES, isRuntimeReachable } from "../components/catalog.ts";
 import {
   RUNTIME_COMPONENT_FACTORIES,
 } from "../runtime/runtimeComponentFactory.ts";
@@ -115,3 +115,60 @@ Deno.test("authoring/md_translation: registrationRequired:false and runtimeConne
   assertEquals(entry!.registrationRequired, false, "md_translation must not appear in placement palette");
   assertEquals(entry!.runtimeConnected, false, "md_translation is admin-only authoring surface, not a canvas component");
 });
+
+// ─── Route-composition reachability: an alternate valid runtime-reachability condition ─────────
+// runtimeConnected strictly means "factory/constructor reachable via RUNTIME_COMPONENT_FACTORIES"
+// and that meaning is NOT changed here. A component can be equally reachable at runtime because a
+// Fresh route (or a parent component already reachable from one) mounts it directly — that claim is
+// verified below against the actual file contents, not taken on the strength of catalog `notes` prose.
+
+// componentKey -> the exported identifier that must appear in the file at routeCompositionFile.
+const EXISTING_ROUTE_COMPOSITION_MOUNT_IDENTIFIERS: Record<string, string> = {
+  "md_translation_authoring_surface.authoring": "TeamMarkdownAuthoring",
+  "team_markdown_dashboard.viewer": "TeamMarkdownViewer",
+  "saved_view_adjustment_authoring.authoring": "SavedViewAdjustmentAuthoringPanel",
+  "personal_page.projection": "PersonalPage",
+  "normal_dashboard_home.projection": "NormalDashboardHome",
+  "credential_management.admin_operation": "AdminUsersRoster",
+  "admin_enum_roster.admin_operation": "AdminEnumsRoster",
+  "scheduler_job_settings.admin_operation": "SchedulerJobSettingsPanel",
+  "hub_navigation_admin.admin_operation": "HubNavigationAdmin",
+};
+
+Deno.test("catalog invariant: every runtimeConnected:false entry is either exempt or runtimeReachability:existing_route_composition", () => {
+  // Sub-components (not standalone placements) and definition-only catalog primitives are the only
+  // recognized exemptions; every other runtimeConnected:false entry must declare how it's reachable.
+  const EXEMPT_KEYS = new Set([
+    "tree_node.template", // sub-component of tree.template, not a standalone placement
+  ]);
+  const violations = COMPONENT_CATALOG_ENTRIES.filter((e) =>
+    !e.runtimeConnected &&
+    !EXEMPT_KEYS.has(e.componentKey) &&
+    e.lifecycleStatus !== "code_only_drift" && // catalog-only primitive lineup, not yet an executable slice
+    e.runtimeReachability !== "existing_route_composition"
+  );
+  assertEquals(
+    violations.map((e) => e.componentKey),
+    [],
+    "runtimeConnected:false entries must declare runtimeReachability:existing_route_composition (with a verifiable routeCompositionFile) unless explicitly exempt",
+  );
+});
+
+for (const [componentKey, mountIdentifier] of Object.entries(EXISTING_ROUTE_COMPOSITION_MOUNT_IDENTIFIERS)) {
+  Deno.test(`route-composition reachability: ${componentKey} is actually mounted in its claimed routeCompositionFile`, async () => {
+    const entry = COMPONENT_CATALOG_ENTRIES.find((e) => e.componentKey === componentKey);
+    assertExists(entry, `catalog entry must exist: ${componentKey}`);
+    assertEquals(entry!.runtimeReachability, "existing_route_composition");
+    assertExists(entry!.routeCompositionFile, `routeCompositionFile must be set: ${componentKey}`);
+    assert(isRuntimeReachable(entry!), `isRuntimeReachable must be true for ${componentKey}`);
+
+    const stat = await Deno.stat(entry!.routeCompositionFile!).catch(() => null);
+    assertExists(stat, `routeCompositionFile does not exist on disk: ${entry!.routeCompositionFile}`);
+
+    const source = await Deno.readTextFile(entry!.routeCompositionFile!);
+    assert(
+      source.includes(mountIdentifier),
+      `routeCompositionFile ${entry!.routeCompositionFile} does not reference ${mountIdentifier} for ${componentKey} — route-composition reachability claim is unverified`,
+    );
+  });
+}

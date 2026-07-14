@@ -417,6 +417,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "field_binding",
     ],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/islands/TeamDashboardRoleSurface.tsx",
     registrationRequired: false,
     notes:
       "registry-driven md translation authoring surface (template registry backs template select/register/update/archive). runtime_reachability: existing_route_composition (per admin-normal-surface-projection-seed-ssot.yaml normal.dashboard.inputer_runtime_adapter_contract's owner-authorized alternative to a generic runtime-factory adapter) — mounted by TeamMarkdownAuthoring (same file, exported alongside TeamMarkdownViewer) at route /dashboard/team via islands/TeamDashboardRoleSurface.tsx, gated client-side to admin-role sessions only; UIBuilder preset_ecosystem child authoring entry remains a separate embedding (placement=\"ui_builder_child_surface\"); not a package canvas edit root; not a preset DB seed registration mechanism; binding is user-selected only — no AI inference; not registered in RUNTIME_COMPONENT_FACTORIES (generic manifest-driven placement remains excluded pending topology UI seed production, which stays owner-paused). runtimeConnected:false reflects this repo's factory-registration-specific definition of that field (SsotWiringAuditComponentRegistrationTests.ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByFactoryRegistryBoundary); route-composition reachability is real but is a separate concept this field does not yet capture.",
@@ -435,6 +437,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "accepts_design",
     ],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/islands/TeamDashboardRoleSurface.tsx",
     registrationRequired: false,
     notes:
       "runtime_reachability: existing_route_composition — TeamMarkdownViewer (exported from this file) mounted at /dashboard/team for both Normal and admin sessions via islands/TeamDashboardRoleSurface.tsx; reads through the plain-JWT viewer endpoints (GET /team-markdown/*), never the admin-gated dispatch lane; carries no admin_only capability tag by design (viewer read/search/filter has no admin capability requirement, per admin-normal-surface-projection-seed-ssot.yaml viewer_read_search_filter_contract). No dashboard_placement_candidate tag: this is a full-page route composition, not a DashboardCandidatePalette-droppable widget.",
@@ -449,6 +453,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     lifecycleStatus: "registered",
     capabilityTags: ["admin_only", "emits_event"],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/islands/TeamMarkdownDashboard.tsx",
     registrationRequired: false,
     notes:
       "runtime_reachability: existing_route_composition — mounted from TeamMarkdownAuthoring (islands/TeamMarkdownDashboard.tsx) when a saved view's Edit adjustment action is invoked. Implements the full preview -> validate -> explicit_confirm -> write -> diff_log workflow against team_markdown:saved_view:update (dryRun for preview/validate, confirmed for write); backend persists the write and its diff-evidence event in one transaction (NpgsqlTeamMarkdownRepository.UpdateSavedViewWithDiffEvidenceAsync).",
@@ -463,6 +469,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     lifecycleStatus: "registered",
     capabilityTags: ["displays_backend_result", "field_binding", "emits_event", "error_display"],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/routes/account/index.tsx",
     registrationRequired: false,
     notes:
       "runtime_reachability: existing_route_composition — mounted at /account (routes/account/index.tsx) via AuthenticatedGate, any authenticated role. Self-only: reads/mutates only the caller's own account via /auth/me/* (backend resolves target from validated JWT subject; no userId is ever accepted from this surface). New surface — no prior catalog/SSOT entry; see admin-normal-surface-projection-seed-ssot.yaml surface_axes.normal.surfaces.personal_page.",
@@ -477,6 +485,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     lifecycleStatus: "registered",
     capabilityTags: ["displays_backend_result"],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/routes/dashboard/index.tsx",
     registrationRequired: false,
     notes:
       "runtime_reachability: existing_route_composition — mounted at /dashboard (routes/dashboard/index.tsx) via AuthenticatedGate, any authenticated role; landing/navigation only, no business projection of its own (mirrors admin.surfaces.dashboard's landing/navigation-only boundary for the normal axis). No dashboard_placement_candidate tag: this is a full-page route composition, not a DashboardCandidatePalette-droppable widget.",
@@ -491,6 +501,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     lifecycleStatus: "registered",
     capabilityTags: ["admin_only", "displays_backend_result", "field_binding", "emits_event", "error_display"],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/routes/admin/users.tsx",
     registrationRequired: false,
     notes:
       "runtime_reachability: existing_route_composition — mounted at /admin/users (unchanged route; unified single surface, not split into a standalone route/panel per admin-console-workflow-ssot.yaml). Owns auth_users:* account CRUD (role/approve/status/suspension via auth_users:update roleName field) plus session/credential revoke via the thin /admin/auth/users/{userId}/* HTTP boundary (bypasses /dispatch — see backend/Program.cs). Never exposes a UI to view or set another account's password value.",
@@ -505,6 +517,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     lifecycleStatus: "registered",
     capabilityTags: ["admin_only", "displays_backend_result", "field_binding", "emits_event"],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/routes/admin/enums.tsx",
     registrationRequired: false,
     notes:
       "runtime_reachability: existing_route_composition — mounted at /admin/enums (unchanged route). enum_dictionary:* CRUD via admin dispatch, gated admin-only by the same manifest capability_requirement inference every admin_runtime action relies on.",
@@ -519,6 +533,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     lifecycleStatus: "registered",
     capabilityTags: ["admin_only", "displays_backend_result", "field_binding", "emits_event"],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/routes/admin/scheduler.tsx",
     registrationRequired: false,
     notes:
       "runtime_reachability: existing_route_composition — mounted at /admin/scheduler (unchanged route). Now wires scheduler_jobs:edit (previously backend/dispatcher-complete but with no UI control — closes the gap tracked as gap-04 in .agent/tasks/todo.md) alongside existing create/disable actions.",
@@ -533,6 +549,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     lifecycleStatus: "registered",
     capabilityTags: ["admin_only", "displays_backend_result", "field_binding", "emits_event"],
     runtimeConnected: false,
+    runtimeReachability: "existing_route_composition",
+    routeCompositionFile: "frontend/islands/ManifestsAdmin.tsx",
     registrationRequired: false,
     notes:
       "runtime_reachability: existing_route_composition — mounted at /admin/manifests (unchanged route) via ManifestsAdmin.tsx. hub_navigation:* actions (list_manifests/get_hub_relations/create/update/deprecate/reorder), already production-dispatcher-mapped per PR584. No behavior change in this Bundle — registered here only to close the catalog coverage gap for the manifest-navigation target surface.",
@@ -1967,6 +1985,16 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "projection_scaffold_only | background_reference_alignment | not_report_layout_engine",
   },
 ];
+
+// True when a component is reachable at runtime through EITHER of the two SSOT-sanctioned
+// mechanisms: factory registration (runtimeConnected) or an existing route composition
+// (a route file — or a component already reachable from one — directly imports/mounts it,
+// per routeCompositionFile). Does not redefine runtimeConnected itself; callers that need
+// "is this seed-usable at all" (rather than "is this factory-registered") should use this,
+// not runtimeConnected alone.
+export function isRuntimeReachable(entry: ComponentCatalogEntry): boolean {
+  return entry.runtimeConnected || entry.runtimeReachability === "existing_route_composition";
+}
 
 // UI/UX primitive catalog identities are definition-only until executable component slice is implemented.
 // sourcePath: CATALOG_SSOT means the primitive exists in SSOT/todo planning, not as executable component path yet.

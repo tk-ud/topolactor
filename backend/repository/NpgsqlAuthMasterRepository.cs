@@ -171,27 +171,53 @@ public class NpgsqlAuthMasterRepository : AuthMasterRepository
                 }
             }
 
-            if (roleName is "admin")
+            if (roleName is "admin" or "user")
             {
-                await using var grantCmd = conn.CreateCommand();
-                grantCmd.Transaction = tx;
-                grantCmd.CommandText =
-                    """
-                    INSERT INTO auth.grants (user_id, role_name, realm)
-                    VALUES (@id, 'admin', 'admin/system')
-                    ON CONFLICT (user_id, role_name, realm) DO NOTHING
-                    """;
-                grantCmd.Parameters.AddWithValue("id", userId);
-                await grantCmd.ExecuteNonQueryAsync(ct);
-            }
-            else if (roleName is "user")
-            {
-                await using var revokeCmd = conn.CreateCommand();
-                revokeCmd.Transaction = tx;
-                revokeCmd.CommandText =
-                    "DELETE FROM auth.grants WHERE user_id = @id AND role_name = 'admin' AND realm = 'admin/system'";
-                revokeCmd.Parameters.AddWithValue("id", userId);
-                await revokeCmd.ExecuteNonQueryAsync(ct);
+                await using var roleCheckCmd = conn.CreateCommand();
+                roleCheckCmd.Transaction = tx;
+                roleCheckCmd.CommandText =
+                    "SELECT EXISTS(SELECT 1 FROM auth.grants WHERE user_id = @id AND role_name = 'admin' AND realm = 'admin/system')";
+                roleCheckCmd.Parameters.AddWithValue("id", userId);
+                var hadAdminGrant = (bool)(await roleCheckCmd.ExecuteScalarAsync(ct))!;
+                var wantsAdminGrant = roleName == "admin";
+                var roleChanged = hadAdminGrant != wantsAdminGrant;
+
+                if (wantsAdminGrant)
+                {
+                    await using var grantCmd = conn.CreateCommand();
+                    grantCmd.Transaction = tx;
+                    grantCmd.CommandText =
+                        """
+                        INSERT INTO auth.grants (user_id, role_name, realm)
+                        VALUES (@id, 'admin', 'admin/system')
+                        ON CONFLICT (user_id, role_name, realm) DO NOTHING
+                        """;
+                    grantCmd.Parameters.AddWithValue("id", userId);
+                    await grantCmd.ExecuteNonQueryAsync(ct);
+                }
+                else
+                {
+                    await using var revokeGrantCmd = conn.CreateCommand();
+                    revokeGrantCmd.Transaction = tx;
+                    revokeGrantCmd.CommandText =
+                        "DELETE FROM auth.grants WHERE user_id = @id AND role_name = 'admin' AND realm = 'admin/system'";
+                    revokeGrantCmd.Parameters.AddWithValue("id", userId);
+                    await revokeGrantCmd.ExecuteNonQueryAsync(ct);
+                }
+
+                // Role change completes in the same transaction as the grant update: an already-issued
+                // access JWT carries the pre-change role claim, so every active session for this user
+                // must be invalidated here — otherwise JwtGuard's session-active check would still admit
+                // the stale-role token (session-active alone doesn't encode role staleness).
+                if (roleChanged)
+                {
+                    await using var revokeSessionsCmd = conn.CreateCommand();
+                    revokeSessionsCmd.Transaction = tx;
+                    revokeSessionsCmd.CommandText =
+                        "UPDATE auth.sessions SET revoked_at = now() WHERE user_id = @id AND revoked_at IS NULL";
+                    revokeSessionsCmd.Parameters.AddWithValue("id", userId);
+                    await revokeSessionsCmd.ExecuteNonQueryAsync(ct);
+                }
             }
 
             await tx.CommitAsync(ct);

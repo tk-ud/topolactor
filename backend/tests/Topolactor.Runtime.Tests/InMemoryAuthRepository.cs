@@ -78,8 +78,19 @@ public sealed class InMemoryAuthRepository : AuthRepository
     }
 
     public override Task<Guid> CreateSessionAsync(
-        Guid userId, string realm, string audience, DateTimeOffset expiresAt, CancellationToken ct = default) =>
-        Task.FromResult(Guid.NewGuid());
+        Guid userId, string realm, string audience, DateTimeOffset expiresAt, CancellationToken ct = default)
+    {
+        var sessionId = Guid.NewGuid();
+        _sessions[sessionId] = new InMemorySession
+        {
+            SessionId = sessionId,
+            UserId = userId,
+            Realm = realm,
+            Audience = audience,
+            ExpiresAt = expiresAt,
+        };
+        return Task.FromResult(sessionId);
+    }
 
     public override Task<Guid> CreateRefreshTokenAsync(
         Guid sessionId, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default) =>
@@ -169,6 +180,22 @@ public sealed class InMemoryAuthRepository : AuthRepository
         if (!_passwords.Remove(userId)) return Task.FromResult(false);
         foreach (var session in _sessions.Values.Where(s => s.UserId == userId && !s.Revoked))
             session.Revoked = true;
+        return Task.FromResult(true);
+    }
+
+    public override Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session)) return Task.FromResult(false);
+        if (session.Revoked || session.ExpiresAt <= DateTimeOffset.UtcNow) return Task.FromResult(false);
+        if (!_users.TryGetValue(session.UserId, out var user)) return Task.FromResult(false);
+        if (!user.Active || !user.Approve) return Task.FromResult(false);
+        if (string.Equals(user.Status, "suspended", StringComparison.OrdinalIgnoreCase)) return Task.FromResult(false);
+        if (user.SuspendedFrom.HasValue)
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (user.SuspendedFrom.Value <= now && (user.SuspendedUntil is null || now <= user.SuspendedUntil.Value))
+                return Task.FromResult(false);
+        }
         return Task.FromResult(true);
     }
 }

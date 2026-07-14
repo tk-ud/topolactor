@@ -9,11 +9,13 @@ import {
   changeOwnPassword,
   getCurrentAccount,
   listOwnSessions,
+  logoutUser,
   revokeOtherSessions,
   revokeOwnSession,
   type CurrentAccountResponse,
   type SessionSummary,
 } from "../api/authApi.ts";
+import { clearSessionToken } from "../lib/demoSession.ts";
 import { useCurrentSession } from "../hooks/useCurrentSession.ts";
 
 function AccountInfoPanel({ account }: { account: CurrentAccountResponse }) {
@@ -62,11 +64,18 @@ function PasswordChangeForm({ token }: { token: string }) {
         return;
       }
       setNotice(
-        `パスワードを変更しました。全セッション（${result.sessionsRevoked ?? 0}件）が無効化されたため、再ログインが必要です。`,
+        `パスワードを変更しました。全セッション（${result.sessionsRevoked ?? 0}件）が無効化されたため、再ログインが必要です。移動します…`,
       );
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      // The change already revoked every server-side session (backend-authoritative), so the token
+      // this browser is holding is now dead. Clear every client-side carrier (sessionStorage, JS-
+      // visible cookie, and the httpOnly refresh cookie via /api/auth/logout) and send the user back
+      // to /auth — never keep operating as if the just-invalidated token were still usable.
+      try {
+        await logoutUser();
+      } finally {
+        clearSessionToken();
+      }
+      globalThis.location.href = "/auth";
     } catch (err) {
       setError(err instanceof Error ? err.message : "パスワード変更に失敗しました。");
     } finally {

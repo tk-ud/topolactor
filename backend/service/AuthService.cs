@@ -102,7 +102,7 @@ public class AuthService
         await _authRepository.CreateRefreshTokenAsync(
             sessionId, refreshHash, sessionExpires, ct);
 
-        var token = _jwtTokenIssuer.IssueAccessToken(user.Username, realmContext);
+        var token = _jwtTokenIssuer.IssueAccessToken(user.Username, realmContext, sessionId);
         await _authRepository.InsertLoginEventAsync(user.UserId, realmContext.Realm, true, null, ct);
 
         _logger.LogDebug("Login succeeded username='{Username}' realm='{Realm}'.",
@@ -155,7 +155,7 @@ public class AuthService
         await _authRepository.CreateRefreshTokenAsync(record.SessionId, newRefreshHash, sessionExpires, ct);
 
         var realmContext = new AuthRealmContext(record.Realm, record.Audience, record.Role);
-        var accessToken = _jwtTokenIssuer.IssueAccessToken(record.Username, realmContext);
+        var accessToken = _jwtTokenIssuer.IssueAccessToken(record.Username, realmContext, record.SessionId);
         return (new RefreshResponseDto(true, accessToken, []), newRefreshPlain);
     }
 

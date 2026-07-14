@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Topolactor.Repository;
 using Topolactor.Schema;
 
 namespace Topolactor.Guard;
@@ -79,6 +80,10 @@ public class JwtGuard
 
     public string? TryGetAudience(string? token) => TryGetStringClaim(token, "aud");
 
+    /// <summary>Extracts the sid (session id / revocation identity) claim as a Guid, or null.</summary>
+    public Guid? TryGetSessionId(string? token) =>
+        Guid.TryParse(TryGetStringClaim(token, "sid"), out var sessionId) ? sessionId : null;
+
     public IReadOnlyList<string> TryGetCapabilities(string? token) =>
         TryGetStringArrayClaim(token, "capabilities").Count > 0
             ? TryGetStringArrayClaim(token, "capabilities")
@@ -108,6 +113,52 @@ public class JwtGuard
         if (!string.Equals(role, expectedRole, StringComparison.Ordinal))
             return [new ValidationError("AUTH_TOKEN_ROLE_MISMATCH",
                 $"Token role must be '{expectedRole}'.")];
+
+        return [];
+    }
+
+    /// <summary>
+    /// Full access-JWT validation boundary: signature + exp (via Validate) plus a DB-side check,
+    /// through the token's sid claim, that the backing auth.sessions row is still active and the
+    /// owning account is still active/approved/not-suspended. Signature+exp alone is NOT sufficient
+    /// — a session revoked (password change, session revoke, credential revoke) or an account
+    /// deactivated after the token was issued must be rejected here, not only on refresh.
+    /// Every endpoint that authenticates a caller must call this (or
+    /// ValidateForContextActiveSessionAsync) instead of the signature/exp-only Validate/ValidateForContext.
+    /// </summary>
+    public async Task<IReadOnlyList<ValidationError>> ValidateActiveSessionAsync(
+        string? token, AuthRepository authRepository, CancellationToken ct = default)
+    {
+        var errors = Validate(token);
+        if (errors.Count > 0) return errors;
+        return await CheckSessionActiveAsync(token, authRepository, ct);
+    }
+
+    /// <summary>Combines ValidateForContext (realm/audience/role) with the DB-side session-active check.</summary>
+    public async Task<IReadOnlyList<ValidationError>> ValidateForContextActiveSessionAsync(
+        string? token,
+        string expectedRealm,
+        string expectedAudience,
+        string expectedRole,
+        AuthRepository authRepository,
+        CancellationToken ct = default)
+    {
+        var errors = ValidateForContext(token, expectedRealm, expectedAudience, expectedRole);
+        if (errors.Count > 0) return errors;
+        return await CheckSessionActiveAsync(token, authRepository, ct);
+    }
+
+    private async Task<IReadOnlyList<ValidationError>> CheckSessionActiveAsync(
+        string? token, AuthRepository authRepository, CancellationToken ct)
+    {
+        var sessionId = TryGetSessionId(token);
+        if (sessionId is null)
+            return [new ValidationError("AUTH_TOKEN_SID_MISSING", "Token is missing required sid claim.")];
+
+        var active = await authRepository.IsSessionActiveAsync(sessionId.Value, ct);
+        if (!active)
+            return [new ValidationError("AUTH_SESSION_REVOKED",
+                "Session has been revoked, or the account is no longer active.")];
 
         return [];
     }

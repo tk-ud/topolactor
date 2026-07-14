@@ -49,9 +49,15 @@ internal sealed class FakeAuthRepository : AuthRepository
         return Task.FromResult(entry.Key is null ? null : entry.Value.Role);
     }
 
+    private readonly Dictionary<Guid, (Guid UserId, DateTimeOffset ExpiresAt)> _liveSessions = new();
+
     public override Task<Guid> CreateSessionAsync(
-        Guid userId, string realm, string audience, DateTimeOffset expiresAt, CancellationToken ct = default) =>
-        Task.FromResult(Guid.NewGuid());
+        Guid userId, string realm, string audience, DateTimeOffset expiresAt, CancellationToken ct = default)
+    {
+        var sessionId = Guid.NewGuid();
+        _liveSessions[sessionId] = (userId, expiresAt);
+        return Task.FromResult(sessionId);
+    }
 
     public override Task<Guid> CreateRefreshTokenAsync(
         Guid sessionId, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default) =>
@@ -83,8 +89,11 @@ internal sealed class FakeAuthRepository : AuthRepository
     public override Task RevokeRefreshTokenAsync(Guid refreshTokenId, CancellationToken ct = default) =>
         Task.CompletedTask;
 
-    public override Task RevokeSessionAsync(Guid sessionId, CancellationToken ct = default) =>
-        Task.CompletedTask;
+    public override Task RevokeSessionAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        _sessionRevoked[sessionId] = true;
+        return Task.CompletedTask;
+    }
 
     public override Task InsertLoginEventAsync(
         Guid? userId, string realm, bool success, string? failureCode, CancellationToken ct = default) =>
@@ -130,6 +139,33 @@ internal sealed class FakeAuthRepository : AuthRepository
         var entry = _users.FirstOrDefault(kv => kv.Value.UserId == userId);
         if (entry.Key is null) return Task.FromResult(false);
         _users.Remove(entry.Key);
+        foreach (var sessionId in _liveSessions.Where(kv => kv.Value.UserId == userId).Select(kv => kv.Key).ToList())
+            _sessionRevoked[sessionId] = true;
+        return Task.FromResult(true);
+    }
+
+    public override Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        if (!_liveSessions.TryGetValue(sessionId, out var session)) return Task.FromResult(false);
+        if (_sessionRevoked.TryGetValue(sessionId, out var revoked) && revoked) return Task.FromResult(false);
+        if (session.ExpiresAt <= DateTimeOffset.UtcNow) return Task.FromResult(false);
+
+        AuthUserRecord? user = _userStates.TryGetValue(session.UserId, out var state) ? state : null;
+        if (user is null)
+        {
+            var entry = _users.FirstOrDefault(kv => kv.Value.UserId == session.UserId);
+            if (entry.Key is not null)
+                user = new AuthUserRecord(entry.Value.UserId, entry.Key, Active: true, Approve: true, Status: "active");
+        }
+        if (user is null) return Task.FromResult(false);
+        if (!user.Active || !user.Approve) return Task.FromResult(false);
+        if (string.Equals(user.Status, "suspended", StringComparison.OrdinalIgnoreCase)) return Task.FromResult(false);
+        if (user.SuspendedFrom.HasValue)
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (user.SuspendedFrom.Value <= now && (user.SuspendedUntil is null || now <= user.SuspendedUntil.Value))
+                return Task.FromResult(false);
+        }
         return Task.FromResult(true);
     }
 }

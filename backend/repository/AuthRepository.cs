@@ -121,4 +121,15 @@ public abstract class AuthRepository
     /// </summary>
     public abstract Task<bool> RevokeCredentialAsync(
         Guid userId, string actorUsername, CancellationToken ct = default);
+
+    /// <summary>
+    /// The single DB-side authority JwtGuard consults to decide whether an access token's
+    /// revocation identity (the sid claim) still backs a usable session: the session row must
+    /// exist, be non-revoked, non-expired, and the owning account must currently be active,
+    /// approved, and outside any suspension window (the same account-state gate LoginAsync/
+    /// RefreshAsync already enforce). This makes password change, session revoke, credential
+    /// revoke, and account deactivation all take effect on already-issued access JWTs immediately,
+    /// without waiting for token expiry or a refresh.
+    /// </summary>
+    public abstract Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default);
 }

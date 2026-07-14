@@ -451,11 +451,12 @@ app.MapPost("/dispatch", async (
     HttpContext ctx,
     EndpointRequestDto request,
     DispatchEndpoint dispatch,
-    JwtGuard jwtGuard) =>
+    JwtGuard jwtGuard,
+    AuthRepository authRepository) =>
 {
     var token = ExtractBearerToken(ctx);
     // Accept any valid JWT; role claim drives authoritative capability — no surface-string heuristic.
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ctx.RequestAborted);
     if (authErrors.Count > 0)
         return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
 
@@ -500,10 +501,11 @@ app.MapPost("/component-events/append", async (
     HttpContext ctx,
     ComponentEventAppendRequestDto request,
     ComponentEventAppendEndpoint endpoint,
-    JwtGuard jwtGuard) =>
+    JwtGuard jwtGuard,
+    AuthRepository authRepository) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ctx.RequestAborted);
     if (authErrors.Count > 0)
         return Results.Json(new ComponentEventAppendResponseDto(false, 0, authErrors), statusCode: 401);
 
@@ -519,14 +521,15 @@ app.MapPost("/component-events/append", async (
 });
 
 // POST /intake/legacy-change — existing-system change-event intake boundary (URL stable; vocabulary canonical).
-app.MapPost("/intake/legacy-change", (
+app.MapPost("/intake/legacy-change", async (
     HttpContext ctx,
     ExistingSystemChangeIntakeRequestDto request,
     ExistingSystemChangeIntakeEndpoint intake,
-    JwtGuard jwtGuard) =>
+    JwtGuard jwtGuard,
+    AuthRepository authRepository) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ctx.RequestAborted);
     if (authErrors.Count > 0)
         return Results.Json(new ExistingSystemChangeIntakeResponseDto(false, null, authErrors), statusCode: 401);
 
@@ -738,18 +741,21 @@ app.MapPost("/super_auth/refresh", async (HttpContext ctx, AuthEndpoint auth) =>
 });
 
 // GET /auth/session — validate Bearer JWT; optional ?expected=admin|user
-app.MapGet("/auth/session", (HttpContext ctx, JwtGuard jwtGuard) =>
+app.MapGet("/auth/session", async (HttpContext ctx, JwtGuard jwtGuard, AuthRepository authRepository) =>
 {
     var token = ExtractBearerToken(ctx);
     var expected = ctx.Request.Query["expected"].FirstOrDefault();
+    var ct = ctx.RequestAborted;
 
     IReadOnlyList<ValidationError> authErrors;
     if (string.Equals(expected, "admin", StringComparison.OrdinalIgnoreCase))
-        authErrors = jwtGuard.ValidateForContext(token, AuthRealm.AdminRealm, AuthRealm.AdminAudience, AuthRealm.AdminRole);
+        authErrors = await jwtGuard.ValidateForContextActiveSessionAsync(
+            token, AuthRealm.AdminRealm, AuthRealm.AdminAudience, AuthRealm.AdminRole, authRepository, ct);
     else if (string.Equals(expected, "user", StringComparison.OrdinalIgnoreCase))
-        authErrors = jwtGuard.ValidateForContext(token, AuthRealm.UserRealm, AuthRealm.UserAudience, AuthRealm.UserRole);
+        authErrors = await jwtGuard.ValidateForContextActiveSessionAsync(
+            token, AuthRealm.UserRealm, AuthRealm.UserAudience, AuthRealm.UserRole, authRepository, ct);
     else
-        authErrors = jwtGuard.Validate(token);
+        authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
 
     if (authErrors.Count > 0)
         return Results.Json(new SessionResponseDto(false, null, null, null, null, authErrors), statusCode: 401);
@@ -776,11 +782,11 @@ app.MapGet("/auth/session", (HttpContext ctx, JwtGuard jwtGuard) =>
 // Any valid JWT (user or admin) authenticates; target account is always the JWT subject itself —
 // none of these routes accept a userId in the path or body.
 
-(string? Subject, string? Role, IResult? ErrorResult) RequireAuthenticatedSubject(
-    HttpContext ctx, JwtGuard jwtGuard)
+async Task<(string? Subject, string? Role, IResult? ErrorResult)> RequireAuthenticatedSubject(
+    HttpContext ctx, JwtGuard jwtGuard, AuthRepository authRepository)
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ctx.RequestAborted);
     if (authErrors.Count > 0)
         return (null, null, Results.Json(new { success = false, errors = authErrors }, statusCode: 401));
 
@@ -795,9 +801,9 @@ app.MapGet("/auth/session", (HttpContext ctx, JwtGuard jwtGuard) =>
     return (subject, role, null);
 }
 
-app.MapGet("/auth/me", async (HttpContext ctx, AuthEndpoint auth, JwtGuard jwtGuard, CancellationToken ct) =>
+app.MapGet("/auth/me", async (HttpContext ctx, AuthEndpoint auth, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
-    var (subject, role, error) = RequireAuthenticatedSubject(ctx, jwtGuard);
+    var (subject, role, error) = await RequireAuthenticatedSubject(ctx, jwtGuard, authRepository);
     if (error is not null) return error;
     var token = ExtractBearerToken(ctx);
     var realm = jwtGuard.TryGetRealm(token) ?? string.Empty;
@@ -806,18 +812,18 @@ app.MapGet("/auth/me", async (HttpContext ctx, AuthEndpoint auth, JwtGuard jwtGu
 });
 
 app.MapPost("/auth/me/password", async (
-    HttpContext ctx, ChangeOwnPasswordRequestDto request, AuthEndpoint auth, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, ChangeOwnPasswordRequestDto request, AuthEndpoint auth, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
-    var (subject, _, error) = RequireAuthenticatedSubject(ctx, jwtGuard);
+    var (subject, _, error) = await RequireAuthenticatedSubject(ctx, jwtGuard, authRepository);
     if (error is not null) return error;
     var result = await auth.ChangeOwnPasswordAsync(subject!, request, ct);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });
 
 app.MapGet("/auth/me/sessions", async (
-    HttpContext ctx, AuthEndpoint auth, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, AuthEndpoint auth, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
-    var (subject, _, error) = RequireAuthenticatedSubject(ctx, jwtGuard);
+    var (subject, _, error) = await RequireAuthenticatedSubject(ctx, jwtGuard, authRepository);
     if (error is not null) return error;
     var refreshPlain = ReadRefreshCookie(ctx.Request);
     var result = await auth.ListOwnSessionsAsync(subject!, refreshPlain, ct);
@@ -825,18 +831,18 @@ app.MapGet("/auth/me/sessions", async (
 });
 
 app.MapPost("/auth/me/sessions/revoke", async (
-    HttpContext ctx, RevokeOwnSessionRequestDto request, AuthEndpoint auth, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, RevokeOwnSessionRequestDto request, AuthEndpoint auth, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
-    var (subject, _, error) = RequireAuthenticatedSubject(ctx, jwtGuard);
+    var (subject, _, error) = await RequireAuthenticatedSubject(ctx, jwtGuard, authRepository);
     if (error is not null) return error;
     var result = await auth.RevokeOwnSessionAsync(subject!, request, ct);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });
 
 app.MapPost("/auth/me/sessions/revoke-others", async (
-    HttpContext ctx, AuthEndpoint auth, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, AuthEndpoint auth, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
-    var (subject, _, error) = RequireAuthenticatedSubject(ctx, jwtGuard);
+    var (subject, _, error) = await RequireAuthenticatedSubject(ctx, jwtGuard, authRepository);
     if (error is not null) return error;
     var refreshPlain = ReadRefreshCookie(ctx.Request);
     var result = await auth.RevokeOtherSessionsAsync(subject!, refreshPlain, ct);
@@ -847,46 +853,46 @@ app.MapPost("/auth/me/sessions/revoke-others", async (
 // Admin JWT required (role must be "admin"). Target userId is always an explicit route parameter,
 // resolved independently of the caller's own identity. Never reads or sets a password value.
 
-IResult? RequireAdminSubject(HttpContext ctx, JwtGuard jwtGuard, out string? actorUsername)
+async Task<(IResult? Error, string? ActorUsername)> RequireAdminSubject(
+    HttpContext ctx, JwtGuard jwtGuard, AuthRepository authRepository)
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.ValidateForContext(token, AuthRealm.AdminRealm, AuthRealm.AdminAudience, AuthRealm.AdminRole);
+    var authErrors = await jwtGuard.ValidateForContextActiveSessionAsync(
+        token, AuthRealm.AdminRealm, AuthRealm.AdminAudience, AuthRealm.AdminRole, authRepository, ctx.RequestAborted);
     if (authErrors.Count > 0)
-    {
-        actorUsername = null;
-        return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
-    }
-    actorUsername = jwtGuard.TryGetSubject(token);
+        return (Results.Json(new { success = false, errors = authErrors }, statusCode: 401), null);
+
+    var actorUsername = jwtGuard.TryGetSubject(token);
     if (string.IsNullOrWhiteSpace(actorUsername))
     {
         var errors = new[] { new ValidationError("AUTH_TOKEN_SUB_MISSING", "Token is missing required sub claim.") };
-        return Results.Json(new { success = false, errors }, statusCode: 401);
+        return (Results.Json(new { success = false, errors }, statusCode: 401), null);
     }
-    return null;
+    return (null, actorUsername);
 }
 
 app.MapGet("/admin/auth/users/{userId:guid}/sessions", async (
-    HttpContext ctx, Guid userId, AuthEndpoint auth, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, Guid userId, AuthEndpoint auth, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
-    var error = RequireAdminSubject(ctx, jwtGuard, out _);
+    var (error, _) = await RequireAdminSubject(ctx, jwtGuard, authRepository);
     if (error is not null) return error;
     var result = await auth.AdminListSessionsAsync(userId, ct);
     return Results.Json(result, statusCode: result.Success ? 200 : 404);
 });
 
 app.MapPost("/admin/auth/users/{userId:guid}/sessions/revoke", async (
-    HttpContext ctx, Guid userId, AdminRevokeSessionsRequestDto request, AuthEndpoint auth, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, Guid userId, AdminRevokeSessionsRequestDto request, AuthEndpoint auth, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
-    var error = RequireAdminSubject(ctx, jwtGuard, out var actor);
+    var (error, actor) = await RequireAdminSubject(ctx, jwtGuard, authRepository);
     if (error is not null) return error;
     var result = await auth.AdminRevokeSessionsAsync(userId, request, actor!, ct);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });
 
 app.MapPost("/admin/auth/users/{userId:guid}/credential/revoke", async (
-    HttpContext ctx, Guid userId, AuthEndpoint auth, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, Guid userId, AuthEndpoint auth, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
-    var error = RequireAdminSubject(ctx, jwtGuard, out var actor);
+    var (error, actor) = await RequireAdminSubject(ctx, jwtGuard, authRepository);
     if (error is not null) return error;
     var result = await auth.AdminRevokeCredentialAsync(userId, actor!, ct);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
@@ -902,10 +908,10 @@ app.MapPost("/admin/auth/users/{userId:guid}/credential/revoke", async (
 // authoring component (admin-only) still goes through the existing admin_runtime dispatch actions.
 
 app.MapGet("/team-markdown/templates", async (
-    HttpContext ctx, TeamMarkdownRepository repo, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, TeamMarkdownRepository repo, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
     if (authErrors.Count > 0)
         return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
     var status = ctx.Request.Query["status"].FirstOrDefault() ?? "active";
@@ -916,10 +922,10 @@ app.MapGet("/team-markdown/templates", async (
 });
 
 app.MapGet("/team-markdown/templates/{templateId:guid}", async (
-    HttpContext ctx, Guid templateId, TeamMarkdownRepository repo, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, Guid templateId, TeamMarkdownRepository repo, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
     if (authErrors.Count > 0)
         return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
     var (detail, errorCode, message) = await repo.GetTemplateAsync(templateId, ct);
@@ -931,10 +937,10 @@ app.MapGet("/team-markdown/templates/{templateId:guid}", async (
 });
 
 app.MapGet("/team-markdown/saved-views", async (
-    HttpContext ctx, TeamMarkdownRepository repo, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, TeamMarkdownRepository repo, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
     if (authErrors.Count > 0)
         return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
     var query = ctx.Request.Query["query"].FirstOrDefault();
@@ -948,10 +954,10 @@ app.MapGet("/team-markdown/saved-views", async (
 });
 
 app.MapGet("/team-markdown/saved-views/{savedViewId:guid}", async (
-    HttpContext ctx, Guid savedViewId, TeamMarkdownRepository repo, JwtGuard jwtGuard, CancellationToken ct) =>
+    HttpContext ctx, Guid savedViewId, TeamMarkdownRepository repo, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
     if (authErrors.Count > 0)
         return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
     var (detail, errorCode, message) = await repo.GetSavedViewAsync(savedViewId, ct);
@@ -960,6 +966,25 @@ app.MapGet("/team-markdown/saved-views/{savedViewId:guid}", async (
     if (detail is null)
         return Results.Json(new { success = false, errors = new[] { new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {savedViewId} not found") } }, statusCode: 404);
     return Results.Json(new { success = true, savedView = detail });
+});
+
+// GET /hub-navigation/relations — read-only navigation link-list fallback for authenticated
+// surfaces with no business projection of their own (e.g. Normal Dashboard Home). Any authenticated
+// JWT (not admin-gated) — derives links exclusively from the existing hub_relation authority
+// (HubNavigationResolver), never a new parallel authority, never frontend-hardcoded, and returns an
+// explicit empty list rather than an error when nothing resolves. hub_navigation MUTATIONS
+// (create/update/deprecate/reorder) remain reachable only via the existing admin-gated /dispatch
+// lane and are entirely untouched by this endpoint.
+app.MapGet("/hub-navigation/relations", async (
+    HttpContext ctx, HubNavigationResolver hubNavigationResolver, JwtGuard jwtGuard, AuthRepository authRepository, CancellationToken ct) =>
+{
+    var token = ExtractBearerToken(ctx);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
+    if (authErrors.Count > 0)
+        return Results.Json(new HubRelationNavigationLinksResponseDto(false, [], authErrors), statusCode: 401);
+
+    var links = await hubNavigationResolver.ResolveFallbackNavigationLinksAsync(ct);
+    return Results.Json(new HubRelationNavigationLinksResponseDto(true, links));
 });
 
 // ─── Draft Preview surface endpoints (/draft-preview/*) ──────────────────────
@@ -972,10 +997,11 @@ app.MapGet("/draft-preview/layouts", async (
     HttpContext ctx,
     UiTopologyRepository uiRepo,
     JwtGuard jwtGuard,
+    AuthRepository authRepository,
     CancellationToken ct) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
     if (authErrors.Count > 0)
         return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
 
@@ -993,10 +1019,11 @@ app.MapPost("/draft-preview/preview", async (
     ManifestRepository manifestRepo,
     UiTopologyRepository uiRepo,
     JwtGuard jwtGuard,
+    AuthRepository authRepository,
     CancellationToken ct) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ct);
     if (authErrors.Count > 0)
         return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
 
@@ -1032,10 +1059,11 @@ app.MapGet("/sql-attention/topology-projection", async (
     HttpContext ctx,
     string? sourceSetId,
     SqlAttentionTopologyProjectionRuntime projectionRuntime,
-    JwtGuard jwtGuard) =>
+    JwtGuard jwtGuard,
+    AuthRepository authRepository) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ctx.RequestAborted);
     if (authErrors.Count > 0)
         return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
 
@@ -1055,10 +1083,10 @@ app.MapGet("/sql-attention/topology-projection", async (
 // GET /sse — SSE projection lane (JWT-guarded runtime-adjacent surface).
 // Streams projection events from DbNotifyListener via SseEventBroadcaster.
 // Guarded to keep reader authorization boundary explicit for runtime/admin projections.
-app.MapGet("/sse", async (HttpContext ctx, SseEndpoint sse, JwtGuard jwtGuard) =>
+app.MapGet("/sse", async (HttpContext ctx, SseEndpoint sse, JwtGuard jwtGuard, AuthRepository authRepository) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var authErrors = await jwtGuard.ValidateActiveSessionAsync(token, authRepository, ctx.RequestAborted);
     if (authErrors.Count > 0)
         return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
 
