@@ -121,20 +121,52 @@ public class HubNavigationFallbackLinksTests
         Assert.Empty(links);
     }
 
+    [Fact]
+    public async Task RelationWithNonNullTargetManifestIdButNoSuchManifestRow_IsExcluded_FailClosed()
+    {
+        // Distinct from the above: here TargetManifestId itself resolves to a non-null GUID (the
+        // hub_navigation sequence layer found exactly one topology_manifest registered under the
+        // related hub), but that manifest id names a row the ManifestRepository does not actually
+        // have (ManifestRepository.LoadByIdAsync returns null — e.g. deleted/never-created row).
+        // This must fail closed exactly like a null TargetManifestId, never be treated as "no
+        // capability_requirement resolvable therefore visible to every caller".
+        var repo = new InMemoryContentBundleRepository();
+        var manifestId = Guid.NewGuid();
+        var relatedHubId = Guid.NewGuid();
+        var danglingTargetManifestId = Guid.NewGuid();
+        repo.CanonicalDefaultEntryManifestId = manifestId;
+        repo.AddHubRelation(Guid.NewGuid(), manifestId, relatedHubId, 1);
+        repo.AddTopologyManifestHub(danglingTargetManifestId, relatedHubId);
+
+        var manifestRepo = new RoleGatedFakeManifestRepository();
+        manifestRepo.SetMissing(danglingTargetManifestId);
+        var resolver = new HubNavigationResolver(repo, manifestRepo);
+
+        var links = await resolver.ResolveFallbackNavigationLinksAsync("admin");
+
+        Assert.Empty(links);
+    }
+
     /// <summary>Test-only ManifestRepository double resolving required_role from a per-manifest
     /// capability_requirement map, mirroring the real capability_requirement topology entry shape
     /// ManifestDispatcher.ValidateCapabilityRequirement reads.</summary>
     private sealed class RoleGatedFakeManifestRepository : ManifestRepository
     {
         private readonly Dictionary<Guid, string?> _requiredRoleByManifestId = new();
+        private readonly HashSet<Guid> _missingManifestIds = new();
 
         public RoleGatedFakeManifestRepository() : base(NullLogger<ManifestRepository>.Instance) { }
 
         public void SetRequiredRole(Guid manifestId, string? requiredRole) =>
             _requiredRoleByManifestId[manifestId] = requiredRole;
 
+        /// <summary>Marks manifestId as a dangling reference: LoadByIdAsync returns null for it,
+        /// simulating a TargetManifestId that names a row which does not actually exist.</summary>
+        public void SetMissing(Guid manifestId) => _missingManifestIds.Add(manifestId);
+
         public override Task<ManifestRecord?> LoadByIdAsync(Guid id, CancellationToken ct = default)
         {
+            if (_missingManifestIds.Contains(id)) return Task.FromResult<ManifestRecord?>(null);
             var requiredRole = _requiredRoleByManifestId.TryGetValue(id, out var r) ? r : null;
             IReadOnlyList<JsonElement> topology = requiredRole is null
                 ? []

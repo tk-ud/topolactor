@@ -489,12 +489,31 @@ admin_normal_surface_projection_seed_ssot:
             prop_bindings:
               - node_key: markdown_viewer
                 component_key: md_viewer.projection
-                props: [savedView, seedValid, seedError, onClose, onRefresh, onEditAdjustment, onArchive, onClone, onRebind, onOpenSourceRecord, onCreateTodoCandidate, disabledActionReasons]
+                props: [savedView, seedValid, seedError, onClose, onRefresh, onEditAdjustment, onArchive, onClone, onRebind, onOpenSourceRecord, onCreateTodoCandidate, disabledActionReasons, authoringEnabled]
                 source_ref: frontend/components/MdViewer.tsx MdViewerProps physical evidence; savedView maps to team_markdown SavedViewDetail from topology.team_markdown_saved_view
               - node_key: markdown_authoring_input
                 component_key: md_translation_authoring_surface.authoring
+                status: superseded_by_realized_route_composition_2026_07_14_round_4
+                resolution_record: >
+                  The [onSaved, onCancel, placement] / MdTranslationAuthoringSeedSurface.tsx binding
+                  this entry originally described was never implemented — that file is unreferenced
+                  dead code (see .agent/tasks/todo.md role-based-surface-separation section, "副次発見").
+                  The realized implementation (route_composition_alternative, see
+                  inputer_runtime_adapter_contract below) mounts TeamMarkdownAuthoring
+                  (frontend/islands/TeamMarkdownDashboard.tsx, prop: { defaultStatus?: string }, no
+                  onSaved/onCancel/placement) via frontend/islands/TeamDashboardRoleSurface.tsx, which
+                  internally opens SavedViewAdjustmentAuthoringPanel
+                  ({ savedView, onWritten, onCancel }) or SavedViewOperationPanel
+                  ({ mode, savedView, onWritten, onCancel }) per user action, not a single
+                  onSaved/onCancel/placement-shaped adapter prop surface. This node_key/props entry is
+                  retained only as the historical seed-time design record for the adapter path that was
+                  not taken; inputer_runtime_adapter_contract.actual_component_props/actual_component_events
+                  below is the authoritative real-implementation record.
                 props: [onSaved, onCancel, placement]
-                source_ref: frontend/components/MdTranslationAuthoringSeedSurface.tsx MdTranslationAuthoringSeedSurfaceProps physical evidence
+                source_ref: >-
+                  NOT current physical evidence — frontend/components/MdTranslationAuthoringSeedSurface.tsx
+                  is unused dead code; retained here for historical seed-design-record purposes only, see
+                  status/resolution_record above.
             event_bindings:
               - event_key: viewer_close
                 source_node: markdown_viewer
@@ -533,13 +552,37 @@ admin_normal_surface_projection_seed_ssot:
               status: resolved_via_existing_route_composition
               resolution_record: role-based-surface-impl bundle (2026-07-14) — owner instruction explicitly selected the route_composition_alternative below over a generic runtime-factory adapter; this closes design_blocking.normal_dashboard_authoring_runtime_adapter.
               adapter_requirement: required_before_topology_seed_generation
-              component_runtime_connected_evidence: md_translation_authoring_surface.authoring runtimeConnected=false in frontend/components/catalog.ts physical evidence -- this repo's SsotWiringAuditComponentRegistrationTests treats runtimeConnected as factory-registration-specific (componentKind must appear in RUNTIME_COMPONENT_FACTORIES), so route-composition reachability (real, see resolution below) is recorded in catalog notes rather than by flipping this field; updating that test to recognize route-composition as an alternative satisfying condition remains a small follow-up.
+              component_runtime_connected_evidence: >-
+                md_translation_authoring_surface.authoring runtimeConnected=false in
+                frontend/components/catalog.ts physical evidence -- this repo's
+                SsotWiringAuditComponentRegistrationTests treats runtimeConnected as
+                factory-registration-specific (componentKind must appear in
+                RUNTIME_COMPONENT_FACTORIES); route-composition reachability is recorded as a
+                structured alternate condition instead (runtimeReachability="existing_route_composition"
+                / routeCompositionFile fields on ComponentCatalogClassification, verified by
+                ComponentRegistrationLane_ExistingRouteCompositionEntries_MustBeMountedInClaimedFile
+                (backend) and runtimeComponentCatalogFullConnection.test.ts (frontend) — both read the
+                claimed routeCompositionFile's real content and confirm it actually imports/mounts the
+                component; this closed 2026-07-14 and is not a follow-up.
               adapter_mounts_component: md_translation_authoring_surface.authoring
-              actual_component_props: [onSaved, onCancel, placement]
-              actual_component_events: [onSaved(savedViewId), onCancel]
+              actual_component_props: >-
+                TeamMarkdownAuthoring(frontend/islands/TeamMarkdownDashboard.tsx):
+                { defaultStatus?: string } — no onSaved/onCancel/placement props; internally opens
+                SavedViewAdjustmentAuthoringPanel(frontend/components/SavedViewAdjustmentAuthoringPanel.tsx):
+                { savedView, onWritten, onCancel } for saved_view:update, or
+                SavedViewOperationPanel(frontend/components/SavedViewOperationPanel.tsx):
+                { mode, savedView, onWritten, onCancel } for saved_view:refresh/clone/rebind, per the
+                user-selected operation — not a single onSaved/onCancel/placement-shaped adapter prop
+                surface.
+              actual_component_events: >-
+                SavedViewAdjustmentAuthoringPanel: onWritten() after a confirmed write,
+                onCancel() to close without writing. SavedViewOperationPanel: onWritten() after a
+                confirmed write (Refresh/Clone/Rebind), onCancel() to close. Neither exposes an
+                onSaved(savedViewId)-shaped event; the written saved view id is read from the write
+                response inside the panel itself, not passed back through a callback argument.
               adapter_owned_events: [preview, validate, explicit_confirm, write, diff_log]
               canonical_role_gate_binding: capability_requirement.required_role=admin required_for_adapter_owned_events_and_onSaved_write_completion
-              route_composition_alternative: "REALIZED: /dashboard/team (frontend/routes/dashboard/team.tsx) via frontend/islands/TeamDashboardRoleSurface.tsx, which mounts TeamMarkdownViewer (frontend/islands/TeamMarkdownDashboard.tsx, all authenticated sessions) and additionally mounts TeamMarkdownAuthoring (same file) only for admin-role sessions (display-only client gate). preview/validate/explicit_confirm/write/diff_log are implemented by frontend/components/SavedViewAdjustmentAuthoringPanel.tsx against team_markdown:saved_view:update with a dryRun payload flag for preview/validate and a confirmed payload flag required for write; backend re-validates unconditionally on every call and persists write+diff-evidence atomically (backend/repository/NpgsqlTeamMarkdownRepository.cs UpdateSavedViewWithDiffEvidenceAsync). Backend-side admin authority is independently re-checked in backend/runtime/AdminRuntime.TeamMarkdown.cs ExecuteTeamMarkdownAsync via OperationVector.AuthenticatedRole (JWT-verified, not client-supplied), not inferred from this route composition alone."
+              route_composition_alternative: "REALIZED: /dashboard/team (frontend/routes/dashboard/team.tsx) via frontend/islands/TeamDashboardRoleSurface.tsx, which mounts TeamMarkdownViewer (frontend/islands/TeamMarkdownDashboard.tsx, all authenticated sessions) and additionally mounts TeamMarkdownAuthoring (same file) only for admin-role sessions (display-only client gate; verified by real-DOM render in frontend/tests/teamDashboardRoleSurfaceRealRender.test.ts, including an end-to-end proof that drives search -> expand -> Refresh action -> real confirmed dispatch through the actual mounted composition). preview/validate/explicit_confirm/write/diff_log are implemented by frontend/components/SavedViewAdjustmentAuthoringPanel.tsx (saved_view:update) and frontend/components/SavedViewOperationPanel.tsx (saved_view:refresh/clone/rebind) against team_markdown:saved_view:* actions with a dryRun payload flag for preview/validate (update only; refresh/clone/rebind have no server-side dryRun and preview client-side instead) and a confirmed payload flag required for every write; backend re-validates unconditionally on every call and persists write+diff/event-evidence atomically (backend/repository/NpgsqlTeamMarkdownRepository.cs UpdateSavedViewWithDiffEvidenceAsync / UpdateSavedViewWithEventEvidenceAsync / CloneSavedViewWithEvidenceAsync). Backend-side admin authority is independently re-checked in backend/runtime/AdminRuntime.TeamMarkdown.cs ExecuteTeamMarkdownAsync via OperationVector.AuthenticatedRole (JWT-verified, not client-supplied), not inferred from this route composition alone."
               prohibited:
                 - direct_seed_runtime_component_binding_while_runtimeConnected_false
                 - frontend_display_only_admin_gate
@@ -648,7 +691,14 @@ admin_normal_surface_projection_seed_ssot:
       status: resolved
       resolution_record: role-based-surface-impl bundle (2026-07-14) — resolved via normal.dashboard.responsibilities.inputer.inputer_runtime_adapter_contract (route_composition_alternative REALIZED). No seed rows were added; this resolves the design blocker only, not the separately-tracked topology UI seed production pause.
       blocking_condition: md_translation_authoring_surface.authoring is physical evidence with runtimeConnected=false in the current catalog; a topology seed cannot use it as a direct runtime component until an explicit runtime adapter or existing route composition binding is selected.
-      required_resolution_before_seed: Define the adapter/route-composition binding with props [onSaved, onCancel, placement] and admin-gated preview/validate/write/diff event emissions before generating seed.
+      required_resolution_before_seed: >-
+        Done — the route-composition binding is realized (TeamDashboardRoleSurface.tsx mounting
+        TeamMarkdownAuthoring for admin-role sessions, itself opening SavedViewAdjustmentAuthoringPanel
+        / SavedViewOperationPanel per action) with admin-gated preview/validate/explicit_confirm/write/
+        diff-or-event-evidence for saved_view:update/refresh/clone/rebind; see
+        normal.dashboard.responsibilities.inputer.inputer_runtime_adapter_contract.actual_component_props/
+        actual_component_events for the real (not the originally-envisioned onSaved/onCancel/placement)
+        component interface.
     - id: normal_dashboard_write_operation_binding
       status: resolved
       resolution_record: role-based-surface-impl bundle (2026-07-14) — bound to team_markdown:saved_view:update (existing, already-dispatcher-mapped action per PR584) with a payload.dryRun flag for preview/validate (non-mutating) and payload.confirmed flag required for write; no new dispatch action / no new dispatcher_mapping row was added, so no seed dependency was introduced. See backend/runtime/AdminRuntime.TeamMarkdown.cs DataTeamMarkdownSavedViewUpdateAsync.

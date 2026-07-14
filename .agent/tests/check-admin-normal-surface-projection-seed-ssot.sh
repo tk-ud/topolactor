@@ -6,7 +6,9 @@ MAP="$REPO_ROOT/.agent/docs/ssot-map.yaml"
 INDEX="$REPO_ROOT/.agent/docs/design-ssot-index.md"
 CATALOG="$REPO_ROOT/frontend/components/catalog.ts"
 MD_VIEWER="$REPO_ROOT/frontend/components/MdViewer.tsx"
-MD_AUTHORING="$REPO_ROOT/frontend/components/MdTranslationAuthoringSeedSurface.tsx"
+TEAM_MARKDOWN_DASHBOARD="$REPO_ROOT/frontend/islands/TeamMarkdownDashboard.tsx"
+SAVED_VIEW_OPERATION_PANEL="$REPO_ROOT/frontend/components/SavedViewOperationPanel.tsx"
+SAVED_VIEW_ADJUSTMENT_PANEL="$REPO_ROOT/frontend/components/SavedViewAdjustmentAuthoringPanel.tsx"
 CRUD_PRESET="$REPO_ROOT/db/physical_search_crud_aggregate_preset_seed.sql"
 FAILURES=0
 pass(){ echo "OK  : $1"; }
@@ -91,7 +93,11 @@ for term in \
   "capability_requirement.required_role=admin" \
   "viewer_mutation_callbacks_disabled_in_normal_projection" \
   "inputer_runtime_adapter_contract:" \
-  "actual_component_props: [onSaved, onCancel, placement]" \
+  "actual_component_props:" \
+  "actual_component_events:" \
+  "TeamMarkdownAuthoring(frontend/islands/TeamMarkdownDashboard.tsx)" \
+  "SavedViewOperationPanel(frontend/components/SavedViewOperationPanel.tsx)" \
+  "SavedViewAdjustmentAuthoringPanel(frontend/components/SavedViewAdjustmentAuthoringPanel.tsx)" \
   "adapter_owned_events: [preview, validate, explicit_confirm, write, diff_log]" \
   "zero_active_target_manifest_for_related_hub_id" \
   "multiple_active_target_manifests_for_related_hub_id" \
@@ -219,9 +225,17 @@ require_term "$REPO_ROOT/docs/design/admin-console-workflow-ssot.yaml" "first-ma
 require_term "$MD_VIEWER" "export type MdViewerProps"
 require_term "$MD_VIEWER" "savedView: SavedViewDetail"
 require_term "$MD_VIEWER" "onRefresh?: (savedViewId: string) => void"
-require_term "$MD_AUTHORING" "export type MdTranslationAuthoringSeedSurfaceProps"
-require_term "$MD_AUTHORING" "onSaved?: (savedViewId: string) => void"
-require_term "$MD_AUTHORING" 'placement?: "admin_route" | "ui_builder_child_surface"'
+# Real mounted authoring component chain (frontend/components/MdTranslationAuthoringSeedSurface.tsx
+# is unused dead code and is deliberately NOT validated here as if it were the real adapter — see
+# admin-normal-surface-projection-seed-ssot.yaml normal.dashboard...prop_bindings markdown_authoring_input
+# status:superseded_by_realized_route_composition_2026_07_14_round_4 for why).
+require_term "$TEAM_MARKDOWN_DASHBOARD" "export function TeamMarkdownAuthoring"
+require_term "$SAVED_VIEW_OPERATION_PANEL" "mode: SavedViewOperationMode"
+require_term "$SAVED_VIEW_OPERATION_PANEL" "onWritten: () => void"
+require_term "$SAVED_VIEW_OPERATION_PANEL" "onCancel: () => void"
+require_term "$SAVED_VIEW_ADJUSTMENT_PANEL" "onWritten: () => void"
+require_term "$SAVED_VIEW_ADJUSTMENT_PANEL" "onCancel: () => void"
+require_absent "$SSOT" "actual_component_props: [onSaved, onCancel, placement]"
 require_term "$CATALOG" 'componentKey: "md_translation_authoring_surface.authoring"'
 require_term "$CATALOG" "runtimeConnected: false"
 require_absent "$SSOT" "password_hash:"

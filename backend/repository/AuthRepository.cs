@@ -135,13 +135,18 @@ public abstract class AuthRepository
 
     /// <summary>
     /// Full identity-aware session check: everything IsSessionActiveAsync checks, PLUS that the
-    /// session's owning account's username matches <paramref name="username"/> and the session's
-    /// own realm/audience match <paramref name="realm"/>/<paramref name="audience"/>. This is what
-    /// JwtGuard calls — session-active alone is not sufficient, because a signed JWT's sub/realm/aud
-    /// claims must never be trusted without verifying them against the canonical session/user
-    /// identity the token's sid actually points to. username/realm/audience here are the JWT's own
+    /// session's owning account's username matches <paramref name="username"/>, the session's own
+    /// realm/audience match <paramref name="realm"/>/<paramref name="audience"/>, AND the account
+    /// holds a real auth.grants row for (role, realm) — i.e. <paramref name="role"/> is not merely
+    /// the JWT's own role claim asserted back at itself, but is cross-checked against the canonical
+    /// grant authority. This is what JwtGuard calls — session-active alone is not sufficient, because
+    /// a signed JWT's sub/realm/aud/role claims must never be trusted without verifying them against
+    /// the canonical session/user/grant identity the token's sid actually points to: a token whose
+    /// sid/sub/realm/aud all correctly name an active session can still carry a role claim the
+    /// account was never granted (e.g. a Normal user's session with a forged role=admin claim), and
+    /// only this grant lookup catches that. username/realm/audience/role here are the JWT's own
     /// claims (untrusted input); this call is what makes them trustworthy or not.
     /// </summary>
     public abstract Task<bool> IsSessionIdentityActiveAsync(
-        Guid sessionId, string username, string realm, string audience, CancellationToken ct = default);
+        Guid sessionId, string username, string realm, string audience, string role, CancellationToken ct = default);
 }

@@ -46,7 +46,10 @@ public class JwtGuardSessionRevocationLiveDbTests
         await cmd.ExecuteNonQueryAsync();
     }
 
-    private static async Task<Guid> CreateUserAsync(string cs, string username)
+    private static Task<Guid> CreateUserAsync(string cs, string username) =>
+        CreateUserWithGrantAsync(cs, username, "user", "user");
+
+    private static async Task<Guid> CreateUserWithGrantAsync(string cs, string username, string role, string realm)
     {
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
@@ -58,8 +61,10 @@ public class JwtGuardSessionRevocationLiveDbTests
         var userId = (Guid)(await userCmd.ExecuteScalarAsync())!;
 
         await using var grantCmd = conn.CreateCommand();
-        grantCmd.CommandText = "INSERT INTO auth.grants (user_id, role_name, realm) VALUES (@id, 'user', 'user')";
+        grantCmd.CommandText = "INSERT INTO auth.grants (user_id, role_name, realm) VALUES (@id, @role, @realm)";
         grantCmd.Parameters.AddWithValue("id", userId);
+        grantCmd.Parameters.AddWithValue("role", role);
+        grantCmd.Parameters.AddWithValue("realm", realm);
         await grantCmd.ExecuteNonQueryAsync();
 
         return userId;
@@ -201,6 +206,103 @@ public class JwtGuardSessionRevocationLiveDbTests
     }
 
     [Fact]
+    public async Task ActiveSession_ForgedAdminRoleClaim_WithOnlyUserGrant_IsRejectedByGuard()
+    {
+        // sid/sub/realm/aud all correctly name a real, active session — only the role claim is
+        // forged (the account's canonical auth.grants row is 'user', not 'admin'). Session-active
+        // plus sub/realm/aud identity is not sufficient: the role claim itself must never be trusted
+        // as authoritative capability without a matching auth.grants row. This is the red proof for
+        // the round-4 gap: prior to the fix, IsSessionIdentityActiveAsync never checked role at all.
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
+        await EnsureRolesSeededAsync(cs);
+
+        var username = "livedb_guard_roleforge_" + Guid.NewGuid().ToString("N")[..8];
+        var userId = await CreateUserAsync(cs, username); // canonical grant: role='user', realm='user'
+        try
+        {
+            var authRepo = new NpgsqlAuthRepository(cs);
+            var sessionId = await authRepo.CreateSessionAsync(userId, "user", "user_app", DateTimeOffset.UtcNow.AddDays(1));
+            // Same realm/audience as the real session, correct sub — only role is forged to 'admin'.
+            var forgedRoleContext = new AuthRealmContext("user", "user_app", "admin");
+            var forgedToken = new JwtTokenIssuer().IssueAccessToken(username, forgedRoleContext, sessionId);
+
+            var guard = new JwtGuard();
+            var errors = await guard.ValidateActiveSessionAsync(forgedToken, authRepo);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, e => e.Code == "AUTH_SESSION_IDENTITY_MISMATCH");
+        }
+        finally
+        {
+            await CleanupUserAsync(cs, userId);
+        }
+    }
+
+    [Fact]
+    public async Task ActiveSession_CanonicalAdminGrant_AdminRoleToken_PassesGuard()
+    {
+        // Positive control for the role/grant cross-check above: an account that genuinely holds
+        // the admin grant, presenting a correctly-issued admin-role token, must still pass.
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
+        await EnsureRolesSeededAsync(cs);
+
+        var username = "livedb_guard_adminok_" + Guid.NewGuid().ToString("N")[..8];
+        var userId = await CreateUserWithGrantAsync(cs, username, "admin", "admin/system");
+        try
+        {
+            var authRepo = new NpgsqlAuthRepository(cs);
+            var sessionId = await authRepo.CreateSessionAsync(userId, "admin/system", "admin_console", DateTimeOffset.UtcNow.AddDays(1));
+            var token = new JwtTokenIssuer().IssueAccessToken(username, AuthRealm.Admin, sessionId);
+
+            var guard = new JwtGuard();
+            var errors = await guard.ValidateActiveSessionAsync(token, authRepo);
+
+            Assert.Empty(errors);
+        }
+        finally
+        {
+            await CleanupUserAsync(cs, userId);
+        }
+    }
+
+    [Fact]
+    public async Task ActiveSession_AdminGrantAccount_UserRoleTokenWithoutMatchingUserGrant_IsRejectedByGuard()
+    {
+        // Explicit documentation of the existing role contract: an admin-grant-only account (no
+        // separate 'user'/'user' grant row) presenting a token that claims role='user'/realm='user'
+        // must be rejected — canonical grants are looked up per (role, realm), so a role claim needs
+        // its own matching grant row, not just "the account has some grant somewhere".
+        var cs = GetConnectionString();
+        if (cs is null) return;
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret).Set("DEMO_JWT_EXPIRY_HOURS", "8");
+        await EnsureRolesSeededAsync(cs);
+
+        var username = "livedb_guard_adminonly_userrole_" + Guid.NewGuid().ToString("N")[..8];
+        var userId = await CreateUserWithGrantAsync(cs, username, "admin", "admin/system");
+        try
+        {
+            var authRepo = new NpgsqlAuthRepository(cs);
+            // Session created under the 'user' realm even though the account's only grant is admin/system.
+            var sessionId = await authRepo.CreateSessionAsync(userId, "user", "user_app", DateTimeOffset.UtcNow.AddDays(1));
+            var token = new JwtTokenIssuer().IssueAccessToken(username, AuthRealm.User, sessionId);
+
+            var guard = new JwtGuard();
+            var errors = await guard.ValidateActiveSessionAsync(token, authRepo);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, e => e.Code == "AUTH_SESSION_IDENTITY_MISMATCH");
+        }
+        finally
+        {
+            await CleanupUserAsync(cs, userId);
+        }
+    }
+
+    [Fact]
     public async Task RevokedSession_TokenIsRejectedByGuard_NotJustSignatureAndExp()
     {
         var cs = GetConnectionString();
@@ -315,6 +417,6 @@ public class JwtGuardSessionRevocationLiveDbTests
         public override Task<Guid?> FindActiveSessionIdByRefreshTokenHashAsync(string tokenHash, CancellationToken ct = default) => throw new InvalidOperationException();
         public override Task<bool> RevokeCredentialAsync(Guid userId, string actorUsername, CancellationToken ct = default) => throw new InvalidOperationException();
         public override Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default) => throw new InvalidOperationException();
-        public override Task<bool> IsSessionIdentityActiveAsync(Guid sessionId, string username, string realm, string audience, CancellationToken ct = default) => throw new InvalidOperationException();
+        public override Task<bool> IsSessionIdentityActiveAsync(Guid sessionId, string username, string realm, string audience, string role, CancellationToken ct = default) => throw new InvalidOperationException();
     }
 }

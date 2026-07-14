@@ -158,19 +158,25 @@ public class JwtGuard
         if (sessionId is null)
             return [new ValidationError("AUTH_TOKEN_SID_MISSING", "Token is missing required sid claim.")];
 
-        // sub/realm/aud come from the token body — untrusted until cross-checked against the
-        // canonical session/user row sid points to. A token with a valid signature can still claim
-        // any sub/realm/aud; only this DB-side comparison makes them trustworthy.
+        // sub/realm/aud/role come from the token body — untrusted until cross-checked against the
+        // canonical session/user/grant row sid points to. A token with a valid signature can still
+        // claim any sub/realm/aud/role; only this DB-side comparison (including a real auth.grants
+        // row for role+realm) makes them trustworthy. role is deliberately never accepted from the
+        // claim alone — a session whose account was never granted the claimed role must be rejected
+        // even though sid/sub/realm/aud all correctly name an active session.
         var subject = TryGetSubject(token);
         var realm = TryGetRealm(token);
         var audience = TryGetAudience(token);
-        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(realm) || string.IsNullOrWhiteSpace(audience))
-            return [new ValidationError("AUTH_TOKEN_CLAIMS_MISSING", "Token is missing required sub/realm/aud claims.")];
+        var role = TryGetRole(token);
+        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(realm) ||
+            string.IsNullOrWhiteSpace(audience) || string.IsNullOrWhiteSpace(role))
+            return [new ValidationError("AUTH_TOKEN_CLAIMS_MISSING", "Token is missing required sub/realm/aud/role claims.")];
 
-        var active = await authRepository.IsSessionIdentityActiveAsync(sessionId.Value, subject, realm, audience, ct);
+        var active = await authRepository.IsSessionIdentityActiveAsync(sessionId.Value, subject, realm, audience, role, ct);
         if (!active)
             return [new ValidationError("AUTH_SESSION_IDENTITY_MISMATCH",
-                "Session is not active, or the token's sub/realm/aud do not match the session/account it names.")];
+                "Session is not active, the token's sub/realm/aud do not match the session/account it names, " +
+                "or the account holds no auth.grants row for the token's claimed role in that realm.")];
 
         return [];
     }

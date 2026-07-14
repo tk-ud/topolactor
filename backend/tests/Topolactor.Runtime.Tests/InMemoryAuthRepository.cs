@@ -187,12 +187,13 @@ public sealed class InMemoryAuthRepository : AuthRepository
         Task.FromResult(IsSessionAndOwnerActive(sessionId, out _, out _));
 
     public override Task<bool> IsSessionIdentityActiveAsync(
-        Guid sessionId, string username, string realm, string audience, CancellationToken ct = default)
+        Guid sessionId, string username, string realm, string audience, string role, CancellationToken ct = default)
     {
         if (!IsSessionAndOwnerActive(sessionId, out var session, out var user)) return Task.FromResult(false);
         if (!string.Equals(user!.Username, username, StringComparison.Ordinal)) return Task.FromResult(false);
         if (!string.Equals(session!.Realm, realm, StringComparison.Ordinal)) return Task.FromResult(false);
         if (!string.Equals(session.Audience, audience, StringComparison.Ordinal)) return Task.FromResult(false);
+        if (!_grants.Any(g => g.UserId == user.UserId && g.Role == role && g.Realm == realm)) return Task.FromResult(false);
         return Task.FromResult(true);
     }
 

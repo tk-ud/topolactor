@@ -518,7 +518,7 @@ public class NpgsqlAuthRepository : AuthRepository
     }
 
     public override async Task<bool> IsSessionIdentityActiveAsync(
-        Guid sessionId, string username, string realm, string audience, CancellationToken ct = default)
+        Guid sessionId, string username, string realm, string audience, string role, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -543,12 +543,17 @@ public class NpgsqlAuthRepository : AuthRepository
                   AND u.username = @username
                   AND s.realm = @realm
                   AND s.audience = @audience
+                  AND EXISTS (
+                      SELECT 1 FROM auth.grants g
+                      WHERE g.user_id = u.user_id AND g.role_name = @role AND g.realm = s.realm
+                  )
             )
             """;
         cmd.Parameters.AddWithValue("id", sessionId);
         cmd.Parameters.AddWithValue("username", username);
         cmd.Parameters.AddWithValue("realm", realm);
         cmd.Parameters.AddWithValue("audience", audience);
+        cmd.Parameters.AddWithValue("role", role);
         return (bool)(await cmd.ExecuteScalarAsync(ct))!;
     }
 }

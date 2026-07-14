@@ -47,7 +47,10 @@ public class HubNavigationResolver
     /// (ManifestDispatcher.ResolveRequiredRole) — the same authority that already gates every
     /// admin_runtime manifest dispatch. A link is excluded (not returned to callerRole) when its
     /// target manifest requires a role callerRole does not hold, and excluded entirely when it has
-    /// no resolvable TargetManifestId (not navigable). This is deliberately NOT a uniform
+    /// no resolvable TargetManifestId (not navigable) OR when TargetManifestId names a manifest row
+    /// that does not actually exist (LoadByIdAsync returns null) — a dangling relation is not
+    /// treated as "no capability requirement = visible to everyone"; it must fail closed exactly
+    /// like a relation with no TargetManifestId at all. This is deliberately NOT a uniform
     /// return-everything-to-every-authenticated-subject projection: the canonical default manifest's
     /// outbound relations are per-target-role filtered, reusing existing capability authority rather
     /// than any new per-user membership table (none exists in this schema) or a JWT-role-only rule.
@@ -68,7 +71,10 @@ public class HubNavigationResolver
                 continue; // not navigable — no resolvable target manifest
 
             var targetManifest = await _manifestRepository.LoadByIdAsync(targetManifestId, ct);
-            var requiredRole = targetManifest is null ? null : ManifestDispatcher.ResolveRequiredRole(targetManifest.Topology);
+            if (targetManifest is null)
+                continue; // TargetManifestId names a row that does not exist — fail closed, not "no requirement"
+
+            var requiredRole = ManifestDispatcher.ResolveRequiredRole(targetManifest.Topology);
             if (requiredRole is not null && !string.Equals(requiredRole, callerRole, StringComparison.Ordinal))
                 continue; // caller's role does not satisfy the target manifest's capability_requirement
 

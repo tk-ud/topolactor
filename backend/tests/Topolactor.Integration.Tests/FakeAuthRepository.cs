@@ -170,7 +170,7 @@ internal sealed class FakeAuthRepository : AuthRepository
     }
 
     public override async Task<bool> IsSessionIdentityActiveAsync(
-        Guid sessionId, string username, string realm, string audience, CancellationToken ct = default)
+        Guid sessionId, string username, string realm, string audience, string role, CancellationToken ct = default)
     {
         if (!await IsSessionActiveAsync(sessionId, ct)) return false;
         var session = _liveSessions[sessionId];
@@ -179,6 +179,10 @@ internal sealed class FakeAuthRepository : AuthRepository
 
         var entry = _users.FirstOrDefault(kv => kv.Value.UserId == session.UserId);
         if (entry.Key is null) return false;
-        return string.Equals(entry.Key, username, StringComparison.Ordinal);
+        if (!string.Equals(entry.Key, username, StringComparison.Ordinal)) return false;
+        // Canonical grant cross-check: the fake's user record carries the one real (Role, Realm)
+        // grant seeded for it — a role claim that does not match it has no backing auth.grants row.
+        return string.Equals(entry.Value.Role, role, StringComparison.Ordinal) &&
+               string.Equals(entry.Value.Realm, realm, StringComparison.Ordinal);
     }
 }
