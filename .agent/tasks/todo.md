@@ -11,7 +11,7 @@
 | `helper-manual` | helper reference artifact / admin helper projection | not_started | 1 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `seed-template-runtime-interaction-assignment` | Seed/template projection runtimeInteractionId assignment path | implemented | 1 | `product.dynamic_support_nocode_loop` / seed-template projection adoption carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `admin-surface-topology-seed-conversion` | Admin hardcoded surface topology seed conversion | not_started | 5 subBundle | `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement | `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml` |
+| `admin-surface-topology-seed-conversion` | Admin hardcoded surface topology seed conversion | not_started | 5 subBundle | `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement | `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml` |
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
@@ -224,7 +224,7 @@ seed / template generator / credential management screen seed 由来 projection 
 ## Bundle `admin-surface-topology-seed-conversion`
 
 **Status:** `not_started`
-**Primary SSOT:** `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml`
+**Primary SSOT:** `docs/design/admin-normal-surface-projection-seed-ssot.yaml`（PR587で追加されたowning / primary design authority）, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml`
 **補助 SSOT:** `docs/design/pipeline-continuity-ssot.yaml`（proof 更新観点のみ）, `docs/design/user-facing-helper-manual-ssot.yaml`（helper/manual 後段境界のみ）
 **統合元:** `runtime-route-taxonomy-hardcoded-route-retirement`, `initial-projection-side-admin-crud-seed-route-retirement`
 **SubBundle:** `admin-dashboard`, `team-dashboard`, `credential-management`, `admin-enum`, `scheduler-settings`
@@ -309,8 +309,18 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - `docs/design/admin-console-workflow-ssot.yaml`
 - `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
 - `docs/design/pipeline-continuity-ssot.yaml`
+- `docs/design/db-schema.yaml`
 - `docs/design/user-facing-helper-manual-ssot.yaml`
-- future / missing owning seed SSOT if materialized for initial projection-side admin CRUD seed
+- `docs/design/component-catalog-classification-ssot.yaml`
+- `docs/design/ui-ux-primitive-catalog-ssot.yaml`
+- `docs/design/ui-builder-preset-ecosystem-ssot.yaml`
+- `docs/design/auth-db-session-credential-ssot.yaml`
+- `docs/design/admin-master-roster-management-ssot.yaml`
+- `docs/design/enum-dictionary-ssot.yaml`
+- `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`
+- `docs/design/scheduler-job-manifest-ssot.yaml`
+- `docs/design/external-port-substrate-ssot.yaml`
+- PR587 design checkpoint / proof completion evidence: `c2c87cc Add admin/normal surface projection seed SSOT and proof (#587)`（design SSOT completion only; seed conversion implementation completionではない）
 
 ### 対象ファイル名
 
@@ -386,6 +396,38 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
   - enum_dictionary / team_dashboard / scheduler_settings: ターゲット側の per-screen `ui_projection` manifest が存在しないことのみが blocker。
 - **topology UI seed production は owner 指示により停止中。再開には明示的な今後の owner 指示が必要。**
 - fake manifest（`ad100`/`ad101`/`ad102`）撤回、`/admin/credentials`・`AdminCredentialsShell` 撤去、`auth_users:*`/`team_markdown:*` dispatcher_mapping 追加、generic `LayoutSchemaTensorComposer` → `LayoutNode[]` fixture proof、`hub_navigation:create` end-to-end proof はすべて維持済み。
+
+
+### PR587後 現在の状態（正本、2026-07-14）
+
+以下がPR587 merge後の現在判断正本である。2026-07-12bまでの各記録は履歴証跡として保持するが、現在判断はこの節と上記scope/NG boundaryを優先する。PR587（`c2c87cc Add admin/normal surface projection seed SSOT and proof (#587)`）は `docs/design/admin-normal-surface-projection-seed-ssot.yaml` と `.agent/tests/check-admin-normal-surface-projection-seed-ssot.sh` による **design SSOT / proof completion evidence** であり、topology UI seed production / DB seed登録 / runtime/frontend実装 / route retirement の完了ではない。Bundle status は **`not_started`** のまま維持する。
+
+- Foundation read gate / target SSOT connection: `docs/framework-core.yaml`, `docs/framework-policy.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/db-schema.yaml` を前提に、PR587 SSOT の `foundation_inputs` / `authority.references` / `design_blocking` / `seed_implementation_start_conditions` を本Bundleへ接続する。後続seed実装は同SSOTの全 authority references を再読し、design blocker全件を解決してからでなければ開始しない。
+- Component catalog authority: `docs/design/component-catalog-classification-ssot.yaml` と `docs/design/ui-ux-primitive-catalog-ssot.yaml` に固定する。`frontend/components/catalog.ts` は `md_translation_authoring_surface.authoring` が `runtimeConnected=false` である等の physical evidence に限り、設計正本へ昇格させない。
+- CRUD preset authority boundary: `db/physical_search_crud_aggregate_preset_seed.sql` は generic composition / wiring shape の physical seed reference に限る。`content_bundle:*` operation refs、UUID、row identity、layout座標、label、current seed row status は対象surface authorityへコピーしない。
+- Normal dashboard responsibility split: viewer は normal read projection。inputer mutation は `operation_bindings[*].capability_requirement.required_role=admin` を持つ。viewer read/search/filter は explicit / inferred admin requirement を持たず、`required_role: none` 等の sentinel role を再導入しない。
+- Credentials/users identity split: `credentials.users` と `users(status)` は同一 `auth.users` を対象にする別projectionとして維持する。`credentials.users` は `auth.users` + `auth.credentials` の composite account lifecycle projection、`users(status)` は `auth.users` の status-only projection。
+- Admin dashboard boundary: `admin-dashboard` は business projection や fake hub/manifest ではなく、admin landing / navigation / guide entry 責務として維持する。hub relation source確保目的の empty/fake topology manifest は追加しない。
+- Hub relation authority: `/admin/manifests` による既存 hub relation authoring authority、`hub_navigation:*` dispatcher mapping、`ManifestDispatcher` projection / relation resolution を維持する。hub relation resolution の再設計、role gate再発明、runtime DB接続状態のTODO固定台帳化はしない。
+- Topology UI seed production: owner明示指示まで停止中。仮にdesign blockerが全件解消済みと判断されても、seed production再開は別途owner明示判断が必要。
+
+#### PR587 design_blocking 再監査
+
+| design_blocking id | 分類 | 根拠 / 残scope |
+|---|---|---|
+| `target_surface_manifest_readiness` | credential-management active target manifest: `resolved_existing_substrate`; credential-management explicit navigation binding authoring / verification: `unresolved_before_seed`; admin-enum / team-dashboard / scheduler-settings target manifest + later binding: `unresolved_before_seed`; admin-dashboard: `subBundle_not_applicable` | Canonical hub relation authoring/resolution substrateは既存 `/admin/manifests` + `HubNavigationAdmin.tsx` + `hub_navigation:*` dispatch + `hubs.hub_relations` + `ManifestDispatcher` で成立済み。credential-managementはmanifest 092の active `ui_projection` target manifest readiness はresolved。ただし live `hubs.hub_relations` row状態はTODO固定台帳にせず、seed開始前に明示的なnavigation binding authoring / verificationを行う残scopeは落とさない。admin-enum / team-dashboard / scheduler-settings は各画面固有 `ui_projection` manifest 生成後、同じ canonical authorityで明示binding authoring / verificationが必要。admin-dashboardはlanding / navigation / guide entry責務であり、business target surface manifestやfake source manifestを作る対象ではない。 |
+| `external_instance_projection_columns` | physical schema / approved candidate source: `resolved_existing_substrate` for credential-management instance_settings; projection seed binding / authoring surface / operation wiring / proof: `unresolved_before_seed`; other subBundles: `subBundle_not_applicable` | 既存substrateとして `topology.db_instance_port` / `topology.runtime_instance_port` / `topology.instance_connection_policy` / `topology.instance_operation_authority_binding`、`NpgsqlInstancePortPolicyRepository`、および `instance_operation_authority_binding` を admin-approved candidate source とする既存契約がある。新table/column/JSON key/candidate sourceは設計しない。残scopeは既存column / approved candidate sourceからprojection seedへのbinding、既存credential-management projection extension上のauthoring surface、operation wiring、secret-deny proofに限定する。 |
+| `normal_dashboard_authoring_runtime_adapter` | `owner_decision_required` for team-dashboard normal.dashboard; `subBundle_not_applicable` for admin-dashboard / credential-management / admin-enum / scheduler-settings | `frontend/components/catalog.ts` physical evidence上、`md_translation_authoring_surface.authoring` は `runtimeConnected=false`。PR587 SSOTはprops `[onSaved, onCancel, placement]` と admin-gated preview/validate/write/diff emissionのadapter/route-composition binding選定をseed前必須とする。既存route compositionを使うかruntime adapterを設計するかはowner decisionであり、Agentが推測で新設しない。 |
+| `normal_dashboard_write_operation_binding` | `resolved_existing_substrate` for backend operation substrate; `unresolved_before_seed` for seed binding selection; `subBundle_not_applicable` for admin-dashboard / credential-management / admin-enum / scheduler-settings | `team_markdown:*` dispatcher_mapping / AdminRuntime / repository substrateはPR584 remediationで維持済みで、team Markdown SSOTがpersistence authorityを持つ。一方、PR587 SSOTはpreview/validate/write/diffのseed側 operation binding key選定を後続seed作業で行う必要があるため、seed generation前に既存team Markdown runtime actionへ明示bindし、conflict時はdesign conflictとして止める。 |
+| `credentials_users_account_transaction_binding` | create account + initial credential: `resolved_existing_substrate`; delete account + credential consistency: `resolved_existing_substrate`; password replace / rotate: `unresolved_before_seed` / `owner_decision_required`; other subBundles: `subBundle_not_applicable` | `docs/design/admin-master-roster-management-ssot.yaml` の現行 action は `auth_users:list/search/get/create/update/delete` で、`backend/schema/AuthMasterContracts.cs` のDTOも create は password を持つが update は metadata/status系のみで password replace / rotate DTOを持たない。したがって create account + initial credential と delete account + credential consistency は既存 `auth_users:*` / `auth.credentials` substrateありとして扱う一方、password replace / rotate は seed operation key選定だけでは解消できない。canonical operation authority、backend transaction contract、secret non-projection boundary、`auth.users` / `auth.credentials` consistency proof、seed operation bindingのdesign resolutionがseed前に必要。`auth_users:update` をpassword replace / rotate代替として扱わず、存在しない `auth_users:replace_password` / `auth_users:rotate_password` も実装済みauthorityとして記録しない。 |
+
+#### 5 subBundle別 残scope分類
+
+- `admin-dashboard`: landing / navigation / guide entry のみ。business projection化、fake hub/manifest作成、`/admin` 自身をhub relation source必須とする設計はNG。残scopeはseed production再開後のhardcoded surface読込・React-like Schema化・translator変換・seed登録写像・canonical admin mechanismでのrender/navigation確認・proof更新・最後のhardcoded route/island/old route-presence test撤去。
+- `credential-management`: manifest 092 / existing `?manifest=` / canonical_default_entry / `/admin/users` auth_users CRUD は既存到達経路として扱う。active `ui_projection` target manifest readinessは既存substrate resolved。ただし explicit navigation binding authoring / verification はseed前残scopeであり、live `hubs.hub_relations` row状態はTODO固定台帳にしない。instance_settingsは既存 `topology.db_instance_port` / `topology.runtime_instance_port` / `topology.instance_connection_policy` / `topology.instance_operation_authority_binding` と `NpgsqlInstancePortPolicyRepository` / approved `instance_operation_authority_binding` candidate sourceからprojection seedへbindする残scope。`credentials.users` は create account + initial credential / delete account + credential consistency は既存substrateあり、password replace / rotate は canonical operation authority / backend transaction contract / secret non-projection boundary / consistency proof / seed bindingが未解決。admin user分離、standalone route/dedicated panel/raw table editorはNG。
+- `admin-enum`: enum dictionary/group/item/status dependency authorityは既存SSOTと `enum_dictionary:*` substrateに従う。target `ui_projection` manifest は未作成で `unresolved_before_seed`。target manifest生成後は `/admin/manifests` / `hub_navigation:*` canonical authorityで明示binding authoring / verificationを行う。CRUD presetのgeneric shapeは参考にできるが `content_bundle:*` refsをコピーせず、enum authority operationへbindする。
+- `team-dashboard`: team Markdown saved view / rendered Markdown / completed preset seed summary authorityは既存SSOTに従う。target `ui_projection` manifest は未作成。target manifest生成後は明示binding authoring / verificationを行う。normal.dashboard viewer/inputer責務分離、`md_translation_authoring_surface.authoring` runtime adapter/route-composition owner decision、preview/validate/write/diff operation bindingがseed前残scope。
+- `scheduler-settings`: scheduler job manifest / create-edit-disable authorityは既存SSOTと `scheduler_jobs:*` substrateに従う。target `ui_projection` manifest は未作成で `unresolved_before_seed`。target manifest生成後は明示binding authoring / verificationを行う。scheduler runtime policyをfrontend constantsへ隠さず、既存backend/dispatcher substrateへ明示bindする。
 
 ### [INVALIDATED — DO_NOT_USE — superseded_by_2026_07_12b] Owner補正記録（PR #584 review comment, 2026-07-11, topology UI seed production 停止）
 
