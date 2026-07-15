@@ -411,6 +411,73 @@ admin_normal_surface_projection_seed_ssot:
     normal:
       axis_kind: projection_surface_axis
       not_role_or_rbac: true
+      normal_hub_relation_navigation_contract:
+        status: design_only_no_live_relation_row_or_seed_2026_07_15
+        bundle: admin-surface-topology-seed-conversion
+        note: >-
+          Defines "Normal authority relation" navigation between normal-axis surfaces (currently
+          normal.surfaces.dashboard [Team Dashboard] and normal.surfaces.self_account_capability), for
+          when their topology UI seed exists. This is NOT a new/parallel runtime mechanism — it reuses
+          the exact same hubs.hub_relations schema, HubNavigationResolver, and
+          GET /hub-navigation/relations backend endpoint as
+          docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract, scoped
+          to normal-axis manifests. It is also NOT a mere rename of that admin contract: authoring
+          authority, source eligibility, and capability requirements are specified below rather than
+          assumed identical.
+        authoring_authority: >-
+          Normal-role sessions never author hubs.hub_relations rows. Relation authoring for
+          normal-axis manifests happens through the SAME existing admin-only /admin/manifests surface
+          (HubNavigationAdmin.tsx, hub_navigation:* dispatch actions) as admin-axis relations — an
+          admin selects any existing topology_manifest (normal-axis or admin-axis) as relation source
+          and authors its outbound hub_relations. No new authoring UI, no new dispatch action family,
+          no Normal-facing relation-editing surface is introduced by this contract.
+        source_and_target_eligibility: >-
+          Any active hubs.topology_manifests row belonging to a normal-axis surface with a real
+          ui_projection (produced through the same topology UI seed process every other surface in
+          this SSOT requires) is a valid relation source or target, the same eligibility rule as
+          admin. No fake/empty manifest may be created solely to serve as a normal-axis relation
+          source or target (same prohibition as
+          admin_hub_relation_navigation_contract.prohibited.empty_or_fake_topology_manifest_created_solely_as_a_hub_relation_connection_source).
+        target_manifest_resolution: >-
+          Identical, non-negotiable rule as docs/design/runtime-orchestration-ssot.yaml
+          dispatcher_contract.hub_navigation_resolution and
+          admin_hub_relation_navigation_contract.resolution_rule: a related_hub_id resolves to a
+          target manifest only when exactly one active hubs.topology_manifests row exists for it.
+          Zero or multiple active rows resolve to no target (null), never a first-match/oldest/MIN
+          implicit fallback.
+        capability_requirement: >-
+          Pure navigation traversal (resolving and displaying a link) carries no
+          capability_requirement.required_role — matching
+          normal.surfaces.dashboard.viewer_read_search_filter_contract's "no admin capability
+          requirement" rule. This governs link visibility/resolution only; it does not affect the
+          separate, already-established capability_requirement.required_role=admin gate on
+          normal.surfaces.dashboard.responsibilities.inputer's own mutation operations, which this
+          contract does not touch.
+        projection_axis: normal
+        connection_state_authority: >-
+          Same rule as admin_hub_relation_navigation_contract.connection_state_authority: whether any
+          specific hubs.hub_relations row currently exists between normal-axis manifests is
+          runtime/admin data, never duplicated here as a fixed "wired"/"unconnected" SSOT ledger.
+        current_target_readiness:
+          dashboard_team_markdown: >-
+            blocked — same as docs/design/admin-console-workflow-ssot.yaml
+            subbundle_target_readiness.team_dashboard: no per-screen ui_projection manifest exists yet
+            for the team markdown dashboard surface; topology UI seed production for this subBundle
+            remains owner-paused pending explicit future owner instruction.
+          self_account_capability: >-
+            blocked — no ui_projection manifest exists yet for this capability at all (see
+            surface_axes.normal.surfaces.self_account_capability.seed_contract.status). Additionally,
+            per that entry's resolution_record, whether this capability ever gets a dedicated
+            page-shaped manifest, an embedded-panel-shaped manifest, or something else is itself an
+            undecided future design question that must be resolved before a target-side manifest can
+            even be produced — this contract does not presuppose an answer.
+        prohibited:
+          - fake_or_empty_manifest_created_solely_as_a_normal_axis_relation_source_or_target
+          - new_normal_facing_relation_authoring_ui_or_dispatch_action_family
+          - treating_this_contract_as_a_rename_of_admin_hub_relation_navigation_contract_rather_than_a_distinct_axis_scoped_authority
+          - duplicating_live_hubs_hub_relations_connection_state_as_a_fixed_ssot_status_ledger
+          - presupposing_self_account_capabilitys_future_frontend_shape_via_this_relation_contract
+          - producing_seed_rows_or_authoring_a_live_relation_before_topology_ui_seed_production_resumes
       surfaces:
         dashboard:
           data_authority_ref:
@@ -626,6 +693,12 @@ admin_normal_surface_projection_seed_ssot:
               backend plain-JWT viewer read endpoints (GET /team-markdown/*) were NOT deleted (Gate-0
               hardcode-allowed runtime port/endpoint-shape substrate) and remain available for a future
               real, seed-authorized Normal-role viewer surface if one is designed.
+          hub_relation_navigation_binding_ref: >-
+            normal_hub_relation_navigation_contract (above, sibling of surfaces:) — same mechanism as
+            admin.surfaces.dashboard.hub_relation_navigation_binding, scoped to this manifest as a
+            normal-axis relation source/target once seeded; see
+            normal_hub_relation_navigation_contract.current_target_readiness.dashboard_team_markdown
+            for why no target manifest exists yet.
         self_account_capability:
           status: backend_only_capability_no_page_surface_presupposed_2026_07_15_gate0_audit
           resolution_record: >
@@ -678,6 +751,11 @@ admin_normal_surface_projection_seed_ssot:
             rule: Same topology_seed_schema_contract.minimum_required_fields as other surfaces in this SSOT applies when seed work resumes. This surface currently has NO frontend component — frontend/routes/account/* and frontend/islands/PersonalPage.tsx were deleted 2026-07-15 (see resolution_record above); it is reachable only via direct backend API (/auth/me, /auth/me/password, /auth/me/sessions*) until a real seed-driven UI is produced.
           runtime_reachability: not_reachable_from_any_frontend_ui_backend_endpoints_only
           component_catalog_ref: none — no frontend component exists; no page-surface identity is presupposed (see resolution_record above)
+          hub_relation_navigation_binding_ref: >-
+            normal_hub_relation_navigation_contract (above, sibling of surfaces:); see
+            normal_hub_relation_navigation_contract.current_target_readiness.self_account_capability
+            for why no target manifest exists yet, and note that this contract does not presuppose
+            this capability's eventual frontend shape.
   crud_preset_physical_reference_assessment:
     physical_reference_file: db/physical_search_crud_aggregate_preset_seed.sql
     physical_reference_role: physical_seed_reference_only_not_design_authority

@@ -609,7 +609,17 @@ owner 指示により、一時監査 report である上記 JSON ファイルは
 
 **検証:** `deno test -A frontend/tests/`（1871 passed / 0 failed）、`bash .agent/tests/check-frontend-types.sh`（PASS）、`bash .agent/tests/check-admin-normal-surface-projection-seed-ssot.sh`（PASS）、`bash .agent/tests/check-structure.sh`（PASS）、`dotnet build`（0 errors）、`dotnet test tests/Topolactor.Runtime.Tests`（1443 passed / 0 failed）。diff hygiene: `git diff origin/main --stat` と `--ignore-space-at-eol --stat` が完全一致（43 files changed）、`db/*.sql` への変更なし、production `backend/*.cs` への変更なし（backend test file 1件の comment 訂正のみ）。
 
-**Primary SSOT:** `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`, `docs/design/component-catalog-classification-ssot.yaml`
+**2026-07-15 Bundle-level gate0 restoration、第5ラウンド（PR #591 owner review、design_change のみ——次Bundle scope の admin/Normal relation所属を固定）:** owner から、PR #591 close前に、cleanup 後の次Bundle境界（admin側の credential-management projection seed と既存 admin hub relation authority の接続、Normal側の Team Dashboard/`self_account_capability` projection seed 所属先の新規 Normal authority relation 設計）を SSOT/TODO へ明記するよう指示された。worktype は design_change——production code・DB row・frontend実装は一切追加していない。
+
+**対応内容（SSOT design contract の追加、いずれも live relation row や具体 seed は含まない）:**
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml` の `surface_axes.normal` 配下に、新規 `normal_hub_relation_navigation_contract` を追加。既存の `admin_hub_relation_navigation_contract`（`docs/design/admin-console-workflow-ssot.yaml`）と同一の runtime mechanism（`hubs.hub_relations`/`HubNavigationResolver`/`GET /hub-navigation/relations`）を再利用しつつ、authoring authority（Normal-role は relation を author しない——既存 `/admin/manifests` 経由のみ）・source/target eligibility・target_manifest_resolution・capability_requirement（navigation自体はno-admin-capability）・projection_axis・現在の target readiness（`dashboard`=team-dashboard・`self_account_capability` 共に blocked）・`prohibited`（fake manifest 禁止、新規 Normal 向け authoring UI/dispatch禁止、admin contractの単純renameとして扱うこと禁止、live connection state のSSOT固定化禁止、`self_account_capability`の未来frontend形状の先取り禁止、seed production再開前の実relation authoring禁止）を明記した、admin側とは区別される独立した design contract として記述。
+- `normal.surfaces.dashboard`（Team Dashboard）・`normal.surfaces.self_account_capability` それぞれに `hub_relation_navigation_binding_ref` を追加し、上記 contract への参照と、現時点でのtarget非存在理由を明記。
+- `docs/design/admin-console-workflow-ssot.yaml` の `subbundle_target_readiness.credential-management` に、「将来 topology UI seed 取得後は既存 `admin_hub_relation_navigation_contract` にそのまま接続し、専用 relation mechanism・fake source は作らない」という明示的な reinforcement を追記（既存文言への軽微な補強、既存の design方針自体は変更なし）。
+- `docs/design/auth-db-session-credential-ssot.yaml`・`docs/design/team-markdown-dashboard-saved-view-ssot.yaml` それぞれに、将来の real topology UI seed 取得後は上記 `normal_hub_relation_navigation_contract` の candidate source/target になる、という次Bundle lineage note を追加（design記録のみ、seed row・manifest・relation は一切作成していない）。
+
+**検証:** `bash .agent/tests/check-admin-normal-surface-projection-seed-ssot.sh`（PASS）、`bash .agent/tests/check-structure.sh`（PASS）。design_change のため frontend/backend test・build は対象外（production code変更なし）。
+
+**Primary SSOT:** `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`, `docs/design/component-catalog-classification-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`
 
 #### 問題点（初回実装時点）
 
@@ -689,6 +699,8 @@ PR574/577/578/584/587/588 の続きとして、role別（Normal / admin）surfac
 - render proof: 上記 seed 登録後の実 canonical mechanism（manifest dispatch）経由での実描画確認。
 - action proof: 上記 seed 登録後の実 dispatch action 経由での実操作確認。
 - ~~legacy route retirement: `frontend/routes/admin/team-dashboard/index.tsx` の 302 redirect 削除は、上記 render proof + action proof（Normal viewer / admin authoring 双方）完了後のみ。~~ **2026-07-15 gate0 audit（第2ラウンド）により消滅: `/admin/team-dashboard` は 302 redirect ではなくなり、再び直接 `TeamMarkdownAuthoring` を mount する canonical route に戻ったため、この項目自体が対象外になった。**
+- **2026-07-15 gate0 audit（第5ラウンド）追加: `self_account_capability`（旧 personal_page）の topology UI seed / ui_projection manifest 登録**——`normal.dashboard`（team-dashboard）と同じ「owner の topology UI seed production 再開指示待ち」scope に、`self_account_capability` も正式に加わる。ただしこちらは他surfaceと異なり、seed生成の**前提として**「専用page/既存surfaceへの埋め込み/その他のいずれの frontend 形状を取るか」という未決定の設計判断も別途必要（`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.normal.surfaces.self_account_capability.resolution_record` 参照）。
+- **2026-07-15 gate0 audit（第5ラウンド）追加: `normal_hub_relation_navigation_contract` の実 seed / live relation row 化**——`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.normal.normal_hub_relation_navigation_contract` として design contract は本ラウンドで確定したが、実際の relation row・seed は上記2項目（team-dashboard・self_account_capability の ui_projection manifest）が両方揃い、かつ owner の topology UI seed production 再開指示が出た後でなければ着手できない。credential-management 等 admin 側の surface は既存 `admin_hub_relation_navigation_contract`（`/admin/manifests` 経由）にそのまま接続すればよく、新規 relation mechanism は不要（`docs/design/admin-console-workflow-ssot.yaml` `subbundle_target_readiness.credential-management` 参照）。
 
 #### 副次発見（historical note — PR589完了条件・次PR scope・owner判断のいずれにも含まれない）
 

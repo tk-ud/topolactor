@@ -166,6 +166,17 @@ team_markdown_dashboard_saved_view_ssot:
         Backend substrate (JWT identity checks, confirmed-write transactions, the plain-JWT viewer
         read endpoints GET /team-markdown/*) was not touched — only the frontend route/component that
         exposed Team Dashboard beyond the canonical admin-only surface without seed authority.
+      next_bundle_lineage_note: >-
+        2026-07-15 gate0 audit: when this surface's Normal-axis projection (viewer read/search/filter,
+        no admin capability requirement) eventually gets a real topology UI seed and ui_projection
+        manifest, it becomes a candidate source/target for
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        surface_axes.normal.normal_hub_relation_navigation_contract (Normal-axis hub relation
+        navigation, reusing the existing hubs.hub_relations/HubNavigationResolver mechanism, authored
+        only via the existing admin-only /admin/manifests surface — no new relation authority for this
+        surface). This note records the design lineage only; no seed row, manifest, or relation is
+        created by this bundle, and this does not reopen the admin-only /admin/team-dashboard route
+        question resolved above.
     primary_ui:
       - search_input
       - saved_markdown_view_result_list
