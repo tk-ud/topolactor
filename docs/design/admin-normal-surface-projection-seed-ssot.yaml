@@ -493,7 +493,7 @@ admin_normal_surface_projection_seed_ssot:
                 source_ref: frontend/components/MdViewer.tsx MdViewerProps physical evidence; savedView maps to team_markdown SavedViewDetail from topology.team_markdown_saved_view
               - node_key: markdown_authoring_input
                 component_key: md_translation_authoring_surface.authoring
-                status: resolved_via_realized_route_composition_2026_07_14_round_4
+                status: hardcoded_interim_pending_seed_conversion_2026_07_15_gate0_audit
                 resolution_record: >
                   The originally-envisioned MdTranslationAuthoringSeedSurface.tsx-based adapter binding
                   was never implemented — that file was unreferenced dead code and has been deleted
@@ -501,11 +501,14 @@ admin_normal_surface_projection_seed_ssot:
                   node_key's canonical current-contract prop/event list has been removed to avoid
                   keeping a machine-readable superseded contract in the active seed_contract tree
                   (round 5 correction: a status/resolution_record annotation alone is not sufficient
-                  when the props/events fields themselves remain literally present). The realized
-                  binding, its real props/events, and its proof are recorded exclusively in
-                  inputer_runtime_adapter_contract below (actual_component_props/actual_component_events)
-                  — that section is the single authoritative current-contract record for this node_key;
-                  do not re-add a parallel props/event_bindings list here.
+                  when the props/events fields themselves remain literally present). 2026-07-15 gate0
+                  audit: the prior status (resolved_via_realized_route_composition_2026_07_14_round_4)
+                  is invalid for the same reason documented in inputer_runtime_adapter_contract below —
+                  route_composition_alternative has no Gate 0 grounding. The current binding, its real
+                  props/events, and its proof are recorded exclusively in inputer_runtime_adapter_contract
+                  below (actual_component_props/actual_component_events) — that section is the single
+                  authoritative current-contract record for this node_key; do not re-add a parallel
+                  props/event_bindings list here.
                 props: []
                 source_ref: see inputer_runtime_adapter_contract below
             event_bindings:
@@ -524,7 +527,7 @@ admin_normal_surface_projection_seed_ssot:
                 capability_requirement:
                   topology_entry_type: capability_requirement
                   required_role: admin
-                backend_boundary: team_markdown:saved_view:update/refresh/clone/rebind actions via the realized route composition (see inputer_runtime_adapter_contract below); no savedViewId is passed back through this callback — the written saved view id is read from the write response inside the panel itself.
+                backend_boundary: team_markdown:saved_view:update/refresh/clone/rebind actions via the current hardcoded interim mount (see inputer_runtime_adapter_contract below); no savedViewId is passed back through this callback — the written saved view id is read from the write response inside the panel itself.
               - event_key: authoring_cancel
                 source_node: markdown_authoring_input
                 event_kind: onCancel()
