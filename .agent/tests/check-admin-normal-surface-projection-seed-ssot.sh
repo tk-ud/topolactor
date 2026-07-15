@@ -226,9 +226,9 @@ require_term "$MD_VIEWER" "export type MdViewerProps"
 require_term "$MD_VIEWER" "savedView: SavedViewDetail"
 require_term "$MD_VIEWER" "onRefresh?: (savedViewId: string) => void"
 # Real mounted authoring component chain (frontend/components/MdTranslationAuthoringSeedSurface.tsx
-# is unused dead code and is deliberately NOT validated here as if it were the real adapter — see
-# admin-normal-surface-projection-seed-ssot.yaml normal.dashboard...prop_bindings markdown_authoring_input
-# status:resolved_via_realized_route_composition_2026_07_14_round_4 for why).
+# was unused dead code and has been deleted — see admin-normal-surface-projection-seed-ssot.yaml
+# normal.dashboard...prop_bindings markdown_authoring_input
+# status:hardcoded_interim_pending_seed_conversion_2026_07_15_gate0_audit for why).
 require_term "$TEAM_MARKDOWN_DASHBOARD" "export function TeamMarkdownAuthoring"
 require_term "$SAVED_VIEW_OPERATION_PANEL" "mode: SavedViewOperationMode"
 require_term "$SAVED_VIEW_OPERATION_PANEL" "onWritten: () => void"

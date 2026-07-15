@@ -9,15 +9,21 @@ runtime_connected:
   note: does_not_mean_db_registered_topology_entity
 
 runtime_reachability:
-  status: added_role_based_surface_impl_bundle_2026_07_14
+  status: added_role_based_surface_impl_bundle_2026_07_14_corrected_2026_07_15_gate0_audit
   resolution_record: >
     runtime_connected strictly means factory/constructor reachable via RUNTIME_COMPONENT_FACTORIES
     (SsotWiringAuditComponentRegistrationTests.ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByFactoryRegistryBoundary)
-    and this addition does not redefine that. A component can be equally reachable at runtime
-    because a Fresh route (or a parent component already reachable from one) mounts it directly —
-    "existing_route_composition", already authorized by admin-normal-surface-projection-seed-ssot.yaml's
-    inputer_runtime_adapter_contract route_composition_alternative — and that claim is now a
-    structured, test-verified field rather than free-text catalog notes prose.
+    and this field does not redefine that. A component can be reachable at runtime because a Fresh
+    route (or a parent component already reachable from one) mounts it directly —
+    "existing_route_composition" records that fact as a structured, test-verified field (routeCompositionFile
+    is checked against real file contents) rather than free-text catalog notes prose. 2026-07-15 gate0
+    audit correction: this field is a factual reachability record only, NOT a Gate-0 hardcode exception
+    grant — the prior wording ("already authorized by ... route_composition_alternative") was circular
+    (admin-normal-surface-projection-seed-ssot.yaml's route_composition_alternative cited this file's
+    authority, and this file cited that one back). Whether a runtimeReachability:existing_route_composition
+    entry constitutes a legitimate hardcode-allowed surface or an unresolved seed-required violation is a
+    Gate 0 judgment made per-entry against docs/design/runtime-orchestration-ssot.yaml, not settled by the
+    presence of this field.
   values: [existing_route_composition]
   entry_fields:
     - runtimeReachability — optional; one of the values above.
@@ -31,6 +37,10 @@ runtime_reachability:
   prohibited:
     - redefining_runtime_connected_to_include_route_composition
     - treating_a_routeCompositionFile_claim_as_true_without_the_paired_test_verifying_it
+    - treating_existing_route_composition_or_isRuntimeReachable_true_as_a_gate_0_exception_grant
+    - treating_existing_route_composition_as_seed_usability_or_registration_or_bundle_completion_evidence
+    - describing_existing_route_composition_as_ssot_sanctioned_alternate_valid_or_otherwise_legitimized_rather_than_a_bare_physical_observation
+    - treating_the_route_composition_mount_verification_tests_passing_as_evidence_that_the_underlying_gate_0_gap_is_closed
 
 registration_required:
   definition: requires DB registration/promotion before topology entity treatment

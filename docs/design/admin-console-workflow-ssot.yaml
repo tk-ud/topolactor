@@ -105,6 +105,12 @@ admin_console_workflow_ssot:
         above).
       credential-management: >-
         manifest 092 already exists with a real ui_projection — no target-side readiness blocker.
+        2026-07-15 gate0 audit reinforcement: once credentials.users/credentials.external_api/
+        credentials.external_instance (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        surface_axes.admin.surfaces.credentials) get their own topology UI seed and ui_projection
+        manifest, they connect to hub relation navigation through this SAME authoring mechanism
+        (authoring above, via /admin/manifests) — no dedicated credential-management relation
+        mechanism, fake source manifest, or parallel authoring surface is created for them.
       enum_dictionary: >-
         blocked — no per-screen ui_projection manifest exists yet for enum_dictionary (only
         per-action dispatcher_mapping-only manifests); topology UI seed production for this
