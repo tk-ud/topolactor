@@ -543,26 +543,28 @@ admin_normal_surface_projection_seed_ssot:
                 expected_response_projection: sanitized_saved_view_and_diff_log
                 error_projection: validation_or_write_error_without_secret
             inputer_runtime_adapter_contract:
-              status: hardcoded_interim_pending_seed_conversion
+              status: reverted_to_canonical_admin_route_2026_07_15_gate0_audit
               resolution_record: >-
-                2026-07-15 gate0 audit correction: the prior status
-                (resolved_via_existing_route_composition, "closes
-                design_blocking.normal_dashboard_authoring_runtime_adapter") was invalid. Audit against
-                docs/design/runtime-orchestration-ssot.yaml (the file Gate 0 names as judgment source)
-                found route_composition_alternative/existing_route_composition has no grounding there or
-                in docs/design/pipeline-continuity-ssot.yaml: that file's data_driven_projection_completion_gate.exceptions
-                block names exactly two allowed exceptions (SQL_Attention, CI_Attention), each requiring
-                exception_name/reason/ssot_basis/why_abstract_function_impossible; route_composition_alternative
-                is not among them and was introduced in this same bundle's own commit (2026-07-14) to
-                justify what that commit had just built — the runtime-orchestration-ssot.yaml prohibited
-                list names this pattern explicitly: implementation_first_shape_ssot_ratification. The
-                mounted components below remain real and tested; this contract records their actual
-                props/events as evidence, not as a closed design blocker. design_blocking.normal_dashboard_authoring_runtime_adapter
-                is reopened below. This route (/dashboard/team) is being kept rather than removed because
-                it repositions substantial pre-existing (pre-2026-07-14) admin-only functionality plus
-                independently-legitimate backend security hardening (JWT identity, confirmed-write
-                atomicity — see auth-db-session-credential-ssot.yaml), not newly-invented hardcoded UI;
-                it still requires real topology UI seed conversion before it can be treated as complete.
+                2026-07-15 gate0 audit, second pass (owner PR #591 review): the prior status
+                (hardcoded_interim_pending_seed_conversion, keeping /dashboard/team live while
+                design_blocking.normal_dashboard_authoring_runtime_adapter stayed reopened) was itself
+                rejected — the owner's review explicitly ruled that "destruction cost, existing feature
+                volume, real DOM tests, security hardening" are not valid Gate 0 exception grounds, and
+                that keeping /admin/team-dashboard redirecting to the PR589-invented /dashboard/team is
+                not an acceptable end state. Reverted fully: frontend/routes/dashboard/team.tsx,
+                frontend/islands/TeamDashboardRoleSurface.tsx, frontend/islands/AuthenticatedGate.tsx,
+                frontend/lib/authenticatedGate.ts, and frontend/hooks/useCurrentSession.ts were deleted.
+                frontend/routes/admin/team-dashboard/index.tsx was reverted from a 302 redirect back to
+                mounting TeamMarkdownAuthoring directly via AdminAuthGate (admin-only) — matching the
+                pre-2026-07-14 canonical route that docs/design/runtime-orchestration-ssot.yaml never
+                stopped naming as canonical. The round-3 confirmed-write atomicity fix is preserved:
+                TeamMarkdownAuthoring (not the older default-exported TeamMarkdownDashboard component,
+                whose own Refresh/Clone/Rebind handlers are pre-round-3 stub notices) is what's mounted,
+                so admin users keep the real fix. Backend substrate (JWT identity checks, confirmed-write
+                transactions, NpgsqlTeamMarkdownRepository.cs) was not touched.
+                design_blocking.normal_dashboard_authoring_runtime_adapter stays reopened below — this
+                is now a genuine, honestly-labeled pending item (real topology UI seed conversion,
+                paused per owner instruction), not a hardcoded workaround being defended.
               adapter_requirement: required_before_topology_seed_generation
               component_runtime_connected_evidence: >-
                 md_translation_authoring_surface.authoring runtimeConnected=false in
@@ -594,35 +596,49 @@ admin_normal_surface_projection_seed_ssot:
                 response inside the panel itself, not passed back through a callback argument.
               adapter_owned_events: [preview, validate, explicit_confirm, write, diff_log]
               canonical_role_gate_binding: capability_requirement.required_role=admin required_for_adapter_owned_events_and_write_completion
-              current_hardcoded_mount: "/dashboard/team (frontend/routes/dashboard/team.tsx) via frontend/islands/TeamDashboardRoleSurface.tsx, which mounts TeamMarkdownViewer (frontend/islands/TeamMarkdownDashboard.tsx, all authenticated sessions) and additionally mounts TeamMarkdownAuthoring (same file) only for admin-role sessions (display-only client gate; verified by real-DOM render in frontend/tests/teamDashboardRoleSurfaceRealRender.test.ts, including an end-to-end proof that drives search -> expand -> Refresh action -> real confirmed dispatch through the actual mounted composition). preview/validate/explicit_confirm/write/diff_log are implemented by frontend/components/SavedViewAdjustmentAuthoringPanel.tsx (saved_view:update) and frontend/components/SavedViewOperationPanel.tsx (saved_view:refresh/clone/rebind) against team_markdown:saved_view:* actions with a dryRun payload flag for preview/validate (update only; refresh/clone/rebind have no server-side dryRun and preview client-side instead) and a confirmed payload flag required for every write; backend re-validates unconditionally on every call and persists write+diff/event-evidence atomically (backend/repository/NpgsqlTeamMarkdownRepository.cs UpdateSavedViewWithDiffEvidenceAsync / UpdateSavedViewWithEventEvidenceAsync / CloneSavedViewWithEvidenceAsync). Backend-side admin authority is independently re-checked in backend/runtime/AdminRuntime.TeamMarkdown.cs ExecuteTeamMarkdownAsync via OperationVector.AuthenticatedRole (JWT-verified, not client-supplied), not inferred from this route composition alone. This is a hardcoded interim mount, not a Gate-0-sanctioned exception — see resolution_record above."
+              current_canonical_mount: "/admin/team-dashboard (frontend/routes/admin/team-dashboard/index.tsx) via islands/AdminAuthGate.tsx, mounting TeamMarkdownAuthoring (frontend/islands/TeamMarkdownDashboard.tsx) directly, admin-only. preview/validate/explicit_confirm/write/diff_log are implemented by frontend/components/SavedViewAdjustmentAuthoringPanel.tsx (saved_view:update) and frontend/components/SavedViewOperationPanel.tsx (saved_view:refresh/clone/rebind) against team_markdown:saved_view:* actions with a dryRun payload flag for preview/validate (update only; refresh/clone/rebind have no server-side dryRun and preview client-side instead) and a confirmed payload flag required for every write; backend re-validates unconditionally on every call and persists write+diff/event-evidence atomically (backend/repository/NpgsqlTeamMarkdownRepository.cs UpdateSavedViewWithDiffEvidenceAsync / UpdateSavedViewWithEventEvidenceAsync / CloneSavedViewWithEvidenceAsync). Backend-side admin authority is independently re-checked in backend/runtime/AdminRuntime.TeamMarkdown.cs ExecuteTeamMarkdownAsync via OperationVector.AuthenticatedRole (JWT-verified, not client-supplied). This route is the pre-2026-07-14 canonical admin surface (still hardcoded pending real topology UI seed conversion, same as before this Bundle — not a new deviation)."
               prohibited:
                 - direct_seed_runtime_component_binding_while_runtimeConnected_false
                 - frontend_display_only_admin_gate
                 - invented_component_props_or_events
             loading_empty_error_projection: [loading_markdown_dashboard, empty_markdown_dashboard, markdown_update_error]
           viewer_runtime_reachability:
-            status: hardcoded_interim_pending_seed_conversion
-            resolution_record: role-based-surface-impl bundle (2026-07-14) — TeamMarkdownViewer (frontend/islands/TeamMarkdownDashboard.tsx) reads through new plain-JWT viewer endpoints (GET /team-markdown/templates, /team-markdown/saved-views, /team-markdown/saved-views/{id} — backend/Program.cs, backed directly by the existing TeamMarkdownRepository read methods) rather than the admin_runtime dispatch lane, because that lane's manifest-level capability_requirement inference (runtime_destination=admin_runtime) applies uniformly per action and cannot be split read-vs-write without a seed change; this keeps the write-side gate intact while giving Normal role read/search/filter access with no admin capability requirement, satisfying viewer_read_search_filter_contract below. 2026-07-15 gate0 audit correction: "resolved_via_existing_route_composition" was not a valid Gate-0 exception status (see inputer_runtime_adapter_contract.resolution_record above for the full finding); this endpoint-shape backend reachability itself is fine (runtime port/handler is hardcode-allowed), but the frontend UI schema mounting it at /dashboard/team remains a hardcoded interim surface, not a resolved design item.
-        personal_page:
-          status: frontend_removed_2026_07_15_gate0_audit_backend_substrate_retained
+            status: not_implemented_reverted_2026_07_15_gate0_audit
+            resolution_record: >-
+              role-based-surface-impl bundle (2026-07-14) added TeamMarkdownViewer
+              (frontend/islands/TeamMarkdownDashboard.tsx), a Normal-role (no admin capability
+              requirement) read/search/filter component reading through new plain-JWT viewer endpoints
+              (GET /team-markdown/templates, /team-markdown/saved-views, /team-markdown/saved-views/{id}
+              — backend/Program.cs, backed directly by the existing TeamMarkdownRepository read
+              methods), mounted at /dashboard/team alongside admin-gated TeamMarkdownAuthoring. 2026-07-15
+              gate0 audit, second pass: the frontend component and its mounting route had no valid Gate 0
+              exception (see inputer_runtime_adapter_contract.resolution_record above) and were deleted
+              along with /dashboard/team. This "normal viewer" capability does not currently exist as a
+              frontend surface — team-dashboard access is admin-only again via /admin/team-dashboard. The
+              backend plain-JWT viewer read endpoints (GET /team-markdown/*) were NOT deleted (Gate-0
+              hardcode-allowed runtime port/endpoint-shape substrate) and remain available for a future
+              real, seed-authorized Normal-role viewer surface if one is designed.
+        self_account_capability:
+          status: backend_only_capability_no_page_surface_presupposed_2026_07_15_gate0_audit
           resolution_record: >
-            Added per explicit task instruction (this Bundle's scope required a Personal Page in the same PR, not a follow-up),
-            2026-07-14. No prior design authority existed for this surface anywhere in docs/ before that bundle. The frontend
-            (frontend/routes/account/*, frontend/islands/PersonalPage.tsx) was hardcoded UI schema/form/action-wiring reachable
-            only via a self-authored SSOT exception (seed_contract below previously claimed runtime_reachability:
-            existing_route_composition / route_composition_alternative). 2026-07-15 gate0 audit found that pattern has no
-            grounding in docs/design/runtime-orchestration-ssot.yaml (Gate 0's named judgment source) or
-            docs/design/pipeline-continuity-ssot.yaml — the only two allowed hardcode exceptions there are SQL_Attention and
-            CI_Attention, each requiring exception_name/reason/ssot_basis/why_abstract_function_impossible declared fields;
-            route_composition_alternative was introduced in the same 2026-07-14 commit it excuses and matches
-            runtime-orchestration-ssot.yaml's own named-prohibited pattern implementation_first_shape_ssot_ratification. Direct
-            precedent exists in .agent/tasks/todo.md (PR584, 2026-07-12 Gate0 remediation): an equivalent hardcoded
-            route+island kept as "provisional" was ruled blocking and fully deleted, not kept-and-documented. Per that
-            precedent, frontend/routes/account/* and frontend/islands/PersonalPage.tsx were deleted 2026-07-15. The backend
-            operations below (self_credential_operator responsibility, mutation_flow) are real, tested, reusable Gate-0
-            hardcode-allowed runtime substrate (JWT-subject-resolved endpoint shape) and were NOT deleted — they remain
-            reachable directly (API/tests) and are available for a future seed-driven UI to consume once topology UI seed
-            production resumes.
+            Originally added as "personal_page" (2026-07-14), a dedicated page-surface identity with a
+            hardcoded frontend (frontend/routes/account/*, frontend/islands/PersonalPage.tsx) reachable
+            only via a self-authored SSOT exception (route_composition_alternative). 2026-07-15 gate0
+            audit found that exception has no grounding in docs/design/runtime-orchestration-ssot.yaml
+            (Gate 0's named judgment source) or docs/design/pipeline-continuity-ssot.yaml, and matches
+            that file's own named-prohibited pattern implementation_first_shape_ssot_ratification (direct
+            precedent: .agent/tasks/todo.md PR584, 2026-07-12 Gate0 remediation, an equivalent hardcoded
+            route+island kept as "provisional" was ruled blocking and fully deleted). The frontend was
+            deleted 2026-07-15. On owner review (PR #591), this entry was further renamed from
+            personal_page to self_account_capability and reframed: the backend operations below are a
+            self-scoped capability (JWT-subject-resolved account read / password change / session
+            list-revoke), not a predetermined "there will be a Personal Page." Whether, when, and in what
+            shape (a dedicated page, a panel embedded in another seed-driven surface, or something else)
+            this capability gets a frontend is an undecided future design question, to be answered once
+            topology UI seed production resumes — this entry does not presuppose the answer. The backend
+            operations (self_credential_operator responsibility, mutation_flow) are real, tested, reusable
+            Gate-0 hardcode-allowed runtime substrate (JWT-subject-resolved endpoint shape) and were not
+            deleted — they remain reachable directly (API/tests).
           data_authority_ref:
             - auth.users
             - auth.sessions
@@ -641,7 +657,7 @@ admin_normal_surface_projection_seed_ssot:
               rule: No request body, query parameter, or route parameter on any operation in this responsibility ever carries a userId/username naming a different account; backend/endpoint self routes resolve the target exclusively from JwtGuard-validated claims.
           operations: [read_self, change_own_password, list_own_sessions, revoke_own_session, revoke_other_sessions]
           operation_capability_boundary:
-            rule: No operation in this surface carries or requires capability_requirement.required_role=admin — every operation is self-scoped by JWT-subject identity, not by a role gate. This is a different boundary mechanism than normal.dashboard's admin-capability-gated inputer; personal_page's mutation authority boundary is "same account as caller," not "admin role."
+            rule: No operation in this surface carries or requires capability_requirement.required_role=admin — every operation is self-scoped by JWT-subject identity, not by a role gate. This is a different boundary mechanism than normal.dashboard's admin-capability-gated inputer; self_account_capability's mutation authority boundary is "same account as caller," not "admin role."
           mutation_flow:
             change_own_password:
               required_order: [current_password_verification, password_policy_check, write, session_revocation, evidence]
@@ -653,7 +669,7 @@ admin_normal_surface_projection_seed_ssot:
             status: not_produced_this_bundle
             rule: Same topology_seed_schema_contract.minimum_required_fields as other surfaces in this SSOT applies when seed work resumes. This surface currently has NO frontend component — frontend/routes/account/* and frontend/islands/PersonalPage.tsx were deleted 2026-07-15 (see resolution_record above); it is reachable only via direct backend API (/auth/me, /auth/me/password, /auth/me/sessions*) until a real seed-driven UI is produced.
           runtime_reachability: not_reachable_from_any_frontend_ui_backend_endpoints_only
-          component_catalog_ref: none (frontend/components/catalog.ts personal_page.projection entry removed 2026-07-15; no frontend component exists)
+          component_catalog_ref: none — no frontend component exists; no page-surface identity is presupposed (see resolution_record above)
   crud_preset_physical_reference_assessment:
     physical_reference_file: db/physical_search_crud_aggregate_preset_seed.sql
     physical_reference_role: physical_seed_reference_only_not_design_authority
@@ -715,19 +731,22 @@ admin_normal_surface_projection_seed_ssot:
     - id: normal_dashboard_authoring_runtime_adapter
       status: reopened_2026_07_15_gate0_audit
       resolution_record: >-
-        2026-07-15: the prior "status: resolved" (role-based-surface-impl bundle, 2026-07-14, "via
-        route_composition_alternative REALIZED") is invalid and reopened. route_composition_alternative
-        has no grounding in docs/design/runtime-orchestration-ssot.yaml (Gate 0's named judgment source)
-        or docs/design/pipeline-continuity-ssot.yaml, was introduced in the same 2026-07-14 commit it
-        excuses, and matches that file's own named-prohibited pattern implementation_first_shape_ssot_ratification.
-        No seed rows exist for this surface; it is not resolved, only reachable via a hardcoded interim
-        mount pending real topology UI seed conversion (see normal.dashboard.responsibilities.inputer.inputer_runtime_adapter_contract
-        for the current, corrected status).
+        2026-07-15, first pass: the prior "status: resolved" (role-based-surface-impl bundle, 2026-07-14,
+        "via route_composition_alternative REALIZED") was found invalid and reopened.
+        route_composition_alternative has no grounding in docs/design/runtime-orchestration-ssot.yaml
+        (Gate 0's named judgment source) or docs/design/pipeline-continuity-ssot.yaml, was introduced in
+        the same 2026-07-14 commit it excuses, and matches that file's own named-prohibited pattern
+        implementation_first_shape_ssot_ratification. 2026-07-15, second pass (owner PR #591 review): the
+        interim mount itself (/dashboard/team + TeamDashboardRoleSurface.tsx) was then also removed —
+        the owner ruled that keeping it while merely reopening this blocker was not an acceptable end
+        state either. frontend/routes/admin/team-dashboard/index.tsx now mounts TeamMarkdownAuthoring
+        directly (admin-only, via AdminAuthGate), matching the pre-2026-07-14 canonical route. No seed
+        rows exist for this surface; this blocker remains open pending real topology UI seed conversion.
       blocking_condition: md_translation_authoring_surface.authoring is physical evidence with runtimeConnected=false in the current catalog; a topology seed cannot use it as a direct runtime component until an explicit runtime adapter or a real seed-defined binding is produced.
       required_resolution_before_seed: >-
-        Not done. The interim hardcoded mount (TeamDashboardRoleSurface.tsx mounting TeamMarkdownAuthoring
-        for admin-role sessions, itself opening SavedViewAdjustmentAuthoringPanel / SavedViewOperationPanel
-        per action) remains real, tested, and in place — see
+        Not done. TeamMarkdownAuthoring (mounted at the canonical admin-only /admin/team-dashboard route,
+        opening SavedViewAdjustmentAuthoringPanel / SavedViewOperationPanel per action) remains real,
+        tested, and in place — see
         normal.dashboard.responsibilities.inputer.inputer_runtime_adapter_contract.actual_component_props/
         actual_component_events for its real interface — but a topology seed / dispatcher_mapping / runtime
         adapter must still be produced before this design blocker can be closed; owner instruction to resume

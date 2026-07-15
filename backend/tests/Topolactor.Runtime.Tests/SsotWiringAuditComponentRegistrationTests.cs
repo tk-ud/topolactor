@@ -147,7 +147,6 @@ public class SsotWiringAuditComponentRegistrationTests
         new Dictionary<string, string>
         {
             ["md_translation_authoring_surface.authoring"] = "TeamMarkdownAuthoring",
-            ["team_markdown_dashboard.viewer"] = "TeamMarkdownViewer",
             ["saved_view_adjustment_authoring.authoring"] = "SavedViewAdjustmentAuthoringPanel",
             ["credential_management.admin_operation"] = "AdminUsersRoster",
             ["admin_enum_roster.admin_operation"] = "AdminEnumsRoster",

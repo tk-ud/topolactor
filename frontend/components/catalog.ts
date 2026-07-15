@@ -401,7 +401,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     runtimeConnected: true,
     registrationRequired: false,
     notes:
-      "dashboard/read-work component candidate for saved Markdown view display; runtime factory renders read-only preview placeholder (not full MdViewer island); does not hold active topology authority, physical record authority, or saved view authority; primary route is /dashboard/team (role-based-surface-impl bundle, 2026-07-14 — /admin/team-dashboard is now a compat redirect to /dashboard/team, not the canonical route); not a preset DB seed registration mechanism or package canvas edit root; not a UIBuilder preset_ecosystem child surface",
+      "dashboard/read-work component candidate for saved Markdown view display; runtime factory renders read-only preview placeholder (not full MdViewer island); does not hold active topology authority, physical record authority, or saved view authority; primary route is /admin/team-dashboard (2026-07-15 gate0 audit: reverted the PR589 role-based-surface-impl bundle's /dashboard/team detour, which had no Gate 0 grounding — see .agent/tasks/todo.md); not a preset DB seed registration mechanism or package canvas edit root; not a UIBuilder preset_ecosystem child surface",
   },
   {
     componentKey: "md_translation_authoring_surface.authoring",
@@ -418,30 +418,10 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     ],
     runtimeConnected: false,
     runtimeReachability: "existing_route_composition",
-    routeCompositionFile: "frontend/islands/TeamDashboardRoleSurface.tsx",
+    routeCompositionFile: "frontend/routes/admin/team-dashboard/index.tsx",
     registrationRequired: false,
     notes:
-      "registry-driven md translation authoring surface (template registry backs template select/register/update/archive). runtime_reachability: existing_route_composition (per admin-normal-surface-projection-seed-ssot.yaml normal.dashboard.inputer_runtime_adapter_contract's owner-authorized alternative to a generic runtime-factory adapter) — mounted by TeamMarkdownAuthoring (same file, exported alongside TeamMarkdownViewer) at route /dashboard/team via islands/TeamDashboardRoleSurface.tsx, gated client-side to admin-role sessions only; UIBuilder preset_ecosystem child authoring entry remains a separate embedding (placement=\"ui_builder_child_surface\"); not a package canvas edit root; not a preset DB seed registration mechanism; binding is user-selected only — no AI inference; not registered in RUNTIME_COMPONENT_FACTORIES (generic manifest-driven placement remains excluded pending topology UI seed production, which stays owner-paused). runtimeConnected:false reflects this repo's factory-registration-specific definition of that field (SsotWiringAuditComponentRegistrationTests.ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByFactoryRegistryBoundary); route-composition reachability is real but is a separate concept this field does not yet capture.",
-  },
-  {
-    componentKey: "team_markdown_dashboard.viewer",
-    componentKind: "dashboard/team_markdown_viewer",
-    sourcePath: "frontend/islands/TeamMarkdownDashboard.tsx",
-    componentFamily: "composite",
-    semanticRole: "data_viewer",
-    visualRole: "panel",
-    lifecycleStatus: "registered",
-    capabilityTags: [
-      "displays_backend_result",
-      "error_display",
-      "accepts_design",
-    ],
-    runtimeConnected: false,
-    runtimeReachability: "existing_route_composition",
-    routeCompositionFile: "frontend/islands/TeamDashboardRoleSurface.tsx",
-    registrationRequired: false,
-    notes:
-      "runtime_reachability: existing_route_composition — TeamMarkdownViewer (exported from this file) mounted at /dashboard/team for both Normal and admin sessions via islands/TeamDashboardRoleSurface.tsx; reads through the plain-JWT viewer endpoints (GET /team-markdown/*), never the admin-gated dispatch lane; carries no admin_only capability tag by design (viewer read/search/filter has no admin capability requirement, per admin-normal-surface-projection-seed-ssot.yaml viewer_read_search_filter_contract). No dashboard_placement_candidate tag: this is a full-page route composition, not a DashboardCandidatePalette-droppable widget.",
+      "registry-driven md translation authoring surface (template registry backs template select/register/update/archive). runtime_reachability: existing_route_composition — mounted by TeamMarkdownAuthoring (same file) at the canonical admin-only route /admin/team-dashboard (frontend/routes/admin/team-dashboard/index.tsx via AdminAuthGate). 2026-07-15 gate0 audit: reverted from the PR589 /dashboard/team + TeamDashboardRoleSurface.tsx detour (deleted — see .agent/tasks/todo.md), which had no Gate 0 grounding for exposing this beyond the pre-existing admin-only surface. UIBuilder preset_ecosystem child authoring entry remains a separate embedding (placement=\"ui_builder_child_surface\"); not a package canvas edit root; not a preset DB seed registration mechanism; binding is user-selected only — no AI inference; not registered in RUNTIME_COMPONENT_FACTORIES (generic manifest-driven placement remains excluded pending topology UI seed production, which stays owner-paused). runtimeConnected:false reflects this repo's factory-registration-specific definition of that field (SsotWiringAuditComponentRegistrationTests.ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByFactoryRegistryBoundary); route-composition reachability is real but is a separate concept this field does not yet capture.",
   },
   {
     componentKey: "saved_view_adjustment_authoring.authoring",

@@ -141,19 +141,31 @@ team_markdown_dashboard_saved_view_ssot:
 
   dashboard_surface_contract:
     entry_surface:
-      preferred: /dashboard/team
+      preferred: /admin/team-dashboard
       alternative: /admin/ui-builder_or_admin_dashboard_tab
       implemented:
-        - /dashboard/team
+        - /admin/team-dashboard
       removed:
         - former_UIBuilder_preset_ecosystem_md_viewer_child_surface (removed 2026-06-09 — responsibility mixing resolved; /admin/team-dashboard was primary route)
-      route_change_2026_07_14: >-
-        role-based-surface-impl bundle — canonical primary route moved from /admin/team-dashboard
-        (admin-only) to /dashboard/team (authenticated, Normal+admin, via AuthenticatedGate +
-        frontend/islands/TeamDashboardRoleSurface.tsx), per the task's explicit requirement that
-        Team Dashboard become a shared authenticated surface with viewer/authoring role split.
-        /admin/team-dashboard now 302-redirects to /dashboard/team (frontend/routes/admin/team-dashboard/index.tsx)
-        rather than being deleted, pending render/action proof per the repo's route-retirement rule.
+        - /dashboard/team (role-based-surface-impl bundle, 2026-07-14, deleted 2026-07-15 gate0 audit — see below)
+      route_change_2026_07_14_REVERTED_2026_07_15: >-
+        role-based-surface-impl bundle (2026-07-14) moved the canonical primary route from
+        /admin/team-dashboard (admin-only) to /dashboard/team (authenticated, Normal+admin, via
+        AuthenticatedGate + frontend/islands/TeamDashboardRoleSurface.tsx), justified by a
+        route_composition_alternative SSOT exception invented in that same PR (#589). A 2026-07-15
+        gate0 audit found that exception had no grounding in docs/design/runtime-orchestration-ssot.yaml
+        (Gate 0's judgment source) or docs/design/pipeline-continuity-ssot.yaml, and matched that
+        file's own named-prohibited pattern implementation_first_shape_ssot_ratification (see
+        .agent/tasks/todo.md). /dashboard/team, frontend/islands/TeamDashboardRoleSurface.tsx,
+        frontend/islands/AuthenticatedGate.tsx, frontend/lib/authenticatedGate.ts, and
+        frontend/hooks/useCurrentSession.ts were deleted; frontend/routes/admin/team-dashboard/index.tsx
+        was reverted from a 302 redirect back to mounting TeamMarkdownAuthoring directly via
+        AdminAuthGate (admin-only, matching the pre-2026-07-14 state), while keeping the real
+        round-3 confirmed-write atomicity fix (TeamMarkdownAuthoring, not the older default-exported
+        TeamMarkdownDashboard component, whose Refresh/Clone/Rebind handlers are pre-round-3 stubs).
+        Backend substrate (JWT identity checks, confirmed-write transactions, the plain-JWT viewer
+        read endpoints GET /team-markdown/*) was not touched — only the frontend route/component that
+        exposed Team Dashboard beyond the canonical admin-only surface without seed authority.
     primary_ui:
       - search_input
       - saved_markdown_view_result_list

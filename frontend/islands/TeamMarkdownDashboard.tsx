@@ -39,8 +39,6 @@ import {
   searchSavedViews,
   type TemplateListItem,
   updateTemplate,
-  viewerGetSavedView,
-  viewerSearchSavedViews,
 } from "../api/teamMarkdownApi.ts";
 import { MdViewer } from "../components/MdViewer.tsx";
 import { SavedViewAdjustmentAuthoringPanel } from "../components/SavedViewAdjustmentAuthoringPanel.tsx";
@@ -746,107 +744,6 @@ export default function TeamMarkdownDashboard({
               clone: expandedView.seedValid ? undefined : EXPLICIT_PAYLOAD_REQUIRED_REASON,
               rebind: expandedView.seedValid ? undefined : EXPLICIT_PAYLOAD_REQUIRED_REASON,
             }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── role-split surfaces for the authenticated /dashboard/team route ──────────
-// Normal and admin sessions share TeamMarkdownViewer (read/search/filter only, backed by the
-// plain-JWT viewer read endpoints — never the admin_runtime dispatch lane). Only admin sessions
-// additionally mount TeamMarkdownAuthoring (backed by the admin_runtime team_markdown dispatch
-// actions, which independently reject non-admin JWTs server-side regardless of what renders here).
-
-/** Normal + admin shared viewer: read/search/filter only, no mutation-capable component mounted. */
-export function TeamMarkdownViewer({ defaultStatus = "active" }: { defaultStatus?: string }) {
-  const [query, setQuery] = useState("");
-  const [cards, setCards] = useState<SavedViewCard[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [expandedView, setExpandedView] = useState<
-    { detail: SavedViewDetail; seedValid: boolean; seedError?: string } | null
-  >(null);
-  const [expandLoading, setExpandLoading] = useState(false);
-
-  const doSearch = useCallback(async (q: string) => {
-    setLoading(true);
-    setSearchError(null);
-    try {
-      const savedViews = await viewerSearchSavedViews({ query: q || undefined, status: defaultStatus });
-      setCards(savedViews);
-    } catch (err) {
-      setCards([]);
-      setSearchError(err instanceof Error ? err.message : "Search failed");
-    } finally {
-      setLoading(false);
-    }
-  }, [defaultStatus]);
-
-  useEffect(() => {
-    doSearch(query);
-  }, []);
-
-  const handleExpand = async (savedViewId: string) => {
-    if (expandLoading) return;
-    setExpandLoading(true);
-    try {
-      const detail = await viewerGetSavedView(savedViewId);
-      setExpandedView({ detail, seedValid: true });
-    } catch (err) {
-      setSearchError(err instanceof Error ? err.message : "Failed to load saved view");
-    } finally {
-      setExpandLoading(false);
-    }
-  };
-
-  return (
-    <div class="md-dashboard" aria-label="Team Dashboard viewer" data-placement="normal_dashboard_viewer">
-      <header class="md-dashboard-header">
-        <p class="md-dashboard-placement-label">Viewer — read/search/filter only</p>
-        <h1 class="md-dashboard-heading">Team Markdown Dashboard</h1>
-      </header>
-
-      <form
-        class="md-dashboard-search-form"
-        role="search"
-        onSubmit={(e) => { e.preventDefault(); doSearch(query); }}
-      >
-        <label for="md-dashboard-viewer-search" class="md-dashboard-search-label">Search saved views</label>
-        <input
-          id="md-dashboard-viewer-search"
-          type="search"
-          class="md-dashboard-search-input"
-          value={query}
-          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
-          placeholder="Search by title, content, or source table..."
-        />
-        <button type="submit" class="md-dashboard-search-btn" disabled={loading}>
-          {loading ? "Searching…" : "Search"}
-        </button>
-      </form>
-
-      {searchError && <div class="md-dashboard-error" role="alert">{searchError}</div>}
-      {expandLoading && <div class="md-dashboard-loading" role="status">Loading saved view…</div>}
-      {cards.length === 0 && !loading && !searchError && (
-        <div class="md-dashboard-empty" role="status">No saved views found{query ? ` for "${query}"` : ""}.</div>
-      )}
-
-      <section class="md-dashboard-results" aria-label="Search results">
-        {cards.map((card) => (
-          <SavedViewResultCard key={card.savedViewId} card={card} onExpand={handleExpand} />
-        ))}
-      </section>
-
-      {expandedView && (
-        <div class="md-dashboard-drawer-overlay" role="dialog" aria-modal="true">
-          <MdViewer
-            savedView={expandedView.detail}
-            seedValid={expandedView.seedValid}
-            seedError={expandedView.seedError}
-            onClose={() => setExpandedView(null)}
-            authoringEnabled={false}
           />
         </div>
       )}

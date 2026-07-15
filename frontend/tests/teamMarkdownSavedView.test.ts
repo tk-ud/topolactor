@@ -768,29 +768,23 @@ Deno.test("md_viewer is a projection component, not a preset DB seed registratio
 
 // ─── UIBuilder / route placement bundle ─────────────────────────────────────
 
-Deno.test("TeamMarkdownDashboard primary route is /dashboard/team, /admin/team-dashboard is a compat redirect (not UIBuilder permanent child surface)", async () => {
-  const primaryRouteSource = await Deno.readTextFile(
-    "frontend/routes/dashboard/team.tsx",
-  );
-  const legacyRouteSource = await Deno.readTextFile(
+Deno.test("TeamMarkdownDashboard canonical route is /admin/team-dashboard (not UIBuilder permanent child surface)", async () => {
+  const canonicalRouteSource = await Deno.readTextFile(
     "frontend/routes/admin/team-dashboard/index.tsx",
   );
-  const roleSurfaceSource = await Deno.readTextFile(
-    "frontend/islands/TeamDashboardRoleSurface.tsx",
+  const dashboardSource = await Deno.readTextFile(
+    "frontend/islands/TeamMarkdownDashboard.tsx",
   );
   const uiBuilderSource = await Deno.readTextFile(
     "frontend/islands/UiBuilderAdmin.tsx",
   );
 
-  // /dashboard/team is the canonical primary route (authenticated, Normal+admin, role-split)
-  assertEquals(primaryRouteSource.includes("AuthenticatedGate"), true);
-  assertEquals(primaryRouteSource.includes("TeamDashboardRoleSurface"), true);
-  assertEquals(roleSurfaceSource.includes("TeamMarkdownViewer"), true);
-  assertEquals(roleSurfaceSource.includes("TeamMarkdownAuthoring"), true);
-
-  // /admin/team-dashboard is kept as a compat redirect, not deleted, per route-retirement rule
-  assertEquals(legacyRouteSource.includes("302"), true);
-  assertEquals(legacyRouteSource.includes("/dashboard/team"), true);
+  // /admin/team-dashboard is the canonical route (admin-only, via AdminAuthGate).
+  // 2026-07-15 gate0 audit: reverted the PR589 /dashboard/team + AuthenticatedGate +
+  // TeamDashboardRoleSurface detour (no Gate 0 grounding — see .agent/tasks/todo.md).
+  assertEquals(canonicalRouteSource.includes("AdminAuthGate"), true);
+  assertEquals(canonicalRouteSource.includes("TeamMarkdownAuthoring"), true);
+  assertEquals(dashboardSource.includes("export function TeamMarkdownAuthoring"), true);
 
   // UiBuilder must NOT permanently mount Team Markdown Dashboard as a child surface
   assertEquals(
@@ -899,26 +893,23 @@ Deno.test("md_viewer does not hold active topology / physical record / saved vie
   );
 });
 
-Deno.test("/dashboard/team is the primary placement for saved markdown view search and seed rehydration", async () => {
+Deno.test("/admin/team-dashboard is the primary placement for saved markdown view search and seed rehydration", async () => {
   const routeSource = await Deno.readTextFile(
-    "frontend/routes/dashboard/team.tsx",
-  );
-  const roleSurfaceSource = await Deno.readTextFile(
-    "frontend/islands/TeamDashboardRoleSurface.tsx",
+    "frontend/routes/admin/team-dashboard/index.tsx",
   );
   const ssotSource = await Deno.readTextFile(
     "docs/design/team-markdown-dashboard-saved-view-ssot.yaml",
   );
 
-  // Route must be guarded and mount the role-split surface
-  assertEquals(routeSource.includes("AuthenticatedGate"), true);
-  assertEquals(routeSource.includes("TeamDashboardRoleSurface"), true);
-  assertEquals(roleSurfaceSource.includes("TeamMarkdownViewer"), true);
-  // SSOT must have /dashboard/team as the preferred entry surface
+  // Route must be admin-gated and mount TeamMarkdownAuthoring directly (2026-07-15 gate0 audit
+  // revert — see .agent/tasks/todo.md)
+  assertEquals(routeSource.includes("AdminAuthGate"), true);
+  assertEquals(routeSource.includes("TeamMarkdownAuthoring"), true);
+  // SSOT must have /admin/team-dashboard as the preferred entry surface
   assertEquals(
-    ssotSource.includes("preferred: /dashboard/team"),
+    ssotSource.includes("preferred: /admin/team-dashboard"),
     true,
-    "SSOT must declare /dashboard/team as the preferred entry surface",
+    "SSOT must declare /admin/team-dashboard as the preferred entry surface",
   );
   // SSOT implemented: block must NOT list UIBuilder as an entry surface.
   // Check only the implemented: block to avoid false-positive on the removed: history entry.
