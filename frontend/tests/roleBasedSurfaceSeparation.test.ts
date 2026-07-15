@@ -139,8 +139,6 @@ Deno.test("admin credential/session revoke endpoints resolve target account only
 const EXPECTED_NEW_OR_UPDATED_ENTRIES: Array<{ componentKey: string; sourcePath: string }> = [
   { componentKey: "team_markdown_dashboard.viewer", sourcePath: "frontend/islands/TeamMarkdownDashboard.tsx" },
   { componentKey: "saved_view_adjustment_authoring.authoring", sourcePath: "frontend/components/SavedViewAdjustmentAuthoringPanel.tsx" },
-  { componentKey: "personal_page.projection", sourcePath: "frontend/islands/PersonalPage.tsx" },
-  { componentKey: "normal_dashboard_home.projection", sourcePath: "frontend/islands/NormalDashboardHome.tsx" },
   { componentKey: "credential_management.admin_operation", sourcePath: "frontend/islands/AdminUsersRoster.tsx" },
   { componentKey: "admin_enum_roster.admin_operation", sourcePath: "frontend/islands/AdminEnumsRoster.tsx" },
   { componentKey: "scheduler_job_settings.admin_operation", sourcePath: "frontend/islands/SchedulerJobSettingsPanel.tsx" },

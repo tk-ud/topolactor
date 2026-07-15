@@ -11,9 +11,6 @@ export default function TeamDashboardRoute(): JSX.Element {
   return (
     <AuthenticatedGate>
       <main class="page-main-wide">
-        <p class="mb-1">
-          <a href="/dashboard" class="link">← ダッシュボードへ戻る</a>
-        </p>
         <TeamDashboardRoleSurface />
       </main>
     </AuthenticatedGate>

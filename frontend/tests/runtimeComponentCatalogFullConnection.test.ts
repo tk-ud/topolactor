@@ -127,8 +127,6 @@ const EXISTING_ROUTE_COMPOSITION_MOUNT_IDENTIFIERS: Record<string, string> = {
   "md_translation_authoring_surface.authoring": "TeamMarkdownAuthoring",
   "team_markdown_dashboard.viewer": "TeamMarkdownViewer",
   "saved_view_adjustment_authoring.authoring": "SavedViewAdjustmentAuthoringPanel",
-  "personal_page.projection": "PersonalPage",
-  "normal_dashboard_home.projection": "NormalDashboardHome",
   "credential_management.admin_operation": "AdminUsersRoster",
   "admin_enum_roster.admin_operation": "AdminEnumsRoster",
   "scheduler_job_settings.admin_operation": "SchedulerJobSettingsPanel",
