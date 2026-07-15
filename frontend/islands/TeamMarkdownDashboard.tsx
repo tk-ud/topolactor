@@ -39,8 +39,12 @@ import {
   searchSavedViews,
   type TemplateListItem,
   updateTemplate,
+  viewerGetSavedView,
+  viewerSearchSavedViews,
 } from "../api/teamMarkdownApi.ts";
 import { MdViewer } from "../components/MdViewer.tsx";
+import { SavedViewAdjustmentAuthoringPanel } from "../components/SavedViewAdjustmentAuthoringPanel.tsx";
+import { SavedViewOperationPanel, type SavedViewOperationMode } from "../components/SavedViewOperationPanel.tsx";
 
 // ─── search card component ────────────────────────────────────────────────────
 
@@ -741,6 +745,264 @@ export default function TeamMarkdownDashboard({
               refresh: expandedView.seedValid ? undefined : EXPLICIT_PAYLOAD_REQUIRED_REASON,
               clone: expandedView.seedValid ? undefined : EXPLICIT_PAYLOAD_REQUIRED_REASON,
               rebind: expandedView.seedValid ? undefined : EXPLICIT_PAYLOAD_REQUIRED_REASON,
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── role-split surfaces for the authenticated /dashboard/team route ──────────
+// Normal and admin sessions share TeamMarkdownViewer (read/search/filter only, backed by the
+// plain-JWT viewer read endpoints — never the admin_runtime dispatch lane). Only admin sessions
+// additionally mount TeamMarkdownAuthoring (backed by the admin_runtime team_markdown dispatch
+// actions, which independently reject non-admin JWTs server-side regardless of what renders here).
+
+/** Normal + admin shared viewer: read/search/filter only, no mutation-capable component mounted. */
+export function TeamMarkdownViewer({ defaultStatus = "active" }: { defaultStatus?: string }) {
+  const [query, setQuery] = useState("");
+  const [cards, setCards] = useState<SavedViewCard[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [expandedView, setExpandedView] = useState<
+    { detail: SavedViewDetail; seedValid: boolean; seedError?: string } | null
+  >(null);
+  const [expandLoading, setExpandLoading] = useState(false);
+
+  const doSearch = useCallback(async (q: string) => {
+    setLoading(true);
+    setSearchError(null);
+    try {
+      const savedViews = await viewerSearchSavedViews({ query: q || undefined, status: defaultStatus });
+      setCards(savedViews);
+    } catch (err) {
+      setCards([]);
+      setSearchError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setLoading(false);
+    }
+  }, [defaultStatus]);
+
+  useEffect(() => {
+    doSearch(query);
+  }, []);
+
+  const handleExpand = async (savedViewId: string) => {
+    if (expandLoading) return;
+    setExpandLoading(true);
+    try {
+      const detail = await viewerGetSavedView(savedViewId);
+      setExpandedView({ detail, seedValid: true });
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Failed to load saved view");
+    } finally {
+      setExpandLoading(false);
+    }
+  };
+
+  return (
+    <div class="md-dashboard" aria-label="Team Dashboard viewer" data-placement="normal_dashboard_viewer">
+      <header class="md-dashboard-header">
+        <p class="md-dashboard-placement-label">Viewer — read/search/filter only</p>
+        <h1 class="md-dashboard-heading">Team Markdown Dashboard</h1>
+      </header>
+
+      <form
+        class="md-dashboard-search-form"
+        role="search"
+        onSubmit={(e) => { e.preventDefault(); doSearch(query); }}
+      >
+        <label for="md-dashboard-viewer-search" class="md-dashboard-search-label">Search saved views</label>
+        <input
+          id="md-dashboard-viewer-search"
+          type="search"
+          class="md-dashboard-search-input"
+          value={query}
+          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+          placeholder="Search by title, content, or source table..."
+        />
+        <button type="submit" class="md-dashboard-search-btn" disabled={loading}>
+          {loading ? "Searching…" : "Search"}
+        </button>
+      </form>
+
+      {searchError && <div class="md-dashboard-error" role="alert">{searchError}</div>}
+      {expandLoading && <div class="md-dashboard-loading" role="status">Loading saved view…</div>}
+      {cards.length === 0 && !loading && !searchError && (
+        <div class="md-dashboard-empty" role="status">No saved views found{query ? ` for "${query}"` : ""}.</div>
+      )}
+
+      <section class="md-dashboard-results" aria-label="Search results">
+        {cards.map((card) => (
+          <SavedViewResultCard key={card.savedViewId} card={card} onExpand={handleExpand} />
+        ))}
+      </section>
+
+      {expandedView && (
+        <div class="md-dashboard-drawer-overlay" role="dialog" aria-modal="true">
+          <MdViewer
+            savedView={expandedView.detail}
+            seedValid={expandedView.seedValid}
+            seedError={expandedView.seedError}
+            onClose={() => setExpandedView(null)}
+            authoringEnabled={false}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Admin-only authoring surface: template/saved-view registration plus the full
+ * preview/validate/confirm/write/diff adjustment workflow. Must only be mounted for admin-role
+ * sessions (display-only client gate); every mutation it calls is independently re-checked and
+ * rejected server-side for non-admin JWTs by AdminRuntime.TeamMarkdown's ExecuteTeamMarkdownAsync.
+ */
+export function TeamMarkdownAuthoring({ defaultStatus = "active" }: { defaultStatus?: string }) {
+  const [query, setQuery] = useState("");
+  const [cards, setCards] = useState<SavedViewCard[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [expandedView, setExpandedView] = useState<
+    { detail: SavedViewDetail; seedValid: boolean; seedError?: string } | null
+  >(null);
+  const [editing, setEditing] = useState(false);
+  const [pendingOperation, setPendingOperation] = useState<SavedViewOperationMode | null>(null);
+  const [expandLoading, setExpandLoading] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  const doSearch = useCallback(async (q: string) => {
+    setLoading(true);
+    setSearchError(null);
+    try {
+      const result = await searchSavedViews({ query: q || undefined, status: defaultStatus });
+      setCards(Array.isArray(result.savedViews) ? result.savedViews : []);
+    } catch (err) {
+      setCards([]);
+      setSearchError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setLoading(false);
+    }
+  }, [defaultStatus]);
+
+  useEffect(() => {
+    doSearch(query);
+  }, []);
+
+  const handleExpand = async (savedViewId: string) => {
+    if (expandLoading) return;
+    setExpandLoading(true);
+    setEditing(false);
+    try {
+      const result = await getSavedView(savedViewId);
+      setExpandedView({ detail: result.savedView, seedValid: result.seedValid, seedError: result.seedError });
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Failed to load saved view");
+    } finally {
+      setExpandLoading(false);
+    }
+  };
+
+  const handleArchive = async (savedViewId: string) => {
+    try {
+      await archiveSavedView(savedViewId);
+      setExpandedView(null);
+      await doSearch(query);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Archive failed");
+    }
+  };
+
+  return (
+    <div class="md-dashboard" aria-label="Team Dashboard authoring" data-placement="normal_dashboard_authoring">
+      <header class="md-dashboard-header">
+        <p class="md-dashboard-placement-label">Authoring — admin only</p>
+        <h1 class="md-dashboard-heading">Team Markdown Authoring</h1>
+      </header>
+
+      <form
+        class="md-dashboard-search-form"
+        role="search"
+        onSubmit={(e) => { e.preventDefault(); doSearch(query); }}
+      >
+        <label for="md-dashboard-authoring-search" class="md-dashboard-search-label">Search saved views</label>
+        <input
+          id="md-dashboard-authoring-search"
+          type="search"
+          class="md-dashboard-search-input"
+          value={query}
+          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+        />
+        <button type="submit" class="md-dashboard-search-btn" disabled={loading}>
+          {loading ? "Searching…" : "Search"}
+        </button>
+      </form>
+
+      <MdTranslationAuthoringSeedSurface onCreated={() => doSearch(query)} />
+
+      {searchError && <div class="md-dashboard-error" role="alert">{searchError}</div>}
+      {actionNotice && <div class="md-dashboard-action-notice" role="status">{actionNotice}</div>}
+      {expandLoading && <div class="md-dashboard-loading" role="status">Loading saved view…</div>}
+
+      <section class="md-dashboard-results" aria-label="Search results">
+        {cards.map((card) => (
+          <SavedViewResultCard key={card.savedViewId} card={card} onExpand={handleExpand} />
+        ))}
+      </section>
+
+      {expandedView && !editing && !pendingOperation && (
+        <div class="md-dashboard-drawer-overlay" role="dialog" aria-modal="true">
+          <MdViewer
+            savedView={expandedView.detail}
+            seedValid={expandedView.seedValid}
+            seedError={expandedView.seedError}
+            onClose={() => setExpandedView(null)}
+            onArchive={handleArchive}
+            onEditAdjustment={() => setEditing(true)}
+            onRefresh={() => setPendingOperation("refresh")}
+            onClone={() => setPendingOperation("clone")}
+            onRebind={() => setPendingOperation("rebind")}
+            authoringEnabled
+          />
+        </div>
+      )}
+
+      {expandedView && editing && (
+        <div class="md-dashboard-drawer-overlay" role="dialog" aria-modal="true">
+          <SavedViewAdjustmentAuthoringPanel
+            savedView={expandedView.detail}
+            onCancel={() => setEditing(false)}
+            onWritten={() => { setEditing(false); void doSearch(query); }}
+          />
+        </div>
+      )}
+
+      {expandedView && pendingOperation && (
+        <div class="md-dashboard-drawer-overlay" role="dialog" aria-modal="true">
+          <SavedViewOperationPanel
+            mode={pendingOperation}
+            savedView={expandedView.detail}
+            onCancel={() => setPendingOperation(null)}
+            onWritten={async () => {
+              const writtenSavedViewId = expandedView.detail.savedViewId;
+              setPendingOperation(null);
+              await doSearch(query);
+              // Refresh/rebind mutate the same saved view in place; refetch it so the drawer
+              // (if reopened) and any still-visible summary reflect the post-write state rather
+              // than the stale pre-write detail. Clone creates a new saved view — closing the
+              // drawer here (rather than refetching the OLD one) is correct: nothing to refetch it into.
+              if (pendingOperation !== "clone") {
+                try {
+                  const result = await getSavedView(writtenSavedViewId);
+                  setExpandedView({ detail: result.savedView, seedValid: result.seedValid, seedError: result.seedError });
+                } catch {
+                  setExpandedView(null);
+                }
+              } else {
+                setExpandedView(null);
+              }
             }}
           />
         </div>

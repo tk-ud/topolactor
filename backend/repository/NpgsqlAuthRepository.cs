@@ -239,4 +239,321 @@ public class NpgsqlAuthRepository : AuthRepository
         cmd.Parameters.AddWithValue("code", (object?)failureCode ?? DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    // Non-secret completion evidence for credential/session mutations, appended into the same
+    // transaction as the mutation itself (logs.diff — the same append-only evidence table
+    // AdminMasterRosterAudit writes, but here committed atomically instead of best-effort).
+    // beforeJson/afterJson must never contain password material — callers only pass field names
+    // and non-secret metadata (session ids, counts, timestamps).
+    private static async Task AppendCredentialEvidenceAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx,
+        string physicalTableName, string recordId, string operationKind,
+        object? before, object? after, string? actor, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            """
+            INSERT INTO logs.diff (
+                source_set_id, basis_window, physical_table_id, physical_table_name,
+                record_id, operation_kind, before_state_or_diff_json, after_state_or_diff_json,
+                observed_at, actor_or_source, archive_policy
+            ) VALUES (
+                'self_credential', 'auth_operation', @physical_table_name, @physical_table_name,
+                @record_id, @operation_kind, @before::jsonb, @after::jsonb,
+                now(), @actor, 'required'
+            )
+            """;
+        cmd.Parameters.AddWithValue("physical_table_name", physicalTableName);
+        cmd.Parameters.AddWithValue("record_id", recordId);
+        cmd.Parameters.AddWithValue("operation_kind", operationKind);
+        cmd.Parameters.AddWithValue("before", System.Text.Json.JsonSerializer.Serialize(before ?? new { }));
+        cmd.Parameters.AddWithValue("after", System.Text.Json.JsonSerializer.Serialize(after ?? new { }));
+        cmd.Parameters.AddWithValue("actor", (object?)actor ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public override async Task<ChangeOwnPasswordResult> ChangeOwnPasswordAsync(
+        Guid userId, string currentPasswordPlain, string newPasswordHash, string actorUsername,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            await using var readCmd = conn.CreateCommand();
+            readCmd.Transaction = tx;
+            readCmd.CommandText =
+                "SELECT password_hash FROM auth.credentials WHERE user_id = @id FOR UPDATE";
+            readCmd.Parameters.AddWithValue("id", userId);
+            var currentHash = (string?)await readCmd.ExecuteScalarAsync(ct);
+            if (currentHash is null)
+            {
+                await tx.RollbackAsync(ct);
+                return new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.CredentialNotFound, 0);
+            }
+
+            if (!BCrypt.Net.BCrypt.Verify(currentPasswordPlain, currentHash))
+            {
+                await tx.RollbackAsync(ct);
+                return new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.CurrentPasswordInvalid, 0);
+            }
+
+            await using var updateCmd = conn.CreateCommand();
+            updateCmd.Transaction = tx;
+            updateCmd.CommandText = "UPDATE auth.credentials SET password_hash = @hash WHERE user_id = @id";
+            updateCmd.Parameters.AddWithValue("hash", newPasswordHash);
+            updateCmd.Parameters.AddWithValue("id", userId);
+            await updateCmd.ExecuteNonQueryAsync(ct);
+
+            await using var revokeCmd = conn.CreateCommand();
+            revokeCmd.Transaction = tx;
+            revokeCmd.CommandText =
+                "UPDATE auth.sessions SET revoked_at = now() WHERE user_id = @id AND revoked_at IS NULL";
+            revokeCmd.Parameters.AddWithValue("id", userId);
+            var revokedCount = await revokeCmd.ExecuteNonQueryAsync(ct);
+
+            await AppendCredentialEvidenceAsync(
+                conn, tx, "auth.credentials", userId.ToString(), "self_password_change",
+                before: new { }, after: new { sessionsRevoked = revokedCount },
+                actorUsername, ct);
+
+            await tx.CommitAsync(ct);
+            return new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.Success, revokedCount);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public override async Task<IReadOnlyList<AuthSessionRecord>> ListActiveSessionsByUserAsync(
+        Guid userId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT session_id, realm, audience, expires_at, created_at, revoked_at
+            FROM auth.sessions
+            WHERE user_id = @id AND revoked_at IS NULL AND expires_at > now()
+            ORDER BY created_at DESC
+            """;
+        cmd.Parameters.AddWithValue("id", userId);
+        var results = new List<AuthSessionRecord>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            results.Add(new AuthSessionRecord(
+                reader.GetGuid(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetFieldValue<DateTimeOffset>(3),
+                reader.GetFieldValue<DateTimeOffset>(4),
+                Revoked: !reader.IsDBNull(5)));
+        }
+        return results;
+    }
+
+    public override async Task<bool> RevokeOwnedSessionAsync(
+        Guid userId, Guid sessionId, string actorUsername, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                """
+                UPDATE auth.sessions SET revoked_at = now()
+                WHERE session_id = @sid AND user_id = @uid AND revoked_at IS NULL
+                """;
+            cmd.Parameters.AddWithValue("sid", sessionId);
+            cmd.Parameters.AddWithValue("uid", userId);
+            var affected = await cmd.ExecuteNonQueryAsync(ct);
+            if (affected == 0)
+            {
+                await tx.RollbackAsync(ct);
+                return false;
+            }
+
+            await AppendCredentialEvidenceAsync(
+                conn, tx, "auth.sessions", sessionId.ToString(), "session_revoke",
+                before: new { }, after: new { userId }, actorUsername, ct);
+
+            await tx.CommitAsync(ct);
+            return true;
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public override async Task<int> RevokeSessionsForUserAsync(
+        Guid userId, Guid? exceptSessionId, string actorUsername, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = exceptSessionId is null
+                ? "UPDATE auth.sessions SET revoked_at = now() WHERE user_id = @uid AND revoked_at IS NULL"
+                : "UPDATE auth.sessions SET revoked_at = now() WHERE user_id = @uid AND revoked_at IS NULL AND session_id <> @except";
+            cmd.Parameters.AddWithValue("uid", userId);
+            if (exceptSessionId is not null)
+                cmd.Parameters.AddWithValue("except", exceptSessionId.Value);
+            var revokedCount = await cmd.ExecuteNonQueryAsync(ct);
+
+            await AppendCredentialEvidenceAsync(
+                conn, tx, "auth.sessions", userId.ToString(), "session_revoke_bulk",
+                before: new { }, after: new { sessionsRevoked = revokedCount, exceptSessionId },
+                actorUsername, ct);
+
+            await tx.CommitAsync(ct);
+            return revokedCount;
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public override async Task<Guid?> FindActiveSessionIdByRefreshTokenHashAsync(
+        string tokenHash, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT s.session_id
+            FROM auth.refresh_tokens rt
+            JOIN auth.sessions s ON s.session_id = rt.session_id
+            WHERE rt.token_hash = @hash AND rt.revoked_at IS NULL AND s.revoked_at IS NULL
+              AND rt.expires_at > now() AND s.expires_at > now()
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("hash", tokenHash);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result as Guid?;
+    }
+
+    public override async Task<bool> RevokeCredentialAsync(
+        Guid userId, string actorUsername, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            await using var deleteCmd = conn.CreateCommand();
+            deleteCmd.Transaction = tx;
+            deleteCmd.CommandText = "DELETE FROM auth.credentials WHERE user_id = @id";
+            deleteCmd.Parameters.AddWithValue("id", userId);
+            var deleted = await deleteCmd.ExecuteNonQueryAsync(ct);
+            if (deleted == 0)
+            {
+                await tx.RollbackAsync(ct);
+                return false;
+            }
+
+            await using var revokeCmd = conn.CreateCommand();
+            revokeCmd.Transaction = tx;
+            revokeCmd.CommandText =
+                "UPDATE auth.sessions SET revoked_at = now() WHERE user_id = @id AND revoked_at IS NULL";
+            revokeCmd.Parameters.AddWithValue("id", userId);
+            var revokedCount = await revokeCmd.ExecuteNonQueryAsync(ct);
+
+            await AppendCredentialEvidenceAsync(
+                conn, tx, "auth.credentials", userId.ToString(), "admin_credential_revoke",
+                before: new { }, after: new { sessionsRevoked = revokedCount }, actorUsername, ct);
+
+            await tx.CommitAsync(ct);
+            return true;
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public override async Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM auth.sessions s
+                JOIN auth.users u ON u.user_id = s.user_id
+                WHERE s.session_id = @id
+                  AND s.revoked_at IS NULL
+                  AND s.expires_at > now()
+                  AND u.active = true
+                  AND u.approve = true
+                  AND COALESCE(u.status, '') <> 'suspended'
+                  AND NOT (
+                      u.suspended_from IS NOT NULL
+                      AND u.suspended_from <= now()
+                      AND (u.suspended_until IS NULL OR now() <= u.suspended_until)
+                  )
+            )
+            """;
+        cmd.Parameters.AddWithValue("id", sessionId);
+        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+    }
+
+    public override async Task<bool> IsSessionIdentityActiveAsync(
+        Guid sessionId, string username, string realm, string audience, string role, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM auth.sessions s
+                JOIN auth.users u ON u.user_id = s.user_id
+                WHERE s.session_id = @id
+                  AND s.revoked_at IS NULL
+                  AND s.expires_at > now()
+                  AND u.active = true
+                  AND u.approve = true
+                  AND COALESCE(u.status, '') <> 'suspended'
+                  AND NOT (
+                      u.suspended_from IS NOT NULL
+                      AND u.suspended_from <= now()
+                      AND (u.suspended_until IS NULL OR now() <= u.suspended_until)
+                  )
+                  AND u.username = @username
+                  AND s.realm = @realm
+                  AND s.audience = @audience
+                  AND EXISTS (
+                      SELECT 1 FROM auth.grants g
+                      WHERE g.user_id = u.user_id AND g.role_name = @role AND g.realm = s.realm
+                  )
+            )
+            """;
+        cmd.Parameters.AddWithValue("id", sessionId);
+        cmd.Parameters.AddWithValue("username", username);
+        cmd.Parameters.AddWithValue("realm", realm);
+        cmd.Parameters.AddWithValue("audience", audience);
+        cmd.Parameters.AddWithValue("role", role);
+        return (bool)(await cmd.ExecuteScalarAsync(ct))!;
+    }
 }

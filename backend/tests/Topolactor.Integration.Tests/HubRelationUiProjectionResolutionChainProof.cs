@@ -35,7 +35,7 @@ internal static class HubRelationUiProjectionResolutionChainProof
         var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
         var manifestRepo = new NpgsqlManifestRepository(NullLogger<NpgsqlManifestRepository>.Instance, connectionString);
         var contentBundleRepo = new NpgsqlContentBundleRepository(NullLogger<NpgsqlContentBundleRepository>.Instance, connectionString);
-        var hubNavResolver = new HubNavigationResolver(contentBundleRepo);
+        var hubNavResolver = new HubNavigationResolver(contentBundleRepo, manifestRepo);
         var adminRuntime = new AdminRuntime(
             NullLogger<AdminRuntime>.Instance,
             ctxRepo,

@@ -212,3 +212,22 @@ public record HubNavigationReorderResponseDto(
     [property: JsonPropertyName("message")] string Message,
     [property: JsonPropertyName("errorCode")] string? ErrorCode = null
 );
+
+/// <summary>
+/// Read-only navigation link-list projection for authenticated surfaces that have no business
+/// projection of their own (e.g. the Normal Dashboard landing page). Derived exclusively from the
+/// existing hub_relation authority (HubNavigationResolver / ContentBundleRepository — the same
+/// repository RuntimeExecutor's manifest-scoped NavigationSequence enrichment already reads), never
+/// a new parallel authority. Links is an explicit empty array — never a fabricated placeholder —
+/// when no canonical default entry manifest resolves or it has no active hub relations. This is
+/// strictly read-only: hub_navigation mutations remain reachable only via the existing admin-gated
+/// /dispatch lane, and a mutation-authority failure there must never be represented as (or
+/// collapsed into) a successful empty/partial response from this projection.
+/// </summary>
+public record HubRelationNavigationLinksResponseDto(
+    [property: JsonPropertyName("success")] bool Success,
+    [property: JsonPropertyName("links")] IReadOnlyList<HubNavigationSequenceItemDto> Links,
+    [property: JsonPropertyName("errors")] IReadOnlyList<ValidationError>? Errors = null,
+    [property: JsonPropertyName("requestedSurface")] string? RequestedSurface = null,
+    [property: JsonPropertyName("fallbackReason")] string? FallbackReason = null
+);

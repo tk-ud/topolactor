@@ -11,7 +11,10 @@ public class NpgsqlAuthMasterRepository : AuthMasterRepository
                u.suspended_from, u.suspended_until, u.state_note,
                u.created_at, u.updated_at,
                (SELECT MAX(le.created_at) FROM auth.login_events le
-                WHERE le.user_id = u.user_id AND le.success = true) AS last_login_at
+                WHERE le.user_id = u.user_id AND le.success = true) AS last_login_at,
+               (CASE WHEN EXISTS (
+                   SELECT 1 FROM auth.grants g WHERE g.user_id = u.user_id AND g.role_name = 'admin'
+                ) THEN 'admin' ELSE 'user' END) AS role
         FROM auth.users u
         """;
 
@@ -119,26 +122,112 @@ public class NpgsqlAuthMasterRepository : AuthMasterRepository
         bool clearSuspendedFrom,
         bool clearSuspendedUntil,
         string? stateNote,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? roleName = null)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
-        var sets = new List<string> { "updated_at = now()" };
-        if (username is not null) { sets.Add("username = @username"); cmd.Parameters.AddWithValue("username", username); }
-        if (active.HasValue) { sets.Add("active = @active"); cmd.Parameters.AddWithValue("active", active.Value); }
-        if (approve.HasValue) { sets.Add("approve = @approve"); cmd.Parameters.AddWithValue("approve", approve.Value); }
-        if (status is not null) { sets.Add("status = @status"); cmd.Parameters.AddWithValue("status", status); }
-        if (clearSuspendedFrom) sets.Add("suspended_from = NULL");
-        else if (suspendedFrom.HasValue) { sets.Add("suspended_from = @sf"); cmd.Parameters.AddWithValue("sf", suspendedFrom.Value); }
-        if (clearSuspendedUntil) sets.Add("suspended_until = NULL");
-        else if (suspendedUntil.HasValue) { sets.Add("suspended_until = @su"); cmd.Parameters.AddWithValue("su", suspendedUntil.Value); }
-        if (stateNote is not null) { sets.Add("state_note = @note"); cmd.Parameters.AddWithValue("note", stateNote); }
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            var hasMetadataChange = username is not null || active.HasValue || approve.HasValue ||
+                status is not null || clearSuspendedFrom || suspendedFrom.HasValue ||
+                clearSuspendedUntil || suspendedUntil.HasValue || stateNote is not null;
 
-        cmd.CommandText = $"UPDATE auth.users SET {string.Join(", ", sets)} WHERE user_id = @id";
-        cmd.Parameters.AddWithValue("id", userId);
-        var rows = await cmd.ExecuteNonQueryAsync(ct);
-        if (rows == 0) return null;
+            if (hasMetadataChange)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                var sets = new List<string> { "updated_at = now()" };
+                if (username is not null) { sets.Add("username = @username"); cmd.Parameters.AddWithValue("username", username); }
+                if (active.HasValue) { sets.Add("active = @active"); cmd.Parameters.AddWithValue("active", active.Value); }
+                if (approve.HasValue) { sets.Add("approve = @approve"); cmd.Parameters.AddWithValue("approve", approve.Value); }
+                if (status is not null) { sets.Add("status = @status"); cmd.Parameters.AddWithValue("status", status); }
+                if (clearSuspendedFrom) sets.Add("suspended_from = NULL");
+                else if (suspendedFrom.HasValue) { sets.Add("suspended_from = @sf"); cmd.Parameters.AddWithValue("sf", suspendedFrom.Value); }
+                if (clearSuspendedUntil) sets.Add("suspended_until = NULL");
+                else if (suspendedUntil.HasValue) { sets.Add("suspended_until = @su"); cmd.Parameters.AddWithValue("su", suspendedUntil.Value); }
+                if (stateNote is not null) { sets.Add("state_note = @note"); cmd.Parameters.AddWithValue("note", stateNote); }
+
+                cmd.CommandText = $"UPDATE auth.users SET {string.Join(", ", sets)} WHERE user_id = @id";
+                cmd.Parameters.AddWithValue("id", userId);
+                var rows = await cmd.ExecuteNonQueryAsync(ct);
+                if (rows == 0)
+                {
+                    await tx.RollbackAsync(ct);
+                    return null;
+                }
+            }
+            else
+            {
+                await using var existsCmd = conn.CreateCommand();
+                existsCmd.Transaction = tx;
+                existsCmd.CommandText = "SELECT 1 FROM auth.users WHERE user_id = @id";
+                existsCmd.Parameters.AddWithValue("id", userId);
+                if (await existsCmd.ExecuteScalarAsync(ct) is null)
+                {
+                    await tx.RollbackAsync(ct);
+                    return null;
+                }
+            }
+
+            if (roleName is "admin" or "user")
+            {
+                await using var roleCheckCmd = conn.CreateCommand();
+                roleCheckCmd.Transaction = tx;
+                roleCheckCmd.CommandText =
+                    "SELECT EXISTS(SELECT 1 FROM auth.grants WHERE user_id = @id AND role_name = 'admin' AND realm = 'admin/system')";
+                roleCheckCmd.Parameters.AddWithValue("id", userId);
+                var hadAdminGrant = (bool)(await roleCheckCmd.ExecuteScalarAsync(ct))!;
+                var wantsAdminGrant = roleName == "admin";
+                var roleChanged = hadAdminGrant != wantsAdminGrant;
+
+                if (wantsAdminGrant)
+                {
+                    await using var grantCmd = conn.CreateCommand();
+                    grantCmd.Transaction = tx;
+                    grantCmd.CommandText =
+                        """
+                        INSERT INTO auth.grants (user_id, role_name, realm)
+                        VALUES (@id, 'admin', 'admin/system')
+                        ON CONFLICT (user_id, role_name, realm) DO NOTHING
+                        """;
+                    grantCmd.Parameters.AddWithValue("id", userId);
+                    await grantCmd.ExecuteNonQueryAsync(ct);
+                }
+                else
+                {
+                    await using var revokeGrantCmd = conn.CreateCommand();
+                    revokeGrantCmd.Transaction = tx;
+                    revokeGrantCmd.CommandText =
+                        "DELETE FROM auth.grants WHERE user_id = @id AND role_name = 'admin' AND realm = 'admin/system'";
+                    revokeGrantCmd.Parameters.AddWithValue("id", userId);
+                    await revokeGrantCmd.ExecuteNonQueryAsync(ct);
+                }
+
+                // Role change completes in the same transaction as the grant update: an already-issued
+                // access JWT carries the pre-change role claim, so every active session for this user
+                // must be invalidated here — otherwise JwtGuard's session-active check would still admit
+                // the stale-role token (session-active alone doesn't encode role staleness).
+                if (roleChanged)
+                {
+                    await using var revokeSessionsCmd = conn.CreateCommand();
+                    revokeSessionsCmd.Transaction = tx;
+                    revokeSessionsCmd.CommandText =
+                        "UPDATE auth.sessions SET revoked_at = now() WHERE user_id = @id AND revoked_at IS NULL";
+                    revokeSessionsCmd.Parameters.AddWithValue("id", userId);
+                    await revokeSessionsCmd.ExecuteNonQueryAsync(ct);
+                }
+            }
+
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+
         return await GetUserAsync(userId, ct);
     }
 
@@ -185,7 +274,8 @@ public class NpgsqlAuthMasterRepository : AuthMasterRepository
                 reader.IsDBNull(7) ? null : reader.GetString(7),
                 new DateTimeOffset(reader.GetDateTime(8), TimeSpan.Zero),
                 new DateTimeOffset(reader.GetDateTime(9), TimeSpan.Zero),
-                reader.IsDBNull(10) ? null : new DateTimeOffset(reader.GetDateTime(10), TimeSpan.Zero)));
+                reader.IsDBNull(10) ? null : new DateTimeOffset(reader.GetDateTime(10), TimeSpan.Zero),
+                reader.GetString(11)));
         }
 
         return list;

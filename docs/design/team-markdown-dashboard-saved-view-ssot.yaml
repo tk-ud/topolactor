@@ -141,12 +141,19 @@ team_markdown_dashboard_saved_view_ssot:
 
   dashboard_surface_contract:
     entry_surface:
-      preferred: /admin/team-dashboard
+      preferred: /dashboard/team
       alternative: /admin/ui-builder_or_admin_dashboard_tab
       implemented:
-        - /admin/team-dashboard
+        - /dashboard/team
       removed:
-        - former_UIBuilder_preset_ecosystem_md_viewer_child_surface (removed 2026-06-09 — responsibility mixing resolved; /admin/team-dashboard is primary route)
+        - former_UIBuilder_preset_ecosystem_md_viewer_child_surface (removed 2026-06-09 — responsibility mixing resolved; /admin/team-dashboard was primary route)
+      route_change_2026_07_14: >-
+        role-based-surface-impl bundle — canonical primary route moved from /admin/team-dashboard
+        (admin-only) to /dashboard/team (authenticated, Normal+admin, via AuthenticatedGate +
+        frontend/islands/TeamDashboardRoleSurface.tsx), per the task's explicit requirement that
+        Team Dashboard become a shared authenticated surface with viewer/authoring role split.
+        /admin/team-dashboard now 302-redirects to /dashboard/team (frontend/routes/admin/team-dashboard/index.tsx)
+        rather than being deleted, pending render/action proof per the repo's route-retirement rule.
     primary_ui:
       - search_input
       - saved_markdown_view_result_list
@@ -346,7 +353,7 @@ team_markdown_dashboard_saved_view_ssot:
         fields:
           - event_id uuid primary key
           - saved_view_id uuid references topology.team_markdown_saved_view
-          - event_kind text not null # create | update | refresh | archive | click_expand | copy | todo_candidate | clone | rebind
+          - event_kind text not null # create | update | refresh | archive | click_expand | copy | todo_candidate | clone | rebind | update_confirmed_write | refresh_confirmed_write | clone_confirmed_write | rebind_confirmed_write
           - actor_id uuid nullable
           - event_payload_json jsonb not null
           - created_at timestamptz
@@ -358,6 +365,37 @@ team_markdown_dashboard_saved_view_ssot:
       - user_adjustment_patch_is_separate_from_bound_record_values
       - search_index_text_is_derived_from_rendered_markdown_seed_and_metadata
       - archive_preserves_history_unless_explicit_delete_policy_exists
+    confirmed_write_atomicity_contract:
+      status: added_role_based_surface_impl_bundle_2026_07_14_round_3
+      resolution_record: >
+        saved_view:update already required payload.confirmed=true and committed its diff-evidence
+        event row (event_kind=update_confirmed_write) in the same transaction as the mutation
+        (UpdateSavedViewWithDiffEvidenceAsync). Round-3 proof-first work found refresh/clone/rebind
+        had neither guarantee — no confirmed gate, and event evidence appended via a separate
+        best-effort AppendEventAsync call outside the mutation transaction — and closed both gaps
+        identically for all three actions.
+      confirmed_gate: >-
+        saved_view:refresh/clone/rebind each require payload.confirmed=true (WRITE_CONFIRMATION_REQUIRED
+        otherwise), checked after full input/seed validation so a direct backend dispatch bypassing
+        the frontend confirm dialog is rejected the same as an unconfirmed one. The existing admin-role
+        gate in AdminRuntime.TeamMarkdown.ExecuteTeamMarkdownAsync still runs first, so a Normal-role
+        JWT is rejected even with confirmed:true.
+      atomic_evidence: >-
+        TeamMarkdownRepository.UpdateSavedViewWithEventEvidenceAsync (refresh/rebind,
+        event_kind=refresh_confirmed_write|rebind_confirmed_write) and CloneSavedViewWithEvidenceAsync
+        (clone, event_kind=clone_confirmed_write) each commit the mutation and its event_payload_json
+        evidence row inside one NpgsqlTransaction; an event-insert failure rolls back the mutation too,
+        proven against real PostgreSQL via a deliberate CHECK-constraint fault injection
+        (UpdateSavedViewWithEventEvidenceAsync_EventEvidenceInsertFailure_RollsBackMutation).
+      proof: >-
+        backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs (in-memory confirmed-gate
+        proof for all three actions, admin-role gate proof) and its real-PostgreSQL LiveDb tests
+        (UpdateSavedViewWithEventEvidenceAsync_CommitsMutationAndEventRowInOneTransaction,
+        CloneSavedViewWithEvidenceAsync_CommitsNewRowAndEventRowInOneTransaction,
+        UpdateSavedViewWithEventEvidenceAsync_EventEvidenceInsertFailure_RollsBackMutation);
+        frontend/tests/savedViewOperationPanel.test.ts (real DOM render + real dispatch body capture)
+        proves confirmed:true is only sent after the explicit ApplyConfirmDialog confirm step and that
+        editing a field after preview invalidates the stale confirm step before any write can occur.
 
   search_contract:
     search_scope:

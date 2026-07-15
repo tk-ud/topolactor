@@ -156,6 +156,17 @@ export type ComponentCatalogIdentity = {
   sourcePath: string;
 };
 
+// Separate from runtimeConnected (which strictly means "factory/constructor reachable via
+// RUNTIME_COMPONENT_FACTORIES" — see SsotWiringAuditComponentRegistrationTests and
+// runtimeComponentCatalogFullConnection.test.ts, and must never be redefined to mean this).
+// "existing_route_composition" is the other real, SSOT-sanctioned way a component is reachable:
+// a Fresh route (or a parent component already reachable from one) mounts it directly. An entry
+// claiming this must set routeCompositionFile to the file that actually imports/mounts it —
+// ComponentRegistrationLane_ExistingRouteCompositionEntries_MustBeMountedInClaimedFile (backend)
+// and the frontend counterpart in runtimeComponentCatalogFullConnection.test.ts verify the claim
+// against the real file contents, not just the prose in `notes`.
+export type ComponentRuntimeReachability = "existing_route_composition";
+
 export type ComponentCatalogClassification = {
   componentKey: string;
   componentKind: string;
@@ -167,6 +178,8 @@ export type ComponentCatalogClassification = {
   capabilityTags: ComponentCapabilityTag[];
   runtimeConnected: boolean;
   registrationRequired: boolean;
+  runtimeReachability?: ComponentRuntimeReachability;
+  routeCompositionFile?: string;
   notes?: string;
 };
 

@@ -84,11 +84,55 @@ public abstract class TeamMarkdownRepository
         => Task.FromResult<(bool, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
 
 
+    // ─── saved view update with durable diff evidence ────────────────────────
+    // Combines the mutation and its diff-evidence event append into one transaction (unlike
+    // UpdateSavedViewAsync + a separate best-effort AppendEventAsync call). This is the write step
+    // of the preview -> validate -> explicit_confirm -> write -> diff_log authoring workflow: the
+    // event row this produces is the completion proof, not a best-effort side effect.
+
+    public virtual Task<(bool Updated, string? ErrorCode, string? Message, string? EventId)>
+        UpdateSavedViewWithDiffEvidenceAsync(Guid savedViewId, string? title, string? renderedMarkdown,
+            System.Text.Json.JsonElement? userAdjustmentPatchJson,
+            System.Text.Json.JsonElement? completedPresetSeedJson,
+            string? searchIndexText,
+            System.Text.Json.JsonElement? cardMetadataJson,
+            System.Text.Json.JsonElement? bindingJson,
+            string actor,
+            CancellationToken ct = default)
+        => Task.FromResult<(bool, string?, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured", null));
+
+    // ─── saved view refresh / rebind with durable event evidence ─────────────
+    // Combines the mutation and its confirmed-write event-evidence append into one transaction
+    // (unlike UpdateSavedViewAsync + a separate best-effort AppendEventAsync call) — the same
+    // atomicity guarantee UpdateSavedViewWithDiffEvidenceAsync gives saved_view:update, generalized
+    // to any eventKind so refresh/rebind reuse the identical transactional pattern instead of a
+    // best-effort side call whose failure would otherwise leave the mutation committed anyway.
+
+    public virtual Task<(bool Updated, string? ErrorCode, string? Message, string? EventId)>
+        UpdateSavedViewWithEventEvidenceAsync(Guid savedViewId, string eventKind, string? title, string? renderedMarkdown,
+            System.Text.Json.JsonElement? userAdjustmentPatchJson,
+            System.Text.Json.JsonElement? completedPresetSeedJson,
+            string? searchIndexText,
+            System.Text.Json.JsonElement? cardMetadataJson,
+            System.Text.Json.JsonElement? bindingJson,
+            string actor,
+            CancellationToken ct = default)
+        => Task.FromResult<(bool, string?, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured", null));
+
     // ─── saved view clone ────────────────────────────────────────────────────
 
     public virtual Task<(string? SavedViewId, string? ErrorCode, string? Message)>
         CloneSavedViewAsync(TeamMarkdownSavedViewCreateRequest request, CancellationToken ct = default)
         => CreateSavedViewAsync(request, ct);
+
+    // ─── saved view clone with durable event evidence ────────────────────────
+    // Combines the new-row insert and its confirmed-write event-evidence append into one
+    // transaction, mirroring UpdateSavedViewWithEventEvidenceAsync's atomicity guarantee for the
+    // create-a-new-row shape clone requires (unlike refresh/rebind, which mutate the existing row).
+
+    public virtual Task<(string? SavedViewId, string? ErrorCode, string? Message, string? EventId)>
+        CloneSavedViewWithEvidenceAsync(TeamMarkdownSavedViewCreateRequest request, Guid sourceSavedViewId, string actor, CancellationToken ct = default)
+        => Task.FromResult<(string?, string?, string?, string?)>((null, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured", null));
 
     // ─── saved view archive ──────────────────────────────────────────────────
 

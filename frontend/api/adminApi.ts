@@ -976,6 +976,8 @@ export type AuthUserRoster = {
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
+  /** "admin" or "user" — read projection of auth.grants. Role changes go through updateAuthUser(roleName). */
+  role: string;
 };
 
 export async function listAuthUsers(query?: string): Promise<AuthUserRoster[] | null> {
@@ -1011,12 +1013,73 @@ export async function updateAuthUser(input: {
   clearSuspendedFrom?: boolean;
   clearSuspendedUntil?: boolean;
   stateNote?: string | null;
+  /** "admin" or "user" — never a password field. Omit to leave role unchanged. */
+  roleName?: "admin" | "user";
 }): Promise<AuthUserRoster | null> {
   return callAdminMasterOp("auth_users", "update", input);
 }
 
 export async function deleteAuthUser(userId: string): Promise<{ ok: boolean } | null> {
   return callAdminMasterOp("auth_users", "delete", { userId });
+}
+
+// ─── Admin-driven session / credential revoke (thin HTTP boundary, bypasses /dispatch) ─────────
+// Admin can act on any userId but never reads/sets a password value — these only revoke.
+
+export type AdminSessionSummary = {
+  sessionId: string;
+  realm: string;
+  audience: string;
+  expiresAt: string;
+  createdAt: string;
+  isCurrent: boolean;
+};
+
+async function adminAuthFetch<T>(path: string, init: RequestInit): Promise<T> {
+  const token = getToken();
+  try {
+    const response = await fetch(path, {
+      ...init,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init.headers ?? {}),
+      },
+    });
+    const json: unknown = await response.json();
+    if (typeof json === "object" && json !== null && !Array.isArray(json) && "success" in json) {
+      return json as T;
+    }
+    return { success: false, errors: [{ message: `unexpected response shape from ${path}` }] } as T;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, errors: [{ message }] } as T;
+  }
+}
+
+export async function adminListUserSessions(
+  userId: string,
+): Promise<{ success: boolean; sessions?: AdminSessionSummary[]; errors?: ValidationError[] }> {
+  return adminAuthFetch(`/api/admin/auth/users/${userId}/sessions`, { method: "GET" });
+}
+
+/** Omit sessionId to revoke every active session for the account. */
+export async function adminRevokeUserSessions(
+  userId: string,
+  sessionId?: string,
+): Promise<{ success: boolean; sessionsRevoked?: number; errors?: ValidationError[] }> {
+  return adminAuthFetch(`/api/admin/auth/users/${userId}/sessions/revoke`, {
+    method: "POST",
+    body: JSON.stringify(sessionId ? { sessionId } : {}),
+  });
+}
+
+/** Kill-switch: deletes the account's credential and revokes all sessions. Never sets a new password. */
+export async function adminRevokeUserCredential(
+  userId: string,
+): Promise<{ success: boolean; errors?: ValidationError[] }> {
+  return adminAuthFetch(`/api/admin/auth/users/${userId}/credential/revoke`, { method: "POST" });
 }
 
 export async function deprecateAdminManifest(manifestId: string): Promise<AdminManifestLifecycleResult | null> {

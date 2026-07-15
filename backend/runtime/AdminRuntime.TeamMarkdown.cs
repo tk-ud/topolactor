@@ -353,17 +353,22 @@ public partial class AdminRuntime
         if (bindingValidationError is not null)
             return (null, bindingValidationError);
 
-        var (updated, errorCode, message) = await _teamMarkdownRepository.UpdateSavedViewAsync(
-            savedViewId, null, refreshedMarkdown, existing.UserAdjustmentPatchJson, updatedSeed, searchIndex, cardMeta, null, ct);
+        // Refresh writes are gated by the same explicit payload.confirmed=true requirement
+        // saved_view:update enforces — full validation always runs first (above), but a direct
+        // dispatch that bypasses the frontend's confirm dialog must still be rejected here.
+        var confirmed = p.TryGetProperty("confirmed", out var cfEl) && cfEl.ValueKind == JsonValueKind.True;
+        if (!confirmed)
+            return (null, new ValidationError("WRITE_CONFIRMATION_REQUIRED",
+                "Refresh requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var actor = vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind ?? "unknown";
+        var (updated, errorCode, message, eventId) = await _teamMarkdownRepository.UpdateSavedViewWithEventEvidenceAsync(
+            savedViewId, "refresh_confirmed_write", null, refreshedMarkdown, existing.UserAdjustmentPatchJson, updatedSeed, searchIndex, cardMeta, null, actor, ct);
         if (errorCode is not null)
             return (null, new ValidationError(errorCode, message ?? errorCode));
 
-        // Event append is best-effort.
-        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "refresh", null,
-            JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
-
         _logger.LogInformation("AdminRuntime.TeamMarkdown.SavedViewRefresh: savedViewId={SavedViewId}", savedViewId);
-        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString() }), null);
+        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString(), eventId }), null);
     }
 
     // ─── saved view clone ────────────────────────────────────────────────────
@@ -410,14 +415,18 @@ public partial class AdminRuntime
         var title = p.TryGetProperty("title", out var titleEl) ? titleEl.GetString() ?? existing.Title : existing.Title;
         var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() ?? "" : string.Join(" ", title, targetTable, targetRecord, render.RenderedMarkdown);
         var cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? cm : existing.CardMetadataJson;
+
+        var confirmed = p.TryGetProperty("confirmed", out var cfEl) && cfEl.ValueKind == JsonValueKind.True;
+        if (!confirmed)
+            return (null, new ValidationError("WRITE_CONFIRMATION_REQUIRED",
+                "Clone requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var actor = vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind ?? "unknown";
         var request = new TeamMarkdownSavedViewCreateRequest(existing.TemplateId, title, targetTable!, targetRecord!,
             existing.BindingJson, completedSeed, render.RenderedMarkdown, existing.UserAdjustmentPatchJson, searchIndex, cardMeta);
-        var (newId, createError, createMsg) = await _teamMarkdownRepository.CloneSavedViewAsync(request, ct);
+        var (newId, createError, createMsg, eventId) = await _teamMarkdownRepository.CloneSavedViewWithEvidenceAsync(request, sourceSavedViewId, actor, ct);
         if (createError is not null) return (null, new ValidationError(createError, createMsg ?? createError));
-        if (Guid.TryParse(newId, out var newGuid))
-            _ = await _teamMarkdownRepository.AppendEventAsync(newGuid, "clone", null,
-                JsonSerializer.SerializeToElement(new { sourceSavedViewId = sourceSavedViewId.ToString(), savedViewId = newId }), ct);
-        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = newId, sourceSavedViewId = sourceSavedViewId.ToString() }), null);
+        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = newId, sourceSavedViewId = sourceSavedViewId.ToString(), eventId }), null);
     }
 
     // ─── saved view rebind ───────────────────────────────────────────────────
@@ -462,15 +471,25 @@ public partial class AdminRuntime
 
         var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() ?? existing.SearchIndexText : existing.SearchIndexText;
         var cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? (JsonElement?)cm : null;
-        var (updated, updateError, updateMsg) = await _teamMarkdownRepository.UpdateSavedViewAsync(savedViewId,
-            null, render.RenderedMarkdown, existing.UserAdjustmentPatchJson, completedSeed, searchIndex, cardMeta, bindingJson, ct);
+
+        var confirmed = p.TryGetProperty("confirmed", out var cfEl) && cfEl.ValueKind == JsonValueKind.True;
+        if (!confirmed)
+            return (null, new ValidationError("WRITE_CONFIRMATION_REQUIRED",
+                "Rebind requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var actor = vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind ?? "unknown";
+        var (updated, updateError, updateMsg, eventId) = await _teamMarkdownRepository.UpdateSavedViewWithEventEvidenceAsync(savedViewId,
+            "rebind_confirmed_write", null, render.RenderedMarkdown, existing.UserAdjustmentPatchJson, completedSeed, searchIndex, cardMeta, bindingJson, actor, ct);
         if (updateError is not null) return (null, new ValidationError(updateError, updateMsg ?? updateError));
-        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "rebind", null,
-            JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
-        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString(), updated }), null);
+        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString(), updated, eventId }), null);
     }
 
     // ─── saved view update ───────────────────────────────────────────────────
+    // Authoring workflow: preview/validate (payload.dryRun=true, non-mutating) -> explicit_confirm
+    // (frontend UI) -> write (payload.dryRun absent/false AND payload.confirmed=true). The write step
+    // re-runs the identical validation against the identical input every time — dryRun is not trusted
+    // as prior proof — and the actual UPDATE + its diff-evidence event are one atomic transaction via
+    // UpdateSavedViewWithDiffEvidenceAsync, never a best-effort side call.
 
     private async Task<(JsonElement? data, ValidationError? error)>
         DataTeamMarkdownSavedViewUpdateAsync(OperationVector vector, CancellationToken ct)
@@ -486,6 +505,8 @@ public partial class AdminRuntime
             return (null, new ValidationError("SAVED_VIEW_PAYLOAD_REQUIRED", "payload is required for team_markdown:saved_view:update"));
 
         var p = vector.Payload.Value;
+        var dryRun = p.TryGetProperty("dryRun", out var drEl) && drEl.ValueKind == JsonValueKind.True;
+        var confirmed = p.TryGetProperty("confirmed", out var cfEl) && cfEl.ValueKind == JsonValueKind.True;
         var title = p.TryGetProperty("title", out var t) ? t.GetString() : null;
         var renderedMarkdown = p.TryGetProperty("renderedMarkdown", out var rm) ? rm.GetString() : null;
         JsonElement? adjustmentPatch = p.TryGetProperty("userAdjustmentPatchJson", out var ua) ? ua : null;
@@ -498,14 +519,10 @@ public partial class AdminRuntime
         }
 
         var touchesSeedGatedProjection = renderedMarkdown is not null || adjustmentPatch.HasValue;
-        TeamMarkdownSavedViewDetail? existing = null;
-        if (touchesSeedGatedProjection || seedJson.HasValue)
-        {
-            var (detail, getError, getMsg) = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
-            if (getError is not null) return (null, new ValidationError(getError, getMsg ?? getError));
-            if (detail is null) return (null, new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {savedViewId} not found"));
-            existing = detail;
-        }
+        var (detail, getError, getMsg) = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
+        if (getError is not null) return (null, new ValidationError(getError, getMsg ?? getError));
+        if (detail is null) return (null, new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {savedViewId} not found"));
+        var existing = detail;
 
         if (touchesSeedGatedProjection && !seedJson.HasValue)
             return (null, new ValidationError("COMPLETED_PRESET_SEED_MISSING",
@@ -513,29 +530,52 @@ public partial class AdminRuntime
 
         if (seedJson.HasValue)
         {
-            var markdownForHash = renderedMarkdown ?? existing!.RenderedMarkdown;
+            var markdownForHash = renderedMarkdown ?? existing.RenderedMarkdown;
             var hashError = CompletedPresetSeedValidator.ValidateRenderedMarkdownHash(seedJson.Value, markdownForHash);
             if (hashError is not null) return (null, hashError);
-            var patchForValidation = adjustmentPatch ?? existing!.UserAdjustmentPatchJson;
+            var patchForValidation = adjustmentPatch ?? existing.UserAdjustmentPatchJson;
             var adjustmentError = CompletedPresetSeedValidator.ValidateAdjustmentPatch(seedJson.Value, patchForValidation);
             if (adjustmentError is not null) return (null, adjustmentError);
-            var bindingError = CompletedPresetSeedValidator.ValidateBindingJson(seedJson.Value, existing!.BindingJson);
+            var bindingError = CompletedPresetSeedValidator.ValidateBindingJson(seedJson.Value, existing.BindingJson);
             if (bindingError is not null) return (null, bindingError);
         }
 
         var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() : null;
         JsonElement? cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? cm : null;
 
-        var (updated, errorCode, message) = await _teamMarkdownRepository.UpdateSavedViewAsync(
-            savedViewId, title, renderedMarkdown, adjustmentPatch, seedJson, searchIndex, cardMeta, null, ct);
+        // preview / validate: every validation gate above already ran; return without mutating.
+        if (dryRun)
+        {
+            return (JsonSerializer.SerializeToElement(new
+            {
+                ok = true,
+                dryRun = true,
+                valid = true,
+                savedViewId = savedViewId.ToString(),
+                preview = new
+                {
+                    title = title ?? existing.Title,
+                    renderedMarkdown = renderedMarkdown ?? existing.RenderedMarkdown,
+                },
+            }), null);
+        }
+
+        if (!confirmed)
+            return (null, new ValidationError("SAVED_VIEW_WRITE_NOT_CONFIRMED",
+                "Write requires payload.confirmed=true after an explicit user confirmation step."));
+
+        var actor = vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind ?? "unknown";
+        var (updated, errorCode, message, eventId) = await _teamMarkdownRepository.UpdateSavedViewWithDiffEvidenceAsync(
+            savedViewId, title, renderedMarkdown, adjustmentPatch, seedJson, searchIndex, cardMeta, null, actor, ct);
         if (errorCode is not null)
             return (null, new ValidationError(errorCode, message ?? errorCode));
 
-        // Event append is best-effort.
-        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "update", null,
-            JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
-
-        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString() }), null);
+        return (JsonSerializer.SerializeToElement(new
+        {
+            ok = true,
+            savedViewId = savedViewId.ToString(),
+            diffEventId = eventId,
+        }), null);
     }
 
     // ─── saved view archive ──────────────────────────────────────────────────
@@ -562,11 +602,33 @@ public partial class AdminRuntime
     }
 
     // ─── team_markdown dispatch router ───────────────────────────────────────
+    // Read actions (list/get/search) are open to any authenticated caller reaching admin_runtime.
+    // Mutation actions additionally require AuthenticatedRole=="admin" — an explicit, non-spoofable,
+    // in-method check (AuthenticatedRole is sourced only from the JWT-verified DispatchAuthContext
+    // stamp, never from client-supplied context) that does not depend on manifest/seed content, as
+    // defense-in-depth alongside the existing manifest capability_requirement inference. This is the
+    // backend authority re-check every Team Markdown mutation now goes through, independent of
+    // whichever role the frontend chose to display authoring UI for.
+
+    private static readonly HashSet<string> TeamMarkdownMutationActions = new(StringComparer.Ordinal)
+    {
+        "template:create", "template:update", "template:archive",
+        "saved_view:create", "saved_view:refresh", "saved_view:clone",
+        "saved_view:rebind", "saved_view:update", "saved_view:archive",
+    };
 
     internal async Task<(JsonElement? data, ValidationError? error)>
         ExecuteTeamMarkdownAsync(OperationVector vector, CancellationToken ct)
     {
         var action = vector.Action ?? "";
+
+        if (TeamMarkdownMutationActions.Contains(action) &&
+            !string.Equals(vector.AuthenticatedRole, "admin", StringComparison.Ordinal))
+        {
+            return (null, new ValidationError("AUTH_CAPABILITY_DENIED",
+                $"team_markdown:{action} requires admin role."));
+        }
+
         return action switch
         {
             "template:create"      => await DataTeamMarkdownTemplateCreateAsync(vector, ct),

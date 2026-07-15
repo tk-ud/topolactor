@@ -1,3 +1,4 @@
+using Topolactor.Endpoint;
 using Topolactor.Schema;
 
 namespace Topolactor.Runtime;
@@ -30,6 +31,8 @@ public class OperationVectorResolver
         string? contextEnumGroupId = null;
         int? contextPrevEnumIndex = null;
         int? contextNextEnumIndex = null;
+        string? authenticatedUserId = null;
+        string? authenticatedRole = null;
 
         if (request.Context is not null)
         {
@@ -46,6 +49,10 @@ public class OperationVectorResolver
             if (request.Context.TryGetValue("next_enum_index", out var nextRaw) &&
                 int.TryParse(nextRaw, out var nextIdx))
                 contextNextEnumIndex = nextIdx;
+            // Server-verified identity, stamped only by DispatchAuthContext.ApplyJwtAuthority —
+            // never present unless the /dispatch boundary already validated the JWT.
+            request.Context.TryGetValue(DispatchAuthContext.AuthenticatedUserIdKey, out authenticatedUserId);
+            request.Context.TryGetValue(DispatchAuthContext.AuthenticatedRolesKey, out authenticatedRole);
         }
 
         // role from direct field takes precedence over Context["UserRole"]
@@ -67,7 +74,9 @@ public class OperationVectorResolver
             ContextEnumGroupId: contextEnumGroupId,
             ContextPrevEnumIndex: contextPrevEnumIndex,
             ContextNextEnumIndex: contextNextEnumIndex,
-            TriggerKind: request.TriggerKind
+            TriggerKind: request.TriggerKind,
+            AuthenticatedUserId: authenticatedUserId,
+            AuthenticatedRole: authenticatedRole
         );
     }
 

@@ -8,6 +8,30 @@ runtime_connected:
   definition: runtime adapter/renderer supported (code/runtime connection)
   note: does_not_mean_db_registered_topology_entity
 
+runtime_reachability:
+  status: added_role_based_surface_impl_bundle_2026_07_14
+  resolution_record: >
+    runtime_connected strictly means factory/constructor reachable via RUNTIME_COMPONENT_FACTORIES
+    (SsotWiringAuditComponentRegistrationTests.ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByFactoryRegistryBoundary)
+    and this addition does not redefine that. A component can be equally reachable at runtime
+    because a Fresh route (or a parent component already reachable from one) mounts it directly —
+    "existing_route_composition", already authorized by admin-normal-surface-projection-seed-ssot.yaml's
+    inputer_runtime_adapter_contract route_composition_alternative — and that claim is now a
+    structured, test-verified field rather than free-text catalog notes prose.
+  values: [existing_route_composition]
+  entry_fields:
+    - runtimeReachability — optional; one of the values above.
+    - routeCompositionFile — required when runtimeReachability is set; the file that actually
+        imports/mounts the component. Verified against real file contents (not just asserted) by
+        backend SsotWiringAuditComponentRegistrationTests.ComponentRegistrationLane_ExistingRouteCompositionEntries_MustBeMountedInClaimedFile
+        and frontend runtimeComponentCatalogFullConnection.test.ts's route-composition reachability tests.
+  helper: frontend/components/catalog.ts isRuntimeReachable(entry) returns runtimeConnected ||
+    runtimeReachability === "existing_route_composition" — the single place callers needing
+    "is this reachable at all" (rather than "is this factory-registered") should read from.
+  prohibited:
+    - redefining_runtime_connected_to_include_route_composition
+    - treating_a_routeCompositionFile_claim_as_true_without_the_paired_test_verifying_it
+
 registration_required:
   definition: requires DB registration/promotion before topology entity treatment
   rule:

@@ -140,6 +140,69 @@ public class SsotWiringAuditComponentRegistrationTests
         }
     }
 
+    // componentKey -> the exported identifier that must appear in the file at routeCompositionFile.
+    // Mirrors frontend/tests/runtimeComponentCatalogFullConnection.test.ts's
+    // EXISTING_ROUTE_COMPOSITION_MOUNT_IDENTIFIERS — keep both in sync when adding an entry.
+    private static readonly IReadOnlyDictionary<string, string> ExistingRouteCompositionMountIdentifiers =
+        new Dictionary<string, string>
+        {
+            ["md_translation_authoring_surface.authoring"] = "TeamMarkdownAuthoring",
+            ["team_markdown_dashboard.viewer"] = "TeamMarkdownViewer",
+            ["saved_view_adjustment_authoring.authoring"] = "SavedViewAdjustmentAuthoringPanel",
+            ["personal_page.projection"] = "PersonalPage",
+            ["normal_dashboard_home.projection"] = "NormalDashboardHome",
+            ["credential_management.admin_operation"] = "AdminUsersRoster",
+            ["admin_enum_roster.admin_operation"] = "AdminEnumsRoster",
+            ["scheduler_job_settings.admin_operation"] = "SchedulerJobSettingsPanel",
+            ["hub_navigation_admin.admin_operation"] = "HubNavigationAdmin",
+        };
+
+    // runtimeConnected strictly means "factory/constructor reachable via RUNTIME_COMPONENT_FACTORIES"
+    // (see ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByFactoryRegistryBoundary
+    // above) and this test does not change that. It verifies the OTHER real reachability condition —
+    // route composition — against the actual file contents, so the claim can't silently rot into
+    // unverified prose in a catalog entry's `notes` field.
+    [Fact]
+    public void ComponentRegistrationLane_ExistingRouteCompositionEntries_MustBeMountedInClaimedFile()
+    {
+        var catalog = SsotYamlContractReader.ReadDoc("frontend/components/catalog.ts");
+        var entries = ExtractCatalogEntries(catalog).ToArray();
+
+        var reachabilityEntries = entries
+            .Where(entry => Regex.IsMatch(entry, @"runtimeReachability:\s*""existing_route_composition"""))
+            .Select(entry => new
+            {
+                ComponentKey = Regex.Match(entry, @"componentKey:\s*""([^""]+)""").Groups[1].Value,
+                RouteCompositionFile = Regex.Match(entry, @"routeCompositionFile:\s*""([^""]+)""").Groups[1].Value,
+            })
+            .ToArray();
+
+        Assert.NotEmpty(reachabilityEntries);
+        foreach (var entry in reachabilityEntries)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(entry.RouteCompositionFile),
+                $"runtimeReachability:existing_route_composition entry must set routeCompositionFile: {entry.ComponentKey}");
+            Assert.True(
+                ExistingRouteCompositionMountIdentifiers.TryGetValue(entry.ComponentKey, out var mountIdentifier),
+                $"no expected mount identifier registered for {entry.ComponentKey} — add one to ExistingRouteCompositionMountIdentifiers");
+
+            string fileContent;
+            try
+            {
+                fileContent = SsotYamlContractReader.ReadDoc(entry.RouteCompositionFile);
+            }
+            catch (FileNotFoundException)
+            {
+                Assert.Fail($"routeCompositionFile does not exist on disk: {entry.RouteCompositionFile} ({entry.ComponentKey})");
+                return;
+            }
+
+            Assert.True(
+                fileContent.Contains(mountIdentifier!, StringComparison.Ordinal),
+                $"routeCompositionFile {entry.RouteCompositionFile} does not reference {mountIdentifier} for {entry.ComponentKey} — route-composition reachability claim is unverified");
+        }
+    }
+
     // Extracts each top-level { ... } entry from COMPONENT_CATALOG_ENTRIES by tracking
     // balanced braces. This ensures per-entry field reads do not cross object boundaries.
     private static IEnumerable<string> ExtractCatalogEntries(string catalog)

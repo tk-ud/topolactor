@@ -774,18 +774,29 @@ Deno.test("md_viewer is a projection component, not a preset DB seed registratio
 
 // ─── UIBuilder / route placement bundle ─────────────────────────────────────
 
-Deno.test("TeamMarkdownDashboard primary route is /admin/team-dashboard (not UIBuilder permanent child surface)", async () => {
-  const routeSource = await Deno.readTextFile(
+Deno.test("TeamMarkdownDashboard primary route is /dashboard/team, /admin/team-dashboard is a compat redirect (not UIBuilder permanent child surface)", async () => {
+  const primaryRouteSource = await Deno.readTextFile(
+    "frontend/routes/dashboard/team.tsx",
+  );
+  const legacyRouteSource = await Deno.readTextFile(
     "frontend/routes/admin/team-dashboard/index.tsx",
+  );
+  const roleSurfaceSource = await Deno.readTextFile(
+    "frontend/islands/TeamDashboardRoleSurface.tsx",
   );
   const uiBuilderSource = await Deno.readTextFile(
     "frontend/islands/UiBuilderAdmin.tsx",
   );
 
-  // /admin/team-dashboard is the canonical primary route
-  assertEquals(routeSource.includes("<AdminAuthGate>"), true);
-  assertEquals(routeSource.includes("TeamMarkdownDashboard"), true);
-  assertEquals(routeSource.includes('placement="admin_route"'), true);
+  // /dashboard/team is the canonical primary route (authenticated, Normal+admin, role-split)
+  assertEquals(primaryRouteSource.includes("AuthenticatedGate"), true);
+  assertEquals(primaryRouteSource.includes("TeamDashboardRoleSurface"), true);
+  assertEquals(roleSurfaceSource.includes("TeamMarkdownViewer"), true);
+  assertEquals(roleSurfaceSource.includes("TeamMarkdownAuthoring"), true);
+
+  // /admin/team-dashboard is kept as a compat redirect, not deleted, per route-retirement rule
+  assertEquals(legacyRouteSource.includes("302"), true);
+  assertEquals(legacyRouteSource.includes("/dashboard/team"), true);
 
   // UiBuilder must NOT permanently mount Team Markdown Dashboard as a child surface
   assertEquals(
@@ -894,23 +905,26 @@ Deno.test("md_viewer does not hold active topology / physical record / saved vie
   );
 });
 
-Deno.test("/admin/team-dashboard is the primary placement for saved markdown view search and seed rehydration", async () => {
+Deno.test("/dashboard/team is the primary placement for saved markdown view search and seed rehydration", async () => {
   const routeSource = await Deno.readTextFile(
-    "frontend/routes/admin/team-dashboard/index.tsx",
+    "frontend/routes/dashboard/team.tsx",
+  );
+  const roleSurfaceSource = await Deno.readTextFile(
+    "frontend/islands/TeamDashboardRoleSurface.tsx",
   );
   const ssotSource = await Deno.readTextFile(
     "docs/design/team-markdown-dashboard-saved-view-ssot.yaml",
   );
 
-  // Route must be guarded and mount TeamMarkdownDashboard as admin_route
-  assertEquals(routeSource.includes("<AdminAuthGate>"), true);
-  assertEquals(routeSource.includes("TeamMarkdownDashboard"), true);
-  assertEquals(routeSource.includes('placement="admin_route"'), true);
-  // SSOT must have /admin/team-dashboard as the preferred entry surface
+  // Route must be guarded and mount the role-split surface
+  assertEquals(routeSource.includes("AuthenticatedGate"), true);
+  assertEquals(routeSource.includes("TeamDashboardRoleSurface"), true);
+  assertEquals(roleSurfaceSource.includes("TeamMarkdownViewer"), true);
+  // SSOT must have /dashboard/team as the preferred entry surface
   assertEquals(
-    ssotSource.includes("preferred: /admin/team-dashboard"),
+    ssotSource.includes("preferred: /dashboard/team"),
     true,
-    "SSOT must declare /admin/team-dashboard as the preferred entry surface",
+    "SSOT must declare /dashboard/team as the preferred entry surface",
   );
   // SSOT implemented: block must NOT list UIBuilder as an entry surface.
   // Check only the implemented: block to avoid false-positive on the removed: history entry.

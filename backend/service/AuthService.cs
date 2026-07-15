@@ -102,7 +102,7 @@ public class AuthService
         await _authRepository.CreateRefreshTokenAsync(
             sessionId, refreshHash, sessionExpires, ct);
 
-        var token = _jwtTokenIssuer.IssueAccessToken(user.Username, realmContext);
+        var token = _jwtTokenIssuer.IssueAccessToken(user.Username, realmContext, sessionId);
         await _authRepository.InsertLoginEventAsync(user.UserId, realmContext.Realm, true, null, ct);
 
         _logger.LogDebug("Login succeeded username='{Username}' realm='{Realm}'.",
@@ -155,7 +155,7 @@ public class AuthService
         await _authRepository.CreateRefreshTokenAsync(record.SessionId, newRefreshHash, sessionExpires, ct);
 
         var realmContext = new AuthRealmContext(record.Realm, record.Audience, record.Role);
-        var accessToken = _jwtTokenIssuer.IssueAccessToken(record.Username, realmContext);
+        var accessToken = _jwtTokenIssuer.IssueAccessToken(record.Username, realmContext, record.SessionId);
         return (new RefreshResponseDto(true, accessToken, []), newRefreshPlain);
     }
 
@@ -196,6 +196,167 @@ public class AuthService
         await _authRepository.RevokeRefreshTokenAsync(record.RefreshTokenId, ct);
         await _authRepository.RevokeSessionAsync(record.SessionId, ct);
         return new LogoutResponseDto(true, []);
+    }
+
+    // ─── Self-service credential/session lifecycle ───────────────────────────────────────────
+    // Every method below resolves the target account exclusively from jwtSubject (the validated
+    // JWT sub claim = username). No method accepts a userId/username argument from the caller.
+
+    public async Task<CurrentAccountResponseDto> GetCurrentAccountAsync(
+        string jwtSubject, string jwtRole, string jwtRealm, CancellationToken ct = default)
+    {
+        var user = await _authRepository.FindUserByUsernameAsync(jwtSubject, ct);
+        if (user is null)
+            return new CurrentAccountResponseDto(false, null, null, null, null, null, null,
+                [new ValidationError("AUTH_USER_NOT_FOUND", "Authenticated account no longer exists.")]);
+
+        return new CurrentAccountResponseDto(
+            true, user.Username, jwtRole, jwtRealm, user.Active, user.Approve, user.Status, []);
+    }
+
+    public const int MinimumPasswordLength = 8;
+
+    public async Task<ChangeOwnPasswordResponseDto> ChangeOwnPasswordAsync(
+        string jwtSubject, ChangeOwnPasswordRequestDto? request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.CurrentPassword) || string.IsNullOrWhiteSpace(request?.NewPassword))
+            return new ChangeOwnPasswordResponseDto(false, 0,
+                [new ValidationError("AUTH_PASSWORD_CHANGE_FIELDS_REQUIRED", "currentPassword and newPassword are required.")]);
+
+        if (request.NewPassword.Length < MinimumPasswordLength)
+            return new ChangeOwnPasswordResponseDto(false, 0,
+                [new ValidationError("AUTH_PASSWORD_POLICY_TOO_SHORT", $"newPassword must be at least {MinimumPasswordLength} characters.")]);
+
+        if (string.Equals(request.CurrentPassword, request.NewPassword, StringComparison.Ordinal))
+            return new ChangeOwnPasswordResponseDto(false, 0,
+                [new ValidationError("AUTH_PASSWORD_POLICY_UNCHANGED", "newPassword must differ from currentPassword.")]);
+
+        var user = await _authRepository.FindUserByUsernameAsync(jwtSubject, ct);
+        if (user is null)
+            return new ChangeOwnPasswordResponseDto(false, 0,
+                [new ValidationError("AUTH_USER_NOT_FOUND", "Authenticated account no longer exists.")]);
+
+        var newHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        var result = await _authRepository.ChangeOwnPasswordAsync(user.UserId, request.CurrentPassword, newHash, jwtSubject, ct);
+
+        return result.Outcome switch
+        {
+            ChangeOwnPasswordOutcome.Success => new ChangeOwnPasswordResponseDto(true, result.SessionsRevoked, []),
+            ChangeOwnPasswordOutcome.CurrentPasswordInvalid => new ChangeOwnPasswordResponseDto(false, 0,
+                [new ValidationError("AUTH_CURRENT_PASSWORD_INVALID", "Current password is incorrect.")]),
+            _ => new ChangeOwnPasswordResponseDto(false, 0,
+                [new ValidationError("AUTH_CREDENTIAL_NOT_FOUND", "No credential is registered for this account.")]),
+        };
+    }
+
+    public async Task<ListSessionsResponseDto> ListOwnSessionsAsync(
+        string jwtSubject, Guid? currentSessionId, CancellationToken ct = default)
+    {
+        var user = await _authRepository.FindUserByUsernameAsync(jwtSubject, ct);
+        if (user is null)
+            return new ListSessionsResponseDto(false, null,
+                [new ValidationError("AUTH_USER_NOT_FOUND", "Authenticated account no longer exists.")]);
+
+        var sessions = await _authRepository.ListActiveSessionsByUserAsync(user.UserId, ct);
+        var dtos = sessions.Select(s => new SessionSummaryDto(
+            s.SessionId, s.Realm, s.Audience, s.ExpiresAt, s.CreatedAt,
+            IsCurrent: currentSessionId.HasValue && s.SessionId == currentSessionId.Value)).ToArray();
+        return new ListSessionsResponseDto(true, dtos, []);
+    }
+
+    public async Task<RevokeOwnSessionResponseDto> RevokeOwnSessionAsync(
+        string jwtSubject, RevokeOwnSessionRequestDto? request, CancellationToken ct = default)
+    {
+        if (!Guid.TryParse(request?.SessionId, out var sessionId))
+            return new RevokeOwnSessionResponseDto(false,
+                [new ValidationError("AUTH_SESSION_ID_MALFORMED", "sessionId must be a valid UUID.")]);
+
+        var user = await _authRepository.FindUserByUsernameAsync(jwtSubject, ct);
+        if (user is null)
+            return new RevokeOwnSessionResponseDto(false,
+                [new ValidationError("AUTH_USER_NOT_FOUND", "Authenticated account no longer exists.")]);
+
+        var revoked = await _authRepository.RevokeOwnedSessionAsync(user.UserId, sessionId, jwtSubject, ct);
+        return revoked
+            ? new RevokeOwnSessionResponseDto(true, [])
+            : new RevokeOwnSessionResponseDto(false,
+                [new ValidationError("AUTH_SESSION_NOT_FOUND", "Session was not found for this account.")]);
+    }
+
+    public async Task<RevokeOtherSessionsResponseDto> RevokeOtherSessionsAsync(
+        string jwtSubject, Guid? currentSessionId, CancellationToken ct = default)
+    {
+        var user = await _authRepository.FindUserByUsernameAsync(jwtSubject, ct);
+        if (user is null)
+            return new RevokeOtherSessionsResponseDto(false, 0,
+                [new ValidationError("AUTH_USER_NOT_FOUND", "Authenticated account no longer exists.")]);
+
+        var count = await _authRepository.RevokeSessionsForUserAsync(user.UserId, currentSessionId, jwtSubject, ct);
+        return new RevokeOtherSessionsResponseDto(true, count, []);
+    }
+
+    /// <summary>Resolves the session bound to the caller's refresh-token cookie, for "current session" identity.</summary>
+    public async Task<Guid?> ResolveSessionIdFromRefreshTokenAsync(string? refreshTokenPlain, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(refreshTokenPlain)) return null;
+        var hash = JwtTokenIssuer.HashRefreshToken(refreshTokenPlain);
+        return await _authRepository.FindActiveSessionIdByRefreshTokenHashAsync(hash, ct);
+    }
+
+    // ─── Admin-driven credential/session operations ──────────────────────────────────────────
+    // userId is always an explicit route parameter (the target account), resolved and validated
+    // independently of the admin caller's own identity. None of these ever read/set a password value.
+
+    public async Task<AdminListSessionsResponseDto> AdminListSessionsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await _authRepository.GetUserStateByIdAsync(userId, ct);
+        if (user is null)
+            return new AdminListSessionsResponseDto(false, null,
+                [new ValidationError("AUTH_USER_NOT_FOUND", $"User {userId} was not found.")]);
+
+        var sessions = await _authRepository.ListActiveSessionsByUserAsync(userId, ct);
+        var dtos = sessions.Select(s => new SessionSummaryDto(
+            s.SessionId, s.Realm, s.Audience, s.ExpiresAt, s.CreatedAt, IsCurrent: false)).ToArray();
+        return new AdminListSessionsResponseDto(true, dtos, []);
+    }
+
+    public async Task<AdminRevokeSessionsResponseDto> AdminRevokeSessionsAsync(
+        Guid userId, AdminRevokeSessionsRequestDto? request, string actorUsername, CancellationToken ct = default)
+    {
+        var user = await _authRepository.GetUserStateByIdAsync(userId, ct);
+        if (user is null)
+            return new AdminRevokeSessionsResponseDto(false, 0,
+                [new ValidationError("AUTH_USER_NOT_FOUND", $"User {userId} was not found.")]);
+
+        if (!string.IsNullOrWhiteSpace(request?.SessionId))
+        {
+            if (!Guid.TryParse(request.SessionId, out var sessionId))
+                return new AdminRevokeSessionsResponseDto(false, 0,
+                    [new ValidationError("AUTH_SESSION_ID_MALFORMED", "sessionId must be a valid UUID.")]);
+            var revoked = await _authRepository.RevokeOwnedSessionAsync(userId, sessionId, actorUsername, ct);
+            return revoked
+                ? new AdminRevokeSessionsResponseDto(true, 1, [])
+                : new AdminRevokeSessionsResponseDto(false, 0,
+                    [new ValidationError("AUTH_SESSION_NOT_FOUND", "Session was not found for this account.")]);
+        }
+
+        var count = await _authRepository.RevokeSessionsForUserAsync(userId, exceptSessionId: null, actorUsername, ct);
+        return new AdminRevokeSessionsResponseDto(true, count, []);
+    }
+
+    public async Task<AdminRevokeCredentialResponseDto> AdminRevokeCredentialAsync(
+        Guid userId, string actorUsername, CancellationToken ct = default)
+    {
+        var user = await _authRepository.GetUserStateByIdAsync(userId, ct);
+        if (user is null)
+            return new AdminRevokeCredentialResponseDto(false,
+                [new ValidationError("AUTH_USER_NOT_FOUND", $"User {userId} was not found.")]);
+
+        var revoked = await _authRepository.RevokeCredentialAsync(userId, actorUsername, ct);
+        return revoked
+            ? new AdminRevokeCredentialResponseDto(true, [])
+            : new AdminRevokeCredentialResponseDto(false,
+                [new ValidationError("AUTH_CREDENTIAL_NOT_FOUND", "No credential is registered for this account.")]);
     }
 
     private static (string Code, string Message)? EvaluateLoginState(AuthUserRecord user)

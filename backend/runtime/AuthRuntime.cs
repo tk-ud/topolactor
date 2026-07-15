@@ -50,6 +50,47 @@ public class AuthRuntime
     public Task<LogoutResponseDto> LogoutAsync(string? refreshToken, CancellationToken ct = default) =>
         _authService.LogoutAsync(refreshToken, ct);
 
+    // ─── Self-service credential/session lifecycle — target account always the validated JWT subject ───
+
+    public Task<CurrentAccountResponseDto> GetCurrentAccountAsync(
+        string jwtSubject, string jwtRole, string jwtRealm, CancellationToken ct = default) =>
+        _authService.GetCurrentAccountAsync(jwtSubject, jwtRole, jwtRealm, ct);
+
+    public Task<ChangeOwnPasswordResponseDto> ChangeOwnPasswordAsync(
+        string jwtSubject, ChangeOwnPasswordRequestDto? request, CancellationToken ct = default) =>
+        _authService.ChangeOwnPasswordAsync(jwtSubject, request, ct);
+
+    public async Task<ListSessionsResponseDto> ListOwnSessionsAsync(
+        string jwtSubject, string? refreshTokenPlain, CancellationToken ct = default)
+    {
+        var currentSessionId = await _authService.ResolveSessionIdFromRefreshTokenAsync(refreshTokenPlain, ct);
+        return await _authService.ListOwnSessionsAsync(jwtSubject, currentSessionId, ct);
+    }
+
+    public Task<RevokeOwnSessionResponseDto> RevokeOwnSessionAsync(
+        string jwtSubject, RevokeOwnSessionRequestDto? request, CancellationToken ct = default) =>
+        _authService.RevokeOwnSessionAsync(jwtSubject, request, ct);
+
+    public async Task<RevokeOtherSessionsResponseDto> RevokeOtherSessionsAsync(
+        string jwtSubject, string? refreshTokenPlain, CancellationToken ct = default)
+    {
+        var currentSessionId = await _authService.ResolveSessionIdFromRefreshTokenAsync(refreshTokenPlain, ct);
+        return await _authService.RevokeOtherSessionsAsync(jwtSubject, currentSessionId, ct);
+    }
+
+    // ─── Admin-driven credential/session operations — target userId always an explicit route parameter ───
+
+    public Task<AdminListSessionsResponseDto> AdminListSessionsAsync(Guid userId, CancellationToken ct = default) =>
+        _authService.AdminListSessionsAsync(userId, ct);
+
+    public Task<AdminRevokeSessionsResponseDto> AdminRevokeSessionsAsync(
+        Guid userId, AdminRevokeSessionsRequestDto? request, string actorUsername, CancellationToken ct = default) =>
+        _authService.AdminRevokeSessionsAsync(userId, request, actorUsername, ct);
+
+    public Task<AdminRevokeCredentialResponseDto> AdminRevokeCredentialAsync(
+        Guid userId, string actorUsername, CancellationToken ct = default) =>
+        _authService.AdminRevokeCredentialAsync(userId, actorUsername, ct);
+
     public async Task<LoginManifestResponseDto> LoadUserLoginManifestAsync(CancellationToken ct = default)
     {
         var manifest = await _manifestRepository.LoadByIdAsync(AuthManifestIds.UserLoginManifestId, ct);

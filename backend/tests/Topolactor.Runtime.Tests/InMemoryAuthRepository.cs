@@ -2,11 +2,24 @@ using Topolactor.Repository;
 
 namespace Topolactor.Runtime.Tests;
 
+public sealed class InMemorySession
+{
+    public Guid SessionId { get; init; }
+    public Guid UserId { get; init; }
+    public string Realm { get; init; } = "";
+    public string Audience { get; init; } = "";
+    public DateTimeOffset ExpiresAt { get; init; }
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+    public bool Revoked { get; set; }
+}
+
 public sealed class InMemoryAuthRepository : AuthRepository
 {
     private readonly Dictionary<Guid, AuthUserRecord> _users = new();
     private readonly Dictionary<Guid, string> _passwords = new();
     private readonly List<(Guid UserId, string Role, string Realm)> _grants = new();
+    private readonly Dictionary<Guid, InMemorySession> _sessions = new();
+    private readonly Dictionary<string, Guid> _refreshTokenHashToSession = new();
 
     public InMemoryAuthRepository() : base("in-memory") { }
 
@@ -18,6 +31,25 @@ public sealed class InMemoryAuthRepository : AuthRepository
 
     public void SeedGrant(Guid userId, string role, string realm) =>
         _grants.Add((userId, role, realm));
+
+    public Guid SeedSession(Guid userId, string realm = "user", string audience = "user_app", string? refreshTokenHash = null)
+    {
+        var sessionId = Guid.NewGuid();
+        _sessions[sessionId] = new InMemorySession
+        {
+            SessionId = sessionId,
+            UserId = userId,
+            Realm = realm,
+            Audience = audience,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+        };
+        if (refreshTokenHash is not null) _refreshTokenHashToSession[refreshTokenHash] = sessionId;
+        return sessionId;
+    }
+
+    public bool IsSessionRevoked(Guid sessionId) => _sessions.TryGetValue(sessionId, out var s) && s.Revoked;
+
+    public string? PasswordHashFor(Guid userId) => _passwords.TryGetValue(userId, out var h) ? h : null;
 
     public override Task<AuthUserRecord?> FindUserByUsernameAsync(string username, CancellationToken ct = default)
     {
@@ -46,8 +78,19 @@ public sealed class InMemoryAuthRepository : AuthRepository
     }
 
     public override Task<Guid> CreateSessionAsync(
-        Guid userId, string realm, string audience, DateTimeOffset expiresAt, CancellationToken ct = default) =>
-        Task.FromResult(Guid.NewGuid());
+        Guid userId, string realm, string audience, DateTimeOffset expiresAt, CancellationToken ct = default)
+    {
+        var sessionId = Guid.NewGuid();
+        _sessions[sessionId] = new InMemorySession
+        {
+            SessionId = sessionId,
+            UserId = userId,
+            Realm = realm,
+            Audience = audience,
+            ExpiresAt = expiresAt,
+        };
+        return Task.FromResult(sessionId);
+    }
 
     public override Task<Guid> CreateRefreshTokenAsync(
         Guid sessionId, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default) =>
@@ -69,4 +112,108 @@ public sealed class InMemoryAuthRepository : AuthRepository
     public override Task InsertLoginEventAsync(
         Guid? userId, string realm, bool success, string? failureCode, CancellationToken ct = default) =>
         Task.CompletedTask;
+
+    public override Task<ChangeOwnPasswordResult> ChangeOwnPasswordAsync(
+        Guid userId, string currentPasswordPlain, string newPasswordHash, string actorUsername,
+        CancellationToken ct = default)
+    {
+        if (!_passwords.TryGetValue(userId, out var currentHash))
+            return Task.FromResult(new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.CredentialNotFound, 0));
+
+        if (!BCrypt.Net.BCrypt.Verify(currentPasswordPlain, currentHash))
+            return Task.FromResult(new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.CurrentPasswordInvalid, 0));
+
+        _passwords[userId] = newPasswordHash;
+        var revoked = 0;
+        foreach (var session in _sessions.Values.Where(s => s.UserId == userId && !s.Revoked))
+        {
+            session.Revoked = true;
+            revoked++;
+        }
+        return Task.FromResult(new ChangeOwnPasswordResult(ChangeOwnPasswordOutcome.Success, revoked));
+    }
+
+    public override Task<IReadOnlyList<AuthSessionRecord>> ListActiveSessionsByUserAsync(
+        Guid userId, CancellationToken ct = default)
+    {
+        IReadOnlyList<AuthSessionRecord> result = _sessions.Values
+            .Where(s => s.UserId == userId && !s.Revoked)
+            .Select(s => new AuthSessionRecord(s.SessionId, s.Realm, s.Audience, s.ExpiresAt, s.CreatedAt, s.Revoked))
+            .ToList();
+        return Task.FromResult(result);
+    }
+
+    public override Task<bool> RevokeOwnedSessionAsync(
+        Guid userId, Guid sessionId, string actorUsername, CancellationToken ct = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session) || session.UserId != userId || session.Revoked)
+            return Task.FromResult(false);
+        session.Revoked = true;
+        return Task.FromResult(true);
+    }
+
+    public override Task<int> RevokeSessionsForUserAsync(
+        Guid userId, Guid? exceptSessionId, string actorUsername, CancellationToken ct = default)
+    {
+        var count = 0;
+        foreach (var session in _sessions.Values.Where(s =>
+            s.UserId == userId && !s.Revoked && (exceptSessionId is null || s.SessionId != exceptSessionId.Value)))
+        {
+            session.Revoked = true;
+            count++;
+        }
+        return Task.FromResult(count);
+    }
+
+    public override Task<Guid?> FindActiveSessionIdByRefreshTokenHashAsync(
+        string tokenHash, CancellationToken ct = default)
+    {
+        if (_refreshTokenHashToSession.TryGetValue(tokenHash, out var sessionId) &&
+            _sessions.TryGetValue(sessionId, out var session) && !session.Revoked)
+            return Task.FromResult<Guid?>(sessionId);
+        return Task.FromResult<Guid?>(null);
+    }
+
+    public override Task<bool> RevokeCredentialAsync(
+        Guid userId, string actorUsername, CancellationToken ct = default)
+    {
+        if (!_passwords.Remove(userId)) return Task.FromResult(false);
+        foreach (var session in _sessions.Values.Where(s => s.UserId == userId && !s.Revoked))
+            session.Revoked = true;
+        return Task.FromResult(true);
+    }
+
+    public override Task<bool> IsSessionActiveAsync(Guid sessionId, CancellationToken ct = default) =>
+        Task.FromResult(IsSessionAndOwnerActive(sessionId, out _, out _));
+
+    public override Task<bool> IsSessionIdentityActiveAsync(
+        Guid sessionId, string username, string realm, string audience, string role, CancellationToken ct = default)
+    {
+        if (!IsSessionAndOwnerActive(sessionId, out var session, out var user)) return Task.FromResult(false);
+        if (!string.Equals(user!.Username, username, StringComparison.Ordinal)) return Task.FromResult(false);
+        if (!string.Equals(session!.Realm, realm, StringComparison.Ordinal)) return Task.FromResult(false);
+        if (!string.Equals(session.Audience, audience, StringComparison.Ordinal)) return Task.FromResult(false);
+        if (!_grants.Any(g => g.UserId == user.UserId && g.Role == role && g.Realm == realm)) return Task.FromResult(false);
+        return Task.FromResult(true);
+    }
+
+    private bool IsSessionAndOwnerActive(Guid sessionId, out InMemorySession? session, out AuthUserRecord? user)
+    {
+        session = null;
+        user = null;
+        if (!_sessions.TryGetValue(sessionId, out var s)) return false;
+        if (s.Revoked || s.ExpiresAt <= DateTimeOffset.UtcNow) return false;
+        if (!_users.TryGetValue(s.UserId, out var u)) return false;
+        if (!u.Active || !u.Approve) return false;
+        if (string.Equals(u.Status, "suspended", StringComparison.OrdinalIgnoreCase)) return false;
+        if (u.SuspendedFrom.HasValue)
+        {
+            var now = DateTimeOffset.UtcNow;
+            if (u.SuspendedFrom.Value <= now && (u.SuspendedUntil is null || now <= u.SuspendedUntil.Value))
+                return false;
+        }
+        session = s;
+        user = u;
+        return true;
+    }
 }

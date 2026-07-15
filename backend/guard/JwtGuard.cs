@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Topolactor.Repository;
 using Topolactor.Schema;
 
 namespace Topolactor.Guard;
@@ -79,6 +80,10 @@ public class JwtGuard
 
     public string? TryGetAudience(string? token) => TryGetStringClaim(token, "aud");
 
+    /// <summary>Extracts the sid (session id / revocation identity) claim as a Guid, or null.</summary>
+    public Guid? TryGetSessionId(string? token) =>
+        Guid.TryParse(TryGetStringClaim(token, "sid"), out var sessionId) ? sessionId : null;
+
     public IReadOnlyList<string> TryGetCapabilities(string? token) =>
         TryGetStringArrayClaim(token, "capabilities").Count > 0
             ? TryGetStringArrayClaim(token, "capabilities")
@@ -108,6 +113,70 @@ public class JwtGuard
         if (!string.Equals(role, expectedRole, StringComparison.Ordinal))
             return [new ValidationError("AUTH_TOKEN_ROLE_MISMATCH",
                 $"Token role must be '{expectedRole}'.")];
+
+        return [];
+    }
+
+    /// <summary>
+    /// Full access-JWT validation boundary: signature + exp (via Validate) plus a DB-side check,
+    /// through the token's sid claim, that the backing auth.sessions row is still active, the
+    /// owning account is still active/approved/not-suspended, AND that the token's own sub/realm/aud
+    /// claims match the canonical session/user identity the sid points to. Session-active alone is
+    /// NOT sufficient: a signed token's sub/realm/aud must never be trusted without this cross-check
+    /// — a session revoked (password change, session revoke, credential revoke) or an account
+    /// deactivated after the token was issued must be rejected here, not only on refresh, and a
+    /// forged/mismatched sub/realm/aud on an otherwise-active session must be rejected too.
+    /// Every endpoint that authenticates a caller must call this (or
+    /// ValidateForContextActiveSessionAsync) instead of the signature/exp-only Validate/ValidateForContext.
+    /// </summary>
+    public async Task<IReadOnlyList<ValidationError>> ValidateActiveSessionAsync(
+        string? token, AuthRepository authRepository, CancellationToken ct = default)
+    {
+        var errors = Validate(token);
+        if (errors.Count > 0) return errors;
+        return await CheckSessionIdentityActiveAsync(token, authRepository, ct);
+    }
+
+    /// <summary>Combines ValidateForContext (realm/audience/role) with the DB-side session-identity check.</summary>
+    public async Task<IReadOnlyList<ValidationError>> ValidateForContextActiveSessionAsync(
+        string? token,
+        string expectedRealm,
+        string expectedAudience,
+        string expectedRole,
+        AuthRepository authRepository,
+        CancellationToken ct = default)
+    {
+        var errors = ValidateForContext(token, expectedRealm, expectedAudience, expectedRole);
+        if (errors.Count > 0) return errors;
+        return await CheckSessionIdentityActiveAsync(token, authRepository, ct);
+    }
+
+    private async Task<IReadOnlyList<ValidationError>> CheckSessionIdentityActiveAsync(
+        string? token, AuthRepository authRepository, CancellationToken ct)
+    {
+        var sessionId = TryGetSessionId(token);
+        if (sessionId is null)
+            return [new ValidationError("AUTH_TOKEN_SID_MISSING", "Token is missing required sid claim.")];
+
+        // sub/realm/aud/role come from the token body — untrusted until cross-checked against the
+        // canonical session/user/grant row sid points to. A token with a valid signature can still
+        // claim any sub/realm/aud/role; only this DB-side comparison (including a real auth.grants
+        // row for role+realm) makes them trustworthy. role is deliberately never accepted from the
+        // claim alone — a session whose account was never granted the claimed role must be rejected
+        // even though sid/sub/realm/aud all correctly name an active session.
+        var subject = TryGetSubject(token);
+        var realm = TryGetRealm(token);
+        var audience = TryGetAudience(token);
+        var role = TryGetRole(token);
+        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(realm) ||
+            string.IsNullOrWhiteSpace(audience) || string.IsNullOrWhiteSpace(role))
+            return [new ValidationError("AUTH_TOKEN_CLAIMS_MISSING", "Token is missing required sub/realm/aud/role claims.")];
+
+        var active = await authRepository.IsSessionIdentityActiveAsync(sessionId.Value, subject, realm, audience, role, ct);
+        if (!active)
+            return [new ValidationError("AUTH_SESSION_IDENTITY_MISMATCH",
+                "Session is not active, the token's sub/realm/aud do not match the session/account it names, " +
+                "or the account holds no auth.grants row for the token's claimed role in that realm.")];
 
         return [];
     }

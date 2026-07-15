@@ -19,7 +19,11 @@ public record AuthUserRosterDto(
     [property: JsonPropertyName("stateNote")] string? StateNote,
     [property: JsonPropertyName("createdAt")] DateTimeOffset CreatedAt,
     [property: JsonPropertyName("updatedAt")] DateTimeOffset UpdatedAt,
-    [property: JsonPropertyName("lastLoginAt")] DateTimeOffset? LastLoginAt);
+    [property: JsonPropertyName("lastLoginAt")] DateTimeOffset? LastLoginAt,
+    // Canonical role value from auth.grants (AuthRealm.AdminRole / AuthRealm.UserRole) — "admin"
+    // when the account holds an admin/system grant, "user" otherwise. Read projection only; role
+    // changes go through AuthMasterRepository.UpdateUserAsync(roleName:), never a raw grants write.
+    [property: JsonPropertyName("role")] string Role = "user");
 
 public record AuthUsersListRequestDto(
     [property: JsonPropertyName("query")] string? Query = null);
@@ -48,7 +52,10 @@ public record AuthUsersUpdateRequestDto(
     [property: JsonPropertyName("suspendedUntil")] DateTimeOffset? SuspendedUntil = null,
     [property: JsonPropertyName("stateNote")] string? StateNote = null,
     [property: JsonPropertyName("clearSuspendedFrom")] bool ClearSuspendedFrom = false,
-    [property: JsonPropertyName("clearSuspendedUntil")] bool ClearSuspendedUntil = false);
+    [property: JsonPropertyName("clearSuspendedUntil")] bool ClearSuspendedUntil = false,
+    // "admin" or "user" — never a password/credential field. Grants the admin/system realm grant
+    // when set to "admin"; revokes it (keeping the baseline user-realm grant) when set to "user".
+    [property: JsonPropertyName("roleName")] string? RoleName = null);
 
 public record AuthUsersDeleteRequestDto(
     [property: JsonPropertyName("userId")] string UserId);

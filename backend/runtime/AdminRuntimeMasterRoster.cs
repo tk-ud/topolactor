@@ -28,8 +28,11 @@ public partial class AdminRuntime
         return null;
     }
 
+    // AuthenticatedUserId is server-verified (JWT subject, stamped by DispatchAuthContext at the
+    // /dispatch boundary) and takes priority over client-supplied ContextUserId, which is not an
+    // authority signal and must never be trusted as an audit actor.
     private string? ResolveAuditActor(OperationVector vector) =>
-        vector.ContextUserId ?? vector.TriggerKind;
+        vector.AuthenticatedUserId ?? vector.ContextUserId ?? vector.TriggerKind;
 
     private async Task<(JsonElement? data, ValidationError? error)> DataAuthUsersListAsync(
         OperationVector vector, CancellationToken ct)
@@ -87,6 +90,9 @@ public partial class AdminRuntime
 
         var statusError = await ValidateUserStatusAsync(request.Status, ct);
         if (statusError is not null) return (null, statusError);
+
+        if (request.RoleName is not ("admin" or "user"))
+            return (null, new ValidationError("AUTH_USER_ROLE_INVALID", "roleName must be 'admin' or 'user'."));
 
         if (await _authMasterRepository.UsernameExistsAsync(request.Username.Trim(), null, ct))
         {
@@ -153,6 +159,9 @@ public partial class AdminRuntime
         var statusError = await ValidateUserStatusAsync(request.Status, ct);
         if (statusError is not null) return (null, statusError);
 
+        if (request.RoleName is not (null or "admin" or "user"))
+            return (null, new ValidationError("AUTH_USER_ROLE_INVALID", "roleName must be 'admin' or 'user'."));
+
         var updated = await _authMasterRepository.UpdateUserAsync(
             userId,
             request.Username?.Trim(),
@@ -164,7 +173,8 @@ public partial class AdminRuntime
             request.ClearSuspendedFrom,
             request.ClearSuspendedUntil,
             request.StateNote,
-            ct);
+            ct,
+            request.RoleName);
 
         if (updated is null)
             return (null, new ValidationError("AUTH_USER_NOT_FOUND", $"User {userId} was not found."));
@@ -177,6 +187,7 @@ public partial class AdminRuntime
         if (request.SuspendedFrom.HasValue || request.ClearSuspendedFrom) changed.Add("suspended_from");
         if (request.SuspendedUntil.HasValue || request.ClearSuspendedUntil) changed.Add("suspended_until");
         if (request.StateNote is not null) changed.Add("state_note");
+        if (request.RoleName is not null) changed.Add("role");
 
         await AdminMasterRosterAudit.AppendAsync(
             _sqlAttentionLogsRepository,

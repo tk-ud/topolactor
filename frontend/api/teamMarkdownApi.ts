@@ -455,6 +455,58 @@ export async function createTemplate(
   }) as Promise<{ ok: boolean; templateId?: string; templateKey?: string }>;
 }
 
+// ─── viewer read (any authenticated JWT — Normal and admin share this) ─────────────────────────
+// Bypasses admin dispatch entirely: GET-only, reuses the same TeamMarkdownRepository read methods
+// on the backend but through a plain JWT-gated HTTP boundary instead of the admin_runtime dispatch
+// lane (which requires admin role uniformly, by manifest-level inference, for every action).
+
+async function viewerFetch<T>(path: string): Promise<T> {
+  const token = getToken();
+  const response = await fetch(path, {
+    credentials: "include",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  const json: unknown = await response.json();
+  if (typeof json === "object" && json !== null && !Array.isArray(json) && "success" in json) {
+    const body = json as { success: boolean; errors?: { code?: string; message?: string }[] };
+    if (!body.success) {
+      const err = body.errors?.[0];
+      throw new Error(err ? `[${err.code ?? "ERROR"}] ${err.message ?? "viewer read failed"}` : "viewer read failed");
+    }
+    return json as T;
+  }
+  throw new Error(`unexpected response shape from ${path}`);
+}
+
+export async function viewerListTemplates(status = "active"): Promise<TemplateListItem[]> {
+  const res = await viewerFetch<{ success: boolean; templates: TemplateListItem[] }>(
+    `/api/team-markdown/templates?status=${encodeURIComponent(status)}`,
+  );
+  return res.templates;
+}
+
+export async function viewerSearchSavedViews(params: {
+  query?: string;
+  status?: string;
+  limit?: number;
+} = {}): Promise<SavedViewCard[]> {
+  const qs = new URLSearchParams();
+  if (params.query) qs.set("query", params.query);
+  qs.set("status", params.status ?? "active");
+  qs.set("limit", String(params.limit ?? 50));
+  const res = await viewerFetch<{ success: boolean; savedViews: SavedViewCard[] }>(
+    `/api/team-markdown/saved-views?${qs.toString()}`,
+  );
+  return res.savedViews;
+}
+
+export async function viewerGetSavedView(savedViewId: string): Promise<SavedViewDetail> {
+  const res = await viewerFetch<{ success: boolean; savedView: SavedViewDetail }>(
+    `/api/team-markdown/saved-views/${encodeURIComponent(savedViewId)}`,
+  );
+  return res.savedView;
+}
+
 export async function listTemplates(
   status = "active",
 ): Promise<{ ok: boolean; templates: TemplateListItem[] }> {
@@ -553,6 +605,13 @@ export async function getSavedView(savedViewId: string): Promise<{
   }>;
 }
 
+/**
+ * Refresh/Clone/Rebind write calls must only ever be invoked after an explicit user confirmation
+ * step (ApplyConfirmDialog) — see SavedViewOperationPanel.tsx, the only caller. confirmed:true is
+ * sent unconditionally here, not because the frontend display implies confirmation, but because
+ * the backend independently re-checks payload.confirmed=true and rejects any write missing it
+ * regardless of what this function sends — the frontend gate is defense-in-depth, not authority.
+ */
 export async function refreshSavedView(
   savedViewId: string,
   refreshedRenderedMarkdown: string,
@@ -567,25 +626,76 @@ export async function refreshSavedView(
       updatedCompletedPresetSeedJson,
       searchIndexText,
       cardMetadataJson,
+      confirmed: true,
     },
   }) as Promise<{ ok: boolean; savedViewId: string }>;
 }
 
-export async function updateSavedView(
+/**
+ * Seed-driven refresh: re-renders from the current template + a freshly-supplied source record,
+ * re-deriving completedPresetSeedJson server-side (AdminRuntime.TeamMarkdown's
+ * templateMarkdown+sourceRecordJson branch) rather than requiring the caller to pre-render.
+ */
+export async function refreshSavedViewFromSource(
   savedViewId: string,
-  updates: {
-    title?: string;
-    renderedMarkdown?: string;
-    userAdjustmentPatchJson?: Record<string, unknown>;
-    completedPresetSeedJson?: CompletedPresetSeed;
-    searchIndexText?: string;
-    cardMetadataJson?: Record<string, unknown>;
-  },
+  templateMarkdown: string,
+  sourceRecordJson: Record<string, unknown>,
+  searchIndexText?: string,
+  cardMetadataJson?: Record<string, unknown>,
 ): Promise<{ ok: boolean; savedViewId: string }> {
+  return dispatchTeamMarkdown("saved_view:refresh", {
+    idOrHubId: savedViewId,
+    payload: { templateMarkdown, sourceRecordJson, searchIndexText, cardMetadataJson, confirmed: true },
+  }) as Promise<{ ok: boolean; savedViewId: string }>;
+}
+
+export type SavedViewUpdateInput = {
+  title?: string;
+  renderedMarkdown?: string;
+  userAdjustmentPatchJson?: Record<string, unknown>;
+  completedPresetSeedJson?: CompletedPresetSeed;
+  searchIndexText?: string;
+  cardMetadataJson?: Record<string, unknown>;
+};
+
+/**
+ * Non-mutating preview/validate step of the authoring workflow (preview -> validate ->
+ * explicit_confirm -> write -> diff_log). Backend runs the identical validation it runs on the
+ * real write and returns without touching the DB (payload.dryRun=true short-circuits before the
+ * repository call). Admin-only: backend rejects non-admin JWTs before this returns.
+ */
+export async function previewSavedViewUpdate(
+  savedViewId: string,
+  updates: SavedViewUpdateInput,
+): Promise<{ ok: boolean; dryRun: true; valid: boolean; savedViewId: string; preview: { title: string; renderedMarkdown: string } }> {
   return dispatchTeamMarkdown("saved_view:update", {
     idOrHubId: savedViewId,
-    payload: updates,
-  }) as Promise<{ ok: boolean; savedViewId: string }>;
+    payload: { ...updates, dryRun: true },
+  }) as Promise<{ ok: boolean; dryRun: true; valid: boolean; savedViewId: string; preview: { title: string; renderedMarkdown: string } }>;
+}
+
+/**
+ * Write step — only proceeds after an explicit user confirmation (confirmed:true). Must be called
+ * with the exact same `updates` object that was just previewed/validated; the backend re-validates
+ * this input again server-side regardless, and persists the mutation plus its diff-evidence event
+ * atomically in one transaction (never a best-effort side call).
+ */
+export async function writeSavedViewUpdate(
+  savedViewId: string,
+  updates: SavedViewUpdateInput,
+): Promise<{ ok: boolean; savedViewId: string; diffEventId: string | null }> {
+  return dispatchTeamMarkdown("saved_view:update", {
+    idOrHubId: savedViewId,
+    payload: { ...updates, confirmed: true },
+  }) as Promise<{ ok: boolean; savedViewId: string; diffEventId: string | null }>;
+}
+
+/** @deprecated Use previewSavedViewUpdate (dry run) then writeSavedViewUpdate (confirmed write). */
+export async function updateSavedView(
+  savedViewId: string,
+  updates: SavedViewUpdateInput,
+): Promise<{ ok: boolean; savedViewId: string }> {
+  return writeSavedViewUpdate(savedViewId, updates);
 }
 
 export async function archiveSavedView(
@@ -611,7 +721,7 @@ export async function cloneSavedView(
 ): Promise<{ ok: boolean; savedViewId: string; sourceSavedViewId: string }> {
   return dispatchTeamMarkdown("saved_view:clone", {
     idOrHubId: savedViewId,
-    payload: params,
+    payload: { ...params, confirmed: true },
   }) as Promise<{ ok: boolean; savedViewId: string; sourceSavedViewId: string }>;
 }
 
@@ -628,6 +738,6 @@ export async function rebindSavedView(
 ): Promise<{ ok: boolean; savedViewId: string }> {
   return dispatchTeamMarkdown("saved_view:rebind", {
     idOrHubId: savedViewId,
-    payload: params,
+    payload: { ...params, confirmed: true },
   }) as Promise<{ ok: boolean; savedViewId: string }>;
 }

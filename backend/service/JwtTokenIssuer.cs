@@ -26,7 +26,13 @@ public class JwtTokenIssuer
         return [];
     }
 
-    public string IssueAccessToken(string username, AuthRealmContext realmContext)
+    /// <summary>
+    /// Issues an access token carrying the revocation identity (sid = session id) so JwtGuard can
+    /// verify DB-side, on every request, that the session backing this token is still active.
+    /// sessionId must be the auth.sessions row created for this login/refresh — never a client-
+    /// supplied value.
+    /// </summary>
+    public string IssueAccessToken(string username, AuthRealmContext realmContext, Guid sessionId)
     {
         var configErrors = ValidateConfiguration();
         if (configErrors.Count > 0)
@@ -46,6 +52,7 @@ public class JwtTokenIssuer
             role = realmContext.Role,
             realm = realmContext.Realm,
             aud = realmContext.Audience,
+            sid = sessionId.ToString(),
             iss = issuer,
             iat = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
             exp = DateTimeOffset.UtcNow.AddHours(expiryHours).ToUnixTimeSeconds(),
