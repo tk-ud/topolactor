@@ -496,8 +496,8 @@ admin_normal_surface_projection_seed_ssot:
                 status: resolved_via_realized_route_composition_2026_07_14_round_4
                 resolution_record: >
                   The originally-envisioned MdTranslationAuthoringSeedSurface.tsx-based adapter binding
-                  was never implemented — that file is unreferenced dead code (see
-                  .agent/tasks/todo.md role-based-surface-separation section, "副次発見"). This
+                  was never implemented — that file was unreferenced dead code and has been deleted
+                  (see .agent/tasks/todo.md role-based-surface-separation section, "副次発見"). This
                   node_key's canonical current-contract prop/event list has been removed to avoid
                   keeping a machine-readable superseded contract in the active seed_contract tree
                   (round 5 correction: a status/resolution_record annotation alone is not sufficient

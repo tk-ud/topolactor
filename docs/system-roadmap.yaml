@@ -1213,7 +1213,6 @@ system_roadmap_ssot:
         - frontend/islands/TeamMarkdownDashboard.tsx
         - frontend/routes/admin/team-dashboard/index.tsx
         - frontend/islands/UiBuilderAdmin.tsx
-        - frontend/components/MdTranslationAuthoringSeedSurface.tsx
         - frontend/lib/mdTranslationSeedBuilder.ts
         - frontend/tests/teamMarkdownSavedView.test.ts
         - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
