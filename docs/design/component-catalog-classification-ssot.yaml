@@ -37,6 +37,10 @@ runtime_reachability:
   prohibited:
     - redefining_runtime_connected_to_include_route_composition
     - treating_a_routeCompositionFile_claim_as_true_without_the_paired_test_verifying_it
+    - treating_existing_route_composition_or_isRuntimeReachable_true_as_a_gate_0_exception_grant
+    - treating_existing_route_composition_as_seed_usability_or_registration_or_bundle_completion_evidence
+    - describing_existing_route_composition_as_ssot_sanctioned_alternate_valid_or_otherwise_legitimized_rather_than_a_bare_physical_observation
+    - treating_the_route_composition_mount_verification_tests_passing_as_evidence_that_the_underlying_gate_0_gap_is_closed
 
 registration_required:
   definition: requires DB registration/promotion before topology entity treatment

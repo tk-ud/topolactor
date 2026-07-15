@@ -116,11 +116,16 @@ Deno.test("authoring/md_translation: registrationRequired:false and runtimeConne
   assertEquals(entry!.runtimeConnected, false, "md_translation is admin-only authoring surface, not a canvas component");
 });
 
-// ─── Route-composition reachability: an alternate valid runtime-reachability condition ─────────
+// ─── Route-composition reachability: a second physically-observable reachability fact ──────────
 // runtimeConnected strictly means "factory/constructor reachable via RUNTIME_COMPONENT_FACTORIES"
-// and that meaning is NOT changed here. A component can be equally reachable at runtime because a
-// Fresh route (or a parent component already reachable from one) mounts it directly — that claim is
-// verified below against the actual file contents, not taken on the strength of catalog `notes` prose.
+// and that meaning is NOT changed here. A component can also be physically mounted at runtime
+// because a Fresh route (or a parent component already reachable from one) mounts it directly —
+// that mount claim is verified below against the actual file contents, not taken on the strength of
+// catalog `notes` prose. 2026-07-15 gate0 audit: this section verifies a physical-mount fact only.
+// It is NOT a Gate 0 exception mechanism, NOT seed-readiness evidence, and passing these tests is
+// NOT completion/registration evidence for any surface — every existing_route_composition entry
+// remains an open Gate 0 question (hardcode-allowed vs. seed-required) judged per-entry against
+// docs/design/runtime-orchestration-ssot.yaml, independent of whether this test suite is green.
 
 // componentKey -> the exported identifier that must appear in the file at routeCompositionFile.
 const EXISTING_ROUTE_COMPOSITION_MOUNT_IDENTIFIERS: Record<string, string> = {
@@ -132,9 +137,12 @@ const EXISTING_ROUTE_COMPOSITION_MOUNT_IDENTIFIERS: Record<string, string> = {
   "hub_navigation_admin.admin_operation": "HubNavigationAdmin",
 };
 
-Deno.test("catalog invariant: every runtimeConnected:false entry is either exempt or runtimeReachability:existing_route_composition", () => {
-  // Sub-components (not standalone placements) and definition-only catalog primitives are the only
-  // recognized exemptions; every other runtimeConnected:false entry must declare how it's reachable.
+Deno.test("catalog invariant: every runtimeConnected:false entry is either exempt or has a verified physical mount (runtimeReachability:existing_route_composition)", () => {
+  // This does not mean a hardcoded route-composition mount is an acceptable end state — it only
+  // catches entries that would otherwise be unreachable ghost catalog rows with no verifiable path
+  // to runtime at all. Each existing_route_composition entry this catches remains a separate,
+  // per-entry Gate 0 question (see docs/design/runtime-orchestration-ssot.yaml), not something this
+  // invariant passing resolves.
   const EXEMPT_KEYS = new Set([
     "tree_node.template", // sub-component of tree.template, not a standalone placement
   ]);
@@ -147,7 +155,7 @@ Deno.test("catalog invariant: every runtimeConnected:false entry is either exemp
   assertEquals(
     violations.map((e) => e.componentKey),
     [],
-    "runtimeConnected:false entries must declare runtimeReachability:existing_route_composition (with a verifiable routeCompositionFile) unless explicitly exempt",
+    "runtimeConnected:false entries must declare a verifiable reachability path (runtimeReachability:existing_route_composition with routeCompositionFile) or be exempt — otherwise this catalog entry is unreachable from any runtime path at all",
   );
 });
 

@@ -595,6 +595,20 @@ owner 指示により、一時監査 report である上記 JSON ファイルは
 
 **検証:** `deno test -A frontend/tests/`（1871 passed / 0 failed、削除前と同数——orphan だったことの裏付け）、`bash .agent/tests/check-frontend-types.sh`（PASS）、`bash .agent/tests/check-admin-normal-surface-projection-seed-ssot.sh`（PASS）、`bash .agent/tests/check-structure.sh`（PASS）、`dotnet build`（0 errors）、`dotnet test tests/Topolactor.Runtime.Tests`（1443 passed / 0 failed）。diff hygiene: `git diff origin/main --stat` と `--ignore-space-at-eol --stat` が完全一致（42 files changed）、`db/*.sql` への変更なし、production `backend/*.cs` への変更なし（backend test file 1件から dead lookup entry 2行を除去のみ、round 2 の commit）。
 
+**2026-07-15 Bundle-level gate0 restoration、第4ラウンド（PR #591 owner review、`existing_route_composition` 機構自体の自己正当化語彙を撤去）:** round 1〜3 は個々の surface（Personal Page, Normal Dashboard Home, `/dashboard/team`）の hardcode 判断を訂正したが、それらが依拠していた共通機構——`ComponentRuntimeReachability` 型（`frontend/components/types.ts`）、`isRuntimeReachable()` helper（`frontend/components/catalog.ts`）、`frontend/tests/runtimeComponentCatalogFullConnection.test.ts`、`backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs`——自体のdoc commentが、hardcoded route composition を一般的に「SSOT-sanctioned」「is this seed-usable at all」「an alternate valid runtime-reachability condition」「the OTHER real reachability condition」と表現しており、これは round 1〜3 で個別 surface について否定した `route_composition_alternative` と同種の一般化された自己正当化語彙だった。owner から、将来の Agent がこの語彙を「hardcode を認める設計 precedent」として再利用できてしまう状態を残すべきではないと指摘された。
+
+**対応内容（語彙訂正、機構自体は削除せず維持）:** `routeCompositionFile` が実ファイルへ実際に mount されているかを検証するテスト機構自体は、catalog の虚偽記載を防ぐ正当な anti-drift 検証であるため削除しなかった（削除するとNG軸が禁止する「機構削除」に該当する可能性があり、かつ有用な検証を失う）。代わりに、以下の箇所全てから「SSOT-sanctioned」「seed-usable」「alternate valid」「OTHER real reachability」という正当化語彙を除去し、明示的な non-authority 宣言に置き換えた:
+- `frontend/components/types.ts`（`ComponentRuntimeReachability` 型の doc comment）
+- `frontend/components/catalog.ts`（`isRuntimeReachable()` の doc comment）
+- `frontend/tests/runtimeComponentCatalogFullConnection.test.ts`（section header comment、invariant test の assertion message）
+- `backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs`（同等の comment）
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`（`component_runtime_connected_evidence` の「this closed 2026-07-14 and is not a follow-up」を、「test-verification mechanism 自体は follow-up 不要だが、これは test の正しさの話であって Gate 0 completion の話ではない」という訂正へ）
+- `docs/design/component-catalog-classification-ssot.yaml`（`prohibited:` list へ4項目追加: `existing_route_composition`/`isRuntimeReachable` を Gate 0 例外・seed利用可否・Bundle completion の根拠として扱うこと、および正当化語彙を使うことの明示的禁止）
+
+いずれも「物理的に mount されているという観測事実」自体は真実として残し、それが Gate 0 適合・seed 利用可否・completion の根拠にならないことを明記した。既存の `/admin/team-dashboard` 等の物理 route、backend security/transaction substrate は変更していない。`design_blocking.normal_dashboard_authoring_runtime_adapter` は reopened のまま維持。
+
+**検証:** `deno test -A frontend/tests/`（1871 passed / 0 failed）、`bash .agent/tests/check-frontend-types.sh`（PASS）、`bash .agent/tests/check-admin-normal-surface-projection-seed-ssot.sh`（PASS）、`bash .agent/tests/check-structure.sh`（PASS）、`dotnet build`（0 errors）、`dotnet test tests/Topolactor.Runtime.Tests`（1443 passed / 0 failed）。diff hygiene: `git diff origin/main --stat` と `--ignore-space-at-eol --stat` が完全一致（43 files changed）、`db/*.sql` への変更なし、production `backend/*.cs` への変更なし（backend test file 1件の comment 訂正のみ）。
+
 **Primary SSOT:** `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/team-markdown-dashboard-saved-view-ssot.yaml`, `docs/design/component-catalog-classification-ssot.yaml`
 
 #### 問題点（初回実装時点）

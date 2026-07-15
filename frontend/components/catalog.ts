@@ -1934,12 +1934,16 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   },
 ];
 
-// True when a component is reachable at runtime through EITHER of the two SSOT-sanctioned
-// mechanisms: factory registration (runtimeConnected) or an existing route composition
-// (a route file — or a component already reachable from one — directly imports/mounts it,
-// per routeCompositionFile). Does not redefine runtimeConnected itself; callers that need
-// "is this seed-usable at all" (rather than "is this factory-registered") should use this,
-// not runtimeConnected alone.
+// True when a component is physically mounted somewhere at runtime through EITHER factory
+// registration (runtimeConnected) or an existing route composition (a route file — or a component
+// already reachable from one — directly imports/mounts it, per routeCompositionFile). Does not
+// redefine runtimeConnected itself; callers that need "is this mounted anywhere at all" (rather than
+// "is this factory-registered") should use this, not runtimeConnected alone.
+// NOT a Gate 0 / seed-readiness / completion signal: a true result via existing_route_composition
+// means only that a hardcoded mount physically exists — it says nothing about whether that hardcode
+// is Gate-0-acceptable or an open seed-required violation (see
+// docs/design/component-catalog-classification-ssot.yaml runtime_reachability). Do not wire this
+// into any seed-usability, registration-completion, or Bundle-completion decision.
 export function isRuntimeReachable(entry: ComponentCatalogEntry): boolean {
   return entry.runtimeConnected || entry.runtimeReachability === "existing_route_composition";
 }

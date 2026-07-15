@@ -159,12 +159,17 @@ export type ComponentCatalogIdentity = {
 // Separate from runtimeConnected (which strictly means "factory/constructor reachable via
 // RUNTIME_COMPONENT_FACTORIES" — see SsotWiringAuditComponentRegistrationTests and
 // runtimeComponentCatalogFullConnection.test.ts, and must never be redefined to mean this).
-// "existing_route_composition" is the other real, SSOT-sanctioned way a component is reachable:
-// a Fresh route (or a parent component already reachable from one) mounts it directly. An entry
-// claiming this must set routeCompositionFile to the file that actually imports/mounts it —
+// "existing_route_composition" records a second physically-observable fact: a Fresh route (or a
+// parent component already reachable from one) mounts this component directly. An entry claiming
+// this must set routeCompositionFile to the file that actually imports/mounts it —
 // ComponentRegistrationLane_ExistingRouteCompositionEntries_MustBeMountedInClaimedFile (backend)
 // and the frontend counterpart in runtimeComponentCatalogFullConnection.test.ts verify the claim
-// against the real file contents, not just the prose in `notes`.
+// against the real file contents, not just the prose in `notes`. This is NOT a Gate 0 exception
+// grant, NOT evidence of seed-readiness, and NOT a substitute for real topology UI seed / dispatcher
+// / projection completion — whether a given existing_route_composition entry is Gate-0-acceptable or
+// an unresolved seed-required violation is a per-entry judgment against
+// docs/design/runtime-orchestration-ssot.yaml, never settled by this field's mere presence. See
+// docs/design/component-catalog-classification-ssot.yaml runtime_reachability for the full framing.
 export type ComponentRuntimeReachability = "existing_route_composition";
 
 export type ComponentCatalogClassification = {

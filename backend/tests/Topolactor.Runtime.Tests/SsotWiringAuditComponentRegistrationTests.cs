@@ -156,9 +156,12 @@ public class SsotWiringAuditComponentRegistrationTests
 
     // runtimeConnected strictly means "factory/constructor reachable via RUNTIME_COMPONENT_FACTORIES"
     // (see ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByFactoryRegistryBoundary
-    // above) and this test does not change that. It verifies the OTHER real reachability condition —
-    // route composition — against the actual file contents, so the claim can't silently rot into
-    // unverified prose in a catalog entry's `notes` field.
+    // above) and this test does not change that. It verifies a second physically-observable fact —
+    // route composition mounting — against the actual file contents, so the claim can't silently rot
+    // into unverified prose in a catalog entry's `notes` field. 2026-07-15 gate0 audit: this is a
+    // physical-mount check only, not a Gate 0 exception mechanism — passing it is not seed-readiness
+    // or completion evidence for any surface (see docs/design/component-catalog-classification-ssot.yaml
+    // runtime_reachability).
     [Fact]
     public void ComponentRegistrationLane_ExistingRouteCompositionEntries_MustBeMountedInClaimedFile()
     {

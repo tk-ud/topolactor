@@ -574,13 +574,18 @@ admin_normal_surface_projection_seed_ssot:
                 frontend/components/catalog.ts physical evidence -- this repo's
                 SsotWiringAuditComponentRegistrationTests treats runtimeConnected as
                 factory-registration-specific (componentKind must appear in
-                RUNTIME_COMPONENT_FACTORIES); route-composition reachability is recorded as a
-                structured alternate condition instead (runtimeReachability="existing_route_composition"
+                RUNTIME_COMPONENT_FACTORIES); route-composition mounting is recorded as a second,
+                separately-verified physical fact instead (runtimeReachability="existing_route_composition"
                 / routeCompositionFile fields on ComponentCatalogClassification, verified by
                 ComponentRegistrationLane_ExistingRouteCompositionEntries_MustBeMountedInClaimedFile
                 (backend) and runtimeComponentCatalogFullConnection.test.ts (frontend) — both read the
                 claimed routeCompositionFile's real content and confirm it actually imports/mounts the
-                component; this closed 2026-07-14 and is not a follow-up.
+                component. 2026-07-15 gate0 audit: this test-verification mechanism itself needs no
+                further follow-up (it correctly reads real file content rather than trusting prose) —
+                but that is a statement about test correctness only, not about Gate 0 completion. The
+                underlying gap (md_translation_authoring_surface.authoring is not seed/data-defined) is
+                not closed by this evidence and remains tracked in design_blocking.normal_dashboard_authoring_runtime_adapter
+                (reopened) above.
               adapter_mounts_component: md_translation_authoring_surface.authoring
               actual_component_props: >-
                 TeamMarkdownAuthoring(frontend/islands/TeamMarkdownDashboard.tsx):
