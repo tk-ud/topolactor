@@ -62,32 +62,10 @@
     "label": "Target projection shell"
   },
   {
-    "nodeId": "select_hub_relation_link",
-    "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000010",
-    "parentNodeId": "hub_relation_navigation_form",
-    "orderIndex": 6,
-    "x": 0,
-    "y": 0,
-    "componentKind": "action/button",
-    "runtimeInteractions": [
-      {
-        "trigger": "click",
-        "actionType": "localStateMutation",
-        "payloadFrom": {
-          "hub_relation_id": "node:hub_relation_link_list.value"
-        },
-        "sourceActionKey": "select_hub_relation_link",
-        "targetRef": "ui-local:hub_relation_link_list.selected_row"
-      }
-    ],
-    "label": "Select hub relation link"
-  },
-  {
     "nodeId": "target_manifest_resolution_validation",
     "nodeKind": "structural_node",
     "parentNodeId": "hub_relation_navigation_section",
-    "orderIndex": 7,
+    "orderIndex": 6,
     "x": 0,
     "y": 0,
     "recordType": "topology_ui_validation",

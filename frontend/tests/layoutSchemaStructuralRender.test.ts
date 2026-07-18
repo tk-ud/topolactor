@@ -176,7 +176,7 @@ Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology
   assertEquals(specs[1].componentType, "action/button");
 });
 
-Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboard subBundle's hub_relation navigation seed_contract (docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.dashboard.seed_contract) composes to zero componentType==='error' specs — review/regression-proof only, never adopted as a live manifest per docs/design/admin-console-workflow-ssot.yaml page_responsibility.admin_index (no hubs.hub / hubs.topology_manifests row is fabricated for /admin)", async () => {
+Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboard subBundle's hub_relation navigation seed_contract structural placeholders (docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.dashboard.seed_contract: hub_relation_search / hub_relation_link_list / target_projection_shell) compose to zero componentType==='error' specs — review/regression-proof only, never adopted as a live manifest per docs/design/admin-console-workflow-ssot.yaml page_responsibility.admin_index (no hubs.hub / hubs.topology_manifests row is fabricated for /admin). No Action/eventBinding node is included: the real hub_relation -> target manifest navigation path is already fully implemented as generic, manifest-agnostic ProjectionShell.tsx substrate (resolveHubNavigationLinks) with zero authored wiring, so this scenario intentionally stays structural-display-only rather than re-authoring an inert local-state action with no real consumer (round 2 correction, PR #594 review)", async () => {
   const layoutNodes = await loadComposedScenario(
     "scenario_admin_dashboard_hub_relation_navigation.json",
   );
@@ -191,11 +191,11 @@ Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboar
     [],
     `render completion requires zero error components; found: ${JSON.stringify(errorSpecs)}`,
   );
-  assertEquals(specs.length, 8);
+  assertEquals(specs.length, 7);
   const catalogSpecs = specs.filter((s) => s.nodeKind === "catalog_component");
   assertEquals(
     catalogSpecs.map((s) => s.componentType),
-    ["display/card_list", "form_input/search_input", "disclosure_structure/panel", "action/button"],
+    ["display/card_list", "form_input/search_input", "disclosure_structure/panel"],
   );
 });
 

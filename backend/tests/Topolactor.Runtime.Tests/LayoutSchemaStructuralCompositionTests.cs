@@ -828,10 +828,10 @@ public class LayoutSchemaStructuralCompositionTests
     // admin-surface-topology-seed-conversion, admin-dashboard subBundle: proves the
     // docs/design/admin-normal-surface-projection-seed-ssot.yaml
     // surface_axes.admin.surfaces.dashboard.seed_contract component_tree
-    // (hub_relation_search/hub_relation_link_list/select_hub_relation_link/target_projection_shell)
-    // composes end to end through the REAL LayoutSchemaTensorComposer, not a hand-authored
-    // LayoutNode[] literal. AdminDashboardHubRelationNavigationRecordsJson is the exact,
-    // byte-for-byte topologyUiSeedFlatRecords wrapper emitted by
+    // (hub_relation_search/hub_relation_link_list/target_projection_shell) composes end to end
+    // through the REAL LayoutSchemaTensorComposer, not a hand-authored LayoutNode[] literal.
+    // AdminDashboardHubRelationNavigationRecordsJson is the exact, byte-for-byte
+    // topologyUiSeedFlatRecords wrapper emitted by
     // .agent/tools/react-schema-topology-seed-translator generate-topology-seed against
     // .agent/tests/fixtures/react-schema-topology-seed-translator/
     // admin-dashboard-hub-relation-navigation.topology-seed.input.json (regenerable; see that
@@ -844,51 +844,53 @@ public class LayoutSchemaStructuralCompositionTests
     // explicitly forbid fabricating a hubs.hub / hubs.topology_manifests row for /admin itself, so
     // this scenario stays a test-only, non-seed literal-JSON scenario (the same pattern already
     // used by scenario_table_workflow_step.json etc. above), not seed adoption.
+    //
+    // No Action/eventBinding node is included here (round 2 correction, PR #594 review): an
+    // earlier revision authored a "select_hub_relation_link" Action wired via
+    // internal_instance_wiring/localStateMutation to a "ui-local:hub_relation_link_list.selected_row"
+    // state slot. Nothing in the real runtime ever reads that slot, so the wiring did not complete
+    // any navigation or rendering path -- it was inert, and per
+    // docs/design/pipeline-continuity-ssot.yaml test_tier_policy.tiers.tier_2_scenario_harness
+    // (required_when includes ui_operation_wiring_added), authoring it would have required a Tier 2
+    // scenario proof asserting a real final-state consumer, which does not exist for this slot. The
+    // real hub_relation -> target manifest navigation path is already fully implemented as generic,
+    // manifest-agnostic runtime substrate (frontend/islands/ProjectionShell.tsx renders
+    // resolveHubNavigationLinks(emission.navigationSequence) as plain "?manifest=<id>" anchors,
+    // with zero authored wiring per surface) -- so this schema keeps hub_relation_search /
+    // hub_relation_link_list / target_projection_shell as pure structural/display placeholders
+    // only, and does not re-author navigation behavior that already exists.
     private const string AdminDashboardHubRelationNavigationRecordsJson = """
-    {"records": [{"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": null, "record": {"recordType": "topology_ui_category", "key": "hub_relation_navigation", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0]", "knownGapRefs": [], "categoryKey": "hub_relation_navigation", "sectionKeys": ["hub_relation_navigation_section"]}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation", "record": {"recordType": "topology_ui_section", "key": "hub_relation_navigation_section", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0].children[0]", "knownGapRefs": [], "sectionKey": "hub_relation_navigation_section", "sectionKind": "readonly_boundary", "childKeys": ["hub_relation_link_list", "hub_relation_navigation_form", "target_manifest_resolution_validation"]}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_table", "key": "hub_relation_link_list", "label": "Hub relation link list", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[0]", "knownGapRefs": [], "tableKey": "hub_relation_link_list", "source": "hub_relations", "display": "card_list", "columnKeys": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_form", "key": "hub_relation_navigation_form", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0].children[0].children[1]", "knownGapRefs": [], "authorityMarker": "draft_or_projection_only", "formKey": "hub_relation_navigation_form", "target": "hub_relations", "mode": "navigate", "fieldKeys": ["hub_relation_search", "target_projection_shell"], "actionKeys": ["select_hub_relation_link"]}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_form", "record": {"recordType": "topology_ui_field", "key": "hub_relation_search", "label": "Hub relation search", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[1].children[0]", "knownGapRefs": [], "fieldKey": "hub_relation_search", "control": "form_input/search_input", "required": false, "validationRefs": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_form", "record": {"recordType": "topology_ui_field", "key": "target_projection_shell", "label": "Target projection shell", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[1].children[2]", "knownGapRefs": [], "fieldKey": "target_projection_shell", "control": "disclosure_structure/panel", "required": false, "validationRefs": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_form", "record": {"recordType": "topology_ui_action", "key": "select_hub_relation_link", "label": "Select hub relation link", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.event_bindings"], "sourceReactPath": "$.root.children[0].children[0].children[1].children[1]", "knownGapRefs": [], "authorityMarker": "draft_or_projection_only", "actionKey": "select_hub_relation_link", "actionRef": "ui-local:hub_relation_link_list.selected_row", "eventBinding": {"trigger": "click", "wiringLane": "internal_instance_wiring", "targetRef": "ui-local:hub_relation_link_list.selected_row", "authority": "draft_or_projection_only", "payloadFrom": {"hub_relation_id": "node:hub_relation_link_list.value"}}, "runtimeInteractions": [{"trigger": "click", "actionType": "localStateMutation", "payloadFrom": {"hub_relation_id": "node:hub_relation_link_list.value"}, "sourceActionKey": "select_hub_relation_link", "targetRef": "ui-local:hub_relation_link_list.selected_row"}]}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_validation", "key": "target_manifest_resolution_validation", "label": "Target manifest resolution", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.hub_relation_navigation_binding"], "sourceReactPath": "$.root.children[0].children[0].children[2]", "knownGapRefs": [], "validationKey": "target_manifest_resolution_validation", "rule": "fail_close_on_zero_or_multiple_active_target_manifest", "severity": "blocking"}}]}
+    {"records": [{"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": null, "record": {"recordType": "topology_ui_category", "key": "hub_relation_navigation", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0]", "knownGapRefs": [], "categoryKey": "hub_relation_navigation", "sectionKeys": ["hub_relation_navigation_section"]}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation", "record": {"recordType": "topology_ui_section", "key": "hub_relation_navigation_section", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0].children[0]", "knownGapRefs": [], "sectionKey": "hub_relation_navigation_section", "sectionKind": "readonly_boundary", "childKeys": ["hub_relation_link_list", "hub_relation_navigation_form", "target_manifest_resolution_validation"]}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_table", "key": "hub_relation_link_list", "label": "Hub relation link list", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[0]", "knownGapRefs": [], "tableKey": "hub_relation_link_list", "source": "hub_relations", "display": "card_list", "columnKeys": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_form", "key": "hub_relation_navigation_form", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0].children[0].children[1]", "knownGapRefs": [], "authorityMarker": "draft_or_projection_only", "formKey": "hub_relation_navigation_form", "target": "hub_relations", "mode": "navigate", "fieldKeys": ["hub_relation_search", "target_projection_shell"], "actionKeys": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_form", "record": {"recordType": "topology_ui_field", "key": "hub_relation_search", "label": "Hub relation search", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[1].children[0]", "knownGapRefs": [], "fieldKey": "hub_relation_search", "control": "form_input/search_input", "required": false, "validationRefs": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_form", "record": {"recordType": "topology_ui_field", "key": "target_projection_shell", "label": "Target projection shell", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[1].children[1]", "knownGapRefs": [], "fieldKey": "target_projection_shell", "control": "disclosure_structure/panel", "required": false, "validationRefs": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_validation", "key": "target_manifest_resolution_validation", "label": "Target manifest resolution", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.hub_relation_navigation_binding"], "sourceReactPath": "$.root.children[0].children[0].children[2]", "knownGapRefs": [], "validationKey": "target_manifest_resolution_validation", "rule": "fail_close_on_zero_or_multiple_active_target_manifest", "severity": "blocking"}}]}
     """;
 
     [Fact]
-    public void ParseRecords_AdminDashboardHubRelationNavigation_AllNineRecordsRecognized()
+    public void ParseRecords_AdminDashboardHubRelationNavigation_AllSevenRecordsRecognized()
     {
         var rows = ParseValidRows(AdminDashboardHubRelationNavigationRecordsJson);
-        Assert.Equal(8, rows.Count);
+        Assert.Equal(7, rows.Count);
         Assert.Equal(
-            new[] { "card_list.primitive", "search_input.alias", "panel.alias", "button.primitive" },
+            new[] { "card_list.primitive", "search_input.alias", "panel.alias" },
             LayoutSchemaTensorComposer.RequiredComponentKeys(rows));
     }
 
     [Fact]
     public async Task ComposeAndMapToLayoutNode_AdminDashboardHubRelationNavigation_MatchesCheckedInFrontendFixture()
     {
-        // select_hub_relation_link's runtimeInteractions are authored at the FORM level in the
-        // real tensorAdoptionCandidates output (layoutPatchJson.nodes[0].nodeId ==
-        // "hub_relation_navigation_form"), merged onto the Action leaf by
-        // "{parentKey}::{actionKey}" == "hub_relation_navigation_form::select_hub_relation_link"
-        // (LayoutSchemaTensorComposer's BuildInteractionsBySourceActionKey/ResolveInteractionsMergeKey
-        // convention -- the same convention manifest 092's json_template_download/json_import
-        // actions already use).
-        const string interactionsJson = """[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{"hub_relation_id":"node:hub_relation_link_list.value"},"sourceActionKey":"select_hub_relation_link","targetRef":"ui-local:hub_relation_link_list.selected_row"}]""";
         await AssertComposedLayoutNodesMatchFixtureAsync(
             "scenario_admin_dashboard_hub_relation_navigation.json",
             ParseValidRows(AdminDashboardHubRelationNavigationRecordsJson),
-            interactionsBySourceActionKey: new Dictionary<string, string>
-            {
-                ["hub_relation_navigation_form::select_hub_relation_link"] = interactionsJson,
-            },
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
             componentKeyToId: new Dictionary<string, string>
             {
                 ["search_input.alias"] = "00000000-0000-0000-0001-000000000002",
                 ["card_list.primitive"] = "00000000-0000-0000-0001-000000000014",
                 ["panel.alias"] = "00000000-0000-0000-0001-000000000003",
-                ["button.primitive"] = "00000000-0000-0000-0001-000000000010",
             },
             componentIdToKind: new Dictionary<string, string>
             {
                 ["00000000-0000-0000-0001-000000000002"] = "form_input/search_input",
                 ["00000000-0000-0000-0001-000000000014"] = "display/card_list",
                 ["00000000-0000-0000-0001-000000000003"] = "disclosure_structure/panel",
-                ["00000000-0000-0000-0001-000000000010"] = "action/button",
             });
     }
 }
