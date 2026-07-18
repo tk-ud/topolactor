@@ -115,6 +115,62 @@ admin_normal_surface_projection_seed_ssot:
       - frontend_component_source_implementation
       - backend_action_body_or_repository_implementation
       - seed_sql_identity_values
+  seed_physical_hierarchy_and_definition:
+    note: >-
+      Added to remove read ambiguity observed in prior audits of this Bundle: "topology UI seed"
+      is not an abstract schema-design artifact separate from runtime persistence, and the
+      translator is not an independent production track. This section grounds both terms in
+      concrete physical tables and existing authoring surfaces so a later seed task cannot misread
+      "topology UI seed generation" as translator R&D work.
+    physical_hierarchy:
+      layer_order: [hub_relation, topology, hub_and_package]
+      hub_relation:
+        table: hubs.hub_relations
+        role: navigation_edge
+        meaning: an outbound navigation row from a source topology_manifest (topology_manifest_id) to a target hub (related_hub_id).
+      topology:
+        table: hubs.topology_manifests (projected from manifest.topology jsonb[])
+        role: semantic_space_db_calculation_and_definition
+        equivalence: the same artifact class docs/design/admin-console-workflow-ssot.yaml canonical_sequential_authoring_pipeline (/admin/contents Step 1-3, manifest shell through physical page binding) produces.
+        ref: docs/framework-core.yaml topolactor_space_model.topology (role -- semantic_space)
+      hub:
+        table: hubs.hub
+        role: physical_db_relation_node
+        meaning: a system-side relation-established node (hub_id + relation jsonb); carries no semantic/business content by itself -- topology_manifests.hub_id merely anchors a topology to it.
+        ref: docs/framework-core.yaml topolactor_space_model.hub (role -- relation_node)
+      package:
+        tables: [topology.ui_component_package, topology.components_package_design, topology.components_layout_design, topology.ui_wiring_registry, topology.ui_topology_tensor]
+        role: frontend_design
+        equivalence: the same artifact class /admin/ui-builder (layout_patch:preview/validate/apply, package_generator:promote) produces, referenced from a topology's manifest.topology[ui_projection] packageIds/layoutId/wiringId/tensorId.
+        ref: >-
+          docs/framework-policy.yaml ui_topology_tensor_persistence; docs/design/pipeline-continuity-ssot.yaml
+          layout_projection_dom_lane node backend.tensor_row -- "layout_patch_json stores the full
+          canvas JSON authored via layout_patch:apply"
+    seed_definition:
+      rule: >-
+        "seed" throughout this SSOT and the admin-surface-topology-seed-conversion Bundle
+        (.agent/tasks/todo.md) means the physical DB rows across hub_relation / topology
+        (topology_manifests) / hub / package (physical_hierarchy above) for a given surface. It is
+        pre-built initial sample data, equivalent in shape to what an admin would obtain by
+        actually using /admin/contents + /admin/ui-builder + /admin/manifests -- not an
+        independently-designed artifact class with a separate authoring lifecycle of its own.
+      translator_role: >-
+        docs/design/react-schema-topology-seed-translator-ssot.yaml (the translator) is a
+        conversion convenience tool: it turns a React-like Schema description into the topology
+        jsonb shape the rows above require, so an implementing agent does not have to hand-author
+        raw jsonb (it exists to remove that authoring/translation cost from the agent, not to add a
+        design phase). It owns SEED EMISSION SHAPE only -- what fields a record carries -- per
+        docs/design/runtime-orchestration-ssot.yaml
+        layout_schema_structural_render_contract.authority_boundary_with_translator_ssot; it never
+        owns seed adoption authority and is never a second, independent seed-production track
+        alongside admin/contents-ui-builder-manifests. This Bundle's deliverable is the physical
+        rows themselves (the projection side's initial implementation) -- never translator
+        maintenance or extension.
+    prohibited:
+      - describing_topology_ui_seed_generation_as_a_design_phase_disconnected_from_the_physical_rows_above
+      - treating_translator_tool_usage_as_this_bundles_deliverable_rather_than_a_means_to_produce_the_rows
+      - treating_the_translator_as_an_independent_seed_authority_separate_from_admin_contents_ui_builder_manifests
+      - scoping_this_bundles_work_as_translator_modification_or_extension
   global_invariants:
     projection_axis_is_not_auth_role:
       rule: admin and normal are projection surface axes only; they must not be converted into auth role, RBAC, audience, credential, or authorization authority.

@@ -241,13 +241,15 @@ route 名単位で `/admin/enums` / `/admin/users` / `/admin/scheduler` / `/admi
 
 admin hardcoded surface を意味要素ごとの topology UI seed conversion scope に統合し、各 subBundle を route 名ではなく admin surface の意味責務で実装する。共通順序は、hardcoded surface 読込、React-like Schema 作成、translator tool 変換、topology UI seed 生成、seed 登録、canonical projection/admin mechanism による render / action wiring 確認、必要な proof 更新、最後に hardcoded route / island / old route-presence test 削除とする。
 
+**用語補足（読み違い防止、`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `seed_physical_hierarchy_and_definition` と同一の定義）:** ここでの「seed」は抽象的なスキーマ設計成果物ではなく、`hub_relation`（`hubs.hub_relations`）→ `topology`（`hubs.topology_manifests`／`manifest.topology`、`/admin/contents` が作るものと同種）→ `hub`（`hubs.hub`、物理DB関係ノード）・`package`（`topology.ui_component_package`/`components_package_design`/`components_layout_design`/`ui_wiring_registry`/`ui_topology_tensor`、`/admin/ui-builder` が作るものと同種）という具体的なDB行そのものを指す。`/admin/contents`・`/admin/ui-builder`・`/admin/manifests` を実際に使えば得られたはずの成果物と同型の、初期構築済みの見本データである。translator（`.agent/tools/react-schema-topology-seed-translator`）はこの行を作るための変換costをagentが肩代わりしなくて済むための便宜ツールに過ぎず、独立した第二の生成経路や本Bundleの成果物そのものではない。**本Bundleの todo は translator の修正・拡張ではなく、投影側（上記の行）の初期実装を構築することである。**
+
 ### 改善方針
 
-- 共通工程を全 subBundle で固定する。
+- 共通工程を全 subBundle で固定する（工程2〜4は一体で「seed行を構築する」作業であり、translatorはその内部で使う変換ツールに過ぎない）。
   1. hardcoded surface 読込。
   2. React-like Schema 作成。
   3. `.agent/tools/react-schema-topology-seed-translator` で topology UI seed candidate へ変換。
-  4. topology UI seed 生成結果を seed 登録へ写像。
+  4. topology UI seed 生成結果を seed 登録へ写像（＝ `hub_relation`/`topology_manifests`/`hub`/`package` 系テーブルへの実際のDB行構築）。
   5. canonical projection/admin mechanism で projection render / backend action wiring を確認。
   6. 必要な proof 更新を行う。
   7. 最後に hardcoded route / island / old route-presence test を削除する。
