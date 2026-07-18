@@ -848,24 +848,47 @@ public class LayoutSchemaStructuralCompositionTests
     // (docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces
     // .dashboard, axis_kind: projection_surface_axis) describes a reusable hub-relation-navigation
     // widget pattern, not content bound to /admin's own route; and (b) whether this candidate could
-    // ever be adopted onto a DIFFERENT, already-existing, real manifest (e.g. manifest 092,
-    // credential-management, which already has a real ui_projection and its own hub_relations) --
-    // a genuinely open question round 7 investigated in full for the first time (see
-    // .agent/tasks/todo.md admin-dashboard round 7 監査). That investigation found manifest-092
-    // adoption structurally legitimate (per seed_physical_hierarchy_and_definition.seed_definition
-    // .rule: seed rows should be "equivalent in shape to what an admin would obtain by actually
-    // using /admin/contents + /admin/ui-builder + /admin/manifests", and adopting onto an existing
-    // real manifest adds no new canonical route, satisfying admin-dashboard subBundle's own "no new
-    // route registry authority" boundary) -- but blocked on a separate, real gap: the seed_contract's
-    // required search/filter capability (capability_requirements.search/filter) has no backing
-    // runtime query path anywhere yet; frontend/islands/ProjectionShell.tsx's hub-navigation <nav>
-    // renders a flat, unfiltered link list only. Closing that gap (even via a low-risk, additive,
-    // client-side filter over the already-loaded navigationSequence, requiring no new backend
-    // action) touches shared runtime code used by every manifest in the system, so it was flagged
-    // for explicit confirmation rather than implemented speculatively in the same round it was
-    // discovered. This scenario therefore remains a test-only, non-seed literal-JSON scenario (the
-    // same pattern already used by scenario_table_workflow_step.json etc. above) for now -- pending
-    // that confirmation, not because adoption is impossible in principle.
+    // ever be adopted onto a DIFFERENT, already-existing, real manifest -- a genuinely open question
+    // round 7 investigated for the first time (see .agent/tasks/todo.md admin-dashboard round 7 監査).
+    //
+    // round 8 (PR #594 review) correction of round 7: round 7's answer to (b) rested on two claims
+    // that were wrong, not settled facts -- manifest 092 (credential-management) is NOT a legitimate
+    // generic adoption target for this candidate (it is credential-management's own
+    // hubs.topology_manifests row, scoped to that subBundle's own topology, not a reusable carrier
+    // for admin-dashboard content); and "capability_requirements.search/filter has no backing
+    // runtime query path anywhere" was false -- a substantial, pre-existing "SQL Attention" system
+    // (docs/design/sql-attention-logs-ssot.yaml) already explores/scores/ranks hubs.hub_relations
+    // per manifest (active_condition, score, sequence, topK, neighbor score, recent window,
+    // fail-close on NoHubRelations) and projects the result via
+    // frontend/components/SqlAttentionProjectionBlock.tsx and
+    // frontend/components/SqlAttentionProjectionPanel.tsx, mounted through
+    // frontend/components/RecommendNavigationIsland.tsx inside this same
+    // frontend/islands/ProjectionShell.tsx already cited above, wired unconditionally on every
+    // dispatch by backend/runtime/RuntimeExecutor.cs Step 9
+    // (RecommendNavigationProjectionSpec.FromRecommendation) and backed by
+    // backend/schema/SqlAttentionContracts.cs. Both errors trace to round 7 simply not reading far
+    // enough through ProjectionShell.tsx / not searching for "SqlAttention", not to any mechanism
+    // this session could not have caught on its own -- round 7 correctly stopped short of touching
+    // shared runtime code or live manifest 092 data on the strength of these wrong conclusions, and
+    // that non-implementation remains the right outcome and is not being reverted here.
+    //
+    // SQL Attention Projection is itself explicitly framed, by its own code comments and by
+    // docs/design/runtime-orchestration-ssot.yaml's sql_attention_relation_recommend_candidate_only
+    // / sql_attention_or_recommendation_must_not_overwrite_route_state_automatically, as read-only
+    // recommendation guidance, not an authoritative search-and-navigate widget -- so it is not a
+    // literal substitute for this seed_contract's search_input.alias / table.primitive / panel.alias
+    // shape. But combined with the plain generic hub-navigation <nav> click-through path (already
+    // established rounds 2-3 below) and admin-dashboard subBundle's own explicit scope boundary
+    // against "business projection" and new route-registry authority (.agent/tasks/todo.md Bundle
+    // definition, admin-dashboard subBundle scope), the functional intent behind
+    // capability_requirements.search/filter already has real, live runtime coverage today, on every
+    // manifest with scored hub_relations, independent of this candidate ever being adopted anywhere.
+    // This scenario therefore remains a test-only, non-seed literal-JSON scenario (the same pattern
+    // already used by scenario_table_workflow_step.json etc. above) -- not because a client-side
+    // filter still needs adding to shared runtime and not because manifest 092 adoption is pending
+    // confirmation (both retracted above), but because no physical adoption target or residual
+    // capability gap has actually been identified for it; see .agent/tasks/todo.md admin-dashboard
+    // round 8 監査 for the full re-judgment.
     //
     // No Action/eventBinding node is included here (round 2 correction, PR #594 review): an
     // earlier revision authored a "select_hub_relation_link" Action wired via

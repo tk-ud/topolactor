@@ -189,19 +189,35 @@ Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology
  * conflated /admin's own permanent no-fabricated-manifest rule with this candidate's own
  * adoptability onto a DIFFERENT, already-existing manifest -- a separate question round 7
  * investigated for the first time (see .agent/tasks/todo.md admin-dashboard round 7 監査).
- * Adoption onto an existing real manifest (e.g. manifest 092, which already has its own
- * hub_relations) was found structurally legitimate and adds no new canonical route, but is
- * blocked on a real, separate gap: the seed_contract's required search/filter capability has no
- * backing runtime query path anywhere yet -- ProjectionShell.tsx's hub-navigation <nav> renders a
- * flat, unfiltered link list only. Closing that gap touches shared runtime code used by every
- * manifest, so it was flagged for explicit confirmation rather than implemented speculatively.
+ *
+ * round 8 (PR #594 review) correction of round 7: round 7's answer above was wrong on two points,
+ * not settled facts -- manifest 092 (credential-management) is NOT a legitimate generic adoption
+ * target (it is credential-management's own hubs.topology_manifests row, scoped to that
+ * subBundle's own topology); and "search/filter has no backing runtime query path anywhere" was
+ * false -- a pre-existing "SQL Attention" system (docs/design/sql-attention-logs-ssot.yaml)
+ * already explores/scores/ranks hubs.hub_relations per manifest and projects the result via
+ * SqlAttentionProjectionBlock.tsx/SqlAttentionProjectionPanel.tsx, mounted through
+ * RecommendNavigationIsland.tsx inside this same ProjectionShell.tsx, wired unconditionally by
+ * backend/runtime/RuntimeExecutor.cs Step 9. Both errors trace to round 7 not reading far enough
+ * through ProjectionShell.tsx -- round 7 correctly stopped short of touching shared runtime code
+ * or live manifest 092 data on the strength of these wrong conclusions, and that
+ * non-implementation remains the right outcome. SQL Attention Projection is itself framed (by its
+ * own code and by runtime-orchestration-ssot.yaml's sql_attention_relation_recommend_candidate_only)
+ * as read-only recommendation guidance, not a literal substitute for this seed_contract's
+ * search_input.alias / table.primitive shape -- but combined with the generic hub-navigation <nav>
+ * click-through path below and admin-dashboard subBundle's own scope boundary against "business
+ * projection" / new route-registry authority, the functional intent behind
+ * capability_requirements.search/filter already has live runtime coverage today, independent of
+ * this candidate ever being adopted anywhere. See .agent/tasks/todo.md admin-dashboard round 8
+ * 監査 for the full re-judgment.
+ *
  * No Action/eventBinding node is included: the real hub_relation -> target manifest navigation
  * path is already fully implemented as generic, manifest-agnostic ProjectionShell.tsx substrate
  * (resolveHubNavigationLinks) with zero authored wiring, so this scenario intentionally stays
  * structural-display-only rather than re-authoring an inert local-state action with no real
  * consumer (round 2 correction, PR #594 review).
  */
-Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboard subBundle's hub_relation navigation seed_contract structural placeholders compose to zero componentType==='error' specs (review/regression-proof only pending adoption confirmation -- see round 7 doc comment above)", async () => {
+Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboard subBundle's hub_relation navigation seed_contract structural placeholders compose to zero componentType==='error' specs (review/regression-proof only; no adoption target identified -- see round 8 doc comment above)", async () => {
   const layoutNodes = await loadComposedScenario(
     "scenario_admin_dashboard_hub_relation_navigation.json",
   );
