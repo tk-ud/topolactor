@@ -411,7 +411,7 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - Credentials/users identity split: `credentials.users` と `users(status)` は同一 `auth.users` を対象にする別projectionとして維持する。`credentials.users` は `auth.users` + `auth.credentials` の composite account lifecycle projection、`users(status)` は `auth.users` の status-only projection。
 - Admin dashboard boundary: `admin-dashboard` は business projection や fake hub/manifest ではなく、admin landing / navigation / guide entry 責務として維持する。hub relation source確保目的の empty/fake topology manifest は追加しない。
 - Hub relation authority: `/admin/manifests` による既存 hub relation authoring authority、`hub_navigation:*` dispatcher mapping、`ManifestDispatcher` projection / relation resolution を維持する。hub relation resolution の再設計、role gate再発明、runtime DB接続状態のTODO固定台帳化はしない。
-- Topology UI seed production: owner明示指示まで停止中。仮にdesign blockerが全件解消済みと判断されても、seed production再開は別途owner明示判断が必要。
+- Topology UI seed production: 2026-07-18、owner明示決定によりpause解除済み（詳細は下記「Owner pause lifted」節参照）。design blockerの個別解決はpause解除とは別軸であり、subBundle単位でsubbundle_statusの`unresolved_before_seed`を個別に解消（またはSSOT裏付けのある`subBundle_not_applicable`証明）してからでなければ、そのsubBundleのseed generation/registrationへは進めない。
 
 #### PR587 design_blocking 再監査
 
@@ -430,6 +430,27 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - `admin-enum`: enum dictionary/group/item/status dependency authorityは既存SSOTと `enum_dictionary:*` substrateに従う。target `ui_projection` manifest は未作成で `unresolved_before_seed`。target manifest生成後は `/admin/manifests` / `hub_navigation:*` canonical authorityで明示binding authoring / verificationを行う。CRUD presetのgeneric shapeは参考にできるが `content_bundle:*` refsをコピーせず、enum authority operationへbindする。
 - `team-dashboard`: team Markdown saved view / rendered Markdown / completed preset seed summary authorityは既存SSOTに従う。target `ui_projection` manifest は未作成。target manifest生成後は明示binding authoring / verificationを行う。normal.dashboard viewer/inputer責務分離、`md_translation_authoring_surface.authoring` runtime adapter/route-composition binding、preview/validate/write/diff operation bindingは全て解決済み（role-based-surface-impl bundle, 2026-07-14）。seed前残scopeは target manifest生成とbinding authoring / verificationのみ。
 - `scheduler-settings`: scheduler job manifest / create-edit-disable authorityは既存SSOTと `scheduler_jobs:*` substrateに従う。target `ui_projection` manifest は未作成で `unresolved_before_seed`。target manifest生成後は明示binding authoring / verificationを行う。scheduler runtime policyをfrontend constantsへ隠さず、既存backend/dispatcher substrateへ明示bindする。
+
+### Owner pause lifted（2026-07-18、PR592 gate0 audit 受け owner 明示決定）
+
+**この節が topology UI seed production pause 状態に関する現在の正本である。** 上記「PR587後 現在の状態（正本、2026-07-14）」節の pause 関連記述はこの節により更新済み（Bundle Status・SubBundle scope・design_blocking の内容自体はこの節により一切変更されない — 変更されるのは pause 状態の記述のみ）。
+
+- **決定:** `admin-surface-topology-seed-conversion` の topology UI seed production owner pause（PR #584 review comment, 2026-07-11 由来、本ファイル該当節参照）は 2026-07-18 時点で解除された。契機は PR592（`admin-surface-topology-seed-conversion: add per-subBundle granularity to design_blocking`、`docs/design/admin-normal-surface-projection-seed-ssot.yaml` の5件の `design_blocking` entry へ `subbundle_status` を追加）の gate0 監査。
+- **意味すること:** `implementation_change` はこの Bundle の work として着手してよい（subBundle 単位）。
+- **意味しないこと（誤読厳禁 — pause解除とdesign_blocking解決の混同は禁止）:**
+  - pause解除は design_blocking の解決を意味しない。未解決の design_blocking entry を resolved 扱いにしない。
+  - `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `design_blocking[*].subbundle_status` に現在も `unresolved_before_seed` として残る項目——`target_surface_manifest_readiness`（credential-managementのnavigation binding authoring/verification; admin-enum/team-dashboard/scheduler-settingsのtarget manifest自体）、`external_instance_projection_columns`（credential-managementのprojection seed binding/authoring surface/operation wiring/proof）、`normal_dashboard_authoring_runtime_adapter`（team-dashboardのruntime adapter、reopened）——は、pause解除後も個別に解消されるまで unresolved のまま維持する。
+  - `credentials_users_account_transaction_binding.subbundle_status.credential-management.admin_driven_password_replace_or_rotate: retired_permanent_ng` は pending gap として復活させない（永久決定のまま）。
+  - `subBundle_not_applicable` を resolved と誤読しない（「このsubBundleをそのidが一切gateしない」の意味であり、「解決済み」の意味ではない）。
+- **進行ゲート（subBundle単位、必須）:** seed generation / seed registration は、対象subBundleについて `subbundle_status` が `subBundle_not_applicable` ではない applicable な design_blocking entry がすべて `unresolved_before_seed` ではない状態（`resolved` / `resolved_existing_substrate` / `retired_permanent_ng` のいずれか）になっている場合にのみ進めてよい。現時点でこの条件を満たすのは `admin-dashboard`（5 id すべて `subBundle_not_applicable`）のみ。他の4 subBundle（credential-management / admin-enum / team-dashboard / scheduler-settings）はそれぞれの残 `unresolved_before_seed` を個別に解消（またはSSOT裏付けのある `subBundle_not_applicable` 証明）してから着手する。
+- **safe owner decision record（正本文言）:**
+  > Owner pause is lifted for `admin-surface-topology-seed-conversion` (2026-07-18). implementation_change may proceed as Bundle work, subBundle by subBundle, following the common process fixed in .agent/tasks/todo.md. This does not mark unresolved design_blocking entries as resolved. Seed generation / seed registration for any subBundle requires either applicable design_blocking resolution for that subBundle (per design_blocking[*].subbundle_status), or SSOT-backed subBundle_not_applicable proof. Generated artifacts and translator output are not seed adoption authority. No route deletion before render/action wiring proof.
+- **同時実施したSSOT訂正（design_change、本節と同一コミット）:**
+  - `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `seed_implementation_start_conditions`: 「All design_blocking entries are resolved」という Bundle一括表現を、`design_blocking[*].subbundle_status` 粒度（対象subBundleに applicable な entry のみが対象、`subBundle_not_applicable` はゲート対象外）へ訂正。
+  - 同ファイル `design_blocking.normal_dashboard_authoring_runtime_adapter.required_resolution_before_seed` および `surface_axes.normal.normal_hub_relation_navigation_contract.current_target_readiness.dashboard_team_markdown`: 「owner instruction to resume ... required first」「remains owner-paused pending explicit future owner instruction」という pause待ち文言を、pause解除済み・残るblockerは個別の未実装状態のみである旨へ訂正。
+  - `docs/design/admin-console-workflow-ssot.yaml` `subbundle_target_readiness.enum_dictionary`（`team_dashboard`/`scheduler_settings` はこれを参照する文言のため連動）: 同様に owner-paused 文言を訂正。
+  - `docs/design/auth-db-session-credential-ssot.yaml` の self-service endpoint note内 pause文言も同様に訂正（この self-service pattern はそもそも pause の対象外だったことを明記）。
+  - いずれも design_blocking の値（`subbundle_status`・`status`・`resolution_record`）自体は変更していない。変更したのは「pauseを理由に待っている」という表現の除去のみ。
 
 ### [INVALIDATED — DO_NOT_USE — superseded_by_2026_07_12b] Owner補正記録（PR #584 review comment, 2026-07-11, topology UI seed production 停止）
 

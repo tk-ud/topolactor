@@ -101,7 +101,7 @@ for term in \
   "adapter_owned_events: [preview, validate, explicit_confirm, write, diff_log]" \
   "zero_active_target_manifest_for_related_hub_id" \
   "multiple_active_target_manifests_for_related_hub_id" \
-  "All design_blocking entries are resolved before seed generation"; do
+  "every design_blocking entry whose subbundle_status for that subBundle is not"; do
   require_term "$SSOT" "$term"
 done
 for term in \
