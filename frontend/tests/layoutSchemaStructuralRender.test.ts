@@ -195,7 +195,7 @@ Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboar
   const catalogSpecs = specs.filter((s) => s.nodeKind === "catalog_component");
   assertEquals(
     catalogSpecs.map((s) => s.componentType),
-    ["display/card_list", "form_input/search_input", "disclosure_structure/panel"],
+    ["data_display/table", "form_input/search_input", "disclosure_structure/panel"],
   );
 });
 

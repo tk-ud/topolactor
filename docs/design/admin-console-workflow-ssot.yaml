@@ -1,6 +1,6 @@
 admin_console_workflow_ssot:
   name: topolactor_admin_console_workflow_ssot
-  version: 0.9.0
+  version: 0.10.0
   status: subordinate_design_document
 
   authority:
@@ -1387,6 +1387,57 @@ admin_console_workflow_ssot:
         hub relation navigation source — that role belongs to whichever manifest is selected via
         /admin/manifests (see admin_hub_relation_navigation_contract.authoring above); /admin has no
         hubs.hub / hubs.topology_manifests row of its own, and none is fabricated to give it one.
+
+      static_navigation_sourcing_contract:
+        status: design_change
+        bundle: admin-surface-topology-seed-conversion
+        note: >-
+          admin-surface-topology-seed-conversion round 4 (PR #594 review): defines the sourcing
+          authority the "where that content is sourced from" sentence above refers to, for the
+          /admin index page's static navigation content (frontend/content/adminGuides.ts
+          ADMIN_ROUTE_CARDS href set, ADMIN_MAIN_FLOW_STEPS / ACCEPTANCE_FLOW_STEPS href set and
+          order). Governs only route SET and ORDER — never wording/copy (purpose text,
+          howToSummary bullets, labels), which frontend-canonical-surface-structure-label-boundary
+          Bundle owns per the responsibility split above. Investigated and rejected before this:
+          (a) a runtime read path (backend endpoint or admin_runtime dispatch action serving this
+          content from a DB row or from this YAML file at request time) — rejected because it would
+          require fabricating a new runtime authority plane / dispatcher_mapping / manifest surface
+          for /admin, which admin_hub_relation_navigation_contract.prohibited and this same
+          responsibility text explicitly forbid, and because static site-structure content (which
+          fixed admin tool routes exist) is not hub/topology instance data and has no natural
+          hubs.hub_relations analog; (b) docs/design/user-facing-helper-manual-ssot.yaml — read in
+          full; it is a read-only, non-runtime-authority SSOT for the separate, not_started
+          helper-manual Bundle's AI/human helper-reference-artifact viewer, and explicitly does not
+          own bundle_implementation or any admin-index navigation-card concern — not a fit.
+        source_authority:
+          - authority.canonical_routes (this file, above) — canonical admin route set
+          - other_admin_routes.master_roster_routes (this file, above) — pipeline-external roster routes
+          - canonical_authoring_order.contents_pipeline (this file, above) — contents pipeline route+step order
+        frontend_consumer:
+          - "frontend/content/adminGuides.ts: ADMIN_ROUTE_CARDS[].href (must be a subset of source_authority; no fabricated/non-canonical route)"
+          - "frontend/content/adminGuides.ts: ADMIN_MAIN_FLOW_STEPS[].href / ACCEPTANCE_FLOW_STEPS[].href (must match canonical_authoring_order.contents_pipeline route order)"
+        read_path: >-
+          compile_time_test_proof_only — no runtime fetch, no new backend authority. Raw-text
+          extraction of this SSOT YAML at test time, the same established pattern already used by
+          frontend/tests/adminMainFlow.test.ts ("Fresh /admin route registry matches
+          runtime-orchestration SSOT exactly") and frontend/tests/adminUxGuard.test.ts for
+          admin-console-workflow-ssot.yaml text assertions.
+        missing_source_fail_close: >-
+          the proof surface below fails if ADMIN_ROUTE_CARDS contains an href absent from
+          source_authority (fabricated/non-canonical route leaking into static navigation).
+          Completeness in the other direction (every source_authority route having a card) is
+          NOT enforced here: docs/design/admin-console-workflow-ssot.yaml authority.canonical_routes
+          already lists /admin/team-dashboard, which frontend/content/adminGuides.ts ADMIN_ROUTE_CARDS
+          does not yet include and for which no existing Japanese UX copy exists anywhere in this
+          repository — closing that gap requires authoring new wording, which is
+          frontend-canonical-surface-structure-label-boundary Bundle's responsibility, not this
+          Bundle's; recorded in .agent/tasks/todo.md as an open item for that Bundle rather than
+          implemented here or silently required to pass by this contract.
+        proof_surface: >-
+          frontend/tests/adminMainFlow.test.ts — "ADMIN_ROUTE_CARDS contain only canonical admin
+          routes (SSOT-sourced)" reads this file's authority.canonical_routes and
+          other_admin_routes.master_roster_routes via raw-text regex extraction and asserts every
+          ADMIN_ROUTE_CARDS href is a member of that union.
 
     admin_contents:
       route: /admin/contents

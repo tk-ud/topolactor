@@ -77,6 +77,7 @@ public static class LayoutSchemaTensorComposer
     private static readonly IReadOnlyDictionary<string, string> TableDisplayToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            ["table"] = "table.primitive",
             ["card_list"] = "card_list.primitive",
             ["data_grid"] = "data_grid.alias",
             ["list"] = "list.alias",

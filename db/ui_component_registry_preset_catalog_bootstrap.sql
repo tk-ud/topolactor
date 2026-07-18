@@ -51,7 +51,14 @@ VALUES
     ('00000000-0000-0000-0001-00000000001b', 'confirmed_update_button.primitive', 'inline_edit/confirmed_update_button', 'frontend/components/ConfirmedUpdateButton.tsx', 'active'),
     ('00000000-0000-0000-0001-00000000001c', 'audit_diff_drawer.primitive', 'inline_edit/audit_diff_drawer', 'frontend/components/AuditDiffDrawer.tsx', 'active'),
     ('00000000-0000-0000-0001-00000000001d', 'aggregation_preview_table.primitive', 'calc_topology/aggregation_preview_table', 'frontend/components/AggregationPreviewTable.tsx', 'active'),
-    ('00000000-0000-0000-0001-00000000001e', 'hub_statistics_panel.primitive', 'calc_topology/hub_statistics_panel', 'frontend/components/HubStatisticsPanel.tsx', 'active')
+    ('00000000-0000-0000-0001-00000000001e', 'hub_statistics_panel.primitive', 'calc_topology/hub_statistics_panel', 'frontend/components/HubStatisticsPanel.tsx', 'active'),
+    -- table.primitive: bucketed in db/seed_empty.sql (components_bucket, registrationRequired:true) same as
+    -- button.primitive/input.primitive/card_list.primitive above, which already carry registrationRequired:true
+    -- yet are registered here via bootstrap SQL rather than live UI Builder canvas-drop authoring. That flag
+    -- does not block bootstrap registration for its siblings, so it does not block it here either. Added for
+    -- admin-dashboard hub_relation_link_list (admin-normal-surface-projection-seed-ssot.yaml
+    -- surface_axes.admin.surfaces.dashboard.seed_contract.component_tree table.primitive/hub_relation_link_list).
+    ('00000000-0000-0000-0001-00000000001f', 'table.primitive', 'data_display/table', 'frontend/components/Table.tsx', 'active')
 ON CONFLICT (component_key) DO UPDATE
     SET component_kind = EXCLUDED.component_kind,
         source_path    = EXCLUDED.source_path,

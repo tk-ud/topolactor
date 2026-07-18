@@ -45,18 +45,62 @@ Deno.test("ACCEPTANCE_FLOW_STEPS matches main flow order", () => {
   assertEquals(ACCEPTANCE_FLOW_STEPS, ADMIN_MAIN_FLOW_STEPS);
 });
 
-Deno.test("ADMIN_ROUTE_CARDS contain canonical admin routes only", () => {
-  assertEquals(
-    ADMIN_ROUTE_CARDS.map((card) => card.href),
-    [
-      "/admin/contents",
-      "/admin/ui-builder",
-      "/admin/manifests",
-      "/admin/enums",
-      "/admin/users",
-      "/admin/scheduler",
-    ],
+/**
+ * admin-surface-topology-seed-conversion round 4 (PR #594 review): sourcing contract for
+ * ADMIN_ROUTE_CARDS, per docs/design/admin-console-workflow-ssot.yaml
+ * page_responsibility.admin_index.static_navigation_sourcing_contract. Previously this test
+ * compared ADMIN_ROUTE_CARDS against a second, independently hardcoded literal array here — never
+ * reading the SSOT authority it claimed to represent, so a card referencing a fabricated or
+ * non-canonical route would not have been caught. This version reads
+ * authority.canonical_routes and other_admin_routes.master_roster_routes directly out of the SSOT
+ * YAML (raw-text regex extraction, the same pattern already used by this file's "Fresh /admin
+ * route registry matches runtime-orchestration SSOT exactly" test and by
+ * frontend/tests/adminUxGuard.test.ts), so a real SSOT/card divergence fails here. This governs
+ * route SET only, never wording/copy — frontend-canonical-surface-structure-label-boundary Bundle
+ * owns wording. Completeness (every canonical route having a card) is intentionally not asserted:
+ * /admin/team-dashboard is canonical per the SSOT but has no card and no existing Japanese UX copy
+ * anywhere in this repo; authoring that copy is the wording Bundle's job, tracked in
+ * .agent/tasks/todo.md, not silently forced to pass by relaxing this test's scope.
+ */
+Deno.test("ADMIN_ROUTE_CARDS contain only canonical admin routes (SSOT-sourced)", async () => {
+  const ssotYaml = await Deno.readTextFile(
+    new URL(
+      "../../docs/design/admin-console-workflow-ssot.yaml",
+      import.meta.url,
+    ),
   );
+
+  const canonicalRoutesMatch = ssotYaml.match(
+    /\n {4}canonical_routes:\n((?: {6}- \/[^\n]+\n)+)/,
+  );
+  if (!canonicalRoutesMatch) {
+    throw new Error(
+      "could not locate authority.canonical_routes in admin-console-workflow-ssot.yaml — SSOT structure changed; update this test's extraction regex",
+    );
+  }
+  const canonicalRoutes = [...canonicalRoutesMatch[1].matchAll(/- (\/\S+)/g)]
+    .map((m) => m[1]);
+
+  const masterRosterMatch = ssotYaml.match(
+    /\n {4}master_roster_routes:\n([\s\S]*?)\n {2}\S/,
+  );
+  if (!masterRosterMatch) {
+    throw new Error(
+      "could not locate other_admin_routes.master_roster_routes in admin-console-workflow-ssot.yaml — SSOT structure changed; update this test's extraction regex",
+    );
+  }
+  const masterRosterRoutes = [...masterRosterMatch[1].matchAll(/route: (\/\S+)/g)]
+    .map((m) => m[1]);
+
+  const sourceAuthorityRoutes = new Set([...canonicalRoutes, ...masterRosterRoutes]);
+
+  for (const card of ADMIN_ROUTE_CARDS) {
+    assertEquals(
+      sourceAuthorityRoutes.has(card.href),
+      true,
+      `ADMIN_ROUTE_CARDS href ${card.href} is not in admin-console-workflow-ssot.yaml authority.canonical_routes or other_admin_routes.master_roster_routes`,
+    );
+  }
 });
 
 Deno.test("canonical admin navigation does not expose removed legacy/debug routes", () => {

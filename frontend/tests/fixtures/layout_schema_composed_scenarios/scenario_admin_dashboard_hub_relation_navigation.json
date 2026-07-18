@@ -21,12 +21,12 @@
   {
     "nodeId": "hub_relation_link_list",
     "nodeKind": "catalog_component",
-    "componentId": "00000000-0000-0000-0001-000000000014",
+    "componentId": "00000000-0000-0000-0001-00000000001f",
     "parentNodeId": "hub_relation_navigation_section",
     "orderIndex": 2,
     "x": 0,
     "y": 0,
-    "componentKind": "display/card_list",
+    "componentKind": "data_display/table",
     "label": "Hub relation link list"
   },
   {
