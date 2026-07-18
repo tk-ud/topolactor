@@ -1,9 +1,15 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   ACCEPTANCE_FLOW_STEPS,
+  ADMIN_INDEX_GUIDE,
   ADMIN_MAIN_FLOW_STEPS,
   ADMIN_ROUTE_CARDS,
+  ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING,
 } from "../content/adminGuides.ts";
+import {
+  ADMIN_CANONICAL_ROUTE_IDENTITY,
+  ADMIN_MAIN_FLOW_ROUTE_ORDER,
+} from "../content/adminRouteIdentity.generated.ts";
 import { UX_MAIN_FLOW_STEP_LABELS } from "../content/adminUxTerms.ts";
 
 const NON_CANONICAL_ADMIN_ROUTES = [
@@ -46,23 +52,21 @@ Deno.test("ACCEPTANCE_FLOW_STEPS matches main flow order", () => {
 });
 
 /**
- * admin-surface-topology-seed-conversion round 4 (PR #594 review): sourcing contract for
- * ADMIN_ROUTE_CARDS, per docs/design/admin-console-workflow-ssot.yaml
- * page_responsibility.admin_index.static_navigation_sourcing_contract. Previously this test
- * compared ADMIN_ROUTE_CARDS against a second, independently hardcoded literal array here — never
- * reading the SSOT authority it claimed to represent, so a card referencing a fabricated or
- * non-canonical route would not have been caught. This version reads
- * authority.canonical_routes and other_admin_routes.master_roster_routes directly out of the SSOT
- * YAML (raw-text regex extraction, the same pattern already used by this file's "Fresh /admin
- * route registry matches runtime-orchestration SSOT exactly" test and by
- * frontend/tests/adminUxGuard.test.ts), so a real SSOT/card divergence fails here. This governs
- * route SET only, never wording/copy — frontend-canonical-surface-structure-label-boundary Bundle
- * owns wording. Completeness (every canonical route having a card) is intentionally not asserted:
- * /admin/team-dashboard is canonical per the SSOT but has no card and no existing Japanese UX copy
- * anywhere in this repo; authoring that copy is the wording Bundle's job, tracked in
- * .agent/tasks/todo.md, not silently forced to pass by relaxing this test's scope.
+ * admin-surface-topology-seed-conversion round 5 (PR #594 review): the round 4 version of this
+ * test only validated that the independently-hardcoded ADMIN_ROUTE_CARDS array was a subset of
+ * SSOT-declared routes -- production code (frontend/content/adminGuides.ts) still read only its
+ * own static TypeScript literal as authority, so an SSOT change could still silently diverge from
+ * the real consumer. Round 5 replaces that with a real source-to-consumer path:
+ * frontend/content/adminRouteIdentity.generated.ts is generated from
+ * docs/design/admin-console-workflow-ssot.yaml (.agent/scripts/generate_admin_route_identity.py)
+ * and adminGuides.ts derives ADMIN_ROUTE_CARDS/ADMIN_MAIN_FLOW_STEPS href+order FROM that
+ * generated file, matching each identity entry to hand-authored wording. This test independently
+ * re-derives the same identity straight from the SSOT raw text (mirroring the generator's own
+ * algorithm) and cross-checks the checked-in generated file against it, so a hand-edited or
+ * stale generated file -- not just a stale hardcoded literal -- fails here. Route SET/ORDER only,
+ * never wording/copy: frontend-canonical-surface-structure-label-boundary Bundle owns wording.
  */
-Deno.test("ADMIN_ROUTE_CARDS contain only canonical admin routes (SSOT-sourced)", async () => {
+async function deriveExpectedAdminRouteIdentity() {
   const ssotYaml = (await Deno.readTextFile(
     new URL(
       "../../docs/design/admin-console-workflow-ssot.yaml",
@@ -92,15 +96,96 @@ Deno.test("ADMIN_ROUTE_CARDS contain only canonical admin routes (SSOT-sourced)"
   const masterRosterRoutes = [...masterRosterMatch[1].matchAll(/route: (\/\S+)/g)]
     .map((m) => m[1]);
 
-  const sourceAuthorityRoutes = new Set([...canonicalRoutes, ...masterRosterRoutes]);
-
-  for (const card of ADMIN_ROUTE_CARDS) {
-    assertEquals(
-      sourceAuthorityRoutes.has(card.href),
-      true,
-      `ADMIN_ROUTE_CARDS href ${card.href} is not in admin-console-workflow-ssot.yaml authority.canonical_routes or other_admin_routes.master_roster_routes`,
+  const authoringOrderMatch = ssotYaml.match(
+    /\n {2}canonical_authoring_order:\n([\s\S]*?)\n {2}\S/,
+  );
+  if (!authoringOrderMatch) {
+    throw new Error(
+      "could not locate canonical_authoring_order in admin-console-workflow-ssot.yaml — SSOT structure changed; update this test's extraction regex",
     );
   }
+  const authoringOrderBlock = "\n" + authoringOrderMatch[1];
+  const subsectionRoute = (key: string): string => {
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const subsectionMatch = authoringOrderBlock.match(
+      new RegExp(`\\n {4}${escapedKey}:\\n((?:.*\\n)*?)(?=\\n {4}\\S|$)`),
+    );
+    if (!subsectionMatch) {
+      throw new Error(
+        `could not locate canonical_authoring_order.${key} in admin-console-workflow-ssot.yaml`,
+      );
+    }
+    const routeMatch = subsectionMatch[1].match(/route: (\/\S+)/);
+    if (!routeMatch) {
+      throw new Error(
+        `could not locate route in canonical_authoring_order.${key} in admin-console-workflow-ssot.yaml`,
+      );
+    }
+    return routeMatch[1];
+  };
+  const mainFlowRouteOrder = [
+    subsectionRoute("contents_pipeline"),
+    subsectionRoute("canvas_workspace_entry"),
+    subsectionRoute("post_contents_entry"),
+  ];
+
+  const identity: { href: string; category: string }[] = [];
+  const seen = new Set<string>();
+  for (const href of mainFlowRouteOrder) {
+    if (!seen.has(href)) {
+      identity.push({ href, category: "main_flow" });
+      seen.add(href);
+    }
+  }
+  for (const href of masterRosterRoutes) {
+    if (!seen.has(href)) {
+      identity.push({ href, category: "master_roster" });
+      seen.add(href);
+    }
+  }
+  for (const href of canonicalRoutes) {
+    if (href === "/admin") continue;
+    if (!seen.has(href)) {
+      identity.push({ href, category: "canonical_route" });
+      seen.add(href);
+    }
+  }
+
+  return { identity, mainFlowRouteOrder };
+}
+
+Deno.test("adminRouteIdentity.generated.ts matches independent re-derivation from admin-console-workflow-ssot.yaml (no generator drift)", async () => {
+  const expected = await deriveExpectedAdminRouteIdentity();
+  assertEquals(
+    [...ADMIN_CANONICAL_ROUTE_IDENTITY],
+    expected.identity,
+    "frontend/content/adminRouteIdentity.generated.ts is out of sync with docs/design/admin-console-workflow-ssot.yaml — regenerate with: python3 .agent/scripts/generate_admin_route_identity.py",
+  );
+  assertEquals(
+    [...ADMIN_MAIN_FLOW_ROUTE_ORDER],
+    expected.mainFlowRouteOrder,
+    "ADMIN_MAIN_FLOW_ROUTE_ORDER is out of sync with docs/design/admin-console-workflow-ssot.yaml canonical_authoring_order",
+  );
+});
+
+Deno.test("ADMIN_ROUTE_CARDS order and membership are sourced from ADMIN_CANONICAL_ROUTE_IDENTITY (no fabricated/reordered route)", () => {
+  const expectedHrefs = ADMIN_CANONICAL_ROUTE_IDENTITY
+    .map((identity) => identity.href)
+    .filter((href) => !ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING.includes(href));
+  assertEquals(ADMIN_ROUTE_CARDS.map((card) => card.href), expectedHrefs);
+});
+
+/**
+ * /admin/team-dashboard is canonical per admin-console-workflow-ssot.yaml authority.canonical_routes
+ * but has no ADMIN_ROUTE_CARD_WORDING entry and no existing Japanese UX copy anywhere in this
+ * repo; authoring that copy is frontend-canonical-surface-structure-label-boundary Bundle's job
+ * (wording), not this Bundle's (sourcing). This test pins that as an explicit, tracked,
+ * intentional gap rather than an accident: if a NEW canonical route appears with no wording, this
+ * assertion fails and forces an explicit decision (add wording, or add it here with a reason)
+ * instead of the card silently never appearing.
+ */
+Deno.test("ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING is exactly the tracked/expected unresolved-wording set", () => {
+  assertEquals(ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING, ["/admin/team-dashboard"]);
 });
 
 Deno.test("canonical admin navigation does not expose removed legacy/debug routes", () => {
@@ -200,4 +285,37 @@ Deno.test("Fresh registry does not retain deleted /dev/admin helper wrappers", a
       `${routeFile} must not remain in generated Fresh registry`,
     );
   }
+});
+
+/**
+ * admin-surface-topology-seed-conversion round 5 (PR #594 review): ADMIN_INDEX_GUIDE audit.
+ * ADMIN_INDEX_GUIDE has no href/order array field of its own (unlike ADMIN_ROUTE_CARDS/
+ * ADMIN_MAIN_FLOW_STEPS) -- every field (title/purpose/howToSteps/prerequisites/inputs/actions/
+ * outputs/boundaryNotes) is hand-authored prose, which is wording and stays out of this Bundle's
+ * scope (frontend-canonical-surface-structure-label-boundary Bundle owns it). The one
+ * structural (non-wording) property this guide's prose does carry is ORDER: purpose/howToSteps
+ * mention the main-flow routes' UX labels in the same sequence as the actual authoring order.
+ * That sequence is checked here against ADMIN_MAIN_FLOW_STEPS (itself sourced from
+ * ADMIN_MAIN_FLOW_ROUTE_ORDER, i.e. admin-console-workflow-ssot.yaml canonical_authoring_order)
+ * without asserting anything about the surrounding wording text itself.
+ */
+Deno.test("ADMIN_INDEX_GUIDE.purpose mentions main-flow step labels in canonical_authoring_order sequence", () => {
+  const labelsInOrder = ADMIN_MAIN_FLOW_STEPS.map((step) => step.label);
+  const positions = labelsInOrder.map((label) => ADMIN_INDEX_GUIDE.purpose.indexOf(label));
+  for (let i = 0; i < labelsInOrder.length; i++) {
+    assertEquals(positions[i] >= 0, true, `ADMIN_INDEX_GUIDE.purpose does not mention label ${JSON.stringify(labelsInOrder[i])}`);
+  }
+  const sorted = [...positions].sort((a, b) => a - b);
+  assertEquals(positions, sorted, "ADMIN_INDEX_GUIDE.purpose mentions main-flow labels out of canonical_authoring_order sequence");
+});
+
+Deno.test("ADMIN_INDEX_GUIDE.howToSteps mentions main-flow step labels in canonical_authoring_order sequence", () => {
+  const labelsInOrder = ADMIN_MAIN_FLOW_STEPS.map((step) => step.label);
+  const joinedSteps = ADMIN_INDEX_GUIDE.howToSteps.join("\n");
+  const positions = labelsInOrder.map((label) => joinedSteps.indexOf(label));
+  for (const position of positions) {
+    assertEquals(position >= 0, true, "ADMIN_INDEX_GUIDE.howToSteps does not mention every main-flow step label");
+  }
+  const sorted = [...positions].sort((a, b) => a - b);
+  assertEquals(positions, sorted, "ADMIN_INDEX_GUIDE.howToSteps mentions main-flow labels out of canonical_authoring_order sequence");
 });

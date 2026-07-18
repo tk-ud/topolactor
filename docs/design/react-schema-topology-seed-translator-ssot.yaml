@@ -1,6 +1,6 @@
 react_schema_topology_seed_translator_ssot:
   name: topolactor_react_schema_topology_seed_translator
-  version: 1.1.0
+  version: 1.2.0
   status: ssot_design_document
   canonical_path: docs/design/react-schema-topology-seed-translator-ssot.yaml
 
@@ -225,10 +225,22 @@ react_schema_topology_seed_translator_ssot:
         meaning: >-
           not a standalone node — an attached tag on any element that could not be resolved to a
           catalog identity, a recognized payload_from/prop_binding pattern, a style token, or a
-          wiring lane. classification must be one of the canonical_gap_types in
-          docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml (component_catalog_gap,
-          prop_binding_gap, event_payload_resolver_gap, runtime_dispatch_or_projection_gap,
-          ssot_ambiguity_gap)
+          wiring lane. classification must be one of allowed_classifications below, which is kept
+          in sync with (never a fork of) canonical_gap_types in
+          docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml — see
+          admin-surface-topology-seed-conversion round 5 (PR #594): a prior revision of this
+          document hardcoded this list as untracked prose, allowing it to drift silently out of
+          sync with the parent SSOT when a new canonical_gap_type was added there
+          (authoring_schema_vocabulary_gap); .agent/scripts/check_react_schema_topology_seed_translator.py
+          now cross-checks this list against the parent's canonical_gap_types keys so a future
+          drift fails a check instead of silently passing.
+        allowed_classifications:
+          - component_catalog_gap
+          - prop_binding_gap
+          - event_payload_resolver_gap
+          - runtime_dispatch_or_projection_gap
+          - ssot_ambiguity_gap
+          - authoring_schema_vocabulary_gap
         maps_to_react_node: null
     rules:
       - every_recognized_unit_instance_carries_sourceYamlRefs

@@ -1,6 +1,6 @@
 admin_console_workflow_ssot:
   name: topolactor_admin_console_workflow_ssot
-  version: 0.10.0
+  version: 0.11.0
   status: subordinate_design_document
 
   authority:
@@ -1392,17 +1392,19 @@ admin_console_workflow_ssot:
         status: design_change
         bundle: admin-surface-topology-seed-conversion
         note: >-
-          admin-surface-topology-seed-conversion round 4 (PR #594 review): defines the sourcing
-          authority the "where that content is sourced from" sentence above refers to, for the
-          /admin index page's static navigation content (frontend/content/adminGuides.ts
-          ADMIN_ROUTE_CARDS href set, ADMIN_MAIN_FLOW_STEPS / ACCEPTANCE_FLOW_STEPS href set and
-          order). Governs only route SET and ORDER — never wording/copy (purpose text,
-          howToSummary bullets, labels), which frontend-canonical-surface-structure-label-boundary
-          Bundle owns per the responsibility split above. Investigated and rejected before this:
-          (a) a runtime read path (backend endpoint or admin_runtime dispatch action serving this
-          content from a DB row or from this YAML file at request time) — rejected because it would
-          require fabricating a new runtime authority plane / dispatcher_mapping / manifest surface
-          for /admin, which admin_hub_relation_navigation_contract.prohibited and this same
+          admin-surface-topology-seed-conversion round 4 (PR #594 review) defined this contract as
+          a test-only validation harness (production code still read an independently-hardcoded
+          TypeScript literal, merely checked against the SSOT afterward). Round 5 (PR #594 review)
+          replaced that with a real source-to-consumer path: frontend/content/adminGuides.ts
+          derives ADMIN_ROUTE_CARDS/ADMIN_MAIN_FLOW_STEPS href+order from a checked-in generated
+          artifact rather than from independently-hardcoded href literals. Governs only route SET
+          and ORDER — never wording/copy (purpose text, howToSummary bullets, labels), which
+          frontend-canonical-surface-structure-label-boundary Bundle owns per the responsibility
+          split above. Investigated and rejected before landing on generation: (a) a runtime read
+          path (backend endpoint or admin_runtime dispatch action serving this content from a DB
+          row or from this YAML file at request time) — rejected because it would require
+          fabricating a new runtime authority plane / dispatcher_mapping / manifest surface for
+          /admin, which admin_hub_relation_navigation_contract.prohibited and this same
           responsibility text explicitly forbid, and because static site-structure content (which
           fixed admin tool routes exist) is not hub/topology instance data and has no natural
           hubs.hub_relations analog; (b) docs/design/user-facing-helper-manual-ssot.yaml — read in
@@ -1412,32 +1414,50 @@ admin_console_workflow_ssot:
         source_authority:
           - authority.canonical_routes (this file, above) — canonical admin route set
           - other_admin_routes.master_roster_routes (this file, above) — pipeline-external roster routes
-          - canonical_authoring_order.contents_pipeline (this file, above) — contents pipeline route+step order
+          - canonical_authoring_order.{contents_pipeline,canvas_workspace_entry,post_contents_entry} (this file, above) — main-flow route order
+        generation:
+          generator: .agent/scripts/generate_admin_route_identity.py
+          generated_artifact: frontend/content/adminRouteIdentity.generated.ts
+          regeneration_command: python3 .agent/scripts/generate_admin_route_identity.py
+          drift_check_command: python3 .agent/scripts/generate_admin_route_identity.py --check
+          emits: >-
+            ADMIN_CANONICAL_ROUTE_IDENTITY (full ordered route identity: href + category) and
+            ADMIN_MAIN_FLOW_ROUTE_ORDER (the 3-route contents -> ui-builder -> manifests primary
+            authoring order) — identity/order only, never wording.
         frontend_consumer:
-          - "frontend/content/adminGuides.ts: ADMIN_ROUTE_CARDS[].href (must be a subset of source_authority; no fabricated/non-canonical route)"
-          - "frontend/content/adminGuides.ts: ADMIN_MAIN_FLOW_STEPS[].href / ACCEPTANCE_FLOW_STEPS[].href (must match canonical_authoring_order.contents_pipeline route order)"
+          - "frontend/content/adminGuides.ts: ADMIN_ROUTE_CARDS derives href+order from ADMIN_CANONICAL_ROUTE_IDENTITY, filtered to routes with an ADMIN_ROUTE_CARD_WORDING entry"
+          - "frontend/content/adminGuides.ts: ADMIN_MAIN_FLOW_STEPS / ACCEPTANCE_FLOW_STEPS derive href+step+order from ADMIN_MAIN_FLOW_ROUTE_ORDER"
         read_path: >-
-          compile_time_test_proof_only — no runtime fetch, no new backend authority. Raw-text
-          extraction of this SSOT YAML at test time, the same established pattern already used by
-          frontend/tests/adminMainFlow.test.ts ("Fresh /admin route registry matches
-          runtime-orchestration SSOT exactly") and frontend/tests/adminUxGuard.test.ts for
-          admin-console-workflow-ssot.yaml text assertions.
+          build_time_generation_checked_in_artifact — no runtime fetch, no new backend authority.
+          The generated artifact is checked in (not regenerated at request/build time in
+          production); frontend/tests/adminMainFlow.test.ts independently re-derives the same
+          identity from this SSOT's raw text (mirroring the generator's own algorithm, not
+          shelling out to it) and cross-checks the checked-in generated file against it, so a
+          hand-edited or stale generated file fails a test even if nobody re-ran the generator.
         missing_source_fail_close: >-
-          the proof surface below fails if ADMIN_ROUTE_CARDS contains an href absent from
-          source_authority (fabricated/non-canonical route leaking into static navigation).
-          Completeness in the other direction (every source_authority route having a card) is
-          NOT enforced here: docs/design/admin-console-workflow-ssot.yaml authority.canonical_routes
-          already lists /admin/team-dashboard, which frontend/content/adminGuides.ts ADMIN_ROUTE_CARDS
-          does not yet include and for which no existing Japanese UX copy exists anywhere in this
-          repository — closing that gap requires authoring new wording, which is
-          frontend-canonical-surface-structure-label-boundary Bundle's responsibility, not this
-          Bundle's; recorded in .agent/tasks/todo.md as an open item for that Bundle rather than
-          implemented here or silently required to pass by this contract.
+          (1) frontend/tests/adminMainFlow.test.ts fails if
+          frontend/content/adminRouteIdentity.generated.ts diverges from an independent
+          re-derivation of this SSOT's raw text (generator/source drift). (2) ADMIN_ROUTE_CARDS
+          order/membership is asserted to equal ADMIN_CANONICAL_ROUTE_IDENTITY filtered to
+          ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING's complement — a fabricated or reordered card fails
+          structurally, not just via a subset check. (3) every ADMIN_MAIN_FLOW_ROUTE_ORDER entry
+          without a matching ADMIN_MAIN_FLOW_STEP_WORDING entry throws at module load
+          (adminGuides.ts) — the main flow stepper has no allowed silent gap. (4)
+          ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING (routes present in identity but absent from
+          ADMIN_ROUTE_CARD_WORDING) is asserted to equal exactly the tracked/expected set
+          (currently ["/admin/team-dashboard"]) — a NEW canonical route with no wording fails this
+          assertion instead of silently having no card, forcing an explicit decision.
         proof_surface: >-
-          frontend/tests/adminMainFlow.test.ts — "ADMIN_ROUTE_CARDS contain only canonical admin
-          routes (SSOT-sourced)" reads this file's authority.canonical_routes and
-          other_admin_routes.master_roster_routes via raw-text regex extraction and asserts every
-          ADMIN_ROUTE_CARDS href is a member of that union.
+          frontend/tests/adminMainFlow.test.ts — "adminRouteIdentity.generated.ts matches
+          independent re-derivation..." (generator/source drift), "ADMIN_ROUTE_CARDS order and
+          membership are sourced from ADMIN_CANONICAL_ROUTE_IDENTITY..." (structural order/
+          membership), "ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING is exactly the tracked/expected
+          unresolved-wording set" (explicit-gap fail-close), plus the pre-existing
+          ADMIN_MAIN_FLOW_STEPS/ACCEPTANCE_FLOW_STEPS order tests. ADMIN_INDEX_GUIDE has no
+          href/order field of its own (all fields are wording prose); its one structural property
+          — mentioning main-flow labels in canonical_authoring_order sequence — is covered by
+          "ADMIN_INDEX_GUIDE.purpose/.howToSteps mentions main-flow step labels in
+          canonical_authoring_order sequence".
 
     admin_contents:
       route: /admin/contents

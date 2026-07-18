@@ -209,6 +209,17 @@ def protected_vocabulary(ssot_root):
     return values if isinstance(values, list) and values else list(DEFAULT_PROTECTED_VOCABULARY)
 
 
+def allowed_gap_classifications(ssot_root):
+    # text_decomposition_contract.units.known_gap_ref.allowed_classifications is this SSOT's own
+    # local copy of docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml canonical_gap_types'
+    # keys (kept in sync, never a fork -- see known_gap_ref.meaning and
+    # check_react_schema_topology_seed_translator.py's cross-SSOT drift check). Read only from
+    # this translator's own SSOT, per this script's single-SSOT-authority invariant (see module
+    # docstring) -- never cross-reads the parent SSOT file directly.
+    values = dig(ssot_root, "text_decomposition_contract", "units", "known_gap_ref", "allowed_classifications")
+    return values if isinstance(values, list) and values else []
+
+
 # ---------------------------------------------------------------------------
 # translator entry gate connection
 #
@@ -298,6 +309,29 @@ def validate_input_envelope(envelope, ssot_root, vocabulary):
     source_refs = envelope.get("sourceYamlRefs") or []
     if not source_refs:
         errors.append(err("SOURCE_YAML_REFS_EMPTY", "$.sourceYamlRefs", "blocking", "sourceYamlRefs must be non-empty"))
+
+    # Only entries that opt into the "<classification>:<description>" convention (colon present)
+    # are checked against allowed_classifications. Bare legacy refs with no colon (e.g. this
+    # translator's own pre-existing physical-search-crud-aggregate golden fixture entries) are a
+    # separate, already-established free-form pattern this check does not retroactively break --
+    # this check targets exactly what round 5 asked for: an unknown/misspelled classification
+    # value, not the absence of one.
+    allowed_classifications = allowed_gap_classifications(ssot_root)
+    for i, gap_ref in enumerate(known_gap_refs):
+        gap_ref_str = str(gap_ref)
+        if ":" not in gap_ref_str:
+            continue
+        classification = gap_ref_str.split(":", 1)[0]
+        if classification not in allowed_classifications:
+            errors.append(
+                err(
+                    "KNOWN_GAP_REF_CLASSIFICATION_UNKNOWN",
+                    f"$.knownGapRefs[{i}]",
+                    "blocking",
+                    f"knownGapRefs entry {gap_ref!r} uses classification {classification!r}, which is not one of "
+                    f"{allowed_classifications} (text_decomposition_contract.units.known_gap_ref.allowed_classifications)",
+                )
+            )
 
     for term in vocabulary:
         if term and term in input_text:

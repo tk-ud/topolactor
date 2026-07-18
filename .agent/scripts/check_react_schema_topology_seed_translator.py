@@ -396,6 +396,70 @@ def main():
             and envelope_gaps.issubset(set(dig(gap_probe_doc or {}, "exchangeReport", "knownGapRefs") or [])),
         )
 
+        # 7d. SSOT family sync: this translator SSOT's local known_gap_ref.allowed_classifications
+        # (text_decomposition_contract.units.known_gap_ref, the vocabulary the translator itself
+        # validates knownGapRefs classification prefixes against -- see 7e/7f below) must be the
+        # exact same set as the PARENT SSOT's canonical_gap_types keys. Read independently of the
+        # translator's own runtime behavior (which could pass even if both files drifted the same
+        # wrong way together), same discipline as 36r1-36r3 above. This is the mechanism that
+        # makes a future canonical_gap_types addition at the parent fail here instead of silently
+        # leaving the child's copy stale (admin-surface-topology-seed-conversion round 5, PR #594:
+        # round 4 added authoring_schema_vocabulary_gap to the parent only, and nothing caught the
+        # child SSOT's hardcoded prose list falling out of sync until round 5's owner review).
+        gap_discovery_ssot_text = (REPO_ROOT / "docs" / "design" / "ui-builder-seed-first-gap-discovery-ssot.yaml").read_text(encoding="utf-8")
+        parent_gap_types_block_match = re.search(r"\n  canonical_gap_types:\n((?:    \S.*\n(?:      .*\n)*)+)", gap_discovery_ssot_text)
+        parent_gap_types = set(re.findall(r"\n    (\w+):\n", "\n" + parent_gap_types_block_match.group(1))) if parent_gap_types_block_match else set()
+        expect(
+            "7d0. ui-builder-seed-first-gap-discovery-ssot.yaml canonical_gap_types block extraction found at least the 6 known types (extraction regex still matches current SSOT structure)",
+            len(parent_gap_types) >= 6,
+        )
+
+        translator_ssot_text_for_gap_sync = (REPO_ROOT / "docs" / "design" / "react-schema-topology-seed-translator-ssot.yaml").read_text(encoding="utf-8")
+        allowed_classifications_match = re.search(r"\n        allowed_classifications:\n((?:          - \S+\n)+)", translator_ssot_text_for_gap_sync)
+        child_gap_types = set(re.findall(r"- (\S+)", allowed_classifications_match.group(1))) if allowed_classifications_match else set()
+        expect(
+            "7d. react-schema-topology-seed-translator-ssot.yaml known_gap_ref.allowed_classifications == ui-builder-seed-first-gap-discovery-ssot.yaml canonical_gap_types keys (no drift between parent and child SSOT)",
+            bool(child_gap_types) and child_gap_types == parent_gap_types,
+        )
+
+        # 7e. a knownGapRefs entry that opts into the "<classification>:<description>" convention
+        # (colon present) with an unrecognized/misspelled classification becomes an explicit
+        # blocking validationError -- not a silently-accepted free-form string. Bare legacy refs
+        # with no colon (e.g. the physical-search-crud-aggregate golden fixture's pre-existing
+        # entries, checks 55/56 above) are a separate, already-established pattern this check does
+        # not retroactively break; see the comment on allowed_gap_classifications' call site in
+        # react_schema_topology_seed_translator.py for why the check is colon-gated.
+        unknown_gap_envelope = {
+            "schemaId": "topolactor.translator_input.v1",
+            "mode": "generate_react_schema",
+            "targetSurface": "auth.external.credential_management.projection",
+            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
+            "knownGapRefs": ["not_a_real_canonical_gap_type:some_description"],
+            "inputText": "[projection key=p label=x sourceYamlRefs=a]\n[/projection]\n",
+        }
+        unknown_gap_path = Path(tmpdir) / _next_tmp_name("tmp_unknown_gap_fixture")
+        unknown_gap_path.write_text(json.dumps(unknown_gap_envelope), encoding="utf-8")
+        unknown_gap_proc, unknown_gap_doc = run_generate(unknown_gap_path)
+        unknown_gap_errors = (unknown_gap_doc or {}).get("validationErrors") or []
+        expect(
+            "7e. knownGapRefs entry with an unrecognized classification prefix becomes a blocking KNOWN_GAP_REF_CLASSIFICATION_UNKNOWN validationError (gateStatus blocking)",
+            any(e.get("ruleId") == "KNOWN_GAP_REF_CLASSIFICATION_UNKNOWN" and e.get("severity") == "blocking" for e in unknown_gap_errors)
+            and (unknown_gap_doc or {}).get("gateStatus") == "blocking",
+        )
+
+        # 7f. the new authoring_schema_vocabulary_gap classification (added round 4, synced round
+        # 5) is itself accepted -- 7e above proves the check rejects bad input; this proves it
+        # does not also reject the one new legitimate value it exists to allow.
+        known_new_gap_envelope = dict(unknown_gap_envelope)
+        known_new_gap_envelope["knownGapRefs"] = ["authoring_schema_vocabulary_gap:some_description"]
+        known_new_gap_path = Path(tmpdir) / _next_tmp_name("tmp_known_new_gap_fixture")
+        known_new_gap_path.write_text(json.dumps(known_new_gap_envelope), encoding="utf-8")
+        _, known_new_gap_doc = run_generate(known_new_gap_path)
+        expect(
+            "7f. knownGapRefs entry classified authoring_schema_vocabulary_gap is accepted (gateStatus pass, no KNOWN_GAP_REF_CLASSIFICATION_UNKNOWN error)",
+            (known_new_gap_doc or {}).get("gateStatus") == "pass",
+        )
+
         schema_candidate = (doc or {}).get("reactSchemaCandidate") or {}
         expect("8. reactSchemaCandidate.schema == topolactor.react_schema.v1", schema_candidate.get("schema") == "topolactor.react_schema.v1")
         expect("9. reactSchemaCandidate.surface == auth.external.credential_management.projection", schema_candidate.get("surface") == "auth.external.credential_management.projection")

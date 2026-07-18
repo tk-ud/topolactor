@@ -1,4 +1,13 @@
-/** Static copy for /admin help panels — canvas_workspace_contract 準拠（admin-console-workflow-ssot.yaml） */
+/**
+ * Static copy for /admin help panels — canvas_workspace_contract 準拠（admin-console-workflow-ssot.yaml）
+ *
+ * Route identity (href / order) for ADMIN_ROUTE_CARDS and ADMIN_MAIN_FLOW_STEPS is sourced from
+ * ./adminRouteIdentity.generated.ts (generated from docs/design/admin-console-workflow-ssot.yaml
+ * page_responsibility.admin_index.static_navigation_sourcing_contract — see that file for the
+ * design_change and regeneration command). This file supplies only the wording/copy matched to
+ * each identity entry; frontend-canonical-surface-structure-label-boundary Bundle owns wording
+ * content, this Bundle owns the identity/wording connection and its fail-close behavior below.
+ */
 
 import {
   UX_CONTENTS,
@@ -11,6 +20,10 @@ import {
   UX_UI_BUILDER,
   UX_USER_ROSTER,
 } from "./adminUxTerms.ts";
+import {
+  ADMIN_CANONICAL_ROUTE_IDENTITY,
+  ADMIN_MAIN_FLOW_ROUTE_ORDER,
+} from "./adminRouteIdentity.generated.ts";
 
 export type AdminGuide = {
   title: string;
@@ -135,17 +148,24 @@ export const ADMIN_MANIFESTS_GUIDE: AdminGuide = {
   caution: "保存するとページ間の導線設定が更新されます。",
 };
 
-/** Index page: per-route cards with short how-to */
-export const ADMIN_ROUTE_CARDS: {
+export type AdminRouteCard = {
   href: string;
   label: string;
   purpose: string;
   relation: string;
   howToSummary: string[];
   caution?: string;
-}[] = [
-  {
-    href: "/admin/contents",
+};
+
+/**
+ * Wording for ADMIN_ROUTE_CARDS, keyed by href. This is the ONLY place ADMIN_ROUTE_CARDS content
+ * is hand-authored — route identity/order comes from ADMIN_CANONICAL_ROUTE_IDENTITY below, never
+ * from this object's key order or membership. A route present in ADMIN_CANONICAL_ROUTE_IDENTITY
+ * but absent here shows up explicitly in ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING (fail-close-tested
+ * in frontend/tests/adminMainFlow.test.ts) instead of silently having no card.
+ */
+const ADMIN_ROUTE_CARD_WORDING: Record<string, Omit<AdminRouteCard, "href">> = {
+  "/admin/contents": {
     label: UX_CONTENTS,
     purpose: "step 1–3 を順に保存（空登録 → テーブル → 関連 → ページ設定）",
     relation: "作業順の最初の 3 ステップ",
@@ -154,8 +174,7 @@ export const ADMIN_ROUTE_CARDS: {
       "保存後は画面づくりへ",
     ],
   },
-  {
-    href: "/admin/ui-builder",
+  "/admin/ui-builder": {
     label: UX_UI_BUILDER,
     purpose: "canvas workspace — ルート選択後に配置・デザイン設定",
     relation: "画面づくり（canvas workspace）",
@@ -165,8 +184,7 @@ export const ADMIN_ROUTE_CARDS: {
       "保存反映",
     ],
   },
-  {
-    href: "/admin/manifests",
+  "/admin/manifests": {
     label: UX_HUB_MANIFESTS,
     purpose: "作成済みページの所属先、ページ間のつながり、表示順を管理する",
     relation: "作業順の最終段階（ページ同士をつなぐ）",
@@ -175,8 +193,7 @@ export const ADMIN_ROUTE_CARDS: {
       "遷移先を追加・編集・並び替え",
     ],
   },
-  {
-    href: "/admin/enums",
+  "/admin/enums": {
     label: UX_ENUM_ROSTER,
     purpose: "enum グループ・項目の名簿管理",
     relation: "master-roster",
@@ -186,8 +203,7 @@ export const ADMIN_ROUTE_CARDS: {
       "削除は確認ダイアログ必須",
     ],
   },
-  {
-    href: "/admin/users",
+  "/admin/users": {
     label: UX_USER_ROSTER,
     purpose: "ユーザー名簿と承認・状態・停止期間の管理",
     relation: "master-roster",
@@ -197,8 +213,7 @@ export const ADMIN_ROUTE_CARDS: {
       "削除は確認ダイアログ必須",
     ],
   },
-  {
-    href: "/admin/scheduler",
+  "/admin/scheduler": {
     label: "スケジューラー Job 設定",
     purpose:
       "スケジューラー Job の read-only 設定確認画面（Job 一覧・ポリシー・権限スコープ確認）",
@@ -210,7 +225,27 @@ export const ADMIN_ROUTE_CARDS: {
     caution:
       "編集不可の read-only 画面。seed / DB 変更は直接 SQL で行ってください。",
   },
-];
+};
+
+/** Index page: per-route cards with short how-to. Order/membership sourced from ADMIN_CANONICAL_ROUTE_IDENTITY. */
+export const ADMIN_ROUTE_CARDS: AdminRouteCard[] = ADMIN_CANONICAL_ROUTE_IDENTITY
+  .filter((identity) => identity.href in ADMIN_ROUTE_CARD_WORDING)
+  .map((identity) => ({
+    href: identity.href,
+    ...ADMIN_ROUTE_CARD_WORDING[identity.href],
+  }));
+
+/**
+ * Canonical admin routes (docs/design/admin-console-workflow-ssot.yaml authority.canonical_routes
+ * / other_admin_routes.master_roster_routes) that currently have no ADMIN_ROUTE_CARD_WORDING
+ * entry — an explicit, tested, tracked state (not a silent omission). Authoring the missing
+ * wording is frontend-canonical-surface-structure-label-boundary Bundle's responsibility, not
+ * this Bundle's; see frontend/tests/adminMainFlow.test.ts for the fail-close assertion that keeps
+ * this list from silently growing unnoticed.
+ */
+export const ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING: readonly string[] = ADMIN_CANONICAL_ROUTE_IDENTITY
+  .filter((identity) => !(identity.href in ADMIN_ROUTE_CARD_WORDING))
+  .map((identity) => identity.href);
 
 export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {
   title: "ナビ順序設定",
@@ -262,12 +297,21 @@ export type AcceptanceFlowStep = {
   subSteps?: { label: string; href: string }[];
 };
 
-/** 管理トップのコンパクトステッパー — canvas_workspace_contract / canonical_authoring_order 準拠 */
-export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
-  {
-    step: 1,
+/**
+ * Wording for ADMIN_MAIN_FLOW_STEPS, keyed by href. Step number/href/order come from
+ * ADMIN_MAIN_FLOW_ROUTE_ORDER (ADMIN_CANONICAL_ROUTE_IDENTITY's main_flow subset) below, never
+ * from this object's key order. Every ADMIN_MAIN_FLOW_ROUTE_ORDER entry is required to have a
+ * wording entry here (unlike ADMIN_ROUTE_CARD_WORDING, which allows an explicit unresolved
+ * state) — the main flow stepper is always the primary 3-route authoring path, so a missing
+ * entry here is a genuine build-time error, not a legitimate unresolved-wording state; see the
+ * fail-close check right below this object.
+ */
+const ADMIN_MAIN_FLOW_STEP_WORDING: Record<
+  string,
+  Pick<AcceptanceFlowStep, "label" | "purpose" | "completionSign" | "nextLabel" | "subSteps">
+> = {
+  "/admin/contents": {
     label: UX_CONTENTS,
-    href: "/admin/contents",
     purpose: "step 1 ～ step 3（空登録・テーブル・関連・ページ設定）を順に保存",
     completionSign: "step 3 まで保存済みであること",
     nextLabel: `${UX_UI_BUILDER}へ`,
@@ -278,22 +322,34 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
       { label: "3 ページ", href: "/admin/contents" },
     ],
   },
-  {
-    step: 2,
+  "/admin/ui-builder": {
     label: UX_UI_BUILDER,
-    href: "/admin/ui-builder",
     purpose: "canvas workspace（ルート選択 → 配置・デザイン設定・保存反映）",
     completionSign: "配置の保存反映が完了していること",
     nextLabel: `${UX_HUB_MANIFESTS}へ`,
   },
-  {
-    step: 3,
+  "/admin/manifests": {
     label: UX_HUB_MANIFESTS,
-    href: "/admin/manifests",
     purpose: "作成済みページの所属先、ページ間のつながり、表示順を管理する",
     completionSign: "必要なページ間の導線設定が完了していること",
   },
-];
+};
+
+/** 管理トップのコンパクトステッパー — canvas_workspace_contract / canonical_authoring_order 準拠 */
+export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = ADMIN_MAIN_FLOW_ROUTE_ORDER.map(
+  (href, index) => {
+    const wording = ADMIN_MAIN_FLOW_STEP_WORDING[href];
+    if (!wording) {
+      throw new Error(
+        `adminGuides.ts: ADMIN_MAIN_FLOW_STEP_WORDING is missing an entry for ${href}, which ` +
+          `ADMIN_MAIN_FLOW_ROUTE_ORDER (sourced from admin-console-workflow-ssot.yaml ` +
+          `canonical_authoring_order) declares as a main-flow route. Add wording for it above ` +
+          `(fail-close: this is not an allowed silent gap for the main flow stepper).`,
+      );
+    }
+    return { step: index + 1, href, ...wording };
+  },
+);
 
 export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = ADMIN_MAIN_FLOW_STEPS
   .map((step) => ({ ...step }));
