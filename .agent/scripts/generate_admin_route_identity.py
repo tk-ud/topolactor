@@ -3,11 +3,16 @@
 frontend/content/adminRouteIdentity.generated.ts from
 docs/design/admin-console-workflow-ssot.yaml.
 
-SSOT: docs/design/admin-console-workflow-ssot.yaml
+SSOT: docs/design/admin-console-workflow-ssot.yaml (subordinate)
   page_responsibility.admin_index.static_navigation_sourcing_contract
   authority.canonical_routes
   other_admin_routes.master_roster_routes
   canonical_authoring_order.{contents_pipeline,canvas_workspace_entry,post_contents_entry}
+Cross-checked against docs/design/runtime-orchestration-ssot.yaml (parent authority)
+  frontend_routes.admin -- the canonical admin route registry;
+  admin-console-workflow-ssot.yaml authority.canonical_admin_route_registry
+  points here and admin-console-workflow-ssot.yaml "MUST NOT add canonical
+  admin routes outside that registry".
 
 Reads the SSOT's own route registry (raw-text regex extraction -- the same
 pattern already used by frontend/tests/adminMainFlow.test.ts and
@@ -21,8 +26,20 @@ cross-SSOT drift) and derives:
     list this Bundle sources for /admin index page static navigation --
     main flow routes, then other_admin_routes.master_roster_routes (in
     SSOT order), then any remaining authority.canonical_routes entries not
-    already covered (in SSOT order), excluding /admin itself (the index
-    page is not a card pointing at itself).
+    already covered (in SSOT order).
+
+EXPLICIT EXCLUSION RULE (not an implicit filter): ADMIN_INDEX_ROUTE ("/admin")
+is excluded from ADMIN_CANONICAL_ROUTE_IDENTITY. /admin is the index page
+itself -- the landing surface that RENDERS the navigation cards -- so it is
+not a navigation target from itself, the same way a site's home page does not
+show a card linking to its own home page. This exclusion is declared once
+here (ADMIN_INDEX_ROUTE) rather than inlined as a bare string comparison, and
+is cross-checked against runtime-orchestration-ssot.yaml frontend_routes.admin
+by --check-parent (see below) and by frontend/tests/adminMainFlow.test.ts's
+"ADMIN_CANONICAL_ROUTE_IDENTITY matches parent runtime-orchestration-ssot.yaml"
+test, so the SET of routes this file's identity carries can never silently
+diverge from the parent authority's admin route registry (only /admin itself
+may differ between the two, and only via this named, tested rule).
 
 This script only emits route identity (href + category + order) -- never
 wording/copy. frontend/content/adminGuides.ts owns matching each identity
@@ -31,8 +48,9 @@ ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING); this script has no way to know
 which entries currently have wording and does not decide that.
 
 Usage:
-  python3 .agent/scripts/generate_admin_route_identity.py             # regenerate in place
-  python3 .agent/scripts/generate_admin_route_identity.py --check     # exit 1 on drift, write nothing
+  python3 .agent/scripts/generate_admin_route_identity.py               # regenerate in place
+  python3 .agent/scripts/generate_admin_route_identity.py --check       # exit 1 on drift vs subordinate SSOT, write nothing
+  python3 .agent/scripts/generate_admin_route_identity.py --check-parent  # exit 1 if the identity set diverges from the parent runtime-orchestration-ssot.yaml route registry
 """
 from __future__ import annotations
 
@@ -42,7 +60,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SSOT_PATH = REPO_ROOT / "docs" / "design" / "admin-console-workflow-ssot.yaml"
+PARENT_SSOT_PATH = REPO_ROOT / "docs" / "design" / "runtime-orchestration-ssot.yaml"
 OUTPUT_PATH = REPO_ROOT / "frontend" / "content" / "adminRouteIdentity.generated.ts"
+
+# The index page itself -- see the EXPLICIT EXCLUSION RULE note above.
+ADMIN_INDEX_ROUTE = "/admin"
 
 
 def extract_canonical_routes(ssot_text: str) -> list[str]:
@@ -104,13 +126,43 @@ def derive_identity(ssot_text: str) -> list[tuple[str, str]]:
             seen.add(href)
 
     for href in canonical_routes:
-        if href == "/admin":
+        if href == ADMIN_INDEX_ROUTE:
             continue
         if href not in seen:
             identity.append((href, "canonical_route"))
             seen.add(href)
 
     return identity
+
+
+def extract_parent_admin_routes(parent_ssot_text: str) -> list[str]:
+    m = re.search(r"\n {4}admin:\n((?: {6}- /[^\n]+\n)+)", parent_ssot_text)
+    if not m:
+        raise SystemExit("could not locate frontend_routes.admin in runtime-orchestration-ssot.yaml")
+    return [mm.group(1) for mm in re.finditer(r"- (/\S+)", m.group(1))]
+
+
+def check_parent(identity: list[tuple[str, str]]) -> int:
+    parent_text = PARENT_SSOT_PATH.read_text(encoding="utf-8").replace("\r\n", "\n")
+    parent_routes = set(extract_parent_admin_routes(parent_text)) - {ADMIN_INDEX_ROUTE}
+    identity_routes = {href for href, _ in identity}
+
+    missing_from_identity = sorted(parent_routes - identity_routes)
+    extra_in_identity = sorted(identity_routes - parent_routes)
+    hrefs = [href for href, _ in identity]
+    duplicates = sorted({href for href in hrefs if hrefs.count(href) > 1})
+
+    if missing_from_identity or extra_in_identity or duplicates:
+        if missing_from_identity:
+            print(f"DRIFT: routes in runtime-orchestration-ssot.yaml frontend_routes.admin but missing from ADMIN_CANONICAL_ROUTE_IDENTITY: {missing_from_identity}", file=sys.stderr)
+        if extra_in_identity:
+            print(f"DRIFT: routes in ADMIN_CANONICAL_ROUTE_IDENTITY but absent from runtime-orchestration-ssot.yaml frontend_routes.admin: {extra_in_identity}", file=sys.stderr)
+        if duplicates:
+            print(f"DRIFT: duplicate hrefs in ADMIN_CANONICAL_ROUTE_IDENTITY: {duplicates}", file=sys.stderr)
+        return 1
+
+    print(f"OK: ADMIN_CANONICAL_ROUTE_IDENTITY route set matches runtime-orchestration-ssot.yaml frontend_routes.admin (excluding {ADMIN_INDEX_ROUTE})")
+    return 0
 
 
 def render_ts(identity: list[tuple[str, str]], main_flow_routes: list[str]) -> str:
@@ -156,10 +208,14 @@ export const ADMIN_MAIN_FLOW_ROUTE_ORDER: readonly string[] = [
 
 def main() -> int:
     check_only = "--check" in sys.argv[1:]
+    check_parent_only = "--check-parent" in sys.argv[1:]
     ssot_text = SSOT_PATH.read_text(encoding="utf-8").replace("\r\n", "\n")
     identity = derive_identity(ssot_text)
     main_flow_routes = extract_main_flow_route_order(ssot_text)
     rendered = render_ts(identity, main_flow_routes)
+
+    if check_parent_only:
+        return check_parent(identity)
 
     if check_only:
         current = OUTPUT_PATH.read_text(encoding="utf-8") if OUTPUT_PATH.is_file() else None

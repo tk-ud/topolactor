@@ -168,6 +168,58 @@ Deno.test("adminRouteIdentity.generated.ts matches independent re-derivation fro
   );
 });
 
+/**
+ * admin-surface-topology-seed-conversion round 6 (PR #594 review): round 5's drift test only
+ * proved ADMIN_CANONICAL_ROUTE_IDENTITY agrees with its SUBORDINATE source
+ * (admin-console-workflow-ssot.yaml) — it never checked that subordinate SSOT itself against the
+ * actual PARENT authority, docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin
+ * (admin-console-workflow-ssot.yaml authority.canonical_admin_route_registry names this file as
+ * the registry it "MUST NOT add canonical admin routes outside"). A route added or removed only
+ * at the parent — or only at the subordinate/generated layer — would have passed round 5's test
+ * undetected. This test closes that gap: it compares ADMIN_CANONICAL_ROUTE_IDENTITY's route SET
+ * directly against the parent's frontend_routes.admin, independently of the subordinate SSOT.
+ * /admin itself is excluded by an explicit, named rule (ADMIN_INDEX_ROUTE in
+ * generate_admin_route_identity.py) — not an implicit filter — because the index page does not
+ * carry a navigation card pointing at itself. This is layered with (not a replacement for): the
+ * "Fresh /admin route registry matches runtime-orchestration SSOT exactly" test (parent SSOT <->
+ * physical route files) and the drift test above (subordinate SSOT <-> generated artifact) —
+ * together the four authorities (parent SSOT, subordinate SSOT, generated artifact, Fresh route
+ * tree) are fully cross-checked, so a parent-only, subordinate-only, or generated-only change, a
+ * duplicate, or an order/membership drift each fail at least one of these tests.
+ */
+Deno.test("ADMIN_CANONICAL_ROUTE_IDENTITY route set matches parent runtime-orchestration-ssot.yaml frontend_routes.admin (excluding /admin itself)", async () => {
+  const parentSsotYaml = (await Deno.readTextFile(
+    new URL("../../docs/design/runtime-orchestration-ssot.yaml", import.meta.url),
+  )).replace(/\r\n/g, "\n");
+  const parentAdminBlockMatch = parentSsotYaml.match(
+    /\n {4}admin:\n((?: {6}- \/[^\n]+\n)+)/,
+  );
+  if (!parentAdminBlockMatch) {
+    throw new Error(
+      "could not locate frontend_routes.admin in runtime-orchestration-ssot.yaml — SSOT structure changed; update this test's extraction regex",
+    );
+  }
+  const parentAdminRoutes = [...parentAdminBlockMatch[1].matchAll(/- (\/\S+)/g)]
+    .map((m) => m[1]);
+  const parentAdminRoutesExcludingIndex = parentAdminRoutes
+    .filter((href) => href !== "/admin")
+    .sort();
+
+  const identityHrefs = ADMIN_CANONICAL_ROUTE_IDENTITY.map((identity) => identity.href);
+
+  assertEquals(
+    identityHrefs.length,
+    new Set(identityHrefs).size,
+    `ADMIN_CANONICAL_ROUTE_IDENTITY contains duplicate hrefs: ${JSON.stringify(identityHrefs)}`,
+  );
+
+  assertEquals(
+    [...identityHrefs].sort(),
+    parentAdminRoutesExcludingIndex,
+    "ADMIN_CANONICAL_ROUTE_IDENTITY's route set diverges from docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin (excluding /admin) — a route was added/removed at only one of the parent SSOT, the subordinate SSOT, or the generated artifact",
+  );
+});
+
 Deno.test("ADMIN_ROUTE_CARDS order and membership are sourced from ADMIN_CANONICAL_ROUTE_IDENTITY (no fabricated/reordered route)", () => {
   const expectedHrefs = ADMIN_CANONICAL_ROUTE_IDENTITY
     .map((identity) => identity.href)

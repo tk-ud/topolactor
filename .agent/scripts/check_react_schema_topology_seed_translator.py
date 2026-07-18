@@ -34,6 +34,7 @@ FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-s
 TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "credential-management-0092.topology-seed.input.json"
 CRUD_SCHEMA_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.react-schema.json"
 CRUD_TOPOLOGY_SEED_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "physical-search-crud-aggregate.topology-seed.input.json"
+ADMIN_DASHBOARD_FIXTURE = REPO_ROOT / ".agent" / "tests" / "fixtures" / "react-schema-topology-seed-translator" / "admin-dashboard-hub-relation-navigation.input.json"
 AGENT_TMP_DIR = REPO_ROOT / ".agent" / "tmp"
 SEED_EMPTY_PATH = REPO_ROOT / "db" / "seed_empty.sql"
 CRUD_PRESET_SEED_SQL_PATH = REPO_ROOT / "db" / "physical_search_crud_aggregate_preset_seed.sql"
@@ -458,6 +459,86 @@ def main():
         expect(
             "7f. knownGapRefs entry classified authoring_schema_vocabulary_gap is accepted (gateStatus pass, no KNOWN_GAP_REF_CLASSIFICATION_UNKNOWN error)",
             (known_new_gap_doc or {}).get("gateStatus") == "pass",
+        )
+
+        # 7g-7j: admin-surface-topology-seed-conversion round 6 (PR #594 review) -- implements
+        # input_format_contract.required_fields.targetSurface.rule end to end: an UNDECLARED
+        # targetSurface (not in declared_seed_surface_catalog) must carry at least one
+        # knownGapRefs entry classified EXACTLY ssot_ambiguity_gap or component_catalog_gap --
+        # not merely "knownGapRefs is non-empty" (round 4/5's weaker check), and not satisfied by
+        # a colon-free legacy ref, an unrecognized classification, or a recognized-but-
+        # non-qualifying classification (e.g. authoring_schema_vocabulary_gap or
+        # runtime_dispatch_or_projection_gap describe a real gap, but not "this surface itself is
+        # undeclared"). All four use a deliberately-undeclared targetSurface so declared surfaces
+        # (and their existing colon-free legacy refs, e.g. physical-search-crud-aggregate's) are
+        # untouched by this rule -- it only applies to new/undeclared surface keys.
+        undeclared_surface_base_envelope = {
+            "schemaId": "topolactor.translator_input.v1",
+            "mode": "generate_react_schema",
+            "targetSurface": "round6.undeclared.probe_surface",
+            "sourceYamlRefs": ["docs/design/react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog"],
+            "inputText": "[projection key=p label=x sourceYamlRefs=a]\n[/projection]\n",
+        }
+
+        def run_undeclared_surface_probe(known_gap_refs, nametag):
+            probe_envelope = dict(undeclared_surface_base_envelope)
+            probe_envelope["knownGapRefs"] = known_gap_refs
+            probe_path = Path(tmpdir) / _next_tmp_name(nametag)
+            probe_path.write_text(json.dumps(probe_envelope), encoding="utf-8")
+            return run_generate(probe_path)
+
+        def has_target_surface_unresolved(doc_):
+            errs = (doc_ or {}).get("validationErrors") or []
+            return any(e.get("ruleId") == "TARGET_SURFACE_UNRESOLVED" and e.get("severity") == "blocking" for e in errs)
+
+        _, no_gap_refs_doc = run_undeclared_surface_probe([], "tmp_undeclared_no_gap_refs")
+        expect(
+            "7g. undeclared targetSurface with empty knownGapRefs fails closed with blocking TARGET_SURFACE_UNRESOLVED",
+            has_target_surface_unresolved(no_gap_refs_doc) and (no_gap_refs_doc or {}).get("gateStatus") == "blocking",
+        )
+
+        _, unknown_classification_doc = run_undeclared_surface_probe(
+            ["not_a_real_canonical_gap_type:some_description"], "tmp_undeclared_unknown_classification",
+        )
+        expect(
+            "7h. undeclared targetSurface with only an unrecognized classification fails closed with blocking TARGET_SURFACE_UNRESOLVED",
+            has_target_surface_unresolved(unknown_classification_doc) and (unknown_classification_doc or {}).get("gateStatus") == "blocking",
+        )
+
+        _, non_qualifying_classification_doc = run_undeclared_surface_probe(
+            ["authoring_schema_vocabulary_gap:some_description"], "tmp_undeclared_non_qualifying_classification",
+        )
+        expect(
+            "7i. undeclared targetSurface with only a recognized-but-non-qualifying classification (authoring_schema_vocabulary_gap) fails closed with blocking TARGET_SURFACE_UNRESOLVED",
+            has_target_surface_unresolved(non_qualifying_classification_doc) and (non_qualifying_classification_doc or {}).get("gateStatus") == "blocking",
+        )
+
+        _, colon_free_only_doc = run_undeclared_surface_probe(
+            ["arbitrary_colon_free_gap_description_with_no_classification"], "tmp_undeclared_colon_free_only",
+        )
+        expect(
+            "7j. undeclared targetSurface with only a colon-free legacy-style ref fails closed with blocking TARGET_SURFACE_UNRESOLVED",
+            has_target_surface_unresolved(colon_free_only_doc) and (colon_free_only_doc or {}).get("gateStatus") == "blocking",
+        )
+
+        _, qualifying_classification_doc = run_undeclared_surface_probe(
+            ["ssot_ambiguity_gap:some_description"], "tmp_undeclared_qualifying_classification",
+        )
+        expect(
+            "7k. undeclared targetSurface WITH a qualifying classification (ssot_ambiguity_gap) is accepted (gateStatus pass, no TARGET_SURFACE_UNRESOLVED)",
+            not has_target_surface_unresolved(qualifying_classification_doc) and (qualifying_classification_doc or {}).get("gateStatus") == "pass",
+        )
+
+        # 7l: positive proof that the CHECKED-IN admin-dashboard fixture (an undeclared surface,
+        # admin.dashboard.hub_relation_navigation) still passes end to end under the stricter 7g-7k
+        # rule -- its ssot_ambiguity_gap-classified entry already qualifies (round 4/5 grounded
+        # value, kept as-is per round 6 SETTLED FACTS), so this is a regression proof, not a new
+        # fixture edit.
+        admin_dashboard_doc_path = Path(tmpdir) / "admin_dashboard_translated.json"
+        _, admin_dashboard_doc = run_generate(ADMIN_DASHBOARD_FIXTURE, extra_args=["--output", str(admin_dashboard_doc_path)])
+        expect(
+            "7l. checked-in admin-dashboard-hub-relation-navigation fixture (undeclared targetSurface) passes end to end with its existing ssot_ambiguity_gap-classified knownGapRefs entry",
+            not has_target_surface_unresolved(admin_dashboard_doc) and (admin_dashboard_doc or {}).get("gateStatus") == "pass",
         )
 
         schema_candidate = (doc or {}).get("reactSchemaCandidate") or {}

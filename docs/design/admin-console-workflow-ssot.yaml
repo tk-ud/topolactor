@@ -1,6 +1,6 @@
 admin_console_workflow_ssot:
   name: topolactor_admin_console_workflow_ssot
-  version: 0.11.0
+  version: 0.12.0
   status: subordinate_design_document
 
   authority:
@@ -1415,11 +1415,20 @@ admin_console_workflow_ssot:
           - authority.canonical_routes (this file, above) — canonical admin route set
           - other_admin_routes.master_roster_routes (this file, above) — pipeline-external roster routes
           - canonical_authoring_order.{contents_pipeline,canvas_workspace_entry,post_contents_entry} (this file, above) — main-flow route order
+          - docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin — the PARENT authority this file's own authority.canonical_admin_route_registry names ("MUST NOT add canonical admin routes outside that registry"); round 6 (PR #594 review) added a direct cross-check against it (see missing_source_fail_close/proof_surface below), since round 5's drift proof only checked ADMIN_CANONICAL_ROUTE_IDENTITY against THIS (subordinate) file, never against the parent it is itself subordinate to.
         generation:
           generator: .agent/scripts/generate_admin_route_identity.py
           generated_artifact: frontend/content/adminRouteIdentity.generated.ts
           regeneration_command: python3 .agent/scripts/generate_admin_route_identity.py
           drift_check_command: python3 .agent/scripts/generate_admin_route_identity.py --check
+          parent_check_command: python3 .agent/scripts/generate_admin_route_identity.py --check-parent
+          admin_index_exclusion_rule: >-
+            /admin (the index page itself) is excluded from ADMIN_CANONICAL_ROUTE_IDENTITY by an
+            explicit named constant (ADMIN_INDEX_ROUTE in generate_admin_route_identity.py), not
+            an inline/implicit filter — the index page does not carry a navigation card pointing
+            at itself. This is the only route the subordinate identity set is allowed to omit
+            relative to the parent's frontend_routes.admin; the parent-cross-check test asserts
+            this exact and only exception.
           emits: >-
             ADMIN_CANONICAL_ROUTE_IDENTITY (full ordered route identity: href + category) and
             ADMIN_MAIN_FLOW_ROUTE_ORDER (the 3-route contents -> ui-builder -> manifests primary
@@ -1446,14 +1455,26 @@ admin_console_workflow_ssot:
           ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING (routes present in identity but absent from
           ADMIN_ROUTE_CARD_WORDING) is asserted to equal exactly the tracked/expected set
           (currently ["/admin/team-dashboard"]) — a NEW canonical route with no wording fails this
-          assertion instead of silently having no card, forcing an explicit decision.
+          assertion instead of silently having no card, forcing an explicit decision. (5) [round 6]
+          ADMIN_CANONICAL_ROUTE_IDENTITY's route SET is asserted to equal
+          docs/design/runtime-orchestration-ssot.yaml frontend_routes.admin minus /admin,
+          independently of this (subordinate) SSOT — a route added/removed only at the parent, or
+          only at the subordinate/generated layer, fails here even if (1) above still passes
+          (that test alone cannot detect parent-only or generated-only drift, since it never reads
+          the parent). (6) [round 6] ADMIN_CANONICAL_ROUTE_IDENTITY is asserted to contain no
+          duplicate hrefs.
         proof_surface: >-
           frontend/tests/adminMainFlow.test.ts — "adminRouteIdentity.generated.ts matches
-          independent re-derivation..." (generator/source drift), "ADMIN_ROUTE_CARDS order and
-          membership are sourced from ADMIN_CANONICAL_ROUTE_IDENTITY..." (structural order/
+          independent re-derivation..." (subordinate SSOT <-> generated artifact drift),
+          "ADMIN_CANONICAL_ROUTE_IDENTITY route set matches parent runtime-orchestration-ssot.yaml
+          frontend_routes.admin..." (parent SSOT <-> generated artifact drift, round 6), "ADMIN_ROUTE_CARDS
+          order and membership are sourced from ADMIN_CANONICAL_ROUTE_IDENTITY..." (structural order/
           membership), "ADMIN_ROUTE_IDENTITY_WITHOUT_WORDING is exactly the tracked/expected
-          unresolved-wording set" (explicit-gap fail-close), plus the pre-existing
-          ADMIN_MAIN_FLOW_STEPS/ACCEPTANCE_FLOW_STEPS order tests. ADMIN_INDEX_GUIDE has no
+          unresolved-wording set" (explicit-gap fail-close), plus the pre-existing "Fresh /admin
+          route registry matches runtime-orchestration SSOT exactly" (parent SSOT <-> physical
+          route files) and ADMIN_MAIN_FLOW_STEPS/ACCEPTANCE_FLOW_STEPS order tests — together these
+          cross-check all four authorities (parent SSOT, this subordinate SSOT, the generated
+          artifact, and the physical Fresh route tree) pairwise. ADMIN_INDEX_GUIDE has no
           href/order field of its own (all fields are wording prose); its one structural property
           — mentioning main-flow labels in canonical_authoring_order sequence — is covered by
           "ADMIN_INDEX_GUIDE.purpose/.howToSteps mentions main-flow step labels in
