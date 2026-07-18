@@ -176,6 +176,29 @@ Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology
   assertEquals(specs[1].componentType, "action/button");
 });
 
+Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboard subBundle's hub_relation navigation seed_contract (docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.dashboard.seed_contract) composes to zero componentType==='error' specs — review/regression-proof only, never adopted as a live manifest per docs/design/admin-console-workflow-ssot.yaml page_responsibility.admin_index (no hubs.hub / hubs.topology_manifests row is fabricated for /admin)", async () => {
+  const layoutNodes = await loadComposedScenario(
+    "scenario_admin_dashboard_hub_relation_navigation.json",
+  );
+  const emission: Emission = {
+    layoutId: "00000000-0000-0000-0000-000000000101",
+    layoutNodes,
+  };
+  const specs = renderEmission(emission, defaultComponentRegistry);
+  const errorSpecs = specs.filter((s) => s.componentType === "error");
+  assertEquals(
+    errorSpecs,
+    [],
+    `render completion requires zero error components; found: ${JSON.stringify(errorSpecs)}`,
+  );
+  assertEquals(specs.length, 8);
+  const catalogSpecs = specs.filter((s) => s.nodeKind === "catalog_component");
+  assertEquals(
+    catalogSpecs.map((s) => s.componentType),
+    ["display/card_list", "form_input/search_input", "disclosure_structure/panel", "action/button"],
+  );
+});
+
 Deno.test("renderEmission: an unresolved_gap node (topology_ui_unresolved) always renders as an explicit error carrying knownGapRefs — never a normal component, never silently dropped", async () => {
   const layoutNodes = await loadComposedScenario("scenario_unresolved_gap.json");
   const emission: Emission = {

@@ -1,0 +1,96 @@
+[
+  {
+    "nodeId": "hub_relation_navigation",
+    "nodeKind": "structural_node",
+    "orderIndex": 0,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_category",
+    "label": "Hub relation navigation"
+  },
+  {
+    "nodeId": "hub_relation_navigation_section",
+    "nodeKind": "structural_node",
+    "parentNodeId": "hub_relation_navigation",
+    "orderIndex": 1,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_section",
+    "label": "Hub relation navigation"
+  },
+  {
+    "nodeId": "hub_relation_link_list",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000014",
+    "parentNodeId": "hub_relation_navigation_section",
+    "orderIndex": 2,
+    "x": 0,
+    "y": 0,
+    "componentKind": "display/card_list",
+    "label": "Hub relation link list"
+  },
+  {
+    "nodeId": "hub_relation_navigation_form",
+    "nodeKind": "structural_node",
+    "parentNodeId": "hub_relation_navigation_section",
+    "orderIndex": 3,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_form",
+    "label": "Hub relation navigation"
+  },
+  {
+    "nodeId": "hub_relation_search",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000002",
+    "parentNodeId": "hub_relation_navigation_form",
+    "orderIndex": 4,
+    "x": 0,
+    "y": 0,
+    "componentKind": "form_input/search_input",
+    "label": "Hub relation search"
+  },
+  {
+    "nodeId": "target_projection_shell",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000003",
+    "parentNodeId": "hub_relation_navigation_form",
+    "orderIndex": 5,
+    "x": 0,
+    "y": 0,
+    "componentKind": "disclosure_structure/panel",
+    "label": "Target projection shell"
+  },
+  {
+    "nodeId": "select_hub_relation_link",
+    "nodeKind": "catalog_component",
+    "componentId": "00000000-0000-0000-0001-000000000010",
+    "parentNodeId": "hub_relation_navigation_form",
+    "orderIndex": 6,
+    "x": 0,
+    "y": 0,
+    "componentKind": "action/button",
+    "runtimeInteractions": [
+      {
+        "trigger": "item.click",
+        "actionType": "localStateMutation",
+        "payloadFrom": {
+          "hub_relation_id": "node:hub_relation_link_list.value"
+        },
+        "sourceActionKey": "select_hub_relation_link",
+        "targetRef": "ui-local:hub_relation_link_list.selected_row"
+      }
+    ],
+    "label": "Select hub relation link"
+  },
+  {
+    "nodeId": "target_manifest_resolution_validation",
+    "nodeKind": "structural_node",
+    "parentNodeId": "hub_relation_navigation_section",
+    "orderIndex": 7,
+    "x": 0,
+    "y": 0,
+    "recordType": "topology_ui_validation",
+    "label": "Target manifest resolution"
+  }
+]
