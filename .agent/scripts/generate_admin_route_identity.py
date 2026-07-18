@@ -71,7 +71,20 @@ def extract_canonical_routes(ssot_text: str) -> list[str]:
     m = re.search(r"\n {4}canonical_routes:\n((?: {6}- /[^\n]+\n)+)", ssot_text)
     if not m:
         raise SystemExit("could not locate authority.canonical_routes in admin-console-workflow-ssot.yaml")
-    return [mm.group(1) for mm in re.finditer(r"- (/\S+)", m.group(1))]
+    routes = [mm.group(1) for mm in re.finditer(r"- (/\S+)", m.group(1))]
+    # admin-surface-topology-seed-conversion round 7 (PR #594 review): the ADMIN_INDEX_ROUTE
+    # exclusion rule below is only meaningful if /admin is actually IN canonical_routes to begin
+    # with -- otherwise silently excluding a route that was never there is not the same guarantee
+    # as excluding one that is. Without this assertion, deleting /admin from canonical_routes
+    # would change nothing observable (the exclusion loop just stops finding anything to skip),
+    # so neither --check nor --check-parent would catch it. Fail closed here instead.
+    if ADMIN_INDEX_ROUTE not in routes:
+        raise SystemExit(
+            f"authority.canonical_routes in admin-console-workflow-ssot.yaml no longer contains "
+            f"{ADMIN_INDEX_ROUTE!r} -- the ADMIN_INDEX_ROUTE exclusion rule in derive_identity() "
+            f"assumes it is present and explicitly excluded, not merely absent"
+        )
+    return routes
 
 
 def extract_master_roster_routes(ssot_text: str) -> list[str]:

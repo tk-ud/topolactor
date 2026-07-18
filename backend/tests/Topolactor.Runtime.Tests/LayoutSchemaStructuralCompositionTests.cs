@@ -836,14 +836,36 @@ public class LayoutSchemaStructuralCompositionTests
     // .agent/tests/fixtures/react-schema-topology-seed-translator/
     // admin-dashboard-hub-relation-navigation.topology-seed.input.json (regenerable; see that
     // fixture pair and .agent/tools/logs/generate.log for the recorded regeneration trace). This
-    // is a review/regression-proof artifact only, per
-    // docs/design/admin-normal-surface-projection-seed-ssot.yaml
-    // seed_physical_hierarchy_and_definition -- it is never written to db/seed_empty.sql and
-    // never adopted as a live hubs.topology_manifests row: docs/design/admin-console-workflow-ssot.yaml
-    // page_responsibility.admin_index and admin_hub_relation_navigation_contract.prohibited
-    // explicitly forbid fabricating a hubs.hub / hubs.topology_manifests row for /admin itself, so
-    // this scenario stays a test-only, non-seed literal-JSON scenario (the same pattern already
-    // used by scenario_table_workflow_step.json etc. above), not seed adoption.
+    // is currently a review/regression-proof artifact only -- not yet written to db/seed_empty.sql
+    // or adopted as live manifest.topology content on any real manifest.
+    //
+    // round 7 (PR #594 review) correction: an earlier revision of this comment stated this
+    // candidate "never" gets adopted BECAUSE /admin itself cannot be fabricated a
+    // hubs.hub/hubs.topology_manifests row (docs/design/admin-console-workflow-ssot.yaml
+    // page_responsibility.admin_index / admin_hub_relation_navigation_contract.prohibited). That
+    // conflated two separate facts: (a) /admin itself will never get a fabricated manifest -- true,
+    // permanent, and unrelated to this candidate's own adoptability, since this seed_contract
+    // (docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces
+    // .dashboard, axis_kind: projection_surface_axis) describes a reusable hub-relation-navigation
+    // widget pattern, not content bound to /admin's own route; and (b) whether this candidate could
+    // ever be adopted onto a DIFFERENT, already-existing, real manifest (e.g. manifest 092,
+    // credential-management, which already has a real ui_projection and its own hub_relations) --
+    // a genuinely open question round 7 investigated in full for the first time (see
+    // .agent/tasks/todo.md admin-dashboard round 7 監査). That investigation found manifest-092
+    // adoption structurally legitimate (per seed_physical_hierarchy_and_definition.seed_definition
+    // .rule: seed rows should be "equivalent in shape to what an admin would obtain by actually
+    // using /admin/contents + /admin/ui-builder + /admin/manifests", and adopting onto an existing
+    // real manifest adds no new canonical route, satisfying admin-dashboard subBundle's own "no new
+    // route registry authority" boundary) -- but blocked on a separate, real gap: the seed_contract's
+    // required search/filter capability (capability_requirements.search/filter) has no backing
+    // runtime query path anywhere yet; frontend/islands/ProjectionShell.tsx's hub-navigation <nav>
+    // renders a flat, unfiltered link list only. Closing that gap (even via a low-risk, additive,
+    // client-side filter over the already-loaded navigationSequence, requiring no new backend
+    // action) touches shared runtime code used by every manifest in the system, so it was flagged
+    // for explicit confirmation rather than implemented speculatively in the same round it was
+    // discovered. This scenario therefore remains a test-only, non-seed literal-JSON scenario (the
+    // same pattern already used by scenario_table_workflow_step.json etc. above) for now -- pending
+    // that confirmation, not because adoption is impossible in principle.
     //
     // No Action/eventBinding node is included here (round 2 correction, PR #594 review): an
     // earlier revision authored a "select_hub_relation_link" Action wired via

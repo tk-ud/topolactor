@@ -423,6 +423,22 @@ def main():
             bool(child_gap_types) and child_gap_types == parent_gap_types,
         )
 
+        # 7d1: admin-surface-topology-seed-conversion round 7 (PR #594 review) -- the undeclared-
+        # surface qualifying classification subset (input_format_contract.required_fields.
+        # targetSurface.undeclared_surface_qualifying_classifications, promoted from a Python-only
+        # constant this same round) must itself be a non-empty SUBSET of the parent's
+        # canonical_gap_types keys -- it names two of the six real classifications, not an
+        # invented seventh one. Read independently via raw text, same discipline as 7d above.
+        qualifying_classifications_match = re.search(
+            r"\n {8}undeclared_surface_qualifying_classifications:\n((?: {10}- \S+\n)+)",
+            translator_ssot_text_for_gap_sync,
+        )
+        qualifying_classifications = set(re.findall(r"- (\S+)", qualifying_classifications_match.group(1))) if qualifying_classifications_match else set()
+        expect(
+            "7d1. input_format_contract.required_fields.targetSurface.undeclared_surface_qualifying_classifications is a non-empty subset of ui-builder-seed-first-gap-discovery-ssot.yaml canonical_gap_types (no invented classification)",
+            bool(qualifying_classifications) and qualifying_classifications.issubset(parent_gap_types),
+        )
+
         # 7e. a knownGapRefs entry that opts into the "<classification>:<description>" convention
         # (colon present) with an unrecognized/misspelled classification becomes an explicit
         # blocking validationError -- not a silently-accepted free-form string. Bare legacy refs

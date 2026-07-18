@@ -84,6 +84,17 @@ async function deriveExpectedAdminRouteIdentity() {
   }
   const canonicalRoutes = [...canonicalRoutesMatch[1].matchAll(/- (\/\S+)/g)]
     .map((m) => m[1]);
+  // admin-surface-topology-seed-conversion round 7 (PR #594 review): /admin is explicitly
+  // EXCLUDED from identity below (it is the index page itself, not a card pointing at itself) --
+  // but excluding a route that silently stopped being present would be a no-op, not a guarantee.
+  // Assert presence so a future edit that deletes /admin from canonical_routes fails here instead
+  // of leaving the derived identity unchanged (and thus this test still passing) either way.
+  if (!canonicalRoutes.includes("/admin")) {
+    throw new Error(
+      "admin-console-workflow-ssot.yaml authority.canonical_routes no longer contains /admin — " +
+        "the exclusion-from-identity rule below assumes it is present and explicitly excluded, not merely absent",
+    );
+  }
 
   const masterRosterMatch = ssotYaml.match(
     /\n {4}master_roster_routes:\n([\s\S]*?)\n {2}\S/,

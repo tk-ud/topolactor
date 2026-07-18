@@ -219,13 +219,20 @@ def gap_ref_classification(gap_ref):
     return gap_ref_str.split(":", 1)[0]
 
 
-# input_format_contract.required_fields.targetSurface.rule: a targetSurface not already in
-# declared_seed_surface_catalog must be paired with at least one knownGapRefs entry of exactly
-# one of these two classifications -- not any classification, and not a colon-free legacy ref
-# (which was never scoped to explain an undeclared surface in the first place; see
-# check_react_schema_topology_seed_translator.py for the declared-surface/seed-evidence-anchored
-# legacy refs this must not retroactively break).
-UNDECLARED_SURFACE_QUALIFYING_CLASSIFICATIONS = {"ssot_ambiguity_gap", "component_catalog_gap"}
+def undeclared_surface_qualifying_classifications(ssot_root):
+    # input_format_contract.required_fields.targetSurface.undeclared_surface_qualifying_classifications
+    # (round 7, PR #594 review: promoted from a Python-only constant to this structured SSOT
+    # field so a future edit to the qualifying set here does not require a manual constant sync
+    # in this module -- see check_react_schema_topology_seed_translator.py's cross-SSOT proof
+    # that this field stays a SUBSET of ui-builder-seed-first-gap-discovery-ssot.yaml
+    # canonical_gap_types). A targetSurface not already in declared_seed_surface_catalog must be
+    # paired with at least one knownGapRefs entry of exactly one of these classifications -- not
+    # any classification, and not a colon-free legacy ref (which was never scoped to explain an
+    # undeclared surface in the first place; see check_react_schema_topology_seed_translator.py
+    # for the declared-surface/seed-evidence-anchored legacy refs this must not retroactively
+    # break).
+    values = dig(ssot_root, "input_format_contract", "required_fields", "targetSurface", "undeclared_surface_qualifying_classifications")
+    return set(values) if isinstance(values, list) and values else set()
 
 
 def allowed_gap_classifications(ssot_root):
@@ -316,8 +323,9 @@ def validate_input_envelope(envelope, ssot_root, vocabulary):
     declared_keys = {s.get("seed_surface_key") for s in declared_surfaces}
     known_gap_refs = envelope.get("knownGapRefs") or []
     if target_surface not in declared_keys:
+        qualifying_classifications = undeclared_surface_qualifying_classifications(ssot_root)
         has_qualifying_gap_ref = any(
-            gap_ref_classification(g) in UNDECLARED_SURFACE_QUALIFYING_CLASSIFICATIONS
+            gap_ref_classification(g) in qualifying_classifications
             for g in known_gap_refs
         )
         if not has_qualifying_gap_ref:
@@ -328,10 +336,10 @@ def validate_input_envelope(envelope, ssot_root, vocabulary):
                     "blocking",
                     "targetSurface does not resolve to a declared_seed_surface_catalog entry; a "
                     "new surface key must carry at least one knownGapRefs entry classified "
-                    f"{sorted(UNDECLARED_SURFACE_QUALIFYING_CLASSIFICATIONS)} "
-                    "(input_format_contract.required_fields.targetSurface.rule) -- an empty "
-                    "knownGapRefs, a colon-free legacy ref, or any other classification does not "
-                    "satisfy this rule",
+                    f"{sorted(qualifying_classifications)} "
+                    "(input_format_contract.required_fields.targetSurface"
+                    ".undeclared_surface_qualifying_classifications) -- an empty knownGapRefs, a "
+                    "colon-free legacy ref, or any other classification does not satisfy this rule",
                 )
             )
 

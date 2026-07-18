@@ -176,7 +176,32 @@ Deno.test("renderEmission: a Table (topology_ui_table) or WorkflowStep (topology
   assertEquals(specs[1].componentType, "action/button");
 });
 
-Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboard subBundle's hub_relation navigation seed_contract structural placeholders (docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.dashboard.seed_contract: hub_relation_search / hub_relation_link_list / target_projection_shell) compose to zero componentType==='error' specs — review/regression-proof only, never adopted as a live manifest per docs/design/admin-console-workflow-ssot.yaml page_responsibility.admin_index (no hubs.hub / hubs.topology_manifests row is fabricated for /admin). No Action/eventBinding node is included: the real hub_relation -> target manifest navigation path is already fully implemented as generic, manifest-agnostic ProjectionShell.tsx substrate (resolveHubNavigationLinks) with zero authored wiring, so this scenario intentionally stays structural-display-only rather than re-authoring an inert local-state action with no real consumer (round 2 correction, PR #594 review)", async () => {
+/**
+ * admin-surface-topology-seed-conversion admin-dashboard subBundle's hub_relation navigation
+ * seed_contract structural placeholders (docs/design/admin-normal-surface-projection-seed-ssot.yaml
+ * surface_axes.admin.surfaces.dashboard.seed_contract: hub_relation_search / hub_relation_link_list
+ * / target_projection_shell) compose to zero componentType==='error' specs. This is currently a
+ * review/regression-proof artifact only, not yet adopted as live manifest.topology content.
+ *
+ * round 7 (PR #594 review) correction: an earlier revision of this comment stated this "never"
+ * gets adopted as a live manifest BECAUSE no hubs.hub/hubs.topology_manifests row is fabricated
+ * for /admin (docs/design/admin-console-workflow-ssot.yaml page_responsibility.admin_index). That
+ * conflated /admin's own permanent no-fabricated-manifest rule with this candidate's own
+ * adoptability onto a DIFFERENT, already-existing manifest -- a separate question round 7
+ * investigated for the first time (see .agent/tasks/todo.md admin-dashboard round 7 監査).
+ * Adoption onto an existing real manifest (e.g. manifest 092, which already has its own
+ * hub_relations) was found structurally legitimate and adds no new canonical route, but is
+ * blocked on a real, separate gap: the seed_contract's required search/filter capability has no
+ * backing runtime query path anywhere yet -- ProjectionShell.tsx's hub-navigation <nav> renders a
+ * flat, unfiltered link list only. Closing that gap touches shared runtime code used by every
+ * manifest, so it was flagged for explicit confirmation rather than implemented speculatively.
+ * No Action/eventBinding node is included: the real hub_relation -> target manifest navigation
+ * path is already fully implemented as generic, manifest-agnostic ProjectionShell.tsx substrate
+ * (resolveHubNavigationLinks) with zero authored wiring, so this scenario intentionally stays
+ * structural-display-only rather than re-authoring an inert local-state action with no real
+ * consumer (round 2 correction, PR #594 review).
+ */
+Deno.test("renderEmission: admin-surface-topology-seed-conversion admin-dashboard subBundle's hub_relation navigation seed_contract structural placeholders compose to zero componentType==='error' specs (review/regression-proof only pending adoption confirmation -- see round 7 doc comment above)", async () => {
   const layoutNodes = await loadComposedScenario(
     "scenario_admin_dashboard_hub_relation_navigation.json",
   );
