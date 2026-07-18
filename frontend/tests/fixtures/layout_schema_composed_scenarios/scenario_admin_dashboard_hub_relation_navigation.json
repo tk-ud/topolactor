@@ -72,7 +72,7 @@
     "componentKind": "action/button",
     "runtimeInteractions": [
       {
-        "trigger": "item.click",
+        "trigger": "click",
         "actionType": "localStateMutation",
         "payloadFrom": {
           "hub_relation_id": "node:hub_relation_link_list.value"
