@@ -518,8 +518,9 @@ admin_normal_surface_projection_seed_ssot:
           dashboard_team_markdown: >-
             blocked — same as docs/design/admin-console-workflow-ssot.yaml
             subbundle_target_readiness.team_dashboard: no per-screen ui_projection manifest exists yet
-            for the team markdown dashboard surface; topology UI seed production for this subBundle
-            remains owner-paused pending explicit future owner instruction.
+            for the team markdown dashboard surface. 2026-07-18: the Bundle-level owner production
+            pause was lifted; this readiness gap is no longer pause-gated, it remains blocked solely
+            because the target manifest itself has not been produced yet.
           self_account_capability: >-
             blocked — no ui_projection manifest exists yet for this capability at all (see
             surface_axes.normal.surfaces.self_account_capability.seed_contract.status). Additionally,
@@ -920,9 +921,10 @@ admin_normal_surface_projection_seed_ssot:
         tested, and in place — see
         normal.dashboard.responsibilities.inputer.inputer_runtime_adapter_contract.actual_component_props/
         actual_component_events for its real interface — but a topology seed / dispatcher_mapping / runtime
-        adapter must still be produced before this design blocker can be closed; owner instruction to resume
-        topology UI seed production is required first (see the standing pause record referenced in
-        .agent/tasks/todo.md).
+        adapter must still be produced before this design blocker can be closed. 2026-07-18: the
+        Bundle-level owner production pause referenced in .agent/tasks/todo.md was lifted, so this blocker
+        is no longer gated on waiting for owner instruction to resume production; it stays
+        unresolved_before_seed solely because the runtime adapter itself has not yet been produced.
       subbundle_status:
         note: >-
           Applies only to team-dashboard's normal.dashboard.inputer (md_translation_authoring_surface.authoring).
@@ -974,4 +976,16 @@ admin_normal_surface_projection_seed_ssot:
     - This SSOT is reachable from .agent/docs/ssot-map.yaml and .agent/docs/design-ssot-index.md.
     - Design proof for required vocabulary, boundaries, and referenced catalog/schema surfaces passes.
     - Later seed task reads all authority references listed in foundation_inputs and authority.references.
-    - All design_blocking entries are resolved before seed generation; unresolved design blockers must not be carried into runtime as fail-close negative cases.
+    - >-
+      Per target subBundle (2026-07-18, aligned to design_blocking[*].subbundle_status granularity):
+      every design_blocking entry whose subbundle_status for that subBundle is not
+      subBundle_not_applicable must be resolved / resolved_existing_substrate / retired_permanent_ng
+      -- never left unresolved_before_seed -- before seed generation/registration proceeds for that
+      subBundle. subBundle_not_applicable means the entry does not gate that subBundle at all, not
+      that it is resolved. This is evaluated per subBundle, not as one Bundle-wide "all 5 ids fully
+      closed" requirement: a subBundle with zero applicable design_blocking entries (e.g.
+      admin-dashboard) may proceed while other subBundles still carry unresolved_before_seed entries.
+      Unresolved design blockers must not be carried into runtime as fail-close negative cases, and
+      must never be marked resolved merely because the Bundle-level owner production pause referenced
+      in .agent/tasks/todo.md has been lifted -- pause state and design_blocking resolution are
+      separate gates.

@@ -113,8 +113,9 @@ admin_console_workflow_ssot:
         mechanism, fake source manifest, or parallel authoring surface is created for them.
       enum_dictionary: >-
         blocked — no per-screen ui_projection manifest exists yet for enum_dictionary (only
-        per-action dispatcher_mapping-only manifests); topology UI seed production for this
-        subBundle is owner-paused pending explicit future owner instruction.
+        per-action dispatcher_mapping-only manifests). 2026-07-18: the Bundle-level owner production
+        pause was lifted (.agent/tasks/todo.md); this readiness gap is no longer pause-gated, it
+        remains blocked solely because the target manifest itself has not been produced yet.
       team_dashboard: >-
         blocked — same as enum_dictionary above, for the team markdown dashboard surface.
       scheduler_settings: >-
