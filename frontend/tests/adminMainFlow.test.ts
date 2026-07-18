@@ -63,12 +63,12 @@ Deno.test("ACCEPTANCE_FLOW_STEPS matches main flow order", () => {
  * .agent/tasks/todo.md, not silently forced to pass by relaxing this test's scope.
  */
 Deno.test("ADMIN_ROUTE_CARDS contain only canonical admin routes (SSOT-sourced)", async () => {
-  const ssotYaml = await Deno.readTextFile(
+  const ssotYaml = (await Deno.readTextFile(
     new URL(
       "../../docs/design/admin-console-workflow-ssot.yaml",
       import.meta.url,
     ),
-  );
+  )).replace(/\r\n/g, "\n");
 
   const canonicalRoutesMatch = ssotYaml.match(
     /\n {4}canonical_routes:\n((?: {6}- \/[^\n]+\n)+)/,
