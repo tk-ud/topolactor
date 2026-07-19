@@ -196,6 +196,8 @@ public record HubNavigationDeprecateRequestDto(
 /// "not directly callable" rather than guessing a target.
 /// </summary>
 public record HubNavigationSequenceItemDto(
+    [property: JsonPropertyName("hubRelationId")] string HubRelationId,
+    [property: JsonPropertyName("topologyManifestId")] string TopologyManifestId,
     [property: JsonPropertyName("relatedHubId")] string RelatedHubId,
     [property: JsonPropertyName("relatedHubLabel")] string RelatedHubLabel,
     [property: JsonPropertyName("sequencePosition")] int SequencePosition,

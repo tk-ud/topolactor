@@ -16,11 +16,14 @@ import {
   ALLOWED_PROP_BINDING_TRANSFORMS,
   applyPropBindingTransform,
   COMPONENT_ARRAY_PROP_CAPABILITIES,
+  EMISSION_NAVIGATION_SEQUENCE_SOURCE,
   resolvePropBindings,
   resolveRuntimeDataPath,
+  resolveRuntimeNavigationSequence,
   validatePropBindingsStructure,
   validatePropBindingTarget,
 } from "../runtime/propBindingResolver.ts";
+import type { HubNavigationSequenceItem } from "../api/dispatch.ts";
 
 // ── resolveRuntimeDataPath ──────────────────────────────────────────────────
 
@@ -408,6 +411,112 @@ Deno.test("validatePropBindingsStructure: aggregate dashboard display components
     validatePropBindingsStructure(
       { data: { source: "emission.data" } },
       "calc_topology/hub_statistics_panel",
+    ),
+    [],
+  );
+});
+
+// ── emission.navigationSequence (canonical hub_relations nav lane) ─────────
+
+const NAV_SEQUENCE: HubNavigationSequenceItem[] = [
+  { hubRelationId: "rel-1", topologyManifestId: "source-manifest", relatedHubId: "hub-1", relatedHubLabel: "Credential management", sequencePosition: 1, targetManifestId: "0000000-0000-0000-0000-000000000092" },
+  { hubRelationId: "rel-2", topologyManifestId: "source-manifest", relatedHubId: "hub-2", relatedHubLabel: "Unresolved target", sequencePosition: 2, targetManifestId: null },
+];
+
+Deno.test("resolveRuntimeNavigationSequence: maps navigationSequence to resolved links, sorted by sequencePosition", () => {
+  const result = resolveRuntimeNavigationSequence(NAV_SEQUENCE);
+  assertEquals(result, [
+    { resolvable: true, href: "?manifest=0000000-0000-0000-0000-000000000092", label: "Credential management", sequencePosition: 1, hubRelationId: "rel-1", topologyManifestId: "source-manifest", relatedHubId: "hub-1" },
+    { resolvable: false, label: "Unresolved target", sequencePosition: 2, hubRelationId: "rel-2", topologyManifestId: "source-manifest", relatedHubId: "hub-2" },
+  ]);
+});
+
+Deno.test("resolveRuntimeNavigationSequence: absent navigationSequence resolves to empty array, not undefined", () => {
+  assertEquals(resolveRuntimeNavigationSequence(undefined), []);
+});
+
+Deno.test("resolvePropBindings: emission.navigationSequence binds raw resolved links to card_list items", () => {
+  const result = resolvePropBindings(
+    {},
+    { items: { source: EMISSION_NAVIGATION_SEQUENCE_SOURCE } },
+    "display/card_list",
+    {},
+    NAV_SEQUENCE,
+  );
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.items, [
+      { resolvable: true, href: "?manifest=0000000-0000-0000-0000-000000000092", label: "Credential management", sequencePosition: 1, hubRelationId: "rel-1", topologyManifestId: "source-manifest", relatedHubId: "hub-1" },
+      { resolvable: false, label: "Unresolved target", sequencePosition: 2, hubRelationId: "rel-2", topologyManifestId: "source-manifest", relatedHubId: "hub-2" },
+    ]);
+  }
+});
+
+Deno.test("resolvePropBindings: navigationLinksToCardItems transform maps links to CardListItem shape", () => {
+  const result = resolvePropBindings(
+    {},
+    {
+      items: {
+        source: EMISSION_NAVIGATION_SEQUENCE_SOURCE,
+        transform: "navigationLinksToCardItems",
+      },
+    },
+    "display/card_list",
+    {},
+    NAV_SEQUENCE,
+  );
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.items, [
+      {
+        id: 1,
+        title: "Credential management",
+        footer: "?manifest=0000000-0000-0000-0000-000000000092",
+        variant: "default",
+        hubRelationId: "rel-1",
+        topologyManifestId: "source-manifest",
+        relatedHubId: "hub-1",
+      },
+      {
+        id: 2,
+        title: "Unresolved target",
+        footer: undefined,
+        variant: "warning",
+        hubRelationId: "rel-2",
+        topologyManifestId: "source-manifest",
+        relatedHubId: "hub-2",
+      },
+    ]);
+  }
+});
+
+Deno.test("resolvePropBindings: emission.navigationSequence with no navigationSequence arg resolves to empty items", () => {
+  const result = resolvePropBindings(
+    {},
+    { items: { source: EMISSION_NAVIGATION_SEQUENCE_SOURCE } },
+    "display/card_list",
+    {},
+  );
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.props.items, []);
+});
+
+Deno.test("resolvePropBindings: rejects an unrecognized source (not emission.data* or emission.navigationSequence)", () => {
+  const result = resolvePropBindings(
+    {},
+    { items: { source: "emission.recommendNavigationProjection" } },
+    "display/card_list",
+    {},
+    NAV_SEQUENCE,
+  );
+  assertEquals(result.ok, false);
+});
+
+Deno.test("validatePropBindingsStructure: emission.navigationSequence is a valid source for card_list items", () => {
+  assertEquals(
+    validatePropBindingsStructure(
+      { items: { source: EMISSION_NAVIGATION_SEQUENCE_SOURCE, transform: "navigationLinksToCardItems" } },
+      "display/card_list",
     ),
     [],
   );

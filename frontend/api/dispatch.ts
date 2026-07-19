@@ -207,8 +207,14 @@ export type PropBinding = {
  * targetManifestId is resolved backend-side only when exactly one active topology_manifest is
  * registered under relatedHubId (no implicit oldest/first-match fallback) — absent/null means
  * "not directly callable", never a guessed target.
+ * hubRelationId (the hubs.hub_relations row's own id) and topologyManifestId (the source manifest
+ * this sequence was resolved for) satisfy
+ * docs/design/admin-normal-surface-projection-seed-ssot.yaml
+ * surface_axes.admin.surfaces.dashboard.hub_relation_navigation_binding.selected_link_payload_required.
  */
 export type HubNavigationSequenceItem = {
+  hubRelationId: string;
+  topologyManifestId: string;
   relatedHubId: string;
   relatedHubLabel: string;
   sequencePosition: number;

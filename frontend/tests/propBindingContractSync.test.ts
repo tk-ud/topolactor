@@ -55,6 +55,7 @@ const SSOT_COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
 const SSOT_ALLOWED_TRANSFORMS: string[] = [
   "activeColumnsToTableColumns",
   "rowsToOptions",
+  "navigationLinksToCardItems",
 ];
 
 // ── Tests ────────────────────────────────────────────────────────────────────

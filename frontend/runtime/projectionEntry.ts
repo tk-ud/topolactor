@@ -123,14 +123,27 @@ export function resolveProjectionEntryAxes(
  * No in-place re-dispatch is invented here — navigation reuses the same entry mount path.
  */
 export type ResolvedHubNavigationLink =
-  | { resolvable: true; href: string; label: string; sequencePosition: number }
-  | { resolvable: false; label: string; sequencePosition: number };
+  & {
+    label: string;
+    sequencePosition: number;
+    /** hubs.hub_relations row id this link was resolved from — see
+     * selected_link_payload_required (admin-normal-surface-projection-seed-ssot.yaml). */
+    hubRelationId: string;
+    /** Source topology_manifest_id this navigation sequence was resolved for. */
+    topologyManifestId: string;
+    /** related_hub_id — always present regardless of resolvability. */
+    relatedHubId: string;
+  }
+  & ({ resolvable: true; href: string } | { resolvable: false });
 
 /**
  * Resolves a manifest's NavigationSequence ("current hub relation" candidates) into navigable
  * links. targetManifestId is only present when the backend resolved exactly one topology_manifest
  * for the related hub (docs/design/db-schema.yaml no_implicit_join_nullable_fallback semantics) —
  * absent/null items are returned as explicitly unresolvable, never guessed or silently dropped.
+ * hubRelationId/topologyManifestId/relatedHubId are carried through on every item (resolvable or
+ * not) so consumers needing the full selected_link_payload_required identity (not just a
+ * clickable href) have it without a second resolution path.
  */
 export function resolveHubNavigationLinks(
   navigationSequence: readonly HubNavigationSequenceItem[] | undefined,
@@ -138,20 +151,22 @@ export function resolveHubNavigationLinks(
   return (navigationSequence ?? [])
     .slice()
     .sort((a, b) => a.sequencePosition - b.sequencePosition)
-    .map((item) =>
-      item.targetManifestId
+    .map((item) => {
+      const base = {
+        label: item.relatedHubLabel,
+        sequencePosition: item.sequencePosition,
+        hubRelationId: item.hubRelationId,
+        topologyManifestId: item.topologyManifestId,
+        relatedHubId: item.relatedHubId,
+      };
+      return item.targetManifestId
         ? {
-          resolvable: true,
+          ...base,
+          resolvable: true as const,
           href: `?manifest=${encodeURIComponent(item.targetManifestId)}`,
-          label: item.relatedHubLabel,
-          sequencePosition: item.sequencePosition,
         }
-        : {
-          resolvable: false,
-          label: item.relatedHubLabel,
-          sequencePosition: item.sequencePosition,
-        }
-    );
+        : { ...base, resolvable: false as const };
+    });
 }
 
 export type ProjectionEntryConfirmation =

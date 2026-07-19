@@ -438,9 +438,47 @@ admin_normal_surface_projection_seed_ssot:
             filter: [status, source_manifest, sequence_position]
             mutation: none_in_this_surface
             navigation: required
+          search_delivery: >-
+            Delivered as of this Bundle: hub_relation_link_list (card_list.primitive) carries a
+            built-in client-side title/body substring filter (frontend/components/CardList.tsx
+            searchable/searchPlaceholder props, local Preact state over the already-resolved items
+            array) -- no separate search_input.alias node, no propBindingResolver/backend filter
+            plumbing. This covers the one meaningful search axis for this surface: the rendered
+            relation label (CardListItem.title, sourced from
+            HubNavigationSequenceItem.relatedHubLabel via navigationLinksToCardItems). The
+            filter: [status, source_manifest, sequence_position] axes declared above are not
+            independently wired as separate filter controls, and are not meaningfully separable
+            for this surface: status is already fixed to active-only server-side
+            (ManifestDispatcher.EnrichWithHubNavigationAsync only enumerates active hub_relations),
+            source_manifest is constant (this list is always scoped to exactly one
+            topology_manifest_id, the current manifest), and sequence_position already governs the
+            list's sort order rather than being a separate reducible dimension a user filters by.
+            None of the three is a dropped capability; each collapses to a no-op or an
+            already-applied ordering for a single-manifest-scoped flat list, so no additional
+            control was fabricated for them.
           hub_relation_navigation_binding:
             relation_source: hubs.hub_relations joined through hubs.topology_manifests by explicit topology_manifest_id
             selected_link_payload_required: [hub_relation_id, topology_manifest_id, related_hub_id]
+            selected_link_payload_delivery: >-
+              Fully delivered as of this Bundle: hub_relation_id and the source topology_manifest_id
+              were added to HubNavigationSequenceItemDto (backend/schema/ContentBundleContracts.cs)
+              and threaded through NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync ->
+              ManifestDispatcher.EnrichWithHubNavigationAsync -> Emission.NavigationSequence ->
+              frontend HubNavigationSequenceItem -> frontend/runtime/projectionEntry.ts
+              resolveHubNavigationLinks (ResolvedHubNavigationLink now carries hubRelationId /
+              topologyManifestId / relatedHubId on every item, resolvable or not) ->
+              propBindingResolver.ts navigationLinksToCardItems -> frontend/runtime/
+              runtimeComponentFactory.ts cardListFactory, which spreads the source item before
+              overwriting the normalized id/title/body/footer/variant fields so the three identity
+              fields survive onto the actual <CardList> items prop and the onSelect emission
+              payload, not just propBindingResolver's own intermediate output (this final hop was
+              audited and found stripping them via an id/title/body/footer/variant-only
+              reconstruction -- fixed; see frontend/tests/cardListFactoryIdentityPassthrough.test.tsx
+              for the regression proof). All three identity fields are available at the point a
+              link is actually rendered/selected; no gap remains. ProjectionShell's own <a href>
+              nav bar continues to use only the resolved href for actual navigation -- the fuller
+              identity is available for any future onSelect wiring on this seed's card_list without
+              a second resolution path.
             canonical_resolution_rule_ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.resolution_rule
             target_manifest_resolution: related_hub_id resolves only when exactly one active hubs.topology_manifests row exists for that hub; zero or multiple active rows fail-close to no target.
             runtime_fail_close_negative_cases:
@@ -452,10 +490,49 @@ admin_normal_surface_projection_seed_ssot:
               - first_match_oldest_or_implicit_surface_fallback_required
           seed_contract:
             component_tree:
-              - node_key: hub_relation_search
-                component_key: search_input.alias
               - node_key: hub_relation_link_list
-                component_key: table.primitive
+                component_key: card_list.primitive
+                component_key_rationale: >-
+                  table.primitive is not registered in topology.ui_component_registry (bucket-only
+                  candidate; see docs/design/react-schema-topology-seed-translator-ssot.yaml
+                  ui_catalog_boundary_contract) and a fixed-column table layout resists responsive
+                  reflow. card_list.primitive is already registered and active
+                  (topology.ui_component_registry, reused by the hub_search.readonly.v1 preset,
+                  db/hub_search_preset_seed.sql); its default rendering (frontend/components/CardList.tsx)
+                  is a normal block flow of Card elements, which is not a fixed-column layout even
+                  without further styling. There is no separate hub_relation_search node in this
+                  component_tree: card_list.primitive only ever distributes the flat top-level
+                  navigationSequence array (there is no nested/child data here for a data_display/tree
+                  primitive to collapse), and search is its own built-in searchable prop -- see
+                  search_delivery above.
+                known_gap_css_grid_styling: >-
+                  CSS-grid arrangement of the cards themselves is NOT wired by this seed and is not
+                  currently possible for a real (non-draft) dispatched emission: CardList's own
+                  className/style comes from LayoutNode.componentDesign
+                  (frontend/api/dispatch.ts), which frontend/runtime/draftPreviewToEmission.ts only
+                  populates for the UI-Builder draft-preview path -- the production ManifestDispatcher
+                  response (backend/schema/Contracts.cs LayoutNode) carries no componentDesign field
+                  at all, so there is no existing wiring point for this seed to attach a grid class to
+                  card_list's internal rendering today. node.layoutClassRefs (which IS populated for
+                  real dispatch) only affects each node's own wrapper positioning among its siblings
+                  in frontend/components/LayoutProjectionTree.tsx, not the internal arrangement of
+                  items within a single card_list node. Actually applying CSS grid to seeded
+                  card_list content requires extending real (non-draft) LayoutNode resolution with a
+                  design/style source -- out of scope for this seed; tracked as a future substrate
+                  gap, not fabricated here.
+                prop_bindings:
+                  - target_prop: items
+                    source: emission.navigationSequence
+                    transform: navigationLinksToCardItems
+                    source_ref: frontend/runtime/propBindingResolver.ts EMISSION_NAVIGATION_SEQUENCE_SOURCE
+                    boundary: >-
+                      emission.navigationSequence is the canonical_route_tab hub_relations lane
+                      (docs/framework-core.yaml runtime_route_attention_boundary) — the same data
+                      ProjectionShell's own automatic nav bar already renders
+                      (resolveHubNavigationLinks). Never emission.recommendNavigationProjection
+                      (SQL Attention / attention_recommendation_tab); that stays unreachable from
+                      propBindings so attention/recommendation scoring never blends into this
+                      projected fixed-route list.
               - node_key: target_projection_shell
                 component_key: panel.alias
             event_bindings:
@@ -463,6 +540,18 @@ admin_normal_surface_projection_seed_ssot:
                 event_kind: select
                 trigger: projection_change
                 fail_close_on_ambiguous_target: true
+                implementation_ref: >-
+                  Satisfied by frontend/islands/ProjectionShell.tsx's own automatic hub navigation
+                  nav bar (resolveHubNavigationLinks, frontend/runtime/projectionEntry.ts), which
+                  every successfully-dispatched manifest already renders as real <a href> links
+                  from the same emission.navigationSequence data -- not by an onSelect handler
+                  authored on the seeded hub_relation_link_list node itself. The seed's card_list
+                  has no runtimeInteractions/eventBinding of its own: it is a read-only projection
+                  of the identical navigationSequence data, coexisting with (not duplicating) the
+                  nav bar's real click-to-navigate behavior. fail_close_on_ambiguous_target is
+                  enforced backend-side by the existing exactly-one-active-manifest resolution rule
+                  (ManifestDispatcher / HubNavigationResolver), independent of which UI surface
+                  renders the resulting link.
             loading_empty_error_projection: [loading_links, empty_links, target_manifest_resolution_error]
     normal:
       axis_kind: projection_surface_axis

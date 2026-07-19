@@ -677,6 +677,12 @@ function cardListFactory(spec: RuntimeComponentSpec): RenderResult {
     ok: true,
     node: h(CardList, {
       items: items.map((it) => ({
+        // Spread first: preserves any extra passthrough fields a propBinding transform
+        // attached to the resolved item (e.g. navigationLinksToCardItems' hubRelationId /
+        // topologyManifestId / relatedHubId, admin-normal-surface-projection-seed-ssot.yaml
+        // selected_link_payload_delivery) so they survive into the rendered CardList item and
+        // the onSelect emission below, not just into propBindingResolver's own output.
+        ...it,
         id: it.id as string | number | undefined,
         title: it.title as string | undefined,
         body: it.body as string | undefined,
@@ -689,13 +695,19 @@ function cardListFactory(spec: RuntimeComponentSpec): RenderResult {
           | undefined,
       })),
       emptyMessage: props.emptyMessage as string | undefined,
+      searchable: props.searchable as boolean | undefined,
+      searchPlaceholder: props.searchPlaceholder as string | undefined,
       className: spec.className,
       design: spec.design ?? {},
       onSelect: spec.eventBinding.select
-        ? (_item, idx) => {
+        ? (item, idx) => {
+          // item is the exact rendered CardListItem (same object reference as this closure's
+          // items[...] before any CardList-internal searchable filtering) — using it directly
+          // instead of re-indexing into `items` by idx, since idx is CardList's own currently
+          // *visible* (post-filter) index, not necessarily an index into this unfiltered array.
           const result = emitBoundEvent(spec, "select", {
             index: idx,
-            item: items[idx],
+            item,
           });
           if (!result.ok) throw new Error(result.error);
         }
