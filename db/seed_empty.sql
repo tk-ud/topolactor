@@ -3311,17 +3311,23 @@ ON CONFLICT (manifest_id) DO NOTHING;
 --
 -- component_tree follows admin-normal-surface-projection-seed-ssot.yaml
 -- surface_axes.admin.surfaces.dashboard.seed_contract.component_tree exactly:
--- hub_relation_search (search_input.alias) + hub_relation_link_list
--- (card_list.primitive -- table.primitive substituted per owner instruction:
--- not yet registered in topology.ui_component_registry, and a fixed-column
--- table resists responsive reflow; card_list is already registered/active and
--- reused by the hub_search.readonly.v1 preset, db/hub_search_preset_seed.sql)
--- + target_projection_shell (panel.alias, the root shell). CSS-grid styling
--- of the cards themselves is NOT wired here -- known_gap_css_grid_styling in
--- the SSOT's seed_contract.component_tree explains why real (non-draft)
--- dispatched LayoutNodes have no design/style wiring point today; card_list's
--- own default block-flow rendering (not a fixed-column table) is what this
--- seed actually provides.
+-- hub_relation_link_list (card_list.primitive -- table.primitive substituted
+-- per owner instruction: not yet registered in topology.ui_component_registry,
+-- and a fixed-column table resists responsive reflow; card_list is already
+-- registered/active and reused by the hub_search.readonly.v1 preset,
+-- db/hub_search_preset_seed.sql) + target_projection_shell (panel.alias, the
+-- root shell). There is no separate hub_relation_search node: search is
+-- card_list.primitive's own built-in searchable prop (frontend/components/
+-- CardList.tsx), a self-contained local-Preact-state title/body substring
+-- filter over the already-resolved items array -- no new propBindingResolver/
+-- backend filter plumbing exists or is needed, since the generic
+-- renderEmission pipeline has no mechanism (and none is required) to filter a
+-- bound list prop by a live local input value. CSS-grid styling of the cards
+-- themselves is NOT wired here -- known_gap_css_grid_styling in the SSOT's
+-- seed_contract.component_tree explains why real (non-draft) dispatched
+-- LayoutNodes have no design/style wiring point today; card_list's own
+-- default block-flow rendering (not a fixed-column table) is what this seed
+-- actually provides.
 --
 -- Authored directly as ui_topology_tensor.layout_patch_json.nodes[] (the
 -- UI-Builder-native "tensor-only" path -- componentKey resolves componentId/
@@ -3344,13 +3350,10 @@ ON CONFLICT (manifest_id) DO NOTHING;
 -- attention_recommendation_tab stays out of reach -- docs/framework-core.yaml
 -- runtime_route_attention_boundary).
 --
--- hub_relation_search is seeded per the SSOT component_tree but is not yet
--- wired to filter the link list (known_gap: no backend/frontend filter
--- wiring for hub_relations search exists today) -- an honest inert control,
--- not fabricated filtering behavior. Real click-to-navigate for the links
--- already happens for free via ProjectionShell's own automatic hub
--- navigation nav bar (resolveHubNavigationLinks) rendered alongside this
--- card list, so no onSelect wiring was added here either.
+-- Real click-to-navigate for the links already happens for free via
+-- ProjectionShell's own automatic hub navigation nav bar
+-- (resolveHubNavigationLinks) rendered alongside this card list, so no
+-- onSelect wiring was added here either.
 -- =============================================================================
 
 -- Hub owning the admin-dashboard-navigation topology_manifest. This hub is
@@ -3460,11 +3463,12 @@ ON CONFLICT (wiring_id) DO UPDATE
         status = EXCLUDED.status;
 
 -- Real UI-Builder-native tensor nodes: target_projection_shell (panel.alias,
--- root) containing hub_relation_search (search_input.alias, inert -- see
--- header comment) and hub_relation_link_list (card_list.primitive, items
--- bound to emission.navigationSequence via navigationLinksToCardItems).
--- componentKey resolves componentId/componentKind server-side from
--- topology.ui_component_registry; no hardcoded componentId here.
+-- root) containing hub_relation_link_list (card_list.primitive, items bound
+-- to emission.navigationSequence via navigationLinksToCardItems, search
+-- built in via its own searchable/searchPlaceholder props -- no separate
+-- hub_relation_search node). componentKey resolves componentId/componentKind
+-- server-side from topology.ui_component_registry; no hardcoded componentId
+-- here.
 INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
 VALUES (
     '00000000-0000-0000-0000-0000000ad206',
@@ -3474,7 +3478,7 @@ VALUES (
     '00000000-0000-0000-0000-0000000ad205',
     'default',
     0,
-    '{"nodes":[{"nodeId":"target_projection_shell","nodeKind":"catalog_component","componentKey":"panel.alias","parentNodeId":null,"slotKey":"root","orderIndex":0,"propsJson":"{\"title\": \"画面間ナビゲーション\"}"},{"nodeId":"hub_relation_search","nodeKind":"catalog_component","componentKey":"search_input.alias","parentNodeId":"target_projection_shell","slotKey":"controls","orderIndex":1,"propsJson":"{\"label\": \"ナビ検索\", \"placeholder\": \"遷移先を検索\"}"},{"nodeId":"hub_relation_link_list","nodeKind":"catalog_component","componentKey":"card_list.primitive","parentNodeId":"target_projection_shell","slotKey":"results","orderIndex":2,"propsJson":"{\"emptyMessage\": \"表示できる遷移先がまだありません\"}","propBindings":{"items":{"source":"emission.navigationSequence","transform":"navigationLinksToCardItems"}}}]}'::jsonb
+    '{"nodes":[{"nodeId":"target_projection_shell","nodeKind":"catalog_component","componentKey":"panel.alias","parentNodeId":null,"slotKey":"root","orderIndex":0,"propsJson":"{\"title\": \"画面間ナビゲーション\"}"},{"nodeId":"hub_relation_link_list","nodeKind":"catalog_component","componentKey":"card_list.primitive","parentNodeId":"target_projection_shell","slotKey":"results","orderIndex":1,"propsJson":"{\"emptyMessage\": \"表示できる遷移先がまだありません\", \"searchable\": true, \"searchPlaceholder\": \"ナビ検索\"}","propBindings":{"items":{"source":"emission.navigationSequence","transform":"navigationLinksToCardItems"}}}]}'::jsonb
 )
 ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
     SET layout_patch_json = EXCLUDED.layout_patch_json;

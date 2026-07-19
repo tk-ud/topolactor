@@ -14,8 +14,8 @@ namespace Topolactor.Integration.Tests;
 /// Scope: this manifest owns zero hubs.hub_relations rows of its own (see the seed's header
 /// comment in db/seed_empty.sql) -- authoring a relation is an ordinary /admin/manifests action,
 /// not seed content. This proof only asserts: (1) the manifest is renderable via the real
-/// admin_runtime structural-render fallback with its SSOT component_tree (search_input.alias /
-/// card_list.primitive / panel.alias) fully resolved, and (2) once a relation IS authored
+/// admin_runtime structural-render fallback with its SSOT component_tree (card_list.primitive /
+/// panel.alias) fully resolved, and (2) once a relation IS authored
 /// (inserted here as ordinary test setup, mirroring how an admin would author it), the
 /// card_list's items propBinding (emission.navigationSequence -> navigationLinksToCardItems)
 /// reflects it -- proving the frontend/backend propBindingResolver.ts /
@@ -61,11 +61,6 @@ public class AdminDashboardNavigationUiProjectionLiveDbTests
         Assert.Equal("catalog_component", shell.NodeKind);
         Assert.Equal("disclosure_structure/panel", shell.ComponentKind);
         Assert.NotNull(shell.ComponentId);
-
-        var search = Assert.Single(nodes, n => n.NodeId == "hub_relation_search");
-        Assert.Equal("form_input/search_input", search.ComponentKind);
-        Assert.NotNull(search.ComponentId);
-        Assert.Equal("target_projection_shell", search.ParentNodeId);
 
         var list = Assert.Single(nodes, n => n.NodeId == "hub_relation_link_list");
         Assert.Equal("display/card_list", list.ComponentKind);
