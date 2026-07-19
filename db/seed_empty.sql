@@ -3316,7 +3316,12 @@ ON CONFLICT (manifest_id) DO NOTHING;
 -- not yet registered in topology.ui_component_registry, and a fixed-column
 -- table resists responsive reflow; card_list is already registered/active and
 -- reused by the hub_search.readonly.v1 preset, db/hub_search_preset_seed.sql)
--- + target_projection_shell (panel.alias, the root shell).
+-- + target_projection_shell (panel.alias, the root shell). CSS-grid styling
+-- of the cards themselves is NOT wired here -- known_gap_css_grid_styling in
+-- the SSOT's seed_contract.component_tree explains why real (non-draft)
+-- dispatched LayoutNodes have no design/style wiring point today; card_list's
+-- own default block-flow rendering (not a fixed-column table) is what this
+-- seed actually provides.
 --
 -- Authored directly as ui_topology_tensor.layout_patch_json.nodes[] (the
 -- UI-Builder-native "tensor-only" path -- componentKey resolves componentId/

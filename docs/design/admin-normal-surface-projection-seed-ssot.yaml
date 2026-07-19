@@ -462,8 +462,24 @@ admin_normal_surface_projection_seed_ssot:
                   ui_catalog_boundary_contract) and a fixed-column table layout resists responsive
                   reflow. card_list.primitive is already registered and active
                   (topology.ui_component_registry, reused by the hub_search.readonly.v1 preset,
-                  db/hub_search_preset_seed.sql), and its cards reflow via CSS grid rather than
-                  fixed table columns.
+                  db/hub_search_preset_seed.sql); its default rendering (frontend/components/CardList.tsx)
+                  is a normal block flow of Card elements, which is not a fixed-column layout even
+                  without further styling.
+                known_gap_css_grid_styling: >-
+                  CSS-grid arrangement of the cards themselves is NOT wired by this seed and is not
+                  currently possible for a real (non-draft) dispatched emission: CardList's own
+                  className/style comes from LayoutNode.componentDesign
+                  (frontend/api/dispatch.ts), which frontend/runtime/draftPreviewToEmission.ts only
+                  populates for the UI-Builder draft-preview path -- the production ManifestDispatcher
+                  response (backend/schema/Contracts.cs LayoutNode) carries no componentDesign field
+                  at all, so there is no existing wiring point for this seed to attach a grid class to
+                  card_list's internal rendering today. node.layoutClassRefs (which IS populated for
+                  real dispatch) only affects each node's own wrapper positioning among its siblings
+                  in frontend/components/LayoutProjectionTree.tsx, not the internal arrangement of
+                  items within a single card_list node. Actually applying CSS grid to seeded
+                  card_list content requires extending real (non-draft) LayoutNode resolution with a
+                  design/style source -- out of scope for this seed; tracked as a future substrate
+                  gap, not fabricated here.
                 prop_bindings:
                   - target_prop: items
                     source: emission.navigationSequence
@@ -484,6 +500,18 @@ admin_normal_surface_projection_seed_ssot:
                 event_kind: select
                 trigger: projection_change
                 fail_close_on_ambiguous_target: true
+                implementation_ref: >-
+                  Satisfied by frontend/islands/ProjectionShell.tsx's own automatic hub navigation
+                  nav bar (resolveHubNavigationLinks, frontend/runtime/projectionEntry.ts), which
+                  every successfully-dispatched manifest already renders as real <a href> links
+                  from the same emission.navigationSequence data -- not by an onSelect handler
+                  authored on the seeded hub_relation_link_list node itself. The seed's card_list
+                  has no runtimeInteractions/eventBinding of its own: it is a read-only projection
+                  of the identical navigationSequence data, coexisting with (not duplicating) the
+                  nav bar's real click-to-navigate behavior. fail_close_on_ambiguous_target is
+                  enforced backend-side by the existing exactly-one-active-manifest resolution rule
+                  (ManifestDispatcher / HubNavigationResolver), independent of which UI surface
+                  renders the resulting link.
             loading_empty_error_projection: [loading_links, empty_links, target_manifest_resolution_error]
     normal:
       axis_kind: projection_surface_axis
