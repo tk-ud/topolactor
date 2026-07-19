@@ -451,21 +451,20 @@ admin_normal_surface_projection_seed_ssot:
           hub_relation_navigation_binding:
             relation_source: hubs.hub_relations joined through hubs.topology_manifests by explicit topology_manifest_id
             selected_link_payload_required: [hub_relation_id, topology_manifest_id, related_hub_id]
-            known_gap_selected_link_payload_narrower_than_required: >-
-              The generic pipeline this seed reuses (ManifestDispatcher.EnrichWithHubNavigationAsync
-              -> Emission.NavigationSequence[HubNavigationSequenceItemDto: relatedHubId /
-              relatedHubLabel / sequencePosition / targetManifestId] ->
-              frontend/runtime/projectionEntry.ts resolveHubNavigationLinks[label / href /
-              resolvable / sequencePosition] -> ProjectionShell's plain <a href> nav bar) never
-              carries hub_relation_id (the hubs.hub_relations row's own id) or the source
-              topology_manifest_id (the manifest currently dispatched) through to the frontend --
-              only related_hub_id (as relatedHubId) and the resolved target manifest id (embedded
-              in href) are actually delivered per link. This is sufficient for this surface's actual
-              responsibility (mutation: none_in_this_surface, read-only navigate), which never needs
-              to identify a specific hub_relations row back to the backend. The fuller identity set
-              in selected_link_payload_required matters only if this surface later gains inline
-              edit/reorder capability (which would need hub_relation_id, matching
-              HubNavigationAdmin.tsx's authoring payload shape) -- not fabricated here as delivered.
+            selected_link_payload_delivery: >-
+              Fully delivered as of this Bundle: hub_relation_id and the source topology_manifest_id
+              were added to HubNavigationSequenceItemDto (backend/schema/ContentBundleContracts.cs)
+              and threaded through NpgsqlContentBundleRepository.LoadHubNavigationSequenceAsync ->
+              ManifestDispatcher.EnrichWithHubNavigationAsync -> Emission.NavigationSequence ->
+              frontend HubNavigationSequenceItem -> frontend/runtime/projectionEntry.ts
+              resolveHubNavigationLinks (ResolvedHubNavigationLink now carries hubRelationId /
+              topologyManifestId / relatedHubId on every item, resolvable or not) ->
+              propBindingResolver.ts navigationLinksToCardItems (carried through onto the rendered
+              CardListItem, even though CardList.tsx itself does not display them). All three
+              identity fields are available at the point a link is rendered/selected; no gap
+              remains. ProjectionShell's own <a href> nav bar continues to use only the resolved
+              href for actual navigation -- the fuller identity is available for any future
+              onSelect wiring on this seed's card_list without a second resolution path.
             canonical_resolution_rule_ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.resolution_rule
             target_manifest_resolution: related_hub_id resolves only when exactly one active hubs.topology_manifests row exists for that hub; zero or multiple active rows fail-close to no target.
             runtime_fail_close_negative_cases:

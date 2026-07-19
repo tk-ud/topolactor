@@ -294,6 +294,8 @@ function navItem(
   partial: Partial<HubNavigationSequenceItem> & { relatedHubId: string },
 ): HubNavigationSequenceItem {
   return {
+    hubRelationId: `${partial.relatedHubId}-relation`,
+    topologyManifestId: "source-manifest",
     relatedHubLabel: partial.relatedHubId,
     sequencePosition: 1,
     ...partial,

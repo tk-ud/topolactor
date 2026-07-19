@@ -175,12 +175,22 @@ function navigationLinksToCardItems(value: unknown[]): unknown[] {
       href?: unknown;
       resolvable?: unknown;
       sequencePosition?: unknown;
+      hubRelationId?: unknown;
+      topologyManifestId?: unknown;
+      relatedHubId?: unknown;
     };
     return {
       id: link.sequencePosition,
       title: link.label,
       footer: link.resolvable === true && typeof link.href === "string" ? link.href : undefined,
       variant: link.resolvable === true ? "default" : "warning",
+      // Carried through even though CardListItem's own rendering (CardList.tsx) does not
+      // display them — satisfies selected_link_payload_required
+      // (admin-normal-surface-projection-seed-ssot.yaml) so any future onSelect wiring on this
+      // node has the full identity available without a second resolution path.
+      hubRelationId: link.hubRelationId,
+      topologyManifestId: link.topologyManifestId,
+      relatedHubId: link.relatedHubId,
     };
   });
 }

@@ -145,6 +145,10 @@ public class AdminDashboardNavigationUiProjectionLiveDbTests
             Assert.NotNull(emission.NavigationSequence);
             var navItem = Assert.Single(emission.NavigationSequence!, n => n.RelatedHubId == relatedHubId.ToString());
             Assert.Equal(relatedManifestId.ToString(), navItem.TargetManifestId);
+            // selected_link_payload_required (admin-normal-surface-projection-seed-ssot.yaml):
+            // hub_relation_id / source topology_manifest_id / related_hub_id all resolve.
+            Assert.Equal(relationUuid.ToString(), navItem.HubRelationId);
+            Assert.Equal(AdminDashboardNavigationManifestId.ToString(), navItem.TopologyManifestId);
 
             var list = Assert.Single(emission.LayoutNodes!, n => n.NodeId == "hub_relation_link_list");
             Assert.NotNull(list.PropBindings);

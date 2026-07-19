@@ -425,6 +425,8 @@ internal class InMemoryContentBundleRepository : ContentBundleRepository
                     ? manifestsForHub[0].ToString()
                     : null;
                 return new HubNavigationSequenceItemDto(
+                    hr.HubRelationId.ToString(),
+                    hr.TopologyManifestId.ToString(),
                     hr.RelatedHubId.ToString(),
                     $"Hub {hr.RelatedHubId.ToString()[..8]}…",
                     hr.SequencePosition,

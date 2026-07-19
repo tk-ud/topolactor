@@ -419,15 +419,15 @@ Deno.test("validatePropBindingsStructure: aggregate dashboard display components
 // ── emission.navigationSequence (canonical hub_relations nav lane) ─────────
 
 const NAV_SEQUENCE: HubNavigationSequenceItem[] = [
-  { relatedHubId: "hub-1", relatedHubLabel: "Credential management", sequencePosition: 1, targetManifestId: "0000000-0000-0000-0000-000000000092" },
-  { relatedHubId: "hub-2", relatedHubLabel: "Unresolved target", sequencePosition: 2, targetManifestId: null },
+  { hubRelationId: "rel-1", topologyManifestId: "source-manifest", relatedHubId: "hub-1", relatedHubLabel: "Credential management", sequencePosition: 1, targetManifestId: "0000000-0000-0000-0000-000000000092" },
+  { hubRelationId: "rel-2", topologyManifestId: "source-manifest", relatedHubId: "hub-2", relatedHubLabel: "Unresolved target", sequencePosition: 2, targetManifestId: null },
 ];
 
 Deno.test("resolveRuntimeNavigationSequence: maps navigationSequence to resolved links, sorted by sequencePosition", () => {
   const result = resolveRuntimeNavigationSequence(NAV_SEQUENCE);
   assertEquals(result, [
-    { resolvable: true, href: "?manifest=0000000-0000-0000-0000-000000000092", label: "Credential management", sequencePosition: 1 },
-    { resolvable: false, label: "Unresolved target", sequencePosition: 2 },
+    { resolvable: true, href: "?manifest=0000000-0000-0000-0000-000000000092", label: "Credential management", sequencePosition: 1, hubRelationId: "rel-1", topologyManifestId: "source-manifest", relatedHubId: "hub-1" },
+    { resolvable: false, label: "Unresolved target", sequencePosition: 2, hubRelationId: "rel-2", topologyManifestId: "source-manifest", relatedHubId: "hub-2" },
   ]);
 });
 
@@ -446,8 +446,8 @@ Deno.test("resolvePropBindings: emission.navigationSequence binds raw resolved l
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.props.items, [
-      { resolvable: true, href: "?manifest=0000000-0000-0000-0000-000000000092", label: "Credential management", sequencePosition: 1 },
-      { resolvable: false, label: "Unresolved target", sequencePosition: 2 },
+      { resolvable: true, href: "?manifest=0000000-0000-0000-0000-000000000092", label: "Credential management", sequencePosition: 1, hubRelationId: "rel-1", topologyManifestId: "source-manifest", relatedHubId: "hub-1" },
+      { resolvable: false, label: "Unresolved target", sequencePosition: 2, hubRelationId: "rel-2", topologyManifestId: "source-manifest", relatedHubId: "hub-2" },
     ]);
   }
 });
@@ -468,8 +468,24 @@ Deno.test("resolvePropBindings: navigationLinksToCardItems transform maps links 
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.props.items, [
-      { id: 1, title: "Credential management", footer: "?manifest=0000000-0000-0000-0000-000000000092", variant: "default" },
-      { id: 2, title: "Unresolved target", footer: undefined, variant: "warning" },
+      {
+        id: 1,
+        title: "Credential management",
+        footer: "?manifest=0000000-0000-0000-0000-000000000092",
+        variant: "default",
+        hubRelationId: "rel-1",
+        topologyManifestId: "source-manifest",
+        relatedHubId: "hub-1",
+      },
+      {
+        id: 2,
+        title: "Unresolved target",
+        footer: undefined,
+        variant: "warning",
+        hubRelationId: "rel-2",
+        topologyManifestId: "source-manifest",
+        relatedHubId: "hub-2",
+      },
     ]);
   }
 });

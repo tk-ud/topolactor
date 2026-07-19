@@ -863,7 +863,8 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         // and a hub with one active + any number of deprecated manifests must still resolve to
         // the single active one (not become ambiguous because of deprecated siblings).
         cmd.CommandText =
-            "SELECT hr.related_hub_id::text, " +
+            "SELECT hr.hub_relation_id::text, " +
+            "       hr.related_hub_id::text, " +
             "       COALESCE(rr.name, hr.related_hub_id::text), " +
             "       hr.sequence_position, " +
             "       (SELECT MIN(tm2.topology_manifest_id::text) " +
@@ -878,12 +879,13 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             "ORDER BY hr.sequence_position";
         cmd.Parameters.AddWithValue("mid", topologyManifestId);
 
+        var sourceTopologyManifestId = topologyManifestId.ToString();
         var items = new List<HubNavigationSequenceItemDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
             items.Add(new HubNavigationSequenceItemDto(
-                reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3)));
+                reader.GetString(0), sourceTopologyManifestId, reader.GetString(1), reader.GetString(2), reader.GetInt32(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4)));
         return items;
     }
 
