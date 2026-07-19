@@ -677,6 +677,12 @@ function cardListFactory(spec: RuntimeComponentSpec): RenderResult {
     ok: true,
     node: h(CardList, {
       items: items.map((it) => ({
+        // Spread first: preserves any extra passthrough fields a propBinding transform
+        // attached to the resolved item (e.g. navigationLinksToCardItems' hubRelationId /
+        // topologyManifestId / relatedHubId, admin-normal-surface-projection-seed-ssot.yaml
+        // selected_link_payload_delivery) so they survive into the rendered CardList item and
+        // the onSelect emission below, not just into propBindingResolver's own output.
+        ...it,
         id: it.id as string | number | undefined,
         title: it.title as string | undefined,
         body: it.body as string | undefined,

@@ -467,12 +467,18 @@ admin_normal_surface_projection_seed_ssot:
               frontend HubNavigationSequenceItem -> frontend/runtime/projectionEntry.ts
               resolveHubNavigationLinks (ResolvedHubNavigationLink now carries hubRelationId /
               topologyManifestId / relatedHubId on every item, resolvable or not) ->
-              propBindingResolver.ts navigationLinksToCardItems (carried through onto the rendered
-              CardListItem, even though CardList.tsx itself does not display them). All three
-              identity fields are available at the point a link is rendered/selected; no gap
-              remains. ProjectionShell's own <a href> nav bar continues to use only the resolved
-              href for actual navigation -- the fuller identity is available for any future
-              onSelect wiring on this seed's card_list without a second resolution path.
+              propBindingResolver.ts navigationLinksToCardItems -> frontend/runtime/
+              runtimeComponentFactory.ts cardListFactory, which spreads the source item before
+              overwriting the normalized id/title/body/footer/variant fields so the three identity
+              fields survive onto the actual <CardList> items prop and the onSelect emission
+              payload, not just propBindingResolver's own intermediate output (this final hop was
+              audited and found stripping them via an id/title/body/footer/variant-only
+              reconstruction -- fixed; see frontend/tests/cardListFactoryIdentityPassthrough.test.tsx
+              for the regression proof). All three identity fields are available at the point a
+              link is actually rendered/selected; no gap remains. ProjectionShell's own <a href>
+              nav bar continues to use only the resolved href for actual navigation -- the fuller
+              identity is available for any future onSelect wiring on this seed's card_list without
+              a second resolution path.
             canonical_resolution_rule_ref: docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract.resolution_rule
             target_manifest_resolution: related_hub_id resolves only when exactly one active hubs.topology_manifests row exists for that hub; zero or multiple active rows fail-close to no target.
             runtime_fail_close_negative_cases:
