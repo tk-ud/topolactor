@@ -3289,6 +3289,191 @@ ON CONFLICT (manifest_id) DO NOTHING;
 -- docs/design/admin-console-workflow-ssot.yaml
 -- admin_hub_relation_navigation_contract for the full authoring contract.
 -- =============================================================================
+
+-- =============================================================================
+-- admin-surface-topology-seed-conversion: admin-dashboard subBundle seed
+-- (admin landing / navigation surface -- projection-side hub_relation link
+-- navigation only, per docs/design/admin-normal-surface-projection-seed-ssot.yaml
+-- surface_axes.admin.surfaces.dashboard: display_manifest_scoped_hub_relation_links /
+-- use_selected_link_as_projection_change_trigger; capability_requirements
+-- mutation: none_in_this_surface).
+--
+-- This is NOT the fake "/admin landing MANIFEST created solely to host an
+-- outbound hub_relations row" pattern the owner explicitly prohibited (PR
+-- #584 review; see the removed ad100/ad101/ad102 block this replaces) --
+-- this manifest carries a real ui_projection (the component_tree below), and
+-- it still owns ZERO hubs.hub_relations rows of its own: authoring a
+-- specific relation is an ordinary admin/runtime action performed through
+-- the existing /admin/manifests surface (hub_navigation:create, already
+-- seeded and proven end to end in
+-- CredentialManagementHubRelationUiProjectionLiveDbTests), never seed
+-- content this file should carry.
+--
+-- component_tree follows admin-normal-surface-projection-seed-ssot.yaml
+-- surface_axes.admin.surfaces.dashboard.seed_contract.component_tree exactly:
+-- hub_relation_search (search_input.alias) + hub_relation_link_list
+-- (card_list.primitive -- table.primitive substituted per owner instruction:
+-- not yet registered in topology.ui_component_registry, and a fixed-column
+-- table resists responsive reflow; card_list is already registered/active and
+-- reused by the hub_search.readonly.v1 preset, db/hub_search_preset_seed.sql)
+-- + target_projection_shell (panel.alias, the root shell).
+--
+-- Authored directly as ui_topology_tensor.layout_patch_json.nodes[] (the
+-- UI-Builder-native "tensor-only" path -- componentKey resolves componentId/
+-- componentKind server-side via topology.ui_component_registry,
+-- NpgsqlTopologyRepository.EnrichCatalogComponentIdsFromRegistryAsync /
+-- LoadComponentKindsByIdsAsync -- no translator/records[] involved, since this
+-- surface's component_tree is a real canvas composition, not a
+-- Category/Section/Field topology_ui_seed_record tree). Reached via the same
+-- admin_runtime structural-render fallback path (ADMIN_OPERATION_NOT_FOUND ->
+-- structural success) manifest 092 already proves, so no new backend C# code
+-- is required for reachability.
+--
+-- hub_relation_link_list.propBindings.items binds to emission.navigationSequence
+-- (frontend/runtime/propBindingResolver.ts EMISSION_NAVIGATION_SEQUENCE_SOURCE,
+-- extended in this Bundle) via the navigationLinksToCardItems transform --
+-- ManifestDispatcher.EnrichWithHubNavigationAsync already populates that field
+-- for any successful dispatch, so the card list shows real hub_relations rows
+-- (authored later via /admin/manifests) with no additional wiring. This never
+-- reads emission.recommendNavigationProjection (SQL Attention /
+-- attention_recommendation_tab stays out of reach -- docs/framework-core.yaml
+-- runtime_route_attention_boundary).
+--
+-- hub_relation_search is seeded per the SSOT component_tree but is not yet
+-- wired to filter the link list (known_gap: no backend/frontend filter
+-- wiring for hub_relations search exists today) -- an honest inert control,
+-- not fabricated filtering behavior. Real click-to-navigate for the links
+-- already happens for free via ProjectionShell's own automatic hub
+-- navigation nav bar (resolveHubNavigationLinks) rendered alongside this
+-- card list, so no onSelect wiring was added here either.
+-- =============================================================================
+
+-- Hub owning the admin-dashboard-navigation topology_manifest. This hub is
+-- never a hub_relations target/source by itself -- it exists only as the
+-- required FK owner of the topology_manifest below.
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ad201', '{"description":"admin_dashboard_navigation","system":true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+-- Runtime manifest row (manifest table): real ui_projection, no
+-- dispatcher_mapping target axis of its own -- reached the same way manifest
+-- 092 is reached, via explicit payload.target_ref = manifest:<id>:projection_entry
+-- (frontend/routes/admin/index.tsx redirects bare /admin to
+-- /admin?manifest=<this id>, the same ?manifest= entry-selection path
+-- frontend/runtime/projectionEntry.ts already supports for any manifest).
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ad200',
+    NULL,
+    ARRAY[
+        '{"type":"hub_grouping","manifestKey":"admin.dashboard.navigation.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+        '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000ad203"],"layoutId":"00000000-0000-0000-0000-0000000ad204","wiringId":"00000000-0000-0000-0000-0000000ad205","tensorId":"00000000-0000-0000-0000-0000000ad206"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+-- hubs.topology_manifests projection for the admin-dashboard-navigation
+-- manifest. topology_manifest_id = manifest_id, same convention as manifest 092.
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ad201'::uuid,
+    'admin.dashboard.navigation.projection',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ad200'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+-- admin-dashboard-navigation UI persistence (package/layout/wiring/tensor).
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ad202',
+    'admin.dashboard.navigation.projection.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey":"admin.dashboard.navigation.projection","surface":"admin.dashboard.navigation.projection","categoryKeys":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+-- Manifest-facing package authority (manifest.topology[ui_projection].packageIds
+-- points here, not at ui_component_package above -- same split as manifest 092).
+-- No component+design pairs were authored via UI Component Builder for this
+-- surface (the tensor below carries componentKey/componentId directly), so
+-- layout is honestly empty.
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ad203',
+    'admin.dashboard.navigation.projection.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+-- Empty records[] (NoRecords): this surface's component tree is a real
+-- UI-Builder-native canvas composition, authored directly on the tensor
+-- below, not a Category/Section/Field topology_ui_seed_record tree.
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ad204',
+    'admin.dashboard.navigation.projection.layout',
+    'ui_builder_canvas',
+    '{"records":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+-- No wiring actions authored -- no click/select event wiring was added (see
+-- header comment: real click-to-navigate already happens through
+-- ProjectionShell's own automatic hub navigation nav bar).
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ad205',
+    'admin.dashboard.navigation.projection.wiring',
+    'read_only_no_actions',
+    'manifest',
+    'admin.dashboard.navigation.projection',
+    '{"actions":[]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+-- Real UI-Builder-native tensor nodes: target_projection_shell (panel.alias,
+-- root) containing hub_relation_search (search_input.alias, inert -- see
+-- header comment) and hub_relation_link_list (card_list.primitive, items
+-- bound to emission.navigationSequence via navigationLinksToCardItems).
+-- componentKey resolves componentId/componentKind server-side from
+-- topology.ui_component_registry; no hardcoded componentId here.
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ad206',
+    'admin#dashboard_navigation',
+    '00000000-0000-0000-0000-0000000ad202',
+    '00000000-0000-0000-0000-0000000ad204',
+    '00000000-0000-0000-0000-0000000ad205',
+    'default',
+    0,
+    '{"nodes":[{"nodeId":"target_projection_shell","nodeKind":"catalog_component","componentKey":"panel.alias","parentNodeId":null,"slotKey":"root","orderIndex":0,"propsJson":"{\"title\": \"画面間ナビゲーション\"}"},{"nodeId":"hub_relation_search","nodeKind":"catalog_component","componentKey":"search_input.alias","parentNodeId":"target_projection_shell","slotKey":"controls","orderIndex":1,"propsJson":"{\"label\": \"ナビ検索\", \"placeholder\": \"遷移先を検索\"}"},{"nodeId":"hub_relation_link_list","nodeKind":"catalog_component","componentKey":"card_list.primitive","parentNodeId":"target_projection_shell","slotKey":"results","orderIndex":2,"propsJson":"{\"emptyMessage\": \"表示できる遷移先がまだありません\"}","propBindings":{"items":{"source":"emission.navigationSequence","transform":"navigationLinksToCardItems"}}}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
 -- Representative existing cron absorption: log retention.
 -- The former RetentionScheduler BackgroundService is absorbed into the scheduler
 -- job manifest substrate. The retention domain body stays in LogRetentionRuntime

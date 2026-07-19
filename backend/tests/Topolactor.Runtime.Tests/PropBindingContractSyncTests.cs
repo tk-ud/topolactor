@@ -51,6 +51,7 @@ public class PropBindingContractSyncTests
         {
             "activeColumnsToTableColumns",
             "rowsToOptions",
+            "navigationLinksToCardItems",
         };
 
     // ── Capability table sync ────────────────────────────────────────────────

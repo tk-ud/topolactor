@@ -455,7 +455,28 @@ admin_normal_surface_projection_seed_ssot:
               - node_key: hub_relation_search
                 component_key: search_input.alias
               - node_key: hub_relation_link_list
-                component_key: table.primitive
+                component_key: card_list.primitive
+                component_key_rationale: >-
+                  table.primitive is not registered in topology.ui_component_registry (bucket-only
+                  candidate; see docs/design/react-schema-topology-seed-translator-ssot.yaml
+                  ui_catalog_boundary_contract) and a fixed-column table layout resists responsive
+                  reflow. card_list.primitive is already registered and active
+                  (topology.ui_component_registry, reused by the hub_search.readonly.v1 preset,
+                  db/hub_search_preset_seed.sql), and its cards reflow via CSS grid rather than
+                  fixed table columns.
+                prop_bindings:
+                  - target_prop: items
+                    source: emission.navigationSequence
+                    transform: navigationLinksToCardItems
+                    source_ref: frontend/runtime/propBindingResolver.ts EMISSION_NAVIGATION_SEQUENCE_SOURCE
+                    boundary: >-
+                      emission.navigationSequence is the canonical_route_tab hub_relations lane
+                      (docs/framework-core.yaml runtime_route_attention_boundary) — the same data
+                      ProjectionShell's own automatic nav bar already renders
+                      (resolveHubNavigationLinks). Never emission.recommendNavigationProjection
+                      (SQL Attention / attention_recommendation_tab); that stays unreachable from
+                      propBindings so attention/recommendation scoring never blends into this
+                      projected fixed-route list.
               - node_key: target_projection_shell
                 component_key: panel.alias
             event_bindings:

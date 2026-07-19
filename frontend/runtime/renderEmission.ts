@@ -965,6 +965,7 @@ export function renderEmission(
             node.propBindings,
             node.componentKind,
             emissionData,
+            emission.navigationSequence,
           );
           if (!bindingResult.ok) {
             return {

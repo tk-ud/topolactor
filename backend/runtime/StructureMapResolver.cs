@@ -62,6 +62,13 @@ public class StructureMapResolver
             ["calc_topology/hub_statistics_panel"] = new HashSet<string>(StringComparer.Ordinal) { "data" },
         };
 
+    // Canonical hub_relations navigation sequence propBinding source — the ONLY recognized
+    // source outside the "emission.data"/"emission.data." family. Never
+    // emission.recommendNavigationProjection (SQL Attention / attention_recommendation_tab
+    // stays out of reach of propBindings — docs/framework-core.yaml runtime_route_attention_boundary).
+    // Must stay in sync with frontend/runtime/propBindingResolver.ts EMISSION_NAVIGATION_SEQUENCE_SOURCE.
+    internal const string EmissionNavigationSequenceSource = "emission.navigationSequence";
+
     // SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.propBindings.transform.allowlist
     // Must stay in sync with frontend/runtime/propBindingResolver.ts ALLOWED_PROP_BINDING_TRANSFORMS.
     internal static readonly IReadOnlySet<string> AllowedPropBindingTransforms =
@@ -69,6 +76,7 @@ public class StructureMapResolver
         {
             "activeColumnsToTableColumns",
             "rowsToOptions",
+            "navigationLinksToCardItems",
         };
 
     private readonly TopologyRepository _topologyRepository;
@@ -410,7 +418,8 @@ public class StructureMapResolver
                     ];
                 }
 
-                // source: required, must be "emission.data" or start with "emission.data."
+                // source: required, must be "emission.data", start with "emission.data.", or be
+                // exactly EmissionNavigationSequenceSource.
                 if (!bindingProp.Value.TryGetProperty("source", out var sourceProp) ||
                     sourceProp.ValueKind != JsonValueKind.String)
                 {
@@ -422,13 +431,15 @@ public class StructureMapResolver
                     ];
                 }
                 var source = sourceProp.GetString()!;
-                if (!(source == "emission.data" || source.StartsWith("emission.data.", StringComparison.Ordinal)))
+                if (!(source == "emission.data" ||
+                      source.StartsWith("emission.data.", StringComparison.Ordinal) ||
+                      source == EmissionNavigationSequenceSource))
                 {
                     return
                     [
                         new ValidationError(
                             "LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE",
-                            $"Node '{node.NodeId}', prop '{propName}': source \"{source}\" must be \"emission.data\" or start with \"emission.data.\".")
+                            $"Node '{node.NodeId}', prop '{propName}': source \"{source}\" must be \"emission.data\", start with \"emission.data.\", or be \"{EmissionNavigationSequenceSource}\".")
                     ];
                 }
 
