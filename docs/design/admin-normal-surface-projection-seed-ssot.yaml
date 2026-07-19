@@ -1,6 +1,6 @@
 admin_normal_surface_projection_seed_ssot:
   name: admin_normal_surface_projection_seed
-  version: 0.1.0
+  version: 0.2.0
   status: owning_ssot_design_contract
   canonical_path: docs/design/admin-normal-surface-projection-seed-ssot.yaml
   purpose:
@@ -464,6 +464,67 @@ admin_normal_surface_projection_seed_ssot:
                 trigger: projection_change
                 fail_close_on_ambiguous_target: true
             loading_empty_error_projection: [loading_links, empty_links, target_manifest_resolution_error]
+          existing_substrate_fulfillment:
+            status: implemented_by_existing_substrate
+            note: >-
+              admin-surface-topology-seed-conversion round 10 (PR #594 review, owner decision): records
+              that this surface's operations/capability_requirements intent is fulfilled by existing
+              runtime substrate, so no new preset/package/physical seed/manifest adoption/wiring/runtime
+              lane is required by this Bundle to close this capability. This is a fulfillment-mapping
+              record, not a claim that seed_contract.component_tree above's specific widget shape is
+              physically instantiated anywhere — see seed_contract_component_shape_boundary below.
+            navigation:
+              capability: operations.navigate / capability_requirements.navigation
+              status: implemented_by_existing_substrate
+              existing_authority: >-
+                docs/design/runtime-orchestration-ssot.yaml
+                dispatcher_contract.hub_navigation_resolution;
+                docs/design/admin-console-workflow-ssot.yaml admin_hub_relation_navigation_contract
+              existing_lane: >-
+                generic manifest-scoped hub navigation
+                (frontend/islands/ProjectionShell.tsx resolveHubNavigationLinks;
+                backend/runtime/HubNavigationResolver.cs / ManifestDispatcher.cs)
+              fulfillment: >-
+                explicit relation source (topology_manifest_id), related hub resolution, exactly one
+                active target manifest required to resolve (zero/multiple active targets fail-close to
+                no target), and click-through navigation to the resolved target manifest -- proven
+                end to end by
+                dispatcher_contract.hub_navigation_resolution.test_proof_contract and
+                backend/tests/Topolactor.Integration.Tests/CredentialManagementHubRelationUiProjectionLiveDbTests.cs.
+              bundle_scope_effect: this Bundle does not add a per-surface navigation runtime for admin-dashboard.
+            search_filter_ranking:
+              capability: capability_requirements.search / capability_requirements.filter
+              status: implemented_by_existing_substrate
+              existing_authority: docs/design/sql-attention-logs-ssot.yaml
+              existing_lane: >-
+                SQL Attention Projection (frontend/components/SqlAttentionProjectionBlock.tsx +
+                SqlAttentionProjectionPanel.tsx via RecommendNavigationIsland.tsx;
+                backend/runtime/SqlAttentionTopologyProjectionRuntime.cs / SqlAttentionContracts.cs)
+              fulfillment: >-
+                manifest-scoped hubs.hub_relations exploration / filtering (active_condition) /
+                scoring / ranking (AttentionScore, ScoreBand, HitRank) / topK selection / projection,
+                per sql-attention-logs-ssot.yaml physical_schema_contract.neighbor_score_policy and
+                sql_attention_target.hubs_space_hierarchy. This is SQL Attention's own
+                exploration/scoring/ranking mechanism serving the search/filter/ranking INTENT of this
+                capability -- a different mechanism shape than a literal label-text search input or a
+                literal status/source_manifest/sequence_position UI filter would be, and it does not
+                itself provide click-through navigation (navigation is fulfilled separately by the
+                navigation entry above, not by this lane).
+              bundle_scope_effect: this Bundle does not add a new search/filter/ranking implementation for admin-dashboard.
+            prohibited_scope_reopening:
+              - reopening_navigation_search_filter_or_ranking_as_unimplemented_or_partial
+              - reusing_manifest_092_as_an_admin_dashboard_carrier
+              - adding_a_client_side_filter_duplicating_sql_attention_projection
+              - adding_a_new_backend_search_action_for_this_capability
+              - adding_a_parallel_projection_lane_for_this_capability
+              - adding_new_preset_package_physical_seed_manifest_adoption_or_wiring_solely_to_satisfy_this_capability
+            seed_contract_component_shape_boundary: >-
+              seed_contract.component_tree above is a reusable hub-relation-navigation widget PATTERN
+              reference (review/regression-proof artifact, round 1-6 of PR #594), not unimplemented
+              production scope. Its continued presence in this SSOT does not by itself require new
+              preset/package/physical seed/manifest adoption/wiring/runtime lane -- the capabilities it
+              structurally represents are already fulfilled by the different-shaped existing substrate
+              recorded above.
     normal:
       axis_kind: projection_surface_axis
       not_role_or_rbac: true
