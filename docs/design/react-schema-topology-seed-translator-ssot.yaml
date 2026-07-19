@@ -1,6 +1,6 @@
 react_schema_topology_seed_translator_ssot:
   name: topolactor_react_schema_topology_seed_translator
-  version: 1.3.0
+  version: 1.1.0
   status: ssot_design_document
   canonical_path: docs/design/react-schema-topology-seed-translator-ssot.yaml
 
@@ -111,26 +111,8 @@ react_schema_topology_seed_translator_ssot:
         type: string
         rule: >-
           must equal an existing declared_seed_surface_catalog[].seed_surface_key, or be a new
-          surface key explicitly paired with at least one known_gap_ref in knownGapRefs whose
-          classification is one of undeclared_surface_qualifying_classifications below
-        undeclared_surface_qualifying_classifications:
-          - ssot_ambiguity_gap
-          - component_catalog_gap
-        undeclared_surface_qualifying_classifications_note: >-
-          admin-surface-topology-seed-conversion round 7 (PR #594 review): promoted from an
-          inline pair of names in this rule's prose (and a Python-only constant in
-          react_schema_topology_seed_translator.py) to this structured field, so
-          validate_input_envelope reads the qualifying set from this SSOT rather than
-          hardcoding it, and check_react_schema_topology_seed_translator.py can prove this
-          field is itself a SUBSET of the parent ui-builder-seed-first-gap-discovery-ssot.yaml
-          canonical_gap_types keys (both members already are: a new/undeclared surface is
-          explained either by "the seed schema/authoring vocabulary itself is ambiguous"
-          (ssot_ambiguity_gap) or "the required catalog entry does not exist yet"
-          (component_catalog_gap) — the other four canonical_gap_types describe gaps in
-          prop binding, event payload resolution, runtime dispatch/projection, or authoring
-          schema vocabulary, none of which are about the surface identity itself being
-          undeclared, so they do not qualify here even though they are valid classifications
-          elsewhere).
+          surface key explicitly paired with at least one known_gap_ref of classification
+          ssot_ambiguity_gap or component_catalog_gap in knownGapRefs
       mode:
         type: enum
         values: [generate_react_schema, generate_topology_ui_seed, round_trip_check]
@@ -243,22 +225,10 @@ react_schema_topology_seed_translator_ssot:
         meaning: >-
           not a standalone node — an attached tag on any element that could not be resolved to a
           catalog identity, a recognized payload_from/prop_binding pattern, a style token, or a
-          wiring lane. classification must be one of allowed_classifications below, which is kept
-          in sync with (never a fork of) canonical_gap_types in
-          docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml — see
-          admin-surface-topology-seed-conversion round 5 (PR #594): a prior revision of this
-          document hardcoded this list as untracked prose, allowing it to drift silently out of
-          sync with the parent SSOT when a new canonical_gap_type was added there
-          (authoring_schema_vocabulary_gap); .agent/scripts/check_react_schema_topology_seed_translator.py
-          now cross-checks this list against the parent's canonical_gap_types keys so a future
-          drift fails a check instead of silently passing.
-        allowed_classifications:
-          - component_catalog_gap
-          - prop_binding_gap
-          - event_payload_resolver_gap
-          - runtime_dispatch_or_projection_gap
-          - ssot_ambiguity_gap
-          - authoring_schema_vocabulary_gap
+          wiring lane. classification must be one of the canonical_gap_types in
+          docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml (component_catalog_gap,
+          prop_binding_gap, event_payload_resolver_gap, runtime_dispatch_or_projection_gap,
+          ssot_ambiguity_gap)
         maps_to_react_node: null
     rules:
       - every_recognized_unit_instance_carries_sourceYamlRefs

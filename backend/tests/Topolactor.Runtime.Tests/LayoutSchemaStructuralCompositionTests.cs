@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Topolactor.Repository;
 using Xunit;
 
@@ -824,156 +826,43 @@ public class LayoutSchemaStructuralCompositionTests
             componentIdToKind: new Dictionary<string, string>());
     }
 
-    // ------------------------------------------------------------------------------------------
-    // admin-surface-topology-seed-conversion, admin-dashboard subBundle: proves the
-    // docs/design/admin-normal-surface-projection-seed-ssot.yaml
-    // surface_axes.admin.surfaces.dashboard.seed_contract component_tree
-    // (hub_relation_search/hub_relation_link_list/target_projection_shell) composes end to end
-    // through the REAL LayoutSchemaTensorComposer, not a hand-authored LayoutNode[] literal.
-    // AdminDashboardHubRelationNavigationRecordsJson is the exact, byte-for-byte
-    // topologyUiSeedFlatRecords wrapper emitted by
-    // .agent/tools/react-schema-topology-seed-translator generate-topology-seed against
-    // .agent/tests/fixtures/react-schema-topology-seed-translator/
-    // admin-dashboard-hub-relation-navigation.topology-seed.input.json (regenerable; see that
-    // fixture pair and .agent/tools/logs/generate.log for the recorded regeneration trace). This
-    // is currently a review/regression-proof artifact only -- not yet written to db/seed_empty.sql
-    // or adopted as live manifest.topology content on any real manifest.
-    //
-    // round 7 (PR #594 review) correction: an earlier revision of this comment stated this
-    // candidate "never" gets adopted BECAUSE /admin itself cannot be fabricated a
-    // hubs.hub/hubs.topology_manifests row (docs/design/admin-console-workflow-ssot.yaml
-    // page_responsibility.admin_index / admin_hub_relation_navigation_contract.prohibited). That
-    // conflated two separate facts: (a) /admin itself will never get a fabricated manifest -- true,
-    // permanent, and unrelated to this candidate's own adoptability, since this seed_contract
-    // (docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces
-    // .dashboard, axis_kind: projection_surface_axis) describes a reusable hub-relation-navigation
-    // widget pattern, not content bound to /admin's own route; and (b) whether this candidate could
-    // ever be adopted onto a DIFFERENT, already-existing, real manifest -- a genuinely open question
-    // round 7 investigated for the first time (see .agent/tasks/todo.md admin-dashboard round 7 監査).
-    //
-    // round 8 (PR #594 review) correction of round 7: round 7's answer to (b) rested on two claims
-    // that were wrong, not settled facts -- manifest 092 (credential-management) is NOT a legitimate
-    // generic adoption target for this candidate (it is credential-management's own
-    // hubs.topology_manifests row, scoped to that subBundle's own topology, not a reusable carrier
-    // for admin-dashboard content); and "capability_requirements.search/filter has no backing
-    // runtime query path anywhere" was false -- a substantial, pre-existing "SQL Attention" system
-    // (docs/design/sql-attention-logs-ssot.yaml) already explores/scores/ranks hubs.hub_relations
-    // per manifest (active_condition, score, sequence, topK, neighbor score, recent window,
-    // fail-close on NoHubRelations) and projects the result via
-    // frontend/components/SqlAttentionProjectionBlock.tsx and
-    // frontend/components/SqlAttentionProjectionPanel.tsx, mounted through
-    // frontend/components/RecommendNavigationIsland.tsx inside this same
-    // frontend/islands/ProjectionShell.tsx already cited above, wired unconditionally on every
-    // dispatch by backend/runtime/RuntimeExecutor.cs Step 9
-    // (RecommendNavigationProjectionSpec.FromRecommendation) and backed by
-    // backend/schema/SqlAttentionContracts.cs. Both errors trace to round 7 simply not reading far
-    // enough through ProjectionShell.tsx / not searching for "SqlAttention", not to any mechanism
-    // this session could not have caught on its own -- round 7 correctly stopped short of touching
-    // shared runtime code or live manifest 092 data on the strength of these wrong conclusions, and
-    // that non-implementation remains the right outcome and is not being reverted here.
-    //
-    // SQL Attention Projection is itself explicitly framed, by its own code comments and by
-    // docs/design/runtime-orchestration-ssot.yaml's sql_attention_relation_recommend_candidate_only
-    // / sql_attention_or_recommendation_must_not_overwrite_route_state_automatically, as read-only
-    // recommendation guidance, not an authoritative search-and-navigate widget -- so it is not a
-    // literal substitute for this seed_contract's search_input.alias / table.primitive / panel.alias
-    // shape. But combined with the plain generic hub-navigation <nav> click-through path (already
-    // established rounds 2-3 below) and admin-dashboard subBundle's own explicit scope boundary
-    // against "business projection" and new route-registry authority (.agent/tasks/todo.md Bundle
-    // definition, admin-dashboard subBundle scope), the functional intent behind
-    // capability_requirements.search/filter already has real, live runtime coverage today, on every
-    // manifest with scored hub_relations, independent of this candidate ever being adopted anywhere.
-    // This scenario therefore remains a test-only, non-seed literal-JSON scenario (the same pattern
-    // already used by scenario_table_workflow_step.json etc. above) -- not because a client-side
-    // filter still needs adding to shared runtime and not because manifest 092 adoption is pending
-    // confirmation (both retracted above), but because no physical adoption target or residual
-    // capability gap has actually been identified for it; see .agent/tasks/todo.md admin-dashboard
-    // round 8 監査 for the full re-judgment.
-    //
-    // No Action/eventBinding node is included here (round 2 correction, PR #594 review): an
-    // earlier revision authored a "select_hub_relation_link" Action wired via
-    // internal_instance_wiring/localStateMutation to a "ui-local:hub_relation_link_list.selected_row"
-    // state slot. Nothing in the real runtime ever reads that slot, so the wiring did not complete
-    // any navigation or rendering path -- it was inert, and per
-    // docs/design/pipeline-continuity-ssot.yaml test_tier_policy.tiers.tier_2_scenario_harness
-    // (required_when includes ui_operation_wiring_added), authoring it would have required a Tier 2
-    // scenario proof asserting a real final-state consumer, which does not exist for this slot. The
-    // real hub_relation -> target manifest navigation path is already fully implemented as generic,
-    // manifest-agnostic runtime substrate (frontend/islands/ProjectionShell.tsx renders
-    // resolveHubNavigationLinks(emission.navigationSequence) as plain "?manifest=<id>" anchors,
-    // with zero authored wiring per surface) -- so this schema keeps hub_relation_search /
-    // hub_relation_link_list / target_projection_shell as pure structural/display placeholders
-    // only, and does not re-author navigation behavior that already exists.
-    //
-    // round 3 (PR #594 review): docs/design/runtime-orchestration-ssot.yaml
-    // dispatcher_contract.hub_navigation_resolution.test_proof_contract literally names this exact
-    // path ("frontend round-trip: NavigationSequence[].TargetManifestId -> resolveHubNavigationLinks
-    // -> ?manifest=<uuid> href -> parseProjectionEntrySelection -> resolveProjectionEntryAxes ->
-    // payload.target_ref = manifest:<uuid>:projection_entry") as the canonical completion proof for
-    // hub relation navigation, with no authored Action anywhere in that chain -- confirming round 2's
-    // removal independently, from the runtime SSOT side rather than only the runtime code side. Also:
-    // the SSOT's admin.surfaces.dashboard.seed_contract.event_bindings[0] entry (event_key:
-    // select_hub_relation_link, trigger: "projection_change") uses a trigger value that is not one of
-    // wiring_lane_contract.event_binding_shape.field_rules.trigger's allowed UI trigger values
-    // (click/change/submit/item.click/mount/custom:<name>) -- "projection_change" names a
-    // projection-level effect category, not a DOM event to author as a react_schema Action node. The
-    // topology_seed_schema_contract.minimum_required_fields.hub_relation_navigation_binding field
-    // shape (source_surface/relation_source/selected_link_payload/target_manifest_resolution/
-    // fail_close_conditions) is the schema-level home for this concept, and it has no corresponding
-    // entry in react_schema_contract.allowed_node_kinds -- a real authoring-vocabulary gap (see
-    // docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml canonical_gap_types
-    // .authoring_schema_vocabulary_gap, added round 4 as the parent-taxonomy-correct classification,
-    // superseding round 3's runtime_dispatch_or_projection_gap label -- dispatch/routing/projection
-    // already fully consume this concept via the resolution_chain above; only the authoring schema
-    // vocabulary itself lacks an expression for it), not an authoring ambiguity, and out of this
-    // Bundle's scope to fix since translator extension is not this Bundle's primary work (see the
-    // corrected knownGapRefs classification in the checked-in translator input fixture).
-    //
-    // round 4 (PR #594 review): hub_relation_link_list uses "table" display / table.primitive
-    // (data_display/table), not card_list.primitive. Round 2/3 reasoning that
-    // registrationRequired:true on table.primitive's db/seed_empty.sql components_bucket entry
-    // implies it "requires live UI Builder canvas-drop authoring, cannot be bootstrap-registered"
-    // was DISPROVEN: button.primitive, input.primitive, and card_list.primitive -- all three already
-    // registered as active topology.ui_component_registry rows via
-    // db/ui_component_registry_preset_catalog_bootstrap.sql -- carry the exact same
-    // registrationRequired:true flag, proving that flag does not block bootstrap-SQL registration.
-    // table.primitive now has its own bootstrap registry row (component_id
-    // 00000000-0000-0000-0001-00000000001f) added the same way, connecting it through the real
-    // catalog/registry/composer/proof chain rather than substituting card_list.primitive's render
-    // success as table.primitive's proof. See docs/design/react-schema-topology-seed-translator-ssot.yaml
-    // for the translator side of this reversal (display=table in the checked-in input fixture).
-    private const string AdminDashboardHubRelationNavigationRecordsJson = """
-    {"records": [{"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": null, "record": {"recordType": "topology_ui_category", "key": "hub_relation_navigation", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0]", "knownGapRefs": [], "categoryKey": "hub_relation_navigation", "sectionKeys": ["hub_relation_navigation_section"]}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation", "record": {"recordType": "topology_ui_section", "key": "hub_relation_navigation_section", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0].children[0]", "knownGapRefs": [], "sectionKey": "hub_relation_navigation_section", "sectionKind": "readonly_boundary", "childKeys": ["hub_relation_link_list", "hub_relation_navigation_form", "target_manifest_resolution_validation"]}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_table", "key": "hub_relation_link_list", "label": "Hub relation link list", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[0]", "knownGapRefs": [], "tableKey": "hub_relation_link_list", "source": "hub_relations", "display": "table", "columnKeys": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_form", "key": "hub_relation_navigation_form", "label": "Hub relation navigation", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract"], "sourceReactPath": "$.root.children[0].children[0].children[1]", "knownGapRefs": [], "authorityMarker": "draft_or_projection_only", "formKey": "hub_relation_navigation_form", "target": "hub_relations", "mode": "navigate", "fieldKeys": ["hub_relation_search", "target_projection_shell"], "actionKeys": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_form", "record": {"recordType": "topology_ui_field", "key": "hub_relation_search", "label": "Hub relation search", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[1].children[0]", "knownGapRefs": [], "fieldKey": "hub_relation_search", "control": "form_input/search_input", "required": false, "validationRefs": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_form", "record": {"recordType": "topology_ui_field", "key": "target_projection_shell", "label": "Target projection shell", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.seed_contract.component_tree"], "sourceReactPath": "$.root.children[0].children[0].children[1].children[1]", "knownGapRefs": [], "fieldKey": "target_projection_shell", "control": "disclosure_structure/panel", "required": false, "validationRefs": []}}, {"type": "topology_ui_seed_record", "seedKey": "admin.dashboard.hub_relation_navigation", "parentKey": "hub_relation_navigation_section", "record": {"recordType": "topology_ui_validation", "key": "target_manifest_resolution_validation", "label": "Target manifest resolution", "sourceYamlRefs": ["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.dashboard.hub_relation_navigation_binding"], "sourceReactPath": "$.root.children[0].children[0].children[2]", "knownGapRefs": [], "validationKey": "target_manifest_resolution_validation", "rule": "fail_close_on_zero_or_multiple_active_target_manifest", "severity": "blocking"}}]}
-    """;
-
+    // db/ui_component_registry_preset_catalog_bootstrap.sql -- ui_component_registry.table.primitive row
+    // is an independent registry gap fix (see that file's own comment for the row): table.primitive was
+    // already a registered, runtimeConnected component in topology.components_bucket (db/seed_empty.sql)
+    // and frontend/components/catalog.ts, but had no ui_component_registry row, so it could not be
+    // resolved via that table's fixed-UUID lookup path. This test reads the SQL file directly (same
+    // RepoRoot()-based File.ReadAllText pattern as EmailPortConsumerContractTests.cs) rather than
+    // depending on any composer/translator/fixture pipeline.
     [Fact]
-    public void ParseRecords_AdminDashboardHubRelationNavigation_AllSevenRecordsRecognized()
+    public void UiComponentRegistryBootstrapSql_TablePrimitiveRow_HasExpectedFieldsAndNoDuplicateIdentifiers()
     {
-        var rows = ParseValidRows(AdminDashboardHubRelationNavigationRecordsJson);
-        Assert.Equal(7, rows.Count);
-        Assert.Equal(
-            new[] { "table.primitive", "search_input.alias", "panel.alias" },
-            LayoutSchemaTensorComposer.RequiredComponentKeys(rows));
+        var sql = File.ReadAllText(Path.Combine(RepoRoot(), "db", "ui_component_registry_preset_catalog_bootstrap.sql"));
+
+        Assert.Contains(
+            "('00000000-0000-0000-0001-00000000001f', 'table.primitive', 'data_display/table', 'frontend/components/Table.tsx', 'active')",
+            sql);
+
+        var rowMatches = Regex.Matches(
+            sql,
+            @"\('(?<id>[0-9a-fA-F-]{36})',\s*'(?<key>[^']+)',\s*'[^']+',\s*'[^']+',\s*'[^']+'\)");
+        Assert.True(rowMatches.Count > 0, "expected at least one ui_component_registry VALUES row to match");
+
+        var ids = rowMatches.Select(m => m.Groups["id"].Value).ToList();
+        var keys = rowMatches.Select(m => m.Groups["key"].Value).ToList();
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+        Assert.Equal(keys.Count, keys.Distinct().Count());
+        Assert.Contains("table.primitive", keys);
     }
 
-    [Fact]
-    public async Task ComposeAndMapToLayoutNode_AdminDashboardHubRelationNavigation_MatchesCheckedInFrontendFixture()
+    private static string RepoRoot([CallerFilePath] string sourceFile = "")
     {
-        await AssertComposedLayoutNodesMatchFixtureAsync(
-            "scenario_admin_dashboard_hub_relation_navigation.json",
-            ParseValidRows(AdminDashboardHubRelationNavigationRecordsJson),
-            interactionsBySourceActionKey: new Dictionary<string, string>(),
-            componentKeyToId: new Dictionary<string, string>
-            {
-                ["search_input.alias"] = "00000000-0000-0000-0001-000000000002",
-                ["table.primitive"] = "00000000-0000-0000-0001-00000000001f",
-                ["panel.alias"] = "00000000-0000-0000-0001-000000000003",
-            },
-            componentIdToKind: new Dictionary<string, string>
-            {
-                ["00000000-0000-0000-0001-000000000002"] = "form_input/search_input",
-                ["00000000-0000-0000-0001-00000000001f"] = "data_display/table",
-                ["00000000-0000-0000-0001-000000000003"] = "disclosure_structure/panel",
-            });
+        var fromSource = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "..", "..", ".."));
+        if (File.Exists(Path.Combine(fromSource, "db", "seed_empty.sql"))) return fromSource;
+        var cwd = Directory.GetCurrentDirectory();
+        if (File.Exists(Path.Combine(cwd, "db", "seed_empty.sql"))) return cwd;
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null && !File.Exists(Path.Combine(dir, "db", "seed_empty.sql")))
+            dir = Directory.GetParent(dir)?.FullName;
+        return dir ?? throw new InvalidOperationException("repo root not found");
     }
 }

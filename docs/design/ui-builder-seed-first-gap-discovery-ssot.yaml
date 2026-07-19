@@ -1,6 +1,6 @@
 ui_builder_seed_first_gap_discovery_ssot:
   name: topolactor_ui_builder_seed_first_gap_discovery_ssot
-  version: 0.2.0
+  version: 0.1.0
   status: subordinate_design_document
 
   authority:
@@ -96,38 +96,6 @@ ui_builder_seed_first_gap_discovery_ssot:
         - unclear active topology versus draft canvas state
         - unclear saved-view versus preset seed authority
       required_response: amend SSOT before implementation or prompt issuance
-    authoring_schema_vocabulary_gap:
-      meaning: >-
-        an SSOT-declared seed concept is already fully satisfied end-to-end by canonical runtime
-        substrate (no component_catalog_gap, prop_binding_gap, event_payload_resolver_gap, or
-        runtime_dispatch_or_projection_gap exists — dispatch, manifest routing, and projection
-        consumption all already work through their canonical lane with zero authored wiring), but
-        the React Schema authoring vocabulary itself (react_schema_contract.allowed_node_kinds /
-        wiring_lane_contract) has no node kind or field capable of representing the concept, so a
-        translator input markup author cannot express it directly even though nothing downstream
-        of authoring is actually missing. This is distinct from runtime_dispatch_or_projection_gap,
-        which assumes the payload CAN be formed but dispatch/routing/projection cannot consume it —
-        here dispatch/routing/projection already fully consume the concept; only the authoring-time
-        vocabulary lacks an expression for it.
-      examples:
-        - >-
-          admin-normal-surface-projection-seed-ssot.yaml topology_seed_schema_contract
-          .minimum_required_fields.hub_relation_navigation_binding has no
-          react_schema_contract.allowed_node_kinds equivalent, yet is already fully resolved at
-          runtime by ManifestDispatcher -> NavigationSequence -> resolveHubNavigationLinks ->
-          projectionEntry (see runtime-orchestration-ssot.yaml
-          dispatcher_contract.hub_navigation_resolution.test_proof_contract) with no authored
-          Action/runtimeInteractions required
-        - any other topology_seed_schema_contract.minimum_required_fields entry whose runtime
-          consumption is already canonical but whose authoring-schema field/node-kind equivalent
-          does not yet exist
-      required_response: >-
-        extend react_schema_contract.allowed_node_kinds (or an equivalent authoring-schema
-        construct) through a documented design_change to
-        react-schema-topology-seed-translator-ssot.yaml when authored expression of the concept
-        becomes necessary; until then, record the gap via known_gap_ref pointing at this type and
-        do not fabricate authored wiring, dispatch, or catalog changes to compensate for a purely
-        authoring-vocabulary absence that the runtime substrate does not actually need
 
   seed_contract:
     required_properties:

@@ -51,15 +51,6 @@ public static class LayoutSchemaTensorComposer
 
     // Canonical control -> ui_component_registry.component_key convention for Field leaves.
     // Reuses the existing preset catalog rows; does not invent new registry entries.
-    // form_input/search_input and disclosure_structure/panel were added for the
-    // admin-surface-topology-seed-conversion admin-dashboard subBundle (surface_axes.admin.
-    // surfaces.dashboard.seed_contract.component_tree names search_input.alias/panel.alias
-    // directly): both component keys already carry fixed-UUID topology.ui_component_registry
-    // rows (db/ui_component_registry_preset_catalog_bootstrap.sql, the same rows
-    // ui-builder-preset-ecosystem-ssot.yaml hub_search_preset's own layout_tree already uses for
-    // its hub_search_input/hub_search_results_panel nodes) -- this only fills a resolver-table
-    // gap for two already-registered, already-runtimeConnected components, it does not register
-    // a new component.
     private static readonly IReadOnlyDictionary<string, string> FieldControlToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -67,8 +58,6 @@ public static class LayoutSchemaTensorComposer
             ["form_input/form_field"] = "form_field.template",
             ["form_input/input"] = "input.primitive",
             ["form_input/textarea"] = "textarea.alias",
-            ["form_input/search_input"] = "search_input.alias",
-            ["disclosure_structure/panel"] = "panel.alias",
         };
 
     // Canonical display -> ui_component_registry.component_key convention for Table leaves.
@@ -77,7 +66,6 @@ public static class LayoutSchemaTensorComposer
     private static readonly IReadOnlyDictionary<string, string> TableDisplayToComponentKey =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["table"] = "table.primitive",
             ["card_list"] = "card_list.primitive",
             ["data_grid"] = "data_grid.alias",
             ["list"] = "list.alias",

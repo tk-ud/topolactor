@@ -55,9 +55,11 @@ VALUES
     -- table.primitive: bucketed in db/seed_empty.sql (components_bucket, registrationRequired:true) same as
     -- button.primitive/input.primitive/card_list.primitive above, which already carry registrationRequired:true
     -- yet are registered here via bootstrap SQL rather than live UI Builder canvas-drop authoring. That flag
-    -- does not block bootstrap registration for its siblings, so it does not block it here either. Added for
-    -- admin-dashboard hub_relation_link_list (admin-normal-surface-projection-seed-ssot.yaml
-    -- surface_axes.admin.surfaces.dashboard.seed_contract.component_tree table.primitive/hub_relation_link_list).
+    -- does not block bootstrap registration for its siblings, so it does not block it here either. This was an
+    -- independent registry gap: table.primitive was already a registered, runtimeConnected component in
+    -- topology.components_bucket (db/seed_empty.sql) and frontend/components/catalog.ts, but had no
+    -- corresponding row in topology.ui_component_registry, so it could not be resolved via that table's
+    -- fixed-UUID lookup path. This closes that gap; it is not specific to any one caller of the registry.
     ('00000000-0000-0000-0001-00000000001f', 'table.primitive', 'data_display/table', 'frontend/components/Table.tsx', 'active')
 ON CONFLICT (component_key) DO UPDATE
     SET component_kind = EXCLUDED.component_kind,

@@ -209,43 +209,6 @@ def protected_vocabulary(ssot_root):
     return values if isinstance(values, list) and values else list(DEFAULT_PROTECTED_VOCABULARY)
 
 
-def gap_ref_classification(gap_ref):
-    """Return the classification prefix of a "<classification>:<description>" knownGapRefs entry,
-    or None for a colon-free legacy-format entry (see allowed_gap_classifications' call site for
-    why colon-free entries are a separate, already-established pattern this module tolerates)."""
-    gap_ref_str = str(gap_ref)
-    if ":" not in gap_ref_str:
-        return None
-    return gap_ref_str.split(":", 1)[0]
-
-
-def undeclared_surface_qualifying_classifications(ssot_root):
-    # input_format_contract.required_fields.targetSurface.undeclared_surface_qualifying_classifications
-    # (round 7, PR #594 review: promoted from a Python-only constant to this structured SSOT
-    # field so a future edit to the qualifying set here does not require a manual constant sync
-    # in this module -- see check_react_schema_topology_seed_translator.py's cross-SSOT proof
-    # that this field stays a SUBSET of ui-builder-seed-first-gap-discovery-ssot.yaml
-    # canonical_gap_types). A targetSurface not already in declared_seed_surface_catalog must be
-    # paired with at least one knownGapRefs entry of exactly one of these classifications -- not
-    # any classification, and not a colon-free legacy ref (which was never scoped to explain an
-    # undeclared surface in the first place; see check_react_schema_topology_seed_translator.py
-    # for the declared-surface/seed-evidence-anchored legacy refs this must not retroactively
-    # break).
-    values = dig(ssot_root, "input_format_contract", "required_fields", "targetSurface", "undeclared_surface_qualifying_classifications")
-    return set(values) if isinstance(values, list) and values else set()
-
-
-def allowed_gap_classifications(ssot_root):
-    # text_decomposition_contract.units.known_gap_ref.allowed_classifications is this SSOT's own
-    # local copy of docs/design/ui-builder-seed-first-gap-discovery-ssot.yaml canonical_gap_types'
-    # keys (kept in sync, never a fork -- see known_gap_ref.meaning and
-    # check_react_schema_topology_seed_translator.py's cross-SSOT drift check). Read only from
-    # this translator's own SSOT, per this script's single-SSOT-authority invariant (see module
-    # docstring) -- never cross-reads the parent SSOT file directly.
-    values = dig(ssot_root, "text_decomposition_contract", "units", "known_gap_ref", "allowed_classifications")
-    return values if isinstance(values, list) and values else []
-
-
 # ---------------------------------------------------------------------------
 # translator entry gate connection
 #
@@ -322,52 +285,19 @@ def validate_input_envelope(envelope, ssot_root, vocabulary):
     declared_surfaces = dig(ssot_root, "declared_seed_surface_catalog", "known_declared_surfaces") or []
     declared_keys = {s.get("seed_surface_key") for s in declared_surfaces}
     known_gap_refs = envelope.get("knownGapRefs") or []
-    if target_surface not in declared_keys:
-        qualifying_classifications = undeclared_surface_qualifying_classifications(ssot_root)
-        has_qualifying_gap_ref = any(
-            gap_ref_classification(g) in qualifying_classifications
-            for g in known_gap_refs
-        )
-        if not has_qualifying_gap_ref:
-            errors.append(
-                err(
-                    "TARGET_SURFACE_UNRESOLVED",
-                    "$.targetSurface",
-                    "blocking",
-                    "targetSurface does not resolve to a declared_seed_surface_catalog entry; a "
-                    "new surface key must carry at least one knownGapRefs entry classified "
-                    f"{sorted(qualifying_classifications)} "
-                    "(input_format_contract.required_fields.targetSurface"
-                    ".undeclared_surface_qualifying_classifications) -- an empty knownGapRefs, a "
-                    "colon-free legacy ref, or any other classification does not satisfy this rule",
-                )
+    if target_surface not in declared_keys and not known_gap_refs:
+        errors.append(
+            err(
+                "TARGET_SURFACE_UNRESOLVED",
+                "$.targetSurface",
+                "blocking",
+                "targetSurface must resolve to a declared_seed_surface_catalog entry, or carry a knownGapRef",
             )
+        )
 
     source_refs = envelope.get("sourceYamlRefs") or []
     if not source_refs:
         errors.append(err("SOURCE_YAML_REFS_EMPTY", "$.sourceYamlRefs", "blocking", "sourceYamlRefs must be non-empty"))
-
-    # Only entries that opt into the "<classification>:<description>" convention (colon present)
-    # are checked against allowed_classifications. Bare legacy refs with no colon (e.g. this
-    # translator's own pre-existing physical-search-crud-aggregate golden fixture entries) are a
-    # separate, already-established free-form pattern this check does not retroactively break --
-    # this check targets exactly what round 5 asked for: an unknown/misspelled classification
-    # value, not the absence of one.
-    allowed_classifications = allowed_gap_classifications(ssot_root)
-    for i, gap_ref in enumerate(known_gap_refs):
-        classification = gap_ref_classification(gap_ref)
-        if classification is None:
-            continue
-        if classification not in allowed_classifications:
-            errors.append(
-                err(
-                    "KNOWN_GAP_REF_CLASSIFICATION_UNKNOWN",
-                    f"$.knownGapRefs[{i}]",
-                    "blocking",
-                    f"knownGapRefs entry {gap_ref!r} uses classification {classification!r}, which is not one of "
-                    f"{allowed_classifications} (text_decomposition_contract.units.known_gap_ref.allowed_classifications)",
-                )
-            )
 
     for term in vocabulary:
         if term and term in input_text:
