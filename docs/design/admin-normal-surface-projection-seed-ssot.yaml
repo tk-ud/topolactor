@@ -957,6 +957,41 @@ admin_normal_surface_projection_seed_ssot:
     - id: target_surface_manifest_readiness
       blocking_condition: Canonical hub relation target resolution already exists; the unresolved design blocker is only whether the target surface has a produced active ui_projection target manifest and whether the navigation binding row has been inserted by the existing /admin/manifests authority.
       required_resolution_before_seed: Produce or identify the active target manifest for each target surface and insert explicit binding data through the canonical authority; do not redesign hub relation resolution.
+      sequencing_note: >-
+        2026-07-22 clarification (owner-confirmed): hub relation authoring is structurally the LAST
+        step of this Bundle's own content-flow order -- physical DB definition -> in-topology
+        relation/function definition -> UI definition (component/package/layout/wiring) -> hub
+        relation definition -- because /admin/manifests can only author a hub_relations row that
+        points at a topology_manifest which already exists. Therefore the
+        navigation_binding_authoring_and_verification sub-item below can never be a precondition
+        for starting a subBundle's own target manifest build (React-like Schema -> translator ->
+        topology UI seed -> seed registration, this Bundle's steps 1-4); it is a precondition only
+        for that subBundle reaching full resolution/closure of this design_blocking id, and it can
+        only be attempted after the target manifest and its own package/layout/wiring/tensor rows
+        already exist. seed_implementation_start_conditions below is scoped accordingly: it does not
+        block starting the manifest-build steps for a subBundle whose only unresolved item here is
+        navigation_binding_authoring_and_verification.
+      navigation_binding_resolution_criterion: >-
+        2026-07-22 clarification: resolving navigation_binding_authoring_and_verification for a
+        subBundle requires exactly the proof shape already defined by
+        docs/design/runtime-orchestration-ssot.yaml
+        ui_projection_render_reachability_contract.test_proof_contract
+        (test_input_shape/resolution_chain/proof_boundary) -- a single live-DB proof, not two
+        partial ones, that (a) creates the hub_relations row through the real hub_navigation:create
+        authoring dispatch path (never a raw SQL insert standing in for authoring), targeting that
+        subBundle's own target manifest, and (b) exercises the full resolution_chain from that same
+        relation_uuid through topology_manifest_id -> hub_ids[]/package_ids[] ->
+        topology.components_package_design / components_layout_design / ui_wiring_registry /
+        ui_topology_tensor -> ManifestDispatcher.DispatchAsync -> a scalar Emission whose
+        NavigationSequence[].RelatedHubId/TargetManifestId and PackageId/LayoutId/LayoutNodes are
+        observed resolving into that subBundle's own real seed rows (never a hardcoded id constant
+        or a fully synthetic non-target manifest standing in for it). The admin-dashboard subBundle's
+        AdminDashboardNavigationUiProjectionLiveDbTests.cs (PR #595) is the existing precedent that
+        combines both halves into one proof against its own real seed rows and is the pattern each
+        remaining subBundle's own proof should follow. Reuse the shared, manifest-identity-agnostic
+        helper backend/tests/Topolactor.Integration.Tests/HubRelationUiProjectionResolutionChainProof.cs
+        (BuildRealDispatcherAsync / AssertNavigationSequenceResolvesHubVector) rather than
+        re-deriving the resolution-chain assertion per manifest.
       subbundle_status:
         note: >-
           Per-subBundle granularity for this id. subBundle_not_applicable means this id does not gate
@@ -964,12 +999,27 @@ admin_normal_surface_projection_seed_ssot:
           distinguish target-manifest existence from navigation-binding-row authoring, per
           docs/design/admin-console-workflow-ssot.yaml subbundle_target_readiness and
           connection_state_authority (binding-row state is runtime/admin data, not a fixed ledger, so it
-          stays unresolved_before_seed here rather than being tracked to completion).
+          stays unresolved_before_seed here rather than being tracked to completion). This does NOT mean
+          navigation_binding_authoring_and_verification is exempt from the readiness/completion tracking
+          in this file -- see navigation_binding_resolution_criterion above for what closes it, and
+          sequencing_note above for why it never blocks starting a subBundle's own manifest-build work.
         admin-dashboard: subBundle_not_applicable
         credential-management:
           target_manifest: resolved_existing_substrate
           evidence_ref: manifest 00000000-0000-0000-0000-000000000092 (auth.external.credential_management.projection) already active with a real ui_projection
           navigation_binding_authoring_and_verification: unresolved_before_seed
+          navigation_binding_gap_detail: >-
+            2026-07-22: the existing 2026-07-12b proof set does not yet meet
+            navigation_binding_resolution_criterion above -- it splits the authoring-dispatch path and
+            the resolution-chain assertion across two separate tests instead of combining them into one:
+            DispatchAsync_HubNavigationCreate_RealAuthoringPath_SourceManifestDispatchReflectsRelationInNavigationSequence_AndFailClosesOnZeroActiveTarget
+            proves the hub_navigation:create authoring path but against a fully synthetic, non-092
+            source manifest, while the resolution_chain proof against manifest 092 in
+            CredentialManagementHubRelationUiProjectionLiveDbTests.cs uses a directly-SQL-inserted
+            relation row rather than one produced by that same authoring dispatch. Closing this item
+            requires the AdminDashboardNavigationUiProjectionLiveDbTests.cs-style combined proof:
+            author a relation via hub_navigation:create pointed at manifest 092 as the target, then
+            assert the full resolution_chain from that same authored relation.
         admin-enum: unresolved_before_seed
         team-dashboard: unresolved_before_seed
         scheduler-settings: unresolved_before_seed
@@ -1078,3 +1128,19 @@ admin_normal_surface_projection_seed_ssot:
       must never be marked resolved merely because the Bundle-level owner production pause referenced
       in .agent/tasks/todo.md has been lifted -- pause state and design_blocking resolution are
       separate gates.
+    - >-
+      2026-07-22 clarification (owner-confirmed, reconciling this file with
+      docs/design/admin-console-workflow-ssot.yaml subbundle_target_readiness/connection_state_authority,
+      which previously read as contradictory): "seed generation/registration proceeds" above has two
+      phases per subBundle, and the never-unresolved_before_seed requirement binds them differently.
+      Phase A is producing that subBundle's own target manifest and its package/layout/wiring/tensor
+      rows (this Bundle's common-process steps 1-4); phase B is design_blocking's
+      navigation_binding_authoring_and_verification sub-item (target_surface_manifest_readiness),
+      which per its sequencing_note can only be attempted after phase A's rows already exist. A
+      subBundle whose only unresolved applicable entry is navigation_binding_authoring_and_verification
+      may start and complete phase A; the never-unresolved_before_seed requirement blocks that
+      subBundle's own full closure/completion (including any claim that its seed work is finished),
+      not the start of phase A. Every other design_blocking entry (including target_manifest
+      existence itself) continues to gate phase A start exactly as written above -- this clarification
+      narrows only the navigation-binding sub-item's blocking scope, per its own
+      navigation_binding_resolution_criterion.

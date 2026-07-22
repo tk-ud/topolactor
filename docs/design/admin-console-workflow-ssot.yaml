@@ -69,6 +69,22 @@ admin_console_workflow_ssot:
         file (e.g. DispatchAsync_CredentialManagementManifest_E2E_RelationVectorToScalarEmission)
         remain valid regression proof for the read/NavigationSequence-population half only — they
         are not a substitute for this authoring-path proof.
+      resolved_closure_proof_shape: >-
+        2026-07-22 clarification: this authoring-path proof and the resolution_chain proof from
+        docs/design/runtime-orchestration-ssot.yaml
+        ui_projection_render_reachability_contract.test_proof_contract are two halves of one
+        completion criterion (see
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        design_blocking.target_surface_manifest_readiness.navigation_binding_resolution_criterion),
+        not two independent proofs. Closing a subBundle's navigation-binding item requires a single
+        live-DB proof that authors the relation via hub_navigation:create pointed at that subBundle's
+        own target manifest AND asserts the full resolution_chain from that same authored relation
+        through to that manifest's own package/layout/wiring/tensor rows and a scalar Emission --
+        the pattern backend/tests/Topolactor.Integration.Tests/AdminDashboardNavigationUiProjectionLiveDbTests.cs
+        (PR #595, admin-dashboard subBundle) already established. The existing
+        CredentialManagementHubRelationUiProjectionLiveDbTests.cs entries above satisfy each half
+        separately (a synthetic non-092 source for authoring, a directly-SQL-inserted row for
+        resolution against manifest 092) but not yet combined against manifest 092 itself.
     authority_boundary:
       hub_relation_is: manifest_scoped_outbound_navigation_sequence_only
       hub_relation_is_not:
@@ -99,10 +115,20 @@ admin_console_workflow_ssot:
       semantics; it does not track live connection state.
     subbundle_target_readiness:
       note: >-
-        The only structural readiness gate this Bundle tracks per subBundle is whether that
-        subBundle has a TARGET manifest worth navigating to at all — never whether a relation has
-        actually been authored (that is ordinary admin/runtime data, per connection_state_authority
-        above).
+        The only structural readiness gate this Bundle tracks per subBundle for STARTING that
+        subBundle's own target manifest build (React-like Schema -> translator -> topology UI seed
+        -> seed registration) is whether that subBundle has a TARGET manifest worth navigating to at
+        all. 2026-07-22 clarification (reconciling this file with
+        docs/design/admin-normal-surface-projection-seed-ssot.yaml
+        design_blocking.target_surface_manifest_readiness, which previously read as contradictory on
+        this point): whether a relation has actually been authored is never part of THIS starting
+        gate, but it is a separate, later-sequenced completion requirement tracked by that other
+        file's navigation_binding_authoring_and_verification sub-item and
+        navigation_binding_resolution_criterion -- it gates that subBundle's full closure, not the
+        start of its manifest build. This note and connection_state_authority above remain correct
+        about live connection state (a specific hubs.hub_relations row's existence) never being a
+        fixed SSOT ledger; they are not a statement that closing the navigation-binding item is
+        exempt from design_blocking tracking entirely.
       credential-management: >-
         manifest 092 already exists with a real ui_projection — no target-side readiness blocker.
         2026-07-15 gate0 audit reinforcement: once credentials.users/credentials.external_api/
