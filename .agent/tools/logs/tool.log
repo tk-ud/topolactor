@@ -47,3 +47,6 @@
 2026-07-14T21:10:09Z 91b9095e-1b37-4fe8-9c57-86efbf1eaa8e pr589_round5_relation_lifecycle_ssot_contract_cleanup implementation_change
 2026-07-15T01:35:48Z a467b830-1002-4805-81ee-57f84ddd0325 pr589_round6_todo_governance_closure_sync audit
 2026-07-15T06:29:15Z 3780fb0e-eae7-4a0d-bcb3-fb1086b88a6f pr589_gate0_personal_page_design_intent_sync audit
+2026-07-21T16:39:35Z e18e6eee-3c7a-4c73-a532-8a9b2f520128 admin-surface-topology-seed-conversion-gate0-reaudit audit
+2026-07-22T04:03:17Z 5d980c7f-b685-4ccd-8661-68a77c96deca navigation-binding-authoring-verification-resolution-criteria design_change
+2026-07-22T09:31:59Z a1d3d3e6-5e39-4ef3-b47c-7ed59e7249f9 scheduler-settings-surface-axes-and-credential-consumer-binding design_change

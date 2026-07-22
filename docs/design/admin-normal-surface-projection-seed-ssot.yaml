@@ -319,6 +319,32 @@ admin_normal_surface_projection_seed_ssot:
               forbidden_projection_fields: [token_hash, encrypted_payload, encryption_key_reference, plaintext_secret, decrypted_payload, token_response]
               operations: [create, read, update, delete, search]
               mutation_boundary: replace or rotate by reference_key and provider/bundle metadata; decrypted material is runtime-only.
+              consumer_reference_binding:
+                status: added_2026_07_22_design_change_owner_confirmed_split
+                role: >-
+                  Lets an admin configure, from this credential-management screen, which consumer
+                  entity references a given credential/port row — starting with scheduler jobs,
+                  because calling an external API or external instance function from a scheduler job
+                  is more usable when configured alongside the credential/port itself rather than on a
+                  separate scheduler screen.
+                target_authority: docs/design/scheduler-job-manifest-ssot.yaml topology.scheduler_jobs.credential_requirement_ref / topology.scheduler_jobs.external_port_ref
+                operations: [configure_scheduler_job_credential_or_port_binding]
+                mutation_boundary: >-
+                  Writes only topology.scheduler_jobs.credential_requirement_ref /
+                  topology.scheduler_jobs.external_port_ref, identified by scheduler_job_id plus this
+                  credential/port row's reference_key. Never writes topology.external_credential_vault /
+                  topology.external_access_ports / topology.external_response_ports /
+                  topology.external_hook_ports rows through this path (those remain this category's
+                  existing create/read/update/delete/search operations above). Never authors
+                  scheduler_jobs.job_key / trigger_kind / schedule_policy_kind / cron_expression /
+                  abstract_function_step_chain or any other /admin/contents-authored field — see
+                  surface_axes.admin.surfaces.scheduler.scope_boundary.
+                other_consumer_bundles_note: >-
+                  The 6 established consumer bundles (file_storage/email/stripe/webhook_inbox/
+                  audit_approval/export_sftp) already have credential_requirement/policy_steps seed
+                  binding via PR#460's consumer bundle work — unaffected by this addition.
+                  job_scheduler was not among them and is added here as new, additive scope; it does
+                  not change or duplicate the existing 6 bundles' binding mechanism.
             external_instance_credential:
               data_authority_ref: docs/design/instance-port-substrate-ssot.yaml existing_credential_management_projection_extension
               existing_schema_fields_allowed_for_projection: [reference_key, provider_kind, required_by_bundle, active, expires_at, version]
@@ -335,7 +361,7 @@ admin_normal_surface_projection_seed_ssot:
             read: required
             search: [auth.users.username, auth.users.status, auth.users.state_note, topology.external_credential_vault.provider_kind, topology.external_credential_vault.required_by_bundle, topology.external_credential_vault.reference_key]
             filter: [category, auth.users.active, auth.users.approve, auth.users.status, provider_kind, required_by_bundle, active, expires_at]
-            mutation: [create_account_with_initial_credential, update_account_metadata, update_role, revoke_credential, revoke_sessions, delete_account_with_credentials, external_credential_metadata_update, deactivate_or_delete_reference]
+            mutation: [create_account_with_initial_credential, update_account_metadata, update_role, revoke_credential, revoke_sessions, delete_account_with_credentials, external_credential_metadata_update, deactivate_or_delete_reference, configure_scheduler_job_credential_or_port_binding]
           seed_contract:
             component_tree:
               - node_key: credential_search
@@ -553,6 +579,68 @@ admin_normal_surface_projection_seed_ssot:
                   (ManifestDispatcher / HubNavigationResolver), independent of which UI surface
                   renders the resulting link.
             loading_empty_error_projection: [loading_links, empty_links, target_manifest_resolution_error]
+        scheduler:
+          status: added_2026_07_22_design_change_owner_confirmed_split
+          authority_boundary: >-
+            This surface must not redefine scheduler job manifest authority. job_key/trigger_kind/
+            schedule_policy_kind/cron_expression/schedule_interval_seconds/input-output table refs/
+            abstract_function_step_chain remain docs/design/scheduler-job-manifest-ssot.yaml authority,
+            authored through /admin/contents physical_table_and_page_binding (the existing generic
+            authoring pipeline over topology.scheduler_jobs / topology.scheduler_job_steps) — never
+            re-implemented as a seed_contract here. credential_requirement_ref / external_port_ref
+            binding for a scheduler job is configured from
+            surface_axes.admin.surfaces.credentials.categories.external_api_credential.consumer_reference_binding,
+            never here.
+          scope_boundary:
+            in_scope: [list, search, filter, enable, disable]
+            out_of_scope:
+              - create
+              - edit
+              - step_chain_authoring
+              - credential_or_external_port_binding
+            routes_to:
+              create_edit_step_chain_authoring: /admin/contents physical_table_and_page_binding over topology.scheduler_jobs / topology.scheduler_job_steps (existing generic pipeline, not produced by this Bundle)
+              credential_or_external_port_binding: surface_axes.admin.surfaces.credentials.categories.external_api_credential.consumer_reference_binding
+          data_authority_ref: docs/design/scheduler-job-manifest-ssot.yaml
+          physical_schema_ref: [topology.scheduler_jobs]
+          existing_schema_fields_allowed_for_projection: [scheduler_job_id, job_key, trigger_kind, schedule_policy_kind, cron_expression, schedule_interval_seconds, timezone, manual_run_allowed, active, updated_at]
+          forbidden_projection_fields: [credential_requirement_ref, external_port_ref, authority_scope, input_table_ref, input_id_column, input_status_column, output_table_ref, retry_policy, projection_policy]
+          forbidden_projection_fields_note: >-
+            Not secret material (none exists on this table per scheduler-job-manifest-ssot.yaml
+            authority_rules) — forbidden here only because these fields belong to /admin/contents
+            authoring (table/column/step/policy configuration) or to the credential/port consumer
+            binding surface, not to this list/search/filter/toggle-only projection.
+          projection_responsibility:
+            - configured_scheduler_job_list_and_active_status_projection
+            - search_and_filter_without_domain_job_body_or_step_chain_detail
+            - explicit_enable_disable_intent_collection
+          capability_requirements:
+            read: required
+            search: [job_key]
+            filter: [trigger_kind, schedule_policy_kind, active]
+            mutation: [enable, disable]
+          new_operation_note: >-
+            db/seed_empty.sql dispatcher_mapping currently has scheduler_jobs:list_settings/create/edit/
+            disable but no symmetric scheduler_jobs:enable. Adding enable (mirrors disable:
+            set_scheduler_job_active_false as enable: set_scheduler_job_active_true) is required
+            implementation-time seed/backend work for this surface, not a new authority invented here —
+            AdminRuntime already owns the disable handler this mirrors.
+          seed_contract:
+            component_tree:
+              - node_key: scheduler_search
+                component_key: search_input.alias
+                responsibility: query job_key only
+              - node_key: scheduler_filter
+                component_key: select.template
+                responsibility: filter trigger_kind, schedule_policy_kind, active
+              - node_key: scheduler_job_list
+                component_key: table.primitive
+                responsibility: list allowed metadata fields only, no step chain or table/column reference detail
+              - node_key: scheduler_toggle_button
+                component_key: button.primitive
+                responsibility: explicit enable or disable confirmation for one scheduler job row; never create/edit
+            loading_empty_error_projection: [loading_scheduler_jobs, empty_scheduler_jobs, scheduler_job_error_fail_close]
+            mutation_confirmation_contract: [explicit_confirm, write, diff_log]
     normal:
       axis_kind: projection_surface_axis
       not_role_or_rbac: true
@@ -947,6 +1035,10 @@ admin_normal_surface_projection_seed_ssot:
         reusable_shape: search/filter/result/form/confirm composition.
         target_authority: enum_dictionary:* authority from docs/design/enum-dictionary-ssot.yaml
         operation_mapping: enum item/group create/read/update/delete/search over existing enum columns, never content_bundle:* refs.
+      scheduler:
+        reusable_shape: search/filter/result/confirm composition only (no form_field.template — this surface is list/search/filter/toggle only, never create/edit).
+        target_authority: scheduler_jobs:* authority from docs/design/scheduler-job-manifest-ssot.yaml, list_settings/enable/disable actions only.
+        operation_mapping: list/search/filter/enable/disable over existing scheduler_jobs columns; create/edit/step-chain map to /admin/contents physical_table_and_page_binding, never to this surface or to content_bundle:* refs.
       normal.dashboard:
         reusable_shape: preview/validate/apply boundary and payloadFrom/payloadResolverRef event-binding shape may be reused.
         target_authority: team Markdown authority from docs/design/team-markdown-dashboard-saved-view-ssot.yaml
@@ -957,6 +1049,41 @@ admin_normal_surface_projection_seed_ssot:
     - id: target_surface_manifest_readiness
       blocking_condition: Canonical hub relation target resolution already exists; the unresolved design blocker is only whether the target surface has a produced active ui_projection target manifest and whether the navigation binding row has been inserted by the existing /admin/manifests authority.
       required_resolution_before_seed: Produce or identify the active target manifest for each target surface and insert explicit binding data through the canonical authority; do not redesign hub relation resolution.
+      sequencing_note: >-
+        2026-07-22 clarification (owner-confirmed): hub relation authoring is structurally the LAST
+        step of this Bundle's own content-flow order -- physical DB definition -> in-topology
+        relation/function definition -> UI definition (component/package/layout/wiring) -> hub
+        relation definition -- because /admin/manifests can only author a hub_relations row that
+        points at a topology_manifest which already exists. Therefore the
+        navigation_binding_authoring_and_verification sub-item below can never be a precondition
+        for starting a subBundle's own target manifest build (React-like Schema -> translator ->
+        topology UI seed -> seed registration, this Bundle's steps 1-4); it is a precondition only
+        for that subBundle reaching full resolution/closure of this design_blocking id, and it can
+        only be attempted after the target manifest and its own package/layout/wiring/tensor rows
+        already exist. seed_implementation_start_conditions below is scoped accordingly: it does not
+        block starting the manifest-build steps for a subBundle whose only unresolved item here is
+        navigation_binding_authoring_and_verification.
+      navigation_binding_resolution_criterion: >-
+        2026-07-22 clarification: resolving navigation_binding_authoring_and_verification for a
+        subBundle requires exactly the proof shape already defined by
+        docs/design/runtime-orchestration-ssot.yaml
+        ui_projection_render_reachability_contract.test_proof_contract
+        (test_input_shape/resolution_chain/proof_boundary) -- a single live-DB proof, not two
+        partial ones, that (a) creates the hub_relations row through the real hub_navigation:create
+        authoring dispatch path (never a raw SQL insert standing in for authoring), targeting that
+        subBundle's own target manifest, and (b) exercises the full resolution_chain from that same
+        relation_uuid through topology_manifest_id -> hub_ids[]/package_ids[] ->
+        topology.components_package_design / components_layout_design / ui_wiring_registry /
+        ui_topology_tensor -> ManifestDispatcher.DispatchAsync -> a scalar Emission whose
+        NavigationSequence[].RelatedHubId/TargetManifestId and PackageId/LayoutId/LayoutNodes are
+        observed resolving into that subBundle's own real seed rows (never a hardcoded id constant
+        or a fully synthetic non-target manifest standing in for it). The admin-dashboard subBundle's
+        AdminDashboardNavigationUiProjectionLiveDbTests.cs (PR #595) is the existing precedent that
+        combines both halves into one proof against its own real seed rows and is the pattern each
+        remaining subBundle's own proof should follow. Reuse the shared, manifest-identity-agnostic
+        helper backend/tests/Topolactor.Integration.Tests/HubRelationUiProjectionResolutionChainProof.cs
+        (BuildRealDispatcherAsync / AssertNavigationSequenceResolvesHubVector) rather than
+        re-deriving the resolution-chain assertion per manifest.
       subbundle_status:
         note: >-
           Per-subBundle granularity for this id. subBundle_not_applicable means this id does not gate
@@ -964,12 +1091,27 @@ admin_normal_surface_projection_seed_ssot:
           distinguish target-manifest existence from navigation-binding-row authoring, per
           docs/design/admin-console-workflow-ssot.yaml subbundle_target_readiness and
           connection_state_authority (binding-row state is runtime/admin data, not a fixed ledger, so it
-          stays unresolved_before_seed here rather than being tracked to completion).
+          stays unresolved_before_seed here rather than being tracked to completion). This does NOT mean
+          navigation_binding_authoring_and_verification is exempt from the readiness/completion tracking
+          in this file -- see navigation_binding_resolution_criterion above for what closes it, and
+          sequencing_note above for why it never blocks starting a subBundle's own manifest-build work.
         admin-dashboard: subBundle_not_applicable
         credential-management:
           target_manifest: resolved_existing_substrate
           evidence_ref: manifest 00000000-0000-0000-0000-000000000092 (auth.external.credential_management.projection) already active with a real ui_projection
           navigation_binding_authoring_and_verification: unresolved_before_seed
+          navigation_binding_gap_detail: >-
+            2026-07-22: the existing 2026-07-12b proof set does not yet meet
+            navigation_binding_resolution_criterion above -- it splits the authoring-dispatch path and
+            the resolution-chain assertion across two separate tests instead of combining them into one:
+            DispatchAsync_HubNavigationCreate_RealAuthoringPath_SourceManifestDispatchReflectsRelationInNavigationSequence_AndFailClosesOnZeroActiveTarget
+            proves the hub_navigation:create authoring path but against a fully synthetic, non-092
+            source manifest, while the resolution_chain proof against manifest 092 in
+            CredentialManagementHubRelationUiProjectionLiveDbTests.cs uses a directly-SQL-inserted
+            relation row rather than one produced by that same authoring dispatch. Closing this item
+            requires the AdminDashboardNavigationUiProjectionLiveDbTests.cs-style combined proof:
+            author a relation via hub_navigation:create pointed at manifest 092 as the target, then
+            assert the full resolution_chain from that same authored relation.
         admin-enum: unresolved_before_seed
         team-dashboard: unresolved_before_seed
         scheduler-settings: unresolved_before_seed
@@ -1078,3 +1220,19 @@ admin_normal_surface_projection_seed_ssot:
       must never be marked resolved merely because the Bundle-level owner production pause referenced
       in .agent/tasks/todo.md has been lifted -- pause state and design_blocking resolution are
       separate gates.
+    - >-
+      2026-07-22 clarification (owner-confirmed, reconciling this file with
+      docs/design/admin-console-workflow-ssot.yaml subbundle_target_readiness/connection_state_authority,
+      which previously read as contradictory): "seed generation/registration proceeds" above has two
+      phases per subBundle, and the never-unresolved_before_seed requirement binds them differently.
+      Phase A is producing that subBundle's own target manifest and its package/layout/wiring/tensor
+      rows (this Bundle's common-process steps 1-4); phase B is design_blocking's
+      navigation_binding_authoring_and_verification sub-item (target_surface_manifest_readiness),
+      which per its sequencing_note can only be attempted after phase A's rows already exist. A
+      subBundle whose only unresolved applicable entry is navigation_binding_authoring_and_verification
+      may start and complete phase A; the never-unresolved_before_seed requirement blocks that
+      subBundle's own full closure/completion (including any claim that its seed work is finished),
+      not the start of phase A. Every other design_blocking entry (including target_manifest
+      existence itself) continues to gate phase A start exactly as written above -- this clarification
+      narrows only the navigation-binding sub-item's blocking scope, per its own
+      navigation_binding_resolution_criterion.
