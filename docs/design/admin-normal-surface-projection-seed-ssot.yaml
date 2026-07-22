@@ -1112,7 +1112,20 @@ admin_normal_surface_projection_seed_ssot:
             requires the AdminDashboardNavigationUiProjectionLiveDbTests.cs-style combined proof:
             author a relation via hub_navigation:create pointed at manifest 092 as the target, then
             assert the full resolution_chain from that same authored relation.
-        admin-enum: unresolved_before_seed
+        admin-enum:
+          target_manifest: resolved
+          evidence_ref: manifest 00000000-0000-0000-0000-0000000ae200 (admin.enum.management.projection) built 2026-07-22, real ui_projection with component_tree per surface_axes.admin.surfaces.enum.seed_contract
+          navigation_binding_authoring_and_verification: resolved
+          navigation_binding_evidence_ref: >-
+            backend/tests/Topolactor.Integration.Tests/AdminEnumHubRelationUiProjectionLiveDbTests.cs
+            DispatchAsync_AdminEnumManagementManifest_HubNavigationCreate_RealAuthoringPath_ThenResolutionChainReflectsIt
+            -- single live-DB test combining the hub_navigation:create real authoring dispatch path
+            (never a raw SQL insert) with the full resolution_chain against manifest ae200's own real
+            seed rows, meeting navigation_binding_resolution_criterion above. This closes the
+            per-id design_blocking gate for admin-enum; it does not by itself mean the admin-enum
+            subBundle is fully implemented -- the enum_dictionary:* write-dispatch wiring gap
+            (.agent/tasks/todo.md admin-enum subBundle 実装記録) remains open and is a separate
+            concern from this hub-relation-navigation design_blocking id.
         team-dashboard: unresolved_before_seed
         scheduler-settings: unresolved_before_seed
     - id: external_instance_projection_columns

@@ -1525,6 +1525,64 @@ react_schema_topology_seed_translator_ssot:
               instance_settings_admin_authoring_ui_pending (the actual admin authoring
               frontend route/island and backend action) remains open and unrelated.
 
+      - seed_surface_key: admin.enum.management.projection
+        declared_by_yaml_ref: docs/design/admin-normal-surface-projection-seed-ssot.yaml surface_axes.admin.surfaces.enum
+        seed_role: admin_enum_dictionary_management_projection_manifest_seed
+        record_subjects: [manifest_projection, enum_group_and_item_management_projection, enum_search_projection]
+        exchange_units: [category, section, field, table]
+        authority_boundary: preview_dictionary_delta_validate_against_enum_authority_explicit_confirm_write_diff_log
+        component_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.frontend_component_catalog
+          componentKinds:
+            - form_input/search_input (search_input.alias)
+            - form_input/select (select.template)
+            - data_display/table (table.primitive)
+            - form_input/form_field (form_field.template)
+            - action/button (button.primitive)
+        style_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.style_catalog
+          refs: []
+        html_tag_catalog_refs:
+          catalog_ref: ui_catalog_boundary_contract.html_tag_catalog
+          refs: []
+        wiring_lane_refs: []
+        known_gaps:
+          - gap: admin_runtime_layer_action_dispatch_wiring_lane_not_yet_implemented
+            classification: runtime_dispatch_gap
+            status: open
+            note: >-
+              admin-surface-topology-seed-conversion admin-enum subBundle (.agent/tasks/todo.md).
+              The 9 enum_dictionary:* admin_runtime actions (docs/design/enum-dictionary-ssot.yaml
+              admin_runtime_actions) already dispatch correctly on the backend
+              (AdminRuntimeDispatchAdapter -> AdminRuntime.ExecuteDataAsync, resolved by
+              target/layer/action via OperationVectorResolver -- ManifestDispatcher.cs is already
+              fully generic across runtime_destination=admin_runtime). What is missing is a
+              frontend runtimeInteractions actionType/wiring lane that lets a seed-authored
+              Action node dispatch an arbitrary admin_runtime layer:action vector -- today
+              frontend/runtime/uiEventEffectRunner.ts and renderEmission.ts recognize only
+              dispatchExternalPort (external_integration_wiring/external_instance_wiring) and
+              dispatchInstanceOperation (external_instance_wiring), plus localStateMutation
+              (internal_instance_wiring); none of wiring_lane_contract.lanes' five lanes'
+              targetRef_shape covers admin_runtime layer:action dispatch, and content_bundle:*
+              (contents_api_wiring) is a different backend authority (NpgsqlContentBundleRepository
+              entity CRUD) that this Bundle's NG boundary explicitly forbids substituting in.
+              This is the same gap previously recorded as gap-01
+              ("response-binding architecture 未実装") in .agent/tasks/todo.md's migrated
+              admin-surface-topology-seed-conversion-design-resolution.json content:
+              cross-cutting, high-blast-radius, owner_decision_required architecture choice
+              (a new dedicated runtime lane), which this Bundle's own NG boundary
+              ("新規専用...runtime lane...を追加する" is prohibited) explicitly keeps out of scope
+              for any single subBundle to add unilaterally. Until resolved, admin-enum's
+              enum_confirm_button (button.primitive) and the create/update/delete/set_group_items
+              mutation actions are seeded as structural leaves only (componentId/componentKind
+              resolve; no functioning eventBinding/runtimeInteractions) -- this is why they are
+              authored directly on topology.ui_topology_tensor rather than as React-like Schema
+              Action nodes (input_text_markup_grammar_contract prohibits an action/step tag with
+              no wiringLane attribute, and wiring_lane_contract has no lane whose meaning is
+              admin_runtime layer:action dispatch). Read/list rendering (enum_dictionary:list_groups
+              etc.) is likewise limited to the ADMIN_OPERATION_NOT_FOUND structural-render fallback
+              (ManifestDispatcher.cs, the same fallback admin-dashboard's manifest ad200 uses) --
+              no real enum row data flows into the UI yet.
       - seed_surface_key: ui_component_registry.preset_catalog_bootstrap.v1
         declared_by_yaml_ref: docs/design/component-catalog-classification-ssot.yaml catalog_vocabulary_contract
         seed_role: fixed_uuid_components_bucket_and_ui_component_registry_bootstrap_rows

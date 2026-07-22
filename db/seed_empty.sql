@@ -3483,6 +3483,203 @@ VALUES (
 ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
     SET layout_patch_json = EXCLUDED.layout_patch_json;
 
+-- =============================================================================
+-- admin-surface-topology-seed-conversion: admin-enum subBundle seed
+-- (enum dictionary / enum group / enum item management projection, per
+-- docs/design/admin-normal-surface-projection-seed-ssot.yaml
+-- surface_axes.admin.surfaces.enum). React-like Schema authored, converted via
+-- .agent/tools/react-schema-topology-seed-translator
+-- (.agent/tests/fixtures/react-schema-topology-seed-translator/admin-enum-ae200*.json,
+-- regenerable: generate-react-schema --input admin-enum-ae200.input.json |
+-- generate-topology-seed --input admin-enum-ae200.topology-seed.input.json).
+-- Translator output is intake/draft evidence only (never adoption authority,
+-- react-schema-topology-seed-translator-ssot.yaml topology_ui_seed_contract
+-- active_topology_rule) -- the records[] below are the same shape, adopted
+-- directly as this seed's structural authority.
+--
+-- component_tree (seed_contract.component_tree) mapped 1:1 to existing
+-- registered componentKeys: enum_search (search_input.alias), enum_group_filter
+-- (select.template), enum_table (table.primitive -- promoted from
+-- code_only_drift to active in this same subBundle, see
+-- db/ui_component_registry_preset_catalog_bootstrap.sql), enum_form
+-- (form_field.template), enum_confirm_button (button.primitive). No
+-- SSOT-unjustified substitution (e.g. card_list.primitive/data_grid.alias) was
+-- made -- table.primitive is exactly what the SSOT specifies.
+--
+-- Authored via the translator/records[] path (components_layout_design below),
+-- unlike admin-dashboard's tensor-only path: this component_tree genuinely is
+-- a Category/Section/Form/Field/Table/Action authoring tree (enum_dictionary
+-- category > enum_dictionary_roster section > enum_search/enum_group_filter
+-- fields + enum_table table + enum_confirm_form form), not a flat UI-Builder
+-- canvas composition. backend/repository/LayoutSchemaTensorComposer.cs's
+-- FieldControlToComponentKey/TableDisplayToComponentKey convention maps were
+-- extended in this subBundle with form_input/search_input->search_input.alias
+-- and table->table.primitive (both ordinary additions to an existing
+-- convention dictionary over already-registered componentKeys, not a new
+-- resolution mechanism).
+--
+-- mutation_confirmation_contract (preview_dictionary_delta / validate_against_
+-- enum_authority / explicit_confirm / write / diff_log): only explicit_confirm
+-- is wired as a real, functioning interaction here -- enum_confirm_button
+-- dispatches a genuine internal_instance_wiring localStateMutation (opens
+-- local confirm state; wiring_lane_contract.lanes.internal_instance_wiring,
+-- "no backend dispatch" by definition). The write step (persisting via the
+-- existing enum_dictionary:create_group/update_group/delete_group/create_item/
+-- update_item/delete_item/set_group_items admin_runtime actions, all already
+-- production-dispatcher-mapped below) has NO resolvable wiring_lane_contract
+-- lane today: frontend/runtime/uiEventEffectRunner.ts and renderEmission.ts
+-- recognize only dispatchExternalPort/dispatchInstanceOperation/
+-- localStateMutation, and none of the 5 declared lanes' targetRef_shape covers
+-- generic admin_runtime layer:action dispatch (content_bundle:* under
+-- contents_api_wiring is a DIFFERENT backend authority --
+-- NpgsqlContentBundleRepository entity CRUD -- substituting it in for
+-- enum_dictionary:* is explicitly out of scope). This is recorded, not
+-- fabricated around: docs/design/react-schema-topology-seed-translator-ssot.yaml
+-- declared_seed_surface_catalog.known_declared_surfaces (seed_surface_key
+-- admin.enum.management.projection).known_gaps
+-- admin_runtime_layer_action_dispatch_wiring_lane_not_yet_implemented, and the
+-- enum_write_dispatch_gap Validation record in components_layout_design below
+-- (rule admin_runtime_layer_action_dispatch_wiring_lane_not_yet_implemented,
+-- severity warning, appliesTo enum_confirm_form). Adding the missing lane
+-- itself is a cross-cutting, owner_decision_required architecture choice (a
+-- new dedicated runtime lane) explicitly out of scope for a single subBundle
+-- to add unilaterally (.agent/tasks/todo.md admin-surface-topology-seed-conversion
+-- Governance NG boundary). Read/list rendering of real enum rows is
+-- correspondingly limited to the same ADMIN_OPERATION_NOT_FOUND
+-- structural-render fallback (ManifestDispatcher.cs) manifest ad200 already
+-- uses -- no real enum group/item data flows into the UI yet, same reason.
+-- =============================================================================
+
+-- Hub owning the admin-enum-management topology_manifest. Never a
+-- hub_relations target/source by itself -- required FK owner only.
+INSERT INTO hubs.hub (hub_id, relation)
+VALUES ('00000000-0000-0000-0000-0000000ae201', '{"description":"admin_enum_management","system":true}'::jsonb)
+ON CONFLICT (hub_id) DO NOTHING;
+
+-- Runtime manifest row: real ui_projection, reached via explicit
+-- payload.target_ref = manifest:<id>:projection_entry (same ?manifest=
+-- entry-selection path manifest 092 / ad200 already use), routed to
+-- admin_runtime (the enum_dictionary:* actions' existing runtime_destination).
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae200',
+    NULL,
+    ARRAY[
+        '{"type":"hub_grouping","manifestKey":"admin.enum.management.projection","bundle":"admin-surface-topology-seed-conversion"}'::jsonb,
+        '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb,
+        '{"type":"ui_projection","packageIds":["00000000-0000-0000-0000-0000000ae203"],"layoutId":"00000000-0000-0000-0000-0000000ae204","wiringId":"00000000-0000-0000-0000-0000000ae205","tensorId":"00000000-0000-0000-0000-0000000ae206"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
+
+-- hubs.topology_manifests projection for the admin-enum-management manifest.
+-- topology_manifest_id = manifest_id, same convention as manifest 092/ad200.
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+SELECT
+    m.manifest_id,
+    '00000000-0000-0000-0000-0000000ae201'::uuid,
+    'admin.enum.management.projection',
+    m.status,
+    to_jsonb(m.topology)
+FROM manifest m
+WHERE m.manifest_id = '00000000-0000-0000-0000-0000000ae200'
+ON CONFLICT (topology_manifest_id) DO UPDATE
+    SET manifest_key   = EXCLUDED.manifest_key,
+        status         = EXCLUDED.status,
+        topology_jsonb = EXCLUDED.topology_jsonb,
+        updated_at     = now();
+
+-- admin-enum-management UI persistence (package/layout/wiring/tensor).
+INSERT INTO topology.ui_component_package (package_id, package_key, package_kind, package_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae202',
+    'admin.enum.management.projection.component_group_bundle',
+    'fixed_form_projection',
+    '{"seedKey":"admin.enum.management.projection","surface":"admin.enum.management.projection","categoryKeys":["enum_dictionary"]}'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET package_schema_json = EXCLUDED.package_schema_json,
+        status = EXCLUDED.status;
+
+-- Manifest-facing package authority (manifest.topology[ui_projection].packageIds
+-- points here, not at ui_component_package above -- same split as manifest
+-- 092/ad200). No component+design pairs were authored via UI Component
+-- Builder for this surface, so layout is honestly empty.
+INSERT INTO topology.components_package_design (package_id, name, layout, state)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae203',
+    'admin.enum.management.projection.package',
+    '[]'::jsonb,
+    'active'
+)
+ON CONFLICT (package_id) DO UPDATE
+    SET layout = EXCLUDED.layout,
+        state = EXCLUDED.state;
+
+-- Structural authority tree: React-like Schema -> translator ->
+-- topology_ui_seed_record records[], adopted directly (see header comment).
+-- Category enum_dictionary > Section enum_dictionary_roster >
+-- Field enum_search / Field enum_group_filter / Table enum_table /
+-- Form enum_confirm_form (Field enum_form + Action enum_confirm_button) +
+-- Validation enum_write_dispatch_gap (documents the write-step gap, see
+-- header comment).
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind, layout_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae204',
+    'admin.enum.management.projection.layout',
+    'fixed_form_projection',
+    '{"records":[{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"admin_enum_management_projection","record":{"recordType":"topology_ui_category","key":"enum_dictionary","label":"Enum dictionary","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum"],"sourceReactPath":"$.root.children[0]","knownGapRefs":[],"categoryKey":"enum_dictionary","sectionKeys":["enum_dictionary_roster"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary","record":{"recordType":"topology_ui_section","key":"enum_dictionary_roster","label":"Enum groups and items","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract"],"sourceReactPath":"$.root.children[0].children[0]","knownGapRefs":[],"sectionKey":"enum_dictionary_roster","sectionKind":"enum_group_and_item_management_projection","childKeys":["enum_search","enum_group_filter","enum_table","enum_confirm_form","enum_write_dispatch_gap"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_search","label":"Enum search","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[0]","knownGapRefs":[],"fieldKey":"enum_search","control":"form_input/search_input","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_field","key":"enum_group_filter","label":"Group filter","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[1]","knownGapRefs":[],"fieldKey":"enum_group_filter","control":"form_input/select","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_table","key":"enum_table","label":"Enum groups and items table","sourceYamlRefs":["enum-dictionary-ssot.yaml#canonical_tables"],"sourceReactPath":"$.root.children[0].children[0].children[2]","knownGapRefs":[],"tableKey":"enum_table","source":"enum.groups","display":"table","columnKeys":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_form","key":"enum_confirm_form","label":"Enum group or item edit and confirm","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[3]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","formKey":"enum_confirm_form","target":"enum.groups","mode":"edit","fieldKeys":["enum_form"],"actionKeys":["enum_confirm_button"]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_confirm_form","record":{"recordType":"topology_ui_field","key":"enum_form","label":"Enum group or item edit fields","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.component_tree"],"sourceReactPath":"$.root.children[0].children[0].children[3].children[0]","knownGapRefs":[],"fieldKey":"enum_form","control":"form_input/form_field","required":false,"validationRefs":[]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_confirm_form","record":{"recordType":"topology_ui_action","key":"enum_confirm_button","label":"Confirm changes","sourceYamlRefs":["admin-normal-surface-projection-seed-ssot.yaml#surface_axes.admin.surfaces.enum.seed_contract.mutation_confirmation_contract"],"sourceReactPath":"$.root.children[0].children[0].children[3].children[1]","knownGapRefs":[],"authorityMarker":"draft_or_projection_only","actionKey":"enum_confirm_button","actionRef":"ui-local:enum_confirm_button.open_confirm","eventBinding":{"trigger":"click","wiringLane":"internal_instance_wiring","targetRef":"ui-local:enum_confirm_button.open_confirm","authority":"draft_or_projection_only"},"runtimeInteractions":[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{},"sourceActionKey":"enum_confirm_button","targetRef":"ui-local:enum_confirm_button.open_confirm"}]}},{"type":"topology_ui_seed_record","seedKey":"admin.enum.management.projection","parentKey":"enum_dictionary_roster","record":{"recordType":"topology_ui_validation","key":"enum_write_dispatch_gap","label":"Write dispatch pending","sourceYamlRefs":["react-schema-topology-seed-translator-ssot.yaml#declared_seed_surface_catalog.known_declared_surfaces.admin_enum_management_projection.known_gaps"],"sourceReactPath":"$.root.children[0].children[0].children[4]","knownGapRefs":[],"validationKey":"enum_write_dispatch_gap","rule":"admin_runtime_layer_action_dispatch_wiring_lane_not_yet_implemented","severity":"warning"}}]}'::jsonb,
+    'active'
+)
+ON CONFLICT (layout_id) DO UPDATE
+    SET layout_schema_json = EXCLUDED.layout_schema_json,
+        status = EXCLUDED.status;
+
+-- Only enum_confirm_button's real, functioning interaction (local confirm
+-- state open -- internal_instance_wiring, no backend dispatch) is wired here.
+-- No wiring row exists for the enum_dictionary:* write actions -- see header
+-- comment (known gap, not fabricated).
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface, target_ref, wiring_schema_json, status)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae205',
+    'admin.enum.management.projection.wiring',
+    'internal_instance_wiring_action_bundle',
+    'manifest',
+    'admin.enum.management.projection',
+    '{"actions":[{"wiringKey":"admin.enum.management.projection.enum_confirm_button.wiring","wiringKind":"internal_instance_wiring","targetSurface":"manifest","wiringSchemaJson":{"eventBinding":{"trigger":"click","wiringLane":"internal_instance_wiring","targetRef":"ui-local:enum_confirm_button.open_confirm","authority":"draft_or_projection_only"},"sourceActionKey":"enum_confirm_button","authorityMarker":"draft_or_projection_only"},"sourceRecordKey":"enum_confirm_button"}]}'::jsonb,
+    'active'
+)
+ON CONFLICT (wiring_id) DO UPDATE
+    SET wiring_schema_json = EXCLUDED.wiring_schema_json,
+        status = EXCLUDED.status;
+
+-- Tensor runtimeInteractions merge target: nodeId matches the OWNING FORM's
+-- own record key (enum_confirm_form, not the leaf enum_confirm_button --
+-- backend/repository/LayoutSchemaTensorComposer.cs BuildInteractionsBySourceActionKey/
+-- ResolveInteractionsMergeKey), carrying enum_confirm_button's runtimeInteractions
+-- tagged by sourceActionKey. componentId/componentKind for every leaf
+-- (enum_search/enum_group_filter/enum_table/enum_form/enum_confirm_button)
+-- resolve from components_layout_design.records[] above via the existing
+-- ui_component_registry preset catalog -- this tensor row's only job is to
+-- carry the one real interaction.
+INSERT INTO topology.ui_topology_tensor (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index, layout_patch_json)
+VALUES (
+    '00000000-0000-0000-0000-0000000ae206',
+    'admin#enum_management',
+    '00000000-0000-0000-0000-0000000ae202',
+    '00000000-0000-0000-0000-0000000ae204',
+    '00000000-0000-0000-0000-0000000ae205',
+    'default',
+    0,
+    '{"nodes":[{"nodeId":"enum_confirm_form","nodeKind":"catalog_component","runtimeInteractions":[{"trigger":"click","actionType":"localStateMutation","payloadFrom":{},"sourceActionKey":"enum_confirm_button","targetRef":"ui-local:enum_confirm_button.open_confirm"}]}]}'::jsonb
+)
+ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO UPDATE
+    SET layout_patch_json = EXCLUDED.layout_patch_json;
+
 -- Representative existing cron absorption: log retention.
 -- The former RetentionScheduler BackgroundService is absorbed into the scheduler
 -- job manifest substrate. The retention domain body stays in LogRetentionRuntime

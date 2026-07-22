@@ -58,6 +58,7 @@ public static class LayoutSchemaTensorComposer
             ["form_input/form_field"] = "form_field.template",
             ["form_input/input"] = "input.primitive",
             ["form_input/textarea"] = "textarea.alias",
+            ["form_input/search_input"] = "search_input.alias",
         };
 
     // Canonical display -> ui_component_registry.component_key convention for Table leaves.
@@ -69,6 +70,7 @@ public static class LayoutSchemaTensorComposer
             ["card_list"] = "card_list.primitive",
             ["data_grid"] = "data_grid.alias",
             ["list"] = "list.alias",
+            ["table"] = "table.primitive",
         };
 
     // Action and WorkflowStep leaves resolve to the existing generic button primitive — both
