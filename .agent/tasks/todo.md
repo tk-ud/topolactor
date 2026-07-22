@@ -12,6 +12,7 @@
 | `seed-template-runtime-interaction-assignment` | Seed/template projection runtimeInteractionId assignment path | implemented | 1 | `product.dynamic_support_nocode_loop` / seed-template projection adoption carry-over | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `admin-surface-topology-seed-conversion` | Admin hardcoded surface topology seed conversion（`role-based-surface-separation` はこの Bundle の pre-seed-implementation evidence として統合済み — 2026-07-14、下記 Bundle 本文の該当 subsection 参照）。`admin-dashboard` subBundle は実装完了（PR #595、2026-07-19、下記「admin-dashboard subBundle 実装完了記録」参照）。`admin-enum` subBundle は seed登録・structural render proof・navigation closure proof を実装したが、enum_dictionary:* write dispatch（実際の作成/更新/削除）は既存 wiring lane 不在という blocking gap により未接続のまま残る（下記「admin-enum subBundle 実装記録」参照、implemented 扱いにしない）。残り3 subBundle（`team-dashboard`/`credential-management`/`scheduler-settings`）は未着手。 | not_started | 5 subBundle（うち1件実装完了、1件 write dispatch gap 付きで部分実装、3件未着手） | `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement | `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml` |
+| `admin-runtime-operation-dispatch-lane-determination` | PR #597 Gate0再監査で確定した、seed-authored Actionからmanifestーauthorizedなadmin_runtime layer:action dispatchへ到達する既存canonical laneの不在。3方向の比較をSSOTへ記録済み、owner decision待ち | not_started | 1 | `admin-surface-topology-seed-conversion`（admin-enum/team-dashboard/scheduler-settings write-dispatch面の前提） | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
@@ -844,6 +845,92 @@ PR574/577/578/584/587/588 の続きとして、role別（Normal / admin）surfac
 - write dispatch gap（admin_runtime layer:action 用の新規 runtimeInteractions actionType/wiring lane）は本subBundle単独では解消できない。owner判断でこのアーキテクチャ選択（新規lane追加 or 既存lane拡張の是非）が確定してから、admin-enum・他のadmin_runtime系subBundle（team-dashboard/scheduler-settings、いずれ`credential-management`が既存とは別にadmin_runtime layer:actionを必要とする場合も同様）に横断的に効く解決を行うこと。単一subBundleのpatchとして再発明しないこと。
 - gap解消後、`enum_write_dispatch_gap` Validation seed recordの除去、`enum_confirm_form`のwiring/tensorへのwrite dispatch runtimeInteractions追加、list/search実データ表示の配線、`preview_dictionary_delta`/`validate_against_enum_authority`段階の実装が残作業となる。
 - hardcoded route/island（`frontend/routes/admin/enums.tsx`/`AdminEnumsRoster.tsx`）撤去は、write dispatch含む完全なaction wiring proofが揃うまで着手しないこと。
+
+---
+
+## Bundle `admin-runtime-operation-dispatch-lane-determination`
+
+**Status:** `not_started`
+**Primary SSOT:** `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`（`lane_storage_boundary.known_gaps`、本Bundleの正本determination）, `docs/design/react-schema-topology-seed-translator-ssot.yaml`（`wiring_lane_contract.known_gaps`、cross-reference）
+**Position:** `admin-surface-topology-seed-conversion`（特に`admin-enum`/`team-dashboard`/`scheduler-settings`の write-dispatch面）の前提となる、design_change による決定事項の記録。実装Bundleではなく、owner decision待ちのSSOT-documented gapとその決定後に着手する後続実装のためのBundle枠。
+
+### 問題点
+
+PR #597（`admin-surface-topology-seed-conversion` admin-enum subBundle）のGate0再監査で、owner指摘に基づき「既存component wiring execution lane / abstract function substrate / `/admin/contents`・UI Builder正規形式」の3方向を実装コードから直接調査した結果、以下が確定した。
+
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `ui_event_settings.setting_category_taxonomy`が定義する6カテゴリ（`external_api_integration`/`external_instance_integration`/`internal_api`/`side_effect_setting`/`ui_state_update`/`ui_watch_binding`）およびそれに対応する`lane_storage_boundary`の5 lane（`external_api_lane`/`external_instance_lane`/`local_ui_state_lane`/`package_internal_api_wiring_lane`/`runtime_interactions_lane`）のいずれも、seed-authored Action nodeからmanifest-authorizedな汎用`admin_runtime` `layer:action` dispatch（`enum_dictionary:*`/`auth_users:*`/`team_markdown:*`/`scheduler_jobs:*`/`content_bundle:*`——いずれも`db/seed_empty.sql`で既にdispatcher_mapping済みの既存admin_runtime action）を運ぶ設計になっていない。
+- `runtime_interactions_lane`自身のdispatch spec型（`RuntimeDispatchSpec`、`frontend/runtime/frontendScheduler.ts`）は`wiring_key`/`wiring_id`/`target_ref`のみを運び、payload fieldを一切持たない——`external_api_lane`/`external_instance_lane`の`ExternalPortDispatchSpec`/`InstanceOperationDispatchSpec`（`resolvePayloadFrom`で解決したpayloadを運ぶ）とは構造的に異なる。
+- `package_internal_api_wiring_lane`（`ui_topology:update_package_wiring`、`PackageWiringEditor`）はdesign-time package/wiring-relation persistence操作であり、`screenReadQueryWiring`/aggregation-measure bindingにscopeされた別機能——admin_runtime actionのdispatchとは無関係。
+- `topology.ui_wiring_registry.wiring_schema_json`（JSON content column、`wiring_kind`/`target_surface`/`target_ref`のflat columnsとは別）は、backend/frontendのどちらからも一切読まれていない（網羅的grepで確認、production `.cs`/`.ts`/`.tsx`いずれにも参照0件）。credential-management・admin-dashboard・admin-enumの各subBundle seedがtranslatorの`wiringAdoptionCandidates`出力をこの列へそのまま採用した慣行はtranslator自身のcontract違反ではないが、実行配線の証拠として扱ってはならない。
+- `backend/runtime/AbstractFunctionRuntime.cs`の`SchedulerExecutionContext`は`payload`由来ではなく`manifest-authorized`な入力binding専用に設計されており、admin-typedなform値（enum group name等）を必要とするadmin CRUDとは前提が異なる。
+
+これは実装の見落としではなく、SSOTの`lane_storage_boundary`/`setting_category_taxonomy`が現時点でこのdispatch経路を定義していないという、SSOTレベルのgapである。
+
+### 目的
+
+owner decisionが必要な3方向（既存`runtime_interactions_lane`拡張／既存`wiring_kind`語彙拡張／abstract function substrate経由）を、それぞれの再利用範囲・新規抽象化範囲・SSOT変更範囲・runtime変更範囲・seed変更範囲・test/proof範囲・authority/fail-close条件・他Bundleへの再利用性・migration境界・blast radiusを明示した比較として確定し、owner判断後にBundle単位の実装作業へ進めるようにする。
+
+### 改善方針
+
+- 3方向いずれかをAgent判断で先行採用しない。`docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `lane_storage_boundary.known_gaps`の`candidate_directions_owner_decision_required`が正本の選択肢一覧であり、選択はowner decision。
+- 選択後の実装は、選択された方向のSSOT改定（`wiring_lane_contract.lanes`への新lane追加、または`wiring_kind`語彙拡大、またはabstract function substrateのUI-triggered runtime_lane定義）を経てから着手する——`SSOT -> wiring -> test/proof surface -> implementation`の順序を維持する。
+- `enum_dictionary:*`等の既存concrete admin_runtime actionをcompatibility fallbackとして使うか、abstract function manifestへ移行するかも、この決定に含める。
+- `runtimeInteractionId`はbackend persistence authority（`AssignRuntimeInteractionIds`、`ApplyConfirmedLayoutPatchAsync`からのみ呼ばれる）に限定したまま維持し、translator側に生成ロジックを追加しない。
+- `preview_dictionary_delta`/`validate_against_enum_authority`/`explicit_confirm`/`write`/`diff_log`の各段階について、単なるboolean flagではなく、preview candidateとconfirmed writeを接続するevidence identity・cancel・stale candidate拒否・diff log順序を、選択した方向の設計に含める。
+- `admin-enum`/`team-dashboard`/`scheduler-settings`の3 subBundleへの影響を横断的に扱う——単一subBundle向けのpatchとして再発明しない。
+
+### 対応資料
+
+- `AGENTS.md`
+- `.agent/rules/rule.md`
+- `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`
+- `docs/design/react-schema-topology-seed-translator-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `docs/design/admin-normal-surface-projection-seed-ssot.yaml`
+- `docs/design/enum-dictionary-ssot.yaml`
+- `docs/design/abstract-function-primitive-registry-ssot.yaml`
+- `docs/design/ui-builder-preset-ecosystem-ssot.yaml`（`package_wiring_manifest_bridge`）
+- `docs/design/db-schema.yaml`
+- `.agent/tasks/todo.md`（本Bundle、および`admin-surface-topology-seed-conversion` admin-enum subBundle実装記録）
+- PR #597（`tk-ud/topolactor`）全差分・comment履歴
+
+### 対象ファイル名
+
+- `frontend/runtime/frontendScheduler.ts`（`RuntimeDispatchSpec`、`enqueueRuntimeComponentCommand`、`ExternalPortDispatchSpec`/`InstanceOperationDispatchSpec`の既存precedent）
+- `frontend/runtime/renderEmission.ts`（`buildRuntimeDispatchSpec`、`mapWiringKindToLayer`、`mapWiringKindToAction`）
+- `frontend/runtime/uiEventEffectRunner.ts`（既存actionType taxonomy: `dispatchExternalPort`/`dispatchInstanceOperation`/`localStateMutation`）
+- `frontend/runtime/runtimeComponentFactory.ts`（`emitBoundEvent`のLane 2: component_wiring_execution_lane呼び出し）
+- `frontend/lib/runtimeInteractionAuthoring.ts`（`runtimeInteractionCategory`の既存category taxonomy）
+- `backend/repository/NpgsqlTopologyRepository.cs`（`MapWiringKindToDispatchAction`）
+- `backend/repository/NpgsqlUiTopologyRepository.cs`（`AssignRuntimeInteractionIds`、`ApplyConfirmedLayoutPatchAsync`、`UpdatePackageWiringAsync`）
+- `backend/runtime/AdminRuntime.cs`、`backend/runtime/AdminRuntimeMasterRoster.cs`（既存`enum_dictionary:*`/`content_bundle:*`等のconcrete admin_runtime action実装）
+- `backend/runtime/AbstractFunctionRuntime.cs`（`SchedulerExecutionContext`、abstract function primitive実行境界）
+- `backend/runtime/ManifestDispatcher.cs`、`backend/runtime/AdminRuntimeDispatchAdapter.cs`、`backend/runtime/OperationVectorResolver.cs`（既に汎用的なtarget/layer/action dispatch transport、変更不要である可能性が高い）
+- `db/seed_empty.sql`（`admin-enum` ae2xx行、影響範囲確認）
+
+### 対象関数名
+
+- `enqueueRuntimeComponentCommand`、`buildRuntimeDispatchSpec`、`mapWiringKindToLayer`、`mapWiringKindToAction`
+- `MapWiringKindToDispatchAction`、`AssignRuntimeInteractionIds`、`ApplyConfirmedLayoutPatchAsync`、`UpdatePackageWiringAsync`
+- `emitBoundEvent`、`enqueueExternalPortDispatchCommand`、`enqueueInstanceOperationDispatchCommand`（既存precedentパターン）
+- `AdminRuntime.ExecuteDataAsync`、`AdminRuntimeDispatchAdapter.ExecuteAsync`、`OperationVectorResolver.Resolve`
+- future: 選択された方向に応じた新規dispatch関数（本Bundleのdesign_change決定前は追加しない）
+
+### 受入条件
+
+- `lane_storage_boundary.known_gaps`/`wiring_lane_contract.known_gaps`に記載された3方向比較がownerに提示され、1方向（または代替）が選択されている。
+- 選択された方向のSSOT改定（新lane定義、または語彙拡大の正式contract、またはabstract function UI-triggered runtime_lane定義）が本Bundleまたは後続Bundleで完了している。
+- `admin-enum`/`team-dashboard`/`scheduler-settings`の write-dispatch実装が、選択された単一の正規contractに従って進められる状態になっている。
+- `runtimeInteractionId`のbackend persistence authority限定が維持されている。
+
+### Governance NG boundary
+
+- Agent判断で3方向のいずれかを検証なしに採用する。
+- `enum_dictionary:*`等の既存concrete admin_runtime actionを`content_bundle:*`で無根拠に代替する。
+- 単一surface専用のactionType/handler/switch/table名/function名/API routeを追加する。
+- `wiring_schema_json`のconsumerがない状態を実行配線の完成証拠として扱う。
+- `admin-surface-topology-seed-conversion`および傘下subBundleの既存記録・statusをこのBundle追加によって変更する。
+- PR #597の未完了scopeをtodo status変更だけで処理済みとして扱う。
 
 ---
 

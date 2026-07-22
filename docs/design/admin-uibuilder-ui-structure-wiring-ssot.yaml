@@ -149,6 +149,78 @@ admin_uibuilder_ui_structure_wiring_ssot:
         runtime_path: applyGuardedLocalStateMutation via the shared guarded dispatcher; no backend/external dispatch
         idempotency_applicability: not_applicable
         idempotency_note: local state mutation never calls dispatchExternalPort/dispatchInstanceOperation, so it carries no idempotency_key by design, not by omission.
+    known_gaps:
+      - gap: admin_runtime_layer_action_dispatch_lane_not_yet_defined
+        classification: missing_lane_ssot_gap
+        status: open
+        note: >-
+          Confirmed via PR #597 (admin-surface-topology-seed-conversion admin-enum
+          subBundle) Gate0 re-audit, 2026-07-22: none of the five lanes above, and none
+          of the six setting_category_taxonomy categories below (ui_event_settings),
+          is designed to carry a generic manifest-authorized admin_runtime layer:action
+          dispatch (the concrete admin_runtime actions already registered and
+          dispatcher-mapped in db/seed_empty.sql, e.g. enum_dictionary:*, auth_users:*,
+          team_markdown:*, scheduler_jobs:*, content_bundle:*) from a seed-authored
+          Action node. This is not an implementation oversight fixable by adding one
+          more case to an existing lane's switch statement: runtime_interactions_lane's
+          own dispatch spec type (RuntimeDispatchSpec,
+          frontend/runtime/frontendScheduler.ts) carries no payload field at all (only
+          wiring_key/wiring_id/target_ref identifiers), unlike external_api_lane's /
+          external_instance_lane's ExternalPortDispatchSpec / InstanceOperationDispatchSpec,
+          which do carry a resolvePayloadFrom-populated payload; and
+          package_internal_api_wiring_lane (ui_topology:update_package_wiring) is an
+          unrelated design-time package/wiring-relation persistence operation, not a
+          per-event dispatch call, explicitly scoped to screenReadQueryWiring /
+          aggregation-measure binding (docs/design/ui-builder-preset-ecosystem-ssot.yaml
+          package_wiring_manifest_bridge), not admin_runtime actions.
+          topology.ui_wiring_registry.wiring_schema_json (the JSON content column, as
+          distinct from its wiring_kind/target_surface/target_ref flat columns) has zero
+          runtime or frontend consumers anywhere in the codebase (verified by exhaustive
+          grep) regardless of which lane authored it -- it must not be treated as
+          execution-wiring evidence by any future bundle. See
+          docs/design/react-schema-topology-seed-translator-ssot.yaml
+          wiring_lane_contract for the corresponding cross-reference.
+        candidate_directions_owner_decision_required:
+          - extend_runtime_interactions_lane: >-
+              Add a new actionType (e.g. dispatchAdminOperation) to the
+              runtime_interactions_lane taxonomy, with its own RuntimeDispatchSpec-like
+              payload-carrying dispatch spec (mirroring ExternalPortDispatchSpec /
+              InstanceOperationDispatchSpec's payloadFrom resolution and
+              idempotency_key precedent), its own targetRef shape and authority_mapping
+              values, and inclusion in
+              docs/design/react-schema-topology-seed-translator-ssot.yaml
+              wiring_lane_contract.lanes.
+          - extend_wiring_kind_vocabulary: >-
+              Add admin_runtime-scoped wiring_kind values to the existing
+              component_wiring_execution_lane convention (mapWiringKindToLayer /
+              mapWiringKindToAction in frontend/runtime/renderEmission.ts,
+              MapWiringKindToDispatchAction in
+              backend/repository/NpgsqlTopologyRepository.cs), and add a payload field
+              to RuntimeDispatchSpec / enqueueRuntimeComponentCommand -- noting this
+              mixes an entity-CRUD-scoped vocabulary with admin_runtime operation
+              selection under one column, and needs its own idempotency_applicability
+              determination (package_internal_api_wiring_lane's idempotency_note above
+              already warns against silently inheriting another lane's idempotency
+              carrier by proximity).
+          - abstract_function_substrate_bridge: >-
+              Route admin_runtime write actions through
+              backend/runtime/AbstractFunctionRuntime.cs (db_mutation /
+              call_postgres_function primitives) instead of concrete
+              AdminRuntime.ExecuteDataAsync case handlers, then define a UI-triggered
+              runtime_lane for it -- note AbstractFunctionRuntime's
+              SchedulerExecutionContext input-binding design is currently scoped to
+              manifest-authorized (not user-payload-derived) input, a mismatch with
+              admin CRUD's need for admin-typed form values that this direction would
+              also have to resolve.
+          - selection_status: >-
+              Selection among the above (or another direction) is not made by this
+              entry; selection and the resulting idempotency_applicability /
+              authority_mapping / audit-evidence contract are owner_decision_required,
+              per admin-surface-topology-seed-conversion's own Governance NG boundary
+              against a single subBundle adding a new dedicated runtime lane
+              unilaterally (.agent/tasks/todo.md).
+        affected_subbundles: [admin-enum, team-dashboard, scheduler-settings]
+        follow_up_ref: .agent/tasks/todo.md admin-runtime-operation-dispatch-lane-determination Bundle
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

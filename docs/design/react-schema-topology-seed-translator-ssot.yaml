@@ -1152,6 +1152,29 @@ react_schema_topology_seed_translator_ssot:
       - sharing_one_ambiguous_dispatch_category_across_external_port_registered_instance_ui_local_and_contents_dto_operations
       - accepting_payloadFrom_syntax_without_lane_specific_validation
       - eventBinding_authority_disagreeing_with_owning_node_authorityMarker
+      - treating_ui_wiring_registry_wiring_schema_json_content_as_execution_wiring_evidence
+    known_gaps:
+      - gap: admin_runtime_layer_action_dispatch_lane_not_yet_defined
+        classification: missing_lane_ssot_gap
+        status: open
+        note: >-
+          Cross-reference: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+          lane_storage_boundary.known_gaps carries the full determination (confirmed via
+          PR #597 admin-enum Gate0 re-audit, 2026-07-22). None of the five lanes above
+          covers generic manifest-authorized admin_runtime layer:action dispatch
+          (enum_dictionary:*, auth_users:*, team_markdown:*, scheduler_jobs:*,
+          content_bundle:*) from a seed-authored Action node.
+          topology.ui_wiring_registry.wiring_schema_json (as adopted from this contract's
+          own wiringAdoptionCandidates output into db/seed_empty.sql by the
+          credential-management, admin-dashboard, and admin-enum subBundle seeds) has
+          zero runtime or frontend consumers anywhere in the codebase (verified by
+          exhaustive grep) -- the wiringAdoptionCandidates -> wiring_schema_json adoption
+          convention those seeds followed is not itself incorrect per this contract's own
+          schema, but it must not be read by any future bundle as proof that seed-authored
+          wiring reaches admin_runtime dispatch; the functionally real carrier is
+          tensorAdoptionCandidates -> ui_topology_tensor.layout_patch_json.nodes[].runtimeInteractions[]
+          only.
+        follow_up_ref: .agent/tasks/todo.md admin-runtime-operation-dispatch-lane-determination Bundle
 
   # ===========================================================================
   # 9. ui_catalog_boundary_contract
