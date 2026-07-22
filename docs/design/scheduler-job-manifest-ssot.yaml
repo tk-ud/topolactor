@@ -45,6 +45,30 @@ scheduler_job_manifest_ssot:
       create: create_scheduler_job_manifest_draft
       edit: edit_scheduler_job_manifest_draft_or_inactive_manifest
       disable: set_scheduler_job_active_false
+    admin_surface_split_2026_07_22:
+      status: design_change_owner_confirmed
+      note: >-
+        Clarifies which admin surface each part of this authoring_surface routes through, so the
+        admin-surface-topology-seed-conversion Bundle's scheduler-settings subBundle is not read as
+        owning a single monolithic screen. Three distinct surfaces:
+      job_body_and_step_chain_authoring:
+        surface: /admin/contents (this authoring_surface.owner above, physical_table_and_page_binding
+          over topology.scheduler_jobs / topology.scheduler_job_steps)
+        covers: create, edit, and all data_defined_fields below except credential_requirement_reference /
+          external_port_reference
+        bundle_scope: existing generic pipeline, not produced or seed-converted by
+          admin-surface-topology-seed-conversion's scheduler-settings subBundle
+      credential_and_external_port_binding:
+        surface: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+          surface_axes.admin.surfaces.credentials.categories.external_api_credential.consumer_reference_binding
+        covers: [credential_requirement_reference, external_port_reference]
+        bundle_scope: credential-management subBundle, not scheduler-settings
+      list_search_filter_toggle_projection:
+        surface: docs/design/admin-normal-surface-projection-seed-ssot.yaml
+          surface_axes.admin.surfaces.scheduler
+        covers: read-only listing of job_key/trigger_kind/schedule_policy_kind/active plus explicit
+          enable/disable (never create/edit/step-chain/credential-port binding)
+        bundle_scope: scheduler-settings subBundle's own topology UI seed target manifest
     data_defined_fields:
       - job_key
       - trigger_kind
@@ -92,11 +116,16 @@ scheduler_job_manifest_ssot:
       scheduler_jobs, which does not exist yet — only per-action dispatcher_mapping manifests
       exist today. Authoring the relation itself is not the blocker — that mechanism already exists
       via /admin/manifests (docs/design/admin-console-workflow-ssot.yaml
-      admin_hub_relation_navigation_contract) — the blocker is purely the absence of a target. The
-      edit action (scheduler_jobs:edit) has full backend/dispatcher wiring but is not yet exposed
-      as a UI control on the current frontend/routes/admin/scheduler.tsx surface (see
-      frontend/content/adminGuides.ts ADMIN_ROUTE_CARDS caution text) — closing that UI gap remains
-      open scheduler-settings subBundle work, tracked in .agent/tasks/todo.md.
+      admin_hub_relation_navigation_contract) — the blocker is purely the absence of a target.
+      2026-07-22 correction: the prior wording here ("edit action has full backend/dispatcher wiring
+      but is not yet exposed as a UI control ... see frontend/content/adminGuides.ts ADMIN_ROUTE_CARDS
+      caution text") was stale — that caution text no longer exists in adminGuides.ts and the edit UI
+      gap it referenced was closed in the role-based-surface-separation work (2026-07-14, see
+      .agent/tasks/todo.md). It is superseded, not reinstated, by admin_surface_split_2026_07_22
+      above: create/edit now route through /admin/contents rather than
+      frontend/routes/admin/scheduler.tsx, so the target manifest this note describes is for the
+      narrower list/search/filter/toggle surface_axes.admin.surfaces.scheduler projection only — see
+      that entry's scope_boundary for what is and is not covered.
 
   scheduler_substrate:
     role: generic_runtime_time_axis_queue_for_job_manifests

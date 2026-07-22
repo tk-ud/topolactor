@@ -286,6 +286,7 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - **含めるもの:** `/admin/users`、admin user、user_auth、external、instance_settings、credential requirement projection、credential-backed instance connection setting。
 - **統合方針:** credential management は user_auth / external / instance_settings の mode/category 統合方針に従い、admin user を分離しない。
 - **NG:** standalone route / dedicated panel / raw physical table row editor を追加しない。credential management から admin user を分離しない。
+- **2026-07-22追記（design_change、owner確認済み）:** scheduler jobの`credential_requirement_ref`/`external_port_ref`紐付け設定（外部APIや外部インスタンス関数呼び出しに使うcredential/portの選択）は、UX上この画面から行える方が良いとのowner判断により、この subBundle の scope に追加された。`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.admin.surfaces.credentials.categories.external_api_credential.consumer_reference_binding` 参照。scheduler job本体（job_key/trigger_kind/schedule/step chain）の設定はこの subBundle の scope外（下記`scheduler-settings`参照）。
 
 #### `admin-enum`
 
@@ -295,9 +296,9 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 
 #### `scheduler-settings`
 
-- **意味 scope:** scheduler job settings projection / create-edit-disable action wiring。
-- **含めるもの:** scheduler job settings projection、create / edit / disable action wiring、scheduler configuration CRUD seed。
-- **含めないもの:** scheduler runtime policy hidden in frontend constants、diagnostics route replacement。
+- **意味 scope:** 2026-07-22 design_change（owner確認済み）により再定義。scheduler job manifestの機能は3つの surface に分割される——(1) job本体のcreate/edit/step chain authoring は既存の汎用 `/admin/contents`（物理テーブル紐付けpipeline）に一任し、この subBundle の scope外。(2) credential/external port紐付け設定は`credential-management` subBundle の scope（上記参照）。(3) 設定済みcron一覧の表示・検索・フィルタ・有効/無効切替のみが、この subBundle 自身が持つ seed_contract の対象。
+- **含めるもの:** 設定済み scheduler job の list / search（job_key）/ filter（trigger_kind, schedule_policy_kind, active）/ enable・disable action wiring のみ。既存 backend dispatcher_mapping は `scheduler_jobs:list_settings/create/edit/disable` のみで対称の `enable` が無いため、`scheduler_jobs:enable`（`disable`の鏡写し）の追加が実装時に必要。
+- **含めないもの:** create / edit / step chain authoring（`/admin/contents`へ）、credential/external port紐付け設定（`credential-management`へ）、scheduler runtime policy hidden in frontend constants、diagnostics route replacement。既存 hardcoded `/admin/scheduler` + `SchedulerJobSettingsPanel.tsx` は撤去ではなくこのスコープへ縮小する対象。
 
 ### 対応資料
 
@@ -429,7 +430,7 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
 - `credential-management`: manifest 092 / existing `?manifest=` / canonical_default_entry / `/admin/users` auth_users CRUD は既存到達経路として扱う。active `ui_projection` target manifest readinessは既存substrate resolved。navigation binding authoring / verificationはmanifest構築の着手条件ではないため着手はいつでも可能だが（そもそも092は既に存在しmanifest構築自体が不要）、subBundle closureには2026-07-22確定の解決基準（下記節参照）を満たすproofが必要——既存2026-07-12b proof群はauthoring pathとresolution chainが分離しており未達（詳細はSSOT `navigation_binding_gap_detail`参照）。instance_settingsは既存 `topology.db_instance_port` / `topology.runtime_instance_port` / `topology.instance_connection_policy` / `topology.instance_operation_authority_binding` と `NpgsqlInstancePortPolicyRepository` / approved `instance_operation_authority_binding` candidate sourceからprojection seedへbindする残scope。`credentials.users` は create account + initial credential / delete account + credential consistency は既存substrateあり、password replace / rotate は owner NG により永続的に対象外（`retired_permanent_ng`、pending扱いではない）、consistency proofは実PostgreSQL live-DB testで解決済み。admin user分離、standalone route/dedicated panel/raw table editorはNG。
 - `admin-enum`: enum dictionary/group/item/status dependency authorityは既存SSOTと `enum_dictionary:*` substrateに従う。target `ui_projection` manifest は未作成で `unresolved_before_seed`——ただしこれは着手条件（manifest構築を始めてよいか）であり、manifest構築自体は`surface_axes.admin.surfaces.enum`のseed_contractがSSOT上完備しているため直ちに着手可能。manifest構築後、navigation binding authoring / verificationは2026-07-22確定の解決基準（下記節参照）を満たすproofをsubBundle closureとして同一作業内で用意する。CRUD presetのgeneric shapeは参考にできるが `content_bundle:*` refsをコピーせず、enum authority operationへbindする。
 - `team-dashboard`: team Markdown saved view / rendered Markdown / completed preset seed summary authorityは既存SSOTに従う。target `ui_projection` manifest は未作成（着手条件として`unresolved_before_seed`）。normal.dashboard viewer/inputer責務分離、`md_translation_authoring_surface.authoring` runtime adapter/route-composition binding、preview/validate/write/diff operation bindingは全て解決済み（role-based-surface-impl bundle, 2026-07-14）。ただし`normal_dashboard_authoring_runtime_adapter`はGate0監査で2026-07-15にreopenされたまま（`/dashboard/team`撤去・`/admin/team-dashboard`復元、下記節参照）——manifest/dispatcher_mapping/runtime adapter自体は未生成。manifest構築後、navigation binding authoring / verificationも同基準で用意する。
-- `scheduler-settings`: scheduler job manifest / create-edit-disable authorityは既存SSOTと `scheduler_jobs:*` substrateに従う（バックエンド/dispatcher wiringは実装済み）。target `ui_projection` manifest は未作成（着手条件として`unresolved_before_seed`）——**加えて `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.admin.surfaces` に scheduler 用エントリ自体が存在しない**（enum/credentials/dashboardと異なり、admin投影seed設計そのものが未着手）。manifest構築に先立ち、この surface_axes セクションの設計（component_tree/operations/capability_requirements）をOwner確認の上で追加する design_change が必要。scheduler runtime policyをfrontend constantsへ隠さず、既存backend/dispatcher substrateへ明示bindする。
+- `scheduler-settings`: **2026-07-22 design_change（owner確認済み、下記「scheduler-settings 3分割設計の確定」節参照）によりscope再定義済み。** `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.admin.surfaces.scheduler` エントリを追加済み——ただしscopeはlist/search/filter/enable・disableのみ（create/edit/step chain authoringは`/admin/contents`、credential/port紐付けは`credential-management`へ分離）。target `ui_projection` manifest はこの縮小scopeについて依然 未作成（着手条件として`unresolved_before_seed`のまま）だが、SSOT設計自体は完備し着手可能。既存dispatcher_mappingに`scheduler_jobs:enable`が無いため、manifest構築と同一作業内で追加する。既存hardcoded `/admin/scheduler` + `SchedulerJobSettingsPanel.tsx`は撤去ではなくこの縮小scopeへの置き換え対象。
 
 ### Owner pause lifted（2026-07-18、PR592 gate0 audit 受け owner 明示決定）
 
@@ -466,6 +467,23 @@ admin hardcoded surface を意味要素ごとの topology UI seed conversion sco
   - `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `design_blocking[0]`（`target_surface_manifest_readiness`）に `sequencing_note` と `navigation_binding_resolution_criterion` を追加。`credential-management.navigation_binding_gap_detail` で既存proofが未達な理由を明記。`seed_implementation_start_conditions` にphase A（manifest構築）/phase B（navigation binding closure）の区別を追記。
   - `docs/design/admin-console-workflow-ssot.yaml` `admin_hub_relation_navigation_contract.authoring.resolved_closure_proof_shape` を新設し、`subbundle_target_readiness.note` を「readiness gate=manifest存在のみ、navigation binding authoring状態は別のcompletion要件」という区別が明示されるよう訂正。
 - **本節が変更しないもの:** Bundle Status（`not_started`）、5 subBundleのdesign_blocking自体の値（`subbundle_status`の resolved/unresolved_before_seed 判定結果）、admin-dashboard実装完了記録、Owner pause lifted節の内容。変更したのはnavigation_binding_authoring_and_verificationという1項目の「着手条件か否か」と「何が resolved を意味するか」の解釈のみ。
+- **検証:** `bash .agent/tests/check-admin-normal-surface-projection-seed-ssot.sh`（PASS）、`bash .agent/tests/check-structure.sh`（PASS）。design_change のため frontend/backend test・build は対象外（production code変更なし）。
+
+### scheduler-settings 3分割設計の確定（2026-07-22、design_change、owner確認済み）
+
+**この節が `scheduler-settings` subBundle の scope に関する現在の正本である。** Gate0再監査で発見した「`docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.admin.surfaces` に scheduler 用エントリ自体が存在しない」という設計欠落をowner確認の上で解消した。
+
+- **問題点:** `scheduler-settings` subBundle は当初、admin-enumと同型の「独自target manifestを持つ専用CRUD投影」として想定されていたが、既存hardcodedフォーム（`SchedulerJobSettingsPanel.tsx`）は約20フィールド＋ネストしたstep配列という、enum等に比べて大幅に複雑な構造を持ち、対応するseed_contractを一から設計するのは過大だった。
+- **目的:** scheduler job manifestの機能を、既存の汎用機構・他subBundleの適切な置き場所へ分割し、`scheduler-settings` subBundle自身が持つべきscopeを最小化する。
+- **owner確認内容（3分割）:**
+  1. **job本体のcreate/edit/step chain authoring**（job_key/trigger_kind/schedule_policy_kind/cron_expression/input-output table refs/abstract_function_step_chain等）は、`docs/design/scheduler-job-manifest-ssot.yaml` `authoring_surface.owner: admin.contents` が元々示す通り、既存の汎用`/admin/contents`（物理テーブル紐付けpipeline）に完全に一任する。本Bundleでは新規のseed_contractを設計しない。
+  2. **credential/external port紐付け設定**（`credential_requirement_ref`/`external_port_ref`）は、外部APIや外部インスタンス関数の呼び出し設定をcredential管理画面から行えた方がUXが良いため、`credential-management` subBundleの投影screenに設定可能な形で追加する（読み取り専用ではなく編集可能）。
+  3. **`scheduler-settings` subBundle自身が持つscope**は、設定済みcron一覧の表示・検索（job_key）・フィルタ（trigger_kind/schedule_policy_kind/active）・有効/無効切替のみ。既存hardcoded `/admin/scheduler` + `SchedulerJobSettingsPanel.tsx`は**撤去ではなく、このscopeへ縮小**する（create/edit/step chainフォーム部分を除去し、一覧・検索・フィルタ・on/off切替のみ残す）。
+- **対応資料（SSOT側、本節と同一作業で実施）:**
+  - `docs/design/admin-normal-surface-projection-seed-ssot.yaml` `surface_axes.admin.surfaces.scheduler` を新設（`scope_boundary`でin_scope/out_of_scope/routes_toを明記、`seed_contract`はsearch_input/select/table.primitive/button.primitiveの最小構成、既存`disable`と対称な`scheduler_jobs:enable`の追加が必要な旨を`new_operation_note`に明記）。`surface_axes.admin.surfaces.credentials.categories.external_api_credential.consumer_reference_binding`を新設し、scheduler job向けcredential/port紐付け操作`configure_scheduler_job_credential_or_port_binding`を追加、`capability_requirements.mutation`にも反映。`crud_preset_physical_reference_assessment.surface_operation_mapping`に`scheduler`エントリを追加。
+  - `docs/design/scheduler-job-manifest-ssot.yaml` `authoring_surface.admin_surface_split_2026_07_22`を新設し3分割を明記。`admin_hub_relation_navigation.note`のstale記述（edit UIが`frontend/routes/admin/scheduler.tsx`上に未露出、という`frontend/content/adminGuides.ts`のcaution text参照——実際には既に存在しない）を訂正。
+- **本節が変更しないもの:** Bundle Status（`not_started`）、`design_blocking[0].subbundle_status.scheduler-settings: unresolved_before_seed`という判定結果自体（target manifestは依然未構築のため）、他4 design_blocking idの内容、admin-dashboard実装完了記録。変更したのは scheduler-settings のscope定義と、それに伴うSSOT設計欠落の解消のみ。
+- **次にこのsubBundleを触るAgentへの引き継ぎ:** manifest構築（React-like Schema→translator→topology UI seed→seed登録）に着手する際は、(a) `surface_axes.admin.surfaces.scheduler`のseed_contractに従うこと、(b) `scheduler_jobs:enable`のdispatcher_mapping追加を同一作業内で行うこと、(c) credential-management側の`consumer_reference_binding`実装は別途credential-management subBundleの作業として扱うこと（同時実装は必須ではないが、両者は独立して進行可能）。
 - **検証:** `bash .agent/tests/check-admin-normal-surface-projection-seed-ssot.sh`（PASS）、`bash .agent/tests/check-structure.sh`（PASS）。design_change のため frontend/backend test・build は対象外（production code変更なし）。
 
 ### [INVALIDATED — DO_NOT_USE — superseded_by_2026_07_12b] Owner補正記録（PR #584 review comment, 2026-07-11, topology UI seed production 停止）
