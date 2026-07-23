@@ -42,6 +42,15 @@ VALUES
     ('00000000-0000-0000-0001-000000000012', 'select.template', 'form_input/select', 'frontend/components/Select.tsx', 'active'),
     ('00000000-0000-0000-0001-000000000013', 'form_field.template', 'form_input/form_field', 'frontend/components/FormField.tsx', 'active'),
     ('00000000-0000-0000-0001-000000000014', 'card_list.primitive', 'display/card_list', 'frontend/components/CardList.tsx', 'active'),
+    -- admin-surface-topology-seed-conversion admin-enum subBundle: promotes the existing
+    -- code_only_drift components_bucket row (db/seed_empty.sql topology.components_bucket)
+    -- to an active ui_component_registry row -- table.primitive was coded
+    -- (frontend/components/Table.tsx) but never promoted, so admin-normal-surface-projection-seed-ssot.yaml
+    -- surface_axes.admin.surfaces.enum.seed_contract.component_tree's enum_table node
+    -- (table.primitive) could not resolve a componentId. This is an ordinary registration/
+    -- promotion action over an already-coded component, not a new component or a substitute
+    -- for the SSOT-specified componentKey.
+    ('00000000-0000-0000-0001-000000000020', 'table.primitive', 'data_display/table', 'frontend/components/Table.tsx', 'active'),
     ('00000000-0000-0000-0001-000000000015', 'modal.template', 'disclosure/modal', 'frontend/components/Modal.tsx', 'active'),
     ('00000000-0000-0000-0001-000000000016', 'tabs.template', 'disclosure/tabs', 'frontend/components/Tabs.tsx', 'active'),
     ('00000000-0000-0000-0001-000000000017', 'json_viewer.template', 'data_display/json', 'frontend/components/JsonViewer.tsx', 'active'),

@@ -420,8 +420,18 @@ function emitBoundEvent(
   if (!logResult.ok) return logResult;
   // Lane 2: component_wiring_execution_lane — runtime dispatch (when configured).
   // Fire-and-forget: the FIFO queue in frontendScheduler handles ordering and error propagation.
+  // Event-time payload (the caller's form/field values, same argument Lane 1's
+  // log entry already merges above) is forwarded verbatim -- this is what lets
+  // an admin_runtime wiringKind=admin_runtime dispatch (see renderEmission.ts
+  // mapWiringKindToLayer/mapWiringKindToAction) carry admin-typed values
+  // (e.g. enum group name) to the backend action; the pre-existing search/
+  // aggregate/create/update/delete wiringKinds ignore it (their payload comes
+  // from wiring/screen_data_shape configuration instead).
   if (binding.runtimeDispatch) {
-    void enqueueRuntimeComponentCommand(binding.runtimeDispatch);
+    void enqueueRuntimeComponentCommand({
+      ...binding.runtimeDispatch,
+      payload: { ...binding.runtimeDispatch.payload, ...binding.payload, ...payload },
+    });
   }
   // Lane 2 (external_port): Design Inspector-authored dispatchExternalPort.
   // high_frequency_policy runtime guard: a high-frequency trigger without a

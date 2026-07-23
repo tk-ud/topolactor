@@ -950,6 +950,12 @@ def new_output_shell():
         "validationErrors": [],
         "unresolvedGaps": [],
         "reverseTranslationBlockers": [],
+        # Populated from the translator entry gate's own authoringReferences
+        # (schema_seed_translator_entry_gate.py) as soon as the gate runs --
+        # see cmd_generate_react_schema / cmd_generate_topology_seed. Stays []
+        # only for the pre-gate early-return paths (SSOT load failure, input
+        # file unreadable), which precede gate execution entirely.
+        "authoringReferences": [],
     }
 
 
@@ -1734,6 +1740,7 @@ def cmd_generate_react_schema(args):
     gate = _gate_core()
     gate_result = gate.validate_translator_entry(envelope, ssot_root=ssot_root, expected_mode="generate_react_schema")
     output["gateStatus"] = gate_result["gateStatus"]
+    output["authoringReferences"] = gate_result["authoringReferences"]
     if gate_result["gateStatus"] != gate.GATE_STATUS_PASS:
         output["validationErrors"].extend(gate_result["entryValidation"]["validationErrors"])
         output["unresolvedGaps"] = gate_result["unresolvedGaps"]
@@ -1845,6 +1852,7 @@ def cmd_generate_topology_seed(args):
     gate = _gate_core()
     gate_result = gate.validate_translator_entry(envelope, ssot_root=ssot_root, expected_mode="generate_topology_ui_seed")
     output["gateStatus"] = gate_result["gateStatus"]
+    output["authoringReferences"] = gate_result["authoringReferences"]
     if gate_result["gateStatus"] != gate.GATE_STATUS_PASS:
         output["validationErrors"].extend(gate_result["entryValidation"]["validationErrors"])
         output["unresolvedGaps"] = gate_result["unresolvedGaps"]

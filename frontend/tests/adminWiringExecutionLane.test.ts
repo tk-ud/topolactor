@@ -120,6 +120,111 @@ Deno.test("buildRuntimeDispatchSpec: create wiring defaults to entity layer", ()
   assertEquals(spec!.target, "default");
 });
 
+// ─── admin_runtime wiringKind (docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+// lane_storage_boundary.known_gaps admin_runtime_layer_action_dispatch_lane_not_yet_defined,
+// extend_wiring_kind_vocabulary direction) ─────────────────────────────────────
+
+// Realistic manifest UUIDs (matching the "manifest:<uuid>:<layer>:<action>" shape
+// ManifestDispatcher.TryParseManifestTargetRef requires -- see parseAdminRuntimeLayerAction's
+// doc comment for why targetRef must stay a valid manifest reference, corrected after a
+// live-DB proof caught a bare "<layer>:<action>" targetRef failing TARGET_REF_INVALID
+// server-side despite passing every frontend-only unit test that existed before that proof).
+const ADMIN_ENUM_MANIFEST_ID = "00000000-0000-0000-0000-0000000ae200";
+const ADMIN_DASHBOARD_MANIFEST_ID = "00000000-0000-0000-0000-0000000ad200";
+
+Deno.test("mapWiringKindToLayer: admin_runtime parses layer from a manifest-prefixed targetRef", () => {
+  assertEquals(
+    mapWiringKindToLayer(
+      "admin_runtime",
+      `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+    ),
+    "enum_dictionary",
+  );
+});
+
+Deno.test("mapWiringKindToAction: admin_runtime parses action from a manifest-prefixed targetRef", () => {
+  assertEquals(
+    mapWiringKindToAction(
+      "admin_runtime",
+      `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+    ),
+    "create_group",
+  );
+});
+
+Deno.test("mapWiringKindToLayer/Action: admin_runtime with absent/malformed targetRef returns null (fail-close, no partial parse)", () => {
+  assertEquals(mapWiringKindToLayer("admin_runtime", undefined), null);
+  assertEquals(mapWiringKindToLayer("admin_runtime", null), null);
+  assertEquals(mapWiringKindToLayer("admin_runtime", ""), null);
+  assertEquals(mapWiringKindToLayer("admin_runtime", "enum_dictionary"), null);
+  assertEquals(mapWiringKindToLayer("admin_runtime", "a:b:c"), null);
+  // a bare "<layer>:<action>" (no "manifest:<uuid>:" prefix) must fail close, not partially
+  // parse -- this exact shape is what the pre-live-DB-proof implementation wrongly accepted.
+  assertEquals(
+    mapWiringKindToLayer("admin_runtime", "enum_dictionary:create_group"),
+    null,
+  );
+  // "manifest:" prefix present but the UUID segment is not a syntactically plausible UUID.
+  assertEquals(
+    mapWiringKindToLayer("admin_runtime", "manifest:not-a-uuid:enum_dictionary:create_group"),
+    null,
+  );
+  // correct manifest/UUID shape but missing the trailing action segment.
+  assertEquals(
+    mapWiringKindToLayer("admin_runtime", `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary`),
+    null,
+  );
+  assertEquals(mapWiringKindToAction("admin_runtime", undefined), null);
+  assertEquals(
+    mapWiringKindToAction("admin_runtime", "enum_dictionary"),
+    null,
+  );
+  assertEquals(
+    mapWiringKindToAction("admin_runtime", "enum_dictionary:create_group"),
+    null,
+  );
+});
+
+Deno.test("buildRuntimeDispatchSpec: admin_runtime wiring builds a generic layer:action dispatch spec, reusable for any admin_runtime action", () => {
+  const enumSpec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "admin_runtime",
+    targetSurface: "manifest",
+    targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+  });
+  assertExists(enumSpec);
+  assertEquals(enumSpec!.target, "manifest");
+  assertEquals(enumSpec!.layer, "enum_dictionary");
+  assertEquals(enumSpec!.action, "create_group");
+  // targetRef is forwarded verbatim (unlike layer/action, which are parsed out of it) -- this
+  // is the SAME string ManifestDispatcher's own target_ref manifest-resolution path consumes,
+  // via enqueueRuntimeComponentCommand's payload.target_ref forwarding.
+  assertEquals(
+    enumSpec!.targetRef,
+    `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+  );
+
+  // same function, different manifest + target_ref content -- no per-operation case added.
+  const authSpec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "admin_runtime",
+    targetSurface: "manifest",
+    targetRef: `manifest:${ADMIN_DASHBOARD_MANIFEST_ID}:auth_users:list`,
+  });
+  assertExists(authSpec);
+  assertEquals(authSpec!.layer, "auth_users");
+  assertEquals(authSpec!.action, "list");
+});
+
+Deno.test("buildRuntimeDispatchSpec: admin_runtime wiring with no targetRef returns null (fail-close, not a partial spec)", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "admin_runtime",
+    targetSurface: "manifest",
+  });
+  assertEquals(spec, null);
+});
+
 Deno.test("buildRuntimeDispatchSpec: absent targetSurface returns null (fail-close, no 'default' fallback)", () => {
   const spec = buildRuntimeDispatchSpec({
     orderIndex: 0,
@@ -1014,6 +1119,66 @@ Deno.test("renderEmission: runtimeInteractions with onInput trigger normalizes t
   assertExists(inputBinding, "onInput must normalize to input binding key");
   const mutation = inputBinding.localStateMutation as Record<string, unknown>;
   assertEquals(mutation.statePath, "activeKey");
+});
+
+Deno.test("emitBoundEvent: admin_runtime runtimeDispatch forwards event-time payload (form values) to the api_command_lane request body", async () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  let capturedBody: Record<string, unknown> | null = null;
+  globalThis.fetch = ((_url: string, init?: RequestInit) => {
+    capturedBody = JSON.parse(String(init?.body ?? "{}"));
+    return Promise.resolve(
+      new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 }),
+    );
+  }) as typeof fetch;
+  try {
+    const emission: Emission = {
+      layoutId: "layout-admin-runtime-001",
+      layoutNodes: [{
+        nodeId: "node-admin-runtime",
+        nodeKind: "catalog_component",
+        componentId: "comp-admin-runtime-001",
+        componentKind: "action/button",
+        componentKey: "button.primitive",
+        orderIndex: 0,
+        wiringKind: "admin_runtime",
+        targetSurface: "manifest",
+        targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+      }],
+    };
+    const specs = renderEmission(emission, emptyRegistry);
+    assertExists(specs[0].runtimeSpec, "runtimeSpec must exist");
+    const result = factoryTestOnly.emitBoundEvent(
+      specs[0].runtimeSpec!,
+      "click",
+      { groupName: "Status", indexNum: 42 },
+    );
+    assertEquals(result.ok, true);
+    // Lane 2 is fire-and-forget (emitBoundEvent does not await enqueueRuntimeComponentCommand);
+    // give the FIFO queue's own async drain loop a few microtask/macrotask turns to reach fetch.
+    for (let i = 0; i < 20 && capturedBody === null; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertExists(capturedBody, "the api_command_lane request body must have been captured");
+    const body = capturedBody as Record<string, unknown>;
+    assertEquals(body.target, "manifest");
+    assertEquals(body.layer, "enum_dictionary");
+    assertEquals(body.action, "create_group");
+    const payload = body.payload as Record<string, unknown>;
+    assertEquals(payload.groupName, "Status");
+    assertEquals(payload.indexNum, 42);
+    // target_ref is forwarded verbatim as the SAME manifest-resolving reference
+    // ManifestDispatcher.TryParseManifestTargetRef consumes server-side (backend/runtime/
+    // ManifestDispatcher.cs) -- not a bare "<layer>:<action>" string.
+    assertEquals(
+      payload.target_ref,
+      `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
 });
 
 // ─── high_frequency_policy runtime guard: emitBoundEvent fails close, not only authoring/apply ──

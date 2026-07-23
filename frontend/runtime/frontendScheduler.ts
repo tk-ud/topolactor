@@ -348,6 +348,15 @@ export type RuntimeDispatchSpec = {
   wiringId?: string;
   /** Admin-configured target reference: "manifest:<uuid>:<wiringKey>" or similar. */
   targetRef?: string;
+  /**
+   * Event-time payload forwarded verbatim to the dispatch (e.g. admin_runtime
+   * wiringKind — layer/action selected from seed data, payload supplied by the
+   * caller at click time; see emitBoundEvent's component_wiring_execution_lane
+   * branch in runtimeComponentFactory.ts). Absent for the pre-existing
+   * search/aggregate/create/update/delete wiringKinds, whose payload the
+   * backend derives from wiring/screen_data_shape configuration instead.
+   */
+  payload?: Record<string, unknown>;
 };
 
 export type ExternalPortDispatchSpec = {
@@ -375,7 +384,7 @@ export async function enqueueRuntimeComponentCommand(
   spec: RuntimeDispatchSpec,
 ): Promise<ScheduledCommandResult> {
   const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? undefined;
-  const payload: Record<string, unknown> = {};
+  const payload: Record<string, unknown> = { ...spec.payload };
   if (spec.wiringKey) payload.wiring_key = spec.wiringKey;
   if (spec.wiringId) payload.wiring_id = spec.wiringId;
   if (spec.targetRef) payload.target_ref = spec.targetRef;

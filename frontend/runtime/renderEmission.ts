@@ -111,28 +111,86 @@ export function isNavigationWiringKind(wiringKind: string): boolean {
 }
 
 /**
+ * Parses "<layer>:<action>" out of a wiringKind=admin_runtime node's targetRef.
+ *
+ * targetRef MUST still be a valid ManifestDispatcher manifest reference —
+ * "manifest:<manifestUuid>:<layer>:<action>" — never a bare "<layer>:<action>"
+ * string: ManifestDispatcher.TryParseManifestTargetRef (backend/runtime/
+ * ManifestDispatcher.cs) requires this exact "manifest:" prefix + UUID shape
+ * to resolve WHICH manifest is authorizing the dispatch at all (the SAME
+ * payload.target_ref this function reads is also forwarded verbatim as the
+ * dispatch request's own target_ref — see enqueueRuntimeComponentCommand in
+ * frontendScheduler.ts). A bare "<layer>:<action>" targetRef would make
+ * ManifestDispatcher fail TARGET_REF_INVALID before ever reaching
+ * AdminRuntime.ExecuteDataAsync — this was corrected after a live-DB proof
+ * caught it (Split(':', 3) on "manifest:<uuid>:<key>" leaves parts[2] free-text
+ * and unvalidated by manifest resolution, which is what carries "<layer>:
+ * <action>" here). Seed side specifies the concrete admin_runtime operation
+ * entirely as data (target_ref content) — this function adds no per-operation
+ * case of its own, so it is reusable by any admin_runtime action
+ * (enum_dictionary:*, auth_users:*, team_markdown:*, scheduler_jobs:*, ...),
+ * never a single surface's dedicated handler. Returns null (fail-close, no
+ * partial parse) when targetRef is absent or not exactly
+ * "manifest:<uuid>:<layer>:<action>" (4 colon-separated segments, uuid a
+ * syntactically plausible UUID, layer/action non-empty).
+ * SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * lane_storage_boundary.known_gaps admin_runtime_layer_action_dispatch_lane_not_yet_defined
+ * (extend_wiring_kind_vocabulary direction).
+ */
+const ADMIN_RUNTIME_TARGET_REF_RE =
+  /^manifest:([0-9a-fA-F-]{36}):([^:]+):([^:]+)$/;
+
+function parseAdminRuntimeLayerAction(
+  targetRef: string | null | undefined,
+): { layer: string; action: string } | null {
+  const trimmed = targetRef?.trim();
+  if (!trimmed) return null;
+  const match = ADMIN_RUNTIME_TARGET_REF_RE.exec(trimmed);
+  if (!match) return null;
+  const [, , layer, action] = match;
+  if (!layer || !action) return null;
+  return { layer, action };
+}
+
+/**
  * Maps wiring_kind to the canonical layer for backend dispatch routing.
  * search → screen_list (ScreenDataShapeQueryRuntime), aggregate → screen_aggregation,
- * CRUD kinds → entity (RuntimeExecutor CRUD path).
+ * CRUD kinds → entity (RuntimeExecutor CRUD path), admin_runtime → the layer
+ * encoded in targetRef (generic admin_runtime layer:action dispatch — see
+ * parseAdminRuntimeLayerAction).
  * navigation is excluded — it is frontend-local and must not enter this mapping.
  * Returns null for unknown wiringKind — callers must treat null as a misconfiguration and not fall back.
  */
-export function mapWiringKindToLayer(wiringKind: string): string | null {
+export function mapWiringKindToLayer(
+  wiringKind: string,
+  targetRef?: string | null,
+): string | null {
   if (wiringKind === "search") return "screen_list";
   if (wiringKind === "aggregate") return "screen_aggregation";
   if (
     wiringKind === "create" || wiringKind === "update" ||
     wiringKind === "delete"
   ) return "entity";
+  if (wiringKind === "admin_runtime") {
+    return parseAdminRuntimeLayerAction(targetRef)?.layer ?? null;
+  }
   return null;
 }
 
 /**
  * Maps wiring_kind to the canonical action string for backend dispatch.
- * Mirrors the backend MapWiringKindToDispatchAction mapping.
+ * Mirrors the backend MapWiringKindToDispatchAction mapping (admin_runtime is
+ * frontend-only: NpgsqlTopologyRepository.RuntimeDispatchAction is unused by
+ * any frontend caller, so no backend mirror update is required for this case).
  * Returns null for unknown wiringKind — callers must not pass raw unknown values as actions.
  */
-export function mapWiringKindToAction(wiringKind: string): string | null {
+export function mapWiringKindToAction(
+  wiringKind: string,
+  targetRef?: string | null,
+): string | null {
+  if (wiringKind === "admin_runtime") {
+    return parseAdminRuntimeLayerAction(targetRef)?.action ?? null;
+  }
   switch (wiringKind) {
     case "search":
       return "Search";
@@ -165,9 +223,9 @@ export function buildRuntimeDispatchSpec(
   if (isNavigationWiringKind(wiringKind)) return null;
   const targetSurface = node.targetSurface && node.targetSurface.trim();
   if (!targetSurface) return null;
-  const action = mapWiringKindToAction(wiringKind);
+  const action = mapWiringKindToAction(wiringKind, node.targetRef);
   if (!action) return null;
-  const layer = mapWiringKindToLayer(wiringKind);
+  const layer = mapWiringKindToLayer(wiringKind, node.targetRef);
   if (!layer) return null;
   return {
     operationType: action,

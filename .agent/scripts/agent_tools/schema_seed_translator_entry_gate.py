@@ -78,6 +78,34 @@ MAPPING_RULE_IDS = {
     "SEED_RECORD_EMPTY_SOURCE_YAML_REFS",
 }
 
+# Structured pointer to the non-SSOT seed authoring reference
+# (docs/reference/seed-data-authoring-guide.md). This is the single
+# definition every caller of validate_translator_entry /
+# validate_translator_entry_from_path shares -- _build_result attaches it to
+# every gateStatus (pass / blocking / unsupported_input_shape) so no caller
+# path can silently drop it. It is deliberately data, not authority: the
+# guide's own Document Status header declares "Authority: non-SSOT", and this
+# entry repeats that boundary so a caller reading only the gate result JSON
+# (never opening the guide itself) still sees the same authority_boundary
+# text. Applicable SSOT (react-schema-topology-seed-translator-ssot.yaml and
+# whatever surface-specific SSOT governs the seed being authored) remains the
+# design authority; this reference is authoring/comparison guidance only.
+AUTHORING_REFERENCES = [
+    {
+        "path": "docs/reference/seed-data-authoring-guide.md",
+        "classification": "non_ssot_authoring_reference",
+        "authority_boundary": (
+            "non_ssot_authoring_and_comparison_guidance_only_applicable_ssot_remains_"
+            "design_authority_on_conflict_ssot_wins"
+        ),
+        "purpose": [
+            "canonical_carrier_comparison",
+            "translator_adoption_boundary_explanation",
+            "canonical_conformance_and_runtime_reachability_axis_separation",
+        ],
+    },
+]
+
 SEED_RECORD_CHILD_LIST_FIELDS = ("categories", "sections", "children", "fields", "actions", "steps", "columns")
 
 
@@ -383,6 +411,9 @@ def _build_result(*, source_ref, gate_status, detected_shape, errors, mode, targ
         "schemaId": GATE_SCHEMA_ID,
         "gateStatus": gate_status,
         "boundary": GATE_BOUNDARY,
+        # Present on every gateStatus (pass / blocking / unsupported_input_shape) --
+        # see AUTHORING_REFERENCES' own comment for why this is data, not authority.
+        "authoringReferences": AUTHORING_REFERENCES,
         "inputDetection": {
             "sourceRef": source_ref,
             "detectedShape": detected_shape,
