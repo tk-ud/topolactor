@@ -13,6 +13,7 @@
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 2 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `admin-surface-topology-seed-conversion` | Admin hardcoded surface topology seed conversion（`role-based-surface-separation` はこの Bundle の pre-seed-implementation evidence として統合済み — 2026-07-14、下記 Bundle 本文の該当 subsection 参照）。`admin-dashboard` subBundle は実装完了（PR #595、2026-07-19、下記「admin-dashboard subBundle 実装完了記録」参照）。`admin-enum` subBundle は seed登録・structural render proof・navigation closure proof・read circuit（search/filter/table、2026-07-23実dispatch化・live-DB証明済み）を実装したが、enum_dictionary:* write dispatch（実際の作成/更新/削除）は`remaining_write_payload_capture_gap`（typed値をdispatch payloadへ載せるproduction-provenな既存mechanismの不在）により未接続のまま残る（下記「admin-enum subBundle 実装記録」参照、implemented 扱いにしない）。残り3 subBundle（`team-dashboard`/`credential-management`/`scheduler-settings`）は未着手。 | not_started | 5 subBundle（うち1件実装完了、1件 write dispatch gap 付きで部分実装、3件未着手） | `product.dynamic_support_nocode_loop` / admin hardcoded surface retirement | `docs/design/admin-normal-surface-projection-seed-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/instance-port-substrate-ssot.yaml` |
 | `admin-runtime-operation-dispatch-lane-determination` | PR #597 Gate0再監査で確定した、seed-authored Actionからmanifest-authorizedなadmin_runtime layer:action dispatchへ到達する既存canonical laneの不在。owner decision確定（2026-07-22、新規lane不採用／enum専用handler不採用／既存component_wiring_execution_laneへ収束）を受け、`wiring_kind="admin_runtime"`による具体境界を実装・test証明済み（下記Bundle本文参照）。ただし`wiring_kind`はlayout単位scopeであり、admin-enum等の複数component混在layoutへの適用にはper-node化またはlayout分割が別途必要（未解決、remaining_granularity_constraint） | not_started | 1 | `admin-surface-topology-seed-conversion`（admin-enum/team-dashboard/scheduler-settings write-dispatch面の前提） | `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml`, `docs/design/react-schema-topology-seed-translator-ssot.yaml` |
+| `seed-authoring-reference-routing` | `docs/reference/seed-data-authoring-guide.md`（non-SSOT authoring reference）を、schema seed translatorの全入口（entry gate core/CLI/topology-seed-discussion wrapper/README/SSOT cross-reference）から構造的に到達可能にする導線実装。2026-07-23 実装完了・test証明済み（下記Bundle本文参照）。 | implemented | 1 | seed authoring/translator利用時の反復調査防止 | `docs/design/react-schema-topology-seed-translator-ssot.yaml`, `docs/reference/seed-data-authoring-guide.md` |
 | `test-orchestration-review` | Seed conversion後の proof / test orchestration review | not_started | 1 | proof surface carry-over | `docs/design/pipeline-continuity-ssot.yaml` |
 | `frontend-canonical-surface-structure-label-boundary` | Seed conversion後の frontend canonical surface label boundary | not_started | 1 | frontend canonical UI structure/wiring surfaces | canonical surface UI structure/wiring SSOTs, `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` |
 | `admin-console-workflow-step-wording-boundary` | Seed conversion後の admin console workflow wording boundary | not_started | 1 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
@@ -991,6 +992,73 @@ owner decisionが必要な3方向（既存`runtime_interactions_lane`拡張／�
 - PR #597の未完了scopeをtodo status変更だけで処理済みとして扱う。
 - remaining_write_payload_capture_gap（`payloadFromNodeValues`が`ProjectionShell.tsx`で未配線、`localStateMutation`がboolean専用）を解消しないまま、canonical形状（`payloadFrom: {"name":"node:...value"}`等）だけをseedへ書き、runtime reachabilityが証明されたかのように扱う——canonical形状とruntime reachabilityは別軸であり、前者だけで後者を宣言してはならない。
 - `frontend/islands/ProjectionShell.tsx`のlive input値trackingを、検証なしに拙速に実装する（共有・本番稼働中のcomponentであり、影響範囲はadmin-enumに留まらない——既存の`dispatchExternalPort`/`dispatchInstanceOperation`のnode:参照全てに影響する）。
+
+---
+
+## Bundle `seed-authoring-reference-routing`
+
+**Status:** `implemented`
+**Primary SSOT:** `docs/design/react-schema-topology-seed-translator-ssot.yaml`（`authority.seed_authoring_reference_ref`、cross-reference only — this Bundle does not add SSOT authority）
+**Position:** PR #597で追加された `docs/reference/seed-data-authoring-guide.md`（non-SSOT authoring reference）を、schema seed translatorを使う全入口から機械的に到達可能にする導線実装。product runtime/frontend/backend/DB seed/admin-enum機能実装はscope外。
+
+### 問題点
+
+`docs/reference/seed-data-authoring-guide.md` は Contents / UI Builder / translator / physical seed の carrier境界、canonical conformanceとruntime reachabilityの分離、consumer未確認データの扱いを整理した有用なnon-SSOT authoring referenceだが、単にfileを置いただけで、entry gate出力・CLI・README・SSOTのいずれからも構造的に到達できない任意参照のままだった（同じcanonical境界調査を将来のAgentが毎回繰り返すリスク）。
+
+### 目的
+
+`docs/reference/seed-data-authoring-guide.md`をnon-SSOTのまま維持しつつ、schema seed translatorを使用する全入口（entry gate core、CLI、`topology-seed-discussion` wrapper、README、SSOT cross-reference）から機械的に一意に到達可能にする。
+
+### 改善方針
+
+- Reference path / classification / authority boundary / purposeの定義を`schema_seed_translator_entry_gate.py`の`AUTHORING_REFERENCES`一箇所へ集約し、各callerは共有定義を参照する（重複実装しない）。
+- entry gate core（`_build_result`）へ`authoringReferences`フィールドを追加し、`gateStatus`が`pass`/`blocking`/`unsupported_input_shape`のいずれでも消失しないことをtestで証明する。
+- CLI（`generate-react-schema`/`generate-topology-seed`）はgate実行直後に`output["authoringReferences"] = gate_result["authoringReferences"]`を代入し、blocking/passどちらの終了経路でも運ぶ。
+- `topology-seed-discussion translator-entry-gate`は`gate_result`をそのまま埋め込むため追加配線不要（既存の`{"gate_result": gate_result}`構造がそのまま`authoringReferences`を運ぶ）。
+- `.agent/tools/README.md`にseed authoring開始時の正規順序（SSOT解決 → Reference比較 → translator実行）を記載し、SSOT優先・Reference非権威を明記する。
+- `docs/design/react-schema-topology-seed-translator-ssot.yaml`の`authority`ブロックへ、既存の`production_policy_ref`と同じ非権威cross-reference pattern（`seed_authoring_reference_ref`）を追加する——SSOTのdoes_not_own境界（`agent_work_procedure`等）は変更しない。
+- 導線削除・path変更・authority昇格をfail-close検出するcheckを追加する。
+
+### 対応資料
+
+- `docs/reference/seed-data-authoring-guide.md`
+- `docs/design/react-schema-topology-seed-translator-ssot.yaml`
+- `docs/design/react-schema-topology-seed-translator-production-policy.md`
+- `.agent/tools/README.md`
+
+### 対象ファイル名
+
+- `.agent/scripts/agent_tools/schema_seed_translator_entry_gate.py`（`AUTHORING_REFERENCES`定数、`_build_result`への`authoringReferences`追加）
+- `.agent/scripts/react_schema_topology_seed_translator.py`（`new_output_shell`のdefault、`cmd_generate_react_schema`/`cmd_generate_topology_seed`への代入）
+- `.agent/scripts/check_schema_seed_translator_entry_gate.py`（check 35–50、新規）
+- `.agent/tools/README.md`
+- `docs/design/react-schema-topology-seed-translator-ssot.yaml`
+- `.agent/tools/logs/generate.log`（`authoringReferences`追加によりtranslator_output document shapeが変わったため、記録済み3件の`sha256`を再計算・更新——実装都合の破壊的変更ではなく、既存check 86（regeneration index actually regenerates）の要求どおり再生成した結果を記録し直しただけ）
+
+### 対象関数名
+
+- `_build_result`、`validate_translator_entry`、`validate_translator_entry_from_path`（`schema_seed_translator_entry_gate.py`）
+- `cmd_generate_react_schema`、`cmd_generate_topology_seed`、`new_output_shell`（`react_schema_topology_seed_translator.py`）
+
+### 受入条件
+
+- entry gate結果（in-memory/file wrapper、pass/blocking/unsupported_input_shapeの全組み合わせ）が`authoringReferences`を運ぶ。
+- CLI（`generate-react-schema`/`generate-topology-seed`）のblocking/pass両経路が`authoringReferences`を運ぶ。
+- `topology-seed-discussion translator-entry-gate`の`gate_result`が`authoringReferences`を運ぶ。
+- README・SSOTがGuideのpathを参照し、SSOT側はGuideへauthorityを譲渡していない。
+- 既存の`check_react_schema_topology_seed_translator.py`・`check_schema_seed_translator_entry_gate.py`が regression なくpassする。
+
+**検証:** `python3 .agent/scripts/check_schema_seed_translator_entry_gate.py`（56 assertions、全passing——新規16件はcheck 35–50）、`python3 .agent/scripts/check_react_schema_topology_seed_translator.py`（160件中159 passing、`7a`のみpre-existing flakeで本変更と無関係）、`bash .agent/tests/check-structure.sh`（PASS）、`bash .agent/tests/check-worktype-routing.sh`（PASS）、`bash .agent/tests/check-completion-judgment.sh`（PASS）。
+
+### Governance NG boundary
+
+- ReferenceをSSOT authority・seed adoption authority・proof completion authority・runtime authority・Bundle completion authorityへ昇格する。
+- `AGENTS.md`への無差別な全作業必読追加。
+- README/entry gate出力のいずれか一方のみへの追加（pass結果のみ・blocking/unsupported結果で欠落）。
+- 各tool callerが別々のpath文字列や説明文を保持して導線authorityを分岐させる。
+- 既存gate schema（`TRANSLATOR_OUTPUT_REQUIRED_FIELDS`等）を無言で破壊する。
+- Reference本文を実装都合でSSOT化する。
+- product runtime、frontend、backend、DB seed、admin-enum機能実装へscopeを拡張する。
 
 ---
 

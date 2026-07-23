@@ -304,6 +304,128 @@ def main():
         doc_rtc = None
     expect("34. round-trip-check remains not_implemented_out_of_scope (gate wiring did not change its status)", proc_rtc.returncode != 0 and doc_rtc is not None and doc_rtc.get("status") == "not_implemented_out_of_scope")
 
+    # --- seed authoring reference routing (docs/reference/seed-data-authoring-guide.md) ---
+    #
+    # The guide itself is authored/owned outside this Bundle; these checks only prove the
+    # ROUTING -- that every entry point reachable through this translator/gate surfaces the
+    # same structured pointer to it, on every gateStatus, without promoting it to SSOT
+    # authority. Deletion, path rename, or authority-boundary drift on any of these fail closed.
+
+    GUIDE_PATH = REPO_ROOT / "docs" / "reference" / "seed-data-authoring-guide.md"
+    GUIDE_REL_PATH = "docs/reference/seed-data-authoring-guide.md"
+
+    guide_exists = GUIDE_PATH.is_file()
+    expect("35. seed-data-authoring-guide.md exists at the routed path", guide_exists)
+    guide_text = GUIDE_PATH.read_text(encoding="utf-8") if guide_exists else ""
+    expect("36. seed-data-authoring-guide.md Document Status declares Authority: non-SSOT", "Authority: non-SSOT" in guide_text)
+
+    def _authoring_ref_entry(refs):
+        return next((r for r in (refs or []) if r.get("path") == GUIDE_REL_PATH), None)
+
+    def _assert_authoring_ref(label, refs):
+        entry = _authoring_ref_entry(refs)
+        expect(
+            label,
+            entry is not None
+            and entry.get("classification") == "non_ssot_authoring_reference"
+            and isinstance(entry.get("authority_boundary"), str)
+            and "non_ssot" in entry["authority_boundary"]
+            and isinstance(entry.get("purpose"), list)
+            and len(entry["purpose"]) > 0,
+        )
+
+    # gateStatus == pass (in-memory / react_schema_candidate result already computed above).
+    pass_result = gate.validate_translator_entry(envelope_fixture, expected_mode="generate_react_schema")
+    _assert_authoring_ref("37. gateStatus=pass (translator_input_envelope, in-memory) result carries authoringReferences for the guide", pass_result["authoringReferences"])
+
+    # gateStatus == blocking.
+    blocking_result = gate.validate_translator_entry(base_envelope(sourceYamlRefs=[]))
+    expect("38. gateStatus=blocking result also carries authoringReferences (not dropped on the failure path)", blocking_result["gateStatus"] == gate.GATE_STATUS_BLOCKING)
+    _assert_authoring_ref("39. gateStatus=blocking result's authoringReferences entry matches the guide", blocking_result["authoringReferences"])
+
+    # gateStatus == unsupported_input_shape.
+    unsupported_result = gate.validate_translator_entry("not valid json at all {")
+    expect("40. gateStatus=unsupported_input_shape result also carries authoringReferences", unsupported_result["gateStatus"] == gate.GATE_STATUS_UNSUPPORTED)
+    _assert_authoring_ref("41. gateStatus=unsupported_input_shape result's authoringReferences entry matches the guide", unsupported_result["authoringReferences"])
+
+    # File-wrapper path (validate_translator_entry_from_path), distinct code path from the
+    # in-memory validate_translator_entry calls above.
+    file_result = gate.validate_translator_entry_from_path(ENVELOPE_FIXTURE, expected_mode="generate_react_schema")
+    _assert_authoring_ref("42. file-wrapper (validate_translator_entry_from_path) result carries the same authoringReferences entry", file_result["authoringReferences"])
+
+    # translator CLI wrapper: authoringReferences must survive both the blocking early-return
+    # and the pass path (reusing the two subprocess results captured for checks 29/31 above,
+    # re-run here since they were consumed inside the earlier `with` block's local scope).
+    with tempfile.TemporaryDirectory(dir=str(AGENT_TMP_DIR)) as tmpdir:
+        cli_bad_envelope_path = Path(tmpdir) / "cli_bad_envelope_for_reference_check.json"
+        cli_bad_envelope_path.write_text(json.dumps(base_envelope(sourceYamlRefs=[])), encoding="utf-8")
+        proc_cli_blocking = subprocess.run(
+            [str(TRANSLATOR_TOOL), "generate-react-schema", "--input", str(cli_bad_envelope_path)],
+            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=30,
+        )
+        try:
+            cli_blocking_doc = json.loads(proc_cli_blocking.stdout)
+        except json.JSONDecodeError:
+            cli_blocking_doc = None
+        expect(
+            "43. generate-react-schema CLI blocking-path output carries authoringReferences for the guide",
+            cli_blocking_doc is not None and _authoring_ref_entry(cli_blocking_doc.get("authoringReferences")) is not None,
+        )
+
+        proc_cli_pass = subprocess.run(
+            [str(TRANSLATOR_TOOL), "generate-react-schema", "--input", str(ENVELOPE_FIXTURE)],
+            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=30,
+        )
+        try:
+            cli_pass_doc = json.loads(proc_cli_pass.stdout)
+        except json.JSONDecodeError:
+            cli_pass_doc = None
+        expect(
+            "44. generate-react-schema CLI pass-path output carries authoringReferences for the guide",
+            cli_pass_doc is not None and _authoring_ref_entry(cli_pass_doc.get("authoringReferences")) is not None,
+        )
+
+        proc_cli_seed_pass = subprocess.run(
+            [str(TRANSLATOR_TOOL), "generate-topology-seed", "--input", str(TOPOLOGY_SEED_ENVELOPE_FIXTURE)],
+            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=30,
+        )
+        try:
+            cli_seed_pass_doc = json.loads(proc_cli_seed_pass.stdout)
+        except json.JSONDecodeError:
+            cli_seed_pass_doc = None
+        expect(
+            "45. generate-topology-seed CLI pass-path output carries authoringReferences for the guide",
+            cli_seed_pass_doc is not None and _authoring_ref_entry(cli_seed_pass_doc.get("authoringReferences")) is not None,
+        )
+
+    # topology-seed-discussion translator-entry-gate wrapper: the full gate_result (including
+    # authoringReferences) is embedded verbatim under "gate_result" -- proves the wrapper does
+    # not re-implement or drop the field.
+    proc_discussion = subprocess.run(
+        [str(REPO_ROOT / ".agent" / "tools" / "topology-seed-discussion"), "translator-entry-gate", "--input", str(ENVELOPE_FIXTURE)],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=30,
+    )
+    try:
+        discussion_doc = json.loads(proc_discussion.stdout)
+    except json.JSONDecodeError:
+        discussion_doc = None
+    discussion_gate_result = (discussion_doc or {}).get("gate_result") or {}
+    expect(
+        "46. topology-seed-discussion translator-entry-gate output's gate_result carries authoringReferences for the guide",
+        discussion_doc is not None and _authoring_ref_entry(discussion_gate_result.get("authoringReferences")) is not None,
+    )
+
+    # SSOT cross-reference: non-authoritative pointer only, never an authority promotion.
+    ssot_text = (REPO_ROOT / "docs" / "design" / "react-schema-topology-seed-translator-ssot.yaml").read_text(encoding="utf-8")
+    expect("47. react-schema-topology-seed-translator-ssot.yaml references the guide path", GUIDE_REL_PATH in ssot_text)
+    expect("48. SSOT's reference to the guide does not claim SSOT authority for it (guide's own non-SSOT wording echoed)", "non-SSOT" in ssot_text or "non_ssot" in ssot_text)
+
+    # README routing: both the entry-gate output field and the translator's seed-authoring
+    # starting order must mention the guide.
+    readme_text = (REPO_ROOT / ".agent" / "tools" / "README.md").read_text(encoding="utf-8")
+    expect("49. .agent/tools/README.md references the guide path", GUIDE_REL_PATH in readme_text)
+    expect("50. .agent/tools/README.md documents authoringReferences as the structured routing field", "authoringReferences" in readme_text)
+
     print()
     if FAILURES:
         print(f"=== {len(FAILURES)} schema-seed-translator-entry-gate check(s) failed ===", file=sys.stderr)

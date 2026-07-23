@@ -16,6 +16,18 @@ react_schema_topology_seed_translator_ssot:
     css_dictionary_ref: docs/design/css-dictionary-ssot.yaml
     topology_layout_class_ref: docs/design/topology-layout-class-ssot.yaml
     production_policy_ref: docs/design/react-schema-topology-seed-translator-production-policy.md
+    seed_authoring_reference_ref: docs/reference/seed-data-authoring-guide.md
+    seed_authoring_reference_note: >-
+      docs/reference/seed-data-authoring-guide.md is non-SSOT authoring/comparison guidance
+      (its own Document Status declares Authority: non-SSOT) for seed and translator-output
+      adoption -- canonical carrier classification, the canonical-conformance-vs-runtime-
+      reachability axis split, and the seed authoring checklist. It does not own, extend, or
+      override any shape/grammar/mapping/validation this SSOT owns; on conflict this SSOT
+      wins. Routed structurally (not just linked) into the schema<->seed translator entry
+      gate's own output (authoringReferences, present on every gateStatus -- see
+      .agent/scripts/agent_tools/schema_seed_translator_entry_gate.py) and
+      .agent/tools/README.md's seed authoring starting order, so every entry point that uses
+      this translator reaches the same reference pointer without re-deriving it.
     note: >-
       This SSOT is the exchange contract only, between a React-like authoring schema and a
       topology UI seed. A next-Bundle Python3 tool reads this YAML and decomposes an input
