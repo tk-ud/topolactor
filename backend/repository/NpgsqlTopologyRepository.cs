@@ -330,12 +330,14 @@ public class NpgsqlTopologyRepository : TopologyRepository
             var requiredComponentKeys = LayoutSchemaTensorComposer.RequiredComponentKeys(schemaRecords);
             var componentKeyToId = await LoadComponentIdsByKeysAsync(requiredComponentKeys, ct);
             var componentIdToKind = await LoadComponentKindsByIdsAsync(componentKeyToId.Values.ToList(), ct);
+            var nodeLocalDataByNodeId = LayoutSchemaTensorComposer.BuildNodeLocalDataByNodeId(baseNodes);
 
             var composed = LayoutSchemaTensorComposer.Compose(
                 schemaRecords,
                 interactionsBySourceActionKey,
                 componentKeyToId,
-                componentIdToKind);
+                componentIdToKind,
+                nodeLocalDataByNodeId);
 
             return composed.Select(n =>
                 n.NodeKind == "structural_node" || n.NodeKind == "unresolved_gap"

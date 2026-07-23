@@ -223,6 +223,97 @@ public class AdminEnumHubRelationUiProjectionLiveDbTests
         }
     }
 
+    /// <summary>
+    /// Read-circuit proof (2026-07-23, admin-runtime-operation-dispatch-lane-determination
+    /// concrete boundary consumption phase 1 of 2): this manifest's wiring row now dispatches the
+    /// real, existing enum_dictionary:list_groups admin_runtime action -- not the
+    /// ADMIN_OPERATION_NOT_FOUND structural-render fallback. Real db/enum_seed.sql rows
+    /// (group_name "demo_status") reach emission.data, and the enum_table node's composed
+    /// PropsJson/PropBindings (LayoutSchemaTensorComposer.BuildNodeLocalDataByNodeId merge, added
+    /// this pass) carry the static columns + emission.data-bound rows a frontend table render
+    /// needs -- this is the render-time wiring proof; frontend/tests/renderEmission tests already
+    /// cover resolvePropBindings/tableFactory consuming this shape once emitted.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_AdminEnumManagementManifest_DispatchesRealListGroups_EmissionDataAndTablePropsCarryRealRows()
+    {
+        var cs = GetConnectionString();
+        if (cs is null) return;
+
+        var dispatcher = await HubRelationUiProjectionResolutionChainProof.BuildRealDispatcherAsync(cs);
+
+        // STEP 1: structural resolution (same "...projection_entry" convention every other
+        // admin-enum test uses) -- confirms the wiring row's flat columns/composed
+        // PropsJson/PropBindings, independent of whether a data dispatch also ran.
+        var structurePayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:projection_entry",
+        });
+        var structureRequest = new EndpointRequestDto(
+            "Search", "default", "screen_list", "Search",
+            IdOrHubId: null, Payload: structurePayload, Context: null, TriggerKind: "client", Role: "admin");
+        var structureResponse = await dispatcher.DispatchAsync(structureRequest);
+        Assert.True(structureResponse.Success, string.Join(";", structureResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        var structureNodes = structureResponse.Emission!.LayoutNodes!;
+
+        var table = Assert.Single(structureNodes, n => n.NodeId == "enum_table");
+        Assert.Equal("admin_runtime", table.WiringKind);
+        Assert.Equal(
+            $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+            table.TargetRef);
+
+        Assert.NotNull(table.PropsJson);
+        Assert.Contains("groupName", table.PropsJson);
+        Assert.NotNull(table.PropBindings);
+        var propBindingsText = table.PropBindings!.Value.GetRawText();
+        Assert.Contains("\"rows\"", propBindingsText);
+        Assert.Contains("emission.data", propBindingsText);
+
+        // search_input/group_filter inherit the SAME layout-wide admin_runtime dispatch spec
+        // (idempotent no-payload re-list) -- not a per-node override, and not left unconfigured
+        // either (both still resolve a WiringKind).
+        var searchField = Assert.Single(structureNodes, n => n.NodeId == "enum_search");
+        Assert.Equal("admin_runtime", searchField.WiringKind);
+        var groupFilterField = Assert.Single(structureNodes, n => n.NodeId == "enum_group_filter");
+        Assert.Equal("admin_runtime", groupFilterField.WiringKind);
+
+        // enum_confirm_button keeps its own explicit_confirm-only interaction, unaffected by the
+        // layout's admin_runtime read binding (Lane 3 overrides Lane 2 on its own click trigger).
+        var confirmButton = Assert.Single(structureNodes, n => n.NodeId == "enum_confirm_button");
+        Assert.NotNull(confirmButton.RuntimeInteractions);
+        Assert.Contains("localStateMutation", confirmButton.RuntimeInteractions!.Value.GetRawText());
+
+        // STEP 2: the REAL data dispatch -- Target/Layer/Action set directly (exactly what
+        // frontend/runtime/frontendScheduler.ts enqueueRuntimeComponentCommand sends as the
+        // request's own top-level target/layer/action, NOT derived from target_ref), with
+        // payload.target_ref carrying the SAME manifest-resolving reference the wiring row
+        // stores (ManifestDispatcher.TryParseManifestTargetRef resolves the manifest from its
+        // "manifest:<uuid>:" prefix; AdminRuntime.ExecuteDataAsync's layerAction switch uses
+        // request.Layer/request.Action directly -- these are two independent axes, not one
+        // encoded inside the other).
+        var dataPayload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            target_ref = $"manifest:{AdminEnumManagementManifestId}:enum_dictionary:list_groups",
+        });
+        var dataRequest = new EndpointRequestDto(
+            "list_groups", "manifest", "enum_dictionary", "list_groups",
+            IdOrHubId: null, Payload: dataPayload, Context: null, TriggerKind: "client", Role: "admin");
+        var dataResponse = await dispatcher.DispatchAsync(dataRequest);
+
+        Assert.True(dataResponse.Success, string.Join(";", dataResponse.Errors.Select(e => e.Code + ":" + e.Message)));
+        Assert.NotNull(dataResponse.Emission);
+        var dataEmission = dataResponse.Emission!;
+
+        // Real enum.groups data (db/enum_seed.sql demo_status row), not the structural-render
+        // fallback's empty/absent data -- this is what proves the dispatch actually reached
+        // AdminRuntime.ExecuteDataAsync's "enum_dictionary:list_groups" case, not just that the
+        // manifest/wiring resolve structurally.
+        Assert.NotNull(dataEmission.Data);
+        var dataText = dataEmission.Data!.Value.GetRawText();
+        Assert.Contains("demo_status", dataText);
+        Assert.Contains("groupName", dataText);
+    }
+
     [Fact]
     public async Task AdminEnumManagementManifest_OwnsNoHubRelationsRows_SeedOnly()
     {

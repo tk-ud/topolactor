@@ -347,6 +347,41 @@ public static class LayoutSchemaTensorComposer
     }
 
     /// <summary>
+    /// Node-local propsJson/stateJson/propBindings JSON string triple, keyed by the exact tensor
+    /// nodeId. Distinct from BuildInteractionsBySourceActionKey's sourceActionKey-scoped map:
+    /// these three fields describe a single node's own static/bound configuration (table
+    /// columns, propBindings reading emission.data, etc.) rather than a form's collection of
+    /// child leaves' interaction entries, so the match key is the tensor node's own NodeId
+    /// directly, not "{formNodeId}::{sourceActionKey}".
+    /// </summary>
+    public readonly record struct NodeLocalData(
+        string? PropsJson,
+        string? StateJson,
+        string? PropBindingsJson);
+
+    /// <summary>
+    /// Builds a NodeId -> NodeLocalData map from the tensor's own layout_patch_json.nodes[]
+    /// entries, for schema-composed leaves to merge onto by exact NodeId match (see Compose).
+    /// A tensor node with none of the three fields set is simply absent from the result — there
+    /// is nothing to attach. This is purely additive seed authoring: a schema-composed layout
+    /// with no matching tensor node entries composes exactly as before (all three fields null on
+    /// every leaf), so this never changes behavior for existing layouts that only use tensor
+    /// nodes for runtimeInteractions.
+    /// </summary>
+    public static IReadOnlyDictionary<string, NodeLocalData> BuildNodeLocalDataByNodeId(
+        IReadOnlyList<LayoutNodeRecord> tensorNodes)
+    {
+        var result = new Dictionary<string, NodeLocalData>(StringComparer.Ordinal);
+        foreach (var node in tensorNodes)
+        {
+            if (node.PropsJson is null && node.StateJson is null && node.PropBindingsJson is null)
+                continue;
+            result[node.NodeId] = new NodeLocalData(node.PropsJson, node.StateJson, node.PropBindingsJson);
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Composes structural + catalog-component + unresolved-gap LayoutNodeRecords from the
     /// authored schema records tree. Structural record types (Category/Section/Form/Workflow/
     /// Validation) become "structural_node" entries carrying RecordType/Label only — never a
@@ -380,7 +415,8 @@ public static class LayoutSchemaTensorComposer
         IReadOnlyList<SchemaRecordRow> schemaRecords,
         IReadOnlyDictionary<string, string> interactionsBySourceActionKey,
         IReadOnlyDictionary<string, string> componentKeyToId,
-        IReadOnlyDictionary<string, string> componentIdToKind)
+        IReadOnlyDictionary<string, string> componentIdToKind,
+        IReadOnlyDictionary<string, NodeLocalData>? nodeLocalDataByNodeId = null)
     {
         var duplicateKeys = new HashSet<string>(
             schemaRecords.GroupBy(r => r.Key, StringComparer.Ordinal)
@@ -444,6 +480,11 @@ public static class LayoutSchemaTensorComposer
             var resolvedNodeId = ResolveNodeId(row, parentNodeId);
             lastResolvedNodeIdByKey[row.Key] = resolvedNodeId;
 
+            NodeLocalData? localData = isCatalogLeaf && nodeLocalDataByNodeId is not null &&
+                nodeLocalDataByNodeId.TryGetValue(resolvedNodeId, out var matchedLocalData)
+                ? matchedLocalData
+                : null;
+
             result.Add(new LayoutNodeRecord(
                 NodeId: resolvedNodeId,
                 NodeKind: nodeKind,
@@ -460,6 +501,9 @@ public static class LayoutSchemaTensorComposer
                 LayoutClassRefs: null,
                 ComponentKind: componentKind,
                 RuntimeInteractionsJson: runtimeInteractionsJson,
+                PropsJson: localData?.PropsJson,
+                StateJson: localData?.StateJson,
+                PropBindingsJson: localData?.PropBindingsJson,
                 RecordType: (isStructural || isUnresolved) ? row.RecordType : null,
                 // Every schema record carries an authored label (record_common_required_fields)
                 // — a catalog_component leaf's own label must survive composition the same way a

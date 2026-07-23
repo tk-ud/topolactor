@@ -46,7 +46,12 @@ internal static class HubRelationUiProjectionResolutionChainProof
             // Real hub_navigation:* authoring path (frontend/islands/HubNavigationAdmin.tsx ->
             // hub_navigation:create/update/deprecate/reorder) needs this repository wired, not
             // just the read-only HubNavigationResolver above.
-            contentBundleRepository: contentBundleRepo);
+            contentBundleRepository: contentBundleRepo,
+            // Real enum_dictionary:* admin_runtime actions (admin-runtime-operation-dispatch-lane-
+            // determination read-circuit proof) need this repository wired, or every
+            // enum_dictionary:* case in AdminRuntime.ExecuteDataAsync fails closed with
+            // ENUM_DICTIONARY_NOT_AVAILABLE regardless of manifest/wiring resolution.
+            enumDictionaryRepository: new NpgsqlEnumDictionaryRepository(connectionString));
         var adminAdapter = new AdminRuntimeDispatchAdapter(adminRuntime, new OperationVectorResolver());
 
         var targetOverride = new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, adminRuntime);

@@ -112,24 +112,44 @@ export function isNavigationWiringKind(wiringKind: string): boolean {
 
 /**
  * Parses "<layer>:<action>" out of a wiringKind=admin_runtime node's targetRef.
- * Seed side specifies the concrete admin_runtime operation entirely as data
- * (target_ref content) — this function adds no per-operation case of its own,
- * so it is reusable by any admin_runtime action (enum_dictionary:*,
- * auth_users:*, team_markdown:*, scheduler_jobs:*, ...), never a single
- * surface's dedicated handler. Returns null (fail-close, no partial parse)
- * when targetRef is absent or not exactly "<layer>:<action>".
+ *
+ * targetRef MUST still be a valid ManifestDispatcher manifest reference —
+ * "manifest:<manifestUuid>:<layer>:<action>" — never a bare "<layer>:<action>"
+ * string: ManifestDispatcher.TryParseManifestTargetRef (backend/runtime/
+ * ManifestDispatcher.cs) requires this exact "manifest:" prefix + UUID shape
+ * to resolve WHICH manifest is authorizing the dispatch at all (the SAME
+ * payload.target_ref this function reads is also forwarded verbatim as the
+ * dispatch request's own target_ref — see enqueueRuntimeComponentCommand in
+ * frontendScheduler.ts). A bare "<layer>:<action>" targetRef would make
+ * ManifestDispatcher fail TARGET_REF_INVALID before ever reaching
+ * AdminRuntime.ExecuteDataAsync — this was corrected after a live-DB proof
+ * caught it (Split(':', 3) on "manifest:<uuid>:<key>" leaves parts[2] free-text
+ * and unvalidated by manifest resolution, which is what carries "<layer>:
+ * <action>" here). Seed side specifies the concrete admin_runtime operation
+ * entirely as data (target_ref content) — this function adds no per-operation
+ * case of its own, so it is reusable by any admin_runtime action
+ * (enum_dictionary:*, auth_users:*, team_markdown:*, scheduler_jobs:*, ...),
+ * never a single surface's dedicated handler. Returns null (fail-close, no
+ * partial parse) when targetRef is absent or not exactly
+ * "manifest:<uuid>:<layer>:<action>" (4 colon-separated segments, uuid a
+ * syntactically plausible UUID, layer/action non-empty).
  * SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
  * lane_storage_boundary.known_gaps admin_runtime_layer_action_dispatch_lane_not_yet_defined
  * (extend_wiring_kind_vocabulary direction).
  */
+const ADMIN_RUNTIME_TARGET_REF_RE =
+  /^manifest:([0-9a-fA-F-]{36}):([^:]+):([^:]+)$/;
+
 function parseAdminRuntimeLayerAction(
   targetRef: string | null | undefined,
 ): { layer: string; action: string } | null {
   const trimmed = targetRef?.trim();
   if (!trimmed) return null;
-  const parts = trimmed.split(":");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
-  return { layer: parts[0], action: parts[1] };
+  const match = ADMIN_RUNTIME_TARGET_REF_RE.exec(trimmed);
+  if (!match) return null;
+  const [, , layer, action] = match;
+  if (!layer || !action) return null;
+  return { layer, action };
 }
 
 /**

@@ -187,58 +187,141 @@ admin_uibuilder_ui_structure_wiring_ssot:
         concrete_boundary_implemented: >-
           frontend/runtime/renderEmission.ts mapWiringKindToLayer / mapWiringKindToAction
           gained a wiringKind="admin_runtime" case: layer/action are parsed from the
-          wiring row's own target_ref content ("<layer>:<action>", e.g.
-          "enum_dictionary:create_group") -- no per-operation case added, reusable by
-          any admin_runtime action across any subBundle (parseAdminRuntimeLayerAction).
-          frontend/runtime/frontendScheduler.ts RuntimeDispatchSpec gained an optional
-          payload field, forwarded verbatim by enqueueRuntimeComponentCommand.
-          frontend/runtime/runtimeComponentFactory.ts emitBoundEvent's Lane 2
-          (component_wiring_execution_lane branch) now merges the event-time payload
-          (the same argument other lanes' payload/log merge already uses -- e.g. admin
-          form field values collected by the calling component) into the dispatch,
-          giving admin_runtime dispatch a real payload carrier without a new
-          payloadFrom concept. idempotency_applicability for this new case is
-          not_applicable, same reasoning as local_ui_state_lane: this is a synchronous
-          admin CRUD action carrying no dispatchExternalPort/dispatchInstanceOperation
-          identity, not a retryable external/instance operation -- if a future bundle
-          needs retry-safe admin_runtime dispatch idempotency, that is a separate,
-          not-yet-defined extension, not silently inherited from
-          runtime_interactions_lane. Proof: frontend/tests/adminWiringExecutionLane.test.ts
-          (mapWiringKindToLayer/mapWiringKindToAction admin_runtime cases,
-          buildRuntimeDispatchSpec generic reuse across two different admin_runtime
-          actions, and an end-to-end emitBoundEvent test asserting the captured
-          api_command_lane request body carries target/layer/action/payload correctly).
-          No backend change was required or made: ManifestDispatcher /
+          wiring row's own target_ref content -- CORRECTED 2026-07-23 after a live-DB
+          proof caught a real bug in the first pass: targetRef must stay a valid
+          ManifestDispatcher manifest reference, "manifest:<manifestUuid>:<layer>:
+          <action>" (e.g. "manifest:00000000-0000-0000-0000-0000000ae200:enum_dictionary:
+          create_group"), never a bare "<layer>:<action>" string. The same targetRef
+          value is forwarded verbatim as the dispatch request's own payload.target_ref
+          (enqueueRuntimeComponentCommand), which ManifestDispatcher.
+          TryParseManifestTargetRef (backend/runtime/ManifestDispatcher.cs) parses with
+          Split(':', 3) -- only the first two segments (the "manifest:" prefix and this
+          manifest's own UUID) are validated/consumed for MANIFEST resolution; the third
+          segment is free-text there and is what parseAdminRuntimeLayerAction reads as
+          "<layer>:<action>". A bare "<layer>:<action>" targetRef (the first pass's
+          shape) fails TARGET_REF_INVALID server-side before ever reaching
+          AdminRuntime.ExecuteDataAsync -- every unit test written before the live-DB
+          proof passed anyway, because they only asserted the OUTGOING request shape,
+          never a real round trip through ManifestDispatcher. This is now corrected and
+          live-DB proven (see read_circuit_consumed_and_proven below); the fix is
+          reusable by any admin_runtime action across any subBundle, no per-operation
+          case added (parseAdminRuntimeLayerAction still contains zero surface-specific
+          logic). Layer/action are two axes independent of manifest resolution:
+          request.Layer/request.Action are separate top-level EndpointRequestDto fields
+          AdminRuntime.ExecuteDataAsync's layerAction switch reads directly, never
+          re-derived from target_ref. frontend/runtime/frontendScheduler.ts
+          RuntimeDispatchSpec gained an optional payload field, forwarded verbatim by
+          enqueueRuntimeComponentCommand. frontend/runtime/runtimeComponentFactory.ts
+          emitBoundEvent's Lane 2 (component_wiring_execution_lane branch) now merges
+          the event-time payload (the same argument other lanes' payload/log merge
+          already uses -- e.g. a single triggering control's own event value) into the
+          dispatch, giving admin_runtime dispatch a real payload carrier without a new
+          payloadFrom concept -- see remaining_write_payload_capture_gap below for the
+          real limit of what this carries. idempotency_applicability for this new case
+          is not_applicable, same reasoning as local_ui_state_lane: this is a
+          synchronous admin CRUD action carrying no dispatchExternalPort/
+          dispatchInstanceOperation identity, not a retryable external/instance
+          operation -- if a future bundle needs retry-safe admin_runtime dispatch
+          idempotency, that is a separate, not-yet-defined extension, not silently
+          inherited from runtime_interactions_lane. Proof:
+          frontend/tests/adminWiringExecutionLane.test.ts (mapWiringKindToLayer/
+          mapWiringKindToAction admin_runtime cases including manifest-prefixed and
+          bare-string fail-close cases, buildRuntimeDispatchSpec generic reuse across
+          two different admin_runtime actions/manifests, and an end-to-end emitBoundEvent
+          test asserting the captured api_command_lane request body carries
+          target/layer/action/payload correctly) plus, since the earlier bug could only
+          be caught by a real round trip, backend/tests/Topolactor.Integration.Tests/
+          AdminEnumHubRelationUiProjectionLiveDbTests.cs
+          DispatchAsync_AdminEnumManagementManifest_DispatchesRealListGroups_
+          EmissionDataAndTablePropsCarryRealRows (see read_circuit_consumed_and_proven).
+          No backend change to the dispatch transport itself was required: ManifestDispatcher /
           AdminRuntimeDispatchAdapter / AdminRuntime.ExecuteDataAsync were already fully
           generic on target/layer/action (confirmed by the pre-existing
           callAdminMasterOp precedent using the same queueAdminClientCommand transport);
           backend/repository/NpgsqlTopologyRepository.cs MapWiringKindToDispatchAction
           was intentionally left unchanged since its own output (RuntimeDispatchAction)
           has no frontend consumer anywhere (verified by grep) and is unrelated to this
-          mechanism's actual dispatch path.
-        remaining_granularity_constraint: >-
-          The mechanism is proven generic and working in isolation, but wiring_kind is
-          scoped to the WHOLE tensor row (one dispatch spec per layout_id -- backend
-          NpgsqlTopologyRepository.LoadLayoutNodesAsync throws
-          LAYOUT_NODES_AMBIGUOUS_SELECTOR for a second tensor row sharing the same
-          layout_id, and frontend renderEmission.ts buildCatalogComponentEventBinding
-          binds the SAME runtimeDispatch spec to every trigger -- click/change/select/
-          submit/toggle -- on every catalog_component node composed from that row).
-          This is a safe, correct fit for a layout whose ENTIRE screen already is one
-          canonical operation (matches the existing physical_search_crud_aggregate
-          preset pattern: one single-purpose layout per search/create/update/delete
-          screen). It is NOT yet safe to apply directly to a multi-component screen
-          like admin-enum's (search input + filter + table + confirm button sharing one
-          layout_id ae204) without either (a) restructuring the write trigger onto its
-          own single-purpose layout/tensor row, composed as a distinct route/slot
-          alongside the read-only screen, or (b) a further, not-yet-designed extension
-          making wiring_kind resolution per-node instead of per-layout. Applying it
-          naively to admin-enum's existing combined layout today would incorrectly fire
-          the same admin_runtime dispatch on every trigger of every node (e.g. typing in
-          the search field). admin-enum's seed was NOT changed to consume this
-          mechanism in this pass for exactly this reason -- the mechanism itself is
-          done; admin-enum's specific consumption of it is the remaining, subBundle-scoped
-          follow-up (see follow_up_ref).
+          mechanism's actual dispatch path. A genuinely NEW backend addition was needed
+          for real render proof, unrelated to dispatch routing itself: see
+          read_circuit_consumed_and_proven's LayoutSchemaTensorComposer note.
+        read_circuit_consumed_and_proven: >-
+          2026-07-23, second consumption pass. admin-enum's manifest
+          (00000000-0000-0000-0000-0000000ae200) now dispatches the real, existing
+          enum_dictionary:list_groups admin_runtime action for its whole read/search/
+          filter screen (wiring_kind=admin_runtime, target_surface=manifest -- "admin"
+          is rejected by topology.ui_wiring_registry's own
+          ck_ui_wiring_registry_target_surface CHECK constraint, target_surface must be
+          one of route/ui/manifest/external_port). This is safe under the
+          layout=one-canonical-operation model: read/search/filter genuinely are one
+          operation for this screen, so every node's click/change/select/submit/toggle
+          trigger safely inheriting the same list_groups dispatch is correct, not a
+          granularity violation (idempotent no-payload re-list on every keystroke is
+          wasteful, not incorrect -- see remaining_write_payload_capture_gap for why a
+          real server-side search/filter parameter is a separate, not-yet-solved
+          problem). A second, real backend addition was needed to make this render, not
+          only dispatch: backend/repository/LayoutSchemaTensorComposer.cs previously
+          merged ONLY RuntimeInteractions from a tensor node onto a schema-composed
+          catalog_component leaf by exact NodeId match -- PropsJson/StateJson/
+          PropBindingsJson on that SAME tensor node were silently discarded for this
+          layout shape (Compose() never read them). BuildNodeLocalDataByNodeId +
+          Compose's new optional nodeLocalDataByNodeId parameter close this: additive,
+          opt-in per exact NodeId match, zero behavior change for any existing
+          schema-composed layout that does not author matching tensor node entries
+          (Runtime.Tests: ComposeLayoutSchemaWithTensor_NoNodeLocalDataMapProvided_
+          ComposesAsBeforeThisFeature). This is what lets enum_table's static columns
+          (propsJson, including "table":null to escape data_display/table's inert
+          preview-placeholder default -- frontend/runtime/runtimeComponentFactory.ts
+          tableFactory falls back to top-level props only when props.table is not a
+          non-null object) and emission.data-bound rows (propBindings, validated
+          against backend/runtime/StructureMapResolver.cs
+          ComponentArrayPropCapabilities["data_display/table"]) actually reach the
+          frontend. Live-DB proof: AdminEnumHubRelationUiProjectionLiveDbTests.cs
+          DispatchAsync_AdminEnumManagementManifest_DispatchesRealListGroups_
+          EmissionDataAndTablePropsCarryRealRows -- dispatches with Layer="enum_dictionary"
+          Action="list_groups" (top-level EndpointRequestDto fields, NOT derived from
+          target_ref) plus payload.target_ref="manifest:<ae200 uuid>:enum_dictionary:
+          list_groups" (manifest resolution only), asserts emission.Data contains the
+          real db/enum_seed.sql "demo_status" group, and asserts enum_table's composed
+          PropsJson/PropBindings carry the real columns/rows binding shape.
+        remaining_write_payload_capture_gap: >-
+          2026-07-23, replaces the prior (2026-07-22) remaining_granularity_constraint
+          entry -- that framing was wrong: per-layout scope alone was never the real
+          blocker for admin-enum's write side (a single-purpose write layout, exactly
+          like the read layout above, is a safe and sufficient composition -- no
+          per-node extension needed). The REAL, deeper blocker, found while attempting
+          to actually wire a write operation for live-DB proof: no production-proven
+          mechanism exists to get a free-typed field value (e.g. a new group's name) or
+          an extracted event path into ANY dispatch payload today, admin_runtime or
+          otherwise. Two independent, confirmed causes: (1)
+          frontend/runtime/uiEventEffectRunner.ts UI_STATE_UPDATE_OPEN_ACTIONS maps
+          EVERY ui_state_update actionType -- including localStateMutation -- to a
+          fixed boolean (true/false/toggle) by design (see its own inline comment: "a
+          localStateMutation trigger writes true to its ui-local: target -- a flag
+          write ... never a business-data value the seed record does not carry"); there
+          is no seed-authorable actionType that writes an event-derived typed value
+          into ui-local state at all. (2)
+          frontend/runtime/payloadFromResolver.ts's node:<nodeId>.value resolution
+          (used by dispatchExternalPort/dispatchInstanceOperation, e.g. the existing
+          credential-management cd004 wiring's own node: payloadFrom entries) depends
+          on payloadFromNodeValues, a renderEmission() options field
+          frontend/islands/ProjectionShell.tsx -- the actual production projection
+          renderer -- never populates (grep-confirmed zero references in that file);
+          only UI-Builder canvas authoring (NodeEventAuthoringPanel.tsx/
+          UiBuilderAdmin.tsx) populates it. This means node:<id>.value payloadFrom
+          references are UNPROVEN in production for ANY surface today, not an
+          admin-enum-specific gap -- fixing it (making ProjectionShell track/forward
+          live input values, then giving Lane 2 its own payloadFrom resolution against
+          that map, mirroring dispatchExternalPort/dispatchInstanceOperation's existing
+          pattern) is a real, bounded, but separate, cross-cutting prerequisite, not
+          attempted in this pass given its blast radius (a shared, live production
+          component) and the amount of independent verification it deserves on its own.
+          What a SINGLE trigering event's OWN native payload already carries (e.g. a
+          table row-click event's own `{row: {...}}`, whose fields the caller can
+          choose to spread if they match the target action's DTO field names) remains
+          usable without this fix -- delete-shaped actions taking exactly the row's own
+          id field(s) (enum_dictionary:delete_item/delete_group) are the closest
+          candidates for the next real write-side proof, not create/update (which need
+          genuinely new typed input, not an existing row's own value).
         affected_subbundles: [admin-enum, team-dashboard, scheduler-settings]
         follow_up_ref: .agent/tasks/todo.md admin-runtime-operation-dispatch-lane-determination Bundle
     manifest_topology_boundary:

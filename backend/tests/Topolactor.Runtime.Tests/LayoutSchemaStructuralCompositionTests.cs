@@ -823,4 +823,111 @@ public class LayoutSchemaStructuralCompositionTests
             componentKeyToId: new Dictionary<string, string>(),
             componentIdToKind: new Dictionary<string, string>());
     }
+
+    // ─── BuildNodeLocalDataByNodeId / PropsJson/StateJson/PropBindingsJson merge ───
+    // (added 2026-07-23: admin-runtime-operation-dispatch-lane-determination read-circuit
+    // consumption — previously only RuntimeInteractions merged through from tensor nodes for
+    // schema-composed layouts; a tensor node's own propsJson/stateJson/propBindings were parsed
+    // by NpgsqlTopologyRepository but silently discarded for this layout shape.)
+
+    [Fact]
+    public void BuildNodeLocalDataByNodeId_TensorNodeWithNoLocalFields_IsAbsentFromResult()
+    {
+        var tensorNodes = new List<LayoutNodeRecord>
+        {
+            new(NodeId: "n1", NodeKind: "catalog_component", HtmlTag: null,
+                ComponentKey: null, ComponentId: null, ParentNodeId: null,
+                SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: null, Height: null,
+                LayoutClassRefs: null),
+        };
+        var result = LayoutSchemaTensorComposer.BuildNodeLocalDataByNodeId(tensorNodes);
+        Assert.False(result.ContainsKey("n1"));
+    }
+
+    [Fact]
+    public void BuildNodeLocalDataByNodeId_TensorNodeWithPropsAndPropBindings_IsKeptByExactNodeId()
+    {
+        var tensorNodes = new List<LayoutNodeRecord>
+        {
+            new(NodeId: "enum_table", NodeKind: "catalog_component", HtmlTag: null,
+                ComponentKey: null, ComponentId: null, ParentNodeId: null,
+                SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: null, Height: null,
+                LayoutClassRefs: null,
+                PropsJson: """{"table":null,"columns":[{"key":"groupName","header":"Group name"}]}""",
+                PropBindingsJson: """{"rows":{"source":"emission.data"}}"""),
+        };
+        var result = LayoutSchemaTensorComposer.BuildNodeLocalDataByNodeId(tensorNodes);
+        Assert.True(result.TryGetValue("enum_table", out var data));
+        Assert.Contains("groupName", data.PropsJson);
+        Assert.Contains("emission.data", data.PropBindingsJson);
+        Assert.Null(data.StateJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_CatalogLeafMatchingTensorNodeId_MergesPropsAndPropBindings()
+    {
+        var records = ParseValidRows(CategoryRecordsJson);
+        var componentKeyToId = new Dictionary<string, string>
+        {
+            ["select.template"] = "00000000-0000-0000-0001-000000000012",
+            ["button.primitive"] = "00000000-0000-0000-0001-000000000010",
+        };
+        var componentIdToKind = new Dictionary<string, string>
+        {
+            ["00000000-0000-0000-0001-000000000012"] = "form_input/select",
+            ["00000000-0000-0000-0001-000000000010"] = "action/button",
+        };
+        var nodeLocalDataByNodeId = new Dictionary<string, LayoutSchemaTensorComposer.NodeLocalData>
+        {
+            ["field1"] = new(
+                PropsJson: """{"data":{"label":"Overridden"}}""",
+                StateJson: null,
+                PropBindingsJson: """{"options":{"source":"emission.data"}}"""),
+        };
+
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId,
+            componentIdToKind,
+            nodeLocalDataByNodeId);
+
+        var field = Assert.Single(composed, n => n.NodeId == "field1");
+        Assert.Equal("""{"data":{"label":"Overridden"}}""", field.PropsJson);
+        Assert.Equal("""{"options":{"source":"emission.data"}}""", field.PropBindingsJson);
+        Assert.Null(field.StateJson);
+
+        // A structural_node never receives node-local data even when a tensor entry happens to
+        // share its NodeId — only catalog_component leaves are eligible.
+        var section = Assert.Single(composed, n => n.NodeId == "sec1");
+        Assert.Null(section.PropsJson);
+        Assert.Null(section.PropBindingsJson);
+
+        // A catalog_component leaf with no matching tensor NodeId composes with null local data,
+        // exactly as before this feature existed — purely additive, no behavior change for
+        // unrelated leaves.
+        var action = Assert.Single(composed, n => n.NodeId == "action1");
+        Assert.Null(action.PropsJson);
+        Assert.Null(action.PropBindingsJson);
+    }
+
+    [Fact]
+    public void ComposeLayoutSchemaWithTensor_NoNodeLocalDataMapProvided_ComposesAsBeforeThisFeature()
+    {
+        // Compose's nodeLocalDataByNodeId parameter is optional (null default) — every existing
+        // caller/fixture that predates this feature must keep composing identically.
+        var records = ParseValidRows(CategoryRecordsJson);
+        var composed = LayoutSchemaTensorComposer.Compose(
+            records,
+            interactionsBySourceActionKey: new Dictionary<string, string>(),
+            componentKeyToId: new Dictionary<string, string>(),
+            componentIdToKind: new Dictionary<string, string>());
+
+        Assert.All(composed, n =>
+        {
+            Assert.Null(n.PropsJson);
+            Assert.Null(n.StateJson);
+            Assert.Null(n.PropBindingsJson);
+        });
+    }
 }
