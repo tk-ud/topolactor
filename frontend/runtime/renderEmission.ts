@@ -168,6 +168,9 @@ export function mapWiringKindToAction(
   wiringKind: string,
   targetRef?: string | null,
 ): string | null {
+  if (wiringKind === "admin_runtime") {
+    return parseAdminRuntimeLayerAction(targetRef)?.action ?? null;
+  }
   switch (wiringKind) {
     case "search":
       return "Search";
@@ -179,8 +182,6 @@ export function mapWiringKindToAction(
       return "diffUpdate";
     case "delete":
       return "logicalDelete";
-    case "admin_runtime":
-      return parseAdminRuntimeLayerAction(targetRef)?.action ?? null;
     default:
       return null;
   }
