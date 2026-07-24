@@ -20,6 +20,15 @@
  * render — the same "shared instance, not a copy" pattern already used by
  * RuntimeGuardedStateStore (uiEventEffectRunner.ts) elsewhere in this file's
  * lineage.
+ *
+ * Own-property identity: the backing store is created with Object.create(null)
+ * (no Object.prototype in its chain), and existence is checked with
+ * Object.prototype.hasOwnProperty.call(...), never bracket-index truthiness or
+ * the `in` operator. A nodeId that happens to collide with an inherited
+ * Object.prototype key (e.g. "constructor", "toString", "hasOwnProperty")
+ * must resolve as genuinely missing, never as an inherited function value —
+ * see payloadFromResolver.ts's matching own-property fix for the read side of
+ * this same identity contract.
  */
 
 export type LiveNodeValueTracker = {
@@ -36,7 +45,7 @@ export type LiveNodeValueTracker = {
 };
 
 export function createLiveNodeValueTracker(): LiveNodeValueTracker {
-  const store: Record<string, unknown> = {};
+  const store: Record<string, unknown> = Object.create(null);
   return {
     set(nodeId, value) {
       if (!nodeId) return;

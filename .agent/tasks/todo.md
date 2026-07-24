@@ -921,6 +921,19 @@ owner再指摘（PR #597コメント、2026-07-23）は「共通mechanismの単�
 
 **本Bundleのscope境界（再確認）**: 上記は`admin-enum`/`team-dashboard`/`scheduler-settings`のwrite-dispatchが単一の正規contractに従って「進められる状態」にする、というremaining scopeを満たすものであり、それら各subBundle自身の本番write UI（実際のbutton/form/create_item・update_item等の残りoperationのseed配線）を実装するものではない。それらは`admin-surface-topology-seed-conversion`の各subBundle自身のscopeであり、本Bundleはその前提gapを解消したのみである。
 
+### 2026-07-24 PR #599 review対応: 共通substrateの厳格化
+
+PR #599のreview（tk-ud、2度目の修正版コメントで既定Bundle境界へ訂正済み）を受け、上記共通substrateに対して以下を追加実装・test証明した。Scope境界（各subBundle本番write UI実装は対象外）は変更していない。
+
+- **own-property identity**: `frontend/runtime/liveNodeValueTracker.ts`の値storeを`Object.create(null)`化し、`frontend/runtime/payloadFromResolver.ts`のnode_value/event_path存在判定を`in`演算子から`Object.prototype.hasOwnProperty.call`へ変更。nodeIdやevent pathのsegmentがObject.prototypeの継承key（`constructor`/`toString`等）と衝突しても、継承された関数値ではなく確実にmissingとしてfail-closeする。
+- **`bindRuntimeDispatchPayload`のfail-close厳格化**: `frontend/runtime/renderEmission.ts`の`buildAdminRuntimePayloadFromByTrigger`を結果型（`{ok:true,byTrigger}|{ok:false,error}`）へ再構成。不正trigger、非object/空`payloadFrom`、非string値、同一trigger内の同一fieldへの複数entry（duplicate field conflict）は、いずれもnode全体をerror specへfail-closeする（従来のskip/filter/後勝ちmergeを廃止）。
+- **`bindRuntimeDispatchPayload`のcanonical lane formalization**: `docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml` `lane_storage_boundary.admin_runtime_payload_binding_contract`（新設）に、authority・authored surface・required fields・target_ref shape・allowed payload sources・validation/fail-close・優先順位/衝突規則・own-property identity契約を明文化。UI Builder canvas authoring用の閉じた`WIRING_SETTING_CATEGORIES`taxonomy外に置く設計判断も、意図的な権威分離として明記（未検証の例外ではない）。
+- **production ProjectionShell経路のscenario test**: `frontend/tests/projectionShellAdminRuntimeWritePayloadCapture.test.ts`（新規）が、実際の`frontend/islands/ProjectionShell.tsx`をhappy-domでmountし、実DOM `input`イベント（テキスト入力）と実DOM `click`イベント（送信button）をsimulateして、`/api/dispatch`へ送出される実際のrequest bodyを検証する——test側で架空のpayload map/callbackを注入する代替ではなく、production componentの実経路を通す。
+- **CI live-DB test実行の接続**: `.github/workflows/backend-tests.yml`のDB schema apply listに`db/enum_tables.sql`/`db/enum_seed.sql`が欠落しており、`.agent/tests/check-backend-tests.sh`の`TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY`フィルタにも`AdminEnumHubRelationUiProjectionLiveDbTests`が含まれていなかった——両方を追加し、実PostgreSQLを使うCIで本Bundleのwrite proof（および既存read circuit proof）が実際に実行されることを、ローカルでCI相当のschema適用順序を再現した上で確認した。
+- **Test結果**: frontend `deno test frontend/tests/` 1916/1916 pass（前回1906 + 新規10、regressionなし）。backend `dotnet build`成功。CI相当環境（`db/enum_tables.sql`/`db/enum_seed.sql`含む完全schema適用済みDB、`TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1`）で`bash .agent/tests/check-backend-tests.sh`実行——`backend_runtime_tests`/`backend_db_continuity_tests`とも`PASS`。
+
+**引き継ぎ（未着手のまま残った点、正直に記録）**: SSE refresh時のnode reconciliation（stale値の解除）はtracker単体test（`reconcile()`）では証明済みだが、production ProjectionShell mountを通したSSE refresh経路のend-to-end scenario testは未実装——`projectionRuntime`のSSE hookが`emission.projectionDefinition`（未fixtures化）を要求するため、別途fixture設計が必要と判明し、本パスでは着手しなかった。次にこのBundleへ触れるAgentは、ProjectionShell scenario testを拡張してSSE refresh後のreconciliation（旧node値の後続dispatchへの非残留）も同じ実mount経路で証明することが望ましい。
+
 ### 問題点
 
 PR #597（`admin-surface-topology-seed-conversion` admin-enum subBundle）のGate0再監査で、owner指摘に基づき「既存component wiring execution lane / abstract function substrate / `/admin/contents`・UI Builder正規形式」の3方向を実装コードから直接調査した結果、以下が確定した。

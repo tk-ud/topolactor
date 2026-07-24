@@ -389,6 +389,105 @@ admin_uibuilder_ui_structure_wiring_ssot:
           unblocked rather than completed by this entry.
         affected_subbundles: [admin-enum, team-dashboard, scheduler-settings]
         follow_up_ref: .agent/tasks/todo.md admin-runtime-operation-dispatch-lane-determination Bundle
+    admin_runtime_payload_binding_contract:
+      role: >-
+        2026-07-24, formalizes "bindRuntimeDispatchPayload" (introduced in
+        write_payload_capture_mechanism_implemented above) as a canonical, validated
+        payload-binding extension of component_wiring_execution_lane's admin_runtime
+        case -- not an undocumented ad-hoc string recognized by one function. This
+        section is that binding's own vocabulary/authority/validation contract, per
+        PR #599 review (2026-07-24): a "canonical lane" statement requires more than a
+        recognized string constant.
+      actionType: bindRuntimeDispatchPayload
+      authority: >-
+        Frontend build-time authoring only (frontend/runtime/renderEmission.ts
+        buildAdminRuntimePayloadFromByTrigger). Never a backend authority, never a
+        second target/layer/action resolution path -- it only supplies DATA (the
+        payload) for the target/layer/action the SAME node's wiringKind="admin_runtime"
+        + targetRef already resolve (parseAdminRuntimeLayerAction). An entry with this
+        actionType on a node that is NOT wiringKind="admin_runtime" is not itself an
+        error (buildAdminRuntimePayloadFromByTrigger runs regardless of wiringKind), but
+        produces a payloadFrom map with nothing to attach it to -- buildCatalogComponentEventBinding
+        only consumes it when a non-null RuntimeDispatchSpec exists for that node.
+      applicability: >-
+        Any wiring_kind="admin_runtime" node, any layer:action (enum_dictionary:*,
+        auth_users:*, team_markdown:*, scheduler_jobs:*, ...) -- reuses the SAME
+        actionType, no per-operation/per-subBundle case.
+      authored_surface: >-
+        A per-node topology.ui_topology_tensor.layout_patch_json.nodes[].runtimeInteractions[]
+        entry (the SAME per-node authoring column dispatchExternalPort/
+        dispatchInstanceOperation/localStateMutation already use) -- never
+        topology.ui_wiring_registry.wiring_schema_json (that column remains a zero-consumer
+        surface per this file's known_gaps note above; this contract does not adopt it).
+      required_fields:
+        trigger: >-
+          Must classify via the SAME normalizeAuthoredEventType/trigger_vocabulary every
+          other runtimeInteractions entry uses (click/change/select/submit/toggle after
+          normalization). An unrecognized trigger fails the WHOLE node closed
+          (ADMIN_RUNTIME_PAYLOAD_FROM_INVALID_TRIGGER) -- never silently skipped.
+        payloadFrom: >-
+          Non-empty object, every value a string source recognized by
+          payloadFromResolver.ts's existing grammar (node:<nodeId>.value | event.<path> |
+          literal:<value>) -- the SAME grammar/resolver dispatchExternalPort/
+          dispatchInstanceOperation already use; this contract adds no new source syntax.
+          Absent/non-object/empty payloadFrom (ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED /
+          ADMIN_RUNTIME_PAYLOAD_FROM_EMPTY) and a non-string field value
+          (ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED) fail the whole node closed.
+      target_ref_shape: >-
+        Unchanged from parseAdminRuntimeLayerAction's existing contract --
+        "manifest:<manifestUuid>:<layer>:<action>". This binding contract adds no new
+        target_ref grammar; targetRef stays exclusively the node's own
+        wiringKind="admin_runtime" column, never re-derived from a
+        bindRuntimeDispatchPayload entry.
+      allowed_payload_sources: >-
+        Exactly payloadFromResolver.ts's three source kinds (node_value / event_path /
+        literal). No new source kind is introduced by this contract -- doing so would
+        require its own SSOT amendment and resolver change, out of this contract's scope.
+      validation_and_fail_close: >-
+        renderEmission.ts buildAdminRuntimePayloadFromByTrigger returns a result type
+        (never a bare map): any invalid trigger, malformed/empty payloadFrom, non-string
+        field value, or a duplicate_field_conflict (two entries on the SAME node
+        authoring the SAME field for the SAME trigger -- resolved via silent last-wins
+        overwrite is explicitly prohibited; the entries disagree, and dispatch must not
+        guess which wins) fails the WHOLE node's render closed as an explicit error
+        ComponentSpec, mirroring the existing CATALOG_COMPONENT_KIND_REQUIRED-class
+        fail-close pattern this file already uses elsewhere in renderEmission.ts. At
+        dispatch time (runtimeComponentFactory.ts emitBoundEvent), a payloadFrom map
+        (once validated at build time) is resolved via the SAME resolvePayloadFrom()
+        single authority dispatchExternalPort/dispatchInstanceOperation use --
+        PAYLOAD_FROM_NODE_NOT_FOUND / PAYLOAD_FROM_EVENT_PATH_NOT_FOUND /
+        PAYLOAD_FROM_UNRESOLVED_REF fail close and never enqueue a dispatch; no unresolved
+        value is ever silently degraded to empty string, null, or false.
+      priority_conflict_rule: >-
+        When a payloadFrom map is authored for a trigger, the RESOLVED payload is the
+        sole payload authority for that dispatch (mirrors dispatchExternalPort/
+        dispatchInstanceOperation's own contract exactly -- resolved.payload replaces,
+        never merges with, any other payload source). When no payloadFrom is authored
+        for a trigger, the pre-existing (PR #597) raw event-time payload passthrough
+        (static config payload + Lane 1's merged event payload) is unchanged.
+      own_property_identity: >-
+        Both the live node value store (frontend/runtime/liveNodeValueTracker.ts,
+        Object.create(null) backing) and payloadFromResolver.ts's node_value/event_path
+        existence checks (Object.prototype.hasOwnProperty.call, never the `in` operator
+        or bracket-index truthiness) treat a nodeId/event-path segment that collides with
+        an inherited Object.prototype key (constructor, toString, hasOwnProperty, ...) as
+        genuinely missing, never as an inherited function value.
+      out_of_scope_for_this_contract: >-
+        Extending WIRING_SETTING_CATEGORIES (uiBuilderWiringProjection.ts) to include
+        this actionType. That taxonomy classifies UI-Builder canvas-authoring inspector
+        categories for a human editing runtimeInteractions in the canvas -- a different
+        concern from this seed-authored runtime dispatch payload-binding contract. Being
+        outside that taxonomy does not weaken this contract's own validation (see
+        validation_and_fail_close above) -- it is a deliberate separation of two
+        different authorities, not an unvalidated exception.
+      proof: >-
+        frontend/tests/liveNodeValueTrackerAndAdminRuntimePayloadFrom.test.ts (fail-close
+        cases: invalid trigger, malformed/empty payloadFrom, non-string field,
+        duplicate_field_conflict, own-property identity for both the node value store and
+        event-path traversal) and frontend/tests/
+        projectionShellAdminRuntimeWritePayloadCapture.test.ts (production
+        frontend/islands/ProjectionShell.tsx mount, real DOM input/click events, not a
+        test-injected payload map/callback).
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

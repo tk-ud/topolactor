@@ -386,50 +386,104 @@ export function mergeNodeLocalProps(
 
 const ADMIN_RUNTIME_PAYLOAD_FROM_ACTION_TYPE = "bindRuntimeDispatchPayload";
 
+export type AdminRuntimePayloadFromByTriggerResult =
+  | { ok: true; byTrigger: Record<string, Record<string, string>> }
+  | { ok: false; error: string };
+
 /**
  * Reads per-trigger payloadFrom maps authored on a node's OWN runtimeInteractions[]
  * entries (a per-node column, independent of the layout-wide wiring_kind=admin_runtime
  * broadcast target/layer/action) for the generic, non-surface-specific
- * "bindRuntimeDispatchPayload" actionType. Every admin_runtime action (enum_dictionary:*,
- * auth_users:*, team_markdown:*, scheduler_jobs:*, ...) reuses this SAME actionType —
- * no per-operation case. Outside the closed WIRING_SETTING_CATEGORIES taxonomy
- * (uiBuilderWiringProjection.ts) on purpose: that taxonomy governs UI-Builder
- * canvas-authoring policy checks, not this seed-authored runtime dispatch path — an
- * unrecognized actionType there is silently skipped (never a hard error) by
- * buildLocalUiStateEventBinding/buildExternalPortEventBinding, and the
- * RUNTIME_INTERACTION_UNATTRIBUTABLE fail-close below only fires when the overall
- * componentEventBinding ends up empty, which an admin_runtime node's own
- * wiringKind-derived baseEventBinding already prevents.
- * SSOT: docs/design/admin-uibuilder-ui-structure-wiring-ssot.yaml
- * lane_storage_boundary.known_gaps.remaining_write_payload_capture_gap.
+ * "bindRuntimeDispatchPayload" actionType — the canonical, data-defined payload-binding
+ * extension of component_wiring_execution_lane's admin_runtime case (SSOT:
+ * admin-uibuilder-ui-structure-wiring-ssot.yaml lane_storage_boundary.known_gaps.
+ * remaining_write_payload_capture_gap write_payload_capture_mechanism_implemented).
+ * Every admin_runtime action (enum_dictionary:*, auth_users:*, team_markdown:*,
+ * scheduler_jobs:*, ...) reuses this SAME actionType — no per-operation case.
+ *
+ * Outside the closed WIRING_SETTING_CATEGORIES taxonomy (uiBuilderWiringProjection.ts)
+ * by design: that taxonomy classifies UI-Builder canvas-authoring inspector categories
+ * for a human editing runtimeInteractions in the canvas, a different concern from this
+ * seed-authored runtime dispatch payload-binding contract. Being outside that taxonomy
+ * does NOT mean malformed entries are silently ignored here — every entry whose
+ * actionType is exactly "bindRuntimeDispatchPayload" is validated and fails the whole
+ * result closed on any malformation (never skipped/filtered/merged-with-last-wins):
+ * unrecognized trigger, non-object/empty payloadFrom, a non-string payloadFrom value,
+ * or two entries authoring the same field for the same trigger (duplicate_field_conflict
+ * — resolved via silent overwrite, never — the entries disagree, and dispatch must not
+ * guess which wins).
  */
 function buildAdminRuntimePayloadFromByTrigger(
   rawWirings: unknown,
-): Record<string, Record<string, string>> {
-  if (!Array.isArray(rawWirings)) return {};
+): AdminRuntimePayloadFromByTriggerResult {
+  if (!Array.isArray(rawWirings)) return { ok: true, byTrigger: {} };
   const byTrigger: Record<string, Record<string, string>> = {};
   for (const raw of rawWirings) {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const wiring = raw as Record<string, unknown>;
     if (wiring.actionType !== ADMIN_RUNTIME_PAYLOAD_FROM_ACTION_TYPE) continue;
-    const trigger = normalizeAuthoredEventType(
-      wiring.trigger ?? wiring.eventType,
-    );
-    if (!trigger) continue;
+
+    const rawTrigger = wiring.trigger ?? wiring.eventType;
+    const trigger = normalizeAuthoredEventType(rawTrigger);
+    if (!trigger) {
+      return {
+        ok: false,
+        error:
+          `ADMIN_RUNTIME_PAYLOAD_FROM_INVALID_TRIGGER: bindRuntimeDispatchPayload entry has an unrecognized trigger "${
+            String(rawTrigger)
+          }"`,
+      };
+    }
+
     const payloadFromRaw = wiring.payloadFrom;
     if (
       typeof payloadFromRaw !== "object" || payloadFromRaw === null ||
       Array.isArray(payloadFromRaw)
-    ) continue;
-    const payloadFrom = Object.fromEntries(
-      Object.entries(payloadFromRaw).filter(([, value]) =>
-        typeof value === "string"
-      ),
-    ) as Record<string, string>;
-    if (Object.keys(payloadFrom).length === 0) continue;
-    byTrigger[trigger] = { ...(byTrigger[trigger] ?? {}), ...payloadFrom };
+    ) {
+      return {
+        ok: false,
+        error:
+          `ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED: bindRuntimeDispatchPayload entry for trigger "${trigger}" has a non-object payloadFrom`,
+      };
+    }
+    const payloadFromEntries = Object.entries(payloadFromRaw);
+    if (payloadFromEntries.length === 0) {
+      return {
+        ok: false,
+        error:
+          `ADMIN_RUNTIME_PAYLOAD_FROM_EMPTY: bindRuntimeDispatchPayload entry for trigger "${trigger}" declares no payloadFrom fields`,
+      };
+    }
+    const payloadFrom: Record<string, string> = {};
+    for (const [field, value] of payloadFromEntries) {
+      if (typeof value !== "string") {
+        return {
+          ok: false,
+          error:
+            `ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED: bindRuntimeDispatchPayload entry for trigger "${trigger}" field "${field}" is not a string source`,
+        };
+      }
+      payloadFrom[field] = value;
+    }
+
+    const existing = byTrigger[trigger];
+    if (existing) {
+      const conflicting = Object.keys(payloadFrom).find((field) =>
+        Object.prototype.hasOwnProperty.call(existing, field)
+      );
+      if (conflicting) {
+        return {
+          ok: false,
+          error:
+            `ADMIN_RUNTIME_PAYLOAD_FROM_DUPLICATE_FIELD_CONFLICT: trigger "${trigger}" has more than one bindRuntimeDispatchPayload entry authoring field "${conflicting}"`,
+        };
+      }
+      byTrigger[trigger] = { ...existing, ...payloadFrom };
+    } else {
+      byTrigger[trigger] = payloadFrom;
+    }
   }
-  return byTrigger;
+  return { ok: true, byTrigger };
 }
 
 /**
@@ -1014,13 +1068,31 @@ export function renderEmission(
             ? { ...design, linkHref: linkHrefResult.value || design.linkHref }
             : undefined,
         );
+        // bindRuntimeDispatchPayload validation is fail-closed for the whole node —
+        // never silently skipped/filtered/last-wins-merged (SSOT
+        // remaining_write_payload_capture_gap negative-case contract).
+        const adminRuntimePayloadFrom = previewMode ||
+            isNavigationWiringKind(nodeWiringKind)
+          ? { ok: true as const, byTrigger: {} }
+          : buildAdminRuntimePayloadFromByTrigger(node.runtimeInteractions);
+        if (!adminRuntimePayloadFrom.ok) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: {
+              error: adminRuntimePayloadFrom.error,
+              componentId: node.componentId,
+            },
+            ...layoutFields,
+          };
+        }
         const baseEventBinding = previewMode
           ? buildPreviewInertEventBinding()
           : isNavigationWiringKind(nodeWiringKind)
           ? buildRouteNavigationEventBinding(node.targetRef)
           : buildCatalogComponentEventBinding(
             buildRuntimeDispatchSpec(node),
-            buildAdminRuntimePayloadFromByTrigger(node.runtimeInteractions),
+            adminRuntimePayloadFrom.byTrigger,
           );
         const rawLocalInteractions = node.runtimeInteractions ??
           propsWithDesign.eventWirings;

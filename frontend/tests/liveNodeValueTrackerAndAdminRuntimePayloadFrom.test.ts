@@ -5,6 +5,7 @@ import {
 import {
   createLiveNodeValueTracker,
 } from "../runtime/liveNodeValueTracker.ts";
+import { resolvePayloadFrom } from "../runtime/payloadFromResolver.ts";
 import {
   buildCatalogComponentEventBinding,
   buildRuntimeDispatchSpec,
@@ -62,6 +63,58 @@ Deno.test("createLiveNodeValueTracker: set() with empty nodeId is a no-op (fail-
   const tracker = createLiveNodeValueTracker();
   tracker.set("", "x");
   assertEquals(tracker.snapshot(), {});
+});
+
+// ─── own-property identity (PR #599 review): a nodeId colliding with an
+// inherited Object.prototype key must never resolve as an inherited value ──
+
+Deno.test("createLiveNodeValueTracker: a nodeId shaped like an Object.prototype key is a genuinely separate, unset slot until set()", () => {
+  const tracker = createLiveNodeValueTracker();
+  // Before any set() call, "constructor"/"toString" must read as absent, not
+  // as the inherited Object.prototype function a plain {} would expose.
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(tracker.snapshot(), "constructor"),
+    false,
+  );
+  tracker.set("constructor", "actual-value");
+  assertEquals(tracker.snapshot()["constructor"], "actual-value");
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(tracker.snapshot(), "constructor"),
+    true,
+  );
+});
+
+Deno.test("resolvePayloadFrom: node:<id>.value fails close (PAYLOAD_FROM_NODE_NOT_FOUND) for an Object.prototype-shaped nodeId that was never set — even against a plain {} nodeValues map", () => {
+  const nodeValues: Record<string, unknown> = {};
+  const result = resolvePayloadFrom(
+    { id: "node:constructor.value" },
+    nodeValues,
+    {},
+  );
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(
+      result.errors.some((e) => e.includes("PAYLOAD_FROM_NODE_NOT_FOUND")),
+      true,
+    );
+  }
+});
+
+Deno.test("resolvePayloadFrom: event.<path> fails close for an Object.prototype-shaped path segment that was never actually present on the event payload", () => {
+  const result = resolvePayloadFrom(
+    { id: "event.toString" },
+    {},
+    { unrelated: true },
+  );
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(
+      result.errors.some((e) =>
+        e.includes("PAYLOAD_FROM_EVENT_PATH_NOT_FOUND")
+      ),
+      true,
+    );
+  }
 });
 
 // ─── emitBoundEvent: node value tracking lane (write side of payloadFromNodeValues) ──
@@ -162,6 +215,159 @@ Deno.test("buildAdminRuntimePayloadFromByTrigger via buildCatalogComponentEventB
   const submitBinding = binding.submit as Record<string, unknown>;
   const submitRd = submitBinding.runtimeDispatch as Record<string, unknown>;
   assertEquals(submitRd.payloadFrom, undefined);
+});
+
+// ─── bindRuntimeDispatchPayload fail-close (PR #599 review): malformed
+// entries must fail the whole node closed, never skip/filter/last-wins ──
+
+function adminRuntimeNodeEmission(
+  runtimeInteractions: unknown,
+): Emission {
+  return {
+    layoutId: "layout-admin-runtime-payloadfrom-failclose",
+    layoutNodes: [
+      {
+        nodeId: "node-submit-button",
+        nodeKind: "catalog_component",
+        componentId: "comp-submit-button-001",
+        componentKind: "action/button",
+        componentKey: "button.primitive",
+        orderIndex: 0,
+        wiringKind: "admin_runtime",
+        targetSurface: "manifest",
+        targetRef:
+          `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+        // deno-lint-ignore no-explicit-any
+        runtimeInteractions: runtimeInteractions as any,
+      },
+    ],
+  };
+}
+
+Deno.test("renderEmission: bindRuntimeDispatchPayload with unrecognized trigger fails the node closed (ADMIN_RUNTIME_PAYLOAD_FROM_INVALID_TRIGGER)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission([{
+      trigger: "not_a_real_trigger",
+      actionType: "bindRuntimeDispatchPayload",
+      payloadFrom: { groupName: "node:name_input.value" },
+    }]),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  const err = JSON.stringify(specs[0].def);
+  assertEquals(err.includes("ADMIN_RUNTIME_PAYLOAD_FROM_INVALID_TRIGGER"), true);
+});
+
+Deno.test("renderEmission: bindRuntimeDispatchPayload with non-object payloadFrom fails the node closed (ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED), not silently skipped", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission([{
+      trigger: "click",
+      actionType: "bindRuntimeDispatchPayload",
+      payloadFrom: "not-an-object",
+    }]),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes("ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED"),
+    true,
+  );
+});
+
+Deno.test("renderEmission: bindRuntimeDispatchPayload with empty payloadFrom fails the node closed (ADMIN_RUNTIME_PAYLOAD_FROM_EMPTY)", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission([{
+      trigger: "click",
+      actionType: "bindRuntimeDispatchPayload",
+      payloadFrom: {},
+    }]),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes("ADMIN_RUNTIME_PAYLOAD_FROM_EMPTY"),
+    true,
+  );
+});
+
+Deno.test("renderEmission: bindRuntimeDispatchPayload with a non-string field source fails the node closed, never silently filtered out", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission([{
+      trigger: "click",
+      actionType: "bindRuntimeDispatchPayload",
+      payloadFrom: { groupName: "node:name_input.value", indexNum: 42 },
+    }]),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes("ADMIN_RUNTIME_PAYLOAD_FROM_MALFORMED"),
+    true,
+  );
+});
+
+Deno.test("renderEmission: two bindRuntimeDispatchPayload entries authoring the SAME field for the SAME trigger fails closed (ADMIN_RUNTIME_PAYLOAD_FROM_DUPLICATE_FIELD_CONFLICT), never last-wins", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission([
+      {
+        trigger: "click",
+        actionType: "bindRuntimeDispatchPayload",
+        payloadFrom: { groupName: "node:name_input.value" },
+      },
+      {
+        trigger: "click",
+        actionType: "bindRuntimeDispatchPayload",
+        payloadFrom: { groupName: "event.row.groupName" },
+      },
+    ]),
+    {},
+  );
+  assertEquals(specs[0].componentType, "error");
+  assertEquals(
+    JSON.stringify(specs[0].def).includes(
+      "ADMIN_RUNTIME_PAYLOAD_FROM_DUPLICATE_FIELD_CONFLICT",
+    ),
+    true,
+  );
+});
+
+Deno.test("renderEmission: two bindRuntimeDispatchPayload entries for DIFFERENT triggers, or DIFFERENT fields on the same trigger, merge without conflict", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const specs = renderEmission(
+    adminRuntimeNodeEmission([
+      {
+        trigger: "click",
+        actionType: "bindRuntimeDispatchPayload",
+        payloadFrom: { groupName: "node:name_input.value" },
+      },
+      {
+        trigger: "click",
+        actionType: "bindRuntimeDispatchPayload",
+        payloadFrom: { indexNum: "node:index_input.value" },
+      },
+      {
+        trigger: "submit",
+        actionType: "bindRuntimeDispatchPayload",
+        payloadFrom: { groupName: "node:name_input.value" },
+      },
+    ]),
+    {},
+  );
+  assertExists(specs[0].runtimeSpec);
+  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<
+    string,
+    unknown
+  >;
+  const clickRd = clickBinding.runtimeDispatch as Record<string, unknown>;
+  assertEquals(clickRd.payloadFrom, {
+    groupName: "node:name_input.value",
+    indexNum: "node:index_input.value",
+  });
 });
 
 Deno.test("emitBoundEvent: admin_runtime Lane 2 resolves payloadFrom from live node values (node:<id>.value) as the sole payload", async () => {

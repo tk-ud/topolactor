@@ -64,7 +64,14 @@ export function resolvePayloadFromSource(
 ): ResolvedPayloadEntry {
   switch (source.kind) {
     case "node_value": {
-      if (!(source.nodeId in nodeValues)) {
+      // Own-property identity: `in` (and bracket-index truthiness) also match
+      // inherited Object.prototype keys ("constructor", "toString", ...) on a
+      // plain-object nodeValues map, which would let a coincidentally-named
+      // nodeId resolve to an inherited function value instead of failing
+      // close as genuinely missing. hasOwnProperty is prototype-independent —
+      // correct whether nodeValues is a plain {} (e.g. hand-built in a test)
+      // or an Object.create(null) store (liveNodeValueTracker.ts).
+      if (!Object.prototype.hasOwnProperty.call(nodeValues, source.nodeId)) {
         return {
           ok: false,
           error: `PAYLOAD_FROM_NODE_NOT_FOUND: node "${source.nodeId}" is not in the current canvas node value map`,
@@ -83,7 +90,17 @@ export function resolvePayloadFromSource(
             error: `PAYLOAD_FROM_EVENT_PATH_NOT_FOUND: path "event.${source.path.join(".")}" is not traversable at "${traversed}" (value is not an object)`,
           };
         }
-        if (!(seg in (current as Record<string, unknown>))) {
+        // Own-property identity, same rationale as node_value above: `in`
+        // matches inherited Object.prototype keys on the caller's raw event
+        // object, which would let a coincidentally-named path segment
+        // (event.constructor, event.toString) resolve to an inherited
+        // function instead of failing close as absent.
+        if (
+          !Object.prototype.hasOwnProperty.call(
+            current as Record<string, unknown>,
+            seg,
+          )
+        ) {
           return {
             ok: false,
             error: `PAYLOAD_FROM_EVENT_PATH_NOT_FOUND: path "event.${source.path.join(".")}" key "${seg}" is absent at "${traversed}"`,
