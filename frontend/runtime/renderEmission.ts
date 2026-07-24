@@ -30,6 +30,7 @@ import {
 } from "./frontendLocalCalculationResolver.ts";
 import { projectionInputFromData } from "./projectionInput.ts";
 import {
+  ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE,
   computeDispatchIdempotencyKey,
   wiringSettingCategoryOf,
 } from "../lib/uiBuilderWiringProjection.ts";
@@ -384,7 +385,6 @@ export function mergeNodeLocalProps(
   return { ok: true, props };
 }
 
-const ADMIN_RUNTIME_PAYLOAD_FROM_ACTION_TYPE = "bindRuntimeDispatchPayload";
 
 export type AdminRuntimePayloadFromByTriggerResult =
   | { ok: true; byTrigger: Record<string, Record<string, string>> }
@@ -421,7 +421,7 @@ function buildAdminRuntimePayloadFromByTrigger(
   for (const raw of rawWirings) {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) continue;
     const wiring = raw as Record<string, unknown>;
-    if (wiring.actionType !== ADMIN_RUNTIME_PAYLOAD_FROM_ACTION_TYPE) continue;
+    if (wiring.actionType !== ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE) continue;
 
     const rawTrigger = wiring.trigger ?? wiring.eventType;
     const trigger = normalizeAuthoredEventType(rawTrigger);

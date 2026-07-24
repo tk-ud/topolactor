@@ -255,6 +255,29 @@ export const WIRING_SETTING_CATEGORIES = [
 
 export type WiringSettingCategory = typeof WIRING_SETTING_CATEGORIES[number];
 
+/**
+ * "bindRuntimeDispatchPayload" (SSOT: admin-uibuilder-ui-structure-wiring-ssot.yaml
+ * lane_storage_boundary.admin_runtime_payload_binding_contract) is a KNOWN, EXPLICITLY
+ * RECOGNIZED runtimeInteractions[] actionType that is intentionally NOT one of the six
+ * ui_event_settings.setting_category_taxonomy categories above — it authors a
+ * component_wiring_execution_lane admin_runtime dispatch's payload data, a different
+ * authority from any of the six (which classify UI-Builder canvas-authoring inspector
+ * categories for wiringSettingCategoryOf's callers). Recognized here explicitly, and
+ * consulted by findRuntimeInteractionPolicyErrors below, so a node carrying this
+ * actionType does not spuriously fail ACTION_OUTSIDE_VOCABULARY when a human later
+ * opens its layout in the UI Builder canvas for an unrelated edit — being outside the
+ * six-category taxonomy must not silently pass OR silently block; it is a distinct,
+ * validated authority (its own build-time validation lives in renderEmission.ts
+ * buildAdminRuntimePayloadFromByTrigger and its own dispatch-time parse-boundary
+ * fail-close lives in runtimeComponentFactory.ts parseEventBinding).
+ */
+export const ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE =
+  "bindRuntimeDispatchPayload";
+
+export function isAdminRuntimePayloadBindingAction(actionType: string): boolean {
+  return actionType === ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE;
+}
+
 const UI_STATE_UPDATE_ACTIONS = new Set([
   "openModal",
   "closeModal",
@@ -494,6 +517,17 @@ export function findRuntimeInteractionPolicyErrors(
         continue;
       }
       if (wiringSettingCategoryOf(w) === null) {
+        // bindRuntimeDispatchPayload is a KNOWN, explicitly recognized authority
+        // outside the six-category taxonomy (see ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE
+        // above) — being outside the taxonomy must not silently pass OR silently
+        // block; recognizing it here means it neither trips ACTION_OUTSIDE_VOCABULARY
+        // nor falls through to the backend/external dispatch policy checks below
+        // (debounce/lifecycle-confirmation), which govern a different authority
+        // (dispatchExternalPort/dispatchInstanceOperation) this actionType is not.
+        // Its own validation (required trigger/payloadFrom shape, duplicate-field
+        // conflict) lives solely in renderEmission.ts buildAdminRuntimePayloadFromByTrigger
+        // — not duplicated here, to keep a single validation authority.
+        if (isAdminRuntimePayloadBindingAction(w.actionType)) continue;
         errors.push(
           `${prefix}: ACTION_OUTSIDE_VOCABULARY — actionType "${w.actionType}" は分類語彙外です`,
         );

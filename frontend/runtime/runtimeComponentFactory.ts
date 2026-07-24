@@ -220,16 +220,31 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     const operationType = typeof rd.operationType === "string"
       ? rd.operationType.trim()
       : action.trim();
+    // Own parse-boundary fail-close for payloadFrom — mirrors externalPortDispatch's
+    // pre-existing contract below exactly (return null for the WHOLE binding on any
+    // malformation), independent of whether the upstream builder
+    // (renderEmission.ts buildAdminRuntimePayloadFromByTrigger) already validated
+    // this shape. This function re-parses spec.eventBinding[trigger] — untyped JSON
+    // that could reach here from any construction path, not only that builder — so
+    // build-time validation existing elsewhere is never a substitute for this
+    // boundary's own explicit fail-close. A present-but-malformed payloadFrom
+    // (non-object, non-string value, or empty object) fails the whole binding
+    // closed; it is never silently filtered down to a subset or dropped to
+    // "unspecified" (which would fall back to raw event-time payload passthrough).
     const rdPayloadFromRaw = rd.payloadFrom;
-    const rdPayloadFrom =
-      (typeof rdPayloadFromRaw === "object" && rdPayloadFromRaw !== null &&
-          !Array.isArray(rdPayloadFromRaw))
-        ? Object.fromEntries(
-          Object.entries(rdPayloadFromRaw).filter(([, v]) =>
-            typeof v === "string"
-          ),
-        ) as Record<string, string>
-        : undefined;
+    let rdPayloadFrom: Record<string, string> | undefined;
+    if (rdPayloadFromRaw !== undefined) {
+      if (
+        typeof rdPayloadFromRaw !== "object" || rdPayloadFromRaw === null ||
+        Array.isArray(rdPayloadFromRaw)
+      ) return null;
+      const entries = Object.entries(rdPayloadFromRaw);
+      if (
+        entries.length === 0 ||
+        !entries.every(([, v]) => typeof v === "string")
+      ) return null;
+      rdPayloadFrom = Object.fromEntries(entries) as Record<string, string>;
+    }
     runtimeDispatch = {
       operationType,
       target: target.trim(),
@@ -238,9 +253,7 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       wiringKey: typeof rd.wiringKey === "string" ? rd.wiringKey : undefined,
       wiringId: typeof rd.wiringId === "string" ? rd.wiringId : undefined,
       targetRef: typeof rd.targetRef === "string" ? rd.targetRef : undefined,
-      payloadFrom: (rdPayloadFrom && Object.keys(rdPayloadFrom).length > 0)
-        ? rdPayloadFrom
-        : undefined,
+      payloadFrom: rdPayloadFrom,
     };
   }
   const routeNavigationRaw = (value as Record<string, unknown>).routeNavigation;

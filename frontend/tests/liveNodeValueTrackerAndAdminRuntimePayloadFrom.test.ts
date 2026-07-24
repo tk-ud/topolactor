@@ -681,3 +681,123 @@ Deno.test("emitBoundEvent: admin_runtime Lane 2 without payloadFrom keeps the pr
     schedulerTestOnly.resetCommandQueue();
   }
 });
+
+// ─── parseEventBinding: payloadFrom runtime parse boundary fail-close
+// (PR #599 review round 3) — this is a SEPARATE boundary from renderEmission.ts's
+// build-time buildAdminRuntimePayloadFromByTrigger validation. parseEventBinding
+// re-parses spec.eventBinding[trigger] (untyped JSON) at dispatch time; build-time
+// validation existing elsewhere must never be treated as a substitute for this
+// boundary's own fail-close ──
+
+function runtimeDispatchBindingWithPayloadFrom(
+  payloadFrom: unknown,
+): Record<string, unknown> {
+  return {
+    eventType: "click",
+    runtimeDispatch: {
+      operationType: "create_group",
+      target: "manifest",
+      layer: "enum_dictionary",
+      action: "create_group",
+      targetRef: `manifest:${ADMIN_ENUM_MANIFEST_ID}:enum_dictionary:create_group`,
+      payloadFrom,
+    },
+  };
+}
+
+Deno.test("parseEventBinding: non-object payloadFrom fails the whole binding closed (null), never silently dropped to 'no payloadFrom'", () => {
+  const parsed = factoryTestOnly.parseEventBinding(
+    runtimeDispatchBindingWithPayloadFrom("not-an-object"),
+  );
+  assertEquals(parsed, null);
+});
+
+Deno.test("parseEventBinding: empty-object payloadFrom fails the whole binding closed (null)", () => {
+  const parsed = factoryTestOnly.parseEventBinding(
+    runtimeDispatchBindingWithPayloadFrom({}),
+  );
+  assertEquals(parsed, null);
+});
+
+Deno.test("parseEventBinding: a non-string payloadFrom field value fails the whole binding closed (null), never filtered out of the map", () => {
+  const parsed = factoryTestOnly.parseEventBinding(
+    runtimeDispatchBindingWithPayloadFrom({
+      groupName: "node:name_input.value",
+      indexNum: 42,
+    }),
+  );
+  assertEquals(parsed, null);
+});
+
+Deno.test("parseEventBinding: an array payloadFrom fails the whole binding closed (null)", () => {
+  const parsed = factoryTestOnly.parseEventBinding(
+    runtimeDispatchBindingWithPayloadFrom(["node:name_input.value"]),
+  );
+  assertEquals(parsed, null);
+});
+
+Deno.test("parseEventBinding: valid payloadFrom parses through unchanged", () => {
+  const parsed = factoryTestOnly.parseEventBinding(
+    runtimeDispatchBindingWithPayloadFrom({
+      groupName: "node:name_input.value",
+    }),
+  );
+  assertExists(parsed);
+  assertExists(parsed!.runtimeDispatch);
+  assertEquals(parsed!.runtimeDispatch!.payloadFrom, {
+    groupName: "node:name_input.value",
+  });
+});
+
+Deno.test("parseEventBinding: absent payloadFrom parses through as undefined (raw passthrough contract unchanged)", () => {
+  const parsed = factoryTestOnly.parseEventBinding({
+    eventType: "click",
+    runtimeDispatch: {
+      operationType: "list_groups",
+      target: "manifest",
+      layer: "enum_dictionary",
+      action: "list_groups",
+    },
+  });
+  assertExists(parsed);
+  assertExists(parsed!.runtimeDispatch);
+  assertEquals(parsed!.runtimeDispatch!.payloadFrom, undefined);
+});
+
+Deno.test("emitBoundEvent: malformed payloadFrom at the dispatch-time parse boundary fails close (RUNTIME_PRIMITIVE_RENDERER_INVALID_EVENT_BINDING) and never enqueues, even if it somehow bypassed build-time validation", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  schedulerTestOnly.resetCommandQueue();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as typeof fetch;
+  try {
+    const spec: RuntimeComponentSpec = {
+      componentId: "comp-malformed-parse-001",
+      packageId: null,
+      layoutId: "layout-malformed-parse-001",
+      wiringId: null,
+      componentType: "action/button",
+      props: { data: { label: "Create" } },
+      // Hand-built eventBinding bypassing renderEmission.ts's builder entirely —
+      // simulates any future/alternate construction path that doesn't go through
+      // buildAdminRuntimePayloadFromByTrigger, proving this parse boundary's
+      // fail-close is real and not merely inherited from the builder.
+      eventBinding: runtimeDispatchBindingWithPayloadFrom({
+        groupName: "node:name_input.value",
+        indexNum: 42,
+      }),
+      payloadFromNodeValues: { "name_input": "Status" },
+    };
+    const result = factoryTestOnly.emitBoundEvent(spec, "click", {});
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+      assertEquals(
+        result.error.includes("RUNTIME_PRIMITIVE_RENDERER_INVALID_EVENT_BINDING"),
+        true,
+      );
+    }
+    assertEquals(schedulerTestOnly.getCommandQueueLength(), 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    schedulerTestOnly.resetCommandQueue();
+  }
+});

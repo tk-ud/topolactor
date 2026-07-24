@@ -473,21 +473,86 @@ admin_uibuilder_ui_structure_wiring_ssot:
         an inherited Object.prototype key (constructor, toString, hasOwnProperty, ...) as
         genuinely missing, never as an inherited function value.
       out_of_scope_for_this_contract: >-
-        Extending WIRING_SETTING_CATEGORIES (uiBuilderWiringProjection.ts) to include
-        this actionType. That taxonomy classifies UI-Builder canvas-authoring inspector
-        categories for a human editing runtimeInteractions in the canvas -- a different
-        concern from this seed-authored runtime dispatch payload-binding contract. Being
-        outside that taxonomy does not weaken this contract's own validation (see
-        validation_and_fail_close above) -- it is a deliberate separation of two
-        different authorities, not an unvalidated exception.
+        Extending WIRING_SETTING_CATEGORIES (uiBuilderWiringProjection.ts) -- the array
+        literal type of the six SSOT ui_event_settings.setting_category_taxonomy
+        categories -- to include this actionType. That taxonomy classifies UI-Builder
+        canvas-authoring inspector categories for a human editing runtimeInteractions in
+        the canvas -- a different concern from this seed-authored runtime dispatch
+        payload-binding contract. wiringSettingCategoryOf still classifies this actionType
+        as null (honestly outside the six categories, never silently rounded into one).
+        This is NOT the same as being unreconciled with UI-Builder's own authoring/apply
+        policy validator -- see policy_validator_reconciliation below, added 2026-07-24
+        after PR #599 review round 3 confirmed the two were not yet reconciled.
+      policy_validator_reconciliation: >-
+        2026-07-24 (PR #599 review round 3). Both this contract's payload-binding entries
+        and UI-Builder's own authoring/apply/readiness policy validator
+        (frontend/lib/uiBuilderWiringProjection.ts findRuntimeInteractionPolicyErrors)
+        share the SAME storage/authoring surface -- topology.ui_topology_tensor.
+        layout_patch_json.nodes[].runtimeInteractions[] -- so an entry with actionType
+        "bindRuntimeDispatchPayload" that a human later opens in the UI Builder canvas
+        (for an unrelated edit on the same layout) must not silently trip that validator's
+        ACTION_OUTSIDE_VOCABULARY (a blocking error on validate/apply/readiness paths, per
+        that function's own contract) just because it is honestly outside the six
+        categories. uiBuilderWiringProjection.ts now exports
+        ADMIN_RUNTIME_PAYLOAD_BINDING_ACTION_TYPE / isAdminRuntimePayloadBindingAction()
+        (the single source of truth renderEmission.ts's buildAdminRuntimePayloadFromByTrigger
+        also imports, replacing its own prior local string-literal duplicate) and
+        findRuntimeInteractionPolicyErrors explicitly recognizes it: neither
+        ACTION_OUTSIDE_VOCABULARY nor the backend/external-dispatch policy checks below it
+        (debounce / lifecycle-confirmation, which govern a DIFFERENT authority --
+        dispatchExternalPort/dispatchInstanceOperation) apply to it. This entry's OWN
+        validation (required trigger/payloadFrom shape, duplicate_field_conflict) is not
+        duplicated into this validator -- it stays solely renderEmission.ts
+        buildAdminRuntimePayloadFromByTrigger's authority, keeping a single validation
+        owner per SSOT design_order.
+      runtime_parse_boundary_fail_close: >-
+        2026-07-24 (PR #599 review round 3). buildAdminRuntimePayloadFromByTrigger's
+        build-time validation is a SEPARATE boundary from
+        runtimeComponentFactory.ts parseEventBinding(), which re-parses the untyped JSON
+        eventBinding[trigger] carried on RuntimeComponentSpec at DISPATCH time -- a
+        boundary that could in principle be reached by any construction path, not only
+        that builder. parseEventBinding's own payloadFrom handling previously used
+        Object.entries(...).filter(...) to silently drop non-string field values and
+        degraded a non-object/absent payloadFrom to undefined (falling back to raw
+        event-time payload passthrough) -- build-time validation existing elsewhere is
+        never a substitute for this boundary's own fail-close. Fixed to mirror
+        externalPortDispatch's own pre-existing contract exactly: a present-but-malformed
+        payloadFrom (non-object, empty object, or any non-string value) now fails the
+        WHOLE binding closed (parseEventBinding returns null,
+        RUNTIME_PRIMITIVE_RENDERER_INVALID_EVENT_BINDING at dispatch time) -- never a
+        silently filtered subset.
+      display_value_vs_dispatch_value_authority_note: >-
+        2026-07-24 finding from the production-mount SSE-refresh scenario proof (recorded
+        here, not treated as a gap to silently paper over): renderEmission() rebuilds
+        every catalog_component leaf's default props from scratch on each render
+        (buildDefaultCatalogComponentProps), so a surviving controlled <input>'s DISPLAYED
+        value resets to its emission-derived default on any SSE-refresh-driven rerender --
+        this is pre-existing, general controlled-component behavior across this codebase,
+        not something the live node value tracker introduces or is responsible for fixing.
+        The tracker's own authority (what a LATER dispatch actually sends) is unaffected
+        and independently proven to survive the same refresh unchanged -- see proof below.
+        A user-facing "the input visibly still shows what I typed after a background
+        refresh" UX guarantee, if ever desired, is a distinct, unscoped feature (binding
+        emission-derived default props to live tracked values for display) -- out of this
+        Bundle.
       proof: >-
         frontend/tests/liveNodeValueTrackerAndAdminRuntimePayloadFrom.test.ts (fail-close
         cases: invalid trigger, malformed/empty payloadFrom, non-string field,
         duplicate_field_conflict, own-property identity for both the node value store and
-        event-path traversal) and frontend/tests/
+        event-path traversal, and the parseEventBinding dispatch-time parse-boundary
+        fail-close cases independent of build-time validation),
+        frontend/tests/uiBuilderWiringProjection.test.ts (policy_validator_reconciliation:
+        bindRuntimeDispatchPayload does not trip ACTION_OUTSIDE_VOCABULARY or inherit
+        backend/external-dispatch policy checks, while a genuinely unrecognized actionType
+        still fails close), and frontend/tests/
         projectionShellAdminRuntimeWritePayloadCapture.test.ts (production
-        frontend/islands/ProjectionShell.tsx mount, real DOM input/click events, not a
-        test-injected payload map/callback).
+        frontend/islands/ProjectionShell.tsx mount, real DOM input/click events and a real
+        SSE "projection" event fired through the actual sseReceiver/projectionRuntime
+        path with a minimal live ProjectionDefinition -- not a test-injected payload
+        map/callback or a stubbed refresh -- proving: multi-node value separation, a
+        removed node's tracked value failing close on a later dispatch instead of leaking,
+        a surviving node's tracked value persisting across refresh, and a fresh
+        unmount/remount starting with no inherited values).
     manifest_topology_boundary:
       rule: >-
         manifest.topology entries for this surface (ui_projection type per

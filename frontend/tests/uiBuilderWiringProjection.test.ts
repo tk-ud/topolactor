@@ -180,6 +180,67 @@ Deno.test("policy: actionType outside taxonomy fails close (no catch-all roundin
   assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
 });
 
+// ─── bindRuntimeDispatchPayload: a KNOWN, explicitly recognized authority
+// outside the six-category taxonomy (admin-uibuilder-ui-structure-wiring-ssot.yaml
+// lane_storage_boundary.admin_runtime_payload_binding_contract) — reconciled with
+// this UI-Builder authoring/apply policy validator (PR #599 review round 3): being
+// outside the taxonomy must not silently pass OR silently block ────────────────
+
+Deno.test("wiringSettingCategoryOf: bindRuntimeDispatchPayload classifies as null (honestly outside the six categories, not silently rounded into one)", () => {
+  assertEquals(
+    wiringSettingCategoryOf({ actionType: "bindRuntimeDispatchPayload" }),
+    null,
+  );
+});
+
+Deno.test("policy: bindRuntimeDispatchPayload is recognized and does NOT trip ACTION_OUTSIDE_VOCABULARY, unlike a genuinely unknown actionType", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "action/button",
+    runtimeInteractions: [{
+      trigger: "click",
+      actionType: "bindRuntimeDispatchPayload",
+      payloadFrom: { groupName: "node:name_input.value" },
+    }],
+  }];
+  const errors = findRuntimeInteractionPolicyErrors(nodes);
+  assertEquals(
+    errors,
+    [],
+    "a node authoring a recognized bindRuntimeDispatchPayload entry must not fail UI-Builder validate/apply policy — a future author opening this layout for an unrelated edit must not be spuriously blocked",
+  );
+});
+
+Deno.test("policy: bindRuntimeDispatchPayload does not fall through to backend/external dispatch policy checks (debounce/lifecycle-confirmation), which govern a different authority", () => {
+  // High-frequency trigger + no debounceMs would fail HIGH_FREQUENCY_DISPATCH_REQUIRES_DEBOUNCE
+  // for dispatchExternalPort/dispatchInstanceOperation — bindRuntimeDispatchPayload is not
+  // that authority and must not inherit its policy checks.
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "form_input/input",
+    runtimeInteractions: [{
+      trigger: "input",
+      actionType: "bindRuntimeDispatchPayload",
+      payloadFrom: { groupName: "event.value" },
+    }],
+  }];
+  assertEquals(findRuntimeInteractionPolicyErrors(nodes), []);
+});
+
+Deno.test("policy: a genuinely unrecognized actionType still fails close even when superficially near bindRuntimeDispatchPayload (no fuzzy/prefix matching)", () => {
+  const nodes: WiringNode[] = [{
+    nodeId: "n1",
+    componentKey: "action/button",
+    runtimeInteractions: [{
+      trigger: "click",
+      actionType: "bindRuntimeDispatchPayloadExtra",
+    }],
+  }];
+  const errors = findRuntimeInteractionPolicyErrors(nodes);
+  assertEquals(errors.length, 1);
+  assert(errors[0].includes("ACTION_OUTSIDE_VOCABULARY"));
+});
+
 // ─── UI監視割当（宣言）と UI状態更新（更新）の分離 ───────────────────────────
 
 Deno.test("UI監視割当: declarations derive from state slots and are distinct from mutations", () => {
